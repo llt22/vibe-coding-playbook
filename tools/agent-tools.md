@@ -12,6 +12,7 @@
 | Tavily | `tvly` CLI / Skills | Web 搜索、网页提取、站点地图、站点抓取、深度研究 |
 | UI UX Pro Max | Skill | 为 AI 生成 UI 时补充设计风格、配色、字体、UX guideline 和行业规则 |
 | Addy Osmani Agent Skills | Skills | 为 AI Coding Agent 补充生产级工程流程、质量门禁和专项 review 能力 |
+| Playwright CLI | `playwright-cli` CLI / Skills | 浏览器自动化、E2E 测试、截图、网络拦截、录制追踪 |
 
 选择原则：
 
@@ -19,6 +20,7 @@
 - 查互联网实时信息、文章、网页内容、竞品资料：优先 Tavily。
 - 需要让 AI 生成或审查界面设计时，可启用 UI UX Pro Max；安装后使用它自带的 skill 说明，不在本仓库重复维护细节。
 - 需要更完整的工程流程约束时，可启用 Addy Osmani Agent Skills；安装后按 skill 自带说明触发具体工作流。
+- 需要浏览器自动化、E2E 测试、截图或网络调试时，优先 Playwright CLI；比 MCP 更省 token，适合编码 Agent 高频调用。
 
 ---
 
@@ -185,6 +187,77 @@ tvly research "2026 frontend testing tools comparison" --json
 - 安装后按 skill 自带说明使用，本仓库不复制具体命令，避免文档过期。
 
 ---
+
+---
+
+## Playwright CLI
+
+| 项目 | 说明 |
+|------|------|
+| **用途** | 为 AI Coding Agent 提供浏览器自动化能力：页面交互、E2E 测试、截图、网络拦截、录制追踪 |
+| **CLI 命令** | `playwright-cli` |
+| **来源** | [GitHub](https://github.com/microsoft/playwright-cli) |
+| **适用场景** | E2E 测试执行与调试、页面截图、表单自动化、网络请求 mock、多 session 管理 |
+
+Playwright CLI 是 Playwright 的命令行接口，相比 MCP 方式更省 token（不需要加载大量工具 schema 和 accessibility tree），更适合编码 Agent 高频调用。
+
+### 安装
+
+```bash
+npm install -g @playwright/cli@latest
+
+# 安装 Agent Skills（Claude Code / Copilot 等会自动加载）
+playwright-cli install --skills
+```
+
+### 常用命令
+
+```bash
+# 打开页面
+playwright-cli open https://example.com
+playwright-cli open https://example.com --headed    # 有头模式
+
+# 页面交互
+playwright-cli snapshot                              # 获取页面快照和元素 ref
+playwright-cli click e15                             # 按 ref 点击
+playwright-cli fill e20 "hello"                      # 填充输入框
+playwright-cli type "search text"                    # 键入文本
+playwright-cli press Enter                           # 按键
+playwright-cli screenshot                            # 截图
+playwright-cli screenshot --filename=result.png      # 指定文件名截图
+
+# 多 session 管理
+playwright-cli -s=app1 open https://app1.example.com
+playwright-cli -s=app2 open https://app2.example.com
+playwright-cli list                                  # 列出所有 session
+playwright-cli close-all                             # 关闭所有浏览器
+
+# 网络调试
+playwright-cli requests                              # 列出所有网络请求
+playwright-cli console                               # 查看控制台消息
+playwright-cli route "**/*.png" --fulfill --status=404  # mock 网络请求
+
+# 录制与追踪
+playwright-cli tracing-start                         # 开始录制 trace
+playwright-cli tracing-stop                          # 停止录制
+playwright-cli video-start                           # 开始录制视频
+playwright-cli video-stop                            # 停止录制
+```
+
+### Agent 工作流
+
+典型用法：让 Agent 通过 CLI 驱动浏览器完成测试或验证。
+
+```text
+使用 playwright-cli 打开 https://demo.playwright.dev/todomvc，测试添加和完成 todo 的流程，每步截图。
+```
+
+使用建议：
+
+- 默认 headless 运行；需要观察时加 `--headed`。
+- 用 `playwright-cli show` 打开可视化面板，实时监控 Agent 的浏览器操作。
+- 用 `PLAYWRIGHT_CLI_SESSION=name` 环境变量为不同项目隔离浏览器实例。
+- 安装 skills 后 Agent 会自动获得详细的命令参考，无需记忆全部命令。
 
 ## 安全提醒
 
