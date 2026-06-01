@@ -11,12 +11,14 @@
 | Context7 | `ctx7` CLI / Skills | 获取第三方库最新官方文档、API 示例和版本相关用法 |
 | Tavily | `tvly` CLI / Skills | Web 搜索、网页提取、站点地图、站点抓取、深度研究 |
 | UI UX Pro Max | Skill | 为 AI 生成 UI 时补充设计风格、配色、字体、UX guideline 和行业规则 |
+| Addy Osmani Agent Skills | Skills | 为 AI Coding Agent 补充生产级工程流程、质量门禁和专项 review 能力 |
 
 选择原则：
 
 - 查库文档、框架 API、包版本用法：优先 Context7。
 - 查互联网实时信息、文章、网页内容、竞品资料：优先 Tavily。
 - 需要让 AI 生成或审查界面设计时，可启用 UI UX Pro Max；安装后使用它自带的 skill 说明，不在本仓库重复维护细节。
+- 需要更完整的工程流程约束时，可启用 Addy Osmani Agent Skills；安装后按 skill 自带说明触发具体工作流。
 
 ---
 
@@ -163,6 +165,23 @@ tvly research "2026 frontend testing tools comparison" --json
 
 - 把它当作设计决策和审查辅助，不当作组件库替代品。
 - Prompt 里明确产品类型、页面类型、风格偏好和约束条件，输出会更稳定。
+- 安装后按 skill 自带说明使用，本仓库不复制具体命令，避免文档过期。
+
+---
+
+## Addy Osmani Agent Skills
+
+| 项目 | 说明 |
+|------|------|
+| **用途** | 为 AI Coding Agent 提供生产级工程 workflow、质量门禁和专项能力 |
+| **推荐方式** | 安装为 Agent Skills |
+| **来源** | [GitHub](https://github.com/addyosmani/agent-skills) |
+| **适用场景** | 复杂功能开发、测试驱动、代码审查、安全加固、性能优化、发布前检查 |
+
+使用建议：
+
+- 把它当作复杂任务的流程增强，不把全部规则塞进全局提示词。
+- 小改动仍按项目全局规则直接执行，避免被完整工程流程拖慢。
 - 安装后按 skill 自带说明使用，本仓库不复制具体命令，避免文档过期。
 
 ---
