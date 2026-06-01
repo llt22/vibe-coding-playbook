@@ -36,8 +36,7 @@
 
 | 文件 | 说明 |
 |------|------|
-| [MCP 服务配置](tools/mcp-servers.json) | Context7 / Exa / Tavily / AWSLabs Document Loader / Ace Tool 配置模板 |
-| [MCP 服务说明](tools/mcp-servers.md) | 每个 MCP Server 的用途、核心能力与配置方式 |
+| [Agent 工具使用方案](tools/agent-tools.md) | Context7 / Tavily / UI UX Pro Max 的 CLI 与 Skills 优先使用方式 |
 
 ---
 
@@ -47,6 +46,6 @@
 vibe-coding-playbook/
 ├── prompts/        # 提示词（全局规则、前端/后端工作流）
 ├── experiences/    # 实战经验（SOP、设计稿还原等）
-├── tools/          # 工具配置（MCP Server 等）
+├── tools/          # 工具使用方案（CLI / Skills 等）
 └── assets/         # 静态资源（图片等）
 ```
