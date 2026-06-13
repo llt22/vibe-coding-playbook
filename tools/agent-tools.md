@@ -12,6 +12,7 @@
 | Tavily | `tvly` CLI / Skills | Web 搜索、网页提取、站点地图、站点抓取、深度研究 |
 | UI UX Pro Max | Skill | 为 AI 生成 UI 时补充设计风格、配色、字体、UX guideline 和行业规则 |
 | Addy Osmani Agent Skills | Skills | 为 AI Coding Agent 补充生产级工程流程、质量门禁和专项 review 能力 |
+| Oh My Pi / OMP | CLI / Codex Skill | 用低成本模型承担读代码、初改和跑验证，Codex 保留规划与终审 |
 | Playwright CLI | `playwright-cli` CLI / Skills | 浏览器自动化、E2E 测试、截图、网络拦截、录制追踪 |
 
 选择原则：
@@ -20,6 +21,7 @@
 - 查互联网实时信息、文章、网页内容、竞品资料：优先 Tavily。
 - 需要让 AI 生成或审查界面设计时，可启用 UI UX Pro Max；安装后使用它自带的 skill 说明，不在本仓库重复维护细节。
 - 需要更完整的工程流程约束时，可启用 Addy Osmani Agent Skills；安装后按 skill 自带说明触发具体工作流。
+- 需要降低 Codex 成本时，可用 OMP 做低风险执行层；Codex 负责拆任务、设边界、审查 diff 和最终验证。
 - 需要浏览器自动化、E2E 测试、截图或网络调试时，优先 Playwright CLI；比 MCP 更省 token，适合编码 Agent 高频调用。
 
 ---
@@ -187,6 +189,72 @@ tvly research "2026 frontend testing tools comparison" --json
 - 安装后按 skill 自带说明使用，本仓库不复制具体命令，避免文档过期。
 
 ---
+
+## Oh My Pi / OMP
+
+| 项目 | 说明 |
+|------|------|
+| **用途** | 让低成本模型承担读代码、初步实现和运行验证，减少高成本 Agent 的执行 token |
+| **CLI 命令** | `omp` |
+| **推荐配合** | Codex Skill：`omp-dev-delegation` |
+| **适用场景** | 代码搜索、调用链梳理、小到中等局部修复、测试/lint/build 报错分析、视觉/UI 截图初审 |
+
+核心分工：
+
+- Codex 做规划、风险过滤、任务拆解、最终 diff 审查和验收。
+- OMP 做低成本执行：读代码、生成候选修改、跑验证、整理错误和关键片段。
+- 高风险业务逻辑、架构决策、权限/密钥/生产数据/不可逆操作，不直接交给 OMP。
+
+### 推荐模型分工
+
+| 任务 | 推荐模型 |
+|------|----------|
+| 日常读代码 / 小修复 / 跑验证 | `opencode-go/deepseek-v4-flash --thinking xhigh` |
+| 复杂调试 / 长上下文分析 | `opencode-go/deepseek-v4-pro --thinking xhigh` |
+| 视觉 / UI 截图初审 | `opencode-go/kimi-k2.6 --thinking xhigh` |
+| 长上下文 + 视觉 | `opencode-go/qwen3.7-plus --thinking xhigh` |
+
+原则：使用模型支持的最高 thinking。若模型不支持 thinking，则不要传 `--thinking`。
+
+### 推荐命令
+
+```bash
+omp -p --no-session --cwd "$PWD" \
+  --model opencode-go/deepseek-v4-flash \
+  --thinking xhigh \
+  "按任务包执行..."
+```
+
+说明：
+
+- `-p` 用于非交互执行。
+- `--no-session` 适合一次性任务，避免把临时上下文写入长期会话。
+- `--cwd "$PWD"` 明确 OMP 的工作目录。
+- 外部不要并发启动多个 `omp` 进程；至少 OMP 15.12.3 观察到本地 SQLite credential/model store 锁竞争。需要并行时，让 OMP 内部使用 task 工具，或串行拆任务。
+
+### Codex Skill 记录
+
+可把以下 skill 安装到 Codex：
+
+```text
+~/.codex/skills/omp-dev-delegation
+```
+
+skill 职责：
+
+- 只在用户明确要求 OMP / On My Pi / 本地低成本 Agent 时触发。
+- 先读取项目规则、README、package scripts、lint/test 约定、类型定义和调用方。
+- 给 OMP 生成窄任务包：必读文件、允许修改范围、禁止操作、验证命令、输出格式。
+- OMP 同一问题最多修正一次；仍失败则 Codex 接管或向用户说明阻塞。
+- OMP 不提交 commit；Codex 审查本地 diff 后再决定后续动作。
+
+任务包要包含这些硬约束：
+
+- 不执行 `git reset`、`git clean`、`git rebase`、`git push`、force push 或改写历史。
+- 不读取或输出 `.env`、`credentials.*`、`*.pem`、`~/.ssh`、`~/.aws`、token、密钥或凭据内容。
+- 不访问生产/远端数据，不执行不可逆操作。
+- 不安装依赖，除非任务明确要求并说明原因。
+- 输出只贴关键改动片段；改动很小时才贴完整 diff，完整 diff 由 Codex 本地查看。
 
 ---
 
