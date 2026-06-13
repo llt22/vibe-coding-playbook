@@ -197,13 +197,20 @@ tvly research "2026 frontend testing tools comparison" --json
 | **用途** | 让低成本模型承担读代码、初步实现和运行验证，减少高成本 Agent 的执行 token |
 | **CLI 命令** | `omp` |
 | **推荐配合** | Codex Skill：`omp-dev-delegation` |
-| **适用场景** | 代码搜索、调用链梳理、小到中等局部修复、测试/lint/build 报错分析、视觉/UI 截图初审 |
+| **适用场景** | 前端样式、UI/layout/responsive、copy/i18n、图表视觉、代码搜索、局部实现、focused tests、lint/build、bug triage、机械清理、验证、OMP review |
 
 核心分工：
 
 - Codex 做规划、风险过滤、任务拆解、最终 diff 审查和验收。
 - OMP 做低成本执行：读代码、生成候选修改、跑验证、整理错误和关键片段。
+- 默认目标是多触发 OMP：安全、局部、可回退、可验证的任务优先交给 OMP。
 - 高风险业务逻辑、架构决策、权限/密钥/生产数据/不可逆操作，不直接交给 OMP。
+
+推荐使用三车道路由：
+
+- **OMP-Default**：低风险、局部、可验证的工作，直接委派 OMP 执行。
+- **OMP-Review**：Codex 执行后让 OMP 做只读侧审；适合重要改动、较大 diff、共享契约、算法/状态流转等。
+- **Codex-Only**：涉及密钥、生产数据、权限、支付、破坏性操作、架构迁移或需求不清时，由 Codex 保留执行。
 
 ### 推荐模型分工
 
@@ -213,8 +220,24 @@ tvly research "2026 frontend testing tools comparison" --json
 | 复杂调试 / 长上下文分析 | `opencode-go/deepseek-v4-pro --thinking xhigh` |
 | 视觉 / UI 截图初审 | `opencode-go/kimi-k2.6 --thinking xhigh` |
 | 长上下文 + 视觉 | `opencode-go/qwen3.7-plus --thinking xhigh` |
+| 代码 review / 交叉检查 | `opencode-go/qwen3.7-max --thinking xhigh` |
 
-原则：使用模型支持的最高 thinking。若模型不支持 thinking，则不要传 `--thinking`。
+原则：使用模型支持的最高 thinking。若模型不支持 thinking，则不要传 `--thinking`。这些模型名是已评估默认值，不是长期稳定接口；OMP 升级后要重新检查模型与 flag。
+
+### 能力探针
+
+首次调用 OMP 前先确认本机能力：
+
+```bash
+command -v omp
+omp --version
+omp --help
+omp --list-models opencode-go/deepseek-v4-flash
+```
+
+需要确认 `omp --help` 里存在或当前版本接受这些参数：`-p` / `--print`、`--no-session`、`--cwd`、`--model`、`--thinking`。
+
+如果 `omp` 缺失、认证失败、模型不可用或 thinking level 被拒绝，不要猜一个未验证替代模型；应先报告失败证据，再选择已验证 fallback、改由 Codex 执行或向用户确认。
 
 ### 推荐命令
 
@@ -231,6 +254,7 @@ omp -p --no-session --cwd "$PWD" \
 - `--no-session` 适合一次性任务，避免把临时上下文写入长期会话。
 - `--cwd "$PWD"` 明确 OMP 的工作目录。
 - 外部不要并发启动多个 `omp` 进程；至少 OMP 15.12.3 观察到本地 SQLite credential/model store 锁竞争。需要并行时，让 OMP 内部使用 task 工具，或串行拆任务。
+- 单次 OMP 调用应有软超时或 harness timeout；同一问题最多允许 OMP 修正一次，仍失败则 Codex 接管。
 
 ### Codex Skill 记录
 
@@ -242,19 +266,24 @@ omp -p --no-session --cwd "$PWD" \
 
 skill 职责：
 
-- 只在用户明确要求 OMP / On My Pi / 本地低成本 Agent 时触发。
+- 高触发：前端样式、UI/layout/responsive、copy/i18n、图表视觉、代码搜索、局部实现、focused tests、lint/build、bug triage、机械清理、验证、OMP review，或用户提到 OMP / Oh My Pi / On My Pi 时触发。
 - 先读取项目规则、README、package scripts、lint/test 约定、类型定义和调用方。
-- 给 OMP 生成窄任务包：必读文件、允许修改范围、禁止操作、验证命令、输出格式。
+- 首次 OMP 调用前执行能力探针，确认 CLI、flag、模型和 thinking level 可用。
+- 给 OMP 生成窄任务包：必读文件、允许修改范围、禁止操作、验收标准、验证命令、输出格式。
+- OMP review 默认 1 个模型；关键路径、首轮 review 提出风险或用户要求多模型意见时，再加第 2 个 reviewer。
 - OMP 同一问题最多修正一次；仍失败则 Codex 接管或向用户说明阻塞。
 - OMP 不提交 commit；Codex 审查本地 diff 后再决定后续动作。
 
 任务包要包含这些硬约束：
 
+- 代理定位为“受范围约束的执行代理”，不要让它自由扩写任务。
 - 不执行 `git reset`、`git clean`、`git rebase`、`git push`、force push 或改写历史。
 - 不读取或输出 `.env`、`credentials.*`、`*.pem`、`~/.ssh`、`~/.aws`、token、密钥或凭据内容。
 - 不访问生产/远端数据，不执行不可逆操作。
 - 不安装依赖，除非任务明确要求并说明原因。
 - 输出只贴关键改动片段；改动很小时才贴完整 diff，完整 diff 由 Codex 本地查看。
+
+当前记录基于本机 `omp/15.12.3`（2026-06-14）验证；升级 OMP 后应重验 flag 和模型。
 
 ---
 
