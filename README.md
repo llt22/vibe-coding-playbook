@@ -38,7 +38,7 @@
 
 | 文件 | 说明 |
 |------|------|
-| [Agent 工具使用方案](tools/agent-tools.md) | Context7 / Tavily / Playwright CLI / UI UX Pro Max 的 CLI 与 Skills 优先使用方式 |
+| [Agent 工具使用方案](tools/agent-tools.md) | Context7 / Tavily / Oh My Pi / Playwright CLI / UI UX Pro Max 的 CLI 与 Skills 优先使用方式 |
 
 ---
 
