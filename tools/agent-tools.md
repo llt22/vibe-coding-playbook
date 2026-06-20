@@ -14,6 +14,7 @@
 | Addy Osmani Agent Skills | Skills | 为 AI Coding Agent 补充生产级工程流程、质量门禁和专项 review 能力 |
 | Oh My Pi / OMP | CLI / Codex Skill | 用低成本模型承担读代码、初改和跑验证，Codex 保留规划与终审 |
 | Playwright CLI | `playwright-cli` CLI / Skills | 浏览器自动化、E2E 测试、截图、网络拦截、录制追踪 |
+| **Clipboard Vision MCP** | MCP Server | 为无视觉能力的 Agent 提供剪贴板截图识别、OCR、错误诊断，基于 OpenAI-compatible 视觉模型 |
 
 选择原则：
 
@@ -23,6 +24,7 @@
 - 需要更完整的工程流程约束时，可启用 Addy Osmani Agent Skills；安装后按 skill 自带说明触发具体工作流。
 - 需要降低 Codex 成本时，可用 OMP 做低风险执行层；Codex 负责拆任务、设边界、审查 diff 和最终验证。
 - 需要浏览器自动化、E2E 测试、截图或网络调试时，优先 Playwright CLI；比 MCP 更省 token，适合编码 Agent 高频调用。
+- 需要让无视觉能力的 Agent 识别截图、OCR 或诊断报错截图时，启用 Clipboard Vision MCP；按需注入 API Key，模型推荐 `gpt-4o-mini`（省 token）或 `qwen-vl-plus`。
 
 ---
 
@@ -355,6 +357,120 @@ playwright-cli video-stop                            # 停止录制
 - 用 `playwright-cli show` 打开可视化面板，实时监控 Agent 的浏览器操作。
 - 用 `PLAYWRIGHT_CLI_SESSION=name` 环境变量为不同项目隔离浏览器实例。
 - 安装 skills 后 Agent 会自动获得详细的命令参考，无需记忆全部命令。
+
+
+## Clipboard Vision MCP
+
+| 项目 | 说明 |
+|------|------|
+| **用途** | 为无视觉能力的 AI Agent 提供剪贴板截图识别、OCR、错误诊断，通过 OpenAI-compatible 视觉模型将图片转为文本描述 |
+| **推荐方式** | MCP Server（stdio transport） |
+| **来源** | [GitHub](https://github.com/llt22/image-recognition-mcp) · [npm](https://www.npmjs.com/package/clipboard-vision-mcp) |
+| **适用场景** | 截图分析、代码/报错截图 OCR、终端输出识别、UI 异常诊断、图片内容描述 |
+
+Clipboard Vision MCP 给 LLM 装上"眼睛"：把剪贴板里的截图发到 OpenAI-compatible 视觉模型，返回文字描述或 OCR 结果。
+
+```
+LLM（无视觉）──MCP/stdio──► clipboard-vision-mcp ──OpenAI-compatible API──► 视觉模型 ──► 文本结果
+```
+
+### 系统依赖
+
+- **macOS**：需安装 [pngpaste](https://github.com/jcsalterego/pngpaste)（`brew install pngpaste`）
+- **Windows**：内置 PowerShell，无需额外安装
+- **Linux Wayland**：`wl-clipboard`（`wl-paste`）
+- **Linux X11**：`xclip`
+
+### MCP Host 配置
+
+在 MCP Host 配置文件的 `mcpServers` 中添加：
+
+```jsonc
+{
+  "mcpServers": {
+    "clipboard-vision": {
+      "command": "npx",
+      "args": ["-y", "clipboard-vision-mcp"],
+      "env": {
+        "OPENAI_API_KEY": "sk-xxxxxxxxxxxxxxxx",
+        "OPENAI_MODEL": "gpt-4o-mini"
+      }
+    }
+  }
+}
+```
+
+配置路径参考：
+
+- ZCode：`~/.zcode/v2/config.json`
+- Claude Desktop：`~/Library/Application Support/Claude/claude_desktop_config.json`
+
+### 环境变量
+
+| 环境变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `OPENAI_API_KEY` | 必填 | OpenAI-compatible API key |
+| `OPENAI_MODEL` | `gpt-4o-mini` | 视觉模型名 |
+| `OPENAI_BASE_URL` | OpenAI 默认地址 | 代理或兼容网关地址 |
+| `OPENAI_TIMEOUT_MS` | `60000` | 请求超时（ms） |
+| `LOCAL_FILE_INPUT_ENABLED` | `true` | 设为 `false` 禁用本地文件路径 |
+| `LOCAL_FILE_ALLOWED_ROOTS` | 空 | 本地路径 allowlist，逗号分隔，如 `/tmp,~/Pictures`；空表示允许所有 |
+
+常见 Provider：
+
+```bash
+# OpenAI
+OPENAI_API_KEY=sk-... OPENAI_MODEL=gpt-4o-mini
+
+# Gemini OpenAI-compatible
+OPENAI_API_KEY=... OPENAI_MODEL=gemini-2.5-flash
+OPENAI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai
+
+# Qwen / DashScope
+OPENAI_API_KEY=... OPENAI_MODEL=qwen-vl-plus
+OPENAI_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+```
+
+### 工具
+
+四个 MCP Tool，各适配不同场景：
+
+| Tool | 用途 | 图片来源 |
+|------|------|----------|
+| `analyze_clipboard_image` | 通用截图分析：描述图片内容、识别文字 | 剪贴板 |
+| `extract_clipboard_text` | OCR 为主：提取文字，保留换行和代码格式 | 剪贴板 |
+| `diagnose_clipboard_error` | 错误诊断：分析报错截图、堆栈、终端输出、异常 UI | 剪贴板 |
+| `recognize_image` | 最灵活：支持剪贴板 / 本地路径 / URL / base64 / data URL | 任意 |
+
+通用参数（所有工具）：
+
+- `prompt`（可选）：自定义分析指令，不传则用内置默认 prompt。
+- `detail`（可选）：视觉精度 `auto` / `low` / `high`，默认 `auto`。`low` 更快更省 token。
+- `maxTokens`（可选）：响应最大 token 数，默认 `1024`。
+
+`recognize_image` 额外参数：
+
+- `image`（可选）：来源，默认 `"clipboard"`。支持本地文件路径、HTTP(S) URL、data URL、base64。
+
+### 使用示例
+
+```text
+分析我剪贴板里的截图，上面有什么文字？
+```
+
+```text
+把剪贴板里这个 error 截图诊断一下，告诉我原因和修复方式。
+```
+
+```text
+识别这张图片里的代码：~/Screenshots/error.png
+```
+
+### 注意事项
+
+- 本地文件、data URL、base64 和剪贴板输入必须是 PNG / JPEG / GIF / WebP / BMP，单张 ≤ 20 MiB。
+- HTTP(S) URL 直接传给 API，不经过本地校验和转码。
+- 不要将 `OPENAI_API_KEY` 写入仓库；通过 MCP Host 的 `env` 字段注入。
 
 ## 安全提醒
 
