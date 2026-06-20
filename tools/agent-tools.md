@@ -12,7 +12,7 @@
 | Tavily | `tvly` CLI / Skills | Web 搜索、网页提取、站点地图、站点抓取、深度研究 |
 | UI UX Pro Max | Skill | 为 AI 生成 UI 时补充设计风格、配色、字体、UX guideline 和行业规则 |
 | Addy Osmani Agent Skills | Skills | 为 AI Coding Agent 补充生产级工程流程、质量门禁和专项 review 能力 |
-| Oh My Pi / OMP | CLI（`omp`） + Skill（`model-routing`） | 本地模型网关，配合 model-routing skill 实现多 CLI 模型发现与按需路由 |
+| Oh My Pi / OMP | CLI（`omp`） + Skill（`assist-router`） | 本地模型网关，配合 assist-router skill 实现多 CLI 模型发现与按需路由 |
 | Playwright CLI | `playwright-cli` CLI / Skills | 浏览器自动化、E2E 测试、截图、网络拦截、录制追踪 |
 | **Clipboard Vision MCP** | MCP Server | 为无视觉能力的 Agent 提供剪贴板截图识别、OCR、错误诊断，基于 OpenAI-compatible 视觉模型 |
 
@@ -198,7 +198,7 @@ tvly research "2026 frontend testing tools comparison" --json
 |------|------|
 | **用途** | 本地模型网关，通过 `omp` CLI 调用多种 AI 模型执行编码、审查、验证任务 |
 | **CLI 命令** | `omp` |
-| **推荐配合** | Codex Skill：`model-routing`（`~/.codex/skills/omp-dev-delegation`） |
+| **推荐配合** | Codex Skill：`assist-router`（`~/.codex/skills/assist-router`） |
 | **适用场景** | 低成本执行与审查：代码生成、测试、lint、搜索、格式化，以及作为多模型路由的本地执行通路 |
 
 OMP 是模型路由体系中的**本地执行通路**——DeepSeek、Kimi、Qwen、Gemini 等模型通过 OMP 调用。完整的多 CLI 模型发现与委派逻辑在 `model-routing` skill 中维护，本文件只保留工具层面的概述。
@@ -209,11 +209,11 @@ OMP 是模型路由体系中的**本地执行通路**——DeepSeek、Kimi、Qwe
 # OMP 本身
 curl -fsSL https://omp.ohmy pi.com/install.sh | bash
 
-# 安装 model-routing skill（到 Codex）
-mkdir -p ~/.codex/skills/omp-dev-delegation
+# 安装 assist-router skill（到 Codex）
+mkdir -p ~/.codex/skills/assist-router
 ```
 
-skill 内容即本仓库的 `SKILL.md`（位于 `~/.codex/skills/omp-dev-delegation/SKILL.md`）。
+skill 内容即本仓库的 `SKILL.md`（位于 `~/.codex/skills/assist-router/SKILL.md`）。
 
 ### 常用命令
 
