@@ -12,7 +12,7 @@
 | Tavily | `tvly` CLI / Skills | Web 搜索、网页提取、站点地图、站点抓取、深度研究 |
 | UI UX Pro Max | Skill | 为 AI 生成 UI 时补充设计风格、配色、字体、UX guideline 和行业规则 |
 | Addy Osmani Agent Skills | Skills | 为 AI Coding Agent 补充生产级工程流程、质量门禁和专项 review 能力 |
-| Oh My Pi / OMP | CLI（`omp`） + Skill（`assist-router`） | 本地模型网关，配合 assist-router skill 实现多 CLI 模型发现与按需路由 |
+| Oh My Pi / OMP | CLI（`omp`） + Skill（`model-router`） | 本地模型网关，配合 model-router skill 实现多 CLI 模型发现与按需路由 |
 | Playwright CLI | `playwright-cli` CLI / Skills | 浏览器自动化、E2E 测试、截图、网络拦截、录制追踪 |
 | **Clipboard Vision MCP** | MCP Server | 为无视觉能力的 Agent 提供剪贴板截图识别、OCR、错误诊断，基于 OpenAI-compatible 视觉模型 |
 
@@ -22,7 +22,7 @@
 - 查互联网实时信息、文章、网页内容、竞品资料：优先 Tavily。
 - 需要让 AI 生成或审查界面设计时，可启用 UI UX Pro Max；安装后使用它自带的 skill 说明，不在本仓库重复维护细节。
 - 需要更完整的工程流程约束时，可启用 Addy Osmani Agent Skills；安装后按 skill 自带说明触发具体工作流。
-- 需要将任务路由到不同模型/CLI 执行时，触发 model-routing skill：自动探测本机 CLI、列出可用模型，等用户指定后按指令执行。OMP 是本地模型的主要执行通路。
+- 需要将任务路由到不同模型/CLI 执行时，触发 model-router skill：自动探测本机 CLI、列出可用模型，等用户指定后按指令执行。OMP 是本地模型的主要执行通路。
 - 需要浏览器自动化、E2E 测试、截图或网络调试时，优先 Playwright CLI；比 MCP 更省 token，适合编码 Agent 高频调用。
 - 需要让无视觉能力的 Agent 识别截图、OCR 或诊断报错截图时，启用 Clipboard Vision MCP；按需注入 API Key，模型推荐 `gpt-4o-mini`（省 token）或 `qwen-vl-plus`。
 
@@ -198,10 +198,10 @@ tvly research "2026 frontend testing tools comparison" --json
 |------|------|
 | **用途** | 本地模型网关，通过 `omp` CLI 调用多种 AI 模型执行编码、审查、验证任务 |
 | **CLI 命令** | `omp` |
-| **推荐配合** | Codex Skill：`assist-router`（`~/.codex/skills/assist-router`） |
+| **推荐配合** | Codex Skill：`model-router`（`~/.codex/skills/model-router`） |
 | **适用场景** | 低成本执行与审查：代码生成、测试、lint、搜索、格式化，以及作为多模型路由的本地执行通路 |
 
-OMP 是模型路由体系中的**本地执行通路**——DeepSeek、Kimi、Qwen、Gemini 等模型通过 OMP 调用。完整的多 CLI 模型发现与委派逻辑在 `model-routing` skill 中维护，本文件只保留工具层面的概述。
+OMP 是模型路由体系中的**本地执行通路**--DeepSeek、Kimi、Qwen、Gemini 等模型通过 OMP 调用。完整的多 CLI 模型发现与委派逻辑在 `model-router` skill 中维护，本文件只保留工具层面的概述。
 
 ### 安装
 
@@ -209,20 +209,22 @@ OMP 是模型路由体系中的**本地执行通路**——DeepSeek、Kimi、Qwe
 # OMP 本身
 curl -fsSL https://omp.ohmy pi.com/install.sh | bash
 
-# 安装 assist-router skill（到 Codex）
-mkdir -p ~/.codex/skills/assist-router
+# 安装 model-router skill（到 Codex）
+mkdir -p ~/.codex/skills/model-router
 ```
 
-skill 内容即本仓库的 `SKILL.md`（位于 `~/.codex/skills/assist-router/SKILL.md`）。
+skill 内容即本仓库的 `SKILL.md`（位于 `~/.codex/skills/model-router/SKILL.md`）。
 
 ### 常用命令
 
 ```bash
-# 列出可用模型
-omp models list
+# 列出可用模型（JSON 格式，selector 字段即 --model 参数值）
+omp models list --json
 
 # 非交互执行（-p），不保存会话（--no-session）
-omp -p --no-session --cwd "$PWD" --model <model> --thinking xhigh "任务描述"
+# --model 必须用 provider/model 全名（来自 --json 的 selector 字段）
+# --thinking 值取自 --json 的 thinking 数组，按任务复杂度自选
+omp -p --no-session --cwd "$PWD" --model <selector> [--thinking <级别>] "任务描述"
 
 # 视觉模型分析图片
 omp inspect_image --model <vision-model> <image-path>
@@ -230,8 +232,8 @@ omp inspect_image --model <vision-model> <image-path>
 
 ### 约束
 
-- 不并发启动多个外部 `omp` 进程（credential store 锁竞争）。
-- 单次调用软超时 10 分钟；同一问题最多修正一次。
+- omp 可以并发跑多个进程（无凭据锁问题）。
+- `--model` 参数必须用 `provider/model` 全名（selector），裸名会走 fuzzy match 跨 provider 误路由。
 - OMP 不自行提交 commit。
 
 ---
