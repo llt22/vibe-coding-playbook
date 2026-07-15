@@ -39,6 +39,15 @@
 | 文件 | 说明 |
 |------|------|
 | [Agent 工具使用方案](tools/agent-tools.md) | Context7 / Tavily / Oh My Pi / Playwright CLI / UI UX Pro Max 的 CLI 与 Skills 优先使用方式 |
+| [Review Skills 方案](tools/review-skills.md) | 研发链路质量检查：设计文档 review / 架构 review / 代码 review 的 Skill 与使用方式 |
+
+### Skills（可直接安装）
+
+| 文件 | 命令 | 说明 |
+|------|------|------|
+| [design-review.md](skills/design-review.md) | `/design-review` | 设计文档 review：命名、一致性、自包含、过度设计 |
+| [arch-review.md](skills/arch-review.md) | `/arch-review` | 项目架构 review：职责边界、耦合、分层、API 设计 |
+| [code-review.md](skills/code-review.md) | `/code-review` | 代码 review：正确性、错误处理、边界、安全、性能 |
 
 ---
 
@@ -49,5 +58,6 @@ vibe-coding-playbook/
 ├── prompts/        # 提示词（直接贴入 AI 工具的规则和指令）
 ├── experiences/    # 实战经验（工作流、方法论、SOP、案例）
 ├── tools/          # 工具使用方案（CLI / Skills 等）
+├── skills/         # 可直接安装的 Skill 文件（cp 到 ~/.claude/commands/）
 └── assets/         # 静态资源（图片等）
 ```
