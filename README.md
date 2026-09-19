@@ -41,13 +41,30 @@
 | [Agent 工具使用方案](tools/agent-tools.md) | Context7 / Tavily / Oh My Pi / Playwright CLI / UI UX Pro Max 的 CLI 与 Skills 优先使用方式 |
 | [Review Skills 方案](tools/review-skills.md) | 研发链路质量检查：设计文档 review / 架构 review / 代码 review 的 Skill 与使用方式 |
 
-### Skills（可直接安装）
+### Skills
+
+#### Review 与测试
 
 | 文件 | 命令 | 说明 |
 |------|------|------|
 | [design-review.md](skills/design-review.md) | `/design-review` | 设计文档 review：命名、一致性、自包含、过度设计 |
 | [arch-review.md](skills/arch-review.md) | `/arch-review` | 项目架构 review：职责边界、耦合、分层、API 设计 |
 | [code-review.md](skills/code-review.md) | `/code-review` | 代码 review：正确性、错误处理、边界、安全、性能 |
+| [cross-review.md](skills/cross-review.md) | `/cross-review` | 多模型并行 review、投票去重与源码验证 |
+| [test-guide.md](skills/test-guide.md) | `/test-guide` | 测试策略、覆盖缺口分析与补测计划 |
+
+#### 本机工作流
+
+| Skill | 说明 |
+|------|------|
+| [skill-management](skills/skill-management/SKILL.md) | 统一维护 `~/skills` 正本及各 AI 工具的符号链接 |
+| [workflow-learning](skills/workflow-learning/SKILL.md) | 从已验证任务中识别可复用流程并提议沉淀 Skill |
+| [herdr-link](skills/herdr-link/SKILL.md) | Herdr 多 Agent 间基于 pane ID 的消息协议 |
+| [browser-skill](skills/browser-skill/SKILL.md) | 通过 BrowserSkill 操作已登录的 Chromium 浏览器 |
+
+本机工作流采用标准 `<skill-name>/SKILL.md` 结构。安装和注册时先阅读
+[`skill-management`](skills/skill-management/SKILL.md)，以 `~/skills` 为唯一正本，
+再链接到各 AI 工具的 Skill 目录。
 
 ---
 
@@ -58,6 +75,6 @@ vibe-coding-playbook/
 ├── prompts/        # 提示词（直接贴入 AI 工具的规则和指令）
 ├── experiences/    # 实战经验（工作流、方法论、SOP、案例）
 ├── tools/          # 工具使用方案（CLI / Skills 等）
-├── skills/         # 可直接安装的 Skill 文件（cp 到 ~/.claude/commands/）
+├── skills/         # Review 指令与标准 <skill-name>/SKILL.md 工作流
 └── assets/         # 静态资源（图片等）
 ```
