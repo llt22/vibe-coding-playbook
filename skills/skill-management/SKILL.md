@@ -12,7 +12,7 @@ description: Skill 安装和管理规范。安装、卸载或查询任何 skill 
 ```
 ~/skills/                        # 唯一正本，所有 skill 在此创建
   ├── skill-management/          # 本文件
-  ├── browser-skill/
+  ├── ai-tool-radar/
   ├── herdr-link/
   └── ...
 

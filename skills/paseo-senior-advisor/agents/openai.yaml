@@ -1,0 +1,4 @@
+interface:
+  display_name: "Paseo Senior Advisor"
+  short_description: "说“咨询继续”即可让高级模型分析并继续"
+  default_prompt: "咨询继续：使用 $paseo-senior-advisor 分析当前状态，并继续完成原任务。"

@@ -1,0 +1,7 @@
+interface:
+  display_name: "AI Tool Radar"
+  short_description: "发现、回溯并交叉核验近期 AI 与 Agent 工具"
+  default_prompt: "Use $ai-tool-radar to scan for noteworthy AI and Agent tools since a specified date."
+
+policy:
+  allow_implicit_invocation: false
