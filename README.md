@@ -38,7 +38,8 @@
 
 | 文件 | 说明 |
 |------|------|
-| [Agent 工具使用方案](tools/agent-tools.md) | Context7 / Tavily / Oh My Pi / Playwright CLI / UI UX Pro Max 的 CLI 与 Skills 优先使用方式 |
+| [Agent 工具使用方案](tools/agent-tools.md) | Context7 / Tavily / Oh My Pi（含 Claude 1 小时缓存、Context Mode）/ Playwright CLI / UI UX Pro Max 的 CLI 与 Skills 优先使用方式 |
+| [Claude Code 配置（Opus 5.5）](tools/claude-code-opus-config.md) | Opus 5.5 发布后的官方推荐配置、成本原理、1 小时缓存与压缩阈值取舍，可直接交给 AI 执行 |
 
 ### Skills
 

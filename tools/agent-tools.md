@@ -13,6 +13,7 @@
 | UI UX Pro Max | Skill | 为 AI 生成 UI 时补充设计风格、配色、字体、UX guideline 和行业规则 |
 | Addy Osmani Agent Skills | Skills | 为 AI Coding Agent 补充生产级工程流程、质量门禁和专项 review 能力 |
 | Oh My Pi / OMP | CLI（`omp`） + Skill（`model-router`） | 本地模型网关，配合 model-router skill 实现多 CLI 模型发现与按需路由 |
+| Context Mode | OMP 插件 | 拦截大块工具输出、沙箱执行和全文检索，减少上下文占用、降低压缩频率 |
 | Playwright CLI | `playwright-cli` CLI / Skills | 浏览器自动化、E2E 测试、截图、网络拦截、录制追踪 |
 | **Clipboard Vision MCP** | MCP Server | 为无视觉能力的 Agent 提供剪贴板截图识别、OCR、错误诊断，基于 OpenAI-compatible 视觉模型 |
 
@@ -229,6 +230,65 @@ omp -p --no-session --cwd "$PWD" --model <selector> [--thinking <级别>] "任�
 # 视觉模型分析图片
 omp inspect_image --model <vision-model> <image-path>
 ```
+
+### 接入 Claude（Anthropic 协议中转站）并开启 1 小时缓存
+
+omp 只对 Anthropic 官方地址默认开启 1 小时提示缓存。走中转站等自定义地址时，下面两项**缺一不可**，否则只会写 5 分钟缓存：
+
+1. 供应商级 compat 声明支持长缓存（`~/.omp/agent/models.yml`，与 `baseUrl` 同级）：
+
+   ```yaml
+   providers:
+     <provider>:
+       baseUrl: https://<你的中转站>
+       api: anthropic-messages
+       compat:
+         supportsLongCacheRetention: true
+   ```
+
+2. omp 设置改为长缓存（默认 `auto` 在 API Key 模式下只用 5 分钟）：
+
+   ```bash
+   omp config set providers.cacheRetention long
+   ```
+
+如果用 [omp-switch](https://github.com/llt22/omp-switch) 管理供应商：它点「应用到 omp」时会按自己的 `~/.omp/omp-switch/providers.json` **整份重写** `models.yml`，手改的 `compat` 会被覆盖。v0.1.18 起在供应商编辑弹窗 →「高级设置」里打开「支持 1 小时提示缓存」即可，不要手改 `models.yml`。
+
+与 Claude Code 推荐配置（见 [Claude Code 配置](claude-code-opus-config.md)）对齐的其余设置：
+
+```bash
+omp config set defaultThinkingLevel medium
+omp config set compaction.thresholdTokens 190000
+# 默认模型：编辑 ~/.omp/agent/config.yml 的 modelRoles.default
+#   default: <provider>/claude-opus-5-5:medium
+```
+
+验证是否真的写了 1 小时缓存（看服务端返回的 `cttl`）：
+
+```bash
+omp -p --mode json --model <provider>/claude-opus-5-5:medium \
+  --append-system-prompt "ttl-check-$(date +%s)" "只回复 ok" \
+  | grep -o '"cttl":{[^}]*}' | sort -u
+```
+
+- 看到 `ephemeral1h`：1 小时缓存生效。
+- 只有 `ephemeral5m`：检查上面两项配置；配置都对仍是 5m，就是中转站没有透传 ttl。聚合多个上游账号的中转站可能出现部分请求 1h、部分 5m，换单 key 线路再测。
+
+### Context Mode 插件
+
+[Context Mode](https://github.com/mksglu/context-mode) 原生支持 OMP：拦截大块工具输出存进本地全文索引，只把摘要放进上下文，压缩前保留会话状态。
+
+```bash
+omp plugin install context-mode
+omp plugin doctor          # 应全部 ok
+```
+
+- 数据目录：`~/.omp/context-mode/`。
+- 装好后会话里会多出 `ctx_execute`、`ctx_search`、`ctx_stats` 等工具；用 `ctx_stats` 查看节省了多少上下文。
+
+### 常见问题
+
+- **报 `HTTP 410 ... was retired`**：默认模型已被供应商下线。用 `omp config get modelRoles` 查看当前角色，改 `~/.omp/agent/config.yml` 的 `modelRoles.default` 换成可用模型。
 
 ### 约束
 
