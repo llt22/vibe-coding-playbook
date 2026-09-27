@@ -64,6 +64,5 @@ vibe-coding-playbook/
 ├── prompts/        # 提示词（直接贴入 AI 工具的规则和指令）
 ├── experiences/    # 实战经验（工作流、方法论、SOP、案例）
 ├── tools/          # 工具使用方案（CLI / Skills 等）
-├── skills/         # 标准 <skill-name>/SKILL.md 工作流
-└── assets/         # 静态资源（图片等）
+└── skills/         # 标准 <skill-name>/SKILL.md 工作流
 ```
