@@ -1,7 +1,7 @@
 # Opus 5.5 发布后，Claude Code 该怎么配（官方推荐）
 
 > 依据 Claude 官方博客 9 月的新文章和官方文档（文末附链接）。
-> 读完第一节就可以动手；也可以复制第二节的代码块发给 Claude Code，让它帮你配。
+> 读完第一节就可以动手，后面是取舍说明。
 
 ---
 
@@ -33,7 +33,7 @@
 | 项 | 怎么处理 |
 |---|---|
 | `promptCacheTtl` | 用 API Key、公司网关、中转站、云厂商的**要配**；Claude 订阅（Pro/Max）**不用配**，默认就是 1 小时 |
-| `autoCompactWindow` | **自己选**：省钱、让模型更专注就写 190000（我的选择）；想用满 100 万就删掉这行。见 [3.2](#32-上下文压缩19-万还是-100-万) |
+| `autoCompactWindow` | **自己选**：省钱、让模型更专注就写 190000（我的选择）；想用满 100 万就删掉这行。见 [2.2](#22-上下文压缩19-万还是-100-万) |
 | `env` 里的 `CLAUDE_CODE_EFFORT_LEVEL` | 有就**删掉**，它会强制覆盖所有档位设置 |
 
 ### 日常怎么切档位
@@ -53,38 +53,9 @@
 
 ---
 
-## 二、交给 AI 配置
+## 二、为什么这样配
 
-复制下面整个代码块，发给 Claude Code 即可。
-
-````markdown
-请按以下步骤帮我配置 Claude Code。严格按顺序执行，每一步完成后再进行下一步。
-
-1. **读取现有配置**：读取 `~/.claude/settings.json`；不存在就新建一个 `{}`。**全程不要输出任何 token、API Key、密码的值**，汇报时用 `***` 代替。
-2. **写入固定项**：合并 `"model": "opus"` 和 `"effortLevel": "medium"`，保留其他所有字段。`effortLevel` 不能写 `max`（会被忽略）。
-3. **判断是否需要 1 小时缓存**：如果 `env` 里有 `ANTHROPIC_BASE_URL`、`ANTHROPIC_AUTH_TOKEN`、`ANTHROPIC_API_KEY`，或配置了 Bedrock、Vertex 相关变量，合并 `"promptCacheTtl": "1h"`。都没有则是订阅用户，不写这一项。
-4. **压缩阈值问用户**：问用户选「19 万自动压缩（省钱、模型更专注）」还是「用满 100 万（不打断长任务，但更贵）」。选前者写 `"autoCompactWindow": 190000`；选后者不写，已有则删除。
-5. **清理档位覆盖**：
-   - `settings.json` 的 `env` 里有 `CLAUDE_CODE_EFFORT_LEVEL` 就删除。
-   - 检查 `~/.zshrc`、`~/.bashrc`、`~/.bash_profile`、`~/.zprofile` 里有没有 `export CLAUDE_CODE_EFFORT_LEVEL`，有的话**告诉用户在哪个文件第几行**，由用户决定是否删除，不要自动改 shell 配置。
-6. **校验 JSON**：运行 `jq empty ~/.claude/settings.json`，必须没有报错。
-7. **CC Switch 用户要同步**：如果存在 `~/.cc-switch/cc-switch.db`，CC Switch 切换供应商时会用数据库里的配置覆盖 `settings.json`。提醒用户在 CC Switch 里把当前供应商同步成同样的字段（或征得同意后，先备份数据库，再更新 `providers` 表中 `is_current=1` 那一行的 `settings_config`）。
-8. **验证 1 小时缓存**（只在第 3 步写了 `promptCacheTtl` 时做）：运行
-
-   ```bash
-   claude -p "只回复 ok" --append-system-prompt "ttl-check-$(date +%s)" --output-format json 2>/dev/null | jq '.usage.cache_creation'
-   ```
-
-   - `ephemeral_1h_input_tokens` 大于 0：1 小时缓存生效。
-   - 只有 `ephemeral_5m_input_tokens` 大于 0：网关没有转发 `anthropic-beta` 请求头，告诉用户去找网关管理员。
-9. **汇报**：列出改了哪些字段（改前 → 改后）、跳过了什么及原因、第 5 步发现的 shell 配置位置、第 8 步的验证结果。
-````
-
----
-
-## 三、为什么这样配
-
-### 3.1 钱花在哪
+### 2.1 钱花在哪
 
 每发一轮对话，Claude Code 都会**把之前的全部上下文重发一遍**，所以花多少钱看的是「轮数 × 上下文长度 × 缓存命中率 + 思考量」：
 
@@ -95,7 +66,7 @@
 
 参考值：官方统计企业用户平均**每人每活跃日约 $13**，90% 的人低于 $30。
 
-### 3.2 上下文压缩：19 万还是 100 万
+### 2.2 上下文压缩：19 万还是 100 万
 
 Opus 5.5 有 100 万上下文窗口。不设 `autoCompactWindow`，要到约 96.7 万才自动压缩；设了就到设定值压缩（把之前的对话总结成摘要继续干活）。官方没有推荐值：
 
@@ -110,7 +81,7 @@ Opus 5.5 有 100 万上下文窗口。不设 `autoCompactWindow`，要到约 96.
 
 会话里用 `/autocompact 190k` 修改（写回 settings.json），`/autocompact auto` 恢复默认；只想这次启动用满，就 `claude --autocompact 1M`。
 
-### 3.3 缓存时长：1 小时还是 5 分钟
+### 2.3 缓存时长：1 小时还是 5 分钟
 
 | 你怎么用 Claude Code | 默认缓存时长 | 要不要配 |
 |---|---|---|
@@ -119,9 +90,15 @@ Opus 5.5 有 100 万上下文窗口。不设 `autoCompactWindow`，要到约 96.
 
 1 小时缓存写入更贵（输入价的 2 倍，5 分钟是 1.25 倍）。经常停下来看代码、想方案、开会再回来的，5 分钟早就过期，**配 1 小时更划算，大部分人属于这种**；一直连续快速发消息、从不停顿超过 5 分钟的，才不用配。
 
-走网关或中转站的，需要网关原样转发 `anthropic-beta` 请求头，配完按第二节第 8 步验证。
+走网关或中转站的，需要网关原样转发 `anthropic-beta` 请求头。配完可以验证：
 
-### 3.4 模型怎么选
+```bash
+claude -p "只回复 ok" --append-system-prompt "ttl-check-$(date +%s)" --output-format json 2>/dev/null | jq '.usage.cache_creation'
+```
+
+`ephemeral_1h_input_tokens` 大于 0 就是生效了；只有 `ephemeral_5m_input_tokens` 大于 0，说明网关没转发请求头，找网关管理员。
+
+### 2.4 模型怎么选
 
 - **Opus 5.5**：日常主力，开发、调试、代码审查。
 - **Sonnet / Haiku**：子代理干杂活，搜索、读日志、总结。子代理默认继承主模型，杂活显式指定小模型。
@@ -129,7 +106,7 @@ Opus 5.5 有 100 万上下文窗口。不设 `autoCompactWindow`，要到约 96.
 
 ---
 
-## 四、日常习惯（比配置更重要）
+## 三、日常习惯（比配置更重要）
 
 1. **换任务就 `/clear`**，别在一个会话里连做不相关的事。
 2. **任务间隙手动 `/compact`**，别等它在任务中途自动压缩；走错方向想整段放弃时用 `/rewind`，比压缩更省。
