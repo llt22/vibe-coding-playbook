@@ -3,7 +3,7 @@
 
 分三层，越往后越贵，前一层能定的不进下一层：
 1. 防死循环：同一轮用户消息里最多拦 MAX_BLOCKS 次。
-2. 零成本规则：没有"提问/待续"迹象的直接放行；在要凭据、授权、危险操作确认的直接放行。
+2. 零成本规则：没有"提问/待续"迹象的直接放行（要凭据、授权这类交给模型判，关键词太容易误放）。
 3. 便宜模型（OpenAI 兼容接口，默认复用 DeepSeek）判断剩下拿不准的。
 
 任何异常都放行（不卡住主 agent），但写进日志，保证可观察。
@@ -21,13 +21,6 @@ HERE = os.path.dirname(os.path.realpath(__file__))
 LOG_DIR = os.path.join(HERE, "logs")
 STATE_DIR = os.path.join(HERE, "state")
 
-# 在向用户要只有用户能给的东西，或在确认危险操作：这时停下是对的
-USER_ONLY = re.compile(
-    r"密码|密钥|token|API ?key|凭据|凭证|授权|登录|验证码|二维码|付款|支付|"
-    r"force push|改写历史|物理删除|清空|生产环境|线上|重启服务器|数据库变更|"
-    r"password|credential|authorize|sign in|log in",
-    re.I,
-)
 # 有停早了的迹象：结尾在提问、请确认、预告下一步、说还没做完
 SUSPECT = re.compile(
     r"[？?]\s*$|要不要|要我|需要我|是否(需要|继续|要)|可以吗|行吗|好吗|你确认|请确认|确认后|"
@@ -151,8 +144,6 @@ def main():
     if not message:
         return log({**base, "decision": "allow", "by": "rule", "why": "无文本"})
     tail = message[-600:]
-    if USER_ONLY.search(tail):
-        return log({**base, "decision": "allow", "by": "rule", "why": "需用户提供/确认"})
     if not SUSPECT.search(tail):
         return log({**base, "decision": "allow", "by": "rule", "why": "无停早迹象"})
 
