@@ -6,12 +6,14 @@ import { pages } from './collectors/pages.ts';
 import { rss } from './collectors/rss.ts';
 import type { Collector, RawItem } from './collectors/types.ts';
 import type { Store } from './db.ts';
-import { runResearch, writeDigest } from './research.ts';
+import { runPlaybook, writeDigest } from './playbook.ts';
+import { runResearch } from './research.ts';
 import { runTriage } from './triage.ts';
 
 export const collectors: Collector[] = [githubSearch, githubTrending, hn, rss, pages];
 export const TRIAGE = 'triage';
 export const RESEARCH = 'research';
+export const PLAYBOOK = { name: 'playbook', intervalHours: 24 };
 export const DIGEST = { name: 'digest', intervalHours: 168 };
 /** 调研失败后至少隔这么久再试，避免每分钟重试刷接口 */
 const RESEARCH_EVERY_HOURS = 1;
@@ -66,9 +68,23 @@ async function research(store: Store, catalog: Catalog) {
   }
 }
 
+/** 每天把新的 adopt/try 调研合并进手册；失败后隔 1 小时再试。 */
+async function playbook(store: Store) {
+  if (!due(store, PLAYBOOK) || !store.research(`status='done' AND verdict IN ('adopt', 'try') AND playbook IS NULL`, [], 1).length) return;
+  const last = store.lastStart(PLAYBOOK.name);
+  if (last && Date.now() - Date.parse(last) < RESEARCH_EVERY_HOURS * 3600_000) return;
+  const run = store.startRun(PLAYBOOK.name);
+  try {
+    store.finishRun(run, { fetched: await runPlaybook(store), newItems: 0 });
+  } catch (e) {
+    store.finishRun(run, { error: (e as Error).message });
+    console.error('[playbook]', (e as Error).message);
+  }
+}
+
+/** 本周没有手册修订时记一次成功、不写文件。 */
 function digest(store: Store) {
-  // 还没有任何调研结果时不写空周报
-  if (!due(store, DIGEST) || !store.research(`status = 'done'`, [], 1).length) return;
+  if (!due(store, DIGEST)) return;
   const run = store.startRun(DIGEST.name);
   try {
     store.finishRun(run, { fetched: writeDigest(store), newItems: 0 });
@@ -85,7 +101,7 @@ const due = (store: Store, c: { name: string; intervalHours: number }) => {
 
 let busy = false;
 
-/** 执行到期的采集器，再初筛、自动调研、到期写周报。force 时采集器忽略周期全部执行。 */
+/** 执行到期的采集器，再初筛、自动调研、合并进手册、到期写周报。force 时采集器忽略周期全部执行。 */
 export async function tick(store: Store, catalog: Catalog, force = false) {
   if (busy) return;
   busy = true;
@@ -93,6 +109,7 @@ export async function tick(store: Store, catalog: Catalog, force = false) {
     for (const c of collectors) if (force || due(store, c)) await runCollector(store, catalog, c);
     await triage(store);
     await research(store, catalog);
+    await playbook(store);
     digest(store);
   } finally {
     busy = false;
@@ -105,7 +122,7 @@ export function unhealthy(store: Store): { name: string; reason: string }[] {
   const out: { name: string; reason: string }[] = [];
   // 推送方：启用推送接口后按约定周期检查心跳
   const pushers = config.ingestToken ? config.pushers.map((p) => ({ name: `ingest:${p.name}`, intervalHours: p.intervalHours })) : [];
-  for (const c of [...collectors, ...pushers, { name: TRIAGE, intervalHours: 0 }, { name: RESEARCH, intervalHours: 0 }, DIGEST]) {
+  for (const c of [...collectors, ...pushers, { name: TRIAGE, intervalHours: 0 }, { name: RESEARCH, intervalHours: 0 }, { name: PLAYBOOK.name, intervalHours: 0 }, DIGEST]) {
     const r = last.get(c.name);
     if (r?.status === 'error') out.push({ name: c.name, reason: r.error ?? '未知错误' });
     else if (c.intervalHours) {

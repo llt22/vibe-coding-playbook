@@ -37,6 +37,20 @@ export type Research = {
   error: string | null;
   created_at: string;
   updated_at: string;
+  /** 合并进的手册 slug；未合并为 null */
+  playbook: string | null;
+  merged_at: string | null;
+};
+
+export type Playbook = {
+  slug: string;
+  title: string;
+  problem: string;
+  first_step: string;
+  body: string;
+  file: string;
+  created_at: string;
+  updated_at: string;
 };
 
 export type Run = {
@@ -102,6 +116,23 @@ CREATE TABLE IF NOT EXISTS research (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS playbooks (
+  slug TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  problem TEXT NOT NULL,
+  first_step TEXT NOT NULL,
+  body TEXT NOT NULL,
+  file TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS playbook_updates (
+  id INTEGER PRIMARY KEY,
+  slug TEXT NOT NULL REFERENCES playbooks(slug),
+  changes TEXT NOT NULL,
+  research_ids TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS pushers (
   name TEXT PRIMARY KEY,
   last_seen_at TEXT NOT NULL,
@@ -120,6 +151,8 @@ export class Store {
     this.db.exec('PRAGMA journal_mode = WAL;' + SCHEMA);
     const cols = (this.db.prepare(`PRAGMA table_info(items)`).all() as { name: string }[]).map((c) => c.name);
     if (!cols.includes('deep')) this.db.exec(`ALTER TABLE items ADD COLUMN deep INTEGER`);
+    const rcols = (this.db.prepare(`PRAGMA table_info(research)`).all() as { name: string }[]).map((c) => c.name);
+    if (!rcols.includes('playbook')) this.db.exec(`ALTER TABLE research ADD COLUMN playbook TEXT; ALTER TABLE research ADD COLUMN merged_at TEXT`);
     // 进程被杀时遗留的 running 记录不会再结束，标成失败以免页面误以为仍在运行
     this.db.prepare(`UPDATE runs SET status='error', finished_at=?, error='进程中断' WHERE status='running'`).run(now());
   }
@@ -228,6 +261,38 @@ export class Store {
 
   count(where = '1=1', params: (string | number)[] = []): number {
     return (this.db.prepare(`SELECT COUNT(*) AS n FROM items WHERE ${where}`).get(...params) as { n: number }).n;
+  }
+
+  playbooks(): Playbook[] {
+    return this.db.prepare(`SELECT * FROM playbooks ORDER BY updated_at DESC`).all() as Playbook[];
+  }
+
+  playbook(slug: string): Playbook | undefined {
+    return this.db.prepare(`SELECT * FROM playbooks WHERE slug=?`).get(slug) as Playbook | undefined;
+  }
+
+  /** 保存新版手册、记一条修订记录，并把这些调研标为已合并，在一个事务里完成。 */
+  savePlaybook(p: Omit<Playbook, 'created_at' | 'updated_at'>, changes: string[], researchIds: number[]): Playbook {
+    const t = now();
+    this.db.exec('BEGIN');
+    try {
+      this.db.prepare(`INSERT INTO playbooks (slug, title, problem, first_step, body, file, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(slug) DO UPDATE SET title=excluded.title, problem=excluded.problem, first_step=excluded.first_step, body=excluded.body, file=excluded.file, updated_at=excluded.updated_at`)
+        .run(p.slug, p.title, p.problem, p.first_step, p.body, p.file, t, t);
+      this.db.prepare(`INSERT INTO playbook_updates (slug, changes, research_ids, created_at) VALUES (?, ?, ?, ?)`)
+        .run(p.slug, JSON.stringify(changes), JSON.stringify(researchIds), t);
+      const mark = this.db.prepare(`UPDATE research SET playbook=?, merged_at=? WHERE id=?`);
+      for (const id of researchIds) mark.run(p.slug, t, id);
+      this.db.exec('COMMIT');
+    } catch (e) {
+      this.db.exec('ROLLBACK');
+      throw e;
+    }
+    return this.playbook(p.slug)!;
+  }
+
+  playbookUpdates(since: string): { slug: string; changes: string; research_ids: string; created_at: string }[] {
+    return this.db.prepare(`SELECT * FROM playbook_updates WHERE created_at >= ? ORDER BY id`).all(since) as { slug: string; changes: string; research_ids: string; created_at: string }[];
   }
 
   touchPusher(name: string, count: number) {

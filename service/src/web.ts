@@ -37,8 +37,8 @@ button{font-size:13px;padding:4px 12px;margin:0 2px;border:1px solid #d1d5db;bac
 button:hover{background:#f3f4f6;border-color:#9ca3af}button:active{background:#e5e7eb}
 h2{font-size:20px;margin:24px 0 12px;color:#111827}
 </style>
-<nav><a href="/">调研结论</a><a href="/candidates">全部线索</a><a href="/runs">运行记录</a>
-<span class="muted">全自动：定时采集 → 模型初筛 → 模型挑选并深入调研 → 报告写入仓库</span></nav>
+<nav><a href="/">手册</a><a href="/research">调研证据</a><a href="/candidates">全部线索</a><a href="/runs">运行记录</a>
+<span class="muted">全自动：采集 → 初筛 → 深入调研 → 合并进可执行手册并提交到仓库</span></nav>
 ${body}</html>`;
 }
 
@@ -102,6 +102,27 @@ function md(src: string) {
 }
 
 function home(store: Store) {
+  const list = store.playbooks();
+  const pending = store.research(`status='done' AND verdict IN ('adopt', 'try') AND playbook IS NULL`, []).length;
+  const cards = list.map((p) => `<div class="card"><h3><a href="/playbooks/${esc(p.slug)}">${esc(p.title)}</a> <span class="muted">未经实测</span></h3>
+${esc(p.problem)}<br><b>先试这一步：</b>${esc(p.first_step)}<br><span class="muted">最近修订 ${time(p.updated_at)} · 依据 ${store.research('playbook = ?', [p.slug]).length} 篇调研 · ${esc(p.file)}</span></div>`).join('');
+  return page('手册', alerts(store)
+    + `<p class="muted">按工作场景组织的可执行手册：适用条件、编号步骤、判断标准、常见坑。模型把“建议采用 / 值得一试”的调研每天合并进来并持续修订${pending ? `，待合并 ${pending} 篇` : ''}。均未经实测，人工验证过的做法在仓库 experiences/。</p>`
+    + (cards || '<p class="muted">还没有手册。有“建议采用 / 值得一试”的调研后，每天自动合并生成。</p>'));
+}
+
+function playbookPage(store: Store, slug: string) {
+  const p = store.playbook(slug);
+  if (!p) return null;
+  const sources = store.research('playbook = ? ORDER BY merged_at', [slug]);
+  return page(p.title, `<h2>${esc(p.title)}</h2>
+<p class="alert" style="background:#fffbeb;border-color:#d97706">未经实测：由模型根据自动调研合并生成，步骤尚未有人实际跑过。</p>
+<p><b>解决的问题：</b>${esc(p.problem)}<br><b>先试这一步：</b>${esc(p.first_step)}</p>
+<p class="muted">最近修订 ${time(p.updated_at)} · ${esc(p.file)}</p>
+<div class="report">${md(p.body)}<h3>依据的调研</h3><ul>${sources.map((r) => `<li><a href="/research/${r.id}">${esc(r.item.title)}</a>：${esc(r.conclusion)}</li>`).join('')}</ul></div>`);
+}
+
+function evidence(store: Store) {
   const since = new Date(Date.now() - 14 * 86400_000).toISOString();
   const done = store.research(`status = 'done' AND updated_at >= ? ORDER BY updated_at DESC`, [since]);
   const failed = store.research(`status = 'error' ORDER BY updated_at DESC`, []);
@@ -115,8 +136,8 @@ function home(store: Store) {
 ${esc(r.conclusion)}<br><span class="muted">${esc(r.item.source)} · ${time(r.updated_at)} · <a href="${esc(r.item.url)}" target="_blank" rel="noreferrer">原文</a>${r.file ? ` · ${esc(r.file)}` : ''}</span></div>`).join('');
   }).join('');
   const failures = failed.length ? `<h2>调研失败（${failed.length}）</h2>` + failed.map((r) => `<div class="card"><a href="${esc(r.item.url)}" target="_blank" rel="noreferrer">${esc(r.item.title)}</a><br>${researchStatus(r)}</div>`).join('') : '';
-  return page('调研结论', alerts(store)
-    + `<p class="muted">近 7 天采集 ${week} 条，模型挑出 ${deep} 条深入调研；近 14 天完成 ${done.length} 条，排队 ${queued} 条。每小时最多调研 ${config.researchPerRun} 条、每天最多 ${config.researchPerDay} 条，报告同时提交到仓库 ${esc(config.researchDir)}/。</p>`
+  return page('调研证据', alerts(store)
+    + `<p class="muted">每条线索的调研报告，是手册的素材。近 7 天采集 ${week} 条，模型挑出 ${deep} 条深入调研；近 14 天完成 ${done.length} 条，排队 ${queued} 条。每小时最多调研 ${config.researchPerRun} 条、每天最多 ${config.researchPerDay} 条，报告同时提交到仓库 ${esc(config.researchDir)}/。</p>`
     + (groups || '<p class="muted">还没有完成的调研。模型初筛时会自动挑选值得深入的线索。</p>') + failures);
 }
 
@@ -125,6 +146,7 @@ function report(store: Store, id: number) {
   if (!r || r.status !== 'done') return null;
   return page(r.item.title, `<h2>${esc(r.item.title)}</h2>
 <p><b class="v-${esc(r.verdict)}">${esc(VERDICTS[r.verdict ?? ''])}</b>：${esc(r.conclusion)}</p>
+${r.playbook ? `<p>已合并进手册 <a href="/playbooks/${esc(r.playbook)}">${esc(store.playbook(r.playbook)?.title ?? r.playbook)}</a></p>` : ''}
 <p class="muted"><a href="${esc(r.item.url)}" target="_blank" rel="noreferrer">原文</a> · ${esc(r.item.source)} · 初筛：${esc(r.item.reason)} · ${time(r.updated_at)}${r.file ? ` · ${esc(r.file)}` : ''}</p>
 <div class="report">${md(r.body ?? '')}</div>`);
 }
@@ -224,10 +246,12 @@ export function handler(store: Store, catalog: Catalog) {
       }
 
       if (req.method === 'GET' && url.pathname === '/') return send(res, 200, home(store));
+      if (req.method === 'GET' && url.pathname === '/research') return send(res, 200, evidence(store));
       if (req.method === 'GET' && url.pathname === '/candidates') return send(res, 200, candidates(store, catalog, url.searchParams));
       if (req.method === 'GET' && url.pathname === '/runs') return send(res, 200, runs(store));
       const m = url.pathname.match(/^\/research\/(\d+)$/);
-      const html = req.method === 'GET' && m ? report(store, Number(m[1])) : null;
+      const pb = url.pathname.match(/^\/playbooks\/([a-z0-9-]+)$/);
+      const html = req.method !== 'GET' ? null : m ? report(store, Number(m[1])) : pb ? playbookPage(store, pb[1]) : null;
       if (html) return send(res, 200, html);
       send(res, 404, page('未找到', '<p>未找到。</p>'));
     } catch (e) {
