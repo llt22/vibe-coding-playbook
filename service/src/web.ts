@@ -18,12 +18,22 @@ function page(title: string, body: string) {
   return `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(title)} · AI 工作方法调研</title>
 <style>
-body{font:14px/1.5 -apple-system,system-ui,sans-serif;margin:0 auto;max-width:1100px;padding:16px;color:#222}
-nav a{margin-right:16px}nav{margin-bottom:12px;border-bottom:1px solid #ddd;padding-bottom:8px}
-table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid #eee;padding:6px 4px;text-align:left;vertical-align:top}
-.alert{background:#fde8e8;border:1px solid #e53e3e;padding:8px 12px;margin-bottom:12px;white-space:pre-wrap}
-.muted{color:#888}.err{color:#c53030}.ok{color:#2f855a}.r3{font-weight:bold;color:#c05621}.r2{color:#b7791f}
-form.inline{display:inline}button{font-size:12px;margin:0 2px}
+body{font:14px/1.6 -apple-system,system-ui,sans-serif;margin:0 auto;max-width:1200px;padding:20px;color:#1a1a1a;background:#fafafa}
+a{color:#2563eb;text-decoration:none}a:hover{text-decoration:underline}
+nav{margin-bottom:16px;border-bottom:2px solid #e5e7eb;padding-bottom:12px;display:flex;align-items:center;gap:20px}
+nav a{font-weight:500}nav a:hover{color:#1e40af}
+table{border-collapse:collapse;width:100%;background:#fff;border:1px solid #e5e7eb;box-shadow:0 1px 2px rgba(0,0,0,0.05)}
+th{background:#f9fafb;font-weight:600;border-bottom:2px solid #e5e7eb;padding:10px 8px;text-align:left}
+td{border-bottom:1px solid #f3f4f6;padding:10px 8px;vertical-align:top}
+tr:last-child td{border-bottom:none}tr:hover{background:#f9fafb}
+.alert{background:#fef2f2;border-left:4px solid #dc2626;padding:12px 16px;margin-bottom:16px;white-space:pre-wrap;border-radius:4px}
+.muted{color:#6b7280;font-size:13px}
+.err{color:#dc2626;font-weight:500}.ok{color:#16a34a;font-weight:500}
+.r3{font-weight:bold;color:#ea580c}.r2{color:#d97706}.r1{color:#65a30d}
+form.inline{display:inline}
+button{font-size:13px;padding:4px 12px;margin:0 2px;border:1px solid #d1d5db;background:#fff;border-radius:4px;cursor:pointer;color:#374151;font-weight:500}
+button:hover{background:#f3f4f6;border-color:#9ca3af}button:active{background:#e5e7eb}
+h2{font-size:20px;margin:24px 0 12px;color:#111827}
 </style>
 <nav><a href="/">今日需关注</a><a href="/candidates">候选池</a><a href="/runs">运行记录</a>
 <form class="inline" method="post" action="/run"><button>立即采集</button></form></nav>
