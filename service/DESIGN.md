@@ -46,7 +46,7 @@
    失败（接口错误、拒答、截断）标为“初筛失败”并显示原因，下一轮重试，不当作 0 分。
 4. **人工决定**：网页上对每条选“采纳 / 观察 / 放弃”。采纳的由人手动触发深度调研（沿用 `ai-tool-radar` 等 skill），结论写回 catalog.jsonl。
 
-模型用 `TRIAGE_MODEL` 环境变量配置，默认 `claude-opus-5-5`、effort `low`。凭据由 Anthropic SDK 从环境变量读取（`ANTHROPIC_API_KEY` 或 `ANTHROPIC_AUTH_TOKEN`，可选 `ANTHROPIC_BASE_URL`），服务不保存。
+模型走任意 OpenAI 兼容接口（需支持 `response_format: json_object`），在 `service/.env` 配置 `LLM_BASE_URL`、`LLM_API_KEY`、`LLM_MODEL`。输出用 zod 校验，不合格记为初筛失败。
 
 ## 网页
 
@@ -86,7 +86,7 @@ Authorization: Bearer $INGEST_TOKEN
 ## 技术选择
 
 - Node 24 直接运行 TypeScript（类型擦除），不需要构建步骤；`tsc --noEmit` 只做类型检查。
-- 依赖只有 `@anthropic-ai/sdk`、`zod`、`fast-xml-parser`。HTTP 服务用 `node:http`，页面服务端渲染，不引前端框架。
+- 依赖只有 `openai`、`zod`、`fast-xml-parser`。HTTP 服务用 `node:http`，页面服务端渲染，不引前端框架。
 - 调度在进程内：启动时和每分钟检查一次，距离上次成功运行超过周期就执行。重启不丢进度，因为时间取自 `runs` 表。
 
 ## 分阶段
@@ -107,9 +107,10 @@ pnpm start          # http://127.0.0.1:4317，进程内每分钟检查到期任�
 pnpm typecheck
 ```
 
-- **代理**：本机直连 github.com 不稳定。Node 的 fetch 默认不走系统代理，需要 `NODE_USE_ENV_PROXY=1 HTTPS_PROXY=http://127.0.0.1:7897`。
+- **配置**：`cp .env.example .env` 后填写，`.env` 不入库。脚本用 `--env-file-if-exists=.env` 读取。
+- **代理**：本机直连 github.com 不稳定。Node 的 fetch 默认不走系统代理，脚本带了 `--use-env-proxy`，在 `.env` 里设 `HTTPS_PROXY` 即生效（`NODE_USE_ENV_PROXY` 写在 env 文件里无效）。模型接口不需要代理时加进 `NO_PROXY`。
 - **推送接口**：设置 `INGEST_TOKEN` 后才启用。
-- **常驻**：`launchd/ai-work-radar.plist` 用登录 shell 启动，凭据从 shell 配置读取，不写进文件。启用方式：
+- **常驻**：`launchd/ai-work-radar.plist` 用登录 shell 启动 `pnpm start`，配置全部来自 `.env`。启用方式：
   ```bash
   cp launchd/ai-work-radar.plist ~/Library/LaunchAgents/
   launchctl load ~/Library/LaunchAgents/ai-work-radar.plist

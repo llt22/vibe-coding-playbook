@@ -10,7 +10,10 @@ export const config = {
   dbPath: process.env.DB_PATH ?? resolve(ROOT, 'data/radar.db'),
   catalogPath: resolve(ROOT, '../research/catalog/catalog.jsonl'),
   githubToken: process.env.GITHUB_TOKEN ?? '',
-  triageModel: process.env.TRIAGE_MODEL ?? 'claude-opus-5-5',
+  // OpenAI 兼容接口：LLM_BASE_URL 形如 https://api.example.com/v1
+  llmBaseURL: process.env.LLM_BASE_URL ?? '',
+  llmApiKey: process.env.LLM_API_KEY ?? '',
+  llmModel: process.env.LLM_MODEL ?? '',
   triageBatch: 10,
 };
 

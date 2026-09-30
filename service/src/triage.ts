@@ -1,5 +1,4 @@
-import Anthropic from '@anthropic-ai/sdk';
-import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
+import OpenAI from 'openai';
 import { z } from 'zod';
 import { config } from './config.ts';
 import type { Item, Store } from './db.ts';
@@ -22,9 +21,11 @@ ${Object.entries(QUESTIONS).map(([k, v]) => `${k}. ${v}`).join('\n')}
 - questions：它主要回答上面哪几个问题（编号，可为空）。
 - reason：一句中文，说明它在真实工作里具体能做什么。看不出实际用途、只有宣传或演示的，直接说明并给低分。
 
-只依据给出的标题、摘要和热度判断，不要编造没有给出的信息。每条输入都必须有一条结果，id 与输入一致。`;
+只依据给出的标题、摘要和热度判断，不要编造没有给出的信息。每条输入都必须有一条结果，id 与输入一致。
+只输出 JSON，格式：{"results": [{"id": 1, "relevance": 2, "questions": [1, 3], "reason": "..."}]}`;
 
-const client = new Anthropic({ maxRetries: 3 });
+let client: OpenAI | undefined;
+const llm = () => (client ??= new OpenAI({ baseURL: config.llmBaseURL, apiKey: config.llmApiKey, maxRetries: 3 }));
 
 function describe(i: Item) {
   return { id: i.id, source: i.source, title: i.title, url: i.url, summary: i.summary.slice(0, 600), metrics: JSON.parse(i.metrics) };
@@ -33,17 +34,26 @@ function describe(i: Item) {
 async function triageBatch(store: Store, batch: Item[]) {
   const ids = batch.map((i) => i.id);
   try {
-    const res = await client.messages.parse({
-      model: config.triageModel,
-      max_tokens: 8000,
-      output_config: { effort: 'low', format: zodOutputFormat(Result) },
-      system: SYSTEM,
-      messages: [{ role: 'user', content: JSON.stringify(batch.map(describe)) }],
+    const res = await llm().chat.completions.create({
+      model: config.llmModel,
+      response_format: { type: 'json_object' },
+      messages: [
+        { role: 'system', content: SYSTEM },
+        { role: 'user', content: JSON.stringify(batch.map(describe)) },
+      ],
     });
-    if (res.stop_reason === 'refusal') return store.setTriageError(ids, `模型拒答：${res.stop_details?.category ?? '未知类别'}`);
-    if (res.stop_reason === 'max_tokens') return store.setTriageError(ids, '输出被截断（max_tokens）');
-    if (!res.parsed_output) return store.setTriageError(ids, '结构化输出解析失败');
-    const got = new Map(res.parsed_output.results.map((r) => [r.id, r]));
+    const choice = res.choices[0];
+    if (!choice) return store.setTriageError(ids, '模型没有返回结果');
+    if (choice.finish_reason === 'length') return store.setTriageError(ids, '输出被截断（length）');
+    if (choice.finish_reason === 'content_filter') return store.setTriageError(ids, '被内容过滤拦截');
+    let parsed;
+    try {
+      parsed = Result.safeParse(JSON.parse(choice.message.content ?? ''));
+    } catch {
+      return store.setTriageError(ids, `输出不是合法 JSON：${(choice.message.content ?? '').slice(0, 200)}`);
+    }
+    if (!parsed.success) return store.setTriageError(ids, `输出格式不符：${parsed.error.issues[0]?.message}`);
+    const got = new Map(parsed.data.results.map((r) => [r.id, r]));
     for (const item of batch) {
       const r = got.get(item.id);
       if (!r) {
@@ -57,10 +67,11 @@ async function triageBatch(store: Store, batch: Item[]) {
       });
     }
   } catch (e) {
-    if (e instanceof Anthropic.APIError) {
+    if (e instanceof OpenAI.APIError) {
       store.setTriageError(ids, `API ${e.status ?? '连接失败'}：${e.message.slice(0, 300)}`);
-      // 鉴权或参数错误重试也不会好，交给调用方停止本轮；限流和 5xx 已由 SDK 重试过
-      if (e instanceof Anthropic.AuthenticationError || e instanceof Anthropic.BadRequestError || e instanceof Anthropic.PermissionDeniedError) throw e;
+      // 鉴权、参数、模型名错误重试也不会好，交给调用方停止本轮；限流和 5xx 已由 SDK 重试过
+      if (e instanceof OpenAI.AuthenticationError || e instanceof OpenAI.BadRequestError
+        || e instanceof OpenAI.PermissionDeniedError || e instanceof OpenAI.NotFoundError) throw e;
       return;
     }
     throw e;
@@ -69,6 +80,8 @@ async function triageBatch(store: Store, batch: Item[]) {
 
 /** 初筛待处理和上次失败的条目。返回处理条数；遇到不可恢复错误时抛出，由调度记为失败。 */
 export async function runTriage(store: Store, limit = 200): Promise<number> {
+  const missing = (['llmBaseURL', 'llmApiKey', 'llmModel'] as const).filter((k) => !config[k]);
+  if (missing.length) throw new Error(`未配置模型：.env 缺少 ${missing.map((k) => ({ llmBaseURL: 'LLM_BASE_URL', llmApiKey: 'LLM_API_KEY', llmModel: 'LLM_MODEL' })[k]).join('、')}`);
   const items = store.pendingTriage(limit);
   for (let i = 0; i < items.length; i += config.triageBatch) {
     await triageBatch(store, items.slice(i, i + config.triageBatch));

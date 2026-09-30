@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!-- 用登录 shell 启动，凭据（ANTHROPIC_*、INGEST_TOKEN）从 shell 配置读取，不写进本文件 -->
+<!-- 用登录 shell 启动以获得 PATH 里的 pnpm；模型凭据和代理都在 service/.env，不写进本文件 -->
 <plist version="1.0">
 <dict>
   <key>Label</key><string>ai-work-radar</string>
   <key>ProgramArguments</key>
   <array>
     <string>/bin/zsh</string><string>-lc</string>
-    <string>cd ~/WebstormProjects/vibe-coding-playbook/service &amp;&amp; NODE_USE_ENV_PROXY=1 HTTPS_PROXY=http://127.0.0.1:7897 exec pnpm start</string>
+    <string>cd ~/WebstormProjects/vibe-coding-playbook/service &amp;&amp; exec pnpm start</string>
   </array>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>

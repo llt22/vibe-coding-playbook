@@ -3,13 +3,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node --disable-warning=ExperimentalWarning src/server.ts",
-    "collect": "node --disable-warning=ExperimentalWarning src/server.ts --once",
+    "start": "node --use-env-proxy --env-file-if-exists=.env --disable-warning=ExperimentalWarning src/server.ts",
+    "collect": "node --use-env-proxy --env-file-if-exists=.env --disable-warning=ExperimentalWarning src/server.ts --once",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.129.0",
     "fast-xml-parser": "^5.11.2",
+    "openai": "^7.23.0",
     "zod": "^4.6.5"
   },
   "devDependencies": {
