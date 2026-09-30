@@ -114,6 +114,7 @@ def ask_llm(env, user_text, message):
         "model": model,
         "temperature": 0,
         "max_tokens": 200,
+        "reasoning_effort": "none",  # 思考型模型会把 max_tokens 耗在推理上，content 为空
         "response_format": {"type": "json_object"},
         "messages": [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": content}],
     }).encode()
