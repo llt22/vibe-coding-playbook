@@ -650,8 +650,8 @@
     {
       "path": "supplement-audit.md",
       "kind": "editorial_audit_ledger",
-      "bytes": 13163,
-      "sha256": "7f4e2689fdba4a2fae21051234d037f529cf0c220523261aeedaa1ad31566c95",
+      "bytes": 17855,
+      "sha256": "ed16ffd4e6dc606d904a9b8b74f56fc085c687d2448b020a613d4b978df6cd90",
       "external_claims_reverified": false,
       "scan_summary": {
         "root_session_files_screened": 1710,
@@ -758,6 +758,184 @@
       ],
       "bytes": 2762,
       "sha256": "5487d0b9539ba8128bc1f50595466aa878d01a0286b6e57c8d5d50fbacaa9cd7"
+    },
+    {
+      "path": "recovered/omp-pi-extensions-and-issues-2026-08-04.md",
+      "kind": "recovered_conversation_excerpt",
+      "external_claims_reverified": false,
+      "source": "~/.omp/agent/sessions/-WebstormProjects-review-helper/2026-08-04T08-17-30-515Z_019fcbd9-6793-7000-940c-ae6aa174fe6a.jsonl",
+      "messages": [
+        {
+          "line": 5,
+          "role": "user",
+          "timestamp": "2026-08-04T08:17:30.638Z",
+          "text_sha256": "90d18bd84410e4746edec16a35c9b62753ff01aae29ebac61fc45a61c9f5ca98"
+        },
+        {
+          "line": 51,
+          "role": "assistant",
+          "timestamp": "2026-08-04T08:18:30.108Z",
+          "text_sha256": "d0bd6bb9e83775dff411d37b6c91734235d5854e254bb770390bee25cbcb6117"
+        },
+        {
+          "line": 52,
+          "role": "user",
+          "timestamp": "2026-08-04T08:18:46.558Z",
+          "text_sha256": "efe68945e130df365193cf8abd02c174b6f3d3462f03680750bcad81fc0037cb"
+        },
+        {
+          "line": 73,
+          "role": "assistant",
+          "timestamp": "2026-08-04T08:20:14.565Z",
+          "text_sha256": "f06b5907357cd8b2a464a597a37efcbcc9121de50db89be399848738372df4e5"
+        },
+        {
+          "line": 74,
+          "role": "user",
+          "timestamp": "2026-08-04T08:20:34.051Z",
+          "text_sha256": "e1ee179b5908844da11cc2685f62309529dc46cb9069a98b5e6c1c3897d8eb8c"
+        },
+        {
+          "line": 87,
+          "role": "user",
+          "timestamp": "2026-08-04T08:20:49.587Z",
+          "text_sha256": "450652dc02577f2acc181ccd72e1b1e8bcb3ee9e427077e95e10a4146f744e83"
+        },
+        {
+          "line": 98,
+          "role": "user",
+          "timestamp": "2026-08-04T08:21:21.542Z",
+          "text_sha256": "58fa674086896695b02f21ec9762402a83a3cee5e0f80cd2d42a6ab4183c6e16"
+        },
+        {
+          "line": 109,
+          "role": "user",
+          "timestamp": "2026-08-04T08:21:45.975Z",
+          "text_sha256": "95efe9f259610a53ed0d99dfaeedc4d395161e5f90730da18c014d43a08dd117"
+        },
+        {
+          "line": 121,
+          "role": "assistant",
+          "timestamp": "2026-08-04T08:22:15.340Z",
+          "text_sha256": "8fbc92c15534a692e172cca36a49dec76a9cf9a070cf02cfca0fdff352eef949"
+        },
+        {
+          "line": 122,
+          "role": "user",
+          "timestamp": "2026-08-04T08:22:27.741Z",
+          "text_sha256": "bcea2a3089e87fa529b1d0da3d04dce528e35f6ef89de7f13b3ba423ec260926"
+        },
+        {
+          "line": 143,
+          "role": "assistant",
+          "timestamp": "2026-08-04T08:23:11.993Z",
+          "text_sha256": "424ce13df24bdbaaf94144202759352deb9be5404d794c1b3968fccb7a78574b"
+        },
+        {
+          "line": 144,
+          "role": "user",
+          "timestamp": "2026-08-04T08:24:21.318Z",
+          "text_sha256": "d8f1fae51af6356ee2ffe6b4ee79f15e76ec9c755d75fee918d10d9b1023eda4"
+        },
+        {
+          "line": 163,
+          "role": "assistant",
+          "timestamp": "2026-08-04T08:25:18.160Z",
+          "text_sha256": "2d3ea392b1f0a9708bbd42ae52a237b015b68975d6ce0bb8b3a2a1c37bfd48ae"
+        },
+        {
+          "line": 164,
+          "role": "user",
+          "timestamp": "2026-08-04T08:26:02.751Z",
+          "text_sha256": "a07618d917891a08b8d1c3d977ca4db8e928473c1a2824240498d7ddc4063eb4"
+        },
+        {
+          "line": 192,
+          "role": "assistant",
+          "timestamp": "2026-08-04T08:26:50.631Z",
+          "text_sha256": "367265c6f211a54ecc716899938248c25652eecb74fdecee31d497cfe32f121e"
+        },
+        {
+          "line": 193,
+          "role": "user",
+          "timestamp": "2026-08-04T08:27:32.415Z",
+          "text_sha256": "41afea934e9531affed038f9e906f3efdc7210a57b186300a0b3406f4ed265b9"
+        },
+        {
+          "line": 257,
+          "role": "assistant",
+          "timestamp": "2026-08-04T08:29:59.278Z",
+          "text_sha256": "d0d3f473ada29e4da7dbb40a47d123397b53811b07ab18da6d865c51a5a9ac8c"
+        },
+        {
+          "line": 258,
+          "role": "user",
+          "timestamp": "2026-08-04T08:30:15.667Z",
+          "text_sha256": "9de9acbad6d8bc01d5f7bf6f7e9a5eecfc304f0b1c06da146a460ad6a15cdd73"
+        },
+        {
+          "line": 259,
+          "role": "assistant",
+          "timestamp": "2026-08-04T08:30:37.212Z",
+          "text_sha256": "20b0f3d4fef519ac58b1372dbb0a9a470498008f742a8a2ad5529b13d023879c"
+        },
+        {
+          "line": 260,
+          "role": "user",
+          "timestamp": "2026-08-04T08:31:05.641Z",
+          "text_sha256": "e118c5587288fb4a27f87fe2ab651e126b48e10b68babb80eaaa862d7003fdcc"
+        },
+        {
+          "line": 369,
+          "role": "assistant",
+          "timestamp": "2026-08-04T08:34:24.207Z",
+          "text_sha256": "3067a6d390a51e223224b376de0e6b59c4e54db407673139f8f7fcb1041085e1"
+        },
+        {
+          "line": 370,
+          "role": "user",
+          "timestamp": "2026-08-04T08:34:51.548Z",
+          "text_sha256": "ff3b461dd620e3176705189989c4f2f5af99ea6261c2a7db1712425f556be10b"
+        },
+        {
+          "line": 441,
+          "role": "assistant",
+          "timestamp": "2026-08-04T08:37:18.635Z",
+          "text_sha256": "8a91ac248891722147a9b3805d65bc23673c0a89038c3c117dc25362fcc97adc"
+        },
+        {
+          "line": 442,
+          "role": "user",
+          "timestamp": "2026-08-04T08:38:46.976Z",
+          "text_sha256": "0a73f12f496fd4bf172c79b07f04bb5f9485827a7c6812ad49cc5b7f2cc22bc5"
+        },
+        {
+          "line": 443,
+          "role": "assistant",
+          "timestamp": "2026-08-04T08:39:00.562Z",
+          "text_sha256": "acd8f52498d5bc237d347d13bd43b85fa49cb734882c815f991cde642d516082"
+        },
+        {
+          "line": 444,
+          "role": "user",
+          "timestamp": "2026-08-04T10:03:48.857Z",
+          "text_sha256": "7810b54f23461cb7bae8546810b2e2407d8119e43a7486c96117d9319cf38c06"
+        },
+        {
+          "line": 529,
+          "role": "user",
+          "timestamp": "2026-08-04T10:07:12.956Z",
+          "text_sha256": "01c88852ac0b837aa39ae52bccddb6c70272ba14f209294d4540179f62e4be3e"
+        },
+        {
+          "line": 530,
+          "role": "assistant",
+          "timestamp": "2026-08-04T10:08:05.006Z",
+          "text_sha256": "72ee74c8f3d653959eb0b7e73b8559c5294948a9c08ab0644c390c89032652ab"
+        }
+      ],
+      "bytes": 31781,
+      "sha256": "b0f154c3dbad107336d0b2a2c7ce16955ccc5d35238d39f107227bc0f487d507"
     }
   ],
   "referenced_assets": [
@@ -828,6 +1006,118 @@
       "source": "~/WebstormProjects/vibe-coding-playbook/skills/workflow-learning/SKILL.md",
       "bytes": 2932,
       "sha256": "52c66de51d2a1ccff0e8975be9c79bcb41fb762d3bb1324d03c8c20031f85a18",
+      "copied_in_this_archive": false,
+      "external_claims_reverified": false
+    },
+    {
+      "source": "~/WebstormProjects/code-semantic-index-lab/README.md",
+      "bytes": 2527,
+      "sha256": "f2a19d09a3f4443c0eebbdc3e699e960115a307444cbf6278623a815bc9c8ce5",
+      "repo_head": "f00785a",
+      "copied_in_this_archive": false,
+      "external_claims_reverified": false
+    },
+    {
+      "source": "~/WebstormProjects/code-semantic-index-lab/docs/future-work-mode.md",
+      "bytes": 4852,
+      "sha256": "2b4708bbf06d6ee6c1710a002a0c787a6e49faeb3b68e03ccd7e7d3294aeebe0",
+      "repo_head": "f00785a",
+      "copied_in_this_archive": false,
+      "external_claims_reverified": false
+    },
+    {
+      "source": "~/WebstormProjects/llm-stream-watchdog/README.md",
+      "bytes": 5410,
+      "sha256": "ab9787af7477cf649851d73b689e42fe7212d793014970d47abc86f1d1bcbd23",
+      "repo_head": "1d36adf",
+      "copied_in_this_archive": false,
+      "external_claims_reverified": false
+    },
+    {
+      "source": "~/WebstormProjects/omp-switch/README.md",
+      "bytes": 8246,
+      "sha256": "be345637526fab8aadb6192ee5a2358826fb2b5f1d3d3f6ea7e6acaa56a337a5",
+      "repo_head": "a8f390b",
+      "copied_in_this_archive": false,
+      "external_claims_reverified": false
+    },
+    {
+      "source": "~/WebstormProjects/omp-setup/README.md",
+      "bytes": 5149,
+      "sha256": "b7a7fef5e8efceeecf46a7596996787a8eb9b3f5bea87853592457b3659b8ae5",
+      "repo_head": "fa626ab",
+      "copied_in_this_archive": false,
+      "external_claims_reverified": false
+    },
+    {
+      "source": "~/WebstormProjects/claude-config/README.md",
+      "bytes": 5059,
+      "sha256": "70bfc7d31f315ae6fd986138a6f596e67512d185846c725a6a4c04821721db4d",
+      "repo_head": "8d23c86",
+      "copied_in_this_archive": false,
+      "external_claims_reverified": false
+    },
+    {
+      "source": "~/WebstormProjects/clipboard-vision-skill/README.md",
+      "bytes": 1188,
+      "sha256": "c83000ec3d3254d986902d17d553f3922f70bfedfbf937aa56c91c19ecce5a79",
+      "repo_head": "f529936",
+      "copied_in_this_archive": false,
+      "external_claims_reverified": false
+    },
+    {
+      "source": "~/WebstormProjects/image-recognition-mcp/README.md",
+      "bytes": 5218,
+      "sha256": "93c040e369491a595f61142bcdee3322a13deddf0b6aa77c39a2206d85d8fb27",
+      "repo_head": "8df7cf7",
+      "copied_in_this_archive": false,
+      "external_claims_reverified": false
+    },
+    {
+      "source": "~/WebstormProjects/dsh-thin-desktop/README.md",
+      "bytes": 6383,
+      "sha256": "ba054a796d61689f22fd1a234cef40803b13a87526e53c07f0d66123314fc71f",
+      "repo_head": "bce404b",
+      "copied_in_this_archive": false,
+      "external_claims_reverified": false
+    },
+    {
+      "source": "~/WebstormProjects/oc-responses-proxy/README.md",
+      "bytes": 3477,
+      "sha256": "bfb475fec67a38d4eae37173d67ab1fe7af4f05c37886f50d51674d95d6c231a",
+      "repo_head": "a2df373",
+      "copied_in_this_archive": false,
+      "external_claims_reverified": false
+    },
+    {
+      "source": "~/WebstormProjects/DockSkill/README.md",
+      "bytes": 4119,
+      "sha256": "859a87f8ef0c42dbb219bb7c0ef263319f723da5fd7800376c53f421e7e86580",
+      "repo_head": "74da1a0",
+      "copied_in_this_archive": false,
+      "external_claims_reverified": false
+    },
+    {
+      "source": "~/WebstormProjects/model-native-document-agent/docs/agent-responsibilities.md",
+      "bytes": 6057,
+      "sha256": "a50bf3cc40e11e24630bf2401aaa7207cc1281035421d49f88cd9ca9740b20c2",
+      "repo_head": "d296d9e",
+      "copied_in_this_archive": false,
+      "external_claims_reverified": false
+    },
+    {
+      "source": "~/WebstormProjects/article-to-video-agent/README.md",
+      "bytes": 4826,
+      "sha256": "ac3994a1e7ad3bdd1200fbf7f2647923b78354882cc38db30e7957ff39f8b03b",
+      "repo_head": "d55f21e",
+      "copied_in_this_archive": false,
+      "external_claims_reverified": false
+    },
+    {
+      "source": "~/WebstormProjects/meeting-minutes-mcp/README.md",
+      "bytes": 2135,
+      "sha256": "4402c24ee4a1322ed3c226574c6946050d2c4b8fef31b51925371cb19dd869dc",
+      "repo_head": "04de825",
       "copied_in_this_archive": false,
       "external_claims_reverified": false
     }

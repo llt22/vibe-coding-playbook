@@ -100,6 +100,7 @@
 | [办公工具与信息获取](recovered/tools-and-information-access-2026-05-to-09.md) | 办公、多模态、沙箱、检索、信源接入和工具成本 |
 | [PageIndex 仓库线索](recovered/pageindex-source-lead-2026-09.md) | 从历史工具结果补回文档索引与检索来源，尚未独立研读或实测 |
 | [Paseo 插件与跨项目接力](recovered/paseo-plugins-and-cross-project-handoff-2026-09.md) | 补回最近一轮插件讨论、跨项目接力的真实需求，以及后续失效反馈 |
+| [OMP 与 Pi 扩展调研](recovered/omp-pi-extensions-and-issues-2026-08-04.md) | 插件兼容性实测、“已安装”与“已内置”的口径纠正、Issue 区风险，以及集成工具与自建的取舍 |
 | [Jev 工具评估](recovered/jev-tool-assessments-2026-09-18.md) | 代码评分、浏览器执行、上下文压缩；独立实验另有来源索引 |
 | [工程雷达](methods/ai-engineering-radar.md)、[DeepSeek 实施方法](methods/deepseek-verified-implementation.md) | 两份个人方法的正文快照 |
 | [O’Reilly 历史提取文本](sources/oreilly-scaling-ai-historical-text.txt) | 从四段工具结果恢复完整可见文本；原 PDF 与版式仍缺失 |

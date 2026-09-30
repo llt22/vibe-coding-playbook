@@ -16,6 +16,7 @@
 | [持续工作与 Agent 配套环境](recovered/agent-harness-and-autonomy-2026-09.md) | Stencil、Clawith、StaffDeck、Octop、Microsoft Agent Framework 的历史比较 |
 | [办公、工具与信息获取](recovered/tools-and-information-access-2026-05-to-09.md) | MiniMax Office、Qwen 多模态、Docker、Agent-Reach、PRAW、Semble、tgrep、SoL-Pi、ego、Paseo、OMP/Pi |
 | [PageIndex 仓库线索](recovered/pageindex-source-lead-2026-09.md) | 用户点名后追补：09-04 仓库检索、09-27 / 28 Thoughtworks 列表均出现过，之前遗漏于工具结果中 |
+| [OMP 与 Pi 扩展调研](recovered/omp-pi-extensions-and-issues-2026-08-04.md) | 第三轮链接反查发现：08-04 的插件实测、Issue 分析与自建取舍，此前未归档 |
 | [Paseo 插件与跨项目接力](recovered/paseo-plugins-and-cross-project-handoff-2026-09.md) | 补回最近一轮插件讨论、跨项目接力的真实需求，以及后续失效反馈 |
 | [三个 Jev 工具评估](recovered/jev-tool-assessments-2026-09-18.md) | Review、浏览器操作、上下文压缩的原始分析 |
 | [工程雷达方法快照](methods/ai-engineering-radar.md) | `~/skills/ai-engineering-radar/SKILL.md` 的正文快照 |
@@ -40,6 +41,20 @@
 | 工具、Skill 与工程实践分享 | `~/WebstormProjects/dev-sharing/docs/第三次分享-Vibe Coding 实用技巧：工具、Skill 与工程实践.md` | 工具链和飞书 CLI 等已有材料 |
 | Tavily、OMP、浏览器等工具说明 | [playbook 工具文档](../../../tools/agent-tools.md) | 保留现有入口；不把重复安装讨论全量复制 |
 | AI 工具雷达与流程沉淀 | [ai-tool-radar](../../../skills/ai-tool-radar/SKILL.md)、[workflow-learning](../../../skills/workflow-learning/SKILL.md) | 仓库已有方法正文，前一轮已对照个人正本，无需重复快照 |
+| 代码检索实验 | `~/WebstormProjects/code-semantic-index-lab/README.md` | “确定性索引 + 便宜模型语义召回 + 主模型源码核验”，降低陌生仓库理解成本；含初测结果；核对时提交 `f00785a` |
+| 未来工作模式 | `~/WebstormProjects/code-semantic-index-lab/docs/future-work-mode.md` | AI 执行力增强后人的工作重心：人负责真实输入、目标判断、关键确认和责任；与本研究的“能力发挥”问题直接相关；核对时提交 `f00785a` |
+| 模型流卡顿监控 | `~/WebstormProjects/llm-stream-watchdog/README.md` | 本地 OpenAI 兼容代理，检测上游模型响应停滞；对应“持续执行时谁来发现卡住”；核对时提交 `1d36adf` |
+| OMP 供应商管理 | `~/WebstormProjects/omp-switch/README.md` | OMP 供应商 / 模型配置图形化切换；配置覆盖问题已写入 [工具文档](../../../tools/agent-tools.md)；核对时提交 `a8f390b` |
+| OMP 自定义供应商 | `~/WebstormProjects/omp-setup/README.md` | 只负责写入 `models.yml`；核对时工作区有未提交改动；核对时提交 `fa626ab` |
+| Claude Code 多机配置同步 | `~/WebstormProjects/claude-config/README.md` | Git 仓库 + 脚本同步全局配置、提示词、hooks 和 skills；核对时提交 `8d23c86` |
+| 剪贴板识图 Skill | `~/WebstormProjects/clipboard-vision-skill/README.md` | 让无视觉能力的模型经 OpenAI 兼容视觉接口读图；核对时提交 `f529936` |
+| 剪贴板识图 MCP | `~/WebstormProjects/image-recognition-mcp/README.md` | 同一需求的 MCP 形态，可与 Skill 形态对照取舍；核对时提交 `8df7cf7` |
+| DSH 插件与桌面工具 | `~/WebstormProjects/dsh-thin-desktop/README.md` | 另有 `dsh-ui-enhancer`、`dsh-conversation-split`、`dsh-ollama-cloud`、`dsh-opencode-zen-compat`、`dsh-session-title-warmup`：启动、界面、长会话拆分、供应商接入与流式兼容修复；核对时提交 `bce404b` |
+| Responses → Chat 代理 | `~/WebstormProjects/oc-responses-proxy/README.md` | 让只支持 Responses API 的客户端接入 Chat Completions 后端；核对时工作区有未提交改动；核对时提交 `a2df373` |
+| Docker 部署规则 | `~/WebstormProjects/DockSkill/README.md` | 可复制进 AI 编码工具上下文的部署规则文件，属于“把经验沉淀为 AI 可用规则”；核对时提交 `74da1a0` |
+| 文档 Agent 实验 | `~/WebstormProjects/model-native-document-agent/docs/agent-responsibilities.md` | 基于 Pi Agent 的文档方向实验，含人与 Agent 职责划分；核对时工作区有未提交改动；核对时提交 `d296d9e` |
+| 文章转讲解视频 | `~/WebstormProjects/article-to-video-agent/README.md` | AI 内容生产流程实验；核对时提交 `d55f21e` |
+| 会议纪要 MCP | `~/WebstormProjects/meeting-minutes-mcp/README.md` | 办公场景：录音转规范 Word 纪要；核对时提交 `04de825` |
 
 ## 另外找回的来源线索
 
@@ -71,6 +86,19 @@
 ## PageIndex 追补暴露的检索缺口
 
 用户点名 PageIndex 后，定向检查工具输出才找到 `VectifyAI/PageIndex`。前面的候选筛选偏重用户消息和最终报告，未覆盖“已经进入工具结果但未写入结论”的资料。已补回 [来源条目](recovered/pageindex-source-lead-2026-09.md)，但这不表示已审计全部工具输出。后续同类补漏应同时检查仓库链接和资料标题，并过滤分页代码变量及重复来源。
+
+## 第三轮：链接级反查（PageIndex 之后）
+
+为弥补上一节的缺口，不再按主题关键词筛选，而是从 2,132 个根会话文件中提取用户消息、助手回答和工具结果里出现的全部 GitHub 仓库（3,363 个），按仓库名与 playbook、dev-sharing 全文比对，再按会话聚合后定点阅读。同时把本机 `~/WebstormProjects` 下的项目与 playbook 对照。
+
+结果：
+
+- **补回 1 份讨论**：[OMP 与 Pi 扩展调研](recovered/omp-pi-extensions-and-issues-2026-08-04.md)。
+- **登记 14 个本机项目入口**：见上文“已在其他位置保存的资料”。它们是你为改善 AI 工作条件自己做的工具和实验（检索、卡顿监控、供应商配置、多机同步、识图、DSH 插件等），此前 playbook 中完全没有索引。其中 `code-semantic-index-lab/docs/future-work-mode.md` 与本研究的核心问题直接相关。
+- **确认已覆盖、不重复收录**：Opus 5.5 配置与 Context Mode（`tools/`）、Jev 思考监督实验（jev-lab 索引）。
+- **按范围排除**：未入库仓库中的大多数属于 ProjectCore / ProjectCore 平台技术选型（MCP 网关、沙箱、BaaS、Dify / Mastra / Langflow、Fastify、计量与权限组件等）和业务项目开发（文档抽取、审核系统）。它们是“做 AI 产品”而不是“用 AI 工作”，以 project-rebuild 等项目文档为准。
+
+边界：仓库链接反查只能覆盖带 GitHub 链接的资料；没有链接、只以名称或文章出现的资料仍可能遗漏。本轮对非 GitHub 外链只做了抽查。
 
 ## 本轮未覆盖的部分
 
