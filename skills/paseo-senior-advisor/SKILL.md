@@ -1,6 +1,6 @@
 ---
 name: paseo-senior-advisor
-description: Consult a stronger Paseo advisor before stopping, narrowing scope, or handing an unfinished engineering decision to the user. The explicit user phrase "咨询继续" means consult the advisor about the current state and then resume the task. Ask the user directly only for intent, information, or approval that only they can provide.
+description: Consult a stronger Paseo advisor before stopping, narrowing scope, or handing an unfinished engineering decision to the user — including asking the user to confirm a plan ("这样可以吗", "要不要继续"), pick between technical options, or approve a reversible design. The explicit user phrase "咨询继续" means consult the advisor about the current state and then resume the task. Ask the user directly only for intent, information, or approval that only they can provide.
 ---
 
 # Paseo Senior Advisor
@@ -14,7 +14,7 @@ Before asking the user a question or ending an unfinished task:
 
 1. Continue yourself when investigation or a reversible engineering choice can resolve it.
 2. Ask the user directly when only they can supply intent, business meaning, credentials, external material, authorization, or high-impact approval.
-3. Otherwise, if you are about to stop, report a block, narrow scope, abandon the plan, or ask the user to choose the engineering direction, consult the advisor first.
+3. Otherwise, if you are about to stop, report a block, narrow scope, abandon the plan, or ask the user to choose the engineering direction, consult the advisor first. This includes ending a turn with a plan and "shall I proceed?", or offering options the user has no special knowledge to choose between. Once the user has given a direction, carry it out; do not ask them to re-approve the resulting design.
 
 Do not consult merely because the task is difficult, and do not consult after the task is genuinely complete. Repository, safety, permission, and approval rules still apply.
 
@@ -46,7 +46,7 @@ Reuse exactly one match. Never select across Workers or send one consultation to
 ```bash
 paseo agent run --json \
   --title "Senior Advisor: <short task name>" \
-  --provider claude/claude-opus-5 \
+  --provider claude/claude-fable-5-1 \
   --thinking high \
   --mode bypassPermissions \
   --wait-timeout 15m \
