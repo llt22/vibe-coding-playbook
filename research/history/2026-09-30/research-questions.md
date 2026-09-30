@@ -54,7 +54,7 @@
 
 研究含义：将“提示更少更好”作为待验证假设，而不是统一结论。
 
-来源：`~/.claude/projects/-user-home-WebstormProjects-dev-sharing/9c0b390a-6b2e-4c5d-a00c-813cc7a927b4.jsonl:179`。
+来源：`~/.claude/projects/-WebstormProjects-dev-sharing/9c0b390a-6b2e-4c5d-a00c-813cc7a927b4.jsonl:179`。
 
 ## 2026-09-12：数字员工能否理解成特定工作阶段的能力配置
 
@@ -62,7 +62,7 @@
 
 研究含义：研究任务、工具、Skill、上下文如何配套，不必先接受某种产品命名。
 
-来源：`~/.omp/agent/sessions/-WebstormProjects-project-rebuild/2026-09-12T05-42-42-601Z_01a09423-b2a9-7275-b642-c1a72b00e37a.jsonl:2023`。
+来源：`~/.omp/agent/sessions/-WebstormProjects-project-x-rebuild/2026-09-12T05-42-42-601Z_01a09423-b2a9-7275-b642-c1a72b00e37a.jsonl:2023`。
 
 ## 2026-09-21：Octop 再次暴露了发现渠道缺口
 
@@ -70,7 +70,7 @@
 
 研究含义：与 09-04 的反馈是同类问题，不应每次归因于偶然没看到。
 
-来源：`~/.omp/agent/sessions/-WebstormProjects-project-rebuild/2026-09-21T01-27-12-306Z_01a0c193-02b2-75a3-924c-cf7c93cd0918.jsonl:211`。
+来源：`~/.omp/agent/sessions/-WebstormProjects-project-x-rebuild/2026-09-21T01-27-12-306Z_01a0c193-02b2-75a3-924c-cf7c93cd0918.jsonl:211`。
 
 ## 2026-09-23：自动触发与方法复杂度的边界
 
@@ -79,7 +79,7 @@
 
 研究含义：这是当时对一个具体 Skill 的要求，不是对 09-30 自动研究项目的永久否定。
 
-来源：`~/.omp/agent/sessions/-WebstormProjects-project-rebuild/2026-09-23T05-19-00-095Z_01a0ccb3-f1ff-773e-b477-d0beadbf557b.jsonl:210`。
+来源：`~/.omp/agent/sessions/-WebstormProjects-project-x-rebuild/2026-09-23T05-19-00-095Z_01a0ccb3-f1ff-773e-b477-d0beadbf557b.jsonl:210`。
 
 ## 2026-09-24：提示词无法稳定防止提前停下
 

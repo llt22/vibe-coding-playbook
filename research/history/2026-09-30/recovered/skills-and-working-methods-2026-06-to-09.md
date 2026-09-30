@@ -1,6 +1,6 @@
 # Skill、规则与研发方法：六月至九月的讨论
 
-> 历史材料，归档于 2026-09-30。本文件恢复当时的用户讨论与 AI 回答，未重新核验外部能力、数字、版本或“已测试”声明。安装命令和推荐仅是历史正文，不代表本次执行或当前建议。涉及 ProjectCore、ProjectCore、ProjectFlow 等项目的限制只属于当时项目上下文。
+> 历史材料，归档于 2026-09-30。本文件恢复当时的用户讨论与 AI 回答，未重新核验外部能力、数字、版本或“已测试”声明。安装命令和推荐仅是历史正文，不代表本次执行或当前建议。涉及 ProjectX、ProjectX-Core、ProjectL 等项目的限制只属于当时项目上下文。
 
 本次整理提示：08-27 的旧回答存在明显时间口径问题（2026 年把“2024 年初”称为“一年前”），且“Token 骤降 50%”“彻底消除”等说法未给出可复核证据。06-01 与 09-13 的流程、测试建议也不是本仓库当前规则。这里保留观点演变，不据此更新全局配置。
 
@@ -248,7 +248,7 @@ Vibe Coding 不是不要工程纪律，而是把工程纪律沉淀成 Spec、Goa
    - 结果可追溯
    - 每轮全量下载
    - SHA256 复用抽取
-   - ProjectCore1.0 做信息抽取
+   - ProjectX-Core1.0 做信息抽取
    - 规则用配置 + Python 稳定算子
 
 2. `spec`
@@ -265,7 +265,7 @@ Vibe Coding 不是不要工程纪律，而是把工程纪律沉淀成 Spec、Goa
    比如：
    - FastAPI / Celery / PostgreSQL / S3
    - 申报单、材料项、文件三层对象
-   - 文件下载、准入、合成图片、ProjectCore1.0 抽取、后处理、规则审核
+   - 文件下载、准入、合成图片、ProjectX-Core1.0 抽取、后处理、规则审核
    - 状态机、重试、限流、日志、结果快照
 
 4. `tasks`
@@ -280,7 +280,7 @@ Vibe Coding 不是不要工程纪律，而是把工程纪律沉淀成 Spec、Goa
 但我不建议现在直接“安装并套用 spec-kit 全家桶”。更稳的是先采用它的目录和工作方式，把当前项目整理成：
 
 ```text
-docs/specs/001-review/
+docs/specs/001-review-helper/
   README.md        # 当前规格工作区索引
   spec.md          # 业务规格：用户交互、输入输出、结论口径
   plan.md          # 技术方案：模块、状态、流程、依赖
@@ -289,7 +289,7 @@ docs/specs/001-review/
   research/        # 调研、讨论纪要、外部参考
 ```
 
-同时把老的 `docs/spec/` 标记成历史规格或待迁移，因为里面还有 ProjectCore2 智能体、SSE、旧状态机等过时口径，已经不能作为当前主方案依据。
+同时把老的 `docs/spec/` 标记成历史规格或待迁移，因为里面还有 ProjectX-Core2 智能体、SSE、旧状态机等过时口径，已经不能作为当前主方案依据。
 
 一句话：`spec-kit` 对我们最大的帮助，是把“讨论出来的共识”变成“项目后续开发可以依赖的唯一口径”。当前项目确实需要这一步。
 
@@ -344,13 +344,13 @@ spec.md
 plan.md
 ```
 
-写技术实现方案：FastAPI、Celery、文件下载、合成图片、ProjectCore1.0、规则引擎、状态流。
+写技术实现方案：FastAPI、Celery、文件下载、合成图片、ProjectX-Core1.0、规则引擎、状态流。
 
 ```text
 research.md
 ```
 
-写我们已经调研/讨论出来的决策：ProjectCore1.0 vs ProjectCore2.0、全量下载、SHA256 复用、文件名不作为主契约、论文材料包合成图片。
+写我们已经调研/讨论出来的决策：ProjectX-Core1.0 vs ProjectX-Core2.0、全量下载、SHA256 复用、文件名不作为主契约、论文材料包合成图片。
 
 ```text
 data-model.md
@@ -435,7 +435,7 @@ specs/[###-feature]/
 
 1. **把“听起来合理但没证据”的点揪出来**
    比如这次 `extractor_version`，如果按 grilling 的方式追问，问题会变成：
-   “ProjectCore1.0 是否真的返回版本号？证据在哪？如果没有，缓存键靠什么失效？”
+   “ProjectX-Core1.0 是否真的返回版本号？证据在哪？如果没有，缓存键靠什么失效？”
    这正是我们漏掉的类型。
 
 2. **统一领域词**
@@ -445,7 +445,7 @@ specs/[###-feature]/
    比如这些其实都适合 ADR：
    - 为什么每轮全量下载，而不是信客户 MD5
    - 为什么文件名不作为归并主契约
-   - 为什么 ProjectCore1.0 抽取复用使用 `config hash`
+   - 为什么 ProjectX-Core1.0 抽取复用使用 `config hash`
    - 为什么任务池拆成申报运行编排池、文件处理池、抽取处理池
    这些未来新人肯定会问“为啥这样设计”。
 
@@ -797,7 +797,7 @@ teamai pull
 
 ### 历史 AI 回答 · 原会话第 1007 行
 
-来源：`~/.claude/projects/-user-home-WebstormProjects-dev-sharing/9c0b390a-6b2e-4c5d-a00c-813cc7a927b4.jsonl:1007`。
+来源：`~/.claude/projects/-WebstormProjects-dev-sharing/9c0b390a-6b2e-4c5d-a00c-813cc7a927b4.jsonl:1007`。
 
 这个和你的 `use-skill` 解决的是同一个痛点但层级不同：
 
@@ -811,7 +811,7 @@ teamai pull
 
 ### 历史 AI 回答 · 原会话第 1012 行
 
-来源：`~/.claude/projects/-user-home-WebstormProjects-dev-sharing/9c0b390a-6b2e-4c5d-a00c-813cc7a927b4.jsonl:1012`。
+来源：`~/.claude/projects/-WebstormProjects-dev-sharing/9c0b390a-6b2e-4c5d-a00c-813cc7a927b4.jsonl:1012`。
 
 一句话：**把一个项目里散落在各处的 AI 规则（CLAUDE.md、AGENTS.md、.cursor/rules 等）收拢成一个统一的 skills 目录，所有工具都从这一个地方读。**
 

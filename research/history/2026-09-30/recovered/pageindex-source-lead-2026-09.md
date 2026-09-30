@@ -20,7 +20,7 @@ VectifyAI/PageIndex	35517	3129	MIT	2026-09-04T15:35:18Z	https://github.com/Vecti
 
 ### 2026-09-27（UTC）
 
-来源：`~/.omp/agent/sessions/-WebstormProjects-project-rebuild/2026-09-27T03-11-41-180Z_01a0e0d8-d27c-774c-b1b5-5400e9290a2b.jsonl:81`。
+来源：`~/.omp/agent/sessions/-WebstormProjects-project-x-rebuild/2026-09-27T03-11-41-180Z_01a0e0d8-d27c-774c-b1b5-5400e9290a2b.jsonl:81`。
 
 原始工具结果摘录：
 
@@ -30,7 +30,7 @@ VectifyAI/PageIndex	35517	3129	MIT	2026-09-04T15:35:18Z	https://github.com/Vecti
 
 ### 2026-09-28（UTC）
 
-来源：`~/.omp/agent/sessions/-WebstormProjects-project-rebuild/2026-09-28T16-04-29-940Z_01a0e8c2-b674-76e4-94a1-776af44eca4b.jsonl:196`。
+来源：`~/.omp/agent/sessions/-WebstormProjects-project-x-rebuild/2026-09-28T16-04-29-940Z_01a0e8c2-b674-76e4-94a1-776af44eca4b.jsonl:196`。
 
 原始工具结果摘录：
 

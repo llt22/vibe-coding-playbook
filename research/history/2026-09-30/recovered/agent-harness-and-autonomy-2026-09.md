@@ -1,6 +1,6 @@
 # Agent 环境、持续工作与产品能力：历史比较
 
-> 历史材料，归档于 2026-09-30。本文件恢复当时的用户讨论与 AI 回答，未重新核验外部能力、数字、版本或“已测试”声明。安装命令和推荐仅是历史正文，不代表本次执行或当前建议。涉及 ProjectCore、ProjectCore、ProjectFlow 等项目的限制只属于当时项目上下文。
+> 历史材料，归档于 2026-09-30。本文件恢复当时的用户讨论与 AI 回答，未重新核验外部能力、数字、版本或“已测试”声明。安装命令和推荐仅是历史正文，不代表本次执行或当前建议。涉及 ProjectX、ProjectX-Core、ProjectL 等项目的限制只属于当时项目上下文。
 
 研究用途：从历史比较中找出持续身份、任务状态、触发、工作区、工具和反馈这些配套条件。文中项目强弱排名、代码现状与框架选择均有当时语境，不能直接移植为当前项目决策。
 
@@ -10,16 +10,16 @@
 
 来源：`~/.codex/sessions/2026/09/04/rollout-2026-09-04T23-53-45-01a06d20-3fb3-77e2-be46-1bf74024c602.jsonl:34`。
 
-我看完了。它不是一篇 UI 设计文章，而是一篇关于 AI Agent Harness 如何避免失控的架构复盘。对我们当前 ProjectCore 最有价值的是这几条。
+我看完了。它不是一篇 UI 设计文章，而是一篇关于 AI Agent Harness 如何避免失控的架构复盘。对我们当前 ProjectX-Core 最有价值的是这几条。
 
 第一，只有一个事实源。
 
 文章反复强调：状态不能同时存在于数据库、内存闭包、前端状态和日志里，否则重放、恢复、分支都会失真。
 
-对 ProjectCore 的对应关系应该是：
+对 ProjectX-Core 的对应关系应该是：
 
 ```text
-ProjectCore API / 数据库
+ProjectX-Core API / 数据库
   = 唯一事实源
 
 Agent、Workflow、Version、Run、Node Run
@@ -122,7 +122,7 @@ Agent、Workflow 和 UI 不应该知道这些模型差异。
 
 最好再增加 Playwright 的非破坏性检查和截图基准。
 
-对我们当前 ProjectCore 的结论是：
+对我们当前 ProjectX-Core 的结论是：
 
 ```text
 DESIGN.md
@@ -148,13 +148,13 @@ DESIGN.md
 
 > 让复杂性由底层统一承担，让上层和代码生成模型面对简单、稳定、可验证的接口。
 
-所以目前“先写 ProjectCore 设计系统组件，再让快速模型组装 Agent 和 Workflow 页面”的路线是对的，而且这篇文章进一步说明了：组件系统不仅是视觉规范，也是约束快速模型、保证代码一致性的工程边界。
+所以目前“先写 ProjectX-Core 设计系统组件，再让快速模型组装 Agent 和 Workflow 页面”的路线是对的，而且这篇文章进一步说明了：组件系统不仅是视觉规范，也是约束快速模型、保证代码一致性的工程边界。
 
 ## Clawith：按能否满足工作需求比较（09-11）
 
 ### 历史 AI 回答 · 原会话第 50 行
 
-来源：`~/.omp/agent/sessions/-WebstormProjects-project-rebuild/2026-09-11T10-25-31-432Z_01a09000-4328-7294-91e9-f53e0ab6e4ef.jsonl:50`。
+来源：`~/.omp/agent/sessions/-WebstormProjects-project-x-rebuild/2026-09-11T10-25-31-432Z_01a09000-4328-7294-91e9-f53e0ab6e4ef.jsonl:50`。
 
 你说得对。按“能不能满足数字员工需求”来判断，结论更直接：
 
@@ -203,8 +203,8 @@ DESIGN.md
 2. **多员工组织协作：Clawith 胜出**
 3. **长期员工记忆与身份：Clawith 胜出**
 4. **渠道内工作的员工：Clawith 胜出**
-5. **可验证、可治理、可交付的 AI 应用：ProjectCore 胜出**
-6. **稳定执行预设任务：两者都有，但 ProjectCore 的运行治理更扎实**
+5. **可验证、可治理、可交付的 AI 应用：ProjectX 胜出**
+6. **稳定执行预设任务：两者都有，但 ProjectX 的运行治理更扎实**
 
 所以当前不能说“我们整体更强”。更准确的判断是：
 
@@ -217,7 +217,7 @@ DESIGN.md
 3. 员工自主决定下一步并创建受控触发器；
 4. 员工之间和外部渠道之间的消息、委派、回复闭环。
 
-参考：[Clawith](https://github.com/dataelement/Clawith)；我们当前状态见 `current-state.md`（`~/WebstormProjects/project-rebuild/docs/development/current-state.md:100`） 和 `project-core-architecture-baseline.md`（`~/WebstormProjects/project-rebuild/docs/development/project-core-architecture-baseline.md:123`）。
+参考：[Clawith](https://github.com/dataelement/Clawith)；我们当前状态见 `current-state.md`（`~/WebstormProjects/project-x-rebuild/docs/development/current-state.md:100`） 和 `project-x-architecture-baseline.md`（`~/WebstormProjects/project-x-rebuild/docs/development/project-x-architecture-baseline.md:123`）。
 
 ## StaffDeck：概念、工程实现与产品整合（09-16）
 
@@ -341,7 +341,7 @@ WorkerDeck 的主要能力可以直接还原：
 
 **WorkerDeck：主要是产品包装和已有组件集成。**
 
-值得参考的是业务工作台、运行观察和协作体验；“五环”“本体驱动”“复盘回流”等不应进入 ProjectCore 底层模型。
+值得参考的是业务工作台、运行观察和协作体验；“五环”“本体驱动”“复盘回流”等不应进入 ProjectX 底层模型。
 
 一句话裁决：
 
@@ -357,7 +357,7 @@ WorkerDeck 的主要能力可以直接还原：
 
 **结论**
 
-Octop 是一个完成度较高的“自托管 AI 助手成品”，偏个人、家庭和小团队使用。它不是 ProjectCore 这类 Agent/Workflow 构建与治理平台，也不适合作为 ProjectCore 的 Runtime 或 Core 直接引入；更适合参考其安装交付、统一消息入口、安全审批和本地运维设计。
+Octop 是一个完成度较高的“自托管 AI 助手成品”，偏个人、家庭和小团队使用。它不是 ProjectX 这类 Agent/Workflow 构建与治理平台，也不适合作为 ProjectX 的 Runtime 或 Core 直接引入；更适合参考其安装交付、统一消息入口、安全审批和本地运维设计。
 
 截至 **2026 年 9 月 20 日**，最新版本是 **v1.0.1**，发布于 **2026 年 9 月 19 日**。
 
@@ -421,7 +421,7 @@ SQLite 或 PostgreSQL + Agent 文件工作区
 
    项目具备 JWT、审计日志、敏感信息脱敏、HITL 审批和 Shell Tool Guard，但官方安全说明仍要求部署者负责网络暴露、凭据轮换和规则维护。推荐的 `curl | bash` 安装方式也应先审查脚本再执行。
 
-**对 ProjectCore 的意义**
+**对 ProjectX 的意义**
 
 值得借鉴：
 
@@ -431,14 +431,14 @@ SQLite 或 PostgreSQL + Agent 文件工作区
 - ADR、模块边界和跨平台发布物管理。
 - SQLite 默认、PostgreSQL 可选的低门槛部署策略。
 
-不应引入 ProjectCore Core：
+不应引入 ProjectX Core：
 
 - MBTI、专家库、长期记忆、主动关怀等助手产品概念。
 - Octop 的动态插件、Agent Teams 或 `harness-*` Runtime。
-- 以 Octop 替换 Mastra，或者在 ProjectCore 内形成第二套 Agent、权限、存储和执行生命周期。
-- 将 Octop 的单进程状态模型直接套到 ProjectCore 的 Version、Run、Attempt、Invocation 合同上。
+- 以 Octop 替换 Mastra，或者在 ProjectX 内形成第二套 Agent、权限、存储和执行生命周期。
+- 将 Octop 的单进程状态模型直接套到 ProjectX 的 Version、Run、Attempt、Invocation 合同上。
 
-我的判断是：**Octop 很适合直接部署成自托管 AI 助手，也适合作为 ProjectCore 前端交互和本地交付的竞品参考；但不适合作为 ProjectCore 的基础依赖。** 真要发生集成，也应把它看成外部系统，通过 ProjectCore 已有公开 API/Skill 边界协作，而不是进入 Core。
+我的判断是：**Octop 很适合直接部署成自托管 AI 助手，也适合作为 ProjectX 前端交互和本地交付的竞品参考；但不适合作为 ProjectX 的基础依赖。** 真要发生集成，也应把它看成外部系统，通过 ProjectX 已有公开 API/Skill 边界协作，而不是进入 Core。
 
 ## Microsoft Agent Framework（09-21）
 
@@ -448,7 +448,7 @@ SQLite 或 PostgreSQL + Agent 文件工作区
 
 我看了。结论先说：
 
-**Microsoft Agent Framework（MAF）值得关注，但按 ProjectCore 当前架构，不应替换 Mastra，也不应引入为第二套 Runtime。** 它更适合作为外部候选实现和能力参考。
+**Microsoft Agent Framework（MAF）值得关注，但按 ProjectX 当前架构，不应替换 Mastra，也不应引入为第二套 Runtime。** 它更适合作为外部候选实现和能力参考。
 
 **它是什么**
 
@@ -464,20 +464,20 @@ MAF 是微软把 AutoGen、Semantic Kernel 等方向收拢后的统一 Agent/Wor
 - OpenTelemetry、Azure Functions / Durable hosting；
 - Python、.NET、Go 的跨语言方向。([learn.microsoft.com](https://learn.microsoft.com/en-us/agent-framework/workflows/human-in-the-loop?utm_source=openai))
 
-**和 ProjectCore 的关系**
+**和 ProjectX 的关系**
 
-| MAF 能力 | ProjectCore 当前对应 |
+| MAF 能力 | ProjectX 当前对应 |
 |---|---|
 | Agent / Workflow Runtime | Mastra |
 | Workflow graph | Mastra Workflow |
-| Agent orchestration | Mastra + ProjectCore 组合调用 |
-| Checkpoint / resume | ProjectCore Run / Attempt / Workflow 恢复边界 |
-| HITL / approval | ProjectCore Human Task、Approval |
-| Tool / MCP | ProjectCore Tool、Policy、Credential、Invocation |
-| Telemetry / evidence | ProjectCore Event、Artifact、Usage、Audit |
-| Hosting / queue / identity | ProjectCore 自己的控制面、pg-boss、Keycloak |
+| Agent orchestration | Mastra + ProjectX 组合调用 |
+| Checkpoint / resume | ProjectX Run / Attempt / Workflow 恢复边界 |
+| HITL / approval | ProjectX Human Task、Approval |
+| Tool / MCP | ProjectX Tool、Policy、Credential、Invocation |
+| Telemetry / evidence | ProjectX Event、Artifact、Usage、Audit |
+| Hosting / queue / identity | ProjectX 自己的控制面、pg-boss、Keycloak |
 
-关键区别是：**MAF 更像执行框架；ProjectCore 还负责不可变版本、发布、权限、Policy、审批、Package、运行证据和审计。** MAF 的 checkpoint 是 Workflow 执行状态持久化，不等于 ProjectCore 的 Run/Attempt/Invocation 事实模型，也不应该直接暴露为 ProjectCore 的第二套状态源。
+关键区别是：**MAF 更像执行框架；ProjectX 还负责不可变版本、发布、权限、Policy、审批、Package、运行证据和审计。** MAF 的 checkpoint 是 Workflow 执行状态持久化，不等于 ProjectX 的 Run/Attempt/Invocation 事实模型，也不应该直接暴露为 ProjectX 的第二套状态源。
 
 **当前判断**
 
@@ -485,7 +485,7 @@ MAF 是微软把 AutoGen、Semantic Kernel 等方向收拢后的统一 Agent/Wor
    当前计划已经明确 Mastra 是唯一 Agent / Workflow / Assignment Runtime。引入 MAF 会形成第二套 Workflow、状态、恢复和执行语义，直接违反现有架构基线。
 
 2. **不把 MAF 的概念搬进 Core**
-   `Checkpoint`、`Executor`、`RequestPort`、`Orchestration` 等可以作为 Adapter 内部实现细节或 Probe 观察对象，不能未经真实任务验证就变成 ProjectCore 的公共资源、权限模型或默认 UI。
+   `Checkpoint`、`Executor`、`RequestPort`、`Orchestration` 等可以作为 Adapter 内部实现细节或 Probe 观察对象，不能未经真实任务验证就变成 ProjectX 的公共资源、权限模型或默认 UI。
 
 3. **可以借鉴三个具体点**
    - checkpoint 与 HITL 请求如何绑定；
@@ -495,12 +495,12 @@ MAF 是微软把 AutoGen、Semantic Kernel 等方向收拢后的统一 Agent/Wor
 4. **真正有价值的后续验证条件**
    只有出现真实需求，例如某客户明确要求 .NET/Foundry/Azure Durable 部署，或者当前 Mastra 无法满足某种跨进程恢复场景，才值得做一个受控 Adapter Probe。Probe 需要比较：
    - 状态是否能映射到现有 Run/Attempt；
-   - 外部副作用未知时是否能保持 ProjectCore 的禁止重放规则；
+   - 外部副作用未知时是否能保持 ProjectX 的禁止重放规则；
    - checkpoint 是否会复制 Provider 或 Runtime 私有状态；
    - 失败、取消、人工审批和审计是否能保持现有合同。
 
 因此，这次调研的结论应记录为：
 
-> **MAF 是值得持续观察的外部 Agent/Workflow Runtime 候选，但当前没有进入 ProjectCore 的产品或实现路线。Mastra 继续作为唯一 Runtime；MAF 只在出现真实 .NET、Azure Durable 或跨进程恢复触发时进入受控 Adapter 评估。**
+> **MAF 是值得持续观察的外部 Agent/Workflow Runtime 候选，但当前没有进入 ProjectX 的产品或实现路线。Mastra 继续作为唯一 Runtime；MAF 只在出现真实 .NET、Azure Durable 或跨进程恢复触发时进入受控 Adapter 评估。**
 
 本次没有修改代码或当前计划。

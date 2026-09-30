@@ -1,14 +1,14 @@
 # 七份外部资料综合笔记：项目历史副本
 
-> 历史材料，归档于 2026-09-30。本文件恢复当时的用户讨论与 AI 回答，未重新核验外部能力、数字、版本或“已测试”声明。安装命令和推荐仅是历史正文，不代表本次执行或当前建议。涉及 ProjectCore、ProjectCore、ProjectFlow 等项目的限制只属于当时项目上下文。
+> 历史材料，归档于 2026-09-30。本文件恢复当时的用户讨论与 AI 回答，未重新核验外部能力、数字、版本或“已测试”声明。安装命令和推荐仅是历史正文，不代表本次执行或当前建议。涉及 ProjectX、ProjectX-Core、ProjectL 等项目的限制只属于当时项目上下文。
 
-来源：`~/WebstormProjects/project-rebuild/docs/ai-native-engineering-reading-notes.md`；原文核对日期：2026-09-26。原文中的 ProjectCore 约束只适用于原项目，不约束本研究项目。原项目相对链接已转换为来源定位。
+来源：`~/WebstormProjects/project-x-rebuild/docs/ai-native-engineering-reading-notes.md`；原文核对日期：2026-09-26。原文中的 ProjectX 约束只适用于原项目，不约束本研究项目。原项目相对链接已转换为来源定位。
 
 ---
 
 # AI Native 研发范式外部资料梳理
 
-状态：研究证据。本文汇总一批外部文章、规范和书稿中关于 AI 研发落地的共识与分歧，并对照 ProjectCore 边界给出吸收判断，是 AI-native 产品交互方向 §2（`~/WebstormProjects/project-rebuild/docs/ai-native-interaction-direction.md#2-为什么改变方向`） 的外部依据；本文不是任务领取入口，不自动改变 ProjectCore 产品范围。实际任务仍只能从当前计划（`~/WebstormProjects/project-rebuild/docs/current-plan.md`）领取，新增概念或页面前仍须按产品开发原则 §10.1（`~/WebstormProjects/project-rebuild/docs/product-development-principles.md#101-产品面准入检验`）做准入检验。
+状态：研究证据。本文汇总一批外部文章、规范和书稿中关于 AI 研发落地的共识与分歧，并对照 ProjectX 边界给出吸收判断，是 AI-native 产品交互方向 §2（`~/WebstormProjects/project-x-rebuild/docs/ai-native-interaction-direction.md#2-为什么改变方向`） 的外部依据；本文不是任务领取入口，不自动改变 ProjectX 产品范围。实际任务仍只能从当前计划（`~/WebstormProjects/project-x-rebuild/docs/current-plan.md`）领取，新增概念或页面前仍须按产品开发原则 §10.1（`~/WebstormProjects/project-x-rebuild/docs/product-development-principles.md#101-产品面准入检验`）做准入检验。
 
 核对日期：2026-09-26
 
@@ -17,7 +17,7 @@
 1. 各方共识高度收敛：编码已不是瓶颈，瓶颈在环境、上下文、验证证据、权限与组织流程。AI 是现有工程底座的放大器，不能替代它。
 2. 可落地的工程形态是 Harness：AI 负责认知，确定性程序负责编排与执行；长链路状态落盘，不依赖会话记忆；权限声明化、可审计、最小化。
 3. 人工逐行 Review 在 Agent 批量产出下必然崩溃。解法是前置定义机器可判定的证据与分级放行规则，缺陷反复出现时改工作流，而不是逐个修 Diff。
-4. 对 ProjectCore 而言，这批资料主要**印证**现有边界（平台只做 Policy、Approval、Audit 与执行事实，不判断业务正确性），可吸收的是权限声明与证据聚合的机制细节，不是新的产品面。
+4. 对 ProjectX 而言，这批资料主要**印证**现有边界（平台只做 Policy、Approval、Audit 与执行事实，不判断业务正确性），可吸收的是权限声明与证据聚合的机制细节，不是新的产品面。
 
 ## 2. 资料清单
 
@@ -73,18 +73,18 @@
 4. **能力退化**：阿里与 O'Reilly 都提到初中级工程师失去成长路径，均未给出解法。
 5. **提效数字不可直接采信**：白皮书和书稿中的百分比多为宣传或虚构案例（O'Reilly 第 1 章两家公司为虚构画像）。
 
-## 5. 对照 ProjectCore 边界
+## 5. 对照 ProjectX 边界
 
-依据 AGENTS.md（`~/WebstormProjects/project-rebuild/AGENTS.md`） 的不可越过边界与 AI-native 产品交互方向（`~/WebstormProjects/project-rebuild/docs/ai-native-interaction-direction.md`）。表中「候选」与「需单独评估」项不自动成为任务，出现真实触发时从当前计划（`~/WebstormProjects/project-rebuild/docs/current-plan.md`）登记。
+依据 AGENTS.md（`~/WebstormProjects/project-x-rebuild/AGENTS.md`） 的不可越过边界与 AI-native 产品交互方向（`~/WebstormProjects/project-x-rebuild/docs/ai-native-interaction-direction.md`）。表中「候选」与「需单独评估」项不自动成为任务，出现真实触发时从当前计划（`~/WebstormProjects/project-x-rebuild/docs/current-plan.md`）登记。
 
-| 外部机制 | 与 ProjectCore 的关系 | 判断 |
+| 外部机制 | 与 ProjectX 的关系 | 判断 |
 |---|---|---|
-| AI 操作草稿、人批准高风险动作、平台执行 Policy 与审计 | 与方向 §1 裁决（`~/WebstormProjects/project-rebuild/docs/ai-native-interaction-direction.md#1-裁决`）、§3 决策权归属（`~/WebstormProjects/project-rebuild/docs/ai-native-interaction-direction.md#3-决策权归属`）一致 | 印证，无需新增 |
+| AI 操作草稿、人批准高风险动作、平台执行 Policy 与审计 | 与方向 §1 裁决（`~/WebstormProjects/project-x-rebuild/docs/ai-native-interaction-direction.md#1-裁决`）、§3 决策权归属（`~/WebstormProjects/project-x-rebuild/docs/ai-native-interaction-direction.md#3-决策权归属`）一致 | 印证，无需新增 |
 | 状态落盘、Run 终态由程序判定 | 已由 Run / Attempt / Event 承载；`succeeded` 只表示程序执行完成 | 印证，无需新增 |
 | 三态门禁中的 UNKNOWN ≠ PASS | 可作为 Publish 与 Policy 校验的设计约束：依赖或审批状态缺失时不得放行 | 可吸收为约束，落地前核对现有实现 |
 | 五层权限交集、Challenge | 落在权限、Policy、Approval 范围内 | 可作为权限模型参考，需单独评估 |
 | 权限声明随版本不可变、权限外扩在版本 Diff 中可见 | 落在 Definition 不可变版本与 Publish 校验范围内 | 候选，需按 §10.1 准入 |
-| 凭据代理注入、Agent 只见哨兵值 | 与外部 Agent 平台实践审计 §5.3（`~/WebstormProjects/project-rebuild/docs/external-agent-platform-practices-audit.md#53-run-级短期能力令牌与可信-gateway`） Run 级短期能力令牌方向相近 | 合并到该条目评估，不另立 |
+| 凭据代理注入、Agent 只见哨兵值 | 与外部 Agent 平台实践审计 §5.3（`~/WebstormProjects/project-x-rebuild/docs/external-agent-platform-practices-audit.md#53-run-级短期能力令牌与可信-gateway`） Run 级短期能力令牌方向相近 | 合并到该条目评估，不另立 |
 | Certificate 的业务正确性判定、通过率、质量门槛 | 属于 Eval / Verdict / 质量门槛，平台不得拥有 | 明确不进入 Core、公共契约、默认 UI 或平台 Skill |
 | Software Factory 触发器驱动 | 与 Schedule / 事件触发相关 | 不在当前范围，出现真实需求再评估 |
 | 结构化知识库、Hyper-Extract 类抽取 | 与平台核心对象无关 | 不吸收 |
@@ -94,4 +94,4 @@
 - 阿里白皮书为用户提供的材料，本文未核对原始出处与版本。
 - 腾讯文章读取自知乎转载，未核对原发渠道。
 - O'Reilly 书稿为 Early Release，只覆盖前言与第 1–4 章，Part 2 / Part 3 仅有目录。
-- 以上资料均未读取实现代码，结论只作方向参考，不作为 ProjectCore 代码现状或合同依据。
+- 以上资料均未读取实现代码，结论只作方向参考，不作为 ProjectX 代码现状或合同依据。

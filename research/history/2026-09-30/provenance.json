@@ -6,7 +6,7 @@
       "path": "recovered/ai-engineering-radar-2026-09-29.md",
       "bytes": 123955,
       "sha256": "c2cf37dd07ab7392c619f60b5a5e6c4aa21a7ed989dee85975de8df9fd1b707f",
-      "source": "~/.omp/agent/sessions/-WebstormProjects-project-rebuild/2026-09-28T16-04-29-940Z_01a0e8c2-b674-76e4-94a1-776af44eca4b.jsonl",
+      "source": "~/.omp/agent/sessions/-WebstormProjects-project-x-rebuild/2026-09-28T16-04-29-940Z_01a0e8c2-b674-76e4-94a1-776af44eca4b.jsonl",
       "successful_operations_at_lines": [
         309,
         316,
@@ -61,7 +61,7 @@
       "path": "recovered/ai-tool-radar-2026-09-24.md",
       "bytes": 9226,
       "sha256": "b81d6fe72feb71e17f28d8ffd3bbdf644597bfb806112f389bb61d256a2d049a",
-      "source": "~/.claude/projects/-user-home-WebstormProjects-project-rebuild/5ae6eb31-6bf2-4032-bc77-e5f543e3a0f9.jsonl",
+      "source": "~/.claude/projects/-WebstormProjects-project-x-rebuild/5ae6eb31-6bf2-4032-bc77-e5f543e3a0f9.jsonl",
       "line": 69,
       "external_claims_reverified": false
     },
@@ -69,7 +69,7 @@
       "path": "recovered/ai-tool-radar-2026-09-23-omp.md",
       "bytes": 14574,
       "sha256": "a90ce8b2f792be9b7379fc52c11163628a553ec7369840039afe602111e2fb40",
-      "source": "~/.omp/agent/sessions/-WebstormProjects-project-rebuild/2026-09-23T03-51-30-480Z_01a0cc63-d7b0-7676-8303-0dc8e6801dab.jsonl",
+      "source": "~/.omp/agent/sessions/-WebstormProjects-project-x-rebuild/2026-09-23T03-51-30-480Z_01a0cc63-d7b0-7676-8303-0dc8e6801dab.jsonl",
       "lines": [
         208
       ],
@@ -79,7 +79,7 @@
       "path": "recovered/engineering-anthropic-uber-2026-09-27.md",
       "bytes": 9966,
       "sha256": "3bd8eb3e688b6def26928d1b55c9a1ad072953456ca75c24213e532be9bd608c",
-      "source": "~/.omp/agent/sessions/-WebstormProjects-project-rebuild/2026-09-27T03-04-40-589Z_01a0e0d2-678d-70d1-9fde-5cc1b08ddea9.jsonl",
+      "source": "~/.omp/agent/sessions/-WebstormProjects-project-x-rebuild/2026-09-27T03-04-40-589Z_01a0e0d2-678d-70d1-9fde-5cc1b08ddea9.jsonl",
       "lines": [
         21
       ],
@@ -91,7 +91,7 @@
       "path": "recovered/engineering-uber-asdlc-2026-09-27.md",
       "bytes": 7581,
       "sha256": "ab4ef809364ff6c1b72458fa077d56a7de496e6ba8e35e27d6362558fc9425d0",
-      "source": "~/.omp/agent/sessions/-WebstormProjects-project-rebuild/2026-09-27T03-08-10-052Z_01a0e0d5-99c4-725e-b5d6-aaa25968a7a7.jsonl",
+      "source": "~/.omp/agent/sessions/-WebstormProjects-project-x-rebuild/2026-09-27T03-08-10-052Z_01a0e0d5-99c4-725e-b5d6-aaa25968a7a7.jsonl",
       "lines": [
         40
       ],
@@ -101,7 +101,7 @@
       "path": "recovered/x-engineering-radar-2026-09-27.md",
       "bytes": 27257,
       "sha256": "dcbbbf1c687f78ab4d114679f4da2a4f3df235d0bb1ed5f1c9232a3118a7e8fd",
-      "source": "~/.omp/agent/sessions/-WebstormProjects-project-rebuild/2026-09-27T03-11-41-180Z_01a0e0d8-d27c-774c-b1b5-5400e9290a2b.jsonl",
+      "source": "~/.omp/agent/sessions/-WebstormProjects-project-x-rebuild/2026-09-27T03-11-41-180Z_01a0e0d8-d27c-774c-b1b5-5400e9290a2b.jsonl",
       "lines": [
         347
       ],
@@ -111,7 +111,7 @@
       "path": "recovered/code-review-radar-2026-09-28.md",
       "bytes": 5908,
       "sha256": "3b3166842e4009a31df464189c9a2b36f51070e3429192e99b69deca053ec7ec",
-      "source": "~/.omp/agent/sessions/-WebstormProjects-project-rebuild/2026-09-25T02-03-18-957Z_01a0d64d-822d-7454-9c5b-8b89f6cae13e.jsonl",
+      "source": "~/.omp/agent/sessions/-WebstormProjects-project-x-rebuild/2026-09-25T02-03-18-957Z_01a0d64d-822d-7454-9c5b-8b89f6cae13e.jsonl",
       "lines": [
         40
       ],
@@ -121,7 +121,7 @@
       "path": "recovered/topic-discussions-2026-09-25-27.md",
       "bytes": 39106,
       "sha256": "ab9ab0cd29786853ec97f682199ea63fea7b6016aab6e170dce998fe27427aad",
-      "source": "~/.omp/agent/sessions/-WebstormProjects-project-rebuild/2026-09-25T02-05-09-112Z_01a0d64f-3078-7408-ac35-006bfd60ae42.jsonl",
+      "source": "~/.omp/agent/sessions/-WebstormProjects-project-x-rebuild/2026-09-25T02-05-09-112Z_01a0d64f-3078-7408-ac35-006bfd60ae42.jsonl",
       "lines": [
         22,
         38,
@@ -150,7 +150,7 @@
       "kind": "historical_reading_notes",
       "bytes": 16295,
       "sha256": "f1b405240e93c826ded56cc03b175420641b5541f387283464f9f2509b7c1a50",
-      "source": "~/.claude/projects/-user-home-WebstormProjects-project-rebuild/9ec4adc5-f2e5-4511-9982-d7f1678db27c.jsonl",
+      "source": "~/.claude/projects/-WebstormProjects-project-x-rebuild/9ec4adc5-f2e5-4511-9982-d7f1678db27c.jsonl",
       "external_claims_reverified": false,
       "lines": [
         58,
@@ -238,19 +238,19 @@
       "kind": "historical_discussion_bundle",
       "excerpts": [
         {
-          "source": "~/.omp/agent/sessions/-WebstormProjects-project-rebuild/2026-09-25T02-03-18-957Z_01a0d64d-822d-7454-9c5b-8b89f6cae13e.jsonl",
+          "source": "~/.omp/agent/sessions/-WebstormProjects-project-x-rebuild/2026-09-25T02-03-18-957Z_01a0d64d-822d-7454-9c5b-8b89f6cae13e.jsonl",
           "line": 9,
           "role": "assistant",
           "text_sha256": "de5ad55c8613c849a187d209f75fbd0be27980332111462769df0caf8ea77e3b"
         },
         {
-          "source": "~/.omp/agent/sessions/-WebstormProjects-project-rebuild/2026-09-25T02-03-18-957Z_01a0d64d-822d-7454-9c5b-8b89f6cae13e.jsonl",
+          "source": "~/.omp/agent/sessions/-WebstormProjects-project-x-rebuild/2026-09-25T02-03-18-957Z_01a0d64d-822d-7454-9c5b-8b89f6cae13e.jsonl",
           "line": 12,
           "role": "user",
           "text_sha256": "2488fef3247a42246ee8caabca6a77d1cbb302ded6e5c90154950e8930b822a9"
         },
         {
-          "source": "~/.omp/agent/sessions/-WebstormProjects-project-rebuild/2026-09-25T02-03-18-957Z_01a0d64d-822d-7454-9c5b-8b89f6cae13e.jsonl",
+          "source": "~/.omp/agent/sessions/-WebstormProjects-project-x-rebuild/2026-09-25T02-03-18-957Z_01a0d64d-822d-7454-9c5b-8b89f6cae13e.jsonl",
           "line": 13,
           "role": "assistant",
           "text_sha256": "b9e4fda2d828c0076ea763f68cf24070863bfe19176e51ecbe126a01c6dbd1b6"
@@ -343,13 +343,13 @@
           "text_sha256": "e761dd3fb30da80e943a42e1091988a7c8b628c063a3da36fae5a9db5d76a43a"
         },
         {
-          "source": "~/.claude/projects/-user-home-WebstormProjects-dev-sharing/9c0b390a-6b2e-4c5d-a00c-813cc7a927b4.jsonl",
+          "source": "~/.claude/projects/-WebstormProjects-dev-sharing/9c0b390a-6b2e-4c5d-a00c-813cc7a927b4.jsonl",
           "line": 1007,
           "role": "assistant",
           "text_sha256": "2a8912b6c3d4f257bb10290a0084f4f529087de22225f7908826dc6a13d0e7aa"
         },
         {
-          "source": "~/.claude/projects/-user-home-WebstormProjects-dev-sharing/9c0b390a-6b2e-4c5d-a00c-813cc7a927b4.jsonl",
+          "source": "~/.claude/projects/-WebstormProjects-dev-sharing/9c0b390a-6b2e-4c5d-a00c-813cc7a927b4.jsonl",
           "line": 1012,
           "role": "assistant",
           "text_sha256": "018902b6b2fd5aaf9e427d43de1dd66426db97ee52a002284d131721ddbba8ff"
@@ -384,7 +384,7 @@
           "text_sha256": "4ba73651779172f82461b60825d715168f9737b1cf441fff37d6422ccf5ebc07"
         },
         {
-          "source": "~/.omp/agent/sessions/-WebstormProjects-project-rebuild/2026-09-11T10-25-31-432Z_01a09000-4328-7294-91e9-f53e0ab6e4ef.jsonl",
+          "source": "~/.omp/agent/sessions/-WebstormProjects-project-x-rebuild/2026-09-11T10-25-31-432Z_01a09000-4328-7294-91e9-f53e0ab6e4ef.jsonl",
           "line": 50,
           "role": "assistant",
           "text_sha256": "549b81662afdf06089806202a7e0a1f6e127f47fbaa4bccbf81586bde344966e"
@@ -473,13 +473,13 @@
           "text_sha256": "7e6fbea014047081eabc96ec2c8ad7540a0418c2d122124919b477fa00ec2620"
         },
         {
-          "source": "~/.claude/projects/-user-home-WebstormProjects-project-h/7764a962-7a2b-41a7-8c5b-b5d469e3ee80.jsonl",
+          "source": "~/.claude/projects/-WebstormProjects-project-h/7764a962-7a2b-41a7-8c5b-b5d469e3ee80.jsonl",
           "line": 28,
           "role": "assistant",
           "text_sha256": "f2bf951d0432f4df6d055831504a3f5361a29af550dcdd1162ef8ac440a80723"
         },
         {
-          "source": "~/.omp/agent/sessions/-WebstormProjects-project-rebuild/2026-09-17T10-40-12-923Z_01a0aef3-de7b-74b1-a513-149bfefbeb95.jsonl",
+          "source": "~/.omp/agent/sessions/-WebstormProjects-project-x-rebuild/2026-09-17T10-40-12-923Z_01a0aef3-de7b-74b1-a513-149bfefbeb95.jsonl",
           "line": 17,
           "role": "assistant",
           "text_sha256": "431872fa07f36cd20fb0b20e944f1e9b90e1e31ef39cf77ba57d3aa67ae9014d"
@@ -519,7 +519,7 @@
       "sha256": "d048510680b83cf2d84f9fa5bf26ed492778e91a903fa00280ef940d32782551",
       "external_claims_reverified": false,
       "kind": "existing_document_snapshot",
-      "source": "~/WebstormProjects/project-rebuild/docs/ai-native-engineering-reading-notes.md",
+      "source": "~/WebstormProjects/project-x-rebuild/docs/ai-native-engineering-reading-notes.md",
       "source_sha256": "8e1935b0589fa90a5630d60bc3a68e41eaa3feaf5edfc22924e19a5104fe11a0",
       "source_adjustments": "Prefixed archival context; converted original project-relative Markdown links to home-relative source references."
     },
@@ -584,25 +584,25 @@
           "text_sha256": "522a3a5e59ce44205f82661df3bdd802d54eee655406f07372f513c6d0006b56"
         },
         {
-          "source": "~/.claude/projects/-user-home-WebstormProjects-dev-sharing/9c0b390a-6b2e-4c5d-a00c-813cc7a927b4.jsonl",
+          "source": "~/.claude/projects/-WebstormProjects-dev-sharing/9c0b390a-6b2e-4c5d-a00c-813cc7a927b4.jsonl",
           "line": 179,
           "role": "user",
           "text_sha256": "2cb5fd5ee9390d1b7d204971e7abe39ecd97c9d82f572625c49eba81471ae654"
         },
         {
-          "source": "~/.omp/agent/sessions/-WebstormProjects-project-rebuild/2026-09-12T05-42-42-601Z_01a09423-b2a9-7275-b642-c1a72b00e37a.jsonl",
+          "source": "~/.omp/agent/sessions/-WebstormProjects-project-x-rebuild/2026-09-12T05-42-42-601Z_01a09423-b2a9-7275-b642-c1a72b00e37a.jsonl",
           "line": 2023,
           "role": "user",
           "text_sha256": "17adef8bcf7279ade6606e1d527864981d75b907605563e08a8031c1df45ab54"
         },
         {
-          "source": "~/.omp/agent/sessions/-WebstormProjects-project-rebuild/2026-09-21T01-27-12-306Z_01a0c193-02b2-75a3-924c-cf7c93cd0918.jsonl",
+          "source": "~/.omp/agent/sessions/-WebstormProjects-project-x-rebuild/2026-09-21T01-27-12-306Z_01a0c193-02b2-75a3-924c-cf7c93cd0918.jsonl",
           "line": 211,
           "role": "user",
           "text_sha256": "dfe6e187d55cce3890b452e88a54ceb0e710f97253069d489e794438370d5d57"
         },
         {
-          "source": "~/.omp/agent/sessions/-WebstormProjects-project-rebuild/2026-09-23T05-19-00-095Z_01a0ccb3-f1ff-773e-b477-d0beadbf557b.jsonl",
+          "source": "~/.omp/agent/sessions/-WebstormProjects-project-x-rebuild/2026-09-23T05-19-00-095Z_01a0ccb3-f1ff-773e-b477-d0beadbf557b.jsonl",
           "line": 210,
           "role": "user",
           "text_sha256": "79bf9f0b18d28e4ac62fc9ca4dc79616a02f03309633927044e72574aa929e54"
@@ -624,7 +624,7 @@
       "kind": "historical_pdf_text_extraction",
       "bytes": 89912,
       "sha256": "63ed019b9759f00baa59e4b7899b899633b67957a5d741b11d156988ae842c27",
-      "source": "~/.omp/agent/sessions/-WebstormProjects-project-rebuild/2026-09-25T02-05-09-112Z_01a0d64f-3078-7408-ac35-006bfd60ae42.jsonl",
+      "source": "~/.omp/agent/sessions/-WebstormProjects-project-x-rebuild/2026-09-25T02-05-09-112Z_01a0d64f-3078-7408-ac35-006bfd60ae42.jsonl",
       "lines": [
         60,
         63,
@@ -736,7 +736,7 @@
           "selected_text_sha256": "a1821042dc9cb22a966990a155c2b23ccee4459cf35a4653798fa0c5d4d73f87"
         },
         {
-          "source": "~/.omp/agent/sessions/-WebstormProjects-project-rebuild/2026-09-27T03-11-41-180Z_01a0e0d8-d27c-774c-b1b5-5400e9290a2b.jsonl",
+          "source": "~/.omp/agent/sessions/-WebstormProjects-project-x-rebuild/2026-09-27T03-11-41-180Z_01a0e0d8-d27c-774c-b1b5-5400e9290a2b.jsonl",
           "line": 81,
           "timestamp": "2026-09-27T03:12:16.177Z",
           "json_pointer": "/message/content/0/text",
@@ -746,7 +746,7 @@
           "selected_text_sha256": "3bc06ff6b8b1d2994e3c470ef9e310a36be696c15c0f6199bc2c39b0ef49c920"
         },
         {
-          "source": "~/.omp/agent/sessions/-WebstormProjects-project-rebuild/2026-09-28T16-04-29-940Z_01a0e8c2-b674-76e4-94a1-776af44eca4b.jsonl",
+          "source": "~/.omp/agent/sessions/-WebstormProjects-project-x-rebuild/2026-09-28T16-04-29-940Z_01a0e8c2-b674-76e4-94a1-776af44eca4b.jsonl",
           "line": 196,
           "timestamp": "2026-09-28T16:21:27.546Z",
           "json_pointer": "/message/content/0/text",

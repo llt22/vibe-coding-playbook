@@ -26,7 +26,7 @@
 **观察，不急着安装**
 
 - [Open Multi-Agent](https://github.com/open-multi-agent/open-multi-agent)：持久审批、运行日志、离线 Run Viewer 与自托管方向很完整，但公开社区采用信号仍弱。
-- [OpenBot](https://github.com/CopilotKit/OpenBot)：每个 Agent 独立容器和浏览器，调用前过 Policy、调用后写 Audit。设计值得 ProjectCore 研究，但 README 明确称为 Alpha 模板，不是成品。
+- [OpenBot](https://github.com/CopilotKit/OpenBot)：每个 Agent 独立容器和浏览器，调用前过 Policy、调用后写 Audit。设计值得 ProjectX 研究，但 README 明确称为 Alpha 模板，不是成品。
 - [Google AX](https://github.com/google/ax) + [Agent Substrate](https://github.com/agent-substrate/substrate)：9 月最强的基础设施信号，代表持久 Agent、沙箱和声明式调度开始成套出现。
 - Graft、Treg、ArcBox、OpenMuse：都是近期强信号，继续观察版本稳定性和非发布帖中的真实反馈。
 

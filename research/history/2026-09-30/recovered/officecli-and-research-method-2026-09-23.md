@@ -1,6 +1,6 @@
 # OfficeCLI 与调研方法分层：历史讨论
 
-> 历史材料，归档于 2026-09-30。本文件恢复当时的用户讨论与 AI 回答，未重新核验外部能力、数字、版本或“已测试”声明。安装命令和推荐仅是历史正文，不代表本次执行或当前建议。涉及 ProjectCore、ProjectCore、ProjectFlow 等项目的限制只属于当时项目上下文。
+> 历史材料，归档于 2026-09-30。本文件恢复当时的用户讨论与 AI 回答，未重新核验外部能力、数字、版本或“已测试”声明。安装命令和推荐仅是历史正文，不代表本次执行或当前建议。涉及 ProjectX、ProjectX-Core、ProjectL 等项目的限制只属于当时项目上下文。
 
 阅读上下文：用户随后澄清，想沉淀的是“发现 AI 相关资料的方法”，不是只围绕 OfficeCLI 创建 Skill；见本目录 README 的 09-23 记录。
 
@@ -90,8 +90,8 @@ Agent 查看实际页面效果
 2. **Web 页面在线预览 Office 文件**
    - 作为 Document Convert Adapter。
    - OfficeCLI 负责 DOCX/PPTX/XLSX → HTML/PNG。
-   - ProjectCore 只负责 Artifact 输入输出、执行治理和错误呈现。
-   - 这正好对应当前计划里的条件候选：current-plan.md（`~/WebstormProjects/project-rebuild/docs/current-plan.md:57`）。
+   - ProjectX 只负责 Artifact 输入输出、执行治理和错误呈现。
+   - 这正好对应当前计划里的条件候选：current-plan.md（`~/WebstormProjects/project-x-rebuild/docs/current-plan.md:57`）。
 
 建议向 Agent 暴露窄接口，而不是任意 shell：
 
@@ -116,13 +116,13 @@ office.export     生成最终 Artifact
 
 接入时必须守住这些边界：
 
-- OfficeCLI 只是外部组件，不成为 ProjectCore 的第二 Runtime。
+- OfficeCLI 只是外部组件，不成为 ProjectX 的第二 Runtime。
 - 不新增 `OfficeDocument` 核心资源或独立生命周期。
 - 不让 Agent 直接操作任意宿主机路径。
 - 临时目录隔离，限制文件类型、大小、超时和输出路径。
 - 宏、外部链接、嵌入对象等高风险内容要拒绝或显式标记。
 - CLI 失败必须让 Run/Invocation 真实失败，不能只返回一个空文件。
-- ProjectCore 只保证文件按合同生成，不判断报告内容是否业务正确，这符合架构基线（`~/WebstormProjects/project-rebuild/docs/project-core-architecture-baseline.md:18`）。
+- ProjectX 只保证文件按合同生成，不判断报告内容是否业务正确，这符合架构基线（`~/WebstormProjects/project-x-rebuild/docs/project-x-architecture-baseline.md:18`）。
 
 所以技术落点很明确：**OfficeCLI 可以同时成为 Agent Tool 的实现候选和 Document Convert Adapter 的实现候选。** 但进入实现前仍需要一个真实任务和对应样例，例如“数字员工每周生成 PPT 汇报”或“研究助手修改客户 DOCX 模板”；当前计划也明确要求有真实格式样例后再启动，不宜先做通用 Office 能力。
 
@@ -146,7 +146,7 @@ Artifact：输出 Markdown、DOCX、PPTX、证据文件
 - **OfficeCLI 是 Tool**：提供真实的文件读写、渲染能力。
 - **Research Skill 是方法说明**：规定怎么拆问题、搜哪些来源、如何交叉验证、怎样标注不确定性、最后如何调用 OfficeCLI 生成报告。
 - **Agent/Workflow 是产品能力**：负责任务步骤、审批、失败恢复和最终交付。
-- **Research 不进入 Core**：架构已经明确它是应用路径，不是平台模块，架构基线（`~/WebstormProjects/project-rebuild/docs/project-core-architecture-baseline.md:183`）。
+- **Research 不进入 Core**：架构已经明确它是应用路径，不是平台模块，架构基线（`~/WebstormProjects/project-x-rebuild/docs/project-x-architecture-baseline.md:183`）。
 
 例如 Skill 可以描述：
 

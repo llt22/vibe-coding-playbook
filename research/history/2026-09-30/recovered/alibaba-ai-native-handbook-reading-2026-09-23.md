@@ -11,13 +11,13 @@
 
 ## 历史回答的阅读边界
 
-以下按原会话恢复四段回答，包含内容梳理、可信度评价、定位澄清和启发。历史回答中的数字、产品判断与“读完了”等陈述是当时的记录，不代表本次重新逐页阅读全文或核验外部事实。与 ProjectCore 的对照属于当时项目语境，不是本 playbook 的产品约束。
+以下按原会话恢复四段回答，包含内容梳理、可信度评价、定位澄清和启发。历史回答中的数字、产品判断与“读完了”等陈述是当时的记录，不代表本次重新逐页阅读全文或核验外部事实。与 ProjectX 的对照属于当时项目语境，不是本 playbook 的产品约束。
 
 ---
 
 ## 内容与结构梳理
 
-来源：`~/.claude/projects/-user-home-WebstormProjects-project-rebuild/9ec4adc5-f2e5-4511-9982-d7f1678db27c.jsonl:58`。
+来源：`~/.claude/projects/-WebstormProjects-project-x-rebuild/9ec4adc5-f2e5-4511-9982-d7f1678db27c.jsonl:58`。
 
 读完了，68 页，阿里巴巴出品的《AI Native 研发范式实践手册》（主编 许晓斌，2026-09-19）。
 
@@ -55,13 +55,13 @@ Harness（上下文管理/规划恢复/工具验证纠错/人机协同）→ 企
 
 ---
 
-顺带一句：它第三章那套 Harness / Identity & Policy / Guardrail / Trajectory 可观测的分层，和你 ProjectCore 里 Definition-版本-Publish-Run-Policy-Approval-Audit 那套边界是同一类问题的不同答案——尤其是"平台不判断业务正确性"对应它的"Guardrail 不解释 Evidence 的业务含义，只做协议约束聚合"。需要的话我可以单独做个对照。
+顺带一句：它第三章那套 Harness / Identity & Policy / Guardrail / Trajectory 可观测的分层，和你 ProjectX 里 Definition-版本-Publish-Run-Policy-Approval-Audit 那套边界是同一类问题的不同答案——尤其是"平台不判断业务正确性"对应它的"Guardrail 不解释 Evidence 的业务含义，只做协议约束聚合"。需要的话我可以单独做个对照。
 
 ---
 
 ## 用户追问：内容是不是水文
 
-来源：`~/.claude/projects/-user-home-WebstormProjects-project-rebuild/9ec4adc5-f2e5-4511-9982-d7f1678db27c.jsonl:64`。
+来源：`~/.claude/projects/-WebstormProjects-project-x-rebuild/9ec4adc5-f2e5-4511-9982-d7f1678db27c.jsonl:64`。
 
 不是水文，但要分层看：**观点部分扎实，数据部分是宣传口径，排版有大量填充。**
 
@@ -93,7 +93,7 @@ Harness（上下文管理/规划恢复/工具验证纠错/人机协同）→ 企
 
 ## 用户追问：讲 Vibe Coding，还是 Agent 开发
 
-来源：`~/.claude/projects/-user-home-WebstormProjects-project-rebuild/9ec4adc5-f2e5-4511-9982-d7f1678db27c.jsonl:70`。
+来源：`~/.claude/projects/-WebstormProjects-project-x-rebuild/9ec4adc5-f2e5-4511-9982-d7f1678db27c.jsonl:70`。
 
 都不是。**核心是"企业要改造什么，Agent 才能可靠地完成软件交付"——主语是研发基础设施和组织，不是程序员，也不是 Agent 本身。**
 
@@ -133,27 +133,27 @@ Harness（上下文管理/规划恢复/工具验证纠错/人机协同）→ 企
 我觉得最有价值的启发有六条。
 
 1. **真正的瓶颈已经从“会不会生成代码”转向“能不能可靠交付”。**
-   手册反复强调：上下文不完整、验证跑不通、环境不稳定、发布不可控，才是 Agent 落地的主要成本。对 ProjectCore 来说，Run、Attempt、Invocation、Artifact、Event、Usage、Audit 这些“交付证据”比继续堆一个更强的聊天能力更重要。
+   手册反复强调：上下文不完整、验证跑不通、环境不稳定、发布不可控，才是 Agent 落地的主要成本。对 ProjectX 来说，Run、Attempt、Invocation、Artifact、Event、Usage、Audit 这些“交付证据”比继续堆一个更强的聊天能力更重要。
 
 2. **Agent Harness 应该是持续运行的执行闭环，不是 Prompt 包装层。**
-   一个合格的闭环至少要包含：获取上下文、规划、调用工具、观察结果、验证、恢复、必要时转人工。ProjectCore 已经确定 Mastra 是唯一 Runtime，因此不应该再造第二套 Harness，而应把这些职责落实在现有 Runtime 和统一 Run 内核上。
+   一个合格的闭环至少要包含：获取上下文、规划、调用工具、观察结果、验证、恢复、必要时转人工。ProjectX 已经确定 Mastra 是唯一 Runtime，因此不应该再造第二套 Harness，而应把这些职责落实在现有 Runtime 和统一 Run 内核上。
 
 3. **“执行成功”与“业务正确”必须严格分开。**
-   这是手册和 ProjectCore 架构最重要的交集。程序跑完只能说明执行完成，不能说明业务结果正确。业务方可以在平台外准备样例、调用不可变版本、读取 Artifact/Event/Usage 后自行评价；Dataset、Eval、Verdict、质量门槛不应反向污染 Core、Publish 或 Run 状态。
+   这是手册和 ProjectX 架构最重要的交集。程序跑完只能说明执行完成，不能说明业务结果正确。业务方可以在平台外准备样例、调用不可变版本、读取 Artifact/Event/Usage 后自行评价；Dataset、Eval、Verdict、质量门槛不应反向污染 Core、Publish 或 Run 状态。
 
 4. **安全不是外围 Guardrail，而是执行链的一部分。**
-   Sandbox、Identity、Policy、Approval、凭据注入、生产前复核、Evidence 都要串成硬约束。ProjectCore 目前已有 Keycloak、Policy、Approval、出站安全层和审计，这条路线是对的；后续应优先补真实场景中的闭环证据，而不是先增加抽象名词。
+   Sandbox、Identity、Policy、Approval、凭据注入、生产前复核、Evidence 都要串成硬约束。ProjectX 目前已有 Keycloak、Policy、Approval、出站安全层和审计，这条路线是对的；后续应优先补真实场景中的闭环证据，而不是先增加抽象名词。
 
 5. **企业知识库的核心不是“能搜到”，而是“可依赖”。**
-   手册讲得很准确：知识必须有来源、版本、权限、治理和可回溯引用。ProjectCore 已有 Knowledge Provider、Citation 和 Object Store，这里最值得继续强化的是引用可解释性、知识版本变化后的行为，以及权限边界，而不是单纯追求更高的召回率。
+   手册讲得很准确：知识必须有来源、版本、权限、治理和可回溯引用。ProjectX 已有 Knowledge Provider、Citation 和 Object Store，这里最值得继续强化的是引用可解释性、知识版本变化后的行为，以及权限边界，而不是单纯追求更高的召回率。
 
 6. **组织变化比技术变化更慢，也更难。**
-   “超级个体”“数字员工”“云上 Scrum”说明人不会简单消失，协作方式会从“谁来做”转向“目标、边界、验收标准和证据如何定义”。这部分可以影响产品设计，但不应把 OKR、岗位评价、业务质量判断直接塞进 ProjectCore 平台。
+   “超级个体”“数字员工”“云上 Scrum”说明人不会简单消失，协作方式会从“谁来做”转向“目标、边界、验收标准和证据如何定义”。这部分可以影响产品设计，但不应把 OKR、岗位评价、业务质量判断直接塞进 ProjectX 平台。
 
-如果把启发压缩成 ProjectCore 的三个优先方向，我会选：
+如果把启发压缩成 ProjectX 的三个优先方向，我会选：
 
 - 让每次 Run 都留下足够完整、可复核的证据；
 - 让长任务支持明确的恢复、接管和人工决策；
 - 让权限、审批、沙箱和生产操作形成不可绕过的执行链。
 
-反过来，手册里最需要警惕的是“平台完整性”诱惑：看到企业实践里有评测、数字员工、质量门禁，不等于这些概念都应该成为 ProjectCore 的 Core 资源或默认 UI。 :codex-file-citation{path="~/.paseo/uploads/upload_1a2e03e5-ab3d-4fe5-90ad-6aaa787018e4/ai-native-handbook.pdf" purpose="source"}
+反过来，手册里最需要警惕的是“平台完整性”诱惑：看到企业实践里有评测、数字员工、质量门禁，不等于这些概念都应该成为 ProjectX 的 Core 资源或默认 UI。 :codex-file-citation{path="~/.paseo/uploads/upload_1a2e03e5-ab3d-4fe5-90ad-6aaa787018e4/ai-native-handbook.pdf" purpose="source"}

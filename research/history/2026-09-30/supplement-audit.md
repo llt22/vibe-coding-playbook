@@ -8,7 +8,7 @@
 
 | 材料 | 补回内容 |
 |---|---|
-| [七份外部资料综合笔记](recovered/ai-native-engineering-reading-notes-2026-09-26.md) | 找到原来沉淀在 ProjectCore 项目的笔记，包含阿里、腾讯、Docker、O’Reilly、Anthropic 等资料的共识与分歧；原项目规则只保留为背景 |
+| [七份外部资料综合笔记](recovered/ai-native-engineering-reading-notes-2026-09-26.md) | 找到原来沉淀在 ProjectX 项目的笔记，包含阿里、腾讯、Docker、O’Reilly、Anthropic 等资料的共识与分歧；原项目规则只保留为背景 |
 | [OfficeCLI 与调研方法](recovered/officecli-and-research-method-2026-09-23.md) | 办公文件的真实交付、渲染检查、工具与方法分层 |
 | [浏览器选型与用户纠正](recovered/browser-tools-and-scenario-correction-2026-09-17.md) | BrowserSkill / Playwright 比较，以及“结合我实际场景”的纠正 |
 | [OpenCodeReview 原始评价](recovered/open-code-review-original-discussion-2026-09-25.md) | 补回后续雷达之前的介绍和“是否花架子”的讨论 |
@@ -58,15 +58,15 @@
 
 | 线索 | 历史时间 | 处理与用途 |
 |---|---|---|
-| Tencent WeKnora：[README_CN.md](https://github.com/Tencent/WeKnora/blob/main/README_CN.md) | 2026-09-04 | 知识与检索能力；源会话的助手回答在第 62 行，以原会话保留，不复制整段 ProjectCore 竞品分析。 来源：`~/.codex/sessions/2026/09/04/rollout-2026-09-04T23-53-45-01a06d20-3fb3-77e2-be46-1bf74024c602.jsonl:43`。 |
-| Agents API：[Agents API](https://openai.com/index/introducing-the-agents-api/) | 2026-09-11 | 持续执行环境与产品命名的讨论；助手原回答第 309 行，保留为待重验来源，不据历史回复说明当前产品能力。 来源：`~/.omp/agent/sessions/-WebstormProjects-project-rebuild/2026-09-11T10-25-31-432Z_01a09000-4328-7294-91e9-f53e0ab6e4ef.jsonl:294`。 |
+| Tencent WeKnora：[README_CN.md](https://github.com/Tencent/WeKnora/blob/main/README_CN.md) | 2026-09-04 | 知识与检索能力；源会话的助手回答在第 62 行，以原会话保留，不复制整段 ProjectX 竞品分析。 来源：`~/.codex/sessions/2026/09/04/rollout-2026-09-04T23-53-45-01a06d20-3fb3-77e2-be46-1bf74024c602.jsonl:43`。 |
+| Agents API：[Agents API](https://openai.com/index/introducing-the-agents-api/) | 2026-09-11 | 持续执行环境与产品命名的讨论；助手原回答第 309 行，保留为待重验来源，不据历史回复说明当前产品能力。 来源：`~/.omp/agent/sessions/-WebstormProjects-project-x-rebuild/2026-09-11T10-25-31-432Z_01a09000-4328-7294-91e9-f53e0ab6e4ef.jsonl:294`。 |
 | Fastclaw：[fastclaw](https://github.com/fastclaw-ai/fastclaw) | 2026-09-08 | Agent 运行时线索；原回答第 551 行，主要针对当时平台选型。 来源：`~/.codex/sessions/2026/09/08/rollout-2026-09-08T00-10-51-01a07ca2-fd5a-7c41-b806-241cae1873b7.jsonl:536`。 |
-| Pi 插件与缓存配置：[.pi](https://github.com/cap153/config/tree/main/pi/.pi)<br>[pi-web-access](https://github.com/nicobailon/pi-web-access)<br>[pi-mcp-adapter](https://github.com/nicobailon/pi-mcp-adapter)<br>[ida-pro-mcp](https://github.com/mrexodia/ida-pro-mcp)<br>[pi-powerline-footer](https://github.com/nicobailon/pi-powerline-footer)<br>[pi-cache-optimizer](https://github.com/jiangge/pi-cache-optimizer)<br>[plan-mode](https://github.com/earendil-works/pi/tree/main/packages/coding-agent/examples/extensions/plan-mode) | 2026-09-03 | 保存用户给出的项目列表；配置会话中曾把公开模板误当本机实际配置，不将初始结论当事实。 来源：`~/.pi/agent/sessions/--user-home-WebstormProjects-api-dash--/2026-09-03T00-37-03-318Z_01a064b2-a0d6-7eb5-bd79-cfb8888efc1c.jsonl:4`。 |
-| Superset：[superset](https://github.com/superset-sh/superset) | 2026-09-17 | 主要是安装清理和 Skill 管理讨论，用户说明曾主动安装；不采信助手关于安装来源的猜测。 来源：`~/.claude/projects/-user-home-WebstormProjects-api-dash/c29e503a-992f-4d80-ab46-2b9a9bfa9ea6.jsonl:186`。 |
-| Laya MLX：[laya-mlx](https://github.com/mizorewww/laya-mlx) | 2026-09-20 | 语音与本机模型能力线索；本轮只登记来源，未验证本机效果。 来源：`~/.omp/agent/sessions/-WebstormProjects-project-rebuild/2026-09-20T06-38-57-619Z_01a0bd8a-1253-769d-8795-8f2f10a50606.jsonl:54`。 |
-| Laya 模型：[laya](https://huggingface.co/convaiinnovations/laya) | 2026-09-20 | 与 Laya MLX 同一研究链，不按两个独立证据计算。 来源：`~/.omp/agent/sessions/-WebstormProjects-project-rebuild/2026-09-20T06-38-57-619Z_01a0bd8a-1253-769d-8795-8f2f10a50606.jsonl:5`。 |
+| Pi 插件与缓存配置：[.pi](https://github.com/cap153/config/tree/main/pi/.pi)<br>[pi-web-access](https://github.com/nicobailon/pi-web-access)<br>[pi-mcp-adapter](https://github.com/nicobailon/pi-mcp-adapter)<br>[ida-pro-mcp](https://github.com/mrexodia/ida-pro-mcp)<br>[pi-powerline-footer](https://github.com/nicobailon/pi-powerline-footer)<br>[pi-cache-optimizer](https://github.com/jiangge/pi-cache-optimizer)<br>[plan-mode](https://github.com/earendil-works/pi/tree/main/packages/coding-agent/examples/extensions/plan-mode) | 2026-09-03 | 保存用户给出的项目列表；配置会话中曾把公开模板误当本机实际配置，不将初始结论当事实。 来源：`~/.pi/agent/sessions/-WebstormProjects-api-dash/2026-09-03T00-37-03-318Z_01a064b2-a0d6-7eb5-bd79-cfb8888efc1c.jsonl:4`。 |
+| Superset：[superset](https://github.com/superset-sh/superset) | 2026-09-17 | 主要是安装清理和 Skill 管理讨论，用户说明曾主动安装；不采信助手关于安装来源的猜测。 来源：`~/.claude/projects/-WebstormProjects-api-dash/c29e503a-992f-4d80-ab46-2b9a9bfa9ea6.jsonl:186`。 |
+| Laya MLX：[laya-mlx](https://github.com/mizorewww/laya-mlx) | 2026-09-20 | 语音与本机模型能力线索；本轮只登记来源，未验证本机效果。 来源：`~/.omp/agent/sessions/-WebstormProjects-project-x-rebuild/2026-09-20T06-38-57-619Z_01a0bd8a-1253-769d-8795-8f2f10a50606.jsonl:54`。 |
+| Laya 模型：[laya](https://huggingface.co/convaiinnovations/laya) | 2026-09-20 | 与 Laya MLX 同一研究链，不按两个独立证据计算。 来源：`~/.omp/agent/sessions/-WebstormProjects-project-x-rebuild/2026-09-20T06-38-57-619Z_01a0bd8a-1253-769d-8795-8f2f10a50606.jsonl:5`。 |
 | RealReplicaBench：[RealReplicaBench](https://github.com/Accio-org/RealReplicaBench) | 2026-08-20 | 用户转来一篇讨论真实工作任务评测的文章；只登记基准入口，文内成绩未核验，避免把转述当原始数据。 来源：`~/.omp/agent/sessions/-WebstormProjects-blog-drafts/2026-08-20T08-26-00-496Z_01a01e46-efb0-7000-8dc5-e0e681e3946b.jsonl:23`。 |
-| i-have-adhd：[README.zh-CN.md](https://github.com/ayghri/i-have-adhd/blob/main/.github/readme/README.zh-CN.md) | 2026-08-31 | 个人任务组织与界面参考线索；本轮只登记，不据此提出新产品方向。 来源：`~/.omp/agent/sessions/-WebstormProjects-project-ai/2026-08-31T06-14-42-226Z_01a05674-ad32-7402-8d5a-bc5998cfae0f.jsonl:6`。 |
+| i-have-adhd：[README.zh-CN.md](https://github.com/ayghri/i-have-adhd/blob/main/.github/readme/README.zh-CN.md) | 2026-08-31 | 个人任务组织与界面参考线索；本轮只登记，不据此提出新产品方向。 来源：`~/.omp/agent/sessions/-WebstormProjects-project-x/2026-08-31T06-14-42-226Z_01a05674-ad32-7402-8d5a-bc5998cfae0f.jsonl:6`。 |
 | Tavily Skills：[skills](https://github.com/tavily-ai/skills) | 2026-07-01 | 工具方法分层与配置讨论；已有工具文档覆盖，原会话中途被打断，不包装成完整独立报告。 来源：`~/.codex/sessions/2026/06/30/rollout-2026-06-30T09-54-36-019f163c-438b-79d3-a86e-09f2a80f23ba.jsonl:630`。 |
 | GPT-5.5 Prompt Guidance：[prompt-guidance?model=gpt-5.5](https://developers.openai.com/api/docs/guides/prompt-guidance?model=gpt-5.5) | 2026-06-16 | 历史提示词来源，助手回答第 1858 行；版本相关内容待使用时重新核验。 来源：`~/.codex/sessions/2026/06/15/rollout-2026-06-15T17-57-03-019ecab6-919f-7840-b421-441c0883a0d7.jsonl:1839`。 |
 | 飞书 CLI：[README.zh.md](https://github.com/larksuite/cli/blob/main/README.zh.md) | 2026-06-04 | 已有 dev-sharing 文章覆盖；用户业务任务和消息操作不搬入研究归档。 来源：`~/.omp/agent/sessions/-WebstormProjects-portal-f/2026-06-04T06-42-49-746Z_019e915e-cd11-7000-afcd-2c922a25d5e4.jsonl:4`。 |
@@ -92,7 +92,7 @@
 - **补回 1 份讨论**：[OMP 与 Pi 扩展调研](recovered/omp-pi-extensions-and-issues-2026-08-04.md)。
 - **登记 10 个本机项目入口**：见上文“已在其他位置保存的资料”。它们是你为改善 AI 工作条件自己做的工具和实验（卡顿监控、供应商配置、多机同步、识图、DSH 插件等），此前 playbook 中完全没有索引。用户确认 `code-semantic-index-lab`、`clipboard-vision-skill`、`model-native-document-agent` 为已弃用的早期项目，不登记。
 - **确认已覆盖、不重复收录**：Opus 5.5 配置与 Context Mode（`tools/`）、Jev 思考监督实验（jev-lab 索引）。
-- **按范围排除**：未入库仓库中的大多数属于 ProjectCore / ProjectCore 平台技术选型（MCP 网关、沙箱、BaaS、Dify / Mastra / Langflow、Fastify、计量与权限组件等）和业务项目开发（文档抽取、审核系统）。它们是“做 AI 产品”而不是“用 AI 工作”，以 project-rebuild 等项目文档为准。
+- **按范围排除**：未入库仓库中的大多数属于 ProjectX / ProjectX-Core 平台技术选型（MCP 网关、沙箱、BaaS、Dify / Mastra / Langflow、Fastify、计量与权限组件等）和业务项目开发（文档抽取、审核系统）。它们是“做 AI 产品”而不是“用 AI 工作”，以 project-x-rebuild 等项目文档为准。
 
 边界：仓库链接反查只能覆盖带 GitHub 链接的资料；没有链接、只以名称或文章出现的资料仍可能遗漏。本轮对非 GitHub 外链只做了抽查。
 
