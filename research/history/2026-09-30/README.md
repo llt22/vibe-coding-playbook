@@ -2,7 +2,9 @@
 
 整理日期：2026-09-30。目的：为 vibe-coding-playbook 升级为覆盖各种工作场景的 AI 使用研究项目，补回尚未稳定沉淀的历史资料、用户判断与研究线索。
 
-本次检索了本机 Codex 会话及归档、Claude Code、OMP 和 Pi 会话，重点阅读 2026-09-22—29 的相关讨论；同时与 dev-sharing、vibe-coding-playbook 当前 Markdown 内容及相关个人 skill 对照。这是按主题进行的补查，不是全部历史会话的逐条审计，也未重新联网验证历史报告中的产品数据和结论。
+首轮检索本机 Codex 会话及归档、Claude Code、OMP 和 Pi 会话，重点阅读 2026-09-22—29 的相关讨论；第二轮扩展到更早记录，对 1,710 个根会话文件进行筛选，再定点阅读相关材料，并与 dev-sharing、vibe-coding-playbook、jev-lab 及个人方法文件对照。这是按主题进行的补查，不是全部历史会话的逐条审计，也未重新联网验证历史报告中的产品数据和结论。
+
+第二轮新增材料与明确缺口见 [补漏台账](supplement-audit.md)。想先看这项研究要解决什么问题，可直接读 [用户问题与研究方向](research-questions.md)。
 
 ## 阅读方式与证据边界
 
@@ -11,6 +13,7 @@
 - 同一主题的多份报告可能相互继承，不能按报告数量算作独立证据。
 - 外部资料链接是后续研究入口；只有重新检查来源或完成适用场景的验证后，才适合晋升为当前推荐。
 - 原始会话保留在本地；本目录只归档研究材料、整理索引与来源定位。以 `~/` 开头的会话路径供原机器追溯，不是仓库内文件。
+- `methods/` 只保存个人方法正文的历史快照，不安装或激活 Skill；原项目的架构、审批与执行规则也不因归档而成为本项目规则。
 
 ## 1. 找回的研究起点与用户纠正
 
@@ -84,6 +87,24 @@
 | 09-28 | [代码审查工具雷达](recovered/code-review-radar-2026-09-28.md) | OpenCodeReview、PR-Agent、ast-grep、Greptile 等比较线索 |
 | 09-29 | [工程研究综合报告](recovered/ai-engineering-radar-2026-09-29.md) | 11 个二级章节，涵盖编排、上下文、验证、环境、组织、工具协议、噪声与落地问题 |
 
+第二轮补回的资料：
+
+| 文件 | 补齐的内容 |
+|---|---|
+| [七份外部资料综合笔记](recovered/ai-native-engineering-reading-notes-2026-09-26.md) | 之前保存在另一项目中的跨资料梳理，含腾讯知乎入口 |
+| [OfficeCLI 与研究方法](recovered/officecli-and-research-method-2026-09-23.md) | 办公交付场景、工具与方法分层 |
+| [浏览器选型与用户纠正](recovered/browser-tools-and-scenario-correction-2026-09-17.md) | 依据真实使用场景比较，区分文档能力与本机实测 |
+| [OpenCodeReview 原始讨论](recovered/open-code-review-original-discussion-2026-09-25.md) | 最初介绍和价值评价，补齐后续雷达之前的讨论 |
+| [Skill、规则与研发方法](recovered/skills-and-working-methods-2026-06-to-09.md) | 团队配置、规则删减、评估，以及多个方法库的历史取舍 |
+| [Agent 环境与持续工作](recovered/agent-harness-and-autonomy-2026-09.md) | Clawith、StaffDeck、Octop、Stencil、Microsoft Agent Framework |
+| [办公工具与信息获取](recovered/tools-and-information-access-2026-05-to-09.md) | 办公、多模态、沙箱、检索、信源接入和工具成本 |
+| [Paseo 插件与跨项目接力](recovered/paseo-plugins-and-cross-project-handoff-2026-09.md) | 补回最近一轮插件讨论、跨项目接力的真实需求，以及后续失效反馈 |
+| [Jev 工具评估](recovered/jev-tool-assessments-2026-09-18.md) | 代码评分、浏览器执行、上下文压缩；独立实验另有来源索引 |
+| [工程雷达](methods/ai-engineering-radar.md)、[DeepSeek 实施方法](methods/deepseek-verified-implementation.md) | 两份个人方法的正文快照 |
+| [O’Reilly 历史提取文本](sources/oreilly-scaling-ai-historical-text.txt) | 从四段工具结果恢复完整可见文本；原 PDF 与版式仍缺失 |
+
+以上材料的会话来源、原文行号与归档校验值均在 [provenance.json](provenance.json) 中。其他已保存文档及仅登记来源的线索见 [补漏台账](supplement-audit.md)。
+
 七篇专题对应的用户提供资料：
 
 | 资料 | 原始入口 | 可研究的工作问题 |
@@ -91,7 +112,7 @@
 | 腾讯工程实践 | [BestBlogs 文章入口](https://www.bestblogs.dev/article/217da0f037) | 如何组织复杂任务、保留上下文并验证效果 |
 | Docker Sandbox Kit 与 Software Factory | [Docker 博客](https://www.docker.com/blog/docker-sandbox-kit-spec/)、[AI Coding Dictionary](https://www.aicodingdictionary.com/?term=software-factory) | 如何提供运行环境、触发和持续执行条件 |
 | Hyper-Extract | [GitHub](https://github.com/yifanfeng97/Hyper-Extract/blob/main/README_ZH.md) | 文档资料如何变成可检索、可使用的知识 |
-| Scaling AI Adoption in Engineering | [用户提供的 PDF 链接](https://github.com/lukeTheNeuromancer/-_Skill/blob/main/oreilly-scaling-ai-ebook.pdf) | 怎样让个人和组织实际采用 AI，并评估收益 |
+| Scaling AI Adoption in Engineering | [用户提供的 PDF 链接](https://github.com/lukeTheNeuromancer/-_Skill/blob/main/oreilly-scaling-ai-ebook.pdf) · [恢复的历史提取文本](sources/oreilly-scaling-ai-historical-text.txt) | 怎样让个人和组织实际采用 AI，并评估收益；历史版本正文到第 4 章 |
 | Anthropic 代码现代化准备 | [原始文章入口](https://claude.com/blog/how-to-prepare-for-ai-driven-code-modernization-projects) | 执行前要明确什么，怎样建立独立验证条件 |
 | GenOffice | [GitHub](https://github.com/genspark-ai/genoffice) | 怎样让 AI 交付可继续编辑和使用的办公文件 |
 | Paperclip | [GitHub](https://github.com/paperclipai/paperclip) | 如何让 Agent 围绕职责和任务持续工作 |
@@ -101,10 +122,10 @@
 | 状态 | 内容 |
 |---|---|
 | 已有方法沉淀 | `ai-tool-radar` 和 `workflow-learning` 在 playbook 有副本，与本机个人正本内容一致 |
-| 仅个人 skill 有完整定义 | `ai-engineering-radar`、`deepseek-verified-implementation` 在 `~/skills` 存在，当前 playbook 没有对应 skill 文件 |
+| 归档前仅个人 skill 有完整定义 | `ai-engineering-radar`、`deepseek-verified-implementation` 的正本在 `~/skills`；第二轮已补入 `methods/` 文本快照，未安装为仓库 Skill |
 | 已有实践文章 | dev-sharing 的 Spec／Goal、验证闭环、工具搭建与分享文章 |
 | 本次补回的具体成果 | 上表报告、阅读笔记与阿里手册原件；归档前，两个仓库的 Markdown 未检索到这些报告及所列具体专题的对应条目；现已收入本目录 |
-| 尚未归并的偏好与问题 | 发现渠道、历史补漏、对花架子的怀疑、反对为搜索重复造脚本等，分散在会话里 |
+| 已归并的偏好与问题 | 发现渠道、历史补漏、对花架子的怀疑、反对为搜索重复造脚本等，现见本索引及 [研究问题](research-questions.md) |
 
 上述检索结论描述本次归档前的状态，不等于全电脑没有副本，也不表示 Git 历史从未保存。额外发现六月的 `dev-sharing/model-bench` 实验会话，当前目录已不存在；本轮未复核实验结果，不把它作为模型能力比较证据。
 

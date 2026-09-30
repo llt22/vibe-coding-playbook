@@ -167,6 +167,629 @@
       ],
       "recovered_sha256": "01f0ecaca5e97dd664c1ca97bbdaa5b807f161ec998321074c930f8a74beff21",
       "archive_adjustments": "Removed trailing Markdown whitespace; historical wording is unchanged."
+    },
+    {
+      "path": "recovered/officecli-and-research-method-2026-09-23.md",
+      "bytes": 7490,
+      "sha256": "c1489ca49cd8b9b1c0ec0718e9f5adcaef67761787da24e6361c91bca0bf3e7a",
+      "external_claims_reverified": false,
+      "kind": "historical_discussion_bundle",
+      "excerpts": [
+        {
+          "source": "~/.codex/sessions/2026/09/23/rollout-2026-09-23T09-46-57-01a0cbf1-d06c-7331-a4a2-46ec9798bdca.jsonl",
+          "line": 113,
+          "role": "assistant",
+          "text_sha256": "76caf6921e115d8db2f418ed2ee86f7388edef0bccb69f349e670fa1792e97e3"
+        },
+        {
+          "source": "~/.codex/sessions/2026/09/23/rollout-2026-09-23T09-46-57-01a0cbf1-d06c-7331-a4a2-46ec9798bdca.jsonl",
+          "line": 147,
+          "role": "assistant",
+          "text_sha256": "76addf3b6b50b0630fb4dc99f3d4501847598e537468246a667902c3147010b6"
+        },
+        {
+          "source": "~/.codex/sessions/2026/09/23/rollout-2026-09-23T09-46-57-01a0cbf1-d06c-7331-a4a2-46ec9798bdca.jsonl",
+          "line": 159,
+          "role": "assistant",
+          "text_sha256": "372b926d34257e046713992e422d0931ebf44827ce59da8a741dbae4005e67b5"
+        }
+      ],
+      "recovered_sha256": "4cb5960afc455bcf4bd8ffc7e65b50ac7de97cd1b9ade16ca8c074aa21140cc5",
+      "archive_adjustments": "Removed trailing whitespace, converted machine-local Markdown links to home-relative source references, and replaced nonportable historical citation handles when present. Historical wording otherwise preserved."
+    },
+    {
+      "path": "recovered/browser-tools-and-scenario-correction-2026-09-17.md",
+      "bytes": 14573,
+      "sha256": "5e62c1739e97f88ba06a349e022319ca8eae05043333c89cc6d3793ec17c0922",
+      "external_claims_reverified": false,
+      "kind": "historical_discussion_bundle",
+      "excerpts": [
+        {
+          "source": "~/.omp/agent/sessions/-WebstormProjects-api-dash/2026-09-17T02-19-57-360Z_01a0ad29-de30-74c1-8307-bc455d985025.jsonl",
+          "line": 37,
+          "role": "assistant",
+          "text_sha256": "e1de8e070be2158866aa49c0312ec21edb979b543036ea6611ce79056f6c0dd2"
+        },
+        {
+          "source": "~/.omp/agent/sessions/-WebstormProjects-api-dash/2026-09-17T02-19-57-360Z_01a0ad29-de30-74c1-8307-bc455d985025.jsonl",
+          "line": 148,
+          "role": "assistant",
+          "text_sha256": "b3cb5e6b8d62bdb3d28f4dd3d7788eaf3b9cc470bf4f54939c0a4c18c790d21c"
+        },
+        {
+          "source": "~/.omp/agent/sessions/-WebstormProjects-api-dash/2026-09-17T02-19-57-360Z_01a0ad29-de30-74c1-8307-bc455d985025.jsonl",
+          "line": 149,
+          "role": "user",
+          "text_sha256": "1013ccf7fc705671aba32ca3d88f6478603a5da46c48c92a5a8c2da17d8a681e"
+        },
+        {
+          "source": "~/.omp/agent/sessions/-WebstormProjects-api-dash/2026-09-17T02-19-57-360Z_01a0ad29-de30-74c1-8307-bc455d985025.jsonl",
+          "line": 150,
+          "role": "assistant",
+          "text_sha256": "b79162e9d36bc86b6471a211ea78958203f4e68dfabf817b9e22b14f1887ef36"
+        }
+      ]
+    },
+    {
+      "path": "recovered/open-code-review-original-discussion-2026-09-25.md",
+      "bytes": 8819,
+      "sha256": "9fcfcadf08ad04b85cb059a70613b27bf15f078f9fc473f7e069a7e20433400b",
+      "external_claims_reverified": false,
+      "kind": "historical_discussion_bundle",
+      "excerpts": [
+        {
+          "source": "~/.omp/agent/sessions/-WebstormProjects-project-rebuild/2026-09-25T02-03-18-957Z_01a0d64d-822d-7454-9c5b-8b89f6cae13e.jsonl",
+          "line": 9,
+          "role": "assistant",
+          "text_sha256": "de5ad55c8613c849a187d209f75fbd0be27980332111462769df0caf8ea77e3b"
+        },
+        {
+          "source": "~/.omp/agent/sessions/-WebstormProjects-project-rebuild/2026-09-25T02-03-18-957Z_01a0d64d-822d-7454-9c5b-8b89f6cae13e.jsonl",
+          "line": 12,
+          "role": "user",
+          "text_sha256": "2488fef3247a42246ee8caabca6a77d1cbb302ded6e5c90154950e8930b822a9"
+        },
+        {
+          "source": "~/.omp/agent/sessions/-WebstormProjects-project-rebuild/2026-09-25T02-03-18-957Z_01a0d64d-822d-7454-9c5b-8b89f6cae13e.jsonl",
+          "line": 13,
+          "role": "assistant",
+          "text_sha256": "b9e4fda2d828c0076ea763f68cf24070863bfe19176e51ecbe126a01c6dbd1b6"
+        }
+      ]
+    },
+    {
+      "path": "recovered/skills-and-working-methods-2026-06-to-09.md",
+      "bytes": 51232,
+      "sha256": "c48a98c417555027a4fbb3510671f50250240d8aeee780e8adc01dc093250c19",
+      "external_claims_reverified": false,
+      "kind": "historical_discussion_bundle",
+      "excerpts": [
+        {
+          "source": "~/.codex/sessions/2026/06/01/rollout-2026-06-01T10-14-41-019e80f6-3c66-7621-8363-846f02e394b2.jsonl",
+          "line": 699,
+          "role": "assistant",
+          "text_sha256": "cbd815443ecd4a4fe0157979c2d1abd2208c474ecc6502fdc25098acc3b54c3f"
+        },
+        {
+          "source": "~/.codex/sessions/2026/06/01/rollout-2026-06-01T10-14-41-019e80f6-3c66-7621-8363-846f02e394b2.jsonl",
+          "line": 766,
+          "role": "assistant",
+          "text_sha256": "ba4aae0dc55ddcfaafffe3f25c98a75258e08fb632b6898243fca8f39fa98b78"
+        },
+        {
+          "source": "~/.codex/sessions/2026/06/01/rollout-2026-06-01T10-14-41-019e80f6-3c66-7621-8363-846f02e394b2.jsonl",
+          "line": 890,
+          "role": "assistant",
+          "text_sha256": "efc08637be3a1421c028a33f793d37029e7056d820e83f52b98a08f27e7b090e"
+        },
+        {
+          "source": "~/.codex/sessions/2026/06/15/rollout-2026-06-15T17-57-03-019ecab6-919f-7840-b421-441c0883a0d7.jsonl",
+          "line": 1277,
+          "role": "assistant",
+          "text_sha256": "c11e2d07089b11bdaec072f9ce23f5b43e287eeaf15cec26b0738466cdb1fb7b"
+        },
+        {
+          "source": "~/.codex/sessions/2026/07/03/rollout-2026-07-03T11-23-10-019f2600-70da-7b72-9a9a-f9558adbe24f.jsonl",
+          "line": 3314,
+          "role": "assistant",
+          "text_sha256": "1bdd8bf62148226acd5f999085a7c4abf13889fa39702c8744ca564dca130483"
+        },
+        {
+          "source": "~/.codex/sessions/2026/07/03/rollout-2026-07-03T11-23-10-019f2600-70da-7b72-9a9a-f9558adbe24f.jsonl",
+          "line": 3342,
+          "role": "assistant",
+          "text_sha256": "7f79efdb7997d0a7ae5b1e2f0fe3076964128f728997e6770c529cb1d3f28f77"
+        },
+        {
+          "source": "~/.codex/sessions/2026/07/03/rollout-2026-07-03T11-23-10-019f2600-70da-7b72-9a9a-f9558adbe24f.jsonl",
+          "line": 3358,
+          "role": "assistant",
+          "text_sha256": "c5249ca97058aba2de51795e45b083ec2321f73c78e79aa979986863a05d707e"
+        },
+        {
+          "source": "~/.codex/sessions/2026/07/03/rollout-2026-07-03T11-23-10-019f2600-70da-7b72-9a9a-f9558adbe24f.jsonl",
+          "line": 6892,
+          "role": "assistant",
+          "text_sha256": "22a1a4a31c35ce6c7ee93f05b62c38773c7939d4c4da40f86069be8d58b12239"
+        },
+        {
+          "source": "~/.codex/sessions/2026/08/24/rollout-2026-08-24T18-42-56-01a0335d-bcec-7ea3-9b3e-90d19dd9f04b.jsonl",
+          "line": 59,
+          "role": "assistant",
+          "text_sha256": "f10152fb7daa99ffa370879b030328e8f3713733bdc69be3b0dbc927290e42df"
+        },
+        {
+          "source": "~/.codex/sessions/2026/08/24/rollout-2026-08-24T09-56-10-01a0317b-797f-7af1-8233-877ec1d43d22.jsonl",
+          "line": 157,
+          "role": "assistant",
+          "text_sha256": "6b2e450be5066afe52b68da05a6b9ec1e1c0433510a2209e28e6c3c0492cef0d"
+        },
+        {
+          "source": "~/.omp/agent/sessions/-WebstormProjects-blog-drafts/2026-08-27T15-03-42-090Z_01a043bf-8d0a-724d-8f17-edbf5690645e.jsonl",
+          "line": 23,
+          "role": "assistant",
+          "text_sha256": "865f18b6dfb7dca1c8c3ee5d47adc8ec0c003f1b6b084ac7a91d7dd41a37f164"
+        },
+        {
+          "source": "~/.omp/agent/sessions/-WebstormProjects-blog-drafts/2026-08-27T15-03-42-090Z_01a043bf-8d0a-724d-8f17-edbf5690645e.jsonl",
+          "line": 48,
+          "role": "assistant",
+          "text_sha256": "f0e4f3995f8dadb5fd7283d7c55e1f0fb352720210731cce50739f592641eff7"
+        },
+        {
+          "source": "~/.codex/sessions/2026/09/08/rollout-2026-09-08T00-10-51-01a07ca2-fd5a-7c41-b806-241cae1873b7.jsonl",
+          "line": 515,
+          "role": "assistant",
+          "text_sha256": "e761dd3fb30da80e943a42e1091988a7c8b628c063a3da36fae5a9db5d76a43a"
+        },
+        {
+          "source": "~/.claude/projects/-user-home-WebstormProjects-dev-sharing/9c0b390a-6b2e-4c5d-a00c-813cc7a927b4.jsonl",
+          "line": 1007,
+          "role": "assistant",
+          "text_sha256": "2a8912b6c3d4f257bb10290a0084f4f529087de22225f7908826dc6a13d0e7aa"
+        },
+        {
+          "source": "~/.claude/projects/-user-home-WebstormProjects-dev-sharing/9c0b390a-6b2e-4c5d-a00c-813cc7a927b4.jsonl",
+          "line": 1012,
+          "role": "assistant",
+          "text_sha256": "018902b6b2fd5aaf9e427d43de1dd66426db97ee52a002284d131721ddbba8ff"
+        },
+        {
+          "source": "~/.codex/sessions/2026/09/08/rollout-2026-09-08T00-10-51-01a07ca2-fd5a-7c41-b806-241cae1873b7.jsonl",
+          "line": 625,
+          "role": "assistant",
+          "text_sha256": "8c57b814d6aa1b5780354069fdfcb42cf66065d272829b5f9b5da98d885eb945"
+        },
+        {
+          "source": "~/.codex/sessions/2026/09/08/rollout-2026-09-08T00-10-51-01a07ca2-fd5a-7c41-b806-241cae1873b7.jsonl",
+          "line": 758,
+          "role": "assistant",
+          "text_sha256": "6c8246cad59d5eb72e1cc4121e04fd2ffbf104ea3762259438e14e8a61c06392"
+        }
+      ],
+      "recovered_sha256": "a8fc0aeb0ebb4bf6ba3d7cf6f5be83a0b42cca045ab8c793a8311e2f8c588e14",
+      "archive_adjustments": "Removed trailing whitespace, converted machine-local Markdown links to home-relative source references, and replaced nonportable historical citation handles when present. Historical wording otherwise preserved."
+    },
+    {
+      "path": "recovered/agent-harness-and-autonomy-2026-09.md",
+      "bytes": 22904,
+      "sha256": "0ec327f1354a6ed269c23912d3dcf3cf056cc9742453ea3f84c6f870bf2f58d9",
+      "external_claims_reverified": false,
+      "kind": "historical_discussion_bundle",
+      "excerpts": [
+        {
+          "source": "~/.codex/sessions/2026/09/04/rollout-2026-09-04T23-53-45-01a06d20-3fb3-77e2-be46-1bf74024c602.jsonl",
+          "line": 34,
+          "role": "assistant",
+          "text_sha256": "4ba73651779172f82461b60825d715168f9737b1cf441fff37d6422ccf5ebc07"
+        },
+        {
+          "source": "~/.omp/agent/sessions/-WebstormProjects-project-rebuild/2026-09-11T10-25-31-432Z_01a09000-4328-7294-91e9-f53e0ab6e4ef.jsonl",
+          "line": 50,
+          "role": "assistant",
+          "text_sha256": "549b81662afdf06089806202a7e0a1f6e127f47fbaa4bccbf81586bde344966e"
+        },
+        {
+          "source": "~/.codex/archived_sessions/rollout-2026-09-15T12-34-40-01a0a358-7df1-7e93-8157-4d75127bb5e0.jsonl",
+          "line": 290,
+          "role": "assistant",
+          "text_sha256": "fd944700a51b7c2e97aecc6397a6746828647bb5e8214ba4699c28f13380127a"
+        },
+        {
+          "source": "~/.codex/archived_sessions/rollout-2026-09-20T18-01-24-01a0be43-6b56-74b2-a07c-fa2ae8df30b7.jsonl",
+          "line": 139,
+          "role": "assistant",
+          "text_sha256": "91893a35864342d428f47c22eb3e51be1a37715f5b2590b8716a7fce2340d4ee"
+        },
+        {
+          "source": "~/.codex/archived_sessions/rollout-2026-09-21T20-19-40-01a0c3e8-5cc9-7782-af50-977b2938c641.jsonl",
+          "line": 64,
+          "role": "assistant",
+          "text_sha256": "0dc38775e4a392c50af74fa5d8f76a90fa5640450ed823fd01b8d5bc586bddd2"
+        }
+      ],
+      "recovered_sha256": "a85476aaa31668a8cb35286bd1eb523f9a248f9ce9e95f024a4bf22c4f75cdd7",
+      "archive_adjustments": "Removed trailing whitespace, converted machine-local Markdown links to home-relative source references, and replaced nonportable historical citation handles when present. Historical wording otherwise preserved."
+    },
+    {
+      "path": "recovered/tools-and-information-access-2026-05-to-09.md",
+      "bytes": 29423,
+      "sha256": "6222df89cb7bc4399f705adde949f870c8c267ec9a88670fe1cb08779b964cc4",
+      "external_claims_reverified": false,
+      "kind": "historical_discussion_bundle",
+      "excerpts": [
+        {
+          "source": "~/.codex/sessions/2026/05/22/rollout-2026-05-22T12-40-20-019e4dfb-fd66-70d0-b92d-9f38c0efdfd9.jsonl",
+          "line": 86,
+          "role": "assistant",
+          "text_sha256": "950b0cdb4f0bffa8b5b7ae2dbad96d4732d0796b57959d6fec4607c35cfa671e"
+        },
+        {
+          "source": "~/.omp/agent/sessions/-WebstormProjects-portal-f/2026-06-01T09-08-03-773Z_019e8270-b03d-7000-897c-616b38ef0991.jsonl",
+          "line": 41,
+          "role": "assistant",
+          "text_sha256": "bf8ff556ff9edceb58ee94d7ad5b05420c2218c0ad42f73ef0c2a489544532d8"
+        },
+        {
+          "source": "~/.codex/sessions/2026/06/30/rollout-2026-06-30T15-14-14-019f1760-e8b9-7ad1-ad11-7c98f36b6801.jsonl",
+          "line": 496,
+          "role": "assistant",
+          "text_sha256": "4e8c7d220e7666a4619db59c2f31f86cd3a51097fd98314f24b9540006a7ca9a"
+        },
+        {
+          "source": "~/.codex/archived_sessions/rollout-2026-08-09T12-03-49-019fe4b0-f1a0-7981-8522-5e85fe351829.jsonl",
+          "line": 8457,
+          "role": "assistant",
+          "text_sha256": "883989ff125200863e4f64190004f575f67269f23abc3bbe6168c5367504c5c9"
+        },
+        {
+          "source": "~/.codex/archived_sessions/rollout-2026-08-09T12-03-49-019fe4b0-f1a0-7981-8522-5e85fe351829.jsonl",
+          "line": 8607,
+          "role": "assistant",
+          "text_sha256": "e4eeec4ee1e0cf1f5bb22fdd2fcedd8e423c5d5c8b566c1329f429ae534e47fd"
+        },
+        {
+          "source": "~/.omp/agent/sessions/-WebstormProjects-review-helper/2026-08-10T16-18-22-819Z_019fec77-cfe3-7000-abd1-45801ef9664d.jsonl",
+          "line": 97,
+          "role": "assistant",
+          "text_sha256": "b90bbbf5097ad748815b9c905852a1a2e7e5f66c122c0b75f2a943926cafc384"
+        },
+        {
+          "source": "~/.omp/agent/sessions/-WebstormProjects-review-helper/2026-08-10T16-18-22-819Z_019fec77-cfe3-7000-abd1-45801ef9664d.jsonl",
+          "line": 116,
+          "role": "assistant",
+          "text_sha256": "4b13bfb3b93ec5e375c09123d74e8a8557fa37774ce6ad3cb1e0d8805073f459"
+        },
+        {
+          "source": "~/.codex/sessions/2026/09/08/rollout-2026-09-08T00-10-51-01a07ca2-fd5a-7c41-b806-241cae1873b7.jsonl",
+          "line": 211,
+          "role": "assistant",
+          "text_sha256": "644eb3349b5368e2117425d40f11afd3560580914936dcc6966206a5da044927"
+        },
+        {
+          "source": "~/.codex/sessions/2026/09/08/rollout-2026-09-08T00-10-51-01a07ca2-fd5a-7c41-b806-241cae1873b7.jsonl",
+          "line": 897,
+          "role": "assistant",
+          "text_sha256": "7e6fbea014047081eabc96ec2c8ad7540a0418c2d122124919b477fa00ec2620"
+        },
+        {
+          "source": "~/.claude/projects/-user-home-WebstormProjects-project-h/7764a962-7a2b-41a7-8c5b-b5d469e3ee80.jsonl",
+          "line": 28,
+          "role": "assistant",
+          "text_sha256": "f2bf951d0432f4df6d055831504a3f5361a29af550dcdd1162ef8ac440a80723"
+        },
+        {
+          "source": "~/.omp/agent/sessions/-WebstormProjects-project-rebuild/2026-09-17T10-40-12-923Z_01a0aef3-de7b-74b1-a513-149bfefbeb95.jsonl",
+          "line": 17,
+          "role": "assistant",
+          "text_sha256": "431872fa07f36cd20fb0b20e944f1e9b90e1e31ef39cf77ba57d3aa67ae9014d"
+        }
+      ]
+    },
+    {
+      "path": "recovered/jev-tool-assessments-2026-09-18.md",
+      "bytes": 9570,
+      "sha256": "4587b07bdc32113e8567e19096de9a562afb89ee5cd9bfcac61113da7e27689b",
+      "external_claims_reverified": false,
+      "kind": "historical_discussion_bundle",
+      "excerpts": [
+        {
+          "source": "~/.codex/archived_sessions/rollout-2026-09-18T14-44-29-01a0b342-6ac9-7d40-a304-d391eacc8461.jsonl",
+          "line": 110,
+          "role": "assistant",
+          "text_sha256": "3fa75ce194c85799e19000b0f804b1a953c8a4baaf185f06327a38ee74ddf870"
+        },
+        {
+          "source": "~/.codex/archived_sessions/rollout-2026-09-18T10-46-23-01a0b268-6ea1-78d3-b023-da1c7d970c71.jsonl",
+          "line": 771,
+          "role": "assistant",
+          "text_sha256": "c88bffd23321e8998401e5e8253025577bf4f4b28b89fbb43adae61eadca4f4e"
+        },
+        {
+          "source": "~/.codex/archived_sessions/rollout-2026-09-18T10-10-08-01a0b247-3bfb-7390-9e61-4f972e6a3474.jsonl",
+          "line": 1077,
+          "role": "assistant",
+          "text_sha256": "5909dffb55f7953250986f447574b074218246c8e2ea345cb7ad7897cf62125e"
+        }
+      ]
+    },
+    {
+      "path": "recovered/ai-native-engineering-reading-notes-2026-09-26.md",
+      "bytes": 9375,
+      "sha256": "d048510680b83cf2d84f9fa5bf26ed492778e91a903fa00280ef940d32782551",
+      "external_claims_reverified": false,
+      "kind": "existing_document_snapshot",
+      "source": "~/WebstormProjects/project-rebuild/docs/ai-native-engineering-reading-notes.md",
+      "source_sha256": "8e1935b0589fa90a5630d60bc3a68e41eaa3feaf5edfc22924e19a5104fe11a0",
+      "source_adjustments": "Prefixed archival context; converted original project-relative Markdown links to home-relative source references."
+    },
+    {
+      "path": "methods/ai-engineering-radar.md",
+      "bytes": 9456,
+      "sha256": "cdb1a7c336932aa430ae9236c8480f7c3eed992a9f5806ac2d2f689ae827fc5b",
+      "external_claims_reverified": false,
+      "kind": "method_snapshot",
+      "source": "~/skills/ai-engineering-radar/SKILL.md",
+      "source_sha256": "d91aa8ae1198c493e3fd33766d4c4f79b850e850910331e13dd23945b14671d0",
+      "installed_or_activated": false
+    },
+    {
+      "path": "methods/deepseek-verified-implementation.md",
+      "bytes": 8393,
+      "sha256": "e4a72eadda013dfb513459f863e2fcdae367afc2b958bef758cd0ee156d2f9ef",
+      "external_claims_reverified": false,
+      "kind": "method_snapshot",
+      "source": "~/skills/deepseek-verified-implementation/SKILL.md",
+      "source_sha256": "97ba9e30049dc7d933bd7e2d207e1f4e3c099554ed01693f1b531bb8379ef6f5",
+      "installed_or_activated": false
+    },
+    {
+      "path": "research-questions.md",
+      "bytes": 7074,
+      "sha256": "2c4a508d46d49b54ee4bd2afaae7fbc0fa27b7416bca3688bdb01205474145d2",
+      "external_claims_reverified": false,
+      "kind": "user_questions_and_editorial_synthesis",
+      "source": "Current conversation and selected historical user messages",
+      "excerpts": [
+        {
+          "source": "~/.codex/sessions/2026/06/24/rollout-2026-06-24T12-43-07-019ef7f0-64d4-7933-90f9-9d7c1d7fa35f.jsonl",
+          "line": 93519,
+          "role": "user",
+          "text_sha256": "b91cb7278e5096b8073494eef2b8983c63046403bb0117694d7045600f322562",
+          "quoted_text_sha256": "2e34dd7ad73d4288a4353b6fa2789a3e5250ae11eff98b0080c6b8b78ef125b9",
+          "quote_adjustments": "Trimmed leading/trailing whitespace around the user message."
+        },
+        {
+          "source": "~/.omp/agent/sessions/-WebstormProjects-blog-drafts/2026-08-27T15-03-42-090Z_01a043bf-8d0a-724d-8f17-edbf5690645e.jsonl",
+          "line": 16,
+          "role": "user",
+          "text_sha256": "0f1846b537a2bd4355e4b89e74f07f3ac2402021c2d2bae894db8479fee3c667"
+        },
+        {
+          "source": "~/.codex/sessions/2026/08/27/rollout-2026-08-27T18-40-31-01a042ce-9c2d-75c1-96b2-01e6b37a3d2c.jsonl",
+          "line": 1250,
+          "role": "user",
+          "text_sha256": "1c1cabcd1cbfe4383230e78dede65f42455e919af569d3c83cb145899170b049"
+        },
+        {
+          "source": "~/.codex/sessions/2026/09/04/rollout-2026-09-04T23-53-45-01a06d20-3fb3-77e2-be46-1bf74024c602.jsonl",
+          "line": 105,
+          "role": "user",
+          "text_sha256": "7399d7bdb8cc78e5a2b18ed85b890c4fe69feb8f15a7e0615652cfd620d5c58b"
+        },
+        {
+          "source": "~/.codex/sessions/2026/09/04/rollout-2026-09-04T09-40-48-01a06a13-5c3a-7bd0-9f60-be2679e314f4.jsonl",
+          "line": 283,
+          "role": "user",
+          "text_sha256": "522a3a5e59ce44205f82661df3bdd802d54eee655406f07372f513c6d0006b56"
+        },
+        {
+          "source": "~/.claude/projects/-user-home-WebstormProjects-dev-sharing/9c0b390a-6b2e-4c5d-a00c-813cc7a927b4.jsonl",
+          "line": 179,
+          "role": "user",
+          "text_sha256": "2cb5fd5ee9390d1b7d204971e7abe39ecd97c9d82f572625c49eba81471ae654"
+        },
+        {
+          "source": "~/.omp/agent/sessions/-WebstormProjects-project-rebuild/2026-09-12T05-42-42-601Z_01a09423-b2a9-7275-b642-c1a72b00e37a.jsonl",
+          "line": 2023,
+          "role": "user",
+          "text_sha256": "17adef8bcf7279ade6606e1d527864981d75b907605563e08a8031c1df45ab54"
+        },
+        {
+          "source": "~/.omp/agent/sessions/-WebstormProjects-project-rebuild/2026-09-21T01-27-12-306Z_01a0c193-02b2-75a3-924c-cf7c93cd0918.jsonl",
+          "line": 211,
+          "role": "user",
+          "text_sha256": "dfe6e187d55cce3890b452e88a54ceb0e710f97253069d489e794438370d5d57"
+        },
+        {
+          "source": "~/.omp/agent/sessions/-WebstormProjects-project-rebuild/2026-09-23T05-19-00-095Z_01a0ccb3-f1ff-773e-b477-d0beadbf557b.jsonl",
+          "line": 210,
+          "role": "user",
+          "text_sha256": "79bf9f0b18d28e4ac62fc9ca4dc79616a02f03309633927044e72574aa929e54"
+        },
+        {
+          "source": "~/.codex/archived_sessions/rollout-2026-09-25T00-37-12-01a0d447-399c-7031-af9e-eaae0ac49806.jsonl",
+          "line": 9,
+          "role": "user",
+          "text_sha256": "535e0c27ddf8bbdca6feea45aa4d833d2591771198a7ca7d27485a9eb5cfbb72",
+          "quoted_text_sha256": "98be5f15fff3fd33cc10a9658259fd929c7b4a1be3e6f8251fb9ee681367db88",
+          "quote_adjustments": "Excluded the prepended chat-history-summary; quoted only the new user message and trimmed outer whitespace."
+        }
+      ],
+      "recovered_sha256": "d64f11943cdca3274e55c03683340ac655dbc6d744238c113c46005030530365",
+      "archive_adjustments": "Removed trailing whitespace, converted machine-local Markdown links to home-relative source references, and replaced nonportable historical citation handles when present. Historical wording otherwise preserved."
+    },
+    {
+      "path": "sources/oreilly-scaling-ai-historical-text.txt",
+      "kind": "historical_pdf_text_extraction",
+      "bytes": 89912,
+      "sha256": "63ed019b9759f00baa59e4b7899b899633b67957a5d741b11d156988ae842c27",
+      "source": "~/.omp/agent/sessions/-WebstormProjects-project-rebuild/2026-09-25T02-05-09-112Z_01a0d64f-3078-7408-ac35-006bfd60ae42.jsonl",
+      "lines": [
+        60,
+        63,
+        66,
+        69
+      ],
+      "original_url": "https://github.com/lukeTheNeuromancer/-_Skill/blob/main/oreilly-scaling-ai-ebook.pdf",
+      "historical_extracted_path": "/tmp/oreilly-scaling-ai.txt",
+      "displayed_line_coverage": [
+        1,
+        1501
+      ],
+      "historical_wc_line": 57,
+      "overlap_matches": true,
+      "pdf_original_recovered": false,
+      "external_claims_reverified": false,
+      "reconstruction": "Removed read-tool numeric line prefixes; joined all 1501 displayed lines, including final empty line. Overlapping lines 253, 603 and 1003 match. No original PDF/text hash available; coverage proves completeness of captured tool-visible text, not byte identity with the original PDF extraction.",
+      "recovered_sha256": "cca3dcfd5686fe237d7e23e563c5eb0551322e613b14ba1cb4f20f3ddbf73373",
+      "recovered_newline_count": 1500,
+      "archive_newline_count": 1499,
+      "archive_adjustments": "Removed trailing whitespace and the redundant final blank line for repository whitespace checks; textual content and line order retained."
+    },
+    {
+      "path": "supplement-audit.md",
+      "kind": "editorial_audit_ledger",
+      "bytes": 12486,
+      "sha256": "7f610d30ea72add673feadd74e8c992c8ef6c12c4c4edf1a86f3e1b4527d0ea5",
+      "external_claims_reverified": false,
+      "scan_summary": {
+        "root_session_files_screened": 1710,
+        "candidate_user_messages": 655,
+        "manual_review": "Selected research-related excerpts only; not a full audit of all conversations."
+      },
+      "source": "Current archival audit and cited local sources"
+    },
+    {
+      "path": "recovered/paseo-plugins-and-cross-project-handoff-2026-09.md",
+      "kind": "historical_discussion_bundle",
+      "bytes": 9436,
+      "sha256": "decb3fb832596333ac6407ac712d202c8a54b5b0f15da32fa77b0b7060dc3ec7",
+      "recovered_sha256": "decb3fb832596333ac6407ac712d202c8a54b5b0f15da32fa77b0b7060dc3ec7",
+      "archive_adjustments": "Removed trailing whitespace; added explicit editorial context and research questions.",
+      "excerpts": [
+        {
+          "source": "~/.omp/agent/sessions/-WebstormProjects-project-h/2026-09-28T02-20-48-738Z_01a0e5d0-9ae2-74dd-9ce7-a793a909dfdd.jsonl",
+          "line": 367,
+          "role": "user",
+          "text_sha256": "076be6d97dcc3a421998307d5a1ba634faeb97c2e4a0f81886d4e6e4d4795eea"
+        },
+        {
+          "source": "~/.omp/agent/sessions/-WebstormProjects-project-h/2026-09-28T02-20-48-738Z_01a0e5d0-9ae2-74dd-9ce7-a793a909dfdd.jsonl",
+          "line": 380,
+          "role": "assistant",
+          "text_sha256": "5fc5ab8fd6113cd233cea3d032632a69876d94ec2c16af7ba3224accd8b8a770"
+        },
+        {
+          "source": "~/.omp/agent/sessions/-WebstormProjects-project-h/2026-09-28T02-20-48-738Z_01a0e5d0-9ae2-74dd-9ce7-a793a909dfdd.jsonl",
+          "line": 383,
+          "role": "user",
+          "text_sha256": "86b51075b1cb646a0755d778333d0f5f1817f0495238ead61c15f591bbf8e811"
+        },
+        {
+          "source": "~/.omp/agent/sessions/-WebstormProjects-project-h/2026-09-28T02-20-48-738Z_01a0e5d0-9ae2-74dd-9ce7-a793a909dfdd.jsonl",
+          "line": 384,
+          "role": "assistant",
+          "text_sha256": "c6c6a6f303bba425a4d9c4da02431e8821fdfc47dad852137b4440b2e2381191"
+        },
+        {
+          "source": "~/.omp/agent/sessions/-WebstormProjects-project-h/2026-09-28T02-20-48-738Z_01a0e5d0-9ae2-74dd-9ce7-a793a909dfdd.jsonl",
+          "line": 387,
+          "role": "user",
+          "text_sha256": "597a3de2728e33bcfd0ccbd7a39cd061d421280543a51c9e11cb1cb86f7117e5"
+        },
+        {
+          "source": "~/.omp/agent/sessions/-WebstormProjects-project-h/2026-09-28T02-20-48-738Z_01a0e5d0-9ae2-74dd-9ce7-a793a909dfdd.jsonl",
+          "line": 494,
+          "role": "user",
+          "text_sha256": "76f83d26b8714ea5a7d165e681310507ef35d5873f4733879dfa38e6a58faa17"
+        },
+        {
+          "source": "~/.omp/agent/sessions/-WebstormProjects-project-h/2026-09-28T02-20-48-738Z_01a0e5d0-9ae2-74dd-9ce7-a793a909dfdd.jsonl",
+          "line": 513,
+          "role": "user",
+          "text_sha256": "49b437eaf8cdd9e2810a9df79905409d5c6debbc9112cb8754a56b29a87e6322"
+        },
+        {
+          "source": "~/.omp/agent/sessions/-WebstormProjects-project-h/2026-09-28T02-20-48-738Z_01a0e5d0-9ae2-74dd-9ce7-a793a909dfdd.jsonl",
+          "line": 691,
+          "role": "user",
+          "text_sha256": "f5f577fb16a2e194e9bc7910ced6c1a1cd0b1a49b7c968214d318957c6cf6271"
+        }
+      ],
+      "external_claims_reverified": false
+    }
+  ],
+  "referenced_assets": [
+    {
+      "source": "~/WebstormProjects/jev-lab/README.zh-CN.md",
+      "bytes": 9640,
+      "sha256": "249f24407da7d82bd76e3af7572ff7d4906471ab700fd0188a9b899138154c7d",
+      "copied_in_this_archive": false,
+      "external_claims_reverified": false
+    },
+    {
+      "source": "~/WebstormProjects/jev-lab/docs/jev-validation-2026-09-18.md",
+      "bytes": 15803,
+      "sha256": "620410995baa024b9f4d898fec736e6b08ac26f598722527db691ae4655cce50",
+      "copied_in_this_archive": false,
+      "external_claims_reverified": false
+    },
+    {
+      "source": "~/WebstormProjects/jev-lab/docs/jev-round11-2026-09-24.md",
+      "bytes": 41594,
+      "sha256": "b12b25d7b698274366f7444d13f7ad9fe83b8f69b416a861c0dc8c30749daa95",
+      "copied_in_this_archive": false,
+      "external_claims_reverified": false
+    },
+    {
+      "source": "~/WebstormProjects/jev-lab/docs/jev-jevtown-case-2026-09-24.md",
+      "bytes": 29335,
+      "sha256": "cc8dee3e4864cf3ed69f91a753d8687b4d12fd5810af20b98e5221ffb506f790",
+      "copied_in_this_archive": false,
+      "external_claims_reverified": false
+    },
+    {
+      "source": "~/WebstormProjects/dev-sharing/docs/从 Spec 到 Goal：我如何用 AI 完成复杂需求开发.md",
+      "bytes": 21394,
+      "sha256": "93d4dd0b9a9d55d77b700100a8764e32e15d14e0f2815ec6cbc47b995bb66adf",
+      "copied_in_this_archive": false,
+      "external_claims_reverified": false
+    },
+    {
+      "source": "~/WebstormProjects/dev-sharing/docs/AI 时代的新敏捷：实现不再是瓶颈之后，研发流程怎么变？.md",
+      "bytes": 10729,
+      "sha256": "b3e308901e5e8d4d94bab68d374b794d19e0a0d22ca97865d3fce311e13cbc94",
+      "copied_in_this_archive": false,
+      "external_claims_reverified": false
+    },
+    {
+      "source": "~/WebstormProjects/dev-sharing/docs/第三次分享-Vibe Coding 实用技巧：工具、Skill 与工程实践.md",
+      "bytes": 21262,
+      "sha256": "457df82e7410a0363103064a306573ad6a37586b47a2cba57ce84295f99e1888",
+      "copied_in_this_archive": false,
+      "external_claims_reverified": false
+    },
+    {
+      "source": "~/WebstormProjects/vibe-coding-playbook/tools/agent-tools.md",
+      "bytes": 14123,
+      "sha256": "6c46814860811fdbf2c153407d14610803e1a3e788249840ef312e297607f077",
+      "copied_in_this_archive": false,
+      "external_claims_reverified": false
+    },
+    {
+      "source": "~/WebstormProjects/vibe-coding-playbook/skills/ai-tool-radar/SKILL.md",
+      "bytes": 3834,
+      "sha256": "a3f6c48a0843bcf027ea5940e8a426b62d44782cca405054d35843465fd503de",
+      "copied_in_this_archive": false,
+      "external_claims_reverified": false
+    },
+    {
+      "source": "~/WebstormProjects/vibe-coding-playbook/skills/workflow-learning/SKILL.md",
+      "bytes": 2932,
+      "sha256": "52c66de51d2a1ccff0e8975be9c79bcb41fb762d3bb1324d03c8c20031f85a18",
+      "copied_in_this_archive": false,
+      "external_claims_reverified": false
     }
   ]
 }
