@@ -6,10 +6,8 @@ import { tick, unhealthy } from './scheduler.ts';
 import { handler } from './web.ts';
 
 const local = ['127.0.0.1', 'localhost', '::1'].includes(config.host);
-if (!local && !config.webPassword) {
-  console.error(`拒绝监听 ${config.host}：对外监听必须设置 WEB_PASSWORD`);
-  process.exit(1);
-}
+// 家里内网直接访问即可；只有暴露到公网时才需要设 WEB_PASSWORD
+if (!local && !config.webPassword) console.warn(`监听 ${config.host} 且未设 WEB_PASSWORD：同一网络内的设备都能访问网页`);
 
 const store = new Store(config.dbPath);
 const catalog = loadCatalog(config.catalogPath);
