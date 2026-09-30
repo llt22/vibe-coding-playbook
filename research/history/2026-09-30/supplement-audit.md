@@ -41,16 +41,16 @@
 | 工具、Skill 与工程实践分享 | `~/WebstormProjects/dev-sharing/docs/第三次分享-Vibe Coding 实用技巧：工具、Skill 与工程实践.md` | 工具链和飞书 CLI 等已有材料 |
 | Tavily、OMP、浏览器等工具说明 | [playbook 工具文档](../../../tools/agent-tools.md) | 保留现有入口；不把重复安装讨论全量复制 |
 | AI 工具雷达与流程沉淀 | [ai-tool-radar](../../../skills/ai-tool-radar/SKILL.md)、[workflow-learning](../../../skills/workflow-learning/SKILL.md) | 仓库已有方法正文，前一轮已对照个人正本，无需重复快照 |
-| 模型流卡顿监控 | `~/WebstormProjects/llm-stream-watchdog/README.md` | 本地 OpenAI 兼容代理，检测上游模型响应停滞；对应“持续执行时谁来发现卡住”；核对时提交 `1d36adf` |
-| OMP 供应商管理 | `~/WebstormProjects/omp-switch/README.md` | OMP 供应商 / 模型配置图形化切换；配置覆盖问题已写入 [工具文档](../../../tools/agent-tools.md)；核对时提交 `a8f390b` |
-| OMP 自定义供应商 | `~/WebstormProjects/omp-setup/README.md` | 只负责写入 `models.yml`；核对时工作区有未提交改动；核对时提交 `fa626ab` |
-| Claude Code 多机配置同步 | `~/WebstormProjects/claude-config/README.md` | Git 仓库 + 脚本同步全局配置、提示词、hooks 和 skills；核对时提交 `8d23c86` |
-| 剪贴板识图 MCP | `~/WebstormProjects/image-recognition-mcp/README.md` | 给无视觉能力的模型提供识图能力；核对时提交 `8df7cf7` |
-| DSH 插件与桌面工具 | `~/WebstormProjects/dsh-thin-desktop/README.md` | 另有 `dsh-ui-enhancer`、`dsh-conversation-split`、`dsh-ollama-cloud`、`dsh-opencode-zen-compat`、`dsh-session-title-warmup`：启动、界面、长会话拆分、供应商接入与流式兼容修复；核对时提交 `bce404b` |
-| Responses → Chat 代理 | `~/WebstormProjects/oc-responses-proxy/README.md` | 让只支持 Responses API 的客户端接入 Chat Completions 后端；核对时工作区有未提交改动；核对时提交 `a2df373` |
-| Docker 部署规则 | `~/WebstormProjects/DockSkill/README.md` | 可复制进 AI 编码工具上下文的部署规则文件，属于“把经验沉淀为 AI 可用规则”；核对时提交 `74da1a0` |
-| 文章转讲解视频 | `~/WebstormProjects/article-to-video-agent/README.md` | AI 内容生产流程实验；核对时提交 `d55f21e` |
-| 会议纪要 MCP | `~/WebstormProjects/meeting-minutes-mcp/README.md` | 办公场景：录音转规范 Word 纪要；核对时提交 `04de825` |
+| 模型流卡顿监控 | [llt22/llm-stream-watchdog](https://github.com/llt22/llm-stream-watchdog) | 本地 OpenAI 兼容代理，检测上游模型响应停滞；对应“持续执行时谁来发现卡住”；核对时提交 `1d36adf` |
+| OMP 供应商管理 | [llt22/omp-switch](https://github.com/llt22/omp-switch) | OMP 供应商 / 模型配置图形化切换；配置覆盖问题已写入 [工具文档](../../../tools/agent-tools.md)；核对时提交 `a8f390b` |
+| OMP 自定义供应商 | [llt22/omp-setup](https://github.com/llt22/omp-setup) | 只负责写入 `models.yml`；核对时工作区有未提交改动；核对时提交 `fa626ab` |
+| Claude Code 多机配置同步 | [llt22/claude-config](https://github.com/llt22/claude-config) | Git 仓库 + 脚本同步全局配置、提示词、hooks 和 skills；核对时提交 `8d23c86` |
+| 剪贴板识图 MCP | [llt22/image-recognition-mcp](https://github.com/llt22/image-recognition-mcp) | 给无视觉能力的模型提供识图能力；核对时提交 `8df7cf7` |
+| DSH 插件与桌面工具 | [llt22/dsh-thin-desktop](https://github.com/llt22/dsh-thin-desktop) | 另有 [dsh-ui-enhancer](https://github.com/llt22/dsh-ui-enhancer)、[dsh-conversation-split](https://github.com/llt22/dsh-conversation-split)、[dsh-ollama-cloud](https://github.com/llt22/dsh-ollama-cloud)、[dsh-opencode-zen-compat](https://github.com/llt22/dsh-opencode-zen-compat)、[dsh-session-title-warmup](https://github.com/llt22/dsh-session-title-warmup)：启动、界面、长会话拆分、供应商接入与流式兼容修复；核对时提交 `bce404b` |
+| Responses → Chat 代理 | [llt22/oc-responses-proxy](https://github.com/llt22/oc-responses-proxy) | 让只支持 Responses API 的客户端接入 Chat Completions 后端；核对时工作区有未提交改动；核对时提交 `a2df373` |
+| Docker 部署规则 | [llt22/ai-docker-rules](https://github.com/llt22/ai-docker-rules) | 可复制进 AI 编码工具上下文的部署规则文件，属于“把经验沉淀为 AI 可用规则”；核对时提交 `74da1a0` |
+| 文章转讲解视频 | [llt22/article-to-video-agent](https://github.com/llt22/article-to-video-agent) | AI 内容生产流程实验；核对时提交 `d55f21e` |
+| 会议纪要 MCP | `~/WebstormProjects/meeting-minutes-mcp/README.md` | 办公场景：录音转规范 Word 纪要；私有仓库，只保留本机入口；核对时提交 `04de825` |
 
 ## 另外找回的来源线索
 

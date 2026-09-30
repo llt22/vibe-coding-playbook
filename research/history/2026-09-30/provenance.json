@@ -650,8 +650,8 @@
     {
       "path": "supplement-audit.md",
       "kind": "editorial_audit_ledger",
-      "bytes": 16936,
-      "sha256": "0110b0b97307f6ec5b985df2e8572b73a3da42352100e430e5f9c8559b617e4f",
+      "bytes": 17395,
+      "sha256": "e8f663dc923284b1e0754eba45f56db756f64eaf92871e80d462b203cf35c297",
       "external_claims_reverified": false,
       "scan_summary": {
         "root_session_files_screened": 1710,
@@ -1015,7 +1015,8 @@
       "sha256": "ab9787af7477cf649851d73b689e42fe7212d793014970d47abc86f1d1bcbd23",
       "repo_head": "1d36adf",
       "copied_in_this_archive": false,
-      "external_claims_reverified": false
+      "external_claims_reverified": false,
+      "public_repo": "https://github.com/llt22/llm-stream-watchdog"
     },
     {
       "source": "~/WebstormProjects/omp-switch/README.md",
@@ -1023,7 +1024,8 @@
       "sha256": "be345637526fab8aadb6192ee5a2358826fb2b5f1d3d3f6ea7e6acaa56a337a5",
       "repo_head": "a8f390b",
       "copied_in_this_archive": false,
-      "external_claims_reverified": false
+      "external_claims_reverified": false,
+      "public_repo": "https://github.com/llt22/omp-switch"
     },
     {
       "source": "~/WebstormProjects/omp-setup/README.md",
@@ -1031,7 +1033,8 @@
       "sha256": "b7a7fef5e8efceeecf46a7596996787a8eb9b3f5bea87853592457b3659b8ae5",
       "repo_head": "fa626ab",
       "copied_in_this_archive": false,
-      "external_claims_reverified": false
+      "external_claims_reverified": false,
+      "public_repo": "https://github.com/llt22/omp-setup"
     },
     {
       "source": "~/WebstormProjects/claude-config/README.md",
@@ -1039,7 +1042,8 @@
       "sha256": "70bfc7d31f315ae6fd986138a6f596e67512d185846c725a6a4c04821721db4d",
       "repo_head": "8d23c86",
       "copied_in_this_archive": false,
-      "external_claims_reverified": false
+      "external_claims_reverified": false,
+      "public_repo": "https://github.com/llt22/claude-config"
     },
     {
       "source": "~/WebstormProjects/image-recognition-mcp/README.md",
@@ -1047,7 +1051,8 @@
       "sha256": "93c040e369491a595f61142bcdee3322a13deddf0b6aa77c39a2206d85d8fb27",
       "repo_head": "8df7cf7",
       "copied_in_this_archive": false,
-      "external_claims_reverified": false
+      "external_claims_reverified": false,
+      "public_repo": "https://github.com/llt22/image-recognition-mcp"
     },
     {
       "source": "~/WebstormProjects/dsh-thin-desktop/README.md",
@@ -1055,7 +1060,8 @@
       "sha256": "ba054a796d61689f22fd1a234cef40803b13a87526e53c07f0d66123314fc71f",
       "repo_head": "bce404b",
       "copied_in_this_archive": false,
-      "external_claims_reverified": false
+      "external_claims_reverified": false,
+      "public_repo": "https://github.com/llt22/dsh-thin-desktop"
     },
     {
       "source": "~/WebstormProjects/oc-responses-proxy/README.md",
@@ -1063,7 +1069,8 @@
       "sha256": "bfb475fec67a38d4eae37173d67ab1fe7af4f05c37886f50d51674d95d6c231a",
       "repo_head": "a2df373",
       "copied_in_this_archive": false,
-      "external_claims_reverified": false
+      "external_claims_reverified": false,
+      "public_repo": "https://github.com/llt22/oc-responses-proxy"
     },
     {
       "source": "~/WebstormProjects/DockSkill/README.md",
@@ -1071,7 +1078,8 @@
       "sha256": "859a87f8ef0c42dbb219bb7c0ef263319f723da5fd7800376c53f421e7e86580",
       "repo_head": "74da1a0",
       "copied_in_this_archive": false,
-      "external_claims_reverified": false
+      "external_claims_reverified": false,
+      "public_repo": "https://github.com/llt22/ai-docker-rules"
     },
     {
       "source": "~/WebstormProjects/article-to-video-agent/README.md",
@@ -1079,7 +1087,8 @@
       "sha256": "ac3994a1e7ad3bdd1200fbf7f2647923b78354882cc38db30e7957ff39f8b03b",
       "repo_head": "d55f21e",
       "copied_in_this_archive": false,
-      "external_claims_reverified": false
+      "external_claims_reverified": false,
+      "public_repo": "https://github.com/llt22/article-to-video-agent"
     },
     {
       "source": "~/WebstormProjects/meeting-minutes-mcp/README.md",
