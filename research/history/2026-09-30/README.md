@@ -25,7 +25,7 @@
 
 随后用户补充，实际发现路径是：先看到腾讯浏览器工具引发关注，再从 X 上试用者的比较反馈中发现 ego。
 
-来源：提问：`~/.claude/projects/-WebstormProjects-project-x-rebuild/122cfdf4-9b14-4c49-8979-19f51983ce03.jsonl:3`、用户补充真实发现路径：`~/.claude/projects/-WebstormProjects-project-x-rebuild/122cfdf4-9b14-4c49-8979-19f51983ce03.jsonl:87`。
+来源：提问：`~/.claude/projects/-WebstormProjects-private-project/122cfdf4-9b14-4c49-8979-19f51983ce03.jsonl:3`、用户补充真实发现路径：`~/.claude/projects/-WebstormProjects-private-project/122cfdf4-9b14-4c49-8979-19f51983ce03.jsonl:87`。
 
 对新项目的启发：发现渠道需要覆盖比较、替代品、迁移和实际使用反馈，不能只依赖新品公告与榜单。历史 AI 对仓库年龄、传播原因等解释仍需核验。
 
@@ -47,7 +47,7 @@
 
 同一会话依次讨论了企业研发实践、沙箱、Software Factory、知识提取、组织采用 AI、代码现代化、办公文档工具和 Agent 组织管理，随后提出“我需要你写个 skill 去发现这类信息”，形成 `ai-engineering-radar`。
 
-来源：创建发现方法的要求：`~/.omp/agent/sessions/-WebstormProjects-project-x-rebuild/2026-09-25T02-05-09-112Z_01a0d64f-3078-7408-ac35-006bfd60ae42.jsonl:90`。七篇专题回答已汇集在[专题讨论恢复](recovered/topic-discussions-2026-09-25-27.md)。
+来源：创建发现方法的要求：`~/.omp/agent/sessions/-WebstormProjects-private-project/2026-09-25T02-05-09-112Z_01a0d64f-3078-7408-ac35-006bfd60ae42.jsonl:90`。七篇专题回答已汇集在[专题讨论恢复](recovered/topic-discussions-2026-09-25-27.md)。
 
 ### 2026-09-27：用户纠正了调研实现的过度复杂化
 
@@ -57,7 +57,7 @@
 
 历史 AI 随后报告撤掉约 500 行专用抓取脚本，将研究方法交回 skill，浏览器操作交给现有 ego-browser。这里可靠的证据是用户的纠正及当时回复；本次没有复核所有已删除脚本的历史状态。
 
-来源：指定 X 与 ego：`~/.omp/agent/sessions/-WebstormProjects-project-x-rebuild/2026-09-27T03-11-41-180Z_01a0e0d8-d27c-774c-b1b5-5400e9290a2b.jsonl:232`、反对过度脚本化：`~/.omp/agent/sessions/-WebstormProjects-project-x-rebuild/2026-09-27T03-20-50-340Z_01a0e0e1-33a4-718c-b231-484d192f743c.jsonl:390`。
+来源：指定 X 与 ego：`~/.omp/agent/sessions/-WebstormProjects-private-project/2026-09-27T03-11-41-180Z_01a0e0d8-d27c-774c-b1b5-5400e9290a2b.jsonl:232`、反对过度脚本化：`~/.omp/agent/sessions/-WebstormProjects-private-project/2026-09-27T03-20-50-340Z_01a0e0e1-33a4-718c-b231-484d192f743c.jsonl:390`。
 
 对新项目的约束：先复用现有研究方法和浏览器能力。持续触发、状态记录与去重如确有需要，再增加最少的支撑，避免为每个信源重复实现工具。
 
@@ -67,7 +67,7 @@
 
 > 你帮我评价一下这个东西，它是真的能发挥作用呢，还是花架子
 
-来源：评价要求：`~/.omp/agent/sessions/-WebstormProjects-project-x-rebuild/2026-09-25T02-03-18-957Z_01a0d64d-822d-7454-9c5b-8b89f6cae13e.jsonl:12`。09-28 的后续调研生成了代码审查工具比较报告。
+来源：评价要求：`~/.omp/agent/sessions/-WebstormProjects-private-project/2026-09-25T02-03-18-957Z_01a0d64d-822d-7454-9c5b-8b89f6cae13e.jsonl:12`。09-28 的后续调研生成了代码审查工具比较报告。
 
 对新项目的启发：要记录方法解决什么失败、依赖哪些条件、有没有独立或本地证据，不仅记录工具的功能说明。
 

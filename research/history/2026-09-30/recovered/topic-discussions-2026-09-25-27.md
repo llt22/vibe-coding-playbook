@@ -9,7 +9,7 @@
 
 用户提供的链接：https://www.bestblogs.dev/article/217da0f037
 
-来源：会话第 22 行：`~/.omp/agent/sessions/-WebstormProjects-project-x-rebuild/2026-09-25T02-05-09-112Z_01a0d64f-3078-7408-ac35-006bfd60ae42.jsonl:22`。
+来源：会话第 22 行：`~/.omp/agent/sessions/-WebstormProjects-private-project/2026-09-25T02-05-09-112Z_01a0d64f-3078-7408-ac35-006bfd60ae42.jsonl:22`。
 
 这篇文章是腾讯应用宝团队（腾讯技术工程官方发布）在真实业务重构中的**一线实操复盘**。
 
@@ -88,7 +88,7 @@
 
 用户提供的链接：https://www.docker.com/blog/docker-sandbox-kit-spec/ ; https://www.aicodingdictionary.com/?term=software-factory
 
-来源：会话第 38 行：`~/.omp/agent/sessions/-WebstormProjects-project-x-rebuild/2026-09-25T02-05-09-112Z_01a0d64f-3078-7408-ac35-006bfd60ae42.jsonl:38`。
+来源：会话第 38 行：`~/.omp/agent/sessions/-WebstormProjects-private-project/2026-09-25T02-05-09-112Z_01a0d64f-3078-7408-ac35-006bfd60ae42.jsonl:38`。
 
 这两份资料正好从**「安全运行时基础设施（Docker）」**和**「研发范式与概念定义（AI Coding Dictionary）」**两个维度，与前面阿里、腾讯的实践形成了完美的拼图闭环。
 
@@ -160,7 +160,7 @@ graph TD
 
 用户提供的链接：https://github.com/yifanfeng97/Hyper-Extract/blob/main/README_ZH.md
 
-来源：会话第 48 行：`~/.omp/agent/sessions/-WebstormProjects-project-x-rebuild/2026-09-25T02-05-09-112Z_01a0d64f-3078-7408-ac35-006bfd60ae42.jsonl:48`。
+来源：会话第 48 行：`~/.omp/agent/sessions/-WebstormProjects-private-project/2026-09-25T02-05-09-112Z_01a0d64f-3078-7408-ac35-006bfd60ae42.jsonl:48`。
 
 **Hyper-Extract**（`hyperextract`）是一个开源的**智能知识提取与结构化建模 CLI 工具 / Python 库**。
 
@@ -213,7 +213,7 @@ graph TD
 
 用户提供的链接：https://github.com/lukeTheNeuromancer/-_Skill/blob/main/oreilly-scaling-ai-ebook.pdf
 
-来源：会话第 70 行：`~/.omp/agent/sessions/-WebstormProjects-project-x-rebuild/2026-09-25T02-05-09-112Z_01a0d64f-3078-7408-ac35-006bfd60ae42.jsonl:70`。
+来源：会话第 70 行：`~/.omp/agent/sessions/-WebstormProjects-private-project/2026-09-25T02-05-09-112Z_01a0d64f-3078-7408-ac35-006bfd60ae42.jsonl:70`。
 
 已将这本 O'Reilly 2026 年新书 **《Scaling AI Adoption in Engineering: A Practical Framework for Leaders》**（作者 Peter Bell，O'Reilly CTO 顾问、Gather.dev / Dev Tool Collective CTO）下载并通读完成。
 
@@ -302,7 +302,7 @@ graph TD
 
 用户提供的链接：https://claude.com/blog/how-to-prepare-for-ai-driven-code-modernization-projects
 
-来源：会话第 77 行：`~/.omp/agent/sessions/-WebstormProjects-project-x-rebuild/2026-09-25T02-05-09-112Z_01a0d64f-3078-7408-ac35-006bfd60ae42.jsonl:77`。
+来源：会话第 77 行：`~/.omp/agent/sessions/-WebstormProjects-private-project/2026-09-25T02-05-09-112Z_01a0d64f-3078-7408-ac35-006bfd60ae42.jsonl:77`。
 
 这是 Anthropic 官方在 2026 年 9 月发布的 **《现场手记（Notes from the Field）》系列文章**，由其驻场前线工程师（Forward Deployed Engineers）基于企业级客户大型遗留系统改造实战撰写。
 
@@ -386,7 +386,7 @@ graph LR
 
 用户提供的链接：https://github.com/genspark-ai/genoffice
 
-来源：会话第 87 行：`~/.omp/agent/sessions/-WebstormProjects-project-x-rebuild/2026-09-25T02-05-09-112Z_01a0d64f-3078-7408-ac35-006bfd60ae42.jsonl:87`。
+来源：会话第 87 行：`~/.omp/agent/sessions/-WebstormProjects-private-project/2026-09-25T02-05-09-112Z_01a0d64f-3078-7408-ac35-006bfd60ae42.jsonl:87`。
 
 **作用非常大，尤其切中了目前大模型与 Agent 生态中一个长期存在的“硬伤”痛点。**
 
@@ -445,7 +445,7 @@ graph LR
 
 用户提供的链接：https://github.com/paperclipai/paperclip
 
-来源：会话第 129 行：`~/.omp/agent/sessions/-WebstormProjects-project-x-rebuild/2026-09-25T02-05-09-112Z_01a0d64f-3078-7408-ac35-006bfd60ae42.jsonl:129`。
+来源：会话第 129 行：`~/.omp/agent/sessions/-WebstormProjects-private-project/2026-09-25T02-05-09-112Z_01a0d64f-3078-7408-ac35-006bfd60ae42.jsonl:129`。
 
 **Paperclip** 是一个开源的 **AI 智能体团队编排与组织治理操作系统（Agentic OS & Org Control Plane）**。
 

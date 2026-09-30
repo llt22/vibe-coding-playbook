@@ -63,7 +63,7 @@
 > 3）工程师 mpoteat 认：rollout artifact，已在 v2.1.281 修
 > 4）双文件仍优先 CLAUDE.md，要双读切 `/config` 的 `claude-md-and-agents-md`；Bedrock/Vertex/Foundry 仍未开」
 
-**⚠️ 仅 X 转述**（未回溯 HN 线程与提交，但细节自洽且与 Mods 的 feature-flag 机制吻合）。**教训可直接抄**：**把本地确定性配置（指令文件加载）挂在远程 flag 上是 harness 级缺陷** —— 失败模式是「静默降级、无提示」，正是我们在 ProjectX Policy/Config 落盘时必须避免的（对应 Agent Baseline 的 fail-closed 原则）。
+**⚠️ 仅 X 转述**（未回溯 HN 线程与提交，但细节自洽且与 Mods 的 feature-flag 机制吻合）。**教训可直接抄**：**把本地确定性配置（指令文件加载）挂在远程 flag 上是 harness 级缺陷** —— 失败模式是「静默降级、无提示」，正是我们在原项目 Policy/Config 落盘时必须避免的（对应 Agent Baseline 的 fail-closed 原则）。
 
 ### 5. `/effort` 与缓存：努力程度第一次成为 cache-aware
 

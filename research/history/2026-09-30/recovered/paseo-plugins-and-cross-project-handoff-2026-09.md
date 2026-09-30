@@ -6,13 +6,13 @@
 
 ## 用户 · 原会话第 367 行
 
-来源：`~/.omp/agent/sessions/-WebstormProjects-project-h/2026-09-28T02-20-48-738Z_01a0e5d0-9ae2-74dd-9ce7-a793a909dfdd.jsonl:367`。
+来源：`~/.omp/agent/sessions/-WebstormProjects-private-project/2026-09-28T02-20-48-738Z_01a0e5d0-9ae2-74dd-9ce7-a793a909dfdd.jsonl:367`。
 
 再多调研，看还有哪些好的插件
 
 ## 历史 AI 回答 · 原会话第 380 行
 
-来源：`~/.omp/agent/sessions/-WebstormProjects-project-h/2026-09-28T02-20-48-738Z_01a0e5d0-9ae2-74dd-9ce7-a793a909dfdd.jsonl:380`。
+来源：`~/.omp/agent/sessions/-WebstormProjects-private-project/2026-09-28T02-20-48-738Z_01a0e5d0-9ae2-74dd-9ce7-a793a909dfdd.jsonl:380`。
 
 通过对 **Paseo 官方生态**、**`omercnet/awesome-paseo-plugins`** 以及主流社区仓库（`panrafal`、`omercnet`、`gpambrozio` 等）的深度调研，为您系统整理了当前最实用、评价最高的 Paseo 插件体系：
 
@@ -81,13 +81,13 @@
 
 ## 用户 · 原会话第 383 行
 
-来源：`~/.omp/agent/sessions/-WebstormProjects-project-h/2026-09-28T02-20-48-738Z_01a0e5d0-9ae2-74dd-9ce7-a793a909dfdd.jsonl:383`。
+来源：`~/.omp/agent/sessions/-WebstormProjects-private-project/2026-09-28T02-20-48-738Z_01a0e5d0-9ae2-74dd-9ce7-a793a909dfdd.jsonl:383`。
 
 chat-resume 本身不就是分叉的功能吗
 
 ## 历史 AI 回答 · 原会话第 384 行
 
-来源：`~/.omp/agent/sessions/-WebstormProjects-project-h/2026-09-28T02-20-48-738Z_01a0e5d0-9ae2-74dd-9ce7-a793a909dfdd.jsonl:384`。
+来源：`~/.omp/agent/sessions/-WebstormProjects-private-project/2026-09-28T02-20-48-738Z_01a0e5d0-9ae2-74dd-9ce7-a793a909dfdd.jsonl:384`。
 
 您理解得很准，它的底层确实利用了类似“分叉会话（Fork / Handover Draft）”的机制，但它和 Paseo 原生 **Fork** 解决的痛点和触发场景有所不同：
 
@@ -112,25 +112,25 @@ chat-resume 本身不就是分叉的功能吗
 
 ## 用户 · 原会话第 387 行
 
-来源：`~/.omp/agent/sessions/-WebstormProjects-project-h/2026-09-28T02-20-48-738Z_01a0e5d0-9ae2-74dd-9ce7-a793a909dfdd.jsonl:387`。
+来源：`~/.omp/agent/sessions/-WebstormProjects-private-project/2026-09-28T02-20-48-738Z_01a0e5d0-9ae2-74dd-9ce7-a793a909dfdd.jsonl:387`。
 
 实际上我有这个的需求，就是现在分叉只能分叉到当前项目，实际上有时间我在两个相关的项目里面的其中一个讨论，最后要把会话直接分到到相关的另一个项目
 
 ## 用户 · 原会话第 494 行
 
-来源：`~/.omp/agent/sessions/-WebstormProjects-project-h/2026-09-28T02-20-48-738Z_01a0e5d0-9ae2-74dd-9ce7-a793a909dfdd.jsonl:494`。
+来源：`~/.omp/agent/sessions/-WebstormProjects-private-project/2026-09-28T02-20-48-738Z_01a0e5d0-9ae2-74dd-9ce7-a793a909dfdd.jsonl:494`。
 
 跨项目分叉 这个功能又没了，是我更新版本导致的吗
 
 ## 用户 · 原会话第 513 行
 
-来源：`~/.omp/agent/sessions/-WebstormProjects-project-h/2026-09-28T02-20-48-738Z_01a0e5d0-9ae2-74dd-9ce7-a793a909dfdd.jsonl:513`。
+来源：`~/.omp/agent/sessions/-WebstormProjects-private-project/2026-09-28T02-20-48-738Z_01a0e5d0-9ae2-74dd-9ce7-a793a909dfdd.jsonl:513`。
 
 分叉到项目，又看不到了
 
 ## 用户 · 原会话第 691 行
 
-来源：`~/.omp/agent/sessions/-WebstormProjects-project-h/2026-09-28T02-20-48-738Z_01a0e5d0-9ae2-74dd-9ce7-a793a909dfdd.jsonl:691`。
+来源：`~/.omp/agent/sessions/-WebstormProjects-private-project/2026-09-28T02-20-48-738Z_01a0e5d0-9ae2-74dd-9ce7-a793a909dfdd.jsonl:691`。
 
 你怎么改的？我会话中心都看不见了。
 

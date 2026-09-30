@@ -22,7 +22,7 @@
 
 研究含义：规则需要有产生原因和复查条件，不能只增不减。
 
-来源：`~/.omp/agent/sessions/-WebstormProjects-blog-drafts/2026-08-27T15-03-42-090Z_01a043bf-8d0a-724d-8f17-edbf5690645e.jsonl:16`。
+来源：`~/.omp/agent/sessions/-WebstormProjects-private-project/2026-08-27T15-03-42-090Z_01a043bf-8d0a-724d-8f17-edbf5690645e.jsonl:16`。
 
 ## 2026-08-30：重复工作能否主动沉淀为方法
 
@@ -62,7 +62,7 @@
 
 研究含义：研究任务、工具、Skill、上下文如何配套，不必先接受某种产品命名。
 
-来源：`~/.omp/agent/sessions/-WebstormProjects-project-x-rebuild/2026-09-12T05-42-42-601Z_01a09423-b2a9-7275-b642-c1a72b00e37a.jsonl:2023`。
+来源：`~/.omp/agent/sessions/-WebstormProjects-private-project/2026-09-12T05-42-42-601Z_01a09423-b2a9-7275-b642-c1a72b00e37a.jsonl:2023`。
 
 ## 2026-09-21：Octop 再次暴露了发现渠道缺口
 
@@ -70,7 +70,7 @@
 
 研究含义：与 09-04 的反馈是同类问题，不应每次归因于偶然没看到。
 
-来源：`~/.omp/agent/sessions/-WebstormProjects-project-x-rebuild/2026-09-21T01-27-12-306Z_01a0c193-02b2-75a3-924c-cf7c93cd0918.jsonl:211`。
+来源：`~/.omp/agent/sessions/-WebstormProjects-private-project/2026-09-21T01-27-12-306Z_01a0c193-02b2-75a3-924c-cf7c93cd0918.jsonl:211`。
 
 ## 2026-09-23：自动触发与方法复杂度的边界
 
@@ -79,7 +79,7 @@
 
 研究含义：这是当时对一个具体 Skill 的要求，不是对 09-30 自动研究项目的永久否定。
 
-来源：`~/.omp/agent/sessions/-WebstormProjects-project-x-rebuild/2026-09-23T05-19-00-095Z_01a0ccb3-f1ff-773e-b477-d0beadbf557b.jsonl:210`。
+来源：`~/.omp/agent/sessions/-WebstormProjects-private-project/2026-09-23T05-19-00-095Z_01a0ccb3-f1ff-773e-b477-d0beadbf557b.jsonl:210`。
 
 ## 2026-09-24：提示词无法稳定防止提前停下
 

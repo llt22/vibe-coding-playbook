@@ -2,7 +2,7 @@
 
 状态：**历史会话恢复稿**，整理日期 2026-09-30。当时环境为 OMP 17.2.7；版本号、Issue 状态和插件兼容性均可能已变化，使用前需重新核验。
 
-来源：`~/.omp/agent/sessions/-WebstormProjects-review-helper/2026-08-04T08-17-30-515Z_019fcbd9-6793-7000-940c-ae6aa174fe6a.jsonl`。下文每段标注原会话行号；只保留用户消息和结论性回答，省略中间的检查进度播报与命令输出。
+来源：`~/.omp/agent/sessions/-WebstormProjects-private-project/2026-08-04T08-17-30-515Z_019fcbd9-6793-7000-940c-ae6aa174fe6a.jsonl`。下文每段标注原会话行号；只保留用户消息和结论性回答，省略中间的检查进度播报与命令输出。
 
 ## 这次讨论为什么值得保留
 

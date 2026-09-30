@@ -1,6 +1,6 @@
 # 浏览器工具比较与按真实场景选型的纠正
 
-> 历史材料，归档于 2026-09-30。本文件恢复当时的用户讨论与 AI 回答，未重新核验外部能力、数字、版本或“已测试”声明。安装命令和推荐仅是历史正文，不代表本次执行或当前建议。涉及 ProjectX、ProjectX-Core、ProjectL 等项目的限制只属于当时项目上下文。
+> 历史材料，归档于 2026-09-30。本文件恢复当时的用户讨论与 AI 回答，未重新核验外部能力、数字、版本或“已测试”声明。安装命令和推荐仅是历史正文，不代表本次执行或当前建议。涉及提问所在项目的限制只属于当时上下文。
 
 本次整理提示：应连同最后的用户纠正一起读。前文功能清单不是本机实测；当时只验证了打开页面、登录态和读取，未完整验证输入、点击、滚动。
 
@@ -8,7 +8,7 @@
 
 ### 历史 AI 回答 · 原会话第 37 行
 
-来源：`~/.omp/agent/sessions/-WebstormProjects-api-dash/2026-09-17T02-19-57-360Z_01a0ad29-de30-74c1-8307-bc455d985025.jsonl:37`。
+来源：`~/.omp/agent/sessions/-WebstormProjects-private-project/2026-09-17T02-19-57-360Z_01a0ad29-de30-74c1-8307-bc455d985025.jsonl:37`。
 
 ## 结论
 
@@ -170,7 +170,7 @@ BrowserSkill 底层也使用 Chrome DevTools Protocol，但在 CDP 上增加了 
 
 ### 历史 AI 回答 · 原会话第 148 行
 
-来源：`~/.omp/agent/sessions/-WebstormProjects-api-dash/2026-09-17T02-19-57-360Z_01a0ad29-de30-74c1-8307-bc455d985025.jsonl:148`。
+来源：`~/.omp/agent/sessions/-WebstormProjects-private-project/2026-09-17T02-19-57-360Z_01a0ad29-de30-74c1-8307-bc455d985025.jsonl:148`。
 
 结论：
 
@@ -263,13 +263,13 @@ BrowserSkill 的测试结果会受当前账号、已有数据、缓存、弹窗�
 
 ### 用户 · 原会话第 149 行
 
-来源：`~/.omp/agent/sessions/-WebstormProjects-api-dash/2026-09-17T02-19-57-360Z_01a0ad29-de30-74c1-8307-bc455d985025.jsonl:149`。
+来源：`~/.omp/agent/sessions/-WebstormProjects-private-project/2026-09-17T02-19-57-360Z_01a0ad29-de30-74c1-8307-bc455d985025.jsonl:149`。
 
 结合我平时的真实的场景来，好多我是否用到了
 
 ### 历史 AI 回答 · 原会话第 150 行
 
-来源：`~/.omp/agent/sessions/-WebstormProjects-api-dash/2026-09-17T02-19-57-360Z_01a0ad29-de30-74c1-8307-bc455d985025.jsonl:150`。
+来源：`~/.omp/agent/sessions/-WebstormProjects-private-project/2026-09-17T02-19-57-360Z_01a0ad29-de30-74c1-8307-bc455d985025.jsonl:150`。
 
 对，我上一条列了太多功能，没有按你的实际使用方式判断。
 

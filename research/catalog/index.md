@@ -670,7 +670,7 @@
 | 2 | 万有无界平台 | 讨论 ⚠️ | 阿里把评审→设计→开发联调→测试→线上问题串成一条落在真实工程上的链，评审用可交互原型、设计师在分支交付可运行页面；auto bug fix 一次成功率 89%，但 bug 日清率只从 53% 升到 63%。 | [alibaba-ai-native-handbook-reading-2026-09-23](../history/2026-09-30/recovered/alibaba-ai-native-handbook-reading-2026-09-23.md) |
 | 3 | 用 LLM 支持 1:1、绩效与项目管理 | 讨论 | Summit 用 LLM 跟踪工程师参与度、支持 1:1、为绩效评估提供数据、自动化项目管理，使 TPM 从行政转向对齐与优先级。 | [oreilly-scaling-ai-historical-text](../history/2026-09-30/sources/oreilly-scaling-ai-historical-text.txt) |
 | 3 | Markdown + n8n + MCP 自动化报告 | 讨论 | Summit CTO 用 Markdown 文件、n8n 和几个 MCP 服务搭轻量 Agent，从记录系统摄取数据，自动化数据团队未来得及做的报告。 | [oreilly-scaling-ai-historical-text](../history/2026-09-30/sources/oreilly-scaling-ai-historical-text.txt) |
-| 3 | worker-bench（WorkerDeck） | 讨论 | 本地数字员工工作台原型，用 Burr 流程+审批+Trace 包装感知/编排/执行/审批/复盘；典型的“页面概念先于执行能力” | [agent-harness-and-autonomy-2026-09](../history/2026-09-30/recovered/agent-harness-and-autonomy-2026-09.md) |
+| 3 | WorkerDeck（WorkerDeck） | 讨论 | 本地数字员工工作台原型，用 Burr 流程+审批+Trace 包装感知/编排/执行/审批/复盘；典型的“页面概念先于执行能力” | [agent-harness-and-autonomy-2026-09](../history/2026-09-30/recovered/agent-harness-and-autonomy-2026-09.md) |
 
 ### 观察（8）
 

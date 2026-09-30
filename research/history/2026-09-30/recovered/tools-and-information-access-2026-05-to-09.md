@@ -1,6 +1,6 @@
 # 工具、办公交付与信息获取：五月至九月的讨论
 
-> 历史材料，归档于 2026-09-30。本文件恢复当时的用户讨论与 AI 回答，未重新核验外部能力、数字、版本或“已测试”声明。安装命令和推荐仅是历史正文，不代表本次执行或当前建议。涉及 ProjectX、ProjectX-Core、ProjectL 等项目的限制只属于当时项目上下文。
+> 历史材料，归档于 2026-09-30。本文件恢复当时的用户讨论与 AI 回答，未重新核验外部能力、数字、版本或“已测试”声明。安装命令和推荐仅是历史正文，不代表本次执行或当前建议。涉及提问所在项目的限制只属于当时上下文。
 
 本次整理提示：沙箱旧回答中的“主机零接触”“放心开”等表述不能作为安全保证；MiniMax 的 API 依赖判断、ego 的性能数字、各平台访问规则和插件维护状态均未重验。采集是否可用取决于实际环境与权限，历史建议不等于当前授权。
 
@@ -66,7 +66,7 @@
 
 ### 历史 AI 回答 · 原会话第 41 行
 
-来源：`~/.omp/agent/sessions/-WebstormProjects-portal-f/2026-06-01T09-08-03-773Z_019e8270-b03d-7000-897c-616b38ef0991.jsonl:41`。
+来源：`~/.omp/agent/sessions/-WebstormProjects-private-project/2026-06-01T09-08-03-773Z_019e8270-b03d-7000-897c-616b38ef0991.jsonl:41`。
 
 看了，这几个 office 相关的 skill 是：
 
@@ -190,13 +190,13 @@ rg 关键词检索
 
 来源：`~/.codex/archived_sessions/rollout-2026-08-09T12-03-49-019fe4b0-f1a0-7981-8522-5e85fe351829.jsonl:8457`。
 
-有用，但更适合作为“信源接入方案参考库”，不适合直接成为 ProjectL 的生产依赖。现在整体安装进 Docker，收益小于复杂度。
+有用，但更适合作为“信源接入方案参考库”，不适合直接成为另一项目的生产依赖。现在整体安装进 Docker，收益小于复杂度。
 
 关键判断：
 
 - Agent-Reach 不是统一采集 SDK。它的核心是安装外部 CLI、检查可用性、告诉 Agent 应该执行什么命令。
 - 它的 MCP 只提供 `get_status`，不能直接搜索或读取 Reddit、小红书、Twitter。
-- 各平台返回结构不统一，ProjectL 仍然要自己做数据转换、去重、时间处理、证据保存和失败重试。
+- 各平台返回结构不统一，另一项目仍然要自己做数据转换、去重、时间处理、证据保存和失败重试。
 - 它依赖 OpenCLI、浏览器扩展、Cookie、Node CLI 等组件，不适合我们当前无人值守的云端 worker。
 - MIT 许可证，可以参考或复用具体实现。
 
@@ -210,7 +210,7 @@ rg 关键词检索
 | RSS | 中 | 思路有用，但实现只是检查 `feedparser`，我们自己接入更简单 |
 | 小红书/Twitter/Instagram | 低 | 都依赖浏览器登录态或 Cookie，不适合云端无人值守 |
 | YouTube/B站字幕 | 中低 | 后续做资讯、内容研究 Lens 时有价值，现在引入过早 |
-| 多后端健康检查 | 中 | 设计值得参考，但当前 ProjectL 信源数量不需要引入完整能力层 |
+| 多后端健康检查 | 中 | 设计值得参考，但当前另一项目信源数量不需要引入完整能力层 |
 
 现场验证结果：
 
@@ -221,7 +221,7 @@ rg 关键词检索
 
 我的建议是：
 
-1. **不要安装 Agent-Reach，也不要加入 ProjectL 依赖。**
+1. **不要安装 Agent-Reach，也不要加入另一项目依赖。**
 2. **保留它作为信源技术选型参考。**
 3. **Product Hunt 继续使用官方 GraphQL**；Jina Reader只适合以后做失败后的人工验证或补充正文，不进入默认自动采集。
 4. **暂时不加 V2EX 默认信源**，因为我们当前更需要解决内容过度偏技术，而 V2EX 会让问题更严重。
@@ -235,7 +235,7 @@ rg 关键词检索
 
 来源：`~/.codex/archived_sessions/rollout-2026-08-09T12-03-49-019fe4b0-f1a0-7981-8522-5e85fe351829.jsonl:8607`。
 
-PRAW 对我们有用，而且如果 Reddit 批准 API 权限，它是目前最适合 ProjectL 线上无人值守采集的实现，比 Cookie、浏览器接管和 Agent-Reach 更稳定。
+PRAW 对我们有用，而且如果 Reddit 批准 API 权限，它是目前最适合另一项目线上无人值守采集的实现，比 Cookie、浏览器接管和 Agent-Reach 更稳定。
 
 但关键是：**PRAW 只是 Reddit API 的 Python 封装，不提供或绕过 API 权限。**
 
@@ -245,7 +245,7 @@ PRAW 对我们有用，而且如果 Reddit 批准 API 权限，它是目前最�
 - 当前版本：`8.0.2`，2026 年仍在更新
 - BSD-2-Clause 许可证，可用于项目
 - 自动处理 OAuth、分页、评论树和限流
-- Reddit 免费 Data API 限额为每个 OAuth Client ID 每分钟 100 次，足够 ProjectL 使用
+- Reddit 免费 Data API 限额为每个 OAuth Client ID 每分钟 100 次，足够另一项目使用
 - 只读采集只需要：
   - `REDDIT_CLIENT_ID`
   - `REDDIT_CLIENT_SECRET`
@@ -266,7 +266,7 @@ https://support.reddithelp.com/hc/en-us/requests/new?ticket_form_id=148685938621
 - 低频定时采集
 - 保留原帖链接和来源归属
 
-还有一个重要成本不是额度，而是合规：Reddit 要求已经删除的帖子、评论和用户信息也从本地数据中删除，并建议在 48 小时内同步处理。ProjectL 当前是长期保存卡片和来源摘录，所以正式接入时需要增加删除复查机制，不能只写一个 PRAW 抓取函数。
+还有一个重要成本不是额度，而是合规：Reddit 要求已经删除的帖子、评论和用户信息也从本地数据中删除，并建议在 48 小时内同步处理。另一项目当前是长期保存卡片和来源摘录，所以正式接入时需要增加删除复查机制，不能只写一个 PRAW 抓取函数。
 
 我的建议：
 
@@ -282,7 +282,7 @@ https://support.reddithelp.com/hc/en-us/requests/new?ticket_form_id=148685938621
 
 ### 历史 AI 回答 · 原会话第 97 行
 
-来源：`~/.omp/agent/sessions/-WebstormProjects-review-helper/2026-08-10T16-18-22-819Z_019fec77-cfe3-7000-abd1-45801ef9664d.jsonl:97`。
+来源：`~/.omp/agent/sessions/-WebstormProjects-private-project/2026-08-10T16-18-22-819Z_019fec77-cfe3-7000-abd1-45801ef9664d.jsonl:97`。
 
 **Docker Sandboxes = 给 AI 编程 agent（Claude Code、Codex、Gemini CLI、OpenCode 等）跑的本地隔离沙箱，用 microVM 隔离，让 agent 能"放开干"而不碰你的主机。**
 
@@ -311,7 +311,7 @@ https://support.reddithelp.com/hc/en-us/requests/new?ticket_form_id=148685938621
 
 ### 历史 AI 回答 · 原会话第 116 行
 
-来源：`~/.omp/agent/sessions/-WebstormProjects-review-helper/2026-08-10T16-18-22-819Z_019fec77-cfe3-7000-abd1-45801ef9664d.jsonl:116`。
+来源：`~/.omp/agent/sessions/-WebstormProjects-private-project/2026-08-10T16-18-22-819Z_019fec77-cfe3-7000-abd1-45801ef9664d.jsonl:116`。
 
 读完了。**这是通义（QwenLM）官方的多模态插件包：给任何 agent harness（Claude Code、Codex、Gemini CLI、opencode 等）装上原生多模态能力——读图/视频/文档/3D/音频，外加生成和 3D 建模驱动。**
 
@@ -446,7 +446,7 @@ npm run check
 
 ### 历史 AI 回答 · 原会话第 28 行
 
-来源：`~/.claude/projects/-WebstormProjects-project-h/7764a962-7a2b-41a7-8c5b-b5d469e3ee80.jsonl:28`。
+来源：`~/.claude/projects/-WebstormProjects-private-project/7764a962-7a2b-41a7-8c5b-b5d469e3ee80.jsonl:28`。
 
 ## ego-lite 概览
 
@@ -476,7 +476,7 @@ npm run check
 
 ### 历史 AI 回答 · 原会话第 17 行
 
-来源：`~/.omp/agent/sessions/-WebstormProjects-project-x-rebuild/2026-09-17T10-40-12-923Z_01a0aef3-de7b-74b1-a513-149bfefbeb95.jsonl:17`。
+来源：`~/.omp/agent/sessions/-WebstormProjects-private-project/2026-09-17T10-40-12-923Z_01a0aef3-de7b-74b1-a513-149bfefbeb95.jsonl:17`。
 
 项目里已装 Paseo 0.8.0，`gh` 可用。这个名单已归档（社区迁到 `paseo-cafe/paseo-cafe`），但插件本体仍可直接安装。按你的用法（几十个并行 agent、probes/smoke 大量子代理、自有 skills、macOS daemon、多 provider）排序：
 
@@ -486,7 +486,7 @@ npm run check
 |---|---|
 | **agent-monitor** (`omercnet/paseo-agent-monitor`) | 一个面板列全 daemon 所有 agent，Attention/Running/Idle 分桶 + 项目分组 + 文本过滤 + 归档清扫。直接回答"这 38 个 agent 哪个需要我"，最适合你的多代理工作负载 |
 | **workspace-activity** (`ABorakati/paseo-workspace-activity`) | 工作区内实时的子代理树、工具调用检查、steering/取消、todo 进度。"启动 agent → 观察子代理树"这个循环你天天在做 |
-| **skills** (`gpambrozio/paseo-plugins --path skills`) | 列出会话可用的 skills/commands、渲染 SKILL.md、在活会话上直接调用。你自己维护了 7 个 skill（project-x-*），这个直接增强你的 skill 工作流 |
+| **skills** (`gpambrozio/paseo-plugins --path skills`) | 列出会话可用的 skills/commands、渲染 SKILL.md、在活会话上直接调用。你自己维护了 7 个项目专用 skill，这个直接增强你的 skill 工作流 |
 
 ## 值得装（有 gh，且你重度多 provider）
 

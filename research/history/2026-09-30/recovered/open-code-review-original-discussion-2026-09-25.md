@@ -1,6 +1,6 @@
 # OpenCodeReview：最初介绍与价值评价
 
-> 历史材料，归档于 2026-09-30。本文件恢复当时的用户讨论与 AI 回答，未重新核验外部能力、数字、版本或“已测试”声明。安装命令和推荐仅是历史正文，不代表本次执行或当前建议。涉及 ProjectX、ProjectX-Core、ProjectL 等项目的限制只属于当时项目上下文。
+> 历史材料，归档于 2026-09-30。本文件恢复当时的用户讨论与 AI 回答，未重新核验外部能力、数字、版本或“已测试”声明。安装命令和推荐仅是历史正文，不代表本次执行或当前建议。涉及提问所在项目的限制只属于当时上下文。
 
 原始入口：https://github.com/alibaba/open-code-review/blob/main/docs/i18n/README.zh-CN.md
 
@@ -10,7 +10,7 @@
 
 ### 历史 AI 回答 · 原会话第 9 行
 
-来源：`~/.omp/agent/sessions/-WebstormProjects-project-x-rebuild/2026-09-25T02-03-18-957Z_01a0d64d-822d-7454-9c5b-8b89f6cae13e.jsonl:9`。
+来源：`~/.omp/agent/sessions/-WebstormProjects-private-project/2026-09-25T02-03-18-957Z_01a0d64d-822d-7454-9c5b-8b89f6cae13e.jsonl:9`。
 
 **OpenCodeReview (`alibaba/open-code-review`)** 是阿里巴巴开源的 AI 代码审查（Code Review）CLI 工具，源自其内部运行两年的 AI 代码审查助手。
 
@@ -74,13 +74,13 @@ ocr review --format json -o res.json   # 导出结构化结果
 
 ### 用户 · 原会话第 12 行
 
-来源：`~/.omp/agent/sessions/-WebstormProjects-project-x-rebuild/2026-09-25T02-03-18-957Z_01a0d64d-822d-7454-9c5b-8b89f6cae13e.jsonl:12`。
+来源：`~/.omp/agent/sessions/-WebstormProjects-private-project/2026-09-25T02-03-18-957Z_01a0d64d-822d-7454-9c5b-8b89f6cae13e.jsonl:12`。
 
 你帮我评价一下这个东西，它是真的能发挥作用呢，还是花架子
 
 ### 历史 AI 回答 · 原会话第 13 行
 
-来源：`~/.omp/agent/sessions/-WebstormProjects-project-x-rebuild/2026-09-25T02-03-18-957Z_01a0d64d-822d-7454-9c5b-8b89f6cae13e.jsonl:13`。
+来源：`~/.omp/agent/sessions/-WebstormProjects-private-project/2026-09-25T02-03-18-957Z_01a0d64d-822d-7454-9c5b-8b89f6cae13e.jsonl:13`。
 
 **一句话结论：**
 **不是花架子，它切实解决了大模型做 Code Review 最致命的几个工程硬伤；但它有明确的系统边界，定位是“高级智能反模式拦截器”，绝不能替代人工业务 CR。**
