@@ -26,6 +26,12 @@
 
 对新项目的启发：发现渠道需要覆盖比较、替代品、迁移和实际使用反馈，不能只依赖新品公告与榜单。历史 AI 对仓库年龄、传播原因等解释仍需核验。
 
+### 2026-09-23：阿里手册的独立阅读与评价
+
+用户提供了《AI Native 研发范式实践手册》PDF，先要求阅读，再追问“内容是水文吗”“核心是讲 vibe coding 还是讲 agent 怎么开发”；另一个会话要求阅读全文并讨论启发。
+
+初次归档只包含综合报告中的阿里摘要，遗漏了原 PDF 和独立阅读记录。本次已补回[原 PDF](sources/alibaba-ai-native-handbook.pdf)及[四段历史阅读分析](recovered/alibaba-ai-native-handbook-reading-2026-09-23.md)。原件共 68 页，与用户当时上传的文件逐字节一致；历史分析仍保留其原有证据边界。
+
 ### 2026-09-23：明确要求历史补漏，调研方法才被做成 skill
 
 这次会话承接了“只看今天会漏掉以前”的讨论，用户要求“那从今年 3 月开始扫”。之后又澄清，想沉淀的是“我们今天找 AI 相关的东西的这个事情”，不是只研究 OfficeCLI。
@@ -66,6 +72,8 @@
 
 | 日期 | 文件 | 内容与用途 |
 |---|---|---|
+| 09-23 | [阿里《AI Native 研发范式实践手册》原 PDF](sources/alibaba-ai-native-handbook.pdf) | 用户提供的 68 页原件，保留完整文档 |
+| 09-23 | [阿里手册独立阅读记录](recovered/alibaba-ai-native-handbook-reading-2026-09-23.md) | 内容梳理、可信度评价、定位澄清及阅读启发，含原文入口与会话定位 |
 | 09-23 | [三月至九月历史回溯](recovered/ai-tool-historical-scan-2026-09-23.md) | Codex 返回的历史补漏结果，包含 OfficeCLI 等工具线索 |
 | 09-23 | [OMP 工具雷达](recovered/ai-tool-radar-2026-09-23-omp.md) | 当期信号、历史回捞、采用证据与渠道缺口 |
 | 09-24 | [Claude Code 工具雷达](recovered/ai-tool-radar-2026-09-24.md) | 另一轮工具清单与分类；与其他报告有重叠 |
@@ -95,7 +103,7 @@
 | 已有方法沉淀 | `ai-tool-radar` 和 `workflow-learning` 在 playbook 有副本，与本机个人正本内容一致 |
 | 仅个人 skill 有完整定义 | `ai-engineering-radar`、`deepseek-verified-implementation` 在 `~/skills` 存在，当前 playbook 没有对应 skill 文件 |
 | 已有实践文章 | dev-sharing 的 Spec／Goal、验证闭环、工具搭建与分享文章 |
-| 本次补回的具体成果 | 上表八份报告与一份专题合集；归档前，两个仓库的 Markdown 未检索到这些报告及所列具体专题的对应条目；现已收入本目录 |
+| 本次补回的具体成果 | 上表报告、阅读笔记与阿里手册原件；归档前，两个仓库的 Markdown 未检索到这些报告及所列具体专题的对应条目；现已收入本目录 |
 | 尚未归并的偏好与问题 | 发现渠道、历史补漏、对花架子的怀疑、反对为搜索重复造脚本等，分散在会话里 |
 
 上述检索结论描述本次归档前的状态，不等于全电脑没有副本，也不表示 Git 历史从未保存。额外发现六月的 `dev-sharing/model-bench` 实验会话，当前目录已不存在；本轮未复核实验结果，不把它作为模型能力比较证据。

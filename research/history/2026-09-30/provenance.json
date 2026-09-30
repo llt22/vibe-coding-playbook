@@ -134,6 +134,39 @@
       "external_claims_reverified": false,
       "recovered_sha256": "4b0318972a428749940ceae3eef9cb5682ffcc7375f471d8ebc22ca7f4218760",
       "archive_adjustments": "Only machine-specific local transcript links were converted to home-relative source references."
+    },
+    {
+      "path": "sources/alibaba-ai-native-handbook.pdf",
+      "kind": "user_provided_pdf",
+      "bytes": 27286928,
+      "sha256": "6929f3e9e57fef9550129d457ba82ac40a4a9368e1c5926c6ac2206d8aaeced3",
+      "source": "~/.paseo/uploads/upload_1a2e03e5-ab3d-4fe5-90ad-6aaa787018e4/ai-native-handbook.pdf",
+      "external_claims_reverified": false,
+      "pages": 68,
+      "verification": "Byte-for-byte match with the user-provided upload; PDF metadata and rendered cover checked."
+    },
+    {
+      "path": "recovered/alibaba-ai-native-handbook-reading-2026-09-23.md",
+      "kind": "historical_reading_notes",
+      "bytes": 16295,
+      "sha256": "f1b405240e93c826ded56cc03b175420641b5541f387283464f9f2509b7c1a50",
+      "source": "~/.claude/projects/-user-home-WebstormProjects-project-rebuild/9ec4adc5-f2e5-4511-9982-d7f1678db27c.jsonl",
+      "external_claims_reverified": false,
+      "lines": [
+        58,
+        64,
+        70
+      ],
+      "additional_sources": [
+        {
+          "source": "~/.codex/archived_sessions/rollout-2026-09-23T19-15-09-01a0cdfa-04c1-7911-9945-c7d9da91e555.jsonl",
+          "lines": [
+            314
+          ]
+        }
+      ],
+      "recovered_sha256": "01f0ecaca5e97dd664c1ca97bbdaa5b807f161ec998321074c930f8a74beff21",
+      "archive_adjustments": "Removed trailing Markdown whitespace; historical wording is unchanged."
     }
   ]
 }
