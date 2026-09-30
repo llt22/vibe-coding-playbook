@@ -650,8 +650,8 @@
     {
       "path": "supplement-audit.md",
       "kind": "editorial_audit_ledger",
-      "bytes": 17855,
-      "sha256": "ed16ffd4e6dc606d904a9b8b74f56fc085c687d2448b020a613d4b978df6cd90",
+      "bytes": 16936,
+      "sha256": "0110b0b97307f6ec5b985df2e8572b73a3da42352100e430e5f9c8559b617e4f",
       "external_claims_reverified": false,
       "scan_summary": {
         "root_session_files_screened": 1710,
@@ -1010,22 +1010,6 @@
       "external_claims_reverified": false
     },
     {
-      "source": "~/WebstormProjects/code-semantic-index-lab/README.md",
-      "bytes": 2527,
-      "sha256": "f2a19d09a3f4443c0eebbdc3e699e960115a307444cbf6278623a815bc9c8ce5",
-      "repo_head": "f00785a",
-      "copied_in_this_archive": false,
-      "external_claims_reverified": false
-    },
-    {
-      "source": "~/WebstormProjects/code-semantic-index-lab/docs/future-work-mode.md",
-      "bytes": 4852,
-      "sha256": "2b4708bbf06d6ee6c1710a002a0c787a6e49faeb3b68e03ccd7e7d3294aeebe0",
-      "repo_head": "f00785a",
-      "copied_in_this_archive": false,
-      "external_claims_reverified": false
-    },
-    {
       "source": "~/WebstormProjects/llm-stream-watchdog/README.md",
       "bytes": 5410,
       "sha256": "ab9787af7477cf649851d73b689e42fe7212d793014970d47abc86f1d1bcbd23",
@@ -1058,14 +1042,6 @@
       "external_claims_reverified": false
     },
     {
-      "source": "~/WebstormProjects/clipboard-vision-skill/README.md",
-      "bytes": 1188,
-      "sha256": "c83000ec3d3254d986902d17d553f3922f70bfedfbf937aa56c91c19ecce5a79",
-      "repo_head": "f529936",
-      "copied_in_this_archive": false,
-      "external_claims_reverified": false
-    },
-    {
       "source": "~/WebstormProjects/image-recognition-mcp/README.md",
       "bytes": 5218,
       "sha256": "93c040e369491a595f61142bcdee3322a13deddf0b6aa77c39a2206d85d8fb27",
@@ -1094,14 +1070,6 @@
       "bytes": 4119,
       "sha256": "859a87f8ef0c42dbb219bb7c0ef263319f723da5fd7800376c53f421e7e86580",
       "repo_head": "74da1a0",
-      "copied_in_this_archive": false,
-      "external_claims_reverified": false
-    },
-    {
-      "source": "~/WebstormProjects/model-native-document-agent/docs/agent-responsibilities.md",
-      "bytes": 6057,
-      "sha256": "a50bf3cc40e11e24630bf2401aaa7207cc1281035421d49f88cd9ca9740b20c2",
-      "repo_head": "d296d9e",
       "copied_in_this_archive": false,
       "external_claims_reverified": false
     },
