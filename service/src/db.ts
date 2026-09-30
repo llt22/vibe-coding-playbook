@@ -21,6 +21,22 @@ export type Item = {
   reason: string | null;
   triage_error: string | null;
   decision: 'new' | 'adopt' | 'watch' | 'drop';
+  /** 初筛时模型判断是否值得自动深入调研；旧数据为 null */
+  deep: number | null;
+};
+
+export type Research = {
+  id: number;
+  item_id: number;
+  status: 'pending' | 'done' | 'error';
+  attempts: number;
+  verdict: string | null;
+  conclusion: string | null;
+  body: string | null;
+  file: string | null;
+  error: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 export type Run = {
@@ -73,6 +89,19 @@ CREATE TABLE IF NOT EXISTS star_snapshots (
   stars INTEGER NOT NULL,
   PRIMARY KEY (repo, day)
 );
+CREATE TABLE IF NOT EXISTS research (
+  id INTEGER PRIMARY KEY,
+  item_id INTEGER NOT NULL UNIQUE REFERENCES items(id),
+  status TEXT NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  verdict TEXT,
+  conclusion TEXT,
+  body TEXT,
+  file TEXT,
+  error TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS pushers (
   name TEXT PRIMARY KEY,
   last_seen_at TEXT NOT NULL,
@@ -89,6 +118,8 @@ export class Store {
     mkdirSync(dirname(path), { recursive: true });
     this.db = new DatabaseSync(path);
     this.db.exec('PRAGMA journal_mode = WAL;' + SCHEMA);
+    const cols = (this.db.prepare(`PRAGMA table_info(items)`).all() as { name: string }[]).map((c) => c.name);
+    if (!cols.includes('deep')) this.db.exec(`ALTER TABLE items ADD COLUMN deep INTEGER`);
     // 进程被杀时遗留的 running 记录不会再结束，标成失败以免页面误以为仍在运行
     this.db.prepare(`UPDATE runs SET status='error', finished_at=?, error='进程中断' WHERE status='running'`).run(now());
   }
@@ -109,6 +140,11 @@ export class Store {
 
   lastSuccess(collector: string): string | null {
     const r = this.db.prepare(`SELECT MAX(started_at) AS t FROM runs WHERE collector=? AND status='ok'`).get(collector) as { t: string | null };
+    return r.t;
+  }
+
+  lastStart(collector: string): string | null {
+    const r = this.db.prepare(`SELECT MAX(started_at) AS t FROM runs WHERE collector=?`).get(collector) as { t: string | null };
     return r.t;
   }
 
@@ -150,9 +186,10 @@ export class Store {
     return this.db.prepare(`SELECT * FROM items WHERE triage_status IN ('pending', 'error') ORDER BY id LIMIT ?`).all(limit) as Item[];
   }
 
-  setTriage(id: number, t: { relevance: number; questions: number[]; reason: string }) {
-    this.db.prepare(`UPDATE items SET triage_status='done', relevance=?, questions=?, reason=?, triage_error=NULL WHERE id=?`)
-      .run(t.relevance, JSON.stringify(t.questions), t.reason, id);
+  setTriage(id: number, t: { relevance: number; questions: number[]; reason: string; deep: boolean }) {
+    this.db.prepare(`UPDATE items SET triage_status='done', relevance=?, questions=?, reason=?, deep=?, triage_error=NULL WHERE id=?`)
+      .run(t.relevance, JSON.stringify(t.questions), t.reason, t.deep ? 1 : 0, id);
+    if (t.deep) this.db.prepare(`INSERT OR IGNORE INTO research (item_id, status, created_at, updated_at) VALUES (?, 'pending', ?, ?)`).run(id, now(), now());
   }
 
   setTriageError(ids: number[], error: string) {
@@ -160,8 +197,29 @@ export class Store {
     for (const id of ids) stmt.run(error, id);
   }
 
-  decide(id: number, decision: Item['decision']) {
-    this.db.prepare(`UPDATE items SET decision=?, decided_at=? WHERE id=?`).run(decision, now(), id);
+  /** 待调研和失败次数未满的条目，按相关度优先。 */
+  pendingResearch(limit: number, maxAttempts: number): (Research & { item: Item })[] {
+    const rows = this.db.prepare(`SELECT r.* FROM research r JOIN items i ON i.id = r.item_id
+      WHERE r.status = 'pending' OR (r.status = 'error' AND r.attempts < ?) ORDER BY i.relevance DESC, r.id LIMIT ?`).all(maxAttempts, limit) as Research[];
+    return rows.map((r) => ({ ...r, item: this.db.prepare(`SELECT * FROM items WHERE id=?`).get(r.item_id) as Item }));
+  }
+
+  researchedSince(iso: string): number {
+    return (this.db.prepare(`SELECT COUNT(*) AS n FROM research WHERE status='done' AND updated_at >= ?`).get(iso) as { n: number }).n;
+  }
+
+  setResearch(id: number, r: { verdict: string; conclusion: string; body: string; file: string | null }) {
+    this.db.prepare(`UPDATE research SET status='done', attempts=attempts+1, verdict=?, conclusion=?, body=?, file=?, error=NULL, updated_at=? WHERE id=?`)
+      .run(r.verdict, r.conclusion, r.body, r.file, now(), id);
+  }
+
+  setResearchError(id: number, error: string) {
+    this.db.prepare(`UPDATE research SET status='error', attempts=attempts+1, error=?, updated_at=? WHERE id=?`).run(error, now(), id);
+  }
+
+  research(where: string, params: (string | number)[], limit = 200): (Research & { item: Item })[] {
+    const rows = this.db.prepare(`SELECT * FROM research WHERE ${where} LIMIT ?`).all(...params, limit) as Research[];
+    return rows.map((r) => ({ ...r, item: this.db.prepare(`SELECT * FROM items WHERE id=?`).get(r.item_id) as Item }));
   }
 
   items(where: string, params: (string | number)[], limit = 300): Item[] {

@@ -3,13 +3,13 @@ import { timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import type { Catalog } from './catalog.ts';
 import { config } from './config.ts';
-import type { Item, Run, Store } from './db.ts';
+import type { Item, Research, Run, Store } from './db.ts';
 import { itemKey } from './http.ts';
 import { QUESTIONS } from './questions.ts';
-import { ingest, tick, unhealthy } from './scheduler.ts';
+import { VERDICTS } from './research.ts';
+import { ingest, unhealthy } from './scheduler.ts';
 
 const esc = (s: unknown) => String(s ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
-const DECISIONS: Record<string, string> = { new: '未决定', adopt: '采纳', watch: '观察', drop: '放弃' };
 const CATALOG_STATUS: Record<string, string> = { adopt: '已采用', try: '可试', study: '研读', watch: '观察', avoid: '暂不采用', drop: '不相关' };
 
 const time = (iso: string | null) => (iso ? new Date(iso).toLocaleString('zh-CN', { hour12: false }) : '—');
@@ -30,13 +30,15 @@ tr:last-child td{border-bottom:none}tr:hover{background:#f9fafb}
 .muted{color:#6b7280;font-size:13px}
 .err{color:#dc2626;font-weight:500}.ok{color:#16a34a;font-weight:500}
 .r3{font-weight:bold;color:#ea580c}.r2{color:#d97706}.r1{color:#65a30d}
-form.inline{display:inline}
+.card{background:#fff;border:1px solid #e5e7eb;border-radius:6px;padding:12px 16px;margin-bottom:10px}
+.card h3{font-size:15px;margin:0 0 4px}.report{background:#fff;border:1px solid #e5e7eb;border-radius:6px;padding:8px 24px}
+.report pre{background:#f3f4f6;padding:8px;overflow:auto}.v-adopt{color:#16a34a}.v-try{color:#2563eb}.v-study{color:#7c3aed}.v-watch{color:#d97706}.v-drop{color:#6b7280}
 button{font-size:13px;padding:4px 12px;margin:0 2px;border:1px solid #d1d5db;background:#fff;border-radius:4px;cursor:pointer;color:#374151;font-weight:500}
 button:hover{background:#f3f4f6;border-color:#9ca3af}button:active{background:#e5e7eb}
 h2{font-size:20px;margin:24px 0 12px;color:#111827}
 </style>
-<nav><a href="/">今日需关注</a><a href="/candidates">候选池</a><a href="/runs">运行记录</a>
-<form class="inline" method="post" action="/run"><button>立即采集</button></form></nav>
+<nav><a href="/">调研结论</a><a href="/candidates">全部线索</a><a href="/runs">运行记录</a>
+<span class="muted">全自动：定时采集 → 模型初筛 → 模型挑选并深入调研 → 报告写入仓库</span></nav>
 ${body}</html>`;
 }
 
@@ -64,28 +66,73 @@ function itemRows(items: Item[], store: Store, catalog: Catalog) {
       : i.triage_status === 'error' ? `<span class="err">初筛失败：${esc(i.triage_error)}</span>`
       : i.triage_status === 'pending' ? '<span class="muted">待初筛</span>'
       : `<span class="r${i.relevance}">${i.relevance}</span> ${esc(i.reason)}<br><span class="muted">${(JSON.parse(i.questions ?? '[]') as number[]).map((q) => esc(QUESTIONS[q]?.split('：')[0])).join('、')}</span>`;
-    const buttons = Object.entries(DECISIONS).filter(([k]) => k !== 'new' && k !== i.decision)
-      .map(([k, v]) => `<button name="decision" value="${k}">${v}</button>`).join('');
+    const r = store.research('item_id = ?', [i.id], 1)[0];
     return `<tr><td><a href="${esc(i.url)}" target="_blank" rel="noreferrer">${esc(i.title)}</a><br><span class="muted">${esc(i.summary.slice(0, 200))}</span></td>
 <td>${triage}</td><td class="muted">${esc(i.source)}<br>${esc(heat(i, store))}<br>${time(i.first_seen_at)}</td>
-<td>${esc(DECISIONS[i.decision])}<form method="post" action="/items/${i.id}/decision">${buttons}</form></td></tr>`;
+<td>${r ? researchStatus(r) : '<span class="muted">—</span>'}</td></tr>`;
   });
-  return `<table><tr><th>线索</th><th>初筛</th><th>来源 · 热度 · 发现</th><th>决定</th></tr>${rows.join('')}</table>`;
+  return `<table><tr><th>线索</th><th>初筛</th><th>来源 · 热度 · 发现</th><th>深入调研</th></tr>${rows.join('')}</table>`;
 }
 
-function today(store: Store, catalog: Catalog) {
-  const items = store.items(`decision='new' AND triage_status='done' AND relevance >= 2 AND first_seen_at >= datetime('now', '-7 day')
-    ORDER BY relevance DESC, first_seen_at DESC`, []);
-  const pending = store.count(`triage_status IN ('pending', 'error')`);
-  return page('今日需关注', alerts(store)
-    + `<h2>今日需关注（${items.length}）</h2><p class="muted">近 7 天、未决定、相关度 ≥ 2。待初筛或初筛失败 ${pending} 条。</p>`
-    + itemRows(items, store, catalog));
+function researchStatus(r: Research) {
+  if (r.status === 'done') return `<a class="v-${esc(r.verdict)}" href="/research/${r.id}">${esc(VERDICTS[r.verdict ?? ''] ?? r.verdict)}</a>`;
+  if (r.status === 'pending') return '<span class="muted">排队中</span>';
+  return `<span class="err">失败 ${r.attempts}/${config.researchMaxAttempts}：${esc(r.error?.slice(0, 120))}</span>`;
+}
+
+/** 极简 Markdown：标题、列表、粗体、行内代码、代码块、链接。模型输出先转义再替换，不会注入 HTML。 */
+function md(src: string) {
+  const inline = (t: string) => esc(t).replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
+    .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>');
+  const out: string[] = [];
+  let list = false;
+  for (const block of src.split(/^```[^\n]*\n([\s\S]*?)^```$/m).map((b, i) => [b, i % 2] as const)) {
+    if (block[1]) { out.push(`<pre>${esc(block[0])}</pre>`); continue; }
+    for (const line of block[0].split('\n')) {
+      const li = line.match(/^\s*(?:[-*]|\d+\.)\s+(.*)/);
+      if (!li && list) { out.push('</ul>'); list = false; }
+      const h = line.match(/^(#{1,4})\s+(.*)/);
+      if (h) out.push(`<h${h[1].length + 1}>${inline(h[2])}</h${h[1].length + 1}>`);
+      else if (li) { if (!list) { out.push('<ul>'); list = true; } out.push(`<li>${inline(li[1])}</li>`); }
+      else if (line.trim()) out.push(`<p>${inline(line)}</p>`);
+    }
+    if (list) { out.push('</ul>'); list = false; }
+  }
+  return out.join('\n');
+}
+
+function home(store: Store) {
+  const since = new Date(Date.now() - 14 * 86400_000).toISOString();
+  const done = store.research(`status = 'done' AND updated_at >= ? ORDER BY updated_at DESC`, [since]);
+  const failed = store.research(`status = 'error' ORDER BY updated_at DESC`, []);
+  const queued = store.research(`status = 'pending'`, []).length;
+  const week = store.count(`first_seen_at >= datetime('now', '-7 day')`);
+  const deep = store.count(`deep = 1 AND first_seen_at >= datetime('now', '-7 day')`);
+  const groups = Object.entries(VERDICTS).map(([k, label]) => {
+    const list = done.filter((r) => r.verdict === k);
+    if (!list.length) return '';
+    return `<h2 class="v-${k}">${label}（${list.length}）</h2>` + list.map((r) => `<div class="card"><h3><a href="/research/${r.id}">${esc(r.item.title)}</a></h3>
+${esc(r.conclusion)}<br><span class="muted">${esc(r.item.source)} · ${time(r.updated_at)} · <a href="${esc(r.item.url)}" target="_blank" rel="noreferrer">原文</a>${r.file ? ` · ${esc(r.file)}` : ''}</span></div>`).join('');
+  }).join('');
+  const failures = failed.length ? `<h2>调研失败（${failed.length}）</h2>` + failed.map((r) => `<div class="card"><a href="${esc(r.item.url)}" target="_blank" rel="noreferrer">${esc(r.item.title)}</a><br>${researchStatus(r)}</div>`).join('') : '';
+  return page('调研结论', alerts(store)
+    + `<p class="muted">近 7 天采集 ${week} 条，模型挑出 ${deep} 条深入调研；近 14 天完成 ${done.length} 条，排队 ${queued} 条。每小时最多调研 ${config.researchPerRun} 条、每天最多 ${config.researchPerDay} 条，报告同时提交到仓库 ${esc(config.researchDir)}/。</p>`
+    + (groups || '<p class="muted">还没有完成的调研。模型初筛时会自动挑选值得深入的线索。</p>') + failures);
+}
+
+function report(store: Store, id: number) {
+  const r = store.research('id = ?', [id], 1)[0];
+  if (!r || r.status !== 'done') return null;
+  return page(r.item.title, `<h2>${esc(r.item.title)}</h2>
+<p><b class="v-${esc(r.verdict)}">${esc(VERDICTS[r.verdict ?? ''])}</b>：${esc(r.conclusion)}</p>
+<p class="muted"><a href="${esc(r.item.url)}" target="_blank" rel="noreferrer">原文</a> · ${esc(r.item.source)} · 初筛：${esc(r.item.reason)} · ${time(r.updated_at)}${r.file ? ` · ${esc(r.file)}` : ''}</p>
+<div class="report">${md(r.body ?? '')}</div>`);
 }
 
 function candidates(store: Store, catalog: Catalog, q: URLSearchParams) {
   const where: string[] = [];
   const params: (string | number)[] = [];
-  for (const [k, col] of [['source', 'source'], ['decision', 'decision'], ['triage', 'triage_status']] as const) {
+  for (const [k, col] of [['source', 'source'], ['triage', 'triage_status']] as const) {
     const v = q.get(k);
     if (v) { where.push(`${col} = ?`); params.push(v); }
   }
@@ -93,6 +140,7 @@ function candidates(store: Store, catalog: Catalog, q: URLSearchParams) {
   if (question) { where.push(`EXISTS (SELECT 1 FROM json_each(questions) WHERE value = ?)`); params.push(Number(question)); }
   const minRel = q.get('min');
   if (minRel) { where.push('relevance >= ?'); params.push(Number(minRel)); }
+  if (q.get('deep')) where.push('deep = 1');
   const w = where.join(' AND ') || '1=1';
   const items = store.items(`${w} ORDER BY first_seen_at DESC`, params);
   const total = store.count(w, params);
@@ -100,11 +148,11 @@ function candidates(store: Store, catalog: Catalog, q: URLSearchParams) {
   const select = (name: string, opts: [string, string][]) =>
     `<select name="${name}"><option value="">全部</option>${opts.map(([v, l]) => `<option value="${esc(v)}"${q.get(name) === v ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
   const form = `<form>来源 ${select('source', sources.map((s) => [s, s]))}
- 决定 ${select('decision', Object.entries(DECISIONS))}
  初筛 ${select('triage', [['done', '已初筛'], ['pending', '待初筛'], ['error', '失败'], ['known', '已在清单']])}
  问题 ${select('question', Object.entries(QUESTIONS).map(([k, v]) => [k, v.split('：')[0]]))}
- 相关度 ≥ ${select('min', [['1', '1'], ['2', '2'], ['3', '3']])} <button>筛选</button></form>`;
-  return page('候选池', `<h2>候选池（${total}${total > items.length ? `，显示最近 ${items.length}` : ''}）</h2>${form}` + itemRows(items, store, catalog));
+ 相关度 ≥ ${select('min', [['1', '1'], ['2', '2'], ['3', '3']])}
+ <label><input type="checkbox" name="deep" value="1"${q.get('deep') ? ' checked' : ''}> 只看模型选中深入的</label> <button>筛选</button></form>`;
+  return page('全部线索', `<h2>全部线索（${total}${total > items.length ? `，显示最近 ${items.length}` : ''}）</h2>${form}` + itemRows(items, store, catalog));
 }
 
 function runs(store: Store) {
@@ -149,7 +197,6 @@ function send(res: ServerResponse, status: number, body: string, type = 'text/ht
   res.end(body);
 }
 const json = (res: ServerResponse, status: number, body: unknown) => send(res, status, JSON.stringify(body), 'application/json');
-const redirect = (res: ServerResponse, to: string) => { res.writeHead(303, { location: to }); res.end(); };
 
 export function handler(store: Store, catalog: Catalog) {
   return async (req: IncomingMessage, res: ServerResponse) => {
@@ -176,21 +223,12 @@ export function handler(store: Store, catalog: Catalog) {
         }
       }
 
-      if (req.method === 'GET' && url.pathname === '/') return send(res, 200, today(store, catalog));
+      if (req.method === 'GET' && url.pathname === '/') return send(res, 200, home(store));
       if (req.method === 'GET' && url.pathname === '/candidates') return send(res, 200, candidates(store, catalog, url.searchParams));
       if (req.method === 'GET' && url.pathname === '/runs') return send(res, 200, runs(store));
-      if (req.method === 'POST' && url.pathname === '/run') {
-        void tick(store, catalog, true);
-        return redirect(res, '/runs');
-      }
-      const m = url.pathname.match(/^\/items\/(\d+)\/decision$/);
-      if (req.method === 'POST' && m) {
-        const decision = new URLSearchParams(await readBody(req)).get('decision') ?? '';
-        if (!(decision in DECISIONS)) return send(res, 400, '非法决定');
-        store.decide(Number(m[1]), decision as Item['decision']);
-        const back = new URL(req.headers.referer ?? '/', 'http://localhost');
-        return redirect(res, back.pathname + back.search);
-      }
+      const m = url.pathname.match(/^\/research\/(\d+)$/);
+      const html = req.method === 'GET' && m ? report(store, Number(m[1])) : null;
+      if (html) return send(res, 200, html);
       send(res, 404, page('未找到', '<p>未找到。</p>'));
     } catch (e) {
       const status = (e as { status?: number }).status ?? (e instanceof SyntaxError ? 400 : 500);

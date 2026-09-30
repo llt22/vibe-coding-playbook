@@ -2,13 +2,19 @@ import { config } from './config.ts';
 import type { Catalog } from './catalog.ts';
 import { githubSearch, githubTrending } from './collectors/github.ts';
 import { hn } from './collectors/hn.ts';
+import { pages } from './collectors/pages.ts';
 import { rss } from './collectors/rss.ts';
 import type { Collector, RawItem } from './collectors/types.ts';
 import type { Store } from './db.ts';
+import { runResearch, writeDigest } from './research.ts';
 import { runTriage } from './triage.ts';
 
-export const collectors: Collector[] = [githubSearch, githubTrending, hn, rss];
+export const collectors: Collector[] = [githubSearch, githubTrending, hn, rss, pages];
 export const TRIAGE = 'triage';
+export const RESEARCH = 'research';
+export const DIGEST = { name: 'digest', intervalHours: 168 };
+/** 调研失败后至少隔这么久再试，避免每分钟重试刷接口 */
+const RESEARCH_EVERY_HOURS = 1;
 
 /** 写入条目并记星数快照，返回新增条数。 */
 export function ingest(store: Store, catalog: Catalog, items: RawItem[]): number {
@@ -46,20 +52,48 @@ async function triage(store: Store) {
   }
 }
 
-const due = (store: Store, c: Collector) => {
+async function research(store: Store, catalog: Catalog) {
+  if (!store.research(`status = 'pending' OR (status = 'error' AND attempts < ?)`, [config.researchMaxAttempts], 1).length) return;
+  const last = store.lastStart(RESEARCH);
+  if (last && Date.now() - Date.parse(last) < RESEARCH_EVERY_HOURS * 3600_000) return;
+  const run = store.startRun(RESEARCH);
+  try {
+    const n = await runResearch(store, catalog);
+    store.finishRun(run, { fetched: n, newItems: 0 });
+  } catch (e) {
+    store.finishRun(run, { error: (e as Error).message });
+    console.error('[research]', (e as Error).message);
+  }
+}
+
+function digest(store: Store) {
+  // 还没有任何调研结果时不写空周报
+  if (!due(store, DIGEST) || !store.research(`status = 'done'`, [], 1).length) return;
+  const run = store.startRun(DIGEST.name);
+  try {
+    store.finishRun(run, { fetched: writeDigest(store), newItems: 0 });
+  } catch (e) {
+    store.finishRun(run, { error: (e as Error).message });
+    console.error('[digest]', (e as Error).message);
+  }
+}
+
+const due = (store: Store, c: { name: string; intervalHours: number }) => {
   const last = store.lastSuccess(c.name);
   return !last || Date.now() - Date.parse(last) >= c.intervalHours * 3600_000;
 };
 
 let busy = false;
 
-/** 执行到期的采集器，再初筛。force 时忽略周期全部执行。 */
+/** 执行到期的采集器，再初筛、自动调研、到期写周报。force 时采集器忽略周期全部执行。 */
 export async function tick(store: Store, catalog: Catalog, force = false) {
   if (busy) return;
   busy = true;
   try {
     for (const c of collectors) if (force || due(store, c)) await runCollector(store, catalog, c);
     await triage(store);
+    await research(store, catalog);
+    digest(store);
   } finally {
     busy = false;
   }
@@ -71,7 +105,7 @@ export function unhealthy(store: Store): { name: string; reason: string }[] {
   const out: { name: string; reason: string }[] = [];
   // 推送方：启用推送接口后按约定周期检查心跳
   const pushers = config.ingestToken ? config.pushers.map((p) => ({ name: `ingest:${p.name}`, intervalHours: p.intervalHours })) : [];
-  for (const c of [...collectors, ...pushers, { name: TRIAGE, intervalHours: 0 }]) {
+  for (const c of [...collectors, ...pushers, { name: TRIAGE, intervalHours: 0 }, { name: RESEARCH, intervalHours: 0 }, DIGEST]) {
     const r = last.get(c.name);
     if (r?.status === 'error') out.push({ name: c.name, reason: r.error ?? '未知错误' });
     else if (c.intervalHours) {

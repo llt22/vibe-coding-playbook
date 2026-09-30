@@ -10,22 +10,32 @@ const Result = z.object({
     relevance: z.number().int(),
     questions: z.array(z.number().int()),
     reason: z.string(),
+    deep: z.boolean(),
   })),
 });
 
 const SYSTEM = `你在为一个长期调研项目做线索初筛。项目研究“怎样在各类工作中把 AI 用到最好”，围绕五个问题：
 ${Object.entries(QUESTIONS).map(([k, v]) => `${k}. ${v}`).join('\n')}
 
+关注的是“人怎样和 AI 一起工作”：编程智能体的用法、工作流、上下文与工具供给、评测与验证、团队实践、工具之间的对比和迁移经验。
+AI 驱动的具体应用本身（生成视频、游戏、图片、营销内容等）不是研究对象，除非它展示了可迁移的工作方法；这类最多给 1。
+
 对每条线索给出：
-- relevance：0–3。3 = 可能直接改变某类工作的做法，值得本周就看；2 = 有具体、可落地的新做法或工具，值得记下；1 = 相关但泛泛、重复已知内容或只是新闻；0 = 与 AI 辅助工作无关。
+- relevance：0–3。3 = 可能直接改变某类工作的做法，值得本周就看；2 = 有具体、可落地的新做法或工具，值得记下；1 = 相关但泛泛、重复已知内容、只是新闻或产品发布；0 = 与 AI 辅助工作无关。
 - questions：它主要回答上面哪几个问题（编号，可为空）。
 - reason：一句中文，说明它在真实工作里具体能做什么。看不出实际用途、只有宣传或演示的，直接说明并给低分。
+- deep：是否值得自动深入调研（读原文、提炼做法、给出采用建议）。只有 relevance ≥ 2、且原文可能包含足够的具体做法或数据时才为 true；纯公告、融资、观点帖、没有细节的短推为 false。宁缺毋滥。
 
 只依据给出的标题、摘要和热度判断，不要编造没有给出的信息。每条输入都必须有一条结果，id 与输入一致。
-只输出 JSON，格式：{"results": [{"id": 1, "relevance": 2, "questions": [1, 3], "reason": "..."}]}`;
+只输出 JSON，格式：{"results": [{"id": 1, "relevance": 2, "questions": [1, 3], "reason": "...", "deep": false}]}`;
 
 let client: OpenAI | undefined;
-const llm = () => (client ??= new OpenAI({ baseURL: config.llmBaseURL, apiKey: config.llmApiKey, maxRetries: 3 }));
+export const llm = () => (client ??= new OpenAI({ baseURL: config.llmBaseURL, apiKey: config.llmApiKey, maxRetries: 3 }));
+
+export function requireModel() {
+  const missing = (['llmBaseURL', 'llmApiKey', 'llmModel'] as const).filter((k) => !config[k]);
+  if (missing.length) throw new Error(`未配置模型：.env 缺少 ${missing.map((k) => ({ llmBaseURL: 'LLM_BASE_URL', llmApiKey: 'LLM_API_KEY', llmModel: 'LLM_MODEL' })[k]).join('、')}`);
+}
 
 function describe(i: Item) {
   return { id: i.id, source: i.source, title: i.title, url: i.url, summary: i.summary.slice(0, 600), metrics: JSON.parse(i.metrics) };
@@ -64,6 +74,7 @@ async function triageBatch(store: Store, batch: Item[]) {
         relevance: Math.max(0, Math.min(3, r.relevance)),
         questions: r.questions.filter((q) => q in QUESTIONS),
         reason: r.reason,
+        deep: r.deep,
       });
     }
   } catch (e) {
@@ -80,8 +91,7 @@ async function triageBatch(store: Store, batch: Item[]) {
 
 /** 初筛待处理和上次失败的条目。返回处理条数；遇到不可恢复错误时抛出，由调度记为失败。 */
 export async function runTriage(store: Store, limit = 200): Promise<number> {
-  const missing = (['llmBaseURL', 'llmApiKey', 'llmModel'] as const).filter((k) => !config[k]);
-  if (missing.length) throw new Error(`未配置模型：.env 缺少 ${missing.map((k) => ({ llmBaseURL: 'LLM_BASE_URL', llmApiKey: 'LLM_API_KEY', llmModel: 'LLM_MODEL' })[k]).join('、')}`);
+  requireModel();
   const items = store.pendingTriage(limit);
   for (let i = 0; i < items.length; i += config.triageBatch) {
     await triageBatch(store, items.slice(i, i + config.triageBatch));

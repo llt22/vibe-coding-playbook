@@ -45,7 +45,7 @@ export const rss: Collector = {
     const errors: string[] = [];
     for (const f of feeds) {
       try {
-        const items = parseFeed(await getText(f.url), `rss:${f.catalogId}`);
+        const items = parseFeed(await getText(f.url), `rss:${f.catalogId || new URL(f.url).hostname}`);
         out.push(...items.filter((i) => !i.published_at || Date.parse(i.published_at) >= cutoff));
       } catch (e) {
         errors.push(`${f.url}: ${(e as Error).message}`);
