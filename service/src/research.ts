@@ -1,4 +1,3 @@
-import OpenAI from 'openai';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -8,7 +7,7 @@ import { config } from './config.ts';
 import type { Item, Store } from './db.ts';
 import { getText, githubRepo } from './http.ts';
 import { QUESTIONS } from './questions.ts';
-import { llm, requireModel } from './triage.ts';
+import { askJson, describeError, fatal, requireModel } from './llm.ts';
 
 export const VERDICTS: Record<string, string> = { adopt: '建议采用', try: '值得一试', study: '值得研读', watch: '继续观察', drop: '不值得跟进' };
 
@@ -21,14 +20,17 @@ const Result = z.object({
 const SYSTEM = `你在为一个长期调研项目做深度调研。项目研究“怎样在各类工作中把 AI 用到最好”，围绕五个问题：
 ${Object.entries(QUESTIONS).map(([k, v]) => `${k}. ${v}`).join('\n')}
 
+调研的最终产出是可执行手册：别人拿到后能照着做、并明显改善工作方式。你的报告是写手册的素材，重点是把原文里可照做的东西提炼出来，而不是转述资讯。
+
 输入是一条初筛认为值得深入的线索：标题、链接、初筛理由、原文（可能被截断，也可能抓取失败），以及原文里提到的、项目清单中已有的条目及其状态。
 
 请读原文，输出：
-- verdict：adopt（建议直接采用）/ try（值得小范围试）/ study（思路值得研读，不必用这个具体东西）/ watch（有潜力但还不成熟）/ drop（没有实质内容或与研究无关）
+- verdict：adopt（建议直接采用）/ try（值得小范围试）/ study（思路值得研读，不必用这个具体东西）/ watch（有潜力但还不成熟）/ drop（没有实质内容或与研究无关）。
+  adopt 和 try 会被写进手册，所以只有原文给出了可照做的具体步骤、配置或流程时才能给；只有观点、宣传或新闻、提炼不出步骤的，最多给 study 或 watch。
 - conclusion：一到两句中文结论，先说该怎么做，再说理由
 - body：Markdown 调研报告，中文，包含这些小节：
   ## 是什么
-  ## 具体做法（原文里可照做的步骤、配置、提示词、流程，尽量具体）
+  ## 具体做法（编号步骤；可直接复制的命令、配置、提示词原样放进代码块；写清每步的前提）
   ## 对应的研究问题（对照上面五个问题逐条说明，只写有依据的）
   ## 与已有做法的关系（对照给出的清单条目；没有就写“清单中没有相关条目”）
   ## 证据与局限（原文给了哪些数据或案例，哪些只是作者主张，适用条件是什么）
@@ -49,6 +51,9 @@ async function source(item: Item): Promise<{ text: string; note: string }> {
   const repo = githubRepo(item.url);
   try {
     if (repo) {
+      // raw 没有匿名 API 每小时 60 次的限流；README 不叫 README.md 时再走 API
+      const raw = await getText(`https://raw.githubusercontent.com/${repo}/HEAD/README.md`).catch(() => null);
+      if (raw) return { text: raw, note: '依据仓库 README' };
       const headers: Record<string, string> = { accept: 'application/vnd.github.raw' };
       if (config.githubToken) headers.authorization = `Bearer ${config.githubToken}`;
       return { text: await getText(`https://api.github.com/repos/${repo}/readme`, headers), note: '依据仓库 README' };
@@ -72,34 +77,15 @@ function related(catalog: Catalog, text: string) {
 
 async function researchOne(item: Item, catalog: Catalog) {
   const src = await source(item);
-  const res = await llm().chat.completions.create({
-    model: config.llmModel,
-    response_format: { type: 'json_object' },
-    messages: [
-      { role: 'system', content: SYSTEM },
-      { role: 'user', content: JSON.stringify({
-        title: item.title, url: item.url, source: item.source, metrics: JSON.parse(item.metrics),
-        triage_reason: item.reason, source_note: src.note, text: src.text.slice(0, 30_000), catalog_related: related(catalog, src.text),
-      }) },
-    ],
-  });
-  const choice = res.choices[0];
-  if (!choice) throw new Error('模型没有返回结果');
-  if (choice.finish_reason === 'length') throw new Error('输出被截断（length）');
-  if (choice.finish_reason === 'content_filter') throw new Error('被内容过滤拦截');
-  let json;
-  try {
-    json = JSON.parse(choice.message.content ?? '');
-  } catch {
-    throw new Error(`输出不是合法 JSON：${(choice.message.content ?? '').slice(0, 200)}`);
-  }
-  const parsed = Result.safeParse(json);
-  if (!parsed.success) throw new Error(`输出格式不符：${parsed.error.issues[0]?.path.join('.')} ${parsed.error.issues[0]?.message}`);
-  return { ...parsed.data, note: src.note };
+  const data = await askJson(SYSTEM, JSON.stringify({
+    title: item.title, url: item.url, source: item.source, metrics: JSON.parse(item.metrics),
+    triage_reason: item.reason, source_note: src.note, text: src.text.slice(0, 30_000), catalog_related: related(catalog, src.text),
+  }), Result);
+  return { ...data, note: src.note };
 }
 
 // 本地日期（sv 区域格式即 YYYY-MM-DD），目录和周报按本机日期归档
-const day = () => new Date().toLocaleDateString('sv');
+export const day = () => new Date().toLocaleDateString('sv');
 
 /** 报告写到 research/radar/日期/，返回相对仓库根目录的路径。 */
 function writeReport(item: Item, r: z.infer<typeof Result> & { note: string }): string {
@@ -150,36 +136,13 @@ export async function runResearch(store: Store, catalog: Catalog): Promise<numbe
       files.push(file);
       titles.push(`${VERDICTS[result.verdict]}：${r.item.title.slice(0, 60)}`);
     } catch (e) {
-      const msg = e instanceof OpenAI.APIError ? `API ${e.status ?? '连接失败'}：${e.message.slice(0, 300)}` : (e as Error).message.slice(0, 500);
+      const msg = describeError(e);
       store.setResearchError(r.id, msg);
       errors.push(`${r.item.title.slice(0, 40)}：${msg}`);
-      // 鉴权、参数、模型名错误重试也不会好，停止本轮
-      if (e instanceof OpenAI.AuthenticationError || e instanceof OpenAI.BadRequestError
-        || e instanceof OpenAI.PermissionDeniedError || e instanceof OpenAI.NotFoundError) break;
+      if (fatal(e)) break;
     }
   }
   commit(files, `docs: 自动调研 ${files.length} 条\n\n${titles.map((t) => `- ${t}`).join('\n')}\n\n由 ai-work-radar 用 ${config.llmModel} 生成`);
   if (errors.length) throw new Error(`${errors.length}/${batch.length} 条调研失败：\n${errors.join('\n')}`);
   return batch.length;
-}
-
-/** 周报：近 7 天完成的调研按结论分组，写到 research/radar/weekly/日期.md。返回收录条数。 */
-export function writeDigest(store: Store): number {
-  const rows = store.research(`status='done' AND updated_at >= ? ORDER BY updated_at DESC`, [new Date(Date.now() - 7 * 86400_000).toISOString()]);
-  const dir = join(config.researchDir, 'weekly');
-  mkdirSync(join(config.repoRoot, dir), { recursive: true });
-  const file = join(dir, `${day()}.md`);
-  const groups = Object.entries(VERDICTS).map(([k, label]) => {
-    const list = rows.filter((r) => r.verdict === k);
-    if (!list.length) return '';
-    return `## ${label}（${list.length}）\n\n${list.map((r) => `- [${r.item.title}](../${r.file?.slice(config.researchDir.length + 1)})：${r.conclusion}`).join('\n')}\n`;
-  }).filter(Boolean);
-  const pending = store.research(`status IN ('pending', 'error')`, []).length;
-  writeFileSync(join(config.repoRoot, file), `# AI 工作方法周报 ${day()}
-
-近 7 天自动调研 ${rows.length} 条，排队或失败待重试 ${pending} 条。每条都由模型读原文后给出结论，点链接看完整报告和依据。
-
-${groups.join('\n') || '本周没有完成的调研。\n'}`);
-  commit([file], `docs: 自动调研周报 ${day()}（${rows.length} 条）\n\n由 ai-work-radar 生成`);
-  return rows.length;
 }

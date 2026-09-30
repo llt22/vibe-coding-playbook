@@ -1,7 +1,7 @@
-import OpenAI from 'openai';
 import { z } from 'zod';
 import { config } from './config.ts';
 import type { Item, Store } from './db.ts';
+import { askJson, describeError, fatal, requireModel } from './llm.ts';
 import { QUESTIONS } from './questions.ts';
 
 const Result = z.object({
@@ -24,18 +24,10 @@ AI 驱动的具体应用本身（生成视频、游戏、图片、营销内容�
 - relevance：0–3。3 = 可能直接改变某类工作的做法，值得本周就看；2 = 有具体、可落地的新做法或工具，值得记下；1 = 相关但泛泛、重复已知内容、只是新闻或产品发布；0 = 与 AI 辅助工作无关。
 - questions：它主要回答上面哪几个问题（编号，可为空）。
 - reason：一句中文，说明它在真实工作里具体能做什么。看不出实际用途、只有宣传或演示的，直接说明并给低分。
-- deep：是否值得自动深入调研（读原文、提炼做法、给出采用建议）。只有 relevance ≥ 2、且原文可能包含足够的具体做法或数据时才为 true；纯公告、融资、观点帖、没有细节的短推为 false。宁缺毋滥。
+- deep：是否值得自动深入调研。调研的产出是别人拿到就能照做、能明显改善工作方式的手册，所以只有 relevance ≥ 2、且读完原文很可能提炼出可照做的步骤、配置或流程（或有说服力的数据）时才为 true；纯新闻、产品发布、融资、观点帖、没有细节的短推为 false。宁缺毋滥。
 
 只依据给出的标题、摘要和热度判断，不要编造没有给出的信息。每条输入都必须有一条结果，id 与输入一致。
 只输出 JSON，格式：{"results": [{"id": 1, "relevance": 2, "questions": [1, 3], "reason": "...", "deep": false}]}`;
-
-let client: OpenAI | undefined;
-export const llm = () => (client ??= new OpenAI({ baseURL: config.llmBaseURL, apiKey: config.llmApiKey, maxRetries: 3 }));
-
-export function requireModel() {
-  const missing = (['llmBaseURL', 'llmApiKey', 'llmModel'] as const).filter((k) => !config[k]);
-  if (missing.length) throw new Error(`未配置模型：.env 缺少 ${missing.map((k) => ({ llmBaseURL: 'LLM_BASE_URL', llmApiKey: 'LLM_API_KEY', llmModel: 'LLM_MODEL' })[k]).join('、')}`);
-}
 
 function describe(i: Item) {
   return { id: i.id, source: i.source, title: i.title, url: i.url, summary: i.summary.slice(0, 600), metrics: JSON.parse(i.metrics) };
@@ -43,49 +35,27 @@ function describe(i: Item) {
 
 async function triageBatch(store: Store, batch: Item[]) {
   const ids = batch.map((i) => i.id);
+  let data;
   try {
-    const res = await llm().chat.completions.create({
-      model: config.llmModel,
-      response_format: { type: 'json_object' },
-      messages: [
-        { role: 'system', content: SYSTEM },
-        { role: 'user', content: JSON.stringify(batch.map(describe)) },
-      ],
-    });
-    const choice = res.choices[0];
-    if (!choice) return store.setTriageError(ids, '模型没有返回结果');
-    if (choice.finish_reason === 'length') return store.setTriageError(ids, '输出被截断（length）');
-    if (choice.finish_reason === 'content_filter') return store.setTriageError(ids, '被内容过滤拦截');
-    let parsed;
-    try {
-      parsed = Result.safeParse(JSON.parse(choice.message.content ?? ''));
-    } catch {
-      return store.setTriageError(ids, `输出不是合法 JSON：${(choice.message.content ?? '').slice(0, 200)}`);
-    }
-    if (!parsed.success) return store.setTriageError(ids, `输出格式不符：${parsed.error.issues[0]?.message}`);
-    const got = new Map(parsed.data.results.map((r) => [r.id, r]));
-    for (const item of batch) {
-      const r = got.get(item.id);
-      if (!r) {
-        store.setTriageError([item.id], '模型结果缺少此条');
-        continue;
-      }
-      store.setTriage(item.id, {
-        relevance: Math.max(0, Math.min(3, r.relevance)),
-        questions: r.questions.filter((q) => q in QUESTIONS),
-        reason: r.reason,
-        deep: r.deep,
-      });
-    }
+    data = await askJson(SYSTEM, JSON.stringify(batch.map(describe)), Result);
   } catch (e) {
-    if (e instanceof OpenAI.APIError) {
-      store.setTriageError(ids, `API ${e.status ?? '连接失败'}：${e.message.slice(0, 300)}`);
-      // 鉴权、参数、模型名错误重试也不会好，交给调用方停止本轮；限流和 5xx 已由 SDK 重试过
-      if (e instanceof OpenAI.AuthenticationError || e instanceof OpenAI.BadRequestError
-        || e instanceof OpenAI.PermissionDeniedError || e instanceof OpenAI.NotFoundError) throw e;
-      return;
+    store.setTriageError(ids, describeError(e));
+    if (fatal(e)) throw e;
+    return;
+  }
+  const got = new Map(data.results.map((r) => [r.id, r]));
+  for (const item of batch) {
+    const r = got.get(item.id);
+    if (!r) {
+      store.setTriageError([item.id], '模型结果缺少此条');
+      continue;
     }
-    throw e;
+    store.setTriage(item.id, {
+      relevance: Math.max(0, Math.min(3, r.relevance)),
+      questions: r.questions.filter((q) => q in QUESTIONS),
+      reason: r.reason,
+      deep: r.deep,
+    });
   }
 }
 
