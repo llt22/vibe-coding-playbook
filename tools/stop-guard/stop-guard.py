@@ -131,6 +131,11 @@ def ask_llm(env, user_text, message):
     return verdict
 
 
+def say(text, **extra):
+    """把判定结论显示在用户界面上（systemMessage），block 时附带 decision/reason。"""
+    print(json.dumps({"systemMessage": f"[stop-guard] {text}", **extra}, ensure_ascii=False))
+
+
 def main():
     inp = json.load(sys.stdin)
     session = inp.get("session_id", "")
@@ -141,29 +146,35 @@ def main():
 
     count, state = block_count(session, reset=not inp.get("stop_hook_active"))
     if count >= max_blocks:
-        return log({**base, "decision": "allow", "by": "limit", "blocks": count})
+        log({**base, "decision": "allow", "by": "limit", "blocks": count})
+        return say(f"放行 · 已连续拦截 {count} 次，达到上限")
     if not message:
-        return log({**base, "decision": "allow", "by": "rule", "why": "无文本"})
+        log({**base, "decision": "allow", "by": "rule", "why": "无文本"})
+        return say("放行 · 规则：无文本")
     tail = message[-600:]
     if not SUSPECT.search(tail):
-        return log({**base, "decision": "allow", "by": "rule", "why": "无停早迹象"})
+        log({**base, "decision": "allow", "by": "rule", "why": "无停早迹象"})
+        return say("放行 · 规则：无停早迹象")
 
     t0 = time.time()
     verdict = ask_llm(env, last_user_text(inp.get("transcript_path")), message)
     ms = int((time.time() - t0) * 1000)
-    if verdict["category"] in ("A", "B"):
-        return log({**base, "decision": "allow", "by": "llm", "ms": ms, **verdict})
+    cat, why = verdict["category"], verdict.get("reason", "")
+    if cat in ("A", "B"):
+        log({**base, "decision": "allow", "by": "llm", "ms": ms, **verdict})
+        return say(f"放行 · 模型判 {cat}（{ms}ms）：{why}")
 
     open(state, "w").write(str(count + 1))
     log({**base, "decision": "block", "by": "llm", "ms": ms, "blocks": count + 1, **verdict})
-    print(json.dumps({
-        "decision": "block",
-        "reason": (
-            f"[stop-guard] 这次不该停（{verdict['category']}）：{verdict.get('reason', '')}\n"
+    say(
+        f"拦截 · 模型判 {cat}（{ms}ms，第 {count + 1}/{max_blocks} 次）：{why}",
+        decision="block",
+        reason=(
+            f"[stop-guard] 这次不该停（{cat}）：{why}\n"
             "请直接继续执行。需要在工程方案间选择时，按 paseo-senior-advisor skill 咨询后自己决定；"
             "只有意图、业务含义、凭据、授权才停下问用户。如果确实已经完成，简要说明结果后结束。"
         ),
-    }, ensure_ascii=False))
+    )
 
 
 if __name__ == "__main__":
@@ -174,5 +185,5 @@ if __name__ == "__main__":
             log({"decision": "allow", "by": "error", "error": f"{type(e).__name__}: {e}"[:300]})
         except Exception:
             pass
-        print(f"stop-guard 出错已放行：{e}", file=sys.stderr)
+        say(f"出错已放行：{type(e).__name__}: {e}"[:300])
     sys.exit(0)
