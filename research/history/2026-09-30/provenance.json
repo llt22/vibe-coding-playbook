@@ -1,0 +1,139 @@
+{
+  "recovered_on": "2026-09-30",
+  "note": "Historical text recovered from local transcripts; not a new fact-check. File paths are relative to this directory. Source paths beginning with ~/ identify local transcripts outside this repository. Hashes describe archived files; recovered_sha256, when present, records the hash before archival normalization. Historical commands were not executed.",
+  "files": [
+    {
+      "path": "recovered/ai-engineering-radar-2026-09-29.md",
+      "bytes": 123955,
+      "sha256": "c2cf37dd07ab7392c619f60b5a5e6c4aa21a7ed989dee85975de8df9fd1b707f",
+      "source": "~/.omp/agent/sessions/-WebstormProjects-project-rebuild/2026-09-28T16-04-29-940Z_01a0e8c2-b674-76e4-94a1-776af44eca4b.jsonl",
+      "successful_operations_at_lines": [
+        309,
+        316,
+        319,
+        328,
+        335,
+        341,
+        347,
+        353,
+        356,
+        362,
+        365,
+        368,
+        387,
+        424,
+        427,
+        430,
+        433,
+        436,
+        439,
+        442,
+        454,
+        457,
+        460,
+        463,
+        466,
+        477,
+        483,
+        486,
+        489,
+        496,
+        499
+      ],
+      "failed_edits_skipped_at_lines": [
+        445,
+        448,
+        480
+      ],
+      "historical_final_check_line": 502,
+      "matches_recorded_byte_and_newline_counts": true,
+      "external_claims_reverified": false
+    },
+    {
+      "path": "recovered/ai-tool-historical-scan-2026-09-23.md",
+      "bytes": 4640,
+      "sha256": "9521facf792d4dc163d27b6cb4e1a2712291130e461b142d43c4b79c3807b433",
+      "source": "~/.codex/sessions/2026/09/23/rollout-2026-09-23T09-46-57-01a0cbf1-d06c-7331-a4a2-46ec9798bdca.jsonl",
+      "line": 99,
+      "external_claims_reverified": false
+    },
+    {
+      "path": "recovered/ai-tool-radar-2026-09-24.md",
+      "bytes": 9226,
+      "sha256": "b81d6fe72feb71e17f28d8ffd3bbdf644597bfb806112f389bb61d256a2d049a",
+      "source": "~/.claude/projects/-user-home-WebstormProjects-project-rebuild/5ae6eb31-6bf2-4032-bc77-e5f543e3a0f9.jsonl",
+      "line": 69,
+      "external_claims_reverified": false
+    },
+    {
+      "path": "recovered/ai-tool-radar-2026-09-23-omp.md",
+      "bytes": 14574,
+      "sha256": "a90ce8b2f792be9b7379fc52c11163628a553ec7369840039afe602111e2fb40",
+      "source": "~/.omp/agent/sessions/-WebstormProjects-project-rebuild/2026-09-23T03-51-30-480Z_01a0cc63-d7b0-7676-8303-0dc8e6801dab.jsonl",
+      "lines": [
+        208
+      ],
+      "external_claims_reverified": false
+    },
+    {
+      "path": "recovered/engineering-anthropic-uber-2026-09-27.md",
+      "bytes": 9966,
+      "sha256": "3bd8eb3e688b6def26928d1b55c9a1ad072953456ca75c24213e532be9bd608c",
+      "source": "~/.omp/agent/sessions/-WebstormProjects-project-rebuild/2026-09-27T03-04-40-589Z_01a0e0d2-678d-70d1-9fde-5cc1b08ddea9.jsonl",
+      "lines": [
+        21
+      ],
+      "external_claims_reverified": false,
+      "recovered_sha256": "1cf1bcd9430c0044b3ee013e17b7e3b5154666c7fef53fde32e35f5e3828b1be",
+      "archive_adjustments": "Removed whitespace from four otherwise empty lines; report text is unchanged."
+    },
+    {
+      "path": "recovered/engineering-uber-asdlc-2026-09-27.md",
+      "bytes": 7581,
+      "sha256": "ab4ef809364ff6c1b72458fa077d56a7de496e6ba8e35e27d6362558fc9425d0",
+      "source": "~/.omp/agent/sessions/-WebstormProjects-project-rebuild/2026-09-27T03-08-10-052Z_01a0e0d5-99c4-725e-b5d6-aaa25968a7a7.jsonl",
+      "lines": [
+        40
+      ],
+      "external_claims_reverified": false
+    },
+    {
+      "path": "recovered/x-engineering-radar-2026-09-27.md",
+      "bytes": 27257,
+      "sha256": "dcbbbf1c687f78ab4d114679f4da2a4f3df235d0bb1ed5f1c9232a3118a7e8fd",
+      "source": "~/.omp/agent/sessions/-WebstormProjects-project-rebuild/2026-09-27T03-11-41-180Z_01a0e0d8-d27c-774c-b1b5-5400e9290a2b.jsonl",
+      "lines": [
+        347
+      ],
+      "external_claims_reverified": false
+    },
+    {
+      "path": "recovered/code-review-radar-2026-09-28.md",
+      "bytes": 5908,
+      "sha256": "3b3166842e4009a31df464189c9a2b36f51070e3429192e99b69deca053ec7ec",
+      "source": "~/.omp/agent/sessions/-WebstormProjects-project-rebuild/2026-09-25T02-03-18-957Z_01a0d64d-822d-7454-9c5b-8b89f6cae13e.jsonl",
+      "lines": [
+        40
+      ],
+      "external_claims_reverified": false
+    },
+    {
+      "path": "recovered/topic-discussions-2026-09-25-27.md",
+      "bytes": 39106,
+      "sha256": "ab9ab0cd29786853ec97f682199ea63fea7b6016aab6e170dce998fe27427aad",
+      "source": "~/.omp/agent/sessions/-WebstormProjects-project-rebuild/2026-09-25T02-05-09-112Z_01a0d64f-3078-7408-ac35-006bfd60ae42.jsonl",
+      "lines": [
+        22,
+        38,
+        48,
+        70,
+        77,
+        87,
+        129
+      ],
+      "external_claims_reverified": false,
+      "recovered_sha256": "4b0318972a428749940ceae3eef9cb5682ffcc7375f471d8ebc22ca7f4218760",
+      "archive_adjustments": "Only machine-specific local transcript links were converted to home-relative source references."
+    }
+  ]
+}
