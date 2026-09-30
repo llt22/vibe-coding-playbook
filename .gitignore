@@ -11,3 +11,4 @@ Thumbs.db
 # Misc
 *.log
 node_modules/
+__pycache__/
