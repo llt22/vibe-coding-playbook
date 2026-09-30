@@ -1,0 +1,14 @@
+{
+  "_说明": "X 搜索查询。账号和关键词取自 research/history/2026-09-30/methods/ai-engineering-radar.md 第二节；{since} 会替换为两天前的日期。",
+  "queries": [
+    "(from:simonw OR from:karpathy OR from:mitchellh OR from:swyx OR from:_lopopolo OR from:ghuntley OR from:Vtrivedy10) min_faves:20 since:{since}",
+    "(from:AnthropicAI OR from:OpenAI OR from:Docker OR from:cursor_ai OR from:sst_dev) min_faves:50 since:{since}",
+    "(from:dotey OR from:geekbb OR from:mardehaym OR from:micci1841) min_faves:20 since:{since}",
+    "\"Claude Code\" (workflow OR skill OR hook OR subagent OR harness) min_faves:100 lang:en since:{since}",
+    "(Codex OR \"coding agent\") (workflow OR harness OR review OR eval) min_faves:100 lang:en since:{since}",
+    "(\"harness engineering\" OR \"agentic SDLC\" OR \"software factory\" OR \"dynamic workflows\") min_faves:30 since:{since}",
+    "(\"adversarial review\" OR \"agent experience\" OR \"MicroVM sandbox\") min_faves:30 since:{since}",
+    "(\"Claude Code\" OR Codex OR \"AI 编程\" OR 智能体) min_faves:50 lang:zh since:{since}",
+    "(\"Harness Engineering\" OR 研发范式 OR 代码审查门禁 OR 知识库工程) min_faves:20 lang:zh since:{since}"
+  ]
+}

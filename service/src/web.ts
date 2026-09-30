@@ -127,6 +127,8 @@ const IngestBody = z.object({
     published_at: z.string().optional(),
     metrics: z.record(z.string(), z.number()).optional(),
   })).max(500),
+  /** 推送方自身的部分失败（如某个查询出错），记为本次运行失败，但已收的条目照常入库 */
+  error: z.string().max(2000).optional(),
 });
 
 async function readBody(req: IncomingMessage, max = 2_000_000): Promise<string> {
@@ -158,10 +160,10 @@ export function handler(store: Store, catalog: Catalog) {
         if (!safeEqual(req.headers.authorization ?? '', `Bearer ${config.ingestToken}`)) return json(res, 401, { error: 'token 无效' });
         const parsed = IngestBody.safeParse(JSON.parse(await readBody(req)));
         if (!parsed.success) return json(res, 400, { error: parsed.error.issues });
-        const { source, items } = parsed.data;
+        const { source, items, error } = parsed.data;
         const run = store.startRun(`ingest:${source}`);
         const added = ingest(store, catalog, items.map((i) => ({ ...i, key: itemKey(i.url), source: `ingest:${source}` })));
-        store.finishRun(run, { fetched: items.length, newItems: added });
+        store.finishRun(run, error ? { error: `${error}（已收 ${items.length} 条，新增 ${added}）` } : { fetched: items.length, newItems: added });
         store.touchPusher(source, items.length);
         return json(res, 200, { received: items.length, added });
       }

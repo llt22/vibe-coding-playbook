@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- 每 3 小时用 Ego 里已登录的 X 会话采集一轮，推到本机服务的 /ingest；周期与 config.pushers 一致 -->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>ai-work-radar-x</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string><string>-lc</string>
+    <string>exec /Volumes/wd-512/WebstormProjects/vibe-coding-playbook/service/x/run.sh</string>
+  </array>
+  <key>StartInterval</key><integer>10800</integer>
+  <key>StandardOutPath</key><string>/Volumes/wd-512/WebstormProjects/vibe-coding-playbook/service/data/x.log</string>
+  <key>StandardErrorPath</key><string>/Volumes/wd-512/WebstormProjects/vibe-coding-playbook/service/data/x.log</string>
+</dict>
+</plist>

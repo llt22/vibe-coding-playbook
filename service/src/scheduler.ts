@@ -1,3 +1,4 @@
+import { config } from './config.ts';
 import type { Catalog } from './catalog.ts';
 import { githubSearch, githubTrending } from './collectors/github.ts';
 import { hn } from './collectors/hn.ts';
@@ -68,7 +69,9 @@ export async function tick(store: Store, catalog: Catalog, force = false) {
 export function unhealthy(store: Store): { name: string; reason: string }[] {
   const last = new Map(store.lastRuns().map((r) => [r.collector, r]));
   const out: { name: string; reason: string }[] = [];
-  for (const c of [...collectors, { name: TRIAGE, intervalHours: 0 }]) {
+  // 推送方：启用推送接口后按约定周期检查心跳
+  const pushers = config.ingestToken ? config.pushers.map((p) => ({ name: `ingest:${p.name}`, intervalHours: p.intervalHours })) : [];
+  for (const c of [...collectors, ...pushers, { name: TRIAGE, intervalHours: 0 }]) {
     const r = last.get(c.name);
     if (r?.status === 'error') out.push({ name: c.name, reason: r.error ?? '未知错误' });
     else if (c.intervalHours) {

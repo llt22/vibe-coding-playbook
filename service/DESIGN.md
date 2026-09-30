@@ -33,7 +33,7 @@
 
 每次采集都记一条运行记录，GitHub 结果顺带记星数快照，用来算增长。
 
-暂不做（第二阶段）：关注仓库的 Releases、arXiv、Reddit、V2EX、X 采集脚本本身。
+暂不做：关注仓库的 Releases、arXiv、Reddit、V2EX。
 
 ## 处理流程
 
@@ -66,13 +66,14 @@
 POST /ingest
 Authorization: Bearer $INGEST_TOKEN
 {
-  "source": "x-ego",          // 推送方名称，也作为心跳
+  "source": "x",              // 推送方名称，也作为心跳
   "items": [{ "url": "...", "title": "...", "summary": "...", "author": "...",
-              "published_at": "ISO 时间", "metrics": { "likes": 120 } }]
+              "published_at": "ISO 时间", "metrics": { "likes": 120 } }],
+  "error": "可选：推送方自身的部分失败"
 }
 ```
 
-返回新增条数。空 `items` 也合法，相当于只报心跳。
+返回新增条数。空 `items` 也合法，相当于只报心跳。带 `error` 时本次运行记为失败并在首页标红，已收条目照常入库。`config.pushers` 登记推送方的约定周期，超过两个周期没推送也标红。
 
 ## 存储
 
@@ -92,7 +93,7 @@ Authorization: Bearer $INGEST_TOKEN
 ## 分阶段
 
 1. **MVP（本次）**：上述采集器、初筛、三个页面、推送接口，在 Mac 上用 launchd 常驻。
-2. **X 采集**：Mac 上定时用 Ego 抓关注列表和关键词，推到 `/ingest`。
+2. **X 采集（已完成）**：`x/run.sh` 每 3 小时用 Ego 里已登录的 X 会话只读搜索 `x/queries.json` 里的账号和关键词（取自 ai-engineering-radar 方法文档），推到 `/ingest`。遇到登录墙直接失败，不绕过。
 3. **深度调研任务**：网页上“采纳”后生成任务，Mac worker 拉取任务（`GET /jobs/next`、`POST /jobs/:id/result`），调用现有 skill，结论以 Markdown 写回仓库并提交。
 4. **到期复查**：清单条目按状态设复查期限，到期重新进入“今日需关注”。
 5. **迁服务器**（需要时）：Docker 部署，Mac 转为 worker。
@@ -115,6 +116,7 @@ pnpm typecheck
   cp launchd/ai-work-radar.plist ~/Library/LaunchAgents/
   launchctl load ~/Library/LaunchAgents/ai-work-radar.plist
   ```
+- **X 定时采集**：`launchd/ai-work-radar-x.plist` 每 3 小时执行 `x/run.sh`，日志在 `data/x.log`。需要 Ego 已登录 X，且主服务已启用推送接口。plist 里的仓库路径按本机实际位置填写。
 - **费用**：初筛每批 10 条调用一次模型。首轮 176 条约 18 次调用，之后只处理新增。
 
 原始会话日志（Codex、Claude Code、omp）不进入本服务，也不上传服务器。

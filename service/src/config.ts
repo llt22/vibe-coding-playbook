@@ -15,6 +15,8 @@ export const config = {
   llmApiKey: process.env.LLM_API_KEY ?? '',
   llmModel: process.env.LLM_MODEL ?? '',
   triageBatch: 10,
+  /** 本机推送方及其约定周期（小时），超过两个周期没推送时首页标红 */
+  pushers: [{ name: 'x', intervalHours: 3 }],
 };
 
 /** GitHub Search 查询：限近 7 天新建、星数过阈值，按星数排序。 */
