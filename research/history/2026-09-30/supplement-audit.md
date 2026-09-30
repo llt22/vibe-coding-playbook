@@ -15,6 +15,7 @@
 | [Skill、规则与研发方法](recovered/skills-and-working-methods-2026-06-to-09.md) | TeamAI、Skill 评估、提示词删减、Matt Pocock、Spec Kit、Ponytail、Superpowers、SBA、Anthropic SDLC 等 |
 | [持续工作与 Agent 配套环境](recovered/agent-harness-and-autonomy-2026-09.md) | Stencil、Clawith、StaffDeck、Octop、Microsoft Agent Framework 的历史比较 |
 | [办公、工具与信息获取](recovered/tools-and-information-access-2026-05-to-09.md) | MiniMax Office、Qwen 多模态、Docker、Agent-Reach、PRAW、Semble、tgrep、SoL-Pi、ego、Paseo、OMP/Pi |
+| [PageIndex 仓库线索](recovered/pageindex-source-lead-2026-09.md) | 用户点名后追补：09-04 仓库检索、09-27 / 28 Thoughtworks 列表均出现过，之前遗漏于工具结果中 |
 | [Paseo 插件与跨项目接力](recovered/paseo-plugins-and-cross-project-handoff-2026-09.md) | 补回最近一轮插件讨论、跨项目接力的真实需求，以及后续失效反馈 |
 | [三个 Jev 工具评估](recovered/jev-tool-assessments-2026-09-18.md) | Review、浏览器操作、上下文压缩的原始分析 |
 | [工程雷达方法快照](methods/ai-engineering-radar.md) | `~/skills/ai-engineering-radar/SKILL.md` 的正文快照 |
@@ -66,6 +67,10 @@
 - 原会话第 60、63、66、69 行的工具结果覆盖显示行 1—1501，重叠行 253、603、1003 完全一致。去掉工具行号后，拼接为 1,500 个换行，与当时第 57 行 `wc -l` 输出一致。入库时仅规范化行尾空白并移除末尾多余空行，归档文本保留 1,499 个换行；恢复前后哈希分别记录。
 - 因此恢复了**当时会话可见的完整提取文本**，但没有原文件哈希可对照，不能声称与原 PDF 或 `pdftotext` 输出逐字节一致。提取文本不保留 PDF 的封面、图片和排版。
 - 阅读分析已在 [七篇专题讨论](recovered/topic-discussions-2026-09-25-27.md) 中；原 PDF / 版式仍是明确缺口。
+
+## PageIndex 追补暴露的检索缺口
+
+用户点名 PageIndex 后，定向检查工具输出才找到 `VectifyAI/PageIndex`。前面的候选筛选偏重用户消息和最终报告，未覆盖“已经进入工具结果但未写入结论”的资料。已补回 [来源条目](recovered/pageindex-source-lead-2026-09.md)，但这不表示已审计全部工具输出。后续同类补漏应同时检查仓库链接和资料标题，并过滤分页代码变量及重复来源。
 
 ## 本轮未覆盖的部分
 

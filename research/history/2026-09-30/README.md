@@ -98,6 +98,7 @@
 | [Skill、规则与研发方法](recovered/skills-and-working-methods-2026-06-to-09.md) | 团队配置、规则删减、评估，以及多个方法库的历史取舍 |
 | [Agent 环境与持续工作](recovered/agent-harness-and-autonomy-2026-09.md) | Clawith、StaffDeck、Octop、Stencil、Microsoft Agent Framework |
 | [办公工具与信息获取](recovered/tools-and-information-access-2026-05-to-09.md) | 办公、多模态、沙箱、检索、信源接入和工具成本 |
+| [PageIndex 仓库线索](recovered/pageindex-source-lead-2026-09.md) | 从历史工具结果补回文档索引与检索来源，尚未独立研读或实测 |
 | [Paseo 插件与跨项目接力](recovered/paseo-plugins-and-cross-project-handoff-2026-09.md) | 补回最近一轮插件讨论、跨项目接力的真实需求，以及后续失效反馈 |
 | [Jev 工具评估](recovered/jev-tool-assessments-2026-09-18.md) | 代码评分、浏览器执行、上下文压缩；独立实验另有来源索引 |
 | [工程雷达](methods/ai-engineering-radar.md)、[DeepSeek 实施方法](methods/deepseek-verified-implementation.md) | 两份个人方法的正文快照 |

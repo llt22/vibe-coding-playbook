@@ -650,8 +650,8 @@
     {
       "path": "supplement-audit.md",
       "kind": "editorial_audit_ledger",
-      "bytes": 12486,
-      "sha256": "7f610d30ea72add673feadd74e8c992c8ef6c12c4c4edf1a86f3e1b4527d0ea5",
+      "bytes": 13163,
+      "sha256": "7f4e2689fdba4a2fae21051234d037f529cf0c220523261aeedaa1ad31566c95",
       "external_claims_reverified": false,
       "scan_summary": {
         "root_session_files_screened": 1710,
@@ -718,6 +718,46 @@
         }
       ],
       "external_claims_reverified": false
+    },
+    {
+      "path": "recovered/pageindex-source-lead-2026-09.md",
+      "kind": "historical_tool_result_lead",
+      "external_claims_reverified": false,
+      "source": "Selected local tool-result excerpts; no independent repository review found in the inspected records.",
+      "tool_excerpts": [
+        {
+          "source": "~/.codex/sessions/2026/09/04/rollout-2026-09-04T23-53-45-01a06d20-3fb3-77e2-be46-1bf74024c602.jsonl",
+          "line": 343,
+          "timestamp": "2026-09-04T16:50:29.553Z",
+          "json_pointer": "/payload/item/stdout",
+          "selected_lines": [
+            "VectifyAI/PageIndex\t35517\t3129\tMIT\t2026-09-04T15:35:18Z\thttps://github.com/VectifyAI/PageIndex\t📑 PageIndex: Document Index for Vectorless, Reasoning-based RAG"
+          ],
+          "selected_text_sha256": "a1821042dc9cb22a966990a155c2b23ccee4459cf35a4653798fa0c5d4d73f87"
+        },
+        {
+          "source": "~/.omp/agent/sessions/-WebstormProjects-project-rebuild/2026-09-27T03-11-41-180Z_01a0e0d8-d27c-774c-b1b5-5400e9290a2b.jsonl",
+          "line": 81,
+          "timestamp": "2026-09-27T03:12:16.177Z",
+          "json_pointer": "/message/content/0/text",
+          "selected_lines": [
+            "- [Assess - PageIndex](https://www.thoughtworks.com/radar/tools/summary/pageindex)"
+          ],
+          "selected_text_sha256": "3bc06ff6b8b1d2994e3c470ef9e310a36be696c15c0f6199bc2c39b0ef49c920"
+        },
+        {
+          "source": "~/.omp/agent/sessions/-WebstormProjects-project-rebuild/2026-09-28T16-04-29-940Z_01a0e8c2-b674-76e4-94a1-776af44eca4b.jsonl",
+          "line": 196,
+          "timestamp": "2026-09-28T16:21:27.546Z",
+          "json_pointer": "/message/content/0/text",
+          "selected_lines": [
+            "- [Assess - PageIndex](https://www.thoughtworks.com/radar/tools/summary/pageindex)"
+          ],
+          "selected_text_sha256": "3bc06ff6b8b1d2994e3c470ef9e310a36be696c15c0f6199bc2c39b0ef49c920"
+        }
+      ],
+      "bytes": 2762,
+      "sha256": "5487d0b9539ba8128bc1f50595466aa878d01a0286b6e57c8d5d50fbacaa9cd7"
     }
   ],
   "referenced_assets": [
