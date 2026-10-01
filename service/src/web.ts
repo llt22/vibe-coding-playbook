@@ -29,7 +29,8 @@ function page(title: string, body: string, tab = '') {
 --green:oklch(.723 .219 149.579);--blue:oklch(.707 .165 254.624);--violet:oklch(.702 .183 293.541);--amber:oklch(.769 .188 70.08)}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--background);color:var(--foreground);font:14px/1.65 ui-sans-serif,-apple-system,"PingFang SC",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
-main{max-width:960px;margin:0 auto;padding:24px 16px 64px;overflow-wrap:anywhere}
+main{max-width:960px;margin:0 auto;padding:24px 16px 64px}
+.card,.report,.lead,.alert{overflow-wrap:anywhere}
 a{color:inherit;text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--border)}a:hover{text-decoration-color:currentColor}
 header{position:sticky;top:0;z-index:10;background:color-mix(in oklch,var(--background) 85%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--border)}
 header .in{max-width:960px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
