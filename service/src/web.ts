@@ -115,23 +115,33 @@ function researchStatus(r: Research) {
 }
 
 /** 极简 Markdown：标题、列表、粗体、行内代码、代码块、链接。模型输出先转义再替换，不会注入 HTML。 */
+/** 极简 Markdown：标题、列表、代码块（含列表里缩进的代码块）、行内代码/粗体/https 链接。 */
 function md(src: string) {
   const inline = (t: string) => esc(t).replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
     .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>');
   const out: string[] = [];
-  let list = false;
-  for (const block of src.split(/^```[^\n]*\n([\s\S]*?)^```$/m).map((b, i) => [b, i % 2] as const)) {
-    if (block[1]) { out.push(`<pre>${esc(block[0])}</pre>`); continue; }
-    for (const line of block[0].split('\n')) {
-      const li = line.match(/^\s*(?:[-*]|\d+\.)\s+(.*)/);
-      if (!li && list) { out.push('</ul>'); list = false; }
+  let list = '';
+  const close = () => { if (list) out.push(`</${list}>`); list = ''; };
+  const parts = src.split(/^([ \t]*)```[^\n]*\n([\s\S]*?)^[ \t]*```[ \t]*$/m);
+  for (let i = 0; i < parts.length; i += 3) {
+    for (const line of parts[i].split('\n')) {
+      const li = line.match(/^\s*(?:([-*])|(\d+)\.)\s+(.*)/);
       const h = line.match(/^(#{1,4})\s+(.*)/);
-      if (h) out.push(`<h${h[1].length + 1}>${inline(h[2])}</h${h[1].length + 1}>`);
-      else if (li) { if (!list) { out.push('<ul>'); list = true; } out.push(`<li>${inline(li[1])}</li>`); }
-      else if (line.trim()) out.push(`<p>${inline(line)}</p>`);
+      if (li) {
+        const tag = li[1] ? 'ul' : 'ol';
+        if (list !== tag) { close(); out.push(tag === 'ol' && li[2] !== '1' ? `<ol start="${li[2]}">` : `<${tag}>`); list = tag; }
+        out.push(`<li>${inline(li[3])}</li>`);
+      } else if (h) { close(); out.push(`<h${h[1].length + 1}>${inline(h[2])}</h${h[1].length + 1}>`); }
+      else if (line.trim()) { close(); out.push(`<p>${inline(line)}</p>`); }
     }
-    if (list) { out.push('</ul>'); list = false; }
+    // 列表项里的代码块带缩进，去掉同样的缩进；列表在此断开，有序列表靠 start 接上编号
+    if (i + 2 < parts.length) {
+      const indent = parts[i + 1].length;
+      close();
+      out.push(`<pre>${esc(parts[i + 2].replace(/\n$/, '').split('\n').map((l) => l.slice(Math.min(indent, l.length - l.trimStart().length))).join('\n'))}</pre>`);
+    }
   }
+  close();
   return out.join('\n');
 }
 
