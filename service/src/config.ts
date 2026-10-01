@@ -16,8 +16,8 @@ export const config = {
   llmModel: process.env.LLM_MODEL ?? '',
   triageBatch: 10,
   /** 自动深入调研：每小时最多处理几条、每 24 小时上限、单条最多重试次数 */
-  researchPerRun: 3,
-  researchPerDay: 8,
+  researchPerRun: 5,
+  researchPerDay: 30,
   researchMaxAttempts: 3,
   /** 调研报告写到仓库的这个目录；RESEARCH_GIT_COMMIT=0 时只写文件不提交 */
   repoRoot: resolve(ROOT, '..'),
