@@ -178,8 +178,8 @@ function home(store: Store) {
   const cards = list.map((p) => `<div class="card"><h3><a href="/playbooks/${esc(p.slug)}">${esc(p.title)}</a></h3>
 <p>${esc(p.problem)}</p><p><span class="badge">先试这一步</span> ${esc(p.first_step)}</p><span class="muted">最近修订 ${time(p.updated_at)} · 依据 ${store.countResearch('playbook = ?', [p.slug])} 篇调研 · ${esc(p.file)}</span></div>`).join('');
   return page('手册', `<h1>可执行手册</h1>` + alerts(store)
-    + `<p class="lead">按工作场景组织的可执行手册：适用条件、编号步骤、判断标准、常见坑。模型把“建议采用 / 值得一试”的调研每天合并进来并持续修订${pending ? `，待合并 ${pending} 篇` : ''}。均未经实测，人工验证过的做法在仓库 experiences/。</p>`
-    + (cards || '<p class="muted">还没有手册。有“建议采用 / 值得一试”的调研后，每天自动合并生成。</p>'), '/');
+    + `<p class="lead">按工作场景组织的可执行手册：适用条件、编号步骤、判断标准、常见坑。模型把“建议采用 / 值得一试”的调研每小时合并进来并持续修订${pending ? `，待合并 ${pending} 篇` : ''}。均未经实测，人工验证过的做法在仓库 experiences/。</p>`
+    + (cards || '<p class="muted">还没有手册。有“建议采用 / 值得一试”的调研后，每小时自动合并生成。</p>'), '/');
 }
 
 function playbookPage(store: Store, slug: string) {

@@ -25,7 +25,7 @@ export const config = {
   /** 手册：目录、每次最多给多少条调研分配手册、每次最多修订几篇 */
   playbookDir: 'playbooks',
   playbookAssignBatch: 20,
-  playbookPerRun: 4,
+  playbookPerRun: 6,
   /** 本机推送方及其约定周期（小时），超过两个周期没推送时首页标红 */
   pushers: [{ name: 'x', intervalHours: 3 }],
 };

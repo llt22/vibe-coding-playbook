@@ -13,7 +13,7 @@ import { runTriage } from './triage.ts';
 export const collectors: Collector[] = [githubSearch, githubActive, githubTrending, hn, rss, pages];
 export const TRIAGE = 'triage';
 export const RESEARCH = 'research';
-export const PLAYBOOK = { name: 'playbook', intervalHours: 24 };
+export const PLAYBOOK = 'playbook';
 export const DIGEST = { name: 'digest', intervalHours: 168 };
 /** 调研失败后至少隔这么久再试，避免每分钟重试刷接口 */
 const RESEARCH_EVERY_HOURS = 1;
@@ -68,12 +68,12 @@ async function research(store: Store, catalog: Catalog) {
   }
 }
 
-/** 每天把新的 adopt/try 调研合并进手册；失败后隔 1 小时再试。 */
+/** 有未合并的 adopt/try 调研就合并进手册，最多每小时一次，和调研同节奏，不攒批。 */
 async function playbook(store: Store) {
-  if (!due(store, PLAYBOOK) || !store.research(`status='done' AND verdict IN ('adopt', 'try') AND playbook IS NULL`, [], 1).length) return;
-  const last = store.lastStart(PLAYBOOK.name);
+  if (!store.research(`status='done' AND verdict IN ('adopt', 'try') AND playbook IS NULL`, [], 1).length) return;
+  const last = store.lastStart(PLAYBOOK);
   if (last && Date.now() - Date.parse(last) < RESEARCH_EVERY_HOURS * 3600_000) return;
-  const run = store.startRun(PLAYBOOK.name);
+  const run = store.startRun(PLAYBOOK);
   try {
     store.finishRun(run, { fetched: await runPlaybook(store), newItems: 0 });
   } catch (e) {
@@ -122,7 +122,7 @@ export function unhealthy(store: Store): { name: string; reason: string }[] {
   const out: { name: string; reason: string }[] = [];
   // 推送方：启用推送接口后按约定周期检查心跳
   const pushers = config.ingestToken ? config.pushers.map((p) => ({ name: `ingest:${p.name}`, intervalHours: p.intervalHours })) : [];
-  for (const c of [...collectors, ...pushers, { name: TRIAGE, intervalHours: 0 }, { name: RESEARCH, intervalHours: 0 }, { name: PLAYBOOK.name, intervalHours: 0 }, DIGEST]) {
+  for (const c of [...collectors, ...pushers, { name: TRIAGE, intervalHours: 0 }, { name: RESEARCH, intervalHours: 0 }, { name: PLAYBOOK, intervalHours: 0 }, DIGEST]) {
     const r = last.get(c.name);
     if (r?.status === 'error') out.push({ name: c.name, reason: r.error ?? '未知错误' });
     else if (c.intervalHours) {
