@@ -8,8 +8,8 @@ agent 每次准备结束一轮时触发，分三层，越往后越贵，前一�
 
 1. **防死循环**：同一轮用户消息里已经拦过 `STOP_GUARD_MAX_BLOCKS` 次（默认 2），直接放行。
 2. **零成本规则**（正则，不发请求）：
-   - 最后一段在要密码、授权，或确认删除、force push 这类危险操作 → 放行；
-   - 没有提问、请确认、"下一步"、"还没完成"这类迹象 → 放行。
+   - 末尾自检行写"自检：未完成…" → 直接拦，让 agent 做完剩下的；写"自检：需要你提供…" → 交给模型判是否真的只有用户能给；
+   - 去掉自检行后，没有提问、请确认、"下一步"、"还没完成"这类迹象 → 放行（要凭据、授权这类交给模型判）。
 3. **便宜模型**（OpenAI 兼容接口，默认复用 DeepSeek）：剩下拿不准的，把消息归为 A 已完成、B 需用户提供、C 请用户确认方案、D 没做完就停。C、D 拦住，并把模型给的"接下来该做什么"喂回 agent。
 
 出错、超时、缺配置一律放行，不卡住主 agent，但会写进日志。
@@ -48,7 +48,7 @@ cp tools/stop-guard/stop-guard.env.example ~/.claude/hooks/stop-guard/stop-guard
 `~/.claude/hooks/stop-guard/logs/stop-guard.jsonl`，每次判断一行：
 
 - `decision`：`allow` 放行 / `block` 拦住
-- `by`：`limit` 防死循环、`rule` 规则、`llm` 模型、`error` 出错放行
+- `by`：`limit` 防死循环、`rule` 规则、`self-check` 自检行、`llm` 模型、`error` 出错放行
 - `category`、`reason`：模型的分类和理由；`ms`：模型耗时
 - `msg`：agent 最后一条消息的末尾 160 字
 

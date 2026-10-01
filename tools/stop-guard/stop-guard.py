@@ -3,7 +3,8 @@
 
 分三层，越往后越贵，前一层能定的不进下一层：
 1. 防死循环：同一轮用户消息里最多拦 MAX_BLOCKS 次。
-2. 零成本规则：没有"提问/待续"迹象的直接放行（要凭据、授权这类交给模型判，关键词太容易误放）。
+2. 零成本规则：先看回复末尾的"自检："行（见 CLAUDE.md），写"未完成"直接拦，写"需要你提供"交给模型判；
+   其余没有"提问/待续"迹象的直接放行（要凭据、授权这类交给模型判，关键词太容易误放）。
 3. 便宜模型（OpenAI 兼容接口，默认复用 DeepSeek）判断剩下拿不准的。
 
 任何异常都放行（不卡住主 agent），但写进日志，保证可观察。
@@ -29,6 +30,9 @@ SUSPECT = re.compile(
     r"shall i|should i|want me to|would you like|let me know|next step",
     re.I,
 )
+
+# 回复末尾的自检行，如"自检：未完成，还差 X"
+SELF_CHECK = re.compile(r"^\s*自检[：:]\s*(.+?)\s*$", re.M)
 
 SYSTEM_PROMPT = """你是编码 agent 的"停止守门员"。agent 刚准备结束这一轮、把控制权交还给用户。判断这次停下是否合理。
 
@@ -151,8 +155,22 @@ def main():
     if not message:
         log({**base, "decision": "allow", "by": "rule", "why": "无文本"})
         return say("放行 · 规则：无文本")
-    tail = message[-600:]
-    if not SUSPECT.search(tail):
+    checks = SELF_CHECK.findall(message[-600:])
+    check = checks[-1] if checks else ""
+    if check.startswith("未完成"):
+        open(state, "w").write(str(count + 1))
+        log({**base, "decision": "block", "by": "self-check", "blocks": count + 1, "check": check})
+        return say(
+            f"拦截 · 自检写了{check}（第 {count + 1}/{max_blocks} 次）",
+            decision="block",
+            reason=(
+                f"[stop-guard] 你的自检写的是「{check}」，请继续把剩下的做完。"
+                "如果确实做不下去，说明阻塞原因，并把自检改成「需要你提供 Y」。"
+            ),
+        )
+    # 自检行挂在末尾会挡住"以问号结尾"等规则，先去掉再判
+    tail = SELF_CHECK.sub("", message).strip()[-600:]
+    if not check.startswith("需要你提供") and not SUSPECT.search(tail):
         log({**base, "decision": "allow", "by": "rule", "why": "无停早迹象"})
         return say("放行 · 规则：无停早迹象")
 
