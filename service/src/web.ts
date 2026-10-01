@@ -44,7 +44,7 @@ h1{font-size:24px;font-weight:600;margin:8px 0 12px}h2{font-size:18px;font-weigh
 .muted{color:var(--muted-foreground);font-size:13px}
 .card{background:var(--card);border:1px solid var(--border);border-radius:calc(var(--radius) + 4px);padding:16px 20px;margin-bottom:12px;box-shadow:0 1px 2px rgb(0 0 0/.04)}
 .card h3{font-size:16px;font-weight:600;margin:0 0 6px}.card h3 a{text-decoration:none}.card h3 a:hover{text-decoration:underline}
-.card p{margin:6px 0}
+.card p{margin:6px 0}.card .muted{overflow-wrap:anywhere}
 .badge{display:inline-flex;align-items:center;border:1px solid var(--border);border-radius:calc(var(--radius) - 4px);padding:0 8px;font-size:12px;font-weight:500;line-height:20px;white-space:nowrap;vertical-align:2px;text-decoration:none}
 .alert{border:1px solid color-mix(in oklch,var(--destructive) 40%,transparent);color:var(--destructive);background:color-mix(in oklch,var(--destructive) 6%,var(--background));border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;white-space:pre-wrap}
 .alert.warn{border-color:color-mix(in oklch,var(--amber) 40%,transparent);color:inherit;background:color-mix(in oklch,var(--amber) 8%,var(--background))}
@@ -54,12 +54,15 @@ h1{font-size:24px;font-weight:600;margin:8px 0 12px}h2{font-size:18px;font-weigh
 .table{border:1px solid var(--border);border-radius:var(--radius);overflow-x:auto;background:var(--card)}
 table{border-collapse:collapse;width:100%;min-width:640px}
 th{text-align:left;font-weight:500;color:var(--muted-foreground);padding:10px 12px;border-bottom:1px solid var(--border);white-space:nowrap}
+.nw{white-space:nowrap}.meta{min-width:150px}
+.clamp{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;margin-top:4px}
 td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:top}tr:last-child td{border-bottom:0}tbody tr:hover,tr:hover td{background:color-mix(in oklch,var(--muted) 50%,transparent)}
 .report{background:var(--card);border:1px solid var(--border);border-radius:calc(var(--radius) + 4px);padding:4px 24px 16px}
 .report h2{font-size:17px;padding-top:8px;border-top:1px solid var(--border)}.report h2:first-child{border-top:0}
 .report pre{background:var(--muted);border-radius:var(--radius);padding:12px 14px;overflow:auto;font-size:13px}
 code{font:12.5px ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--muted);padding:1px 5px;border-radius:4px}pre code{background:none;padding:0}
 form{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin:0 0 16px}
+select{max-width:220px;text-overflow:ellipsis}
 select,button{font:inherit;font-size:13px;height:32px;padding:0 10px;border:1px solid var(--border);border-radius:calc(var(--radius) - 2px);background:var(--background);color:inherit}
 button{background:var(--primary);color:var(--primary-foreground);border-color:var(--primary);font-weight:500;cursor:pointer}button:hover{opacity:.9}
 @media (max-width:640px){main{padding:16px 12px 48px}.card{padding:14px 16px}.report{padding:4px 16px 12px}h1{font-size:20px}}
@@ -93,8 +96,8 @@ function itemRows(items: Item[], store: Store, catalog: Catalog) {
       : i.triage_status === 'pending' ? '<span class="muted">待初筛</span>'
       : `<span class="r${i.relevance}">${i.relevance}</span> ${esc(i.reason)}<br><span class="muted">${(JSON.parse(i.questions ?? '[]') as number[]).map((q) => esc(QUESTIONS[q]?.split('：')[0])).join('、')}</span>`;
     const r = store.research('item_id = ?', [i.id], 1)[0];
-    return `<tr><td><a href="${esc(i.url)}" target="_blank" rel="noreferrer">${esc(i.title)}</a><br><span class="muted">${esc(i.summary.slice(0, 200))}</span></td>
-<td>${triage}</td><td class="muted">${esc(i.source)}<br>${esc(heat(i, store))}<br>${time(i.first_seen_at)}</td>
+    return `<tr><td><a href="${esc(i.url)}" target="_blank" rel="noreferrer">${esc(i.title)}</a><span class="muted clamp">${esc(i.summary.slice(0, 200))}</span></td>
+<td>${triage}</td><td class="muted meta">${esc(i.source)}<br>${esc(heat(i, store))}<br>${time(i.first_seen_at)}</td>
 <td>${r ? researchStatus(r) : '<span class="muted">—</span>'}</td></tr>`;
   });
   return `<div class="table"><table><tr><th>线索</th><th>初筛</th><th>来源 · 热度 · 发现</th><th>深入调研</th></tr>${rows.join('')}</table></div>`;
@@ -205,12 +208,12 @@ function candidates(store: Store, catalog: Catalog, q: URLSearchParams) {
 }
 
 function runs(store: Store) {
-  const row = (r: Run) => `<tr><td>${esc(r.collector)}</td><td>${time(r.started_at)}</td>
+  const row = (r: Run) => `<tr><td class="nw">${esc(r.collector)}</td><td class="nw">${time(r.started_at)}</td>
 <td class="${r.status === 'error' ? 'err' : r.status === 'ok' ? 'ok' : 'muted'}">${r.status}</td><td>${r.fetched}</td><td>${r.new_items}</td>
-<td class="err" style="white-space:pre-wrap">${esc(r.error)}</td></tr>`;
+<td class="err" style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(r.error)}</td></tr>`;
   const pushers = store.pushers();
   return page('运行记录', `<h1>运行记录</h1>` + alerts(store)
-    + `<h2>推送方心跳</h2>${pushers.length ? `<div class="table"><table><tr><th>名称</th><th>最后推送</th><th>条数</th></tr>${pushers.map((p) => `<tr><td>${esc(p.name)}</td><td>${time(p.last_seen_at)}</td><td>${p.last_count}</td></tr>`).join('')}</table></div>` : '<p class="muted">还没有推送方。</p>'}`
+    + `<h2>推送方心跳</h2>${pushers.length ? `<div class="table"><table><tr><th>名称</th><th>最后推送</th><th>条数</th></tr>${pushers.map((p) => `<tr><td>${esc(p.name)}</td><td class="nw">${time(p.last_seen_at)}</td><td>${p.last_count}</td></tr>`).join('')}</table></div>` : '<p class="muted">还没有推送方。</p>'}`
     + `<h2>最近运行</h2><div class="table"><table><tr><th>采集器</th><th>开始</th><th>状态</th><th>抓取</th><th>新增</th><th>错误</th></tr>${store.recentRuns().map(row).join('')}</table></div>`, '/runs');
 }
 
