@@ -14,7 +14,7 @@ const CATALOG_STATUS: Record<string, string> = { adopt: '已采用', try: '可�
 
 const time = (iso: string | null) => (iso ? new Date(iso).toLocaleString('zh-CN', { hour12: false }) : '—');
 
-const TABS = [['/', '手册'], ['/research', '调研证据'], ['/candidates', '全部线索'], ['/runs', '运行记录']] as const;
+const TABS = [['/', '手册'], ['/research', '调研证据'], ['/candidates', '线索'], ['/repos', '仓库'], ['/runs', '运行记录']] as const;
 
 /** 样式沿用 shadcn/ui 默认 neutral 主题的变量和组件外观（卡片、徽章、表格），随系统切换深色。 */
 function page(title: string, body: string, tab = '') {
@@ -230,8 +230,10 @@ ${r.playbook ? `<p>已合并进手册 <a href="/playbooks/${esc(r.playbook)}">${
 <div class="report">${md(r.body ?? '')}</div>`, '/research');
 }
 
-function candidates(store: Store, catalog: Catalog, q: URLSearchParams) {
-  const where: string[] = [];
+/** 线索页和仓库页共用：仓库页只看 GitHub 仓库（key 以 github: 开头），可按星数排序；线索页排除仓库。 */
+function candidates(store: Store, catalog: Catalog, q: URLSearchParams, repos = false) {
+  const kind = `key ${repos ? '' : 'NOT '}LIKE 'github:%'`;
+  const where: string[] = [kind];
   const params: (string | number)[] = [];
   for (const [k, col] of [['source', 'source'], ['triage', 'triage_status']] as const) {
     const v = q.get(k);
@@ -245,16 +247,20 @@ function candidates(store: Store, catalog: Catalog, q: URLSearchParams) {
   const w = where.join(' AND ') || '1=1';
   const total = store.count(w, params);
   const { offset, nav } = pager(q, total, 50);
-  const items = store.items(`${w} ORDER BY first_seen_at DESC`, params, 50, offset);
-  const sources = (store.db.prepare(`SELECT DISTINCT source FROM items ORDER BY source`).all() as { source: string }[]).map((r) => r.source);
+  const order = repos && q.get('sort') === 'stars' ? `CAST(json_extract(metrics, '$.stars') AS INTEGER) DESC, first_seen_at DESC` : 'first_seen_at DESC';
+  const items = store.items(`${w} ORDER BY ${order}`, params, 50, offset);
+  const sources = (store.db.prepare(`SELECT DISTINCT source FROM items WHERE ${kind} ORDER BY source`).all() as { source: string }[]).map((r) => r.source);
   const select = (name: string, opts: [string, string][]) =>
     `<select name="${name}"><option value="">全部</option>${opts.map(([v, l]) => `<option value="${esc(v)}"${q.get(name) === v ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
-  const form = `<form><label>来源 ${select('source', sources.map((s) => [s, s]))}</label>
+  const sort = repos ? `<label>排序 <select name="sort"><option value="">最新发现</option><option value="stars"${q.get('sort') === 'stars' ? ' selected' : ''}>星数</option></select></label>
+ ` : '';
+  const form = `<form>${sort}<label>来源 ${select('source', sources.map((s) => [s, s]))}</label>
  <label>初筛 ${select('triage', [['done', '已初筛'], ['pending', '待初筛'], ['error', '失败'], ['known', '已在清单']])}</label>
  <label>问题 ${select('question', Object.entries(QUESTIONS).map(([k, v]) => [k, v.split('：')[0]]))}</label>
  <label>相关度 ≥ ${select('min', [['1', '1'], ['2', '2'], ['3', '3']])}</label>
  <label><input type="checkbox" name="deep" value="1"${q.get('deep') ? ' checked' : ''}> 只看模型选中深入的</label> <button>筛选</button></form>`;
-  return page('全部线索', `<h1>全部线索（${total}）</h1>${form}` + itemRows(items, store, catalog) + nav, '/candidates');
+  const [title, path] = repos ? ['仓库', '/repos'] : ['线索', '/candidates'];
+  return page(title, `<h1>${title}（${total}）</h1>${form}` + itemRows(items, store, catalog) + nav, path);
 }
 
 function runs(store: Store, q: URLSearchParams) {
@@ -329,6 +335,7 @@ export function handler(store: Store, catalog: Catalog) {
       if (req.method === 'GET' && url.pathname === '/') return send(res, 200, home(store));
       if (req.method === 'GET' && url.pathname === '/research') return send(res, 200, evidence(store, url.searchParams));
       if (req.method === 'GET' && url.pathname === '/candidates') return send(res, 200, candidates(store, catalog, url.searchParams));
+      if (req.method === 'GET' && url.pathname === '/repos') return send(res, 200, candidates(store, catalog, url.searchParams, true));
       if (req.method === 'GET' && url.pathname === '/runs') return send(res, 200, runs(store, url.searchParams));
       const m = url.pathname.match(/^\/research\/(\d+)$/);
       const pb = url.pathname.match(/^\/playbooks\/([a-z0-9-]+)$/);
