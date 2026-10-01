@@ -241,10 +241,6 @@ export class Store {
     return rows.map((r) => ({ ...r, item: this.db.prepare(`SELECT * FROM items WHERE id=?`).get(r.item_id) as Item }));
   }
 
-  researchedSince(iso: string): number {
-    return (this.db.prepare(`SELECT COUNT(*) AS n FROM research WHERE status='done' AND updated_at >= ?`).get(iso) as { n: number }).n;
-  }
-
   setResearch(id: number, r: { verdict: string; conclusion: string; body: string; file: string | null }) {
     this.db.prepare(`UPDATE research SET status='done', attempts=attempts+1, verdict=?, conclusion=?, body=?, file=?, error=NULL, updated_at=? WHERE id=?`)
       .run(r.verdict, r.conclusion, r.body, r.file, now(), id);

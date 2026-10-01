@@ -216,7 +216,7 @@ function evidence(store: Store, q: URLSearchParams) {
 <span class="badge v-${esc(r.verdict)}">${esc(VERDICTS[r.verdict ?? ''] ?? r.verdict)}</span> ${esc(r.conclusion)}<br><span class="muted">${esc(r.item.source)} · ${time(r.updated_at)} · <a href="${esc(r.item.url)}" target="_blank" rel="noreferrer">原文</a>${r.file ? ` · ${esc(r.file)}` : ''}</span></div>`).join('');
   const failures = failed.length && !offset ? `<h2>调研失败（${failed.length}）</h2>` + failed.map((r) => `<div class="card"><a href="${esc(r.item.url)}" target="_blank" rel="noreferrer">${esc(r.item.title)}</a><br>${researchStatus(r)}</div>`).join('') + '<h2>已完成</h2>' : '';
   return page('调研证据', `<h1>调研证据</h1>` + alerts(store)
-    + `<p class="lead">每条线索的调研报告，是手册的素材。近 7 天采集 ${week} 条，模型挑出 ${deep} 条深入调研；近 14 天完成 ${recent} 条，排队 ${queued} 条。每小时最多调研 ${config.researchPerRun} 条、每天最多 ${config.researchPerDay} 条，报告同时提交到仓库 ${esc(config.researchDir)}/。</p>`
+    + `<p class="lead">每条线索的调研报告，是手册的素材。近 7 天采集 ${week} 条，模型挑出 ${deep} 条深入调研；近 14 天完成 ${recent} 条，排队 ${queued} 条。每小时最多调研 ${config.researchPerRun} 条，报告同时提交到仓库 ${esc(config.researchDir)}/。</p>`
     + failures + chips + (cards || '<p class="muted">还没有完成的调研。模型初筛时会自动挑选值得深入的线索。</p>') + nav, '/research');
 }
 

@@ -123,8 +123,7 @@ export function commit(files: string[], message: string) {
 /** 调研一批模型标记为 deep 的条目。返回处理条数；有条目失败或提交失败时抛出，由调度记为失败。 */
 export async function runResearch(store: Store, catalog: Catalog): Promise<number> {
   requireModel();
-  const quota = config.researchPerDay - store.researchedSince(new Date(Date.now() - 86400_000).toISOString());
-  const batch = quota > 0 ? store.pendingResearch(Math.min(config.researchPerRun, quota), config.researchMaxAttempts) : [];
+  const batch = store.pendingResearch(config.researchPerRun, config.researchMaxAttempts);
   const files: string[] = [];
   const titles: string[] = [];
   const errors: string[] = [];
