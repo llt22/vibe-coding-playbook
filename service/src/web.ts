@@ -65,7 +65,11 @@ form{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin:0 0 16px
 select{max-width:220px;text-overflow:ellipsis}
 select,button{font:inherit;font-size:13px;height:32px;padding:0 10px;border:1px solid var(--border);border-radius:calc(var(--radius) - 2px);background:var(--background);color:inherit}
 button{background:var(--primary);color:var(--primary-foreground);border-color:var(--primary);font-weight:500;cursor:pointer}button:hover{opacity:.9}
-@media (max-width:640px){main{padding:16px 12px 48px}.card{padding:14px 16px}.report{padding:4px 16px 12px}h1{font-size:20px}}
+@media (max-width:640px){main{padding:16px 12px 48px}.card{padding:14px 16px}.report{padding:4px 16px 12px}h1{font-size:20px}header b{display:none}
+.runs table{min-width:0}.runs tr:first-child{display:none}.runs tr{display:flex;flex-wrap:wrap;gap:0 12px;padding:8px 14px;border-bottom:1px solid var(--border)}.runs tr:last-child{border-bottom:0}
+.runs td{padding:0;border:0}.runs td:nth-child(4)::before{content:"抓取 ";color:var(--muted-foreground)}.runs td:nth-child(5)::before{content:"新增 ";color:var(--muted-foreground)}.runs td:nth-child(6){flex-basis:100%}.runs td:nth-child(6):empty{display:none}
+.stack table{min-width:0}.stack tr:first-child{display:none}.stack tr{display:block;padding:10px 0;border-bottom:1px solid var(--border)}.stack tr:last-child{border-bottom:0}
+.stack td{display:block;border:0;padding:3px 14px}.stack td:nth-child(2)::before{content:"初筛 ";color:var(--muted-foreground);font-size:12px}.stack td:nth-child(4)::before{content:"深入调研 ";color:var(--muted-foreground);font-size:12px}}
 </style>
 <header><div class="in"><b>AI 工作方法手册</b><nav class="tabs">${TABS.map(([href, label]) => `<a href="${href}"${tab === href ? ' class="on"' : ''}>${label}</a>`).join('')}</nav></div></header>
 <main>${body}</main></html>`;
@@ -100,7 +104,7 @@ function itemRows(items: Item[], store: Store, catalog: Catalog) {
 <td>${triage}</td><td class="muted meta">${esc(i.source)}<br>${esc(heat(i, store))}<br>${time(i.first_seen_at)}</td>
 <td>${r ? researchStatus(r) : '<span class="muted">—</span>'}</td></tr>`;
   });
-  return `<div class="table"><table><tr><th>线索</th><th>初筛</th><th>来源 · 热度 · 发现</th><th>深入调研</th></tr>${rows.join('')}</table></div>`;
+  return `<div class="table stack"><table><tr><th>线索</th><th>初筛</th><th>来源 · 热度 · 发现</th><th>深入调研</th></tr>${rows.join('')}</table></div>`;
 }
 
 function researchStatus(r: Research) {
@@ -214,7 +218,7 @@ function runs(store: Store) {
   const pushers = store.pushers();
   return page('运行记录', `<h1>运行记录</h1>` + alerts(store)
     + `<h2>推送方心跳</h2>${pushers.length ? `<div class="table"><table><tr><th>名称</th><th>最后推送</th><th>条数</th></tr>${pushers.map((p) => `<tr><td>${esc(p.name)}</td><td class="nw">${time(p.last_seen_at)}</td><td>${p.last_count}</td></tr>`).join('')}</table></div>` : '<p class="muted">还没有推送方。</p>'}`
-    + `<h2>最近运行</h2><div class="table"><table><tr><th>采集器</th><th>开始</th><th>状态</th><th>抓取</th><th>新增</th><th>错误</th></tr>${store.recentRuns().map(row).join('')}</table></div>`, '/runs');
+    + `<h2>最近运行</h2><div class="table runs"><table><tr><th>采集器</th><th>开始</th><th>状态</th><th>抓取</th><th>新增</th><th>错误</th></tr>${store.recentRuns().map(row).join('')}</table></div>`, '/runs');
 }
 
 const IngestBody = z.object({
