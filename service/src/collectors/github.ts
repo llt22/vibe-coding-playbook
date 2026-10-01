@@ -1,4 +1,4 @@
-import { config, githubMinStars, githubQueries } from '../config.ts';
+import { config, githubActiveQueries, githubMinStars, githubQueries } from '../config.ts';
 import { getJson, getText } from '../http.ts';
 import type { Collector, RawItem } from './types.ts';
 
@@ -27,18 +27,37 @@ export const githubSearch: Collector = {
       const query = `${q} created:>${daysAgo(7)} stars:>=${githubMinStars}`;
       const url = `https://api.github.com/search/repositories?q=${encodeURIComponent(query)}&sort=stars&order=desc&per_page=30`;
       const res = await getJson<{ items: SearchRepo[] }>(url, headers());
-      for (const r of res.items) {
-        out.push({
-          key: `github:${r.full_name.toLowerCase()}`,
-          source: 'github-search',
-          title: r.full_name,
-          url: r.html_url,
-          summary: r.description ?? '',
-          author: r.owner.login,
-          published_at: r.created_at,
-          metrics: { stars: r.stargazers_count },
-        });
-      }
+      out.push(...res.items.map((r) => toItem(r, 'github-search')));
+    }
+    return out;
+  },
+};
+
+const toItem = (r: SearchRepo, source: string): RawItem => ({
+  key: `github:${r.full_name.toLowerCase()}`,
+  source,
+  title: r.full_name,
+  url: r.html_url,
+  summary: r.description ?? '',
+  author: r.owner.login,
+  published_at: r.created_at,
+  metrics: { stars: r.stargazers_count },
+});
+
+/** 未配置 token 时搜索接口每分钟限 10 次，查询之间留间隔，避免和 github-search 同一轮撞上限流 */
+const SEARCH_GAP_MS = 7000;
+
+export const githubActive: Collector = {
+  name: 'github-active',
+  intervalHours: 24,
+  async collect() {
+    const out: RawItem[] = [];
+    for (const [i, { q, minStars }] of githubActiveQueries.entries()) {
+      if (i) await new Promise((r) => setTimeout(r, SEARCH_GAP_MS));
+      const query = `${q} pushed:>${daysAgo(7)} stars:>=${minStars}`;
+      const url = `https://api.github.com/search/repositories?q=${encodeURIComponent(query)}&sort=stars&order=desc&per_page=30`;
+      const res = await getJson<{ items: SearchRepo[] }>(url, headers());
+      out.push(...res.items.map((r) => toItem(r, 'github-active')));
     }
     return out;
   },

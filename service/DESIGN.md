@@ -28,6 +28,7 @@
 | 采集器 | 方式 | 频率 | 说明 |
 |---|---|---|---|
 | `github-search` | Search API，按关键词/topic，限近 7 天新建且星数过阈值 | 6 小时 | 无 token 每分钟 10 次，够用；设 `GITHUB_TOKEN` 可提高限额 |
+| `github-active` | Search API，不限创建时间，近 7 天有推送且星数过 500/1000，补上只看新建会漏掉的成熟项目 | 每天 | 4 条查询之间隔 7 秒，避开无 token 时的限流 |
 | `github-trending` | 解析 github.com/trending 页面 | 每天 | 无官方 API；解析出 0 条视为失败 |
 | `hn` | HN Algolia API，按关键词，限分数阈值 | 3 小时 | |
 | `rss` | 博客、newsletter 和官方博客的 feed（含 claude.dev、OpenAI News） | 6 小时 | 每个 feed 单独记成功或失败 |

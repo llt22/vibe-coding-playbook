@@ -42,6 +42,14 @@ export const githubQueries = [
 ];
 export const githubMinStars = 30;
 
+/** 成熟项目：不限创建时间，近 7 天有推送、星数过阈值。补上 github-search 只看新建仓库而漏掉的老牌高星项目。 */
+export const githubActiveQueries = [
+  { q: '"claude code" OR codex OR opencode OR "coding agent"', minStars: 1000 },
+  { q: 'topic:ai-agents', minStars: 1000 },
+  { q: 'topic:agent-skills', minStars: 500 },
+  { q: 'topic:claude-skills', minStars: 500 },
+];
+
 /** HN Algolia 查询：限近 3 天、分数过阈值的 story。 */
 export const hnQueries = ['claude code', 'codex', 'ai agent', 'llm', 'mcp', 'cursor'];
 export const hnMinPoints = 30;

@@ -1,6 +1,6 @@
 import { config } from './config.ts';
 import type { Catalog } from './catalog.ts';
-import { githubSearch, githubTrending } from './collectors/github.ts';
+import { githubActive, githubSearch, githubTrending } from './collectors/github.ts';
 import { hn } from './collectors/hn.ts';
 import { pages } from './collectors/pages.ts';
 import { rss } from './collectors/rss.ts';
@@ -10,7 +10,7 @@ import { runPlaybook, writeDigest } from './playbook.ts';
 import { runResearch } from './research.ts';
 import { runTriage } from './triage.ts';
 
-export const collectors: Collector[] = [githubSearch, githubTrending, hn, rss, pages];
+export const collectors: Collector[] = [githubSearch, githubActive, githubTrending, hn, rss, pages];
 export const TRIAGE = 'triage';
 export const RESEARCH = 'research';
 export const PLAYBOOK = { name: 'playbook', intervalHours: 24 };
