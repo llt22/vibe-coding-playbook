@@ -57,6 +57,11 @@ th{text-align:left;font-weight:500;color:var(--muted-foreground);padding:10px 12
 .nw{white-space:nowrap}.meta{min-width:150px}
 .clamp{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;margin-top:4px}
 td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:top}tr:last-child td{border-bottom:0}tbody tr:hover,tr:hover td{background:color-mix(in oklch,var(--muted) 50%,transparent)}
+.pager{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin:16px 0}
+.pager a,.pager span{min-width:32px;height:32px;padding:0 10px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:calc(var(--radius) - 2px);text-decoration:none;white-space:nowrap}
+.pager .on,.chips a.on{background:var(--primary);color:var(--primary-foreground);border-color:var(--primary)}.pager .gap{border:0;min-width:16px;padding:0}.pager .off{color:var(--muted-foreground);opacity:.5}
+.pager .total{border:0;color:var(--muted-foreground);font-size:13px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 16px}.chips a{line-height:26px}
 .report{background:var(--card);border:1px solid var(--border);border-radius:calc(var(--radius) + 4px);padding:4px 24px 16px}
 .report h2{font-size:17px;padding-top:8px;border-top:1px solid var(--border)}.report h2:first-child{border-top:0}
 .report pre{background:var(--muted);border-radius:var(--radius);padding:12px 14px;overflow:auto;font-size:13px}
@@ -108,6 +113,28 @@ function itemRows(items: Item[], store: Store, catalog: Catalog) {
   return `<div class="table stack"><table><tr><th>线索</th><th>初筛</th><th>来源 · 热度 · 发现</th><th>深入调研</th></tr>${rows.join('')}</table></div>`;
 }
 
+/** 从 ?p= 取页码，返回本页 offset 和分页条；分页链接保留其他查询参数，只有一页时不显示。 */
+function pager(q: URLSearchParams, total: number, size: number) {
+  const pages = Math.max(1, Math.ceil(total / size));
+  const cur = Math.min(pages, Math.max(1, Math.floor(Number(q.get('p'))) || 1));
+  const href = (n: number) => {
+    const u = new URLSearchParams(q);
+    if (n > 1) u.set('p', String(n)); else u.delete('p');
+    return `?${u}`;
+  };
+  const step = (n: number, label: string) => (n < 1 || n > pages ? `<span class="off">${label}</span>` : `<a href="${esc(href(n))}">${label}</a>`);
+  const nums: string[] = [];
+  let last = 0;
+  for (let n = 1; n <= pages; n++) {
+    if (n !== 1 && n !== pages && Math.abs(n - cur) > 2) continue;
+    if (n - last > 1) nums.push('<span class="gap">…</span>');
+    nums.push(n === cur ? `<span class="on">${n}</span>` : `<a href="${esc(href(n))}">${n}</a>`);
+    last = n;
+  }
+  const nav = pages > 1 ? `<nav class="pager">${step(cur - 1, '上一页')}${nums.join('')}${step(cur + 1, '下一页')}<span class="total">共 ${total} 条</span></nav>` : '';
+  return { offset: (cur - 1) * size, nav };
+}
+
 function researchStatus(r: Research) {
   if (r.status === 'done') return `<a class="v-${esc(r.verdict)}" href="/research/${r.id}">${esc(VERDICTS[r.verdict ?? ''] ?? r.verdict)}</a>`;
   if (r.status === 'pending') return '<span class="muted">排队中</span>';
@@ -147,9 +174,9 @@ function md(src: string) {
 
 function home(store: Store) {
   const list = store.playbooks();
-  const pending = store.research(`status='done' AND verdict IN ('adopt', 'try') AND playbook IS NULL`, []).length;
+  const pending = store.countResearch(`status='done' AND verdict IN ('adopt', 'try') AND playbook IS NULL`);
   const cards = list.map((p) => `<div class="card"><h3><a href="/playbooks/${esc(p.slug)}">${esc(p.title)}</a></h3>
-<p>${esc(p.problem)}</p><p><span class="badge">先试这一步</span> ${esc(p.first_step)}</p><span class="muted">最近修订 ${time(p.updated_at)} · 依据 ${store.research('playbook = ?', [p.slug]).length} 篇调研 · ${esc(p.file)}</span></div>`).join('');
+<p>${esc(p.problem)}</p><p><span class="badge">先试这一步</span> ${esc(p.first_step)}</p><span class="muted">最近修订 ${time(p.updated_at)} · 依据 ${store.countResearch('playbook = ?', [p.slug])} 篇调研 · ${esc(p.file)}</span></div>`).join('');
   return page('手册', `<h1>可执行手册</h1>` + alerts(store)
     + `<p class="lead">按工作场景组织的可执行手册：适用条件、编号步骤、判断标准、常见坑。模型把“建议采用 / 值得一试”的调研每天合并进来并持续修订${pending ? `，待合并 ${pending} 篇` : ''}。均未经实测，人工验证过的做法在仓库 experiences/。</p>`
     + (cards || '<p class="muted">还没有手册。有“建议采用 / 值得一试”的调研后，每天自动合并生成。</p>'), '/');
@@ -167,23 +194,30 @@ function playbookPage(store: Store, slug: string) {
 <div class="report">${md(p.body)}<h3>依据的调研</h3><ul>${sources.map((r) => `<li><a href="/research/${r.id}">${esc(r.item.title)}</a>：${esc(r.conclusion)}</li>`).join('')}</ul></div>`, '/');
 }
 
-function evidence(store: Store) {
+function evidence(store: Store, q: URLSearchParams) {
   const since = new Date(Date.now() - 14 * 86400_000).toISOString();
-  const done = store.research(`status = 'done' AND updated_at >= ? ORDER BY updated_at DESC`, [since]);
+  const recent = store.countResearch(`status = 'done' AND updated_at >= ?`, [since]);
+  const v = q.get('verdict') ?? '';
+  const verdict = v in VERDICTS ? v : '';
+  const w = `status = 'done'${verdict ? ' AND verdict = ?' : ''}`;
+  const params = verdict ? [verdict] : [];
+  const total = store.countResearch(w, params);
+  const { offset, nav } = pager(q, total, 30);
+  const done = store.research(`${w} ORDER BY updated_at DESC`, params, 30, offset);
   const failed = store.research(`status = 'error' ORDER BY updated_at DESC`, []);
-  const queued = store.research(`status = 'pending'`, []).length;
+  const queued = store.countResearch(`status = 'pending'`);
   const week = store.count(`first_seen_at >= datetime('now', '-7 day')`);
   const deep = store.count(`deep = 1 AND first_seen_at >= datetime('now', '-7 day')`);
-  const groups = Object.entries(VERDICTS).map(([k, label]) => {
-    const list = done.filter((r) => r.verdict === k);
-    if (!list.length) return '';
-    return `<h2><span class="badge v-${k}">${label}</span> ${list.length} 条</h2>` + list.map((r) => `<div class="card"><h3><a href="/research/${r.id}">${esc(r.item.title)}</a></h3>
-${esc(r.conclusion)}<br><span class="muted">${esc(r.item.source)} · ${time(r.updated_at)} · <a href="${esc(r.item.url)}" target="_blank" rel="noreferrer">原文</a>${r.file ? ` · ${esc(r.file)}` : ''}</span></div>`).join('');
-  }).join('');
-  const failures = failed.length ? `<h2>调研失败（${failed.length}）</h2>` + failed.map((r) => `<div class="card"><a href="${esc(r.item.url)}" target="_blank" rel="noreferrer">${esc(r.item.title)}</a><br>${researchStatus(r)}</div>`).join('') : '';
+  const chip = (k: string, label: string, n: number) => `<a class="badge${k === verdict ? ' on' : ''}" href="${k ? `?verdict=${k}` : '/research'}">${label} ${n}</a>`;
+  const chips = `<div class="chips">${chip('', '全部', store.countResearch(`status = 'done'`))}${Object.entries(VERDICTS)
+    .map(([k, label]) => [k, label, store.countResearch(`status = 'done' AND verdict = ?`, [k])] as const)
+    .filter(([k, , n]) => n || k === verdict).map(([k, label, n]) => chip(k, label, n)).join('')}</div>`;
+  const cards = done.map((r) => `<div class="card"><h3><a href="/research/${r.id}">${esc(r.item.title)}</a></h3>
+<span class="badge v-${esc(r.verdict)}">${esc(VERDICTS[r.verdict ?? ''] ?? r.verdict)}</span> ${esc(r.conclusion)}<br><span class="muted">${esc(r.item.source)} · ${time(r.updated_at)} · <a href="${esc(r.item.url)}" target="_blank" rel="noreferrer">原文</a>${r.file ? ` · ${esc(r.file)}` : ''}</span></div>`).join('');
+  const failures = failed.length && !offset ? `<h2>调研失败（${failed.length}）</h2>` + failed.map((r) => `<div class="card"><a href="${esc(r.item.url)}" target="_blank" rel="noreferrer">${esc(r.item.title)}</a><br>${researchStatus(r)}</div>`).join('') + '<h2>已完成</h2>' : '';
   return page('调研证据', `<h1>调研证据</h1>` + alerts(store)
-    + `<p class="lead">每条线索的调研报告，是手册的素材。近 7 天采集 ${week} 条，模型挑出 ${deep} 条深入调研；近 14 天完成 ${done.length} 条，排队 ${queued} 条。每小时最多调研 ${config.researchPerRun} 条、每天最多 ${config.researchPerDay} 条，报告同时提交到仓库 ${esc(config.researchDir)}/。</p>`
-    + (groups || '<p class="muted">还没有完成的调研。模型初筛时会自动挑选值得深入的线索。</p>') + failures, '/research');
+    + `<p class="lead">每条线索的调研报告，是手册的素材。近 7 天采集 ${week} 条，模型挑出 ${deep} 条深入调研；近 14 天完成 ${recent} 条，排队 ${queued} 条。每小时最多调研 ${config.researchPerRun} 条、每天最多 ${config.researchPerDay} 条，报告同时提交到仓库 ${esc(config.researchDir)}/。</p>`
+    + failures + chips + (cards || '<p class="muted">还没有完成的调研。模型初筛时会自动挑选值得深入的线索。</p>') + nav, '/research');
 }
 
 function report(store: Store, id: number) {
@@ -209,8 +243,9 @@ function candidates(store: Store, catalog: Catalog, q: URLSearchParams) {
   if (minRel) { where.push('relevance >= ?'); params.push(Number(minRel)); }
   if (q.get('deep')) where.push('deep = 1');
   const w = where.join(' AND ') || '1=1';
-  const items = store.items(`${w} ORDER BY first_seen_at DESC`, params);
   const total = store.count(w, params);
+  const { offset, nav } = pager(q, total, 50);
+  const items = store.items(`${w} ORDER BY first_seen_at DESC`, params, 50, offset);
   const sources = (store.db.prepare(`SELECT DISTINCT source FROM items ORDER BY source`).all() as { source: string }[]).map((r) => r.source);
   const select = (name: string, opts: [string, string][]) =>
     `<select name="${name}"><option value="">全部</option>${opts.map(([v, l]) => `<option value="${esc(v)}"${q.get(name) === v ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
@@ -219,17 +254,18 @@ function candidates(store: Store, catalog: Catalog, q: URLSearchParams) {
  <label>问题 ${select('question', Object.entries(QUESTIONS).map(([k, v]) => [k, v.split('：')[0]]))}</label>
  <label>相关度 ≥ ${select('min', [['1', '1'], ['2', '2'], ['3', '3']])}</label>
  <label><input type="checkbox" name="deep" value="1"${q.get('deep') ? ' checked' : ''}> 只看模型选中深入的</label> <button>筛选</button></form>`;
-  return page('全部线索', `<h1>全部线索（${total}${total > items.length ? `，显示最近 ${items.length}` : ''}）</h1>${form}` + itemRows(items, store, catalog), '/candidates');
+  return page('全部线索', `<h1>全部线索（${total}）</h1>${form}` + itemRows(items, store, catalog) + nav, '/candidates');
 }
 
-function runs(store: Store) {
+function runs(store: Store, q: URLSearchParams) {
+  const { offset, nav } = pager(q, store.countRuns(), 50);
   const row = (r: Run) => `<tr><td class="nw">${esc(r.collector)}</td><td class="nw">${time(r.started_at)}</td>
 <td class="${r.status === 'error' ? 'err' : r.status === 'ok' ? 'ok' : 'muted'}">${r.status}</td><td>${r.fetched}</td><td>${r.new_items}</td>
 <td class="err" style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(r.error)}</td></tr>`;
   const pushers = store.pushers();
   return page('运行记录', `<h1>运行记录</h1>` + alerts(store)
     + `<h2>推送方心跳</h2>${pushers.length ? `<div class="table"><table><tr><th>名称</th><th>最后推送</th><th>条数</th></tr>${pushers.map((p) => `<tr><td>${esc(p.name)}</td><td class="nw">${time(p.last_seen_at)}</td><td>${p.last_count}</td></tr>`).join('')}</table></div>` : '<p class="muted">还没有推送方。</p>'}`
-    + `<h2>最近运行</h2><div class="table runs"><table><tr><th>采集器</th><th>开始</th><th>状态</th><th>抓取</th><th>新增</th><th>错误</th></tr>${store.recentRuns().map(row).join('')}</table></div>`, '/runs');
+    + `<h2>最近运行</h2><div class="table runs"><table><tr><th>采集器</th><th>开始</th><th>状态</th><th>抓取</th><th>新增</th><th>错误</th></tr>${store.recentRuns(50, offset).map(row).join('')}</table></div>${nav}`, '/runs');
 }
 
 const IngestBody = z.object({
@@ -291,9 +327,9 @@ export function handler(store: Store, catalog: Catalog) {
       }
 
       if (req.method === 'GET' && url.pathname === '/') return send(res, 200, home(store));
-      if (req.method === 'GET' && url.pathname === '/research') return send(res, 200, evidence(store));
+      if (req.method === 'GET' && url.pathname === '/research') return send(res, 200, evidence(store, url.searchParams));
       if (req.method === 'GET' && url.pathname === '/candidates') return send(res, 200, candidates(store, catalog, url.searchParams));
-      if (req.method === 'GET' && url.pathname === '/runs') return send(res, 200, runs(store));
+      if (req.method === 'GET' && url.pathname === '/runs') return send(res, 200, runs(store, url.searchParams));
       const m = url.pathname.match(/^\/research\/(\d+)$/);
       const pb = url.pathname.match(/^\/playbooks\/([a-z0-9-]+)$/);
       const html = req.method !== 'GET' ? null : m ? report(store, Number(m[1])) : pb ? playbookPage(store, pb[1]) : null;

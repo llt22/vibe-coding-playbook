@@ -185,8 +185,12 @@ export class Store {
     return this.db.prepare(`SELECT * FROM runs WHERE id IN (SELECT MAX(id) FROM runs GROUP BY collector) ORDER BY collector`).all() as Run[];
   }
 
-  recentRuns(limit = 100): Run[] {
-    return this.db.prepare(`SELECT * FROM runs ORDER BY id DESC LIMIT ?`).all(limit) as Run[];
+  recentRuns(limit = 100, offset = 0): Run[] {
+    return this.db.prepare(`SELECT * FROM runs ORDER BY id DESC LIMIT ? OFFSET ?`).all(limit, offset) as Run[];
+  }
+
+  countRuns(): number {
+    return (this.db.prepare(`SELECT COUNT(*) AS n FROM runs`).get() as { n: number }).n;
   }
 
   /** 新 key 插入并返回 true；已有 key 只刷新热度和摘要。 */
@@ -250,17 +254,21 @@ export class Store {
     this.db.prepare(`UPDATE research SET status='error', attempts=attempts+1, error=?, updated_at=? WHERE id=?`).run(error, now(), id);
   }
 
-  research(where: string, params: (string | number)[], limit = 200): (Research & { item: Item })[] {
-    const rows = this.db.prepare(`SELECT * FROM research WHERE ${where} LIMIT ?`).all(...params, limit) as Research[];
+  research(where: string, params: (string | number)[], limit = 200, offset = 0): (Research & { item: Item })[] {
+    const rows = this.db.prepare(`SELECT * FROM research WHERE ${where} LIMIT ? OFFSET ?`).all(...params, limit, offset) as Research[];
     return rows.map((r) => ({ ...r, item: this.db.prepare(`SELECT * FROM items WHERE id=?`).get(r.item_id) as Item }));
   }
 
-  items(where: string, params: (string | number)[], limit = 300): Item[] {
-    return this.db.prepare(`SELECT * FROM items WHERE ${where} LIMIT ?`).all(...params, limit) as Item[];
+  items(where: string, params: (string | number)[], limit = 300, offset = 0): Item[] {
+    return this.db.prepare(`SELECT * FROM items WHERE ${where} LIMIT ? OFFSET ?`).all(...params, limit, offset) as Item[];
   }
 
   count(where = '1=1', params: (string | number)[] = []): number {
     return (this.db.prepare(`SELECT COUNT(*) AS n FROM items WHERE ${where}`).get(...params) as { n: number }).n;
+  }
+
+  countResearch(where: string, params: (string | number)[] = []): number {
+    return (this.db.prepare(`SELECT COUNT(*) AS n FROM research WHERE ${where}`).get(...params) as { n: number }).n;
   }
 
   playbooks(): Playbook[] {
