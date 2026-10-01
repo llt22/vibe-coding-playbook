@@ -1,14 +1,14 @@
-# 给编码 agent 装技能包前，先做一次有/无对照
+# 让编码 agent 稳定按你的规范干活：先小范围试装，再自建技能或 mod
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：解决“装了技能包但说不清有没有减少返工”的问题：给出一套小范围试装、有/无对照、按可观察指标验收的流程。
-> 先试这一步：挑一个非关键项目里反复出现的任务，只装一个技能包，用同一输入在没有技能和有技能的条件下各跑 3 次，记录返工轮数。
+> 解决的问题：把“该装什么、装完有没有用、要不要自己写”从凭感觉变成一套可照做、可对照验证的流程。
+> 先试这一步：在一个可回滚的非关键项目上只装一个技能包，用同一任务做有技能和无技能各 3 次的对照，再决定是否保留。
 > 最近修订：2026-10-02
 
 ## 解决什么问题
 
-你已经在用编码 agent，但每次都要重复描述同一套工程规范，或者不确定装一个技能包是否真的减少了返工。这篇手册给出一个可照做的流程：先小范围试装一个现成技能包，用同一任务做有/无技能的对照，确认有效后再考虑把自己的重复工作写成 `SKILL.md`。同一套对照方法也适用于中文技术文档的写作与审稿、单篇论文的精读。如果你还需要给 agent 补模型端点、权限或搜索能力，再用配置模板单独补，而不是整包采用。
+你已经在用编码 agent，但每次都要重复描述同一套工程规范，或者不确定装一个技能包是否真的减少了返工。这篇手册给出一个可照做的流程：先小范围试装一个现成技能包，用同一任务做有/无技能的对照，确认有效后再考虑把自己的重复工作写成 `SKILL.md`，或者写一个把会话状态嵌进界面的 Claude Code mod。同一套对照方法也适用于中文技术文档的写作与审稿、单篇论文的精读。如果你还需要给 agent 补模型端点、权限或搜索能力，再用配置模板单独补，而不是整包采用。
 
 ## 适用与不适用
 
@@ -19,7 +19,8 @@
 - 反复写或审中文技术文档（README、设计文档、接口说明、教程），希望它读起来像工程师写的、没有 AI 腔；
 - 需要把单篇生物医学论文读成结构化精读报告；
 - 愿意在一个非关键项目上做一周对照；
-- 需要给 agent 补模型端点、工具权限或网页搜索能力，且愿意手动填自己的网关信息。
+- 需要给 agent 补模型端点、工具权限或网页搜索能力，且愿意手动填自己的网关信息；
+- 想让 Claude Code 会话多一层界面或拦截能力（上下文占用、危险命令拦截、改动回放），愿意照教程先在本机小范围试。
 
 不适用：
 
@@ -28,7 +29,9 @@
 - 直接在生产关键项目上全量安装；
 - 不知道自己网关提供哪些模型名，却原样照抄配置模板；
 - 写英文文档（`zh-tech-writing` 只针对中文技术文档）；
-- 非生物医学领域的论文精读（`biomedical-paper-reader` 的检查点要自己判断是否适用）。
+- 非生物医学领域的论文精读（`biomedical-paper-reader` 的检查点要自己判断是否适用）；
+- 不接受 mods API 会随版本变化、不想核对当前版本写出的类型声明；
+- 不确认 mod 来源就安装（mod 以与 Claude Code 同等权限在本机运行）。
 
 ## 前置条件
 
@@ -41,10 +44,11 @@
 - 走配置模板路线时额外准备：你的提供商端点地址（`ANTHROPIC_BASE_URL`）和 key，以及你网关实际提供的模型名。
 - 走中文技术文档路线（做法 E）时额外准备：可用的 `npx`（用 skills 命令行安装）或 `git`（手动拷贝）；可选装 autocorrect，不装则空格与标点修正要人工做。
 - 走论文精读路线（做法 F）时额外准备：宿主助手支持文件读取，并能读取 PDF/图像；联网能力为可选项；准备好 PDF、DOI、链接或原文之一，以及本地已有的补充材料。
+- 走 mod 路线（做法 G）时额外准备：Claude Code 2.1.287 或更高；先确认这个 mod 的来源可信，因为它以与 Claude Code 同等权限在本机运行。
 
 ## 操作步骤
 
-怎么选：先做做法 A；A 里某个技能确实有效、且你有一件每周重复且规范明确的工作，再做做法 B；需要把外部文档变成智能体知识资产时用做法 C；需要给 Claude Code 补模型端点、权限、网页搜索时用做法 D；要写或审中文技术文档用做法 E；要精读单篇论文用做法 F。E 和 F 都必须套用 A 的对照方法，不要跳过验证直接纳入常规流程。
+怎么选：先做做法 A；A 里某个技能确实有效、且你有一件每周重复且规范明确的工作，再做做法 B；需要把外部文档变成智能体知识资产时用做法 C；需要给 Claude Code 补模型端点、权限、网页搜索时用做法 D；要写或审中文技术文档用做法 E；要精读单篇论文用做法 F；要给自己写一个把会话状态嵌进界面的 Claude Code mod 时用做法 G。E、F、G 都必须套用 A 的对照方法，不要跳过验证直接纳入常规流程。
 
 ### 做法 A：先用现成技能包做小范围试装（推荐先做）
 
@@ -444,6 +448,154 @@ skill-seekers install-agent output/react/ --agent cursor
 
    预期：报告里每张主图都被讲到、图注被引用、没有遗漏面板；说不清某类论文是否适用时，就限定使用范围并把不适用处记下来。
 
+### 做法 G：自己写一个 Claude Code mod，把会话信息嵌进界面（可选，先 try 不要 adopt）
+
+mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话加界面与拦截能力。两者都套用同一套对照方法——教程完整可照做，但 mods API 会随版本变化，且 mod 以与 Claude Code 同等权限在本机运行，所以先试一个，不要直接纳入日常。
+
+先理解你要做的东西是什么：Claude Code 的 mod 本质是 hook。它以插件形式分发，行为写在一个 JavaScript/TypeScript 模块里，模块运行在会话内，能看到发生的每个事件。相比 settings 里的 hook（每个事件跑一个 shell 命令、用 stdin/stdout 传 JSON），mod 只加载一次并常驻会话，可以持有状态、画随事件更新的 UI，并回调 Claude Code：开面板、跑进程、注册 slash command、注册模型可调用的工具。一个 mod 可以做三种事：观察（`await next(e)` 后看结果）、改写（`return next({ ...e, command: safer })`）、回答（不调 `next`，直接返回拒绝，或自己提供命令/工具）。Claude Code 自身也有功能是 mod 实现的（如 AGENTS.md 支持、对话旁的 `/diff` 面板），源码在 public 的 `anthropics/claude-code` 仓库 `mods/` 下，可以拿来当参照。
+
+1. 确认版本。mods 默认开启，无需打开开关。
+
+   ```shell
+   claude --version   # 需要 2.1.287 或更高
+   ```
+
+   预期：版本号 ≥ 2.1.287。低版本先升级 Claude Code，不要在这一步硬撑。
+
+2. 选一个“信息看不见”的痛点当第一个目标，例如上下文占用、危险命令拦截、改动回放。前提：这是你本机会话里反复出现、目前要靠肉眼或翻日志才知道的事。
+
+3. 二选一建 mod。
+
+   做法 G-1（最快）：让 Claude 自己写。开一个 session，粘贴原文的 shortcut 提示词，只描述你想看到什么，不需要懂 API：
+
+   ```text
+   Make me a Claude Code mod called token-weather: a live forecast of my context window, shown in the band above the prompt.
+
+   What it should show, on one line:
+   - A weather icon and word for how full the context window is: under 25% ☀ Clear (yellow), 25–49% ☁ Cloudy (cyan), 50–74% ☂ Showers (blue), 75–89% ☇ Storm (magenta), 90% and up ↯ Compact soon (red).
+   - The percentage used, then the tokens used out of the window, like "134.4k / 200k".
+   - A small chart of the last 12 turns, drawn with ▁▂▃▄▅▆▇█.
+   - How much the last turn added, like "▲ +98.3k last turn".
+
+   It should update after every turn.
+   ```
+
+   前提与预期：Claude 会问一次是否为本次会话打开 hot reloading，允许它，band 就会在 Claude 回合结束时出现在 prompt 上方；之后每次改动原地重载，可以继续提要求（“make Storm start at 70%”“add the dollar cost at the end”）看效果。这个 mod 只在当前会话加载，目录之后会被清理，要保留就把文件夹复制出去，按第 8 步当普通插件安装。
+
+   做法 G-2（想自己看懂或检查 Claude 写了什么时走这条）：手工建目录。
+
+   ```text
+   token-weather/
+   ├── .claude-plugin/
+   │   ├── plugin.json
+   │   └── types/ (written by Claude Code when it loads the mod)
+   ├── hooks/
+   │   ├── hooks.json
+   │   └── token-weather.mjs
+   ├── types/
+   │   └── index.d.ts (added in step 3)
+   └── tests/
+       └── token-weather.test.ts (added in step 5)
+   ```
+
+   `.claude-plugin/plugin.json`（标准插件 manifest）：
+
+   ```json
+   {
+     "name": "token-weather",
+     "version": "0.1.0",
+     "description": "A live forecast of the context window, drawn above the prompt.",
+     "author": { "name": "You" }
+   }
+   ```
+
+   `hooks/hooks.json` 指向模块，一个 mod 只能有一个：
+
+   ```json
+   {
+     "modules": ["./token-weather.mjs"]
+   }
+   ```
+
+   注意：每次加载 mod，Claude Code 会把类型声明写进该 mod 的 `.claude-plugin/types/` 文件夹，那份声明是你这个版本的权威依据；上面的目录里那些 step 编号是原教程的步骤号。
+
+4. 先画点东西。prompt 正上方那条带叫 `AbovePrompt`，Claude Code 自己不在那儿画东西，适合当第一个目标。
+
+   ```javascript
+   // hooks/token-weather.mjs
+   export function register(on) {
+     on("ui.render", { component: "AbovePrompt" }, ($, e, next) => {
+       const { Box, Text } = $.ui.resolve(e);
+       return Box({
+         paddingX: 1,
+         children: [Text({ color: "yellow", bold: true, children: "☀ Clear skies" })],
+       });
+     });
+   }
+   ```
+
+   前提：元素不是全局变量，`$.ui.resolve(e)` 返回当前正在绘制的 surface 对应的构造函数（每个 surface 支持的元素集略有不同）；也可以用 JSX，工厂函数是 `h`。
+
+   带插件启动会话：
+
+   ```shell
+   claude --plugin-dir ./token-weather
+   ```
+
+   保持会话开着——文件夹被监视，每次保存原地重载模块，无需重启。预期：prompt 上方出现你画的那条带。
+
+5. 读真实数字，把历史放进 `$.state`。`$.session.usage()` 返回与状态行相同的数字：`context.tokens` 是上一条回答所基于的输入，`context.window` 是模型的窗口，`context.percent` 是两者之比。这个调用是免费的，只有你要 breakdown 时才会发一次 token 计数请求。
+
+   ```javascript
+   on("session.start", async ($, e, next) => {
+     const result = await next(e);
+     await takeReading($);
+     return result;
+   });
+
+   on("turn.complete", async ($, e, next) => {
+     const result = await next(e);
+     if (!e.agentId) {
+       await takeReading($); // main-loop turns only, not subagents
+     }
+     return result;
+   });
+   ```
+
+   关键坑：模块级变量（如 `let readings = []`）在 hot reload 时会重置，因为 reload 是一次全新加载，`register` 会重跑、`session.start` 会再次触发。历史必须放 `$.state`，它由宿主持有，整个会话存活、跨重载保留。
+
+   ```javascript
+   // Held by the host, so the history survives a hot reload of this file.
+   const readings = { plugin: "token-weather", key: "readings" };
+
+   async function takeReading($) {
+     const { context } = await $.session.usage();
+     if (!context?.window) return;
+     const tokens = context.tokens ?? 0;
+     const percent = context.percent ?? Math.round((tokens / context.window) * 100);
+     const { value: history = [] } = await $.state.get(readings);
+     await $.state.set(readings, [...history, { tokens, window: context.window, percent }].slice(-HISTORY));
+   }
+   ```
+
+6. 在类型契约里声明 state。新建 `types/index.d.ts`：
+
+   ```typescript
+   export type TokenWeatherReading = { tokens: number; window: number; percent: number };
+
+   declare module "claude-code" {
+     interface PluginState {
+       "token-weather": { readings: TokenWeatherReading[] };
+     }
+   }
+   ```
+
+   前提：把 `"types": "./types/index.d.ts"` 加进 `plugin.json`。跳过这步，`claude plugin validate` 会报错并给出修法：`token-weather.readings is not declared: the manifest's types contract must name it in interface PluginState { … }`。
+
+7. 补完完整模块。原文 Step 4 给了可整段复制的完整模块（含 `HISTORY = 12`、`BARS = "▁▂▃▄▅▆▇█"`、五档 `FORECAST` 阈值与颜色）。本次材料在 `async function ta` 处被截断，不能照抄半截代码，需打开原文补全后再复制。可以先靠这套回报机制验收：重绘是自动的——渲染 hook 执行期间发生的 `$.state.get` 会订阅那次绘制，之后每次 `$.state.set` 都会重画这条带，永远不用调 `$.ui.invalidate`。
+
+8. 决定是否保留。要长期用，就把文件夹复制出去，按普通插件安装（命令见做法 A）。安装任何来源不明的 mod 前先确认信任来源。预期：你能说清这个 mod 让你提前看见了什么、或拦下了哪一次返工；说不清就不要保留。
+
 ## 怎么判断变好了
 
 最小试用方式：
@@ -452,7 +604,8 @@ skill-seekers install-agent output/react/ --agent cursor
 - 至少覆盖 5 个同类任务，或持续一周；
 - 换一个新会话，让不了解背景的人只凭 `description` 触发，检查可复现性；
 - 文档类任务：挑一篇已有的中文文档，先建分支或备份，先只审不改，再改一版逐条 diff；
-- 论文类任务：用一篇自己已读过、心里有底、含多张主图（或主表）的论文生成精读报告，逐项对照自己的理解；再对一篇只有摘要或片段可得的论文试一次，看它是否正确声明覆盖范围与暂定判断。
+- 论文类任务：用一篇自己已读过、心里有底、含多张主图（或主表）的论文生成精读报告，逐项对照自己的理解；再对一篇只有摘要或片段可得的论文试一次，看它是否正确声明覆盖范围与暂定判断；
+- mod 类任务：开一个 session，用 `claude --plugin-dir ./token-weather` 带插件跑几个回合，看它是否在回合结束时刷新；再把文件夹复制出去重装一次，确认能长期加载。
 
 可观察的指标：
 
@@ -466,15 +619,17 @@ skill-seekers install-agent output/react/ --agent cursor
 - 论文精读：每张主图是否都被讲到、图注是否被引用、有无遗漏面板；是否区分独立个体数与细胞 / 切片数、观察与因果、作者解释与新增假设；是否列出「已读与未获取材料」、未核查附件处是否说明；第⑥节是否给出可迁移环节与待验证设计；人工精读耗时 vs 生成加核对的耗时。
 - 工作流形态的产物是否稳定出现：例如 deep-research 是否每次都在 `.research/<name>/` 下留出 `prompts/`、`child_outputs/`、`logs/`、`raw/`、`final_report.md`。
 - 交接是否可用：一次 `/handoff` 之后，新会话不靠你再口述背景就能继续推进。
+- mod 是否让你看见或拦下原本要靠运气的事：上下文占用是否在压缩前就被看到、危险命令是否在会话里被拦下、改动回放是否能替代事后翻日志。这类指标比“装上了”更接近效果，但教程本身没有对照数据。
 
 反向指标：
 
 - 如果加了技能后仍然每次都要口头纠正同一件事，说明 `description` 或正文指令没写到位，应先改 `SKILL.md`，而不是继续加提示。
 - 如果文档改完只是删了空话、却没有补上事实，信息量反而下降，说明它没有拿到项目事实，先把代码、配置和真实报错给它读。
 - 如果论文报告把未实际执行的代码和数据标成已复现，或漏掉主图面板，停止用在这类论文上。
+- 如果 mod 每次改完都丢掉历史、或升级 Claude Code 后 mod 直接不加载，说明你在跟会变的 API 较劲，先按当前版本写出的类型声明对齐，再决定是否继续。
 - 如果一周内没有任何一项指标变化，或安装的插件与仓库实际规范冲突导致返工增加，就回到“只借鉴组织方式、不装具体内容”的用法。
 
-注意：`doctor`、`validate`、`npm test` 这类检查只能证明“技能装得上、格式合法、不带危险命令”，不能证明“产出更好”。效果必须自己对照。
+注意：`doctor`、`validate`、`npm test`、`claude plugin validate` 这类检查只能证明“技能或 mod 装得上、格式合法、不带危险命令”，不能证明“产出更好”。效果必须自己对照。
 
 ## 常见坑
 
@@ -483,7 +638,7 @@ skill-seekers install-agent output/react/ --agent cursor
 - 手拷 hooks：把仓库里的 `hooks/hooks.json` 直接拷进 `~/.claude/settings.json` 或 `~/.claude/hooks/hooks.json`，会导致重复执行和跨平台 hook 冲突；hooks 必须用安装器写。
 - 在用户主目录安装：项目级安装应在具体项目目录执行；v1.2.1 起 superpowers-zh 会拒绝在主目录安装，老版本会把 skills 写进 home 目录，污染所有项目。
 - 只信 README：很多技能包的 README 没有贴出 `SKILL.md` 正文，质量无法核验；只有安装命令和自述，没有效果数据。feiskyer/claude-code-settings 虽然技能、子代理、settings 模板都列得很全，但技能效果仍是作者描述，没有对照数据。`zh-tech-writing` 的 SKILL.md 与两个 references 未在材料中给出，14 条 AI 腔清单只有类别没有逐条文本；`biomedical-paper-reader` 的 SKILL.md、各 references 与 `evals/RESULTS.md` 的实际内容同样看不到。
-- 忽略安全：安装任何第三方技能前先通读它的 `SKILL.md`，并跑自己运行时的 doctor/audit 工具。`genspark-claw validate` 会标记 `curl | bash`、base64 载荷和破坏性命令。
+- 忽略安全：安装任何第三方技能前先通读它的 `SKILL.md`，并跑自己运行时的 doctor/audit 工具。`genspark-claw validate` 会标记 `curl | bash`、base64 载荷和破坏性命令。mod 的风险面更大：它以与 Claude Code 同等权限在本机运行，且能改写或拒绝命令，安装前必须确认来源可信。
 - 规则全量加载：rules 是始终加载的上下文，从 `rules/common` 加一个你实际使用的语言/框架包开始，不要全抄。
 - 技能描述没写清：`description` 只写“做什么”没写“什么时候用”，技能就不会在合适时机触发。
 - 配置模板照抄不动：作者模板默认指向 copilot-gateway（`http://localhost:4141`），模型名写的是 `claude-sonnet-5` 等；不按自己网关实际提供的模型替换，端点或模型对不上就用不起来。
@@ -500,6 +655,11 @@ skill-seekers install-agent output/react/ --agent cursor
 - 在非官方 API 环境找不到网页搜索：WebSearch 只限官方 API 环境，其它环境要用 MCP 补；README 只给了四个 MCP 的链接，没有安装步骤。
 - 用 `npx skills add` 装到的版本可能滞后于仓库最新，挑技能时注意这一点。
 - 拿 star 数当质量证据：`zh-tech-writing` 的 312 stars 只说明关注度，`biomedical-paper-reader` 的 31 stars 同样，都不说明产出改善幅度。
+- mod 的模块变量会被 hot reload 清空：`register` 会重跑、`session.start` 会再次触发，模块级数组每次都重置；历史必须放 `$.state`。
+- state 没在类型契约里声明：`plugin.json` 不写 `"types"` 或 `types/index.d.ts` 不声明 `PluginState`，`claude plugin validate` 会直接报 `token-weather.readings is not declared`，先别继续装。
+- 把教程当稳定 API：mods API 会随版本变化，教程照做能跑通，但每次加载时写进 `.claude-plugin/types/` 的类型声明才是你这个版本的权威依据，升级后要重新核对。
+- 只装在临时目录：让 Claude 自己写的 mod 只在当前会话加载、目录之后会被清理，要长期用必须把文件夹复制出去按普通插件安装。
+- 一个 mod 塞多个模块入口：`hooks/hooks.json` 的 `modules` 只指一个模块，多写不会变成多个 mod。
 
 ## 证据与来源
 
@@ -512,6 +672,7 @@ skill-seekers install-agent output/react/ --agent cursor
 - “多来源知识打包”来自 yusufkaraaslan/Skill_Seekers 的 README；给出了 `pip install skill-seekers`、`create`、`package`、`install-agent` 等命令，质量门禁 `--threshold` 可用，但缺少与人工基线的对照，多数效率数字为作者主张。
 - feiskyer/claude-code-settings（MIT，约 1.6k stars）的安装命令、npx skills 选装方式、settings.json 模板、Copilot Gateway、VSCode 环境变量、`customApiKeyResponses`、`update-cc-plugins.sh`、四个 WebSearch MCP 与五条技能触发排查，均来自该仓库 README，步骤具体可复制；但技能效果全凭作者描述，且模板中的模型名需按自己网关实际提供情况替换，所以只建议按需选装 1–2 个技能做小范围试用。
 - deep-research 的产出目录、handoff 的交接文档字段与脱敏行为、codex-skill 的触发词与“只呈现不自动改码”、github-review-pr 的 `file:line` 与原文引用要求，均来自 feiskyer/claude-code-settings 的 README 描述，属作者主张，没有对照实验数据。
+- mod 路线的全部内容——mod 本质是 hook、以插件形式分发、加载一次常驻会话、可观察/改写/回答三种做法、版本要求 2.1.287+ 且 mods 默认开启、Claude Code 自身也有功能由 mod 实现（AGENTS.md 支持、`/diff` 面板）且源码在 `anthropics/claude-code` 的 `mods/` 下、`plugin.json` 与 `hooks.json` 内容、`AbovePrompt` 与 `$.ui.resolve`/`Box`/`Text`、`$.session.usage()` 的 `context.tokens`/`context.window`/`context.percent`、`$.state` 跨 hot reload 保留历史、`types/index.d.ts` 的 `PluginState` 声明、`claude --plugin-dir` 启动与保存即重载、`claude plugin validate` 的报错文本、以及“mods API 会随版本变化、mod 以与 Claude Code 同等权限运行、先 try 不要 adopt”——均来自本次加入的调研《Getting started with Claude Code mods》。该教程步骤完整、命令可复制，但没有给出效果对照数据，属作者主张；且本次材料在完整模块的 `async function ta` 处被截断，`HISTORY`/`BARS`/`FORECAST` 之后的代码需打开原文确认，不要照抄半截模块。
 - 中文技术文档路线的安装命令（`npx skills add leter/zh-tech-writing -g`、git clone + cp）、autocorrect 的三种安装方式与 `autocorrect -V` 验证、三个调用提示词示例、五步写作流程、四类核心规则要点、14 条 AI 腔清单的类别说明，以及一组前后对比文本，均来自 leter/zh-tech-writing 的 README。规则来源为阮一峰《中文技术文档的写作规范》（public domain），另参考华为《产品手册中文写作规范》、LeanCloud《文档风格指南》、《中文文案排版指北》、Google Developer Documentation Style Guide、GB/T 15835-2011；autocorrect 为 MIT 许可，项目自身为 MIT。作者对原规范做了三处调整：破折号统一为 `——`、省略号统一为 `……`；数字与中文之间统一定为加空格以与 autocorrect 一致；把“不使用非正式语言”放宽为“可口语化但不用网络流行语”。其中“效果”一节是单个作者挑选的示例，属主张不是评测结果；“skill 找不到事实时会删空话或直接问你”是对行为的描述，材料中无法验证。
 - 论文精读路线的 clone 命令、SKILL.md 入口提示词与 `$biomedical-paper-reader` 调用方式、`~/.codex/skills/` 安装路径、补充材料只用本地文件、复用 PDF 提取结果、逐图先概览后放大、七段报告骨架、判定纪律与交付形式，均来自 Gaoyuan-0423/biomedical-paper-reader 的 README（v0.1.2，MIT）。README 列出了 `SKILL.md`、`references/report-template.md`、`references/evidence-rules.md`、`references/study-checks.md`、`references/material-handling.md`、`agents/openai.yaml`、`evals/`、`examples/`、`CHANGELOG.md` 的文件组织，两篇真实试读论文入口（DOI `10.1186/s12943-026-02682-x`、`10.1038/s41588-026-02673-0`）和三份明确标注为虚构的短材料；仓库含 `evals/cases.md`、`evals/fixtures/` 与 `evals/RESULTS.md`，但验收结论的实际内容在本次材料中看不到。精读质量本身、判定规则是否稳定执行、“不依赖固定 MCP、第三方 skill、Python 库或付费服务”的依赖声明，均属作者主张。README 自述借鉴了 `nature-reader` 的原文定位/图文联读思想与 `paper-deep-note` 的来源覆盖声明思想，未复制其实现文件。
 - “主 SKILL.md 放流程与规则、细则拆到 `references/` 按需加载、确定性格式修正交给外部 CLI”来自 leter/zh-tech-writing 的目录组织与写法，属可观察的仓库结构；“按需加载能减少上下文占用”是据此推断，材料没有对照数据。
@@ -530,3 +691,4 @@ skill-seekers install-agent output/react/ --agent cursor
 - [feiskyer/claude-code-settings](../research/radar/2026-10-01/602-feiskyer-claude-code-settings.md)：值得一试，可以照抄它的安装命令和 settings 模板，但只按需选装 1–2 个技能做小范围试用，不要整包采用——理由：安装/配置步骤具体可复制，但技能效果全凭作者描述、且其中模型名需按自己网关实际提供情况替换。
 - [leter/zh-tech-writing](../research/radar/2026-10-02/57-leter-zh-tech-writing.md)：建议采用，直接装上这个 Agent Skill，把中文技术文档的写作与审稿交给它执行，因为 README 给出了可复制的安装命令、调用提示词和一套五步写作流程；配套的 autocorrect 负责中英文空格与全角标点，属于无需模型的确定性修正。
 - [Gaoyuan-0423/biomedical-paper-reader](../research/radar/2026-10-02/63-gaoyuan-0423-biomedical-paper-reader.md)：值得一试，按 README 提供的方式在本地 clone 这个 skill，先用一篇自己已熟悉的论文试跑一次精读报告，再决定是否纳入常规流程；它的价值在于给出了一套可照做的“逐图理解 + 证据边界判别 + 固定报告骨架”的精读流程，但核心规则在看不到的 SKILL.md 与 references 文件里，且仅面向生物医学论文。
+- [Getting started with Claude Code mods](../research/radar/2026-10-02/720-getting-started-with-claude-code-mods.md)：值得一试，可以照原文从零搭一个约 80 行的 Claude Code mod（Token Weather），在本机小范围试，验证它能否把上下文占用、危险命令拦截、改动回放这类信息嵌进会话；给 try 而不是 adopt，是因为教程本身完整可照做，但 mods API 会随版本变化，且 mod 以与 Claude Code 同等权限在本机运行，需要先确认信任来源。
