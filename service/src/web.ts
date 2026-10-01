@@ -63,6 +63,7 @@ td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:top}tr
 code{font:12.5px ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--muted);padding:1px 5px;border-radius:4px}pre code{background:none;padding:0}
 form{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin:0 0 16px}
 select{max-width:220px;text-overflow:ellipsis}
+label{white-space:nowrap}
 select,button{font:inherit;font-size:13px;height:32px;padding:0 10px;border:1px solid var(--border);border-radius:calc(var(--radius) - 2px);background:var(--background);color:inherit}
 button{background:var(--primary);color:var(--primary-foreground);border-color:var(--primary);font-weight:500;cursor:pointer}button:hover{opacity:.9}
 @media (max-width:640px){main{padding:16px 12px 48px}.card{padding:14px 16px}.report{padding:4px 16px 12px}h1{font-size:20px}header b{display:none}
@@ -203,10 +204,10 @@ function candidates(store: Store, catalog: Catalog, q: URLSearchParams) {
   const sources = (store.db.prepare(`SELECT DISTINCT source FROM items ORDER BY source`).all() as { source: string }[]).map((r) => r.source);
   const select = (name: string, opts: [string, string][]) =>
     `<select name="${name}"><option value="">全部</option>${opts.map(([v, l]) => `<option value="${esc(v)}"${q.get(name) === v ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
-  const form = `<form>来源 ${select('source', sources.map((s) => [s, s]))}
- 初筛 ${select('triage', [['done', '已初筛'], ['pending', '待初筛'], ['error', '失败'], ['known', '已在清单']])}
- 问题 ${select('question', Object.entries(QUESTIONS).map(([k, v]) => [k, v.split('：')[0]]))}
- 相关度 ≥ ${select('min', [['1', '1'], ['2', '2'], ['3', '3']])}
+  const form = `<form><label>来源 ${select('source', sources.map((s) => [s, s]))}</label>
+ <label>初筛 ${select('triage', [['done', '已初筛'], ['pending', '待初筛'], ['error', '失败'], ['known', '已在清单']])}</label>
+ <label>问题 ${select('question', Object.entries(QUESTIONS).map(([k, v]) => [k, v.split('：')[0]]))}</label>
+ <label>相关度 ≥ ${select('min', [['1', '1'], ['2', '2'], ['3', '3']])}</label>
  <label><input type="checkbox" name="deep" value="1"${q.get('deep') ? ' checked' : ''}> 只看模型选中深入的</label> <button>筛选</button></form>`;
   return page('全部线索', `<h1>全部线索（${total}${total > items.length ? `，显示最近 ${items.length}` : ''}）</h1>${form}` + itemRows(items, store, catalog), '/candidates');
 }
