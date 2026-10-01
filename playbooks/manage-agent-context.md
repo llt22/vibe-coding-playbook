@@ -1,16 +1,18 @@
-# 让编码 agent 跨会话不忘事，也不被工具输出塞满上下文
+# 让同一台机器上的多个编码 agent 共读一套规则
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：编码 agent 在长任务里会把大量工具输出塞进上下文、跨会话失忆、丢掉执行计划，还会让团队重复解决已解决的问题。
-> 先试这一步：先在一个真实长任务上按做法 A 给 Claude Code 加 Context Mode 的 MCP-only 模式，用 ctx stats 记录节省；同时把计划写进 task_plan.md 作为 /clear 后的恢复点。
+> 解决的问题：同一台机器上同时用 Claude Code、Codex 等编码 agent 时，同一条规则要在每处各写一遍、两边行为还不一致；本手册说明如何用一份共享 AGENTS.MD 软链给多个 agent 共读，并先用可观察的方式验证规则真的被读到。
+> 先试这一步：挑一个最常用的 repo，建一个共享文件夹、写一份 AGENTS.MD，先只放一条一眼可验的规则（例如要求每次回复开头写某个固定词），按各工具文档软链给 Claude Code 和 Codex，用同一个日常任务各跑一遍，确认两个工具都读到了这份文件。
 > 最近修订：2026-10-02
 
 ## 解决什么问题
 
 编码 agent 在真实任务里会调用大量工具：读文件、grep、跑 shell、抓网页、扫日志、翻工单。这些工具返回的原始数据直接进上下文窗口，很快就把上下文塞满；会话压缩时，之前的状态又可能丢失，agent 像失忆一样。还有一类更隐蔽的浪费：为了回答「哪些文件处理 auth」这种只需要一个小判断的问题，把 187 个文件全读进上下文。
 
-本手册把对应这几类浪费的做法合在一起：把工具输出挡在上下文窗口之外（Context Mode、headroom）、把「读很多、只判断一点」的略读外包给小模型（Quicksilver）、用持久记忆保住跨会话状态（claude-mem、mem0、cognee）、把执行计划写到磁盘并靠 hook 重注入（planning-with-files）、把团队 trace 固化成可复用技能（hivemind）、用录屏口述补上下文和反馈（blurt）。核心要求是：不只看节省比例，要用任务侧指标验证结果有没有变好。
+还有一类浪费发生在机器层面：同一台机器上装了 Claude Code、Codex 等多个编码 agent，每个工具各维护一份自己的指令文件，同一条规则要写好几遍，而且两边行为还可能不一致。
+
+本手册把对应这几类浪费的做法合在一起：把工具输出挡在上下文窗口之外（Context Mode、headroom）、把「读很多、只判断一点」的略读外包给小模型（Quicksilver）、用持久记忆保住跨会话状态（claude-mem、mem0、cognee）、把执行计划写到磁盘并靠 hook 重注入（planning-with-files）、把团队 trace 固化成可复用技能（hivemind）、用录屏口述补上下文和反馈（blurt）、把 agent 规则集中成一份共享 AGENTS.MD 软链给同机多个工具共读（做法 L）。核心要求是：不只看节省比例，要用任务侧指标验证结果有没有变好。
 
 ## 适用与不适用
 
@@ -23,6 +25,7 @@
 - 你有说不清、截图慢的界面问题，需要一个更自然的输入通道。
 - 你要做长时编码任务，计划需要挺过 /clear、崩溃和 compaction。
 - 你想让团队里多个 agent 复用已解决的问题，或想给 agent 加可编程的持久记忆。
+- 你本机同时使用两个及以上支持「项目/全局指令文件」约定的编码 agent（如 Claude Code、Codex），希望同一套规则只维护一份、两边都遵守。
 - 你愿意装 MCP server / 插件 / hook / 本地代理 / skill，并接受一次小范围试用。
 
 不适用：
@@ -34,6 +37,9 @@
 - 你不想改配置、不想重启客户端，或者沙箱里跑不了本地进程（headroom 需要本机进程和端口）。
 - 你的问题是纯后端、无界面、又拍不到。blurt 的前提是能看到问题或用手机拍到（终端、TUI、桌面应用可以）。
 - 你只用单一 provider、也不需要跨 agent 记忆——headroom 的这部分收益对你不成立。
+- 你只用单一 agent。做法 L 的收益建立在「多个工具共读一份规则」上，只有一个工具时这条不成立。
+- 你的系统不支持符号链接。macOS / Linux 原生支持；Windows 需另想办法，做法 L 的原文没有给出 Windows 路径。
+- 你想照抄一份现成的规则文本或仓库链接。这条材料是二手转述，原文没给开源仓库链接、没给具体路径，也没给规则内容，路径必须按各工具当前文档自行确认。
 - 你不想引入 Postgres demo、Docker、Deeplake 账号或 600 MB 本地嵌入模型。
 
 ## 前置条件
@@ -41,6 +47,7 @@
 - 如果走 Claude Code：Claude Code v1.0.33+（Context Mode 要求），用 claude --version 确认。claude-mem 要求 Claude Code 最新版且支持插件。
 - Node.js/npm 可用。Quicksilver 要 Node 18+；claude-mem 要 Node 20.0.0+，Bun 和 uv 缺失时会自动安装，SQLite 3 已捆绑；headroom 要 Python 3.10+；hivemind 要 Node >= 22.0.0；planning-with-files 安装走 npx skills。
 - 一个真实编码任务，最好本来就有大量工具调用，能对比前后差异。不要用玩具任务，否则看不出节省。
+- 做法 L 额外需要：本机确实同时使用两个及以上支持同类指令文件约定的编码 agent；系统支持符号链接（macOS / Linux 原生支持，Windows 需另想办法）。
 - 各自的凭据与许可：
   - Quicksilver：到 console.typesafe.ai 申请一个 Jev key。内容会被发送到 TypeSafe 的 API，所以不要拿它处理不能给第三方的数据。
   - claude-mem：标准安装会要求浏览器登录（邮箱 magic link，无需信用卡）；不想要账号交互就显式传 --provider、设 CLAUDE_MEM_ONLINE_OPTIN=false，或在 CI / 非交互 shell 里运行。
@@ -67,6 +74,7 @@
 - 团队多 agent、想把重复模式固化成技能 → 做法 K（hivemind）。
 - 需要可编程、按 user_id 隔离的持久记忆 → 做法 H（mem0）。
 - 需要本地优先、知识图谱、无 LLM 也能检索 → 做法 I（cognee）。
+- 同一台机器上同时用 Claude Code 和 Codex，规则要在多处维护、两边行为还不一致 → 做法 L（共享 AGENTS.MD + 软链）。这条按「值得小范围试」对待，不要一上来就铺到所有 repo。
 
 这些做法可以叠加，但一次只加一个，否则分不清是哪个起了作用。
 
@@ -606,6 +614,34 @@ hivemind uninstall
 hivemind codex uninstall
 ```
 
+### 做法 L：一份共享 AGENTS.MD，软链给多个 agent 共读
+
+适用形态：同一台机器上同时使用 Claude Code 和 Codex（或其他支持同类指令文件约定的编码 agent），希望把规则集中成一份可维护的文件，再分发给各工具，而不是每个工具、每个 repo 各存一份。原文来自 @oliviscusAI 转述 Peter Steinberger（OpenClaw 作者）的设置，是二手转述且在「Every repo」处被截断，按「值得小范围试」对待，不要当 adopt。
+
+原文只给出了机制层面的做法，没有给出任何命令、路径或规则文本。以下步骤严格对应原文所述机制，**涉及具体路径的地方必须自行按各工具当前文档确认**，不要照抄示意路径：
+
+1. 前提确认：本机确实同时使用两个及以上支持「项目/全局指令文件」约定的编码 agent（如 Claude Code、Codex）；系统支持符号链接（macOS / Linux 原生支持；Windows 需另想办法）。
+
+2. 建立一个单一的共享文件夹。原文强调「one shared folder that every agent on his machines reads」，即每台机器一个、所有 agent 都读它。
+
+3. 在该文件夹里写一份 AGENTS.MD，把所有 agent 需要遵守的规则集中放在这一份文件里，而不是各工具各存一份。
+
+4. 把这个 AGENTS.MD 软链到 Claude Code 和 Codex 各自期望读取指令文件的位置，让两个工具实际读到同一份内容。原文未给出路径，示意形式如下（**路径需按各工具文档确认，非原文内容**）：
+   ```bash
+   # 示意，非原文给出的命令
+   ln -s /path/to/shared/AGENTS.md /path/to/claude-code/expected/location/AGENTS.md
+   ln -s /path/to/shared/AGENTS.md /path/to/codex/expected/location/AGENTS.md
+   ```
+   预期：两个工具实际读到同一份内容，而不是各自读到一份副本。
+
+5. 对每个 repo 做同样处理。原文在「Every repo」处截断，这一步的完整做法不可知，只能知道方向是「每个 repo 都要覆盖」。
+
+6. **先验证链路通没通，再谈规则内容**。在里面放一条可明确观察是否生效的独特规则（例如「改动代码后必须先运行测试再汇报」，或一个特定的输出格式要求；最省事的做法是要求回复开头写某句固定的话）。然后用同一个日常任务分别在这两个工具里跑一遍。预期：两个工具都在输出里体现这条规则。若任一工具行为没有变化，说明软链路径写错了，agent 会静默地读不到规则。
+
+7. 链路确认后再把正式规则写进去（例如「改动代码后必须先运行测试再汇报」），用同一个日常任务分别在这两个工具各跑一遍，观察正式规则是否被遵守。
+
+8. 只在一个 repo 上跑一到两周，不铺开到所有 repo。记录下面「怎么判断变好了」里的几个指标，再决定是否扩大范围。
+
 ### 核心用法：用代码思考（Think in Code）
 
 不管用哪种做法，关键动作是：让模型写脚本做分析，只 console.log() 结果，而不是把 50 个文件读进上下文再数函数。示例：
@@ -633,6 +669,7 @@ ctx_execute("javascript", `
 - cognee：无 LLM 本地 remember / recall 先跑通；再通过 Claude Code 插件或 MCP 接进现有 agent 做 1–2 周对照试用，判断能否减少重复交代上下文。BEAM 分数是自报，不能直接当作「用了 Cognee 就更好」的证据。
 - planning-with-files：在同一个长时编码任务上做 A/B，让智能体把 phases 写进 task_plan.md 并靠 hook 每轮重注入，观察 /clear 或 compaction 后的重新定位轮数是否下降。原文自测数据：基准 96.7% 断言通过（29/30）、3/3 盲测 A/B 获胜、磁盘计划把重新定位从 13.3 回合降到 5.0 回合、hook 单次触发优化后 289ms。这些需要自己复现。
 - hivemind：先在一个仓库、一个 agent（如 Claude Code）上小范围试，用 .hivemind 限定捕获范围，再看 skillify 是否真的产出被复用的 SKILL.md。基准数据是作者自测。
+- 做法 L：这条材料没有给出任何工具侧指标，也没有命令可以读回执。唯一能用的是行为观察——两个工具是否真的读到了同一份文件、是否遵守同一条规则。
 
 任务侧指标：
 
@@ -642,6 +679,11 @@ ctx_execute("javascript", `
 - 会话连续性：会话压缩后，agent 是否还能检索到之前的状态和决策；/clear 或 compaction 后重新定位需要多少轮。
 - 条目保留率（blurt）：按 A 保留的条数 / 总条数；以及保留条目里「不需要再补上下文就能直接开工」的比例、代码定位命中率。
 - 团队复用率（hivemind）：skillify 产出的 SKILL.md 是否被其他会话或其他人的 agent 实际拉取并复用。
+- 规则生效次数（做法 L）：同一条规则在两个工具里的生效次数，应从 0 变成生效。先用一眼可验的规则（如规定回复开头的话）确认「读到了没有」，再观察正式规则。
+- 重复交代次数（做法 L）：需要重复向 agent 交代同一规则的次数，应下降。
+- 行为不一致次数（做法 L）：两个工具在同一个任务上的输出/行为不一致次数，应下降。
+- 维护成本（做法 L）：修改一条通用规则时需要改动的文件数，应从「有几个工具/几个 repo 就改几处」降到 1 处。
+- 返工次数（做法 L）：因两个工具遵循不同规则而产生的返工次数，应下降。
 
 最小试用方式：
 
@@ -654,6 +696,7 @@ ctx_execute("javascript", `
 7. cognee：按 Python/CLI 快速上手路径先跑通「跨会话长期记忆」，再通过 Claude Code 插件或 MCP 接进现有 agent 做 1–2 周对照试用。
 8. planning-with-files：选一个跨多会话的真实长任务，在支持 hook 的宿主上执行，做 A/B，观察重新定位轮数。
 9. hivemind：先只在一个仓库、一个 agent 上安装，用 .hivemind 限定范围，看 skillify 产出的 SKILL.md 是否被复用。
+10. 做法 L：挑 1 个自己最常用的 repo，建一个共享文件夹，写一份 AGENTS.MD；里面先放一条可明确观察是否生效的独特规则（例如「改动代码后必须先运行测试再汇报」，或一个特定的输出格式要求）；按各工具文档把 AGENTS.MD 软链给 Claude Code 和 Codex；用同一个日常任务分别在这两个工具里跑一遍，先确认它们确实读到了这份文件，再观察正式规则是否被遵守；只在一个 repo 上跑一到两周，不铺开到所有 repo。
 
 试多久：
 
@@ -664,6 +707,7 @@ ctx_execute("javascript", `
 - mem0 / cognee 这类持久记忆，先用 1–2 周小范围试，重点看是否减少重复交代上下文，而不是只看向量库或图谱是否漂亮。
 - planning-with-files 至少覆盖一次 /clear 或 compaction，再比较重新定位轮数。
 - hivemind 先在一个仓库一个 agent 上试，确认捕获范围和 skillify 质量后再扩展团队。
+- 做法 L 只在一个 repo 上跑一到两周。失败信号很明确：软链后任一工具的行为没有变化，说明链路没接上，此时先用一条一眼可验的规则确认「读到了没有」，再谈效果。
 
 ## 常见坑
 
@@ -748,9 +792,20 @@ hivemind：
 - 原文在 rules 一节的命令块未结束，后续 goals 等命令只有目录提及、没有正文；照做前核对完整文档。
 - 基准数据是作者自测，需自己复现。
 
+共享 AGENTS.MD（做法 L，多 agent 共读规则）：
+
+- 来源是二手转述：@oliviscusAI 转述 Peter Steinberger 的设置，不是作者本人的原始帖，也没给出开源仓库链接。细节可能在转述中失真。
+- 原文在「Every repo」处被截断，逐个 repo 的处理方式不可知；具体路径、规则内容也都没有，必须自行按各工具当前文档补全，不要照抄示意路径。
+- 软链路径写错时，agent 会静默地读不到规则，不会报错。原文没有提醒这一点。所以必须先用一条一眼可验的规则（例如规定回复开头写某句话）确认「读到了没有」，再谈效果。
+- 整条推文没有任何关于「这样做之后结果变好了」的数据或案例，只有主张。推文指标 78 赞、18 转、16 回复只说明关注度，不是效果证据。
+- 需要系统支持符号链接；Windows 需另想办法，原文没有给出 Windows 路径。
+- 原文完全没有说明这套设置与 OpenClaw 本身是什么关系（是给 OpenClaw 用的，还是只给 Claude Code / Codex 用的），不能假设。
+- 适用条件是本机确实同时使用多个支持同类指令文件约定的编码 agent；只用单一 agent 时这条做法的收益不成立。
+- 本手册把它按「值得小范围试」而非「采纳」对待：不要一上来就铺到所有 repo。
+
 ## 证据与来源
 
-本手册合并了九份材料：mksglu/context-mode、UditAkhourii/quicksilver、AGIHunt/blurt、thedotmack/claude-mem、headroomlabs-ai/headroom、mem0ai/mem0、topoteretes/cognee、OthmanAdi/planning-with-files、activeloopai/hivemind。以下逐条标注依据和性质。
+本手册合并了十份材料：mksglu/context-mode、UditAkhourii/quicksilver、AGIHunt/blurt、thedotmack/claude-mem、headroomlabs-ai/headroom、mem0ai/mem0、topoteretes/cognee、OthmanAdi/planning-with-files、activeloopai/hivemind，以及一条转述 Peter Steinberger（OpenClaw 作者）开源其个人 agent 配置的推文（@oliviscusAI）。以下逐条标注依据和性质。
 
 Context Mode（来自 README 与调研报告）：
 
@@ -816,6 +871,16 @@ hivemind（来自 README 调研）：
 - 只是作者主张或未验证的：基准数据是作者自测；原文在 rules 一节的命令块未结束，后续 goals 等命令只有目录提及、没有正文。
 - 关键局限：默认把全部会话 prompt 与工具输出写进团队共享 workspace；需要 Deeplake 账号 token；Codex 要 Trust all，Claude Cowork 要完全退出重开。
 
+共享 AGENTS.MD 软链给多个 agent（来自 @oliviscusAI 的转述推文）：
+
+- 有依据的只有机制本身：一台机器一个共享文件夹、所有 agent 都读它；一份 AGENTS.MD 集中存放规则；把它软链进 Claude Code 和 Codex，使两个工具读到同一套指令；「每个 repo 都要覆盖」这个方向。这几点来自原文对 Peter Steinberger 设置的描述。
+- 原文在「Every repo」处被截断，之后内容缺失，完整设置不可知；具体路径与规则内容原文都没有给出。本手册中的 ln -s 命令是为说明机制写的示意，已明确标注「非原文给出的命令」。
+- 二手来源：@oliviscusAI 转述而非 Peter Steinberger 原帖，细节可能在转述中失真；没有给出开源仓库链接。
+- 数据/案例：只有一个「某人这么做」的描述，没有前后对比；推文指标 78 赞、18 转、16 回复只反映关注度，不是效果证据。
+- 只是作者/转述者主张的：整条推文没有任何关于「这样做之后结果变好了」的数据或案例。
+- 本手册为这条材料补的判定指标（规则生效次数、重复交代次数、行为不一致次数、维护成本从多处降到 1 处、返工次数）、「先用一眼可验的规则确认链路」的步骤、「只在一个 repo 上跑一到两周」的试用范围，都是基于原文机制推导出的验证方式，不是原文给出的内容——原文没有给出任何验证方式或改善数据。
+- 与 OpenClaw 的关系原文完全没有说明，本手册不做假设。
+
 ## 依据的调研
 
 - [mksglu/context-mode](../research/radar/2026-10-01/68-mksglu-context-mode.md)：值得一试，建议先在 Claude Code（或 Cursor）上做小范围试用：用 MCP-only 方式跑一个真实编码任务，对照 ctx_stats 的上下文节省与实际任务结果，再决定是否推广到团队。理由是它直指“工具输出塞满上下文 + 会话压缩后失忆”这两个具体痛点，安装与回退成本低；但 README 的 98% 节省数字、100x 说法和企业 logo 墙均为自述，缺少第三方验证，且 ELv2 许可对商用有限制。
@@ -827,3 +892,4 @@ hivemind（来自 README 调研）：
 - [topoteretes/cognee](../research/radar/2026-10-01/570-topoteretes-cognee.md)：值得一试，可以小范围试：按 README 的 Python/CLI 快速上手路径先跑通「跨会话长期记忆」，再通过 Claude Code 插件或 MCP 接进现有 agent 做 1–2 周对照试用，判断能否减少重复交代上下文。理由：原文给出了可直接复制的安装、代码与插件命令，属于可照做的具体流程；但其效果数据为自报基准，且单 Postgres 图存储与本地 GLiNER 抽取器均明确标注为 demo，尚不足以直接写入手册作为推荐配置。
 - [OthmanAdi/planning-with-files](../research/radar/2026-10-01/571-othmanadi-planning-with-files.md)：值得一试，先用一条安装命令把 planning-with-files 装进 Claude Code 或 Codex 这类支持 hook 的宿主，在同一个长时编码任务上做 A/B：让智能体把 phases 写进 task_plan.md 并靠 hook 每轮重注入，观察 /clear 或 compaction 后的重新定位轮数是否下降。理由是原文给出了可照做的安装命令、三文件模式与 hook 生命周期，但这些效果数字全部来自项目自测，需要自己复现验证。
 - [activeloopai/hivemind](../research/radar/2026-10-01/604-activeloopai-hivemind.md)：值得一试，建议先在一个仓库、一个 agent（如 Claude Code）上小范围试：按 README 的安装命令接入、用 `.hivemind` 限定捕获范围、再看 skillify 是否真的产出被复用的 SKILL.md；它给出了可直接照做的安装/配置/触发步骤，但基准数据是作者自测，且默认把全部会话 prompt 与工具输出写进团队共享 workspace。
+- [@oliviscusAI: Peter Steinberger, the creator of OpenClaw, open-sourced his entire agent setup.](../research/radar/2026-10-02/708-peter-steinberger-the-creator-of-openclaw-open-sou.md)：值得一试，值得小范围试：在一台同时使用 Claude Code 和 Codex 的机器上，把 agent 规则集中成一份 AGENTS.MD，软链给两个工具共读，先验证同一条规则能否被两边自动遵守；给 try 而非 adopt，是因为原文只是第三方转述、且在“Every repo”处截断，仓库链接、具体路径和规则内容都没有，需自行按各工具文档补全。
