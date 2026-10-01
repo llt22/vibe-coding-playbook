@@ -234,10 +234,10 @@ export class Store {
     for (const id of ids) stmt.run(error, id);
   }
 
-  /** 待调研和失败次数未满的条目，按相关度优先。 */
+  /** 待调研和失败次数未满的条目，手动加入的（source = 'manual'）最先，其余按相关度优先。 */
   pendingResearch(limit: number, maxAttempts: number): (Research & { item: Item })[] {
     const rows = this.db.prepare(`SELECT r.* FROM research r JOIN items i ON i.id = r.item_id
-      WHERE r.status = 'pending' OR (r.status = 'error' AND r.attempts < ?) ORDER BY i.relevance DESC, r.id LIMIT ?`).all(maxAttempts, limit) as Research[];
+      WHERE r.status = 'pending' OR (r.status = 'error' AND r.attempts < ?) ORDER BY i.source = 'manual' DESC, i.relevance DESC, r.id LIMIT ?`).all(maxAttempts, limit) as Research[];
     return rows.map((r) => ({ ...r, item: this.db.prepare(`SELECT * FROM items WHERE id=?`).get(r.item_id) as Item }));
   }
 
