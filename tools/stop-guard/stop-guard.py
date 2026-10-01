@@ -85,35 +85,52 @@ def block_count(session, reset):
         return 0, path
 
 
-def last_user_text(transcript_path, limit=1500):
-    """从 transcript 里取最近一条用户手打的消息（跳过工具结果），给模型当背景。取不到就返回空。"""
+def turn_context(transcript_path, message, limit=1500, earlier_limit=2000):
+    """从 transcript 取最近一条用户手打的消息（跳过工具结果、hook 反馈），以及本轮 agent 在最后一条之前说过的话。
+
+    后者让模型知道用户的问题可能已在本轮前面回答过，避免只看最后一条就误判。取不到就返回空串。
+    """
     if not transcript_path or not os.path.exists(transcript_path):
-        return ""
+        return "", ""
     with open(transcript_path, "rb") as f:
         f.seek(0, 2)
         f.seek(max(0, f.tell() - 2_000_000))
         lines = f.read().decode("utf-8", "ignore").splitlines()
+    replies = []
     for line in reversed(lines):
         try:
             d = json.loads(line)
         except ValueError:
             continue
-        if d.get("type") != "user" or d.get("isMeta"):
-            continue
         c = (d.get("message") or {}).get("content")
         if isinstance(c, list):
             c = "".join(b.get("text", "") for b in c if isinstance(b, dict) and b.get("type") == "text")
-        if isinstance(c, str) and c.strip() and not c.lstrip().startswith("<"):
-            return c.strip()[-limit:]
-    return ""
+        if not isinstance(c, str) or not c.strip():
+            continue
+        if d.get("type") == "assistant":
+            replies.append(c.strip())
+        elif d.get("type") == "user" and not d.get("isMeta") and not c.lstrip().startswith("<"):
+            replies.reverse()
+            if replies and replies[-1] == message:
+                replies.pop()
+            earlier = "\n---\n".join(replies)
+            if len(earlier) > earlier_limit:  # 首尾都留：开头常是对用户问题的直接回答
+                half = earlier_limit // 2
+                earlier = f"{earlier[:half]}\n……\n{earlier[-half:]}"
+            return c.strip()[-limit:], earlier
+    return "", ""
 
 
-def ask_llm(env, user_text, message):
+def ask_llm(env, user_text, earlier, message):
     base = env.get("LLM_BASE_URL", "").rstrip("/")
     key, model = env.get("LLM_API_KEY", ""), env.get("LLM_MODEL", "")
     if not (base and key and model):
         raise RuntimeError("stop-guard.env 缺少 LLM_BASE_URL / LLM_API_KEY / LLM_MODEL")
-    content = f"用户最近的要求：\n{user_text or '（未取到）'}\n\nagent 的最后一条消息：\n{message[-4000:]}"
+    content = (
+        f"用户最近的要求：\n{user_text or '（未取到）'}\n\n"
+        f"本轮 agent 在最后一条之前说过的话（节选）：\n{earlier or '（无）'}\n\n"
+        f"agent 的最后一条消息：\n{message[-4000:]}"
+    )
     body = json.dumps({
         "model": model,
         "temperature": 0,
@@ -175,7 +192,7 @@ def main():
         return say("放行 · 规则：无停早迹象")
 
     t0 = time.time()
-    verdict = ask_llm(env, last_user_text(inp.get("transcript_path")), message)
+    verdict = ask_llm(env, *turn_context(inp.get("transcript_path"), message), message)
     ms = int((time.time() - t0) * 1000)
     cat, why = verdict["category"], verdict.get("reason", "")
     if cat in ("A", "B"):
