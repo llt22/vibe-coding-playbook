@@ -1,14 +1,14 @@
-# 让编码 agent 在项目规则里反复跑，而不是在本机随手跑一次
+# 让编码 agent 在受控环境里按项目规则反复跑
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：把编码 agent 从「在本机随手跑一次」变成「在可控环境里、按项目规则反复跑」：补齐工作区持久化、权限边界、工具与扩展供给、项目级护栏和按轮用量成本记录。
-> 先试这一步：先在单个真实项目里手写一份短 CLAUDE.md 和 `.claude/settings.json` 的 allow/ask/deny，再用 Plan mode 跑一个一文件以上的任务，结束后看 git diff 再决定合并。
+> 解决的问题：把编码 agent 从「在本机随手跑一次」变成「在可控环境里、按项目规则反复跑」，补齐工作区持久化、权限与凭据边界、工具与扩展供给、项目级护栏、按轮成本记录，以及「先只读规划、再放权编辑」的分工。
+> 先试这一步：先挑一个可回退的真实 Git 项目，只落地三件事：一份短 CLAUDE.md、permissions 的 allow/ask/deny、一个 PostToolUse 格式化 hook，然后用 Plan mode 跑完一个边界清晰的任务，记录人工介入次数与 diff 大小。
 > 最近修订：2026-10-02
 
 ## 解决什么问题
 
-本手册解决的是：把编码 agent（Claude Code / Codex CLI / 通用 agent）从「在本机随手跑一次」变成「在可控环境里、按项目规则反复跑」。要补五件事：工作区与文件持久化、权限与凭据边界、工具与扩展供给、项目级护栏（上下文供给 + 自动化触发）、按轮次的用量成本记录。给出三条可照做的路径：做法 A 是在 Linux 服务器上自托管 agentbox 工作区；做法 B 是在非生产机器上装 goose，用 MCP 供给工具与权限；做法 C 是在单个真实项目里给 Claude Code 配 CLAUDE.md、allow/ask/deny 权限、hook、subagent、skill，并把主工作流固定成 Explore → Plan → Code → Verify → Commit。
+本手册解决的是：把编码 agent（Claude Code / Codex CLI / OpenCode / goose / agentbox 里的 agent）从「在本机随手跑一次」变成「在可控环境里、按项目规则反复跑」。要补六件事：工作区与文件持久化、权限与凭据边界、工具与扩展供给、项目级护栏（上下文供给 + 自动化触发）、按轮次的用量成本记录、「先只读规划、再放权编辑」的分工。给出五条可照做的路径：做法 A 是在 Linux 服务器上自托管 agentbox 工作区；做法 B 是在非生产机器上装 goose，用 MCP 供给工具与权限；做法 C 是在单个真实项目里给 Claude Code 配 CLAUDE.md、allow/ask/deny 权限、hook、subagent、skill，并把主工作流固定成 Explore → Plan → Code → Verify → Commit；做法 D 是用 OpenCode 的 build/plan 双 agent 把「先只读规划、再放权编辑」固定成分工；做法 E 是在本机装 Codex CLI 并用 ChatGPT 账号登录，先跑通一次终端编码任务。
 
 ## 适用与不适用
 
@@ -16,13 +16,17 @@
 - 需要在服务器或非生产机器上把 Claude Code、Codex CLI 或通用 agent 跑起来，需要持久工作区、共享目录、Git 变更审查、按轮成本记录的人（做法 A / B）。
 - 想用 MCP 给 agent 供给工具与权限，然后观察任务完成率与人工介入时间的人（做法 B / C）。
 - 已经在单个真实项目里用 Claude Code，想照抄一份短 CLAUDE.md、权限白名单、PostToolUse hook、subagent 与 skill 定义，把「动作 → 校验」闭环固定下来的人（做法 C）。
+- 需要先读懂陌生代码库、评估改动范围、再决定是否放权编辑，想用默认只读、bash 前询问权限的 plan agent 降低误改风险的人（做法 D）。
+- 已有 ChatGPT Plus / Pro / Business / Edu / Enterprise 订阅之一，想在本机装官方编码 CLI、用账号登录跑通一次终端编码任务的人（做法 E）。
 - 能给出一台非生产机器或一个可回退的 Git 分支，愿意先小范围试用再扩大的人。
 
 不适用：
 - agentbox 只有 34 stars、稳定版 v0.1.7，原文自述存在 bypassPermissions 默认权限、凭据可被终端用户读取、单机单进程等硬约束，暂不适合直接作为通用方案推给不特定的人。
 - goose 只有 README 级信息，供应商配置字段、权限设置、提示词、工作流步骤都没给，要照做必须查官方文档。
 - claude-code-pro-course 只有 109 stars，README 是课程宣传页；install.sh、labs、starter-kit 的具体内容与任何效果数据都没有在原文中给出，不能直接判定为成熟可采用的成品。
-- 三者都没有给出「AI 是否让结果变好了」的对照评测方法或基准数据；agentbox 只提供成本与用量维度度量，goose 没有任务效果指标，claude-code-pro-course 没有效果数据。
+- OpenCode 的 README 是入口文档：配置细节、模型接入、提示词、协作流程都在外部 opencode.ai/docs，本次未抓到，无法从本材料提炼可照做的配置；桌面版明确标注 BETA；输入元数据里的 211212 stars 量级异常、README 正文未提及，需自行核实。
+- Codex CLI 抓取到的原文只有 README 首页（Quickstart、登录方式、文档链接），没有工作流示例、提示词样本、权限/沙箱/审批配置、性能或成本数据。
+- 五条线索都没有给出「AI 是否让结果变好了」的对照评测方法或基准数据；agentbox 只提供成本与用量维度度量，goose 没有任务效果指标，claude-code-pro-course 没有效果数据，OpenCode 与 Codex 也没有。
 - 涉密或受管环境要额外做安全审查与权限约束，不能直接照搬 `curl | bash` 类安装。
 
 ## 前置条件
@@ -44,9 +48,21 @@
 - 能审阅从网络下载的安装脚本；受管环境改用 npm 安装或发行版打包。
 - 一个非生产或可回退的环境；无人值守（`-p`、CI、`--dangerously-skip-permissions`）只在无生产访问的容器/沙箱里跑。
 
+做法 D（OpenCode）：
+- 能使用包管理器（brew / npm / scoop / choco / pacman / paru / mise / nix 等）的 macOS / Linux / Windows 开发机。
+- 安装前先清掉 0.1.x 之前的旧版本（README 明确提示）。
+- 安装脚本可用环境变量控制安装目录（仅对安装脚本生效）。
+
+做法 E（Codex CLI）：
+- Mac 或 Linux 或 Windows 机器。
+- 若按 ChatGPT 订阅使用：需 Plus、Pro、Business、Edu 或 Enterprise 计划之一。
+- 或改用 API key，但 README 明确说这需要 additional setup，不是零配置。
+- 能执行安装脚本（curl / PowerShell）或包管理器（npm / brew）。
+- 网络受限环境下需改用 GitHub Releases 或手动下载二进制。
+
 ## 操作步骤
 
-三条做法按环境选：要服务器、多人、持久工作区、共享目录、Git 审查、按轮用量成本记录，选做法 A；只有一台非生产机器、想要通用 agent 并愿意自己接 MCP，选做法 B；已经在单个真实项目里用 Claude Code、想把项目级规则和自动化触发固定下来，选做法 C。做法 C 可以和 A 叠加：A 管服务器工作区与账号边界，C 管单个项目内的工具调用规则。
+五条做法按环境选：要服务器、多人、持久工作区、共享目录、Git 审查、按轮用量成本记录，选做法 A；只有一台非生产机器、想要通用 agent 并愿意自己接 MCP，选做法 B；已经在单个真实项目里用 Claude Code、想把项目级规则和自动化触发固定下来，选做法 C；需要先读懂陌生代码库、要一个默认只读、bash 前询问权限的 plan 模式，选做法 D；已经用 ChatGPT 订阅、想在本机装官方 CLI 跑通一次终端编码任务，选做法 E。做法 C 可以和 A 叠加：A 管服务器工作区与账号边界，C 管单个项目内的工具调用规则。
 
 ### 做法 A：在 Linux 服务器上搭自托管 agentbox 工作区
 
@@ -369,6 +385,121 @@ cd ../app-auth && claude
 
 预期结果：同类任务的提示词从一句话变成「目标 + 去哪里找 + 约束 + 怎么验证」，agent 少问、少猜。
 
+### 做法 D：用 OpenCode 把「先只读规划、再放权编辑」固定成分工
+
+1. 清理旧版本。README 明确提示「Remove versions older than 0.1.x before installing」。
+
+2. 安装（任选一种，按平台和习惯选）：
+
+```bash
+# YOLO
+curl -fsSL https://opencode.ai/install | bash
+
+# Package managers
+npm i -g opencode-ai@latest        # or bun/pnpm/yarn
+scoop install opencode             # Windows
+choco install opencode             # Windows
+brew install anomalyco/tap/opencode # macOS and Linux (recommended, always up to date)
+brew install opencode              # macOS and Linux (official brew formula, updated less)
+sudo pacman -S opencode            # Arch Linux (Stable)
+paru -S opencode-bin               # Arch Linux (Latest from AUR)
+mise use -g opencode               # Any OS
+nix run nixpkgs#opencode           # or github:anomalyco/opencode for latest dev branch
+```
+
+注意：`curl | bash` 是直接从网络下载脚本并执行，受管或涉密环境应先审阅脚本内容与来源，或改用包管理器安装。预期结果：`opencode` 命令可用。
+
+3. 若需要指定安装位置（仅对安装脚本生效），按 README 给出的优先级选择，优先级顺序为：
+   1. `$OPENCODE_INSTALL_DIR` — 自定义安装目录
+   2. `$XDG_BIN_DIR` — 符合 XDG Base Directory 规范的路径
+   3. `$HOME/bin` — 标准用户二进制目录（存在或可创建时）
+   4. `$HOME/.opencode/bin` — 默认回退
+
+```bash
+# Examples
+OPENCODE_INSTALL_DIR=/usr/local/bin curl -fsSL https://opencode.ai/install | bash
+XDG_BIN_DIR=$HOME/.local/bin curl -fsSL https://opencode.ai/install | bash
+```
+
+4. 启动后按 `Tab` 键在 `build` 与 `plan` 两个内置 agent 之间切换。预期结果：界面显示当前处于哪个 agent。
+
+5. 把「读陌生代码库、规划改动」这一步固定交给 `plan` agent。README 对其行为的描述是：默认拒绝文件编辑；运行 bash 命令前会询问权限；适合探索不熟悉的代码库或规划改动。预期结果：plan 阶段不会直接改文件，bash 需要你授权。
+
+6. 确认计划后切到 `build`（默认、full-access）执行实际开发改动。预期结果：编辑动作被执行。
+
+7. 遇到复杂搜索和多步任务时，在消息中用 `@general` 调用 `general` 子代理（README 说明它主要供内部使用）。
+
+8. 需要图形界面时安装桌面版（README 标注为 BETA）：
+
+```bash
+# macOS (Homebrew)
+brew install --cask opencode-desktop
+# Windows (Scoop)
+scoop bucket add extras; scoop install extras/opencode-desktop
+```
+
+下载页：`https://github.com/anomalyco/opencode/releases` 或 `https://opencode.ai/download`。平台包名：`opencode-desktop-mac-arm64.dmg`、`opencode-desktop-mac-x64.dmg`、`opencode-desktop-windows-x64.exe`、Linux 用 `.deb` / `.rpm` / `.AppImage`。
+
+9. 需要更细的配置（模型、协作方式等）时，按 README 指引访问 `https://opencode.ai/docs` 与其 agents 文档 `https://opencode.ai/docs/agents`——这些内容不在本次输入中。
+
+诚实说明：README 是入口文档，除安装命令、内置 agent 列表、`Tab` 切换、`plan` 的默认权限行为、`@general` 调用方式和桌面版安装命令外，没有给出配置字段、提示词或协作流程；这些必须查阅 opencode.ai/docs 才能照做。
+
+### 做法 E：在本机装 Codex CLI 并跑通一次终端编码任务
+
+1. 确认前提：Mac / Linux / Windows；按 ChatGPT 订阅使用需 Plus、Pro、Business、Edu 或 Enterprise 计划之一。README 也提到可改用 API key，但明确说这需要 additional setup，即 API key 路径不是零配置。
+
+2. 在 Mac / Linux 上安装（任选其一）：
+
+```shell
+curl -fsSL https://chatgpt.com/codex/install.sh | sh
+```
+
+```shell
+# 或使用 npm
+npm install -g @openai/codex
+```
+
+```shell
+# 或使用 Homebrew
+brew install --cask codex
+```
+
+3. 在 Windows 上安装：
+
+```shell
+powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1 | iex"
+```
+
+4. （可选）强制从 GitHub Releases 下载：独立安装脚本默认从 `https://releases.openai.com/codex` 下载，元数据或资源不可用时回退到 GitHub Releases。需要强制走 GitHub Releases 时设置环境变量 `CODEX_INSTALLER_USE_RELEASES_OPENAI_COM` 为 `false`（`0`、`no` 也接受）：
+
+```shell
+curl -fsSL https://chatgpt.com/codex/install.sh | CODEX_INSTALLER_USE_RELEASES_OPENAI_COM=false sh
+```
+
+```powershell
+$env:CODEX_INSTALLER_USE_RELEASES_OPENAI_COM='false'; irm https://chatgpt.com/codex/install.ps1 | iex
+```
+
+5. （可选）手动下载二进制：到 latest GitHub Release（https://github.com/openai/codex/releases/latest）按平台选择对应的包——
+   - macOS：Apple Silicon/arm64 用 `codex-aarch64-apple-darwin.tar.gz`；x86_64（较老 Mac 硬件）用 `codex-x86_64-apple-darwin.tar.gz`
+   - Linux：x86_64 用 `codex-x86_64-unknown-linux-musl.tar.gz`；arm64 用 `codex-aarch64-unknown-linux-musl.tar.gz`
+
+   每个压缩包内只有一个条目，文件名里带了平台标识（如 `codex-x86_64-unknown-linux-musl`），解压后建议重命名为 `codex`。
+
+6. 启动：安装完成后直接运行
+
+```shell
+codex
+```
+
+7. 登录（推荐路径）：运行 `codex` 后选择 **Sign in with ChatGPT**。README 建议用 ChatGPT 账号登录，以便把 Codex 作为 Plus、Pro、Business、Edu 或 Enterprise 计划的一部分使用。预期结果：登录成功后可在终端里让 Codex 执行编码任务。
+
+8. （可选）换用其他形态：想要编辑器内体验，到 https://developers.openai.com/codex/ide 安装 IDE 扩展（VS Code、Cursor、Windsurf）；想要桌面应用运行 `codex app`，或访问 Codex App 页面；需要 OpenAI 的云端代理 Codex Web，访问 chatgpt.com/codex。
+
+9. （可选）继续查文档：README 指向 Codex Documentation（developers.openai.com/codex）、Contributing（./docs/contributing.md）、Installing & building（./docs/install.md）、Open source fund（./docs/open-source-fund.md）。
+
+诚实说明：抓取到的原文只有 README 首页，没有工作流示例、提示词样本、权限/沙箱/审批配置、性能或成本数据，因此本做法只能做到「装起来并完成账号登录、跑通一次终端任务」这一层。
+
 ## 怎么判断变好了
 
 做法 A（agentbox）看成本与交付把关，不看「结果是否更好」：
@@ -411,6 +542,39 @@ cd ../app-auth && claude
 
 注意：做法 C 的调研没有给出任何效果数据，以上指标与 3~5 次的最小试用节奏沿用做法 B 的方法，属于作者主张而非基准数据。
 
+做法 D（OpenCode）最小试用方式（1 台机器、1 个仓库、1 次对照即可）：
+1. 在个人开发机上按上文任一命令安装，先清掉 0.1.x 之前的旧版本。
+2. 选一个自己不熟悉的中小型仓库，交给 `plan` agent 做同一件事：「定位 X 功能的实现位置，并给出改动计划」。全程不要切到 `build`。
+3. 人工核对：它指出的文件/函数是否真的命中。
+4. 确认计划后切到 `build` 执行同一改动。
+5. 对照：另取一个同量级任务，跳过 `plan`，直接用 `build` 从零做，记录差异。
+
+判断有没有改善的指标（这些指标由调研报告提出，原文未给出）：
+- plan 阶段定位准确率（人工核对命中/未命中）；
+- 计划返工次数（需要你纠正几次才可用）；
+- 从开始到「首个可运行的改动」的耗时；
+- 误操作风险：`plan` 因默认拒绝编辑、bash 需授权而拦下的次数（拦得多说明放权前确实起到闸门作用）；
+- build 阶段的回滚或重做次数（若比不用 plan 时更少，说明前置规划有价值）。
+
+若上述指标没有改善，或 plan 的定位频繁失准，则应退回 watch，等看过官方 docs 后再判断。
+
+做法 E（Codex CLI）最小试用方式（约 15 分钟）：
+1. 在一台自己的开发机上，用 npm 或 curl 命令安装（避免一开始就动生产环境或团队镜像）。
+2. 运行 `codex`，选择 Sign in with ChatGPT 完成登录。
+3. 挑一个小而不重要的真实仓库（例如内部工具脚本库），交给它一个边界清晰的任务，例如「修掉某个已知的小 bug 并补一个测试」。
+4. 人工 review 它产生的每一处改动，记录下面几项。
+
+判断有没有改善的指标（这些指标由调研报告提出，原文未给出）：
+- 任务是否一次跑通（未跑通时，人工介入了几轮）；
+- 最终 diff 中人工需要重写/删除的比例（越低说明越可用）；
+- 与你自己动手相比，完成同一任务的时间差；
+- 它对仓库上下文的「误解次数」（改错文件、改错函数、误删内容等）——这类错误直接决定能不能放进日常工作流；
+- 触发权限确认/中断的次数，评估在受控环境下是否可接受。
+
+建议的继续路径：安装验证通过后，把 README 指向但本次未抓到的文档（Codex Documentation、docs/install.md）补进来，再决定是否把它写进日常编程任务的工作流；若补齐文档后能看到明确的配置与工作流步骤，可把结论从 try 上调。
+
+注意：做法 D、E 的调研都没有给出效果数据，以上指标与最小试用节奏属于调研报告提出的作者主张而非基准数据。
+
 ## 常见坑
 
 - agentbox 的权限默认值：原文自述存在 bypassPermissions 默认权限、凭据可被终端用户读取、单机单进程等硬约束。账号凭据会传给容器内 CLI，有终端权限的用户可以读到。
@@ -432,17 +596,31 @@ cd ../app-auth && claude
 - 不用的 MCP server 要关掉——工具描述本身也占上下文。
 - 一个任务一个会话，`/clear` 开新任务，长任务 `/compact`；`/rewind` 或 `Esc Esc` 回退，而不是在错误上叠第三条消息。
 - 做法 C 的仓库只有 109 stars，README 是课程宣传页；原文没有给出 install.sh、labs、starter-kit 的具体内容与任何效果数据，不适合直接判定为成熟成品。
+- OpenCode 安装前先清掉 0.1.x 之前的旧版本；桌面版明确标注 BETA。
+- OpenCode 的 README 是入口文档，配置细节、模型接入、提示词、协作流程都在外部 `opencode.ai/docs`，本次未抓到，无法从中提炼可照做的配置。
+- OpenCode 输入元数据给出 211212 stars，README 正文未提及该数字，且该量级明显异常，应自行到仓库页面核实。
+- OpenCode 对 `plan` agent「默认拒绝文件编辑、执行 bash 前询问权限」的描述来自 README，没有案例或对比支撑，也未在原文中独立验证。
+- Codex CLI 抓取到的原文只有 README 首页（Quickstart、登录方式、文档链接），没有工作流示例、提示词样本、权限/沙箱/审批配置、性能或成本数据。
+- Codex 的 API key 路径需要 additional setup，不是零配置；有 ChatGPT 订阅的人应优先走账号登录。
+- Codex 独立安装脚本默认从 `https://releases.openai.com/codex` 下载，元数据或资源不可用时回退到 GitHub Releases；需要强制走 GitHub Releases 用 `CODEX_INSTALLER_USE_RELEASES_OPENAI_COM=false`。
+- Codex Web 是云端代理，原文没有任何关于定时、事件或状态触发的说明，不能据此做主动推进。
+- Codex 的 `curl | sh` / PowerShell `irm | iex` 同样是直接从网络下载脚本并执行；受管或涉密环境应先审阅脚本内容与来源，或改用 npm / brew / 手动下载二进制。
+- 不要把「服务器上默认放开」（agentbox 的 bypassPermissions 默认值）当成「项目内也可以不设白名单」；做法 C/D 的权限边界与 agentbox 的账号边界不是同一层。
 
 ## 证据与来源
 
 - 做法 A 依据调研《devilcoolyue/agentbox》：一键安装命令、最小配置样例、工作区任务闭环步骤、容器默认限额（2048 MiB / 2 CPU / 512 进程）、账号池与凭据约束、备份与价格目录说明，均来自该报告转述的项目原文。其中「暂不适合直接作为通用方案推给不特定的人」是调研结论中的作者主张。
 - 做法 B 依据调研《aaif-goose/goose》：安装命令来自 README；54,827 stars、15+ 供应商、70+ MCP 扩展、Apache-2.0、AAIF / Linux Foundation 托管、CI workflow 徽章、repology 打包状态均为仓库自述与徽章，未在原文中独立验证。其余关于通用能力的表述均为作者主张，无数据或案例支撑。
 - 做法 C 依据调研《justxor/claude-code-pro-course》：安装命令、`CLAUDE.md` 模板、`permissions` 配置、`PostToolUse` hook 配置、subagent 与 skill 定义、MCP 命令与 `.mcp.json`、headless / CI 命令、GitHub 集成提示词、Explore → Plan → Code → Verify → Commit 工作流、让它自己验证的做法、worktree 并行与 Writer/Reviewer 互审、提示词公式与「模糊 → 具体」示例，均来自该报告转述的 README 原文（该报告正文在「重构一下」示例处截断，本手册也照此截断标注）。109 stars、12 个模块、8 个实验、13 类任务的提示词库、插件示例与 GitHub Actions 示例均为仓库自述，未在原文中独立验证。原文没有给出 install.sh / labs / starter-kit 的具体内容与任何效果数据；「先把 README 里可直接复制的片段在单个真实项目上落地，再决定是否引入 starter-kit 与 CI 集成」是调研结论中的作者主张。
-- 三条线索都没有给出「AI 是否让结果变好了」的对照评测方法或基准数据。agentbox 的成本与用量指标属于记账维度；goose 没有任务效果指标；claude-code-pro-course 没有效果数据。做法 C 的「怎么判断变好了」沿用做法 B 的最小试用方法与指标，属于作者主张。
-- 与清单的关系：agentbox 不替代 Claude Code，而是给它（以及 Codex CLI）提供自托管环境；goose 这条线索给出了可复制安装命令和通过 MCP 供给工具权限、通过定制发行版预置配置两条路径；claude-code-pro-course 给出了项目级护栏与自动化触发的可复制配置。三条都可把评估从 watch 上调为 try，但都必须先读官方文档、审查安装脚本，并做一次实际任务。
+- 做法 D 依据调研《anomalyco/opencode》：安装命令列表（curl 脚本、npm/bun/pnpm/yarn、scoop、choco、brew tap 与官方 formula、pacman、paru、mise、nix）及「先卸载 0.1.x 之前版本」的提示、安装脚本目录优先级四档与两段示例命令、内置 agent 列表与 `Tab` 切换、`plan` 的默认权限行为、`@general` 调用方式、桌面版下载平台与包名与两条安装命令，均来自该报告转述的 README 正文。其中「The open source AI coding agent」是自我描述，README 未给许可证、代码规模或架构说明；211212 stars 来自输入元数据、README 正文未提及且量级异常；「Ideal for exploring unfamiliar codebases or planning changes」是作者对 plan agent 适用场景的主张，没有案例或对比支撑。「先把 `plan` 用于陌生代码库的定位与规划、确认后再切 `build` 执行」是调研结论中的作者主张。
+- 做法 E 依据调研《openai/codex》：安装命令（Mac/Linux 的 `curl | sh`、Windows 的 PowerShell、npm、Homebrew）、下载源与回退机制、`CODEX_INSTALLER_USE_RELEASES_OPENAI_COM` 环境变量、各平台二进制文件名、登录方式（Sign in with ChatGPT 优先，API key 需额外设置）、许可证（Apache-2.0）、仓库星标 127,454，均来自该报告转述的 README 首页。其中「推荐用 ChatGPT 账号登录以作为订阅计划的一部分使用」属于官方推荐，非第三方验证结论。抓取内容只有 README 首页，没有工作流、提示词、权限/沙箱/审批配置、性能或成本数据；做法 E 的「怎么判断变好了」指标由调研报告提出，原文未给出。
+- 五条线索都没有给出「AI 是否让结果变好了」的对照评测方法或基准数据。agentbox 的成本与用量指标属于记账维度；goose 没有任务效果指标；claude-code-pro-course 没有效果数据；OpenCode 与 Codex 的 README 也没有效果数据。做法 C、D、E 的「怎么判断变好了」分别沿用做法 B 或调研报告提出的最小试用方法与指标，属于作者主张。
+- 与清单的关系：agentbox 不替代 Claude Code，而是给它（以及 Codex CLI）提供自托管环境；goose 这条线索给出了可复制安装命令和通过 MCP 供给工具权限、通过定制发行版预置配置两条路径；claude-code-pro-course 给出了项目级护栏与自动化触发的可复制配置；OpenCode 补上了可复制的安装命令和 `build`/`plan` 权限分工，但 README 不含效果数据，不足以支撑 adopt，可作为把清单中 OpenCode（watch）推进到 try 的依据；Codex CLI 给出了安装与登录路径，并说明可作为 Cursor 里的智能体使用（同一层叠加），但原文只到首页，可作为对比参照，没有给出与 Cursor 的功能差异证据。五条都可把评估从 watch 上调为 try，但都必须先读官方文档、审查安装脚本，并做一次实际任务。
 
 ## 依据的调研
 
 - [devilcoolyue/agentbox](../research/radar/2026-10-02/36-devilcoolyue-agentbox.md)：值得一试，建议在一台可信的 Linux 服务器上小范围试装 agentbox，用它把 Claude Code / Codex CLI 装进 Docker 工作区，换取持久工作区、共享目录、统一 Git 审查和按轮次的用量成本记录；理由是一键安装命令、最小配置样例和任务闭环步骤都可直接照做，但项目仅 34 stars、稳定版 v0.1.7，且原文自述存在 bypassPermissions 默认权限、凭据可被终端用户读取、单机单进程等硬约束，暂不适合直接作为通用方案推给不特定的人。
 - [aaif-goose/goose](../research/radar/2026-10-01/550-aaif-goose-goose.md)：值得一试，建议小范围试用：在非生产机器上用给出的命令装 CLI，接一个模型供应商和 1~2 个相关 MCP 扩展，拿一个重复性任务跑通并记录人工耗时变化；理由是它是本地运行、能用 MCP 供给工具与权限的通用 agent，README 给了可复制的安装方式，但配置与工作流细节缺失，须配合官方文档。
 - [justxor/claude-code-pro-course](../research/radar/2026-10-02/672-justxor-claude-code-pro-course.md)：值得一试，建议小范围试：先把 README 里可直接复制的片段（短 CLAUDE.md、permissions 的 allow/ask/deny、PostToolUse 自动格式化 hook、subagent 与 skill 定义、Plan mode 工作流）在单个真实项目上落地，再决定是否引入其 starter-kit 安装脚本与 CI 集成；理由是这些配置具体到可照抄、覆盖了上下文供给与自动化触发两条主线，但仓库自带的 install.sh／labs／starter-kit 具体内容与任何效果数据都未在原文中给出，不足以直接判定为成熟可采用的成品。
+- [anomalyco/opencode](../research/radar/2026-10-02/511-anomalyco-opencode.md)：值得一试，可先在一台开发机上按 README 给的 brew/npm 命令安装 OpenCode，用 Tab 在 build 与 plan 之间切换，把「读陌生代码库、出改动计划」固定交给只读的 plan agent，确认后再切到 build 执行。理由：README 直接给出了可复制的安装命令和 plan agent 的权限行为（默认拒绝文件编辑、执行 bash 前询问），这套「先只读规划、再放权编辑」的分工流程可以照做；但仓库内容只到入口层，配置细节与效果未给，需自行验证。
+- [openai/codex](../research/radar/2026-10-02/516-openai-codex.md)：值得一试，可以按 README 给出的命令在本机装好 Codex CLI、用 ChatGPT 账号登录，先在真实小仓库里跑通一次终端编码任务；因为原文只提供了安装与登录这类可照做的步骤，没有可提炼的工作流配置，所以先小范围试而不是直接采用。
