@@ -1,16 +1,18 @@
-# 把复杂任务拆成带门禁的三阶段，并在一周对照后再决定留不留
+# 小范围试装 agent 技能包，用对照验证它真的减少了返工
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：重复任务装了技能却说不清有没有改善，多步复杂任务又被 agent 一口气跑完、返工到最后一刻才暴露——这篇手册给出一个可照做的对照验证流程，外加一套把复杂任务拆成带门禁的三阶段骨架。
-> 先试这一步：挑一个非关键项目里每周重复的任务，只装一个技能包，同一输入在有技能和无技能下各跑 3 次，记录返工轮数和首稿可用率。
-> 最近修订：2026-10-02
+> 解决的问题：你已经把编码 agent 接进了日常工作，却不知道该给它装哪些技能、装了到底是变好还是变乱——这篇手册给出一套可照做的方法：装之前先问它值不值、按对照法验证，再把验证有效的部分沉淀成自己的技能或流程。
+> 先试这一步：选一个非关键项目和一类重复任务，只装一个技能包（做法 A 里的六选一，或做法 R 的 mattpocock/skills），同一任务做有/无技能各 3 次对照，一周内说清它有没有减少你的返工，说不清就卸掉。
+> 最近修订：2026-10-03
 
 ## 解决什么问题
 
 你已经在用编码 agent，但每次都要重复描述同一套工程规范，或者不确定装一个技能包是否真的减少了返工——甚至因为一次装太多，上下文反而更乱。这篇手册给出一个可照做的流程：先小范围试装一个现成技能包（可以从一个大插件市场里只装一个单元，也可以只装一个技能），用同一任务做有/无技能的对照，确认有效后再考虑把自己的重复工作写成 `SKILL.md`，或者把一本反复查阅的技术书、一份内部文档半自动转成按需加载的技能；让 agent 代理编码 CLI 跑长任务并拿硬证据验收；给 agent 补一块行业设计知识；把一句模糊想法写成可让 agent 独立跑几小时的任务书；写一个把会话状态嵌进界面的 Claude Code mod；让 agent 把一句话描述／一个代码仓库变成可交互的架构图、工作流图、时序图、数据流图、生命周期图，或者把自然语言需求与已有的 draw.io / Mermaid / Excalidraw 源文件改成自包含的 HTML+SVG 图、并让它长得像你的品牌。
 
-同一套对照方法也适用于中文技术文档的写作与审稿、单篇论文的精读。给 agent 补一块 Postgres 领域知识与版本化官方文档检索（做法 O）；在已获授权的漏洞挖掘或外部红队场景里，按主题自动加载一套安全技能库，并在提交任何发现之前过 7-Question Gate（做法 P）；把读题分析、代码实现、文档撰写这类多步复杂任务拆成三个阶段，每阶段绑定固定交付物和阶段内只读门禁，不许攒到最后才质检（做法 Q）。如果你还需要给 agent 补模型端点、权限或搜索能力，再用配置模板单独补，而不是整包采用。
+同一套对照方法也适用于中文技术文档的写作与审稿、单篇论文的精读。给 agent 补一块 Postgres 领域知识与版本化官方文档检索（做法 O）；在已获授权的漏洞挖掘或外部红队场景里，按主题自动加载一套安全技能库，并在提交任何发现之前过 7-Question Gate（做法 P）；把读题分析、代码实现、文档撰写这类多步复杂任务拆成三个阶段，每阶段绑定固定交付物和阶段内只读门禁，不许攒到最后才质检（做法 Q）；用一套小而可组合的工程技能集，把「动手前先对齐、建共享语言、建反馈回路、管设计」做成可重复实践（做法 R）。如果你还需要给 agent 补模型端点、权限或搜索能力，再用配置模板单独补，而不是整包采用。
+
+如果反复出现的是这四类失败——agent 没做我要的、agent 太啰嗦、代码跑不起来、造出一坨泥——做法 R 的对应手段分别是：动手前用拷问对齐、建一份共享术语表、补反馈回路（静态类型 / 浏览器访问 / 自动化测试）、每天投资设计。
 
 ## 适用与不适用
 
@@ -36,7 +38,10 @@
 - 在已获授权的漏洞挖掘或外部红队场景里（自有资产、书面授权、CTF、赏金 in-scope），想让 agent 按主题自动加载安全技能库，并在提交前过闸门（做法 P）；
 - 有一类多步、有明确交付物的复杂分析任务（读题与需求分析 → 代码实现 → 文档或论文撰写），希望 agent 分阶段推进、每阶段有独立质检，而不是一口气跑完（做法 Q）；
 - 愿意把只读的 skill 根目录与可写的项目目录分开，并接受阶段门禁 FAIL 后必须回原阶段按证据修正（做法 Q）；
-- 参加或模拟数学建模竞赛（CUMCM、MCM/ICM、APMCM、MathorCup 等），需要一个能跑通“分析 → 实现 → 出论文”的完整 skill 做试装对象（做法 Q）。
+- 参加或模拟数学建模竞赛（CUMCM、MCM/ICM、APMCM、MathorCup 等），需要一个能跑通“分析 → 实现 → 出论文”的完整 skill 做试装对象（做法 Q）；
+- 已经在用支持 agent skills 的编码 agent（Claude Code、Codex 等），并且反复出现「agent 没做我要的 / 太啰嗦 / 代码跑不起来 / 造出一坨泥」这四类失败，想用一套小而可组合的技能集把工程基本功固化下来（做法 R）；
+- 愿意在每次改动前先被拷问对齐，并接受让 agent 内联写 `GLOSSARY.md` 和 ADR（做法 R）；
+- 愿意先在一个仓库上跑一次 `/setup-matt-pocock-skills`，把 issue tracker、triage 标签、文档目录定下来（做法 R）。
 
 不适用：
 
@@ -72,7 +77,13 @@
 - 把 Opus 5 在高风险安全请求后回落到 Opus 4.8 当成模型变差（做法 P）；
 - 期待 math-modeling-skill 是一个通用分析框架——它面向数学建模竞赛和一般建模项目，骨架可迁移但领域内容不通用（做法 Q）；
 - 打算把生成的论文直接提交，而不按目标竞赛当届官方规则和官方模板核对（做法 Q 的产物明确“仅供参考”，流程本身不保证合规）；
-- 想跳过单阶段试跑直接跑完整三阶段，或者只把门禁当装饰、不接受 FAIL 后回原阶段返工（做法 Q）。
+- 想跳过单阶段试跑直接跑完整三阶段，或者只把门禁当装饰、不接受 FAIL 后回原阶段返工（做法 Q）；
+- 想让技能接管整个开发流程、替你规划一切（原文明确说 mattpocock/skills 不接管流程，只是把工程基本功压缩成可重复实践，做法 R）；
+- 两条安装路径都想装——原文明确说两个都装会让每个技能出现两份，做法 R 只选一条；
+- 不想让 agent 写 `GLOSSARY.md` 和 ADR 文件（`/grill-with-docs` 依赖这个前提，做法 R）；
+- 没有静态类型、浏览器访问、自动化测试这些常规设施，却想直接拿 `/tdd` 和 `/diagnosing-bugs` 建反馈回路（做法 R）；
+- 没有 issue tracker、也不接受用本地文件当 tracker（`/setup-matt-pocock-skills` 必须先定这个，做法 R）；
+- 在老代码库上指望 `/improve-codebase-architecture` 替你解开泥球——原文明确说它是勘察不是抢救（做法 R）。
 
 ## 前置条件
 
@@ -96,22 +107,25 @@
 - 走 pg-aiguide 路线（做法 O）时额外准备：本机可用 `npx`，目标 agent 支持 Agent Skills 或 MCP；一个真实但不紧急的 Postgres schema 设计或重构任务，首次试验不要用线上迁移；如果团队不允许把 schema 信息发往第三方端点，需要先评估或改为自建。README 未说明公共 MCP 服务的可用性保证、速率限制与数据隐私。
 - 走 Claude-BugHunter 路线（做法 P）时额外准备：已装 Claude Code；只对你自己拥有、或有书面授权评估的资产使用（README 的授权条款：赏金项目 in-scope 资产、渗透测试授权书、CTF、自有基础设施）；可选 Burp Suite + MCP Server 扩展；若做授权的攻击性安全工作，按 README 指引申请 Anthropic 免费的 Cyber Verification Program（CVP）。
 - 走 math-modeling-skill 路线（做法 Q）时额外准备：一个支持本地 Skills 或 Agent 工作流的宿主（README 列出 Claude Code、Codex、Cursor、Trae、Qoder，具体加载方式以各工具当前文档为准）；一个可写的 `PROJECT_ROOT` 题目目录，与只读的 `SKILL_ROOT` 分开；题目附件保持只读；跑双引擎文献检索时，AnySearch 需要密钥时设置环境变量 `ANYSEARCH_API_KEY`，OpenAlex 可用 `--email` 提供礼貌池邮箱；可选装 dsh 预设时要找到本机预设根目录。
+- 走 mattpocock/skills 路线（做法 R）时额外准备：一个支持 agent skills 的编码 agent（Claude Code、Codex 等）；想改技能源码的走 `npx skills@latest add mattpocock/skills`，只想要作者更新、不改的走 Claude Code 插件路线（两条只选一条）；一个 issue tracker（GitHub、Linear，或本地文件）；一组 triage 标签；一个放生成文档的目录；如果要用 `/grill-with-docs`，需要接受它会写 `GLOSSARY.md` 和 ADR；如果要用 `/tdd` 和 `/diagnosing-bugs`，需要静态类型、浏览器访问和自动化测试这些常规设施。
 
 ## 操作步骤
 
-怎么选：先做做法 A；A 里某个技能确实有效、且你有一件每周重复且规范明确的工作，再做做法 B；需要把外部文档变成智能体知识资产时用做法 C；需要给 Claude Code 补模型端点、权限、网页搜索时用做法 D；要写或审中文技术文档用做法 E；要精读单篇论文用做法 F；要给自己写一个把会话状态嵌进界面的 Claude Code mod 时用做法 G；已经在用 Cline CLI、想让 agent 代理长任务并用证据验收时用做法 H；要给 agent 补一块 UI/UX 设计知识时用做法 I；需要把一句话描述或一个代码仓库变成可交互的单文件 HTML 图（架构、工作流、时序、数据流、生命周期）时用做法 J；需要把自然语言需求或已有的 draw.io / Mermaid / Excalidraw 源文件改成自包含的 HTML+SVG 图、并让它长得像你的品牌时用做法 K；面对一个很大的插件市场、想按任务类型匹配模型档位并用现成评测做筛检时用做法 L；要把一本反复查阅的技术书或一份内部文档变成按需加载的技能时用做法 M；要把模糊想法写成可独立跑的任务书，或给破坏性操作加闸门、给文档与记忆做收尾对齐时用做法 N；要给 agent 补 Postgres 领域知识与版本化文档检索时用做法 O；在已获授权的漏洞挖掘或外部红队场景里，要让 agent 按主题自动加载安全技能库并在提交前过闸门时用做法 P；要把一道多步复杂任务拆成“分析 → 实现 → 交付”三阶段、每阶段过门禁再往下走时用做法 Q。
+怎么选：先做做法 A；A 里某个技能确实有效、且你有一件每周重复且规范明确的工作，再做做法 B；需要把外部文档变成智能体知识资产时用做法 C；需要给 Claude Code 补模型端点、权限、网页搜索时用做法 D；要写或审中文技术文档用做法 E；要精读单篇论文用做法 F；要给自己写一个把会话状态嵌进界面的 Claude Code mod 时用做法 G；已经在用 Cline CLI、想让 agent 代理长任务并用证据验收时用做法 H；要给 agent 补一块 UI/UX 设计知识时用做法 I；需要把一句话描述或一个代码仓库变成可交互的单文件 HTML 图（架构、工作流、时序、数据流、生命周期）时用做法 J；需要把自然语言需求或已有的 draw.io / Mermaid / Excalidraw 源文件改成自包含的 HTML+SVG 图、并让它长得像你的品牌时用做法 K；面对一个很大的插件市场、想按任务类型匹配模型档位并用现成评测做筛检时用做法 L；要把一本反复查阅的技术书或一份内部文档变成按需加载的技能时用做法 M；要把模糊想法写成可独立跑的任务书，或给破坏性操作加闸门、给文档与记忆做收尾对齐时用做法 N；要给 agent 补 Postgres 领域知识与版本化文档检索时用做法 O；在已获授权的漏洞挖掘或外部红队场景里，要让 agent 按主题自动加载安全技能库并在提交前过闸门时用做法 P；要把一道多步复杂任务拆成“分析 → 实现 → 交付”三阶段、每阶段过门禁再往下走时用做法 Q；想要一套小而可组合、跨模型可用的工程技能集，先把「动手前对齐」和「可复用纪律」固化下来时用做法 R。
 
 做法 J 与 K 都出图，区别是：J 出带 JavaScript 交互的单文件 HTML，验收靠 `validate`/`deliver` 的机器收据；K 默认出无 JS、无外部图片依赖的静态 HTML+SVG，验收靠品牌 onboarding 阶段的对比度校验和 fidelity receipt，以及你自己看产物能不能交付。要交互选 J，要品牌一致性和静态可交付选 K。
 
 做法 N 与 Q 都涉及“把任务交给 agent 跑长程”，区别是：N 解决的是“怎么把一句模糊想法写清楚”，产出物是一份含目标七问的任务书，不绑定具体领域；Q 解决的是“多步任务怎么分阶段推进、每阶段什么时候该拦”，产出物是分阶段的固定交付物加五道门禁，并带一套现成的目录契约和复现清单。任务本身还在想不清楚的阶段先用 N；任务已经清楚、只是步骤多且容易一步错步步错，用 Q。
 
-E、F、G、H、I、J、K、L、M、N、O、P、Q 都必须套用 A 的对照方法，不要跳过验证直接纳入常规流程。
+做法 B 与 R 都涉及“自己组织技能”，区别是：B 是把你自己的重复工作写成单个 `SKILL.md`；R 是先用别人已经拆好的一套技能集，并且它额外给了两条可照抄的组织经验——用户调用型 / 模型调用型的分层规则，以及「拷问 → 共享语言 → 反馈回路 → 管设计」这条顺序。只有一件重复工作先用 B；有一整类跨会话的工程习惯要先固化，先用 R。
+
+E、F、G、H、I、J、K、L、M、N、O、P、Q、R 都必须套用 A 的对照方法，不要跳过验证直接纳入常规流程。
 
 ### 做法 A：先用现成技能包做小范围试装（推荐先做）
 
 1. 选定一个非关键项目和一类重复任务。前提：你已经在用 Claude Code 或 Codex CLI；项目不是生产关键。预期：明确一个可对照的任务，例如“从 PDF 抽表单字段”或“给用户模块加批量导出功能”。
 
-2. 只选一个技能包，只装一个，不要全装。以下六选一（其它现成来源见做法 L、M、N、Q）：
+2. 只选一个技能包，只装一个，不要全装。以下六选一（其它现成来源见做法 L、M、N、Q、R）：
 
    - 官方示例技能（Claude Code）：
 
@@ -1656,6 +1670,84 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 
 12. 把骨架平移到自己的任务上做一次压力测试。把“建模分析 → 代码实现 → 论文撰写”换成你领域的“分析 → 实现 → 交付”三段，把五个门禁换成自己领域的检查点，看两个机制是否仍然成立：只读根目录 + 可写项目目录的目录契约，以及阶段内只读质检。预期：至少能说出哪一道门禁真的拦下了后面才会暴露的问题；说不出就说明这套骨架对你不成立，不要硬搬。
 
+### 做法 R：装一套小而可组合的工程技能集，把「动手前对齐」和可复用纪律固化下来（可选，按 A 的对照法验证）
+
+定位：`mattpocock/skills`（作者 Matt Pocock）是一套面向编码智能体（Claude Code、Codex 等）的技能集合。作者自述这是他每天用来做真实工程开发、而不是 vibe coding 的配置；技能被设计成**小而可组合、跨模型可用**，每条都能单独改动。它不接管流程（作者明确对比 GSD、BMAD、Spec-Kit），而是把工程基本功压缩成可重复实践。和做法 A 的关系：同样是一个技能包的试装，套用同一套对照方法；区别是它给了两条明确的安装路径、一条仓库级一次性配置，以及一条「用户调用型 / 模型调用型」的分工规则，可以直接拿来当自己的技能组织结构参照。和做法 B 的关系见前面「怎么选」——B 是写单个 `SKILL.md`，R 是先用别人拆好的一整套。
+
+先理解它的两条设计经验：
+
+- 分工轴：**用户调用型（user-invoked）**只有你手输 `/xxx` 才会触发，职责是**编排**；**模型调用型（model-invoked）**你可以手动调用，agent 也可以在任务匹配时自动调用，承载**可复用的纪律**。用户调用型可以调用模型调用型，但不能调用另一个用户调用型。
+- 四个失败模式对应四组手段：agent 没做我要的 → 用拷问在动手前对齐（`grilling` 是 `grill-me` / `grill-with-docs` / `triage` / `wayfinder` / `improve-codebase-architecture` 背后复用的原语）；agent 太啰嗦 → 建一份共享语言文档（术语表 `GLOSSARY.md`）；代码跑不起来 → 补反馈回路（静态类型、浏览器访问、自动化测试，测试走红-绿-重构）；造出一坨泥 → 每天投资设计（`/to-spec` 写规格前先问你会动哪些模块，`/improve-codebase-architecture` 每隔几天扫一次深模块候选）。
+
+工程类技能清单（照原文）：用户调用型有 `ask-matt`（路由，问该用哪个技能）、`grill-with-docs`、`triage`、`improve-codebase-architecture`、`setup-matt-pocock-skills`、`to-spec`、`to-tickets`、`implement`、`implement-spec`、`wayfinder`、`retro`；模型调用型有 `prototype`、`diagnosing-bugs`、`research`、`tdd`、`domain-modeling`、`codebase-design`、`code-review`、`pr`、`wizard`。生产力类：用户调用型 `grill-me`、`handoff`、`teach`、`to-questionnaire`、`wait-what`；模型调用型 `grilling`、`writing-for-agents`。
+
+1. 前提：一个支持 agent skills 的编码 agent（Claude Code、Codex 等）。安装技能，两条路线**只选一条**——原文明确说两个都装会让每个技能出现两份。
+
+   路线 A：Claude Code 插件（只读、随作者更新，等于订阅而非 fork）：
+
+   ```bash
+   claude plugins install mattpocock-skills
+   ```
+
+   或在一个会话内：
+
+   ```text
+   /plugin install mattpocock-skills
+   ```
+
+   前提：它在 Claude Code 官方 marketplace 里，不需要先添加源，更新自动到达。
+
+   路线 B：Codex 及其他 agent（可选技能、可编辑）：
+
+   ```bash
+   npx skills@latest add mattpocock/skills
+   ```
+
+   前提与注意：安装器会让你**选择要装哪些技能、装到哪些编码 agent 上**；原文特意强调 **`setup-matt-pocock-skills` 必须被选中**。原文提到原生 Codex 插件在路线图上。
+
+   给想改的人：任意 agent（包括 Claude Code）用同一个安装器，它把技能以普通文件写进你的仓库，归你所有、可编辑，不会在背后自动更新；想拉作者最新改动时：
+
+   ```bash
+   npx skills update
+   ```
+
+   预期：技能落到你点名的 agent，你清楚它是自动更新、还是归你所有可编辑。
+
+2. 每个仓库跑一次配置。在你的 agent 里运行：
+
+   ```text
+   /setup-matt-pocock-skills
+   ```
+
+   前提：每个仓库跑一次，且要在用其他工程类技能**之前**跑。它会被问三件事：你要用哪个 issue tracker（GitHub、Linear，或本地文件）；你在 triage 工单时打什么标签（`/triage` 会用到这些标签）；你希望生成的文档存到哪里。预期：后面所有需要写回 tracker 或文档的技能都有统一落点，而不是每次临时问。
+
+3. 每次想改动前先对齐。非代码用途用 `/grill-me`：被 relentless 地追问一个计划或设计，直到设计树的每个分支都被解决。代码用途用 `/grill-with-docs`：同样是拷问，但会顺带建项目的领域模型、打磨术语，**内联更新 `GLOSSARY.md` 和 ADR**。前提：`/grill-with-docs` 需要你愿意让它写 `GLOSSARY.md` 和 ADR 文件（存放位置在第 2 步定过）。预期：动手前把「要做什么」问清楚，而不是等交付时才发现方向错。作者称拷问是他最受欢迎的技能，建议**每次**想做改动都用。
+
+4. （可选，但作者说这是最值钱的一步）建共享语言。用 `/grill-with-docs` 或模型调用型 `/domain-modeling`：挑战术语是否与术语表一致，用边界场景压力测试，内联更新 `GLOSSARY.md` 和 ADR。原文给的 before/after 例子：`"There's a problem when a lesson inside a section of a course is made 'real' (i.e. given a spot in the file system)"` → `"There's a problem with the materialization cascade"`。作者称共享语言除了减少啰嗦，还有三个附带好处——变量/函数/文件命名一致、代码库对 agent 更好导航、agent 思考花的 token 更少（均为作者主张，无数据）。
+
+5. 建反馈回路。`/tdd`：红-绿-重构循环，一次做一个垂直切片，用来建功能或修 bug，它会指导 agent 什么算好测试、什么算坏测试。`/diagnosing-bugs`：针对难 bug 和性能回归的纪律化诊断环，分阶段把关——**先建一个能对当前 bug 变红的反馈回路 → 最小化 → 提假设 → 插桩 → 修 → 回归测试**。前提：原文说这类反馈回路依赖「静态类型、浏览器访问、自动化测试」这些常规设施，你得先有。
+
+6. 管设计，别让它烂掉。`/to-spec`：把当前对话整理成规格并发到 issue tracker（**不再访谈**，只是综合你说过的东西）；它会在写规格前先问你会动哪些模块。`/improve-codebase-architecture`：扫描代码库里的「深化机会」，以可视化 HTML 报告交出候选，然后对选定的一项做拷问；作者建议**每隔几天**在代码库上跑一次，并提醒这是**勘察不是抢救**——在老代码库上能找到真候选，但不会替你解开泥球。
+
+7. 串起完整工作流：`/to-spec` → `/to-tickets` → `/implement` 或 `/implement-spec` → `/code-review` 后才提交。
+
+   - `/to-tickets`：把任何计划/规格/对话拆成一组 tracer-bullet 工单，每个工单声明它的阻塞边；可写成本地文本文件，也可在真实 tracker 上建成原生 blocking 链接。
+   - `/implement`：按规格或工单建东西，在事先约定的接缝处驱动 `/tdd`，提交前用 `/code-review` 收尾。
+   - `/implement-spec`：在一个集成分支上实现整个 spec，把工单当任务图跑，在「就绪前沿」上并发跑实施子 agent，最后用 `/code-review` 收尾。
+   - `/code-review`：按两个轴审 diff——**Standards**（是否符合仓库编码规范，加一套 Fowler 坏味道基线）和 **Spec**（是否忠实实现了源工单/规格），以并行子 agent 跑，互不污染。
+   - `/wayfinder`：为超过一个 agent 会话容量的大块工作，在 issue tracker 上建一张决策工单共享地图，一次解决一个，直到通往目的地的路清晰。
+   - `/pr`：规定 PR 正文该长什么样——用最小的可视化把改动说清、附前后证据、给出合并风险判断（单向门还是双向门 + 爆炸半径）。
+   - `/retro`：会话结束后，按严重程度从高到低，提出对编码 agent 环境（导航、自动化检查、编码规范、steering 文件、工具）的改进建议。
+   - `/handoff`：把当前对话压缩成交接文档，让另一个 agent 能接着干。
+   - `/research`：作为后台 agent 运行，对着高可信一手来源调查一个问题，把结论写成带引用的 Markdown 文件存进仓库。
+   - `/wizard`：生成交互式 bash 向导，带人类走只有人才能做的步骤：开基础设施、配凭证或 CI secrets、走不熟的第三方控制台、跑一次性迁移或切换。
+   - `ask-matt`：用户调用型技能之上的路由器，用来问哪个技能或流程适合你的情况。
+   - `writing-for-agents`：一条元技能，管「怎么写 agent 读的文档」（skills、`AGENTS.md`/`CLAUDE.md`、任何 agent 通过指针找到的文档）。
+
+8. 按做法 A 的对照法验证。只挑一两个最高频入口开始（原文给的两个是 `/grill-with-docs` 和 `/tdd`），在一个真实仓库上跑，记录人工介入次数、返工轮数、首稿可用率；保留不装技能时的同任务结果作为基线。预期：你能说清哪一个入口减少了你自己的返工；说不清就不要保留。
+
+注意：原文**没有给任何指标定义、基线或对照数据**，所有效果表述都是作者主张；各 `SKILL.md` 的实际提示词内容也不在本次材料里，要用前先打开仓库确认。
+
 ## 怎么判断变好了
 
 最小试用方式：
@@ -1675,7 +1767,8 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 - 目标书类（做法 N）：拿一个你原本打算自己盯着的多步任务，用 leader 生成任务书，检查七问是否全有答案；丢进目标模式跑一次，记录人工介入次数；完成后跑 `/neat` 看变更摘要是否合理；另拿一个不装技能的同量级任务做对照；
 - Postgres 知识类（做法 O）：按 README 的 A/B 提示词，同一任务关闭 MCP 生成一份、打开生成一份，两份都落到文件，逐项对比；重复 3 次以上或换 2–3 个任务再下结论；
 - 安全技能包类（做法 P）：在一个自建靶场或自有授权小资产上跑一次 `/hunt`，记录加载了哪些技能、攻击面排序是否合理、7-Question Gate 是否拦下了不该提交的发现；另拿不装技能时的同任务结果做基线。注意 README 没有改善幅度数据；
-- 复杂分析类（做法 Q）：先只跑单阶段“建模分析”，把 `题目分析报告.md` 和 `术语表格.md` 与你当初的人工版本对比（这一步不跑代码、不出图，最便宜）；再挑一道小题跑完整三阶段，重点观察 `P1` 有没有在全量计算和正式出图之前真的拦下不可运行的方案；最后换一道小题复跑一次，看第二、第三次的返工量是否低于第一次。
+- 复杂分析类（做法 Q）：先只跑单阶段“建模分析”，把 `题目分析报告.md` 和 `术语表格.md` 与你当初的人工版本对比（这一步不跑代码、不出图，最便宜）；再挑一道小题跑完整三阶段，重点观察 `P1` 有没有在全量计算和正式出图之前真的拦下不可运行的方案；最后换一道小题复跑一次，看第二、第三次的返工量是否低于第一次；
+- 工程技能集类（做法 R）：在一个真实仓库上先跑一次 `/setup-matt-pocock-skills`（定 issue tracker、triage 标签、文档目录），然后只从两个最高频入口开始——对一次真实改动先跑 `/grill-with-docs`，对一个小功能或 bug 跑 `/tdd`；记录人工介入次数与返工轮数，另拿同量级、不装技能的任务作对照。
 
 可观察的指标：
 
@@ -1695,6 +1788,7 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 - Postgres 知识类（做法 O）：约束数量（NOT NULL / CHECK / 唯一约束 / 外键）；索引数量与类型，特别是 partial 与 expression 索引；是否使用了与目标 PG 版本匹配的现代语法（如 `GENERATED ALWAYS AS IDENTITY`、`NULLS NOT DISTINCT`）；人工 review 的返工次数与修改条数；DDL 应用后是否需要补加索引或补约束；对同一版本问题，答案是否与官方手册一致（可用 MCP 的 `search_docs` 交叉核对）。
 - 安全技能包类（做法 P）：7-Question Gate 是否在提交前拦下了不该提交的发现；技能是否按主题自动加载、加载得对不对；攻击面排序是否合理；evidence-hygiene 是否把截图里的 cookie 与 PII 脱掉；README 没有时间节省、误报率、有效率的前后对比，这些要自己记录。
 - 复杂分析类（做法 Q）：五个门禁的通过 / 失败记录（`M1`、`P1`、`P2`、`W1`、`W2`）；门禁拦截率——`P1`/`W1` 提前拦下的问题数 ÷ 总返工问题数，如果接近 0，说明门禁是摆设；`results/复现清单.json` 是否齐全（随机种子、输入文件 SHA-256、运行时与依赖版本、关键参数、唯一复现命令）；LaTeX 侧是否做到资源—源码—产物哈希绑定；回归测试套件是否通过（覆盖双引擎搜索、公式转换、DOCX、LaTeX 模板与校验、Excel 重算、论文结构、动态依赖、复现清单和科学绘图工具）；`figures/_qa/` 的灰度质检预览和成图自检是否真的跑过；换到非建模任务后，目录契约与只读质检这两个机制是否仍然成立。
+- 工程技能集类（做法 R）：`/grill-with-docs` 之后 `GLOSSARY.md` 与 ADR 是否真的被内联更新、术语是否在后续命名中一致；`/tdd` 是否按红-绿-重构一次一个垂直切片推进；`/diagnosing-bugs` 是否真的先建出能对当前 bug 变红的反馈回路再动手改；`/to-spec` 是否在写规格前先问你会动哪些模块；`/code-review` 的两个轴（Standards / Spec）是否分开跑、有没有互相污染；`/improve-codebase-architecture` 每隔几天跑一次后，候选清单是否还有真东西；从 `/to-spec` 到 `/code-review` 的链路能不能一次走通。注意这些都是从原文职责描述推出的可观察项，原文没有给指标定义、基线或对照数据。
 - 文档审稿：它列出的问题里你认可并采纳的比例；修改后的事实密度（「强大」「无缝」这类形容词是否换成数字、命令或报错原文）；AI 腔清单类别是否还有残留；让没参与写作的同事只读成稿，能否说出「读完能做成什么事」。
 - 论文精读：每张主图是否都被讲到、图注是否被引用、有无遗漏面板；是否区分独立个体数与细胞 / 切片数、观察与因果、作者解释与新增假设；是否列出「已读与未获取材料」、未核查附件处是否说明；第⑥节是否给出可迁移环节与待验证设计；人工精读耗时 vs 生成加核对的耗时。
 - 工作流形态的产物是否稳定出现：例如 deep-research 是否每次都在 `.research/<name>/` 下留出 `prompts/`、`child_outputs/`、`logs/`、`raw/`、`final_report.md`。
@@ -1725,18 +1819,27 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 - 如果发现 Opus 5 在高风险安全请求上“变差”，先确认是不是回落到了 Opus 4.8，而不是直接换工具。
 - 如果门禁返回 `FAIL` 后主 Agent 直接把失败结论改掉、或者五个门禁一次也没拦下过东西，说明这套骨架在你这里只是装饰，先只留目录契约和 `P1` 一个门禁再试。
 - 如果生成的论文要直接提交、而你没有按目标竞赛当届官方规则和模板核对过，停手——技能的产物明确“仅供参考”。
+- 如果装了工程技能集之后 agent 仍然先动手再问，说明你没在改动前跑 `/grill-me` 或 `/grill-with-docs`，先改用法再判断要不要留（做法 R）。
+- 如果两条安装路径都装了、每个技能出现两份，先卸掉一条——原文明确说只选一条（做法 R）。
+- 如果 `/improve-codebase-architecture` 的候选清单被当成改造方案直接执行，停一下：原文说它是勘察不是抢救（做法 R）。
 - 如果一周内没有任何一项指标变化，或安装的插件与仓库实际规范冲突导致返工增加，就回到“只借鉴组织方式、不装具体内容”的用法。
 
 注意：`doctor`、`validate`、`npm test`、`claude plugin validate`、`npx @anthropics/skills-ref validate`、`archify doctor`、`validate --json`、`copilot skill list`、`python -m unittest discover -s tests` 这类检查只能证明“技能或 mod 装得上、格式合法、不带危险命令、图能通过校验、技能被宿主发现、回归测试能过”，不能证明“产出更好”。效果必须自己对照。
 
 ## 常见坑
 
-- 整体 adopt：一次装多个技能包，导致上下文过载或规则冲突。AAS 提到 Antigravity 会因监控的 skill 目录过载上下文，需要选择性激活；feiskyer/claude-code-settings 的 FAQ 也建议精选技能，不要全装。做法 H、I、J、K、L、N、Q 同理，先只装一个。
+- 整体 adopt：一次装多个技能包，导致上下文过载或规则冲突。AAS 提到 Antigravity 会因监控的 skill 目录过载上下文，需要选择性激活；feiskyer/claude-code-settings 的 FAQ 也建议精选技能，不要全装。做法 H、I、J、K、L、N、Q、R 同理，先只装一个。
 - 一次装整个插件市场：94 个插件、202 个 agent、184 个 skill 是目录规模，不是使用建议；一次只装一个插件或一个 skill，能走 `gh skill install` / `npx skills add` 的 skills-only 路径就别走全量。
 - 重复安装：在同一个项目里同时用项目级安装和 Claude Code 插件市场装同一个技能包，skills 会出现两份。
+- 两条安装路径都装（做法 R）：原文明确说 `claude plugins install mattpocock-skills` 和 `npx skills@latest add mattpocock/skills` 两个都装会让每个技能出现两份；只选一条。
+- 安装时没勾 `setup-matt-pocock-skills`（做法 R）：原文特意强调它必须被选中，否则后面没有统一的配置落点。
+- 跳过仓库级一次性配置（做法 R）：`/setup-matt-pocock-skills` 要在用其他工程类技能**之前**跑，每个仓库跑一次；跳过它，`/triage` 没有标签、`/to-spec` 没有 tracker 可写。
+- 把用户调用型和模型调用型混着用（做法 R）：用户调用型不能调用另一个用户调用型，只有用户调用型能调用模型调用型；搞反了编排链会断。
+- 想用 `/improve-codebase-architecture` 解泥球（做法 R）：原文明确它是勘察不是抢救，在老代码库上能找到真候选，但不会替你解开泥球。
+- 把 `/to-spec` 当成新一轮访谈（做法 R）：它不再访谈，只是把你说过的东西综合成规格；要问清楚应该在更早的 `/grill-*` 阶段。
 - 手拷 hooks：把仓库里的 `hooks/hooks.json` 直接拷进 `~/.claude/settings.json` 或 `~/.claude/hooks/hooks.json`，会导致重复执行和跨平台 hook 冲突；hooks 必须用安装器写。
 - 在用户主目录安装：项目级安装应在具体项目目录执行；v1.2.1 起 superpowers-zh 会拒绝在主目录安装，老版本会把 skills 写进 home 目录，污染所有项目。
-- 只信 README：很多技能包的 README 没有贴出 `SKILL.md` 正文，质量无法核验；只有安装命令和自述，没有效果数据。feiskyer/claude-code-settings 虽然技能、子代理、settings 模板都列得很全，但技能效果仍是作者描述，没有对照数据。`zh-tech-writing` 的 SKILL.md 与两个 references 未在材料中给出，14 条 AI 腔清单只有类别没有逐条文本；`biomedical-paper-reader` 的 SKILL.md、各 references 与 `evals/RESULTS.md` 的实际内容同样看不到；cline-pilot 的「四要素格式」和 6 项验收清单只存在于 `SKILL.md` / `references/*`，README 里没有；ui-ux-pro-max 的能力数字（192 条规则、79 种风格等）全是作者自述，演示素材被作者自己标注为非本 skill 产物；archify 的 star 数、Trending 排名、案例同样都是创作者口径，没有独立验证；diagram-design 的图型覆盖、十种新增版式语法、三种静态变体的可用性也全是作者口径；wshobson/agents 的规模数字、book-to-skill 的 24×–51× 与 Steps 0–10、khazix-skills 的六个 `SKILL.md` 正文同样只看得到 README 这一层；pg-aiguide 的效果数字只有厂商自己的一次 e-commerce schema 演示；Claude-BugHunter 的 83 个技能、15 个命令、681 条报告模式也都是作者口径；math-modeling-skill 的材料同样只有 README，真正的做法细节在 `SKILL.md`、`references/roles/*/SKILL.md`、`references/Subagent调度.md`、`tools/*/SKILL.md` 等子文件里。
+- 只信 README：很多技能包的 README 没有贴出 `SKILL.md` 正文，质量无法核验；只有安装命令和自述，没有效果数据。feiskyer/claude-code-settings 虽然技能、子代理、settings 模板都列得很全，但技能效果仍是作者描述，没有对照数据。`zh-tech-writing` 的 SKILL.md 与两个 references 未在材料中给出，14 条 AI 腔清单只有类别没有逐条文本；`biomedical-paper-reader` 的 SKILL.md、各 references 与 `evals/RESULTS.md` 的实际内容同样看不到；cline-pilot 的「四要素格式」和 6 项验收清单只存在于 `SKILL.md` / `references/*`，README 里没有；ui-ux-pro-max 的能力数字（192 条规则、79 种风格等）全是作者自述，演示素材被作者自己标注为非本 skill 产物；archify 的 star 数、Trending 排名、案例同样都是创作者口径，没有独立验证；diagram-design 的图型覆盖、十种新增版式语法、三种静态变体的可用性也全是作者口径；wshobson/agents 的规模数字、book-to-skill 的 24×–51× 与 Steps 0–10、khazix-skills 的六个 `SKILL.md` 正文同样只看得到 README 这一层；pg-aiguide 的效果数字只有厂商自己的一次 e-commerce schema 演示；Claude-BugHunter 的 83 个技能、15 个命令、681 条报告模式也都是作者口径；math-modeling-skill 的材料同样只有 README，真正的做法细节在 `SKILL.md`、`references/roles/*/SKILL.md`、`references/Subagent调度.md`、`tools/*/SKILL.md` 等子文件里；mattpocock/skills 的各 `SKILL.md` 实际提示词内容也不在材料里，效果表述全是作者主张。
 - 把 README 当完整流程：book-to-skill 的 Steps 0–10、analyze-only / generate-from-analysis / update / fold-in 的具体用法都在未提供的 `docs/` 里；khazix-skills 的六个 `SKILL.md` 正文也没给；wshobson/agents 没有单个插件的质量数据；Claude-BugHunter 的 6 阶段流程在 README 里列了 5 个名字却称 6 阶段，要对照仓库内 `docs/architecture.md`；pg-aiguide 是否支持本地自建只在未提供的 `DEVELOPMENT.md` 里提到；math-modeling-skill 的角色规范与门禁判定标准也无法从 README 核验。用前先打开仓库确认。
 - 忽略安全：安装任何第三方技能前先通读它的 `SKILL.md`，并跑自己运行时的 doctor/audit 工具。`genspark-claw validate` 会标记 `curl | bash`、base64 载荷和破坏性命令。mod 的风险面更大：它以与 Claude Code 同等权限在本机运行，且能改写或拒绝命令，安装前必须确认来源可信。cline-pilot 以代理身份驱动 Cline 跑任务，安装前同样先读它自己的说明。
 - 规则全量加载：rules 是始终加载的上下文，从 `rules/common` 加一个你实际使用的语言/框架包开始，不要全抄。
@@ -1818,7 +1921,8 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 - 把领域流程当通用框架搬走：可迁移的只有三阶段切分、只读门禁、目录契约和复现清单这几条骨架；换个领域后，门禁要换成自己领域的检查点，直接照搬五个门禁不会成立。
 - 把 math-modeling-skill 的论文直接提交：原文反复声明生成的论文仅供参考，论文结构与格式必须以目标竞赛当届官方规则和官方模板为准，不同竞赛的页面、摘要、编号、页数和提交格式要按当届要求配置——流程本身不保证合规。
 - 把作者设定的质量基线当硬要求：「CUMCM 默认约 15000 字词单位、约 20 页」「每道子问题最多使用两个独立模型体系」「至少 8 幅正式图」「三类各至少 3 张候选图」都是作者设定的基线，README 自己注明前一条是非官方要求，没有说明依据，按自己的任务调整。
-- 把材料当完整文档：本次调研在「与已有做法的关系」一节讲到 OpenCode 时被截断，Archify 在 OpenCode 上的支持细节没有给全；diagram-design 的调研在「重绘已有图（导入）」的 `import-drawio platform.drawio --size=slide-16x` 之后被截断，导出与后续步骤缺失；book-to-skill 的 docs 全部未包含在材料中；khazix-skills 的六个 `SKILL.md` 正文也没给；pg-aiguide 的 `DEVELOPMENT.md` 未读到；Claude-BugHunter 的 `SKILL.md`、`references/*` 与 `docs/architecture.md` 也未提供；math-modeling-skill 只到 README 一层，角色规范与门禁判定标准在 `SKILL.md`、`references/roles/*/SKILL.md`、`references/Subagent调度.md`、`tools/*/SKILL.md` 里。都要用前自己打开仓库确认。
+- 拿作者主张当效果结论（做法 R）：共享语言减少啰嗦、让命名一致、让代码库更好导航、让 agent 少花 token 思考，以及红-绿-重构「结果代码好得多」、并行子 agent「互不污染」，都是作者主张；原文没有指标定义、基线或对照数据。
+- 把材料当完整文档：本次调研在「与已有做法的关系」一节讲到 OpenCode 时被截断，Archify 在 OpenCode 上的支持细节没有给全；diagram-design 的调研在「重绘已有图（导入）」的 `import-drawio platform.drawio --size=slide-16x` 之后被截断，导出与后续步骤缺失；book-to-skill 的 docs 全部未包含在材料中；khazix-skills 的六个 `SKILL.md` 正文也没给；pg-aiguide 的 `DEVELOPMENT.md` 未读到；Claude-BugHunter 的 `SKILL.md`、`references/*` 与 `docs/architecture.md` 也未提供；math-modeling-skill 只到 README 一层，角色规范与门禁判定标准在 `SKILL.md`、`references/roles/*/SKILL.md`、`references/Subagent调度.md`、`tools/*/SKILL.md` 里；mattpocock/skills 同样只到 README 一层，各 `SKILL.md` 的实际提示词未提供。都要用前自己打开仓库确认。
 
 ## 证据与来源
 
@@ -1845,6 +1949,7 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 - pg-aiguide 路线的全部内容——`npx skills add timescale/pg-aiguide --skill postgres` / `--skill schema-exploration`、公共 MCP 端点 `https://mcp.tigerdata.com/docs` 与各环境配置（Claude Code 插件 `claude plugin marketplace add timescale/pg-aiguide` + `claude plugin install pg@aiguide`、Codex、Gemini CLI、Cursor 的 `.cursor/mcp.json`、Windsurf 的 `serverUrl`、OpenCode、VS Code `code --add-mcp`）、简单与复杂两段示例提示词、A/B 自测提示词——均来自调研《timescale/pg-aiguide》，即该仓库 README（Apache 2.0，1853 stars）。README 自述的技能覆盖范围（schema/对象探查、schema 设计、索引策略、数据类型、数据完整性与约束、命名规范、性能调优、现代 Postgres 特性）、扩展生态（TimescaleDB、PostGIS，pgvector coming soon）、以及「技能会被 AI agent 自动使用」都属作者声明。效果数据只有厂商自己的一次 e-commerce schema 演示（约束多 4 倍、索引多 55%、采用 PG17 推荐模式、使用 `GENERATED ALWAYS AS IDENTITY` / `NULLS NOT DISTINCT`），没有任务集、多次重复、第三方复核，也没说明「更好」的判定细则；“dramatically better”“more robust, performant, maintainable”属宣传性表述。README 未说明公共 MCP 服务的可用性保证、速率限制与数据隐私（查询内容会发送到 Timescale 托管的端点）；是否支持本地自建只在未提供的 `DEVELOPMENT.md` 里提到。
 - Claude-BugHunter 路线的全部内容——`/plugin marketplace add elementalsouls/Claude-BugHunter` 与 `/plugin install claude-bughunter@elementalsouls`、clone + `bash scripts/install.sh` / `pwsh ./scripts/install.ps1`、三条路径的能力差异表、`--all` / `--burp-mcp` 与五个 harness 的技能目录映射、`pipx install git+https://github.com/elementalsouls/Claude-BugHunter`、`/hunt` 第一轮声明授权背景、6 阶段流程、自然语言示例与示意输出、7-Question Gate 的 Q2/Q3、evidence-hygiene 的脱敏范围、报告分流、CVP 与 Opus 5 回落 Opus 4.8——均来自调研《elementalsouls/Claude-BugHunter》，即该仓库 README。83 个技能、15 个命令、681 条披露报告模式（433 条单独引用）都是作者口径，没有第三方验证；README 没有给改善幅度数据（没有时间节省、误报率、有效率的前后对比），只有两次 engagement 暴露的能力缺口清单；示例 transcript 被作者自己标注为非真实录制；Atlas Cloud 是赞助商推广位；per-engagement memory、program-rules-parser、HackerOne MCP 都是未勾选的路线图项；README 列了 5 个阶段名却称 6 阶段，需以仓库内 `docs/architecture.md` 为准。
 - math-modeling-skill 路线的全部内容——两选一的安装命令（`git clone https://github.com/XiaoMaColtAI/math-modeling-skill.git`、`npx skills add https://github.com/xiaomacoltai/math-modeling-skill --skill math-modeling`）与 ZIP 解压方式、三阶段与角色对应（建模手 / 编程手 / 论文手）、各阶段固定交付物（`题目分析报告.md`、`术语表格.md`；代码、结果表格、三类各至少 3 张候选图、至少 1 幅总体建模流程图、`results/复现清单.json`；至少 8 幅正式图、默认 `完整论文.docx`、显式要求时的 LaTeX 源码/PDF/哈希清单）、五道独立门禁（`M1`、`P1`、`P2`、`W1`、`W2`）及触发时机、阶段内只读 Subagent 做质检而不是第四个固定角色、`SKILL_ROOT` 只读 + `PROJECT_ROOT` 可写 + 附件只读的目录契约与典型产物结构、六条可直接抄的提示词、阶段反馈回路（FAIL 由原阶段执行者修正并重新派发复验、主 Agent 不得自行覆盖失败结论、从被阻断阶段继续）、集成工具清单（科研可视化、双引擎论文搜索、DOCX、LaTeX、Excel、PDF）、`hybrid_scholar.py` 双引擎检索命令与 `--email` / `ANYSEARCH_API_KEY`、Python 与 MATLAB 两版动态依赖检查、算法资料渐进式加载与「每道子问题最多两个独立模型体系」、三条回归验证命令、dsh 预设的复制位置与 `mm_*` 工具、以及 1.3.0 版本更新说明——均来自调研《XiaoMaColtAI/math-modeling-skill》，即该仓库 README（版本 1.3.0，1848 stars）。原文给出的可核查内容只有这些：安装与运行命令、目录结构、五个门禁的定义与触发时机、集成工具清单、回归测试命令、版本语义化策略与 1.3.0 更新说明、2025 年国赛 A 题（烟幕干扰弹投放策略）和 B 题（碳化硅外延层厚度确定）的示例图。属作者主张、没有数据支撑的是：「CUMCM 默认以约 15000 字词单位、约 20 页作为完整度质量目标」（README 自己注明是非官方要求）、「每道子问题最多使用两个独立模型体系」「至少 8 幅正式图」「三类各至少 3 张候选图」（作者设定的质量基线，未说明依据），以及全文没有任何“用了它之后结果变好多少”的评测数据、对比实验或用户案例。局限：领域特定，面向 CUMCM、MCM/ICM、APMCM、MathorCup、认证杯、数维杯等竞赛与一般建模项目，不是通用分析框架；原文反复声明生成的论文仅供参考，结构格式必须以目标竞赛当届官方规则和官方模板为准；本次材料只有 README，真正的做法细节在 `SKILL.md`、`references/roles/*/SKILL.md`、`references/Subagent调度.md`、`tools/*/SKILL.md` 等子文件中，未包含在输入里，更细的角色规范与门禁判定标准无法核验；跨工具的可移植性未经验证。
+- mattpocock/skills 路线的全部内容——两条安装路线（`claude plugins install mattpocock-skills` 与 `/plugin install mattpocock-skills`、`npx skills@latest add mattpocock/skills`，以及两者只选一条、都装会让每个技能出现两份）、安装器里 `setup-matt-pocock-skills` 必须被选中、想改技能的人用同一安装器并 `npx skills update` 拉更新、`/setup-matt-pocock-skills` 在每个仓库跑一次且要在其他工程类技能之前、它问的三件事（issue tracker / triage 标签 / 文档存放位置）、用户调用型与模型调用型的分层规则（用户调用型负责编排、模型调用型承载可复用纪律；用户调用型可调用模型调用型，不可调用另一个用户调用型）、工程类与生产力类的完整技能清单、四个失败模式与对应手段、`/grill-me` 与 `/grill-with-docs` 的用途与后者内联更新 `GLOSSARY.md` 和 ADR、共享语言的 before/after 例子、`/tdd` 的红-绿-重构与一次一个垂直切片、`/diagnosing-bugs` 的六阶段（先建能对当前 bug 变红的反馈回路 → 最小化 → 提假设 → 插桩 → 修 → 回归测试）、`/to-spec` 写规格前先问模块且不再访谈、`/improve-codebase-architecture` 的可视化 HTML 报告与「每隔几天」和「勘察不是抢救」、`/to-spec` → `/to-tickets` → `/implement` 或 `/implement-spec` → `/code-review` 的链路、`/code-review` 的 Standards / Spec 双轴与并行子 agent、`/wayfinder`、`/pr`（单向门/双向门 + 爆炸半径）、`/retro`、`/handoff`、`/research`（后台 agent、带引用的 Markdown）、`/wizard`（交互式 bash 向导）、`ask-matt` 与 `writing-for-agents` 的定位——均来自调研《mattpocock/skills》，即该仓库 README。原文提供了可复制的安装命令、一次性配置的交互项、完整技能清单与每个技能的职责，以及一条清晰的能力分类轴；但各 `SKILL.md` 的实际提示词内容不在材料里，效果表述（共享语言减少啰嗦、让命名一致、让代码库更好导航、让 agent 少花 token 思考；红-绿-重构「给 agent 一致的反馈水平，结果代码好得多」；并行子 agent「互不污染」）全部是作者主张，原文**没有给任何指标定义、基线或对照数据**，也没有第三方复现记录，所以只能当 try 而不是 adopt。原文提到原生 Codex 插件在路线图上，属未实现项。
 - 文中提到的 star 数（如 anthropics/skills 179219、awesome-copilot 39,568、pro-workflow 2.9k、feiskyer/claude-code-settings 约 1.6k、zh-tech-writing 312、biomedical-paper-reader 31、cline-pilot 91、wshobson/agents 40,149、book-to-skill 33,277、khazix-skills 21,099、pg-aiguide 1853、math-modeling-skill 1848）来自 metrics，不构成有效性证据。
 
 ## 依据的调研
@@ -1871,3 +1976,4 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 - [elementalsouls/Claude-BugHunter](../research/radar/2026-10-02/590-elementalsouls-claude-bughunter.md)：值得一试，在已获授权的漏洞挖掘/外部红队场景中，按 README 的插件方式小范围装这套技能包，用 `/hunt` 跑一个自建靶场并按 7-Question Gate 校验产出；它把「技能包分层 + 按主题自动加载 + 阶段化流程 + 提交前闸门 + 证据脱敏」这套可复制的工作流给全了（含可照抄的安装命令和多 harness 目录映射），但仅凭 README 无法验证 83 个技能的实际质量，且覆盖范围被明确限定在外部攻击面。
 - [timescale/pg-aiguide](../research/radar/2026-10-02/599-timescale-pg-aiguide.md)：值得一试，按 README 给出的命令给 AI 编码助手装上 pg-aiguide 的 Postgres 技能与文档 MCP，然后用它的开/关对照法在一个真实 Postgres schema 任务上小范围验证收益。理由是安装与配置步骤完整可直接照做、覆盖多种主流 agent，但效果证据只有厂商自己的一次演示，尚不足以直接 adopt。
 - [XiaoMaColtAI/math-modeling-skill](../research/radar/2026-10-02/600-xiaomacoltai-math-modeling-skill.md)：值得一试，把这个 skill 的三阶段拆分（建模分析→代码实现→论文撰写）加上「阶段内只读门禁 + 复现清单 + 目录契约」的骨架，小范围试用到自己的复杂分析任务上；它是可直接安装运行的完整 skill（含具体命令与配置），但面向数学建模竞赛，通用性来自流程结构而非领域内容，且原文未给出效果数据，所以先试不建议直接全盘采用。
+- [mattpocock/skills](../research/radar/2026-10-03/73-mattpocock-skills.md)：值得一试，值得在一个真实仓库里小范围试：按原文两条安装路径之一装上技能集，先跑 /setup-matt-pocock-skills 配好 issue tracker、triage 标签和文档目录，再从 /grill-with-docs + /tdd 这两个最高频入口开始用；理由是原文给出了可直接复制的安装命令、一次性配置项和每个技能的职责清单，但效果只有作者主张，需要自建指标验证。

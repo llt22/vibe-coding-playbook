@@ -1,14 +1,14 @@
-# 把编码 agent 从随手跑一次变成可控环境里反复跑
+# 把编码 agent 从「随手跑一次」变成「在可控边界里按项目规则反复跑」
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：把编码 agent 从本机随手跑一次，变成在可控环境里按项目规则反复跑，并为每一项扩展做法给出可照做的步骤、验收信号和回退边界。
-> 先试这一步：先挑一个可回退的真实项目，按做法 C 写短 CLAUDE.md、配 allow/ask/deny 权限和一个 PostToolUse 格式化 hook，用 Plan mode 跑通一次任务。
-> 最近修订：2026-10-02
+> 解决的问题：本手册解决的是：如何把编码 agent 从本机一次性试用，变成有持久工作区、明确权限边界、项目级护栏、可核算成本、可回退的固定工作方式，并且能在换模型供应商时不必重做整套流程。
+> 先试这一步：先在一个可回退的真实 Git 项目里只落地三样东西——短 CLAUDE.md、permissions 的 allow/ask/deny、一个 PostToolUse 格式化 hook——用 Plan mode 跑一次并记录人工介入时间；如果你在意「同一套流程换模型」，再在容器里用 pi 对同一任务做一次对照。
+> 最近修订：2026-10-03
 
 ## 解决什么问题
 
-本手册解决的是：把编码 agent（Claude Code / Codex CLI / OpenCode / goose / agentbox 里的 agent）从「在本机随手跑一次」变成「在可控环境里、按项目规则反复跑」。要补七件事：工作区与文件持久化、权限与凭据边界、工具与扩展供给、项目级护栏（上下文供给 + 自动化触发）、按轮次的用量成本记录、「先只读规划、再放权编辑」的分工、以及「运行时/界面扩展面」的受控试点。给出六条可照做的路径：做法 A 是在 Linux 服务器上自托管 agentbox 工作区；做法 B 是在非生产机器上装 goose，用 MCP 供给工具与权限；做法 C 是在单个真实项目里给 Claude Code 配 CLAUDE.md、allow/ask/deny 权限、hook、subagent、skill，并把主工作流固定成 Explore → Plan → Code → Verify → Commit；做法 D 是用 OpenCode 的 build/plan 双 agent 把「先只读规划、再放权编辑」固定成分工；做法 E 是在本机装 Codex CLI 并用 ChatGPT 账号登录，先跑通一次终端编码任务；做法 F 是在一次性项目里用实验开关试点 Claude Mods（function hooks），按验收矩阵检查后再决定是否留下。
+本手册解决的是：把编码 agent（Claude Code / Codex CLI / OpenCode / goose / pi / agentbox 里的 agent）从「在本机随手跑一次」变成「在可控环境里、按项目规则反复跑」。要补八件事：工作区与文件持久化、权限与凭据边界、工具与扩展供给、项目级护栏（上下文供给 + 自动化触发）、按轮次的用量成本记录、「先只读规划、再放权编辑」的分工、「运行时/界面扩展面」的受控试点，以及「跨模型统一接口」——让同一套流程换供应商而不改上层。给出七条可照做的路径：做法 A 是在 Linux 服务器上自托管 agentbox 工作区；做法 B 是在非生产机器上装 goose，用 MCP 供给工具与权限；做法 C 是在单个真实项目里给 Claude Code 配 CLAUDE.md、allow/ask/deny 权限、hook、subagent、skill，并把主工作流固定成 Explore → Plan → Code → Verify → Commit；做法 D 是用 OpenCode 的 build/plan 双 agent 把「先只读规划、再放权编辑」固定成分工；做法 E 是在本机装 Codex CLI 并用 ChatGPT 账号登录，先跑通一次终端编码任务；做法 F 是在一次性项目里用实验开关试点 Claude Mods（function hooks），按验收矩阵检查后再决定是否留下；做法 G 是按 pi 的官方安装脚本装好 CLI，用 `/login` 接入模型，在容器边界内跑一个边界清晰的小任务，验证「同一套流程换 provider」是否成立。
 
 ## 适用与不适用
 
@@ -19,6 +19,7 @@
 - 需要先读懂陌生代码库、评估改动范围、再决定是否放权编辑，想用默认只读、bash 前询问权限的 plan agent 降低误改风险的人（做法 D）。
 - 已有 ChatGPT Plus / Pro / Business / Edu / Enterprise 订阅之一，想在本机装官方编码 CLI、用账号登录跑通一次终端编码任务的人（做法 E）。
 - 想在一次性项目、合成数据、无生产凭据的前提下，试点 Claude Code 的运行时/界面扩展面（Claude Mods / function hooks），并有一套验收矩阵和成本口径来判断是否留下的人（做法 F）。
+- 想验证「同一套流程换模型供应商而不改上层」、需要把 agent 能力嵌进脚本/服务/其他应用（print/JSON、RPC、TypeScript SDK），并且愿意自己承担隔离边界的人（做法 G）。
 - 能给出一台非生产机器或一个可回退的 Git 分支，愿意先小范围试用再扩大的人。
 
 不适用：
@@ -28,8 +29,12 @@
 - OpenCode 的 README 是入口文档：配置细节、模型接入、提示词、协作流程都在外部 opencode.ai/docs，本次未抓到，无法从本材料提炼可照做的配置；桌面版明确标注 BETA；输入元数据里的 211212 stars 量级异常、README 正文未提及，需自行核实。
 - Codex CLI 抓取到的原文只有 README 首页（Quickstart、登录方式、文档链接），没有工作流示例、提示词样本、权限/沙箱/审批配置、性能或成本数据。
 - Claude Mods 的原文自述是文档与源码审阅，不是实测 benchmark，也不是生产就绪证明；源码目录明确标注接口为 early access，API 可能不通知就变；文中命令是「源码记录的」，作者未声称在真实 Claude 会话中执行过。因此只适合受控试点，不适合直接采纳为生产依赖。
-- 五条已有线索都没有给出「AI 是否让结果变好了」的对照评测方法或基准数据；Claude Mods 给出了验收矩阵与成本公式，但同样是作者提出的评估方法，不是 Anthropic 的计费公式。
-- 涉密或受管环境要额外做安全审查与权限约束，不能直接照搬 `curl | bash` 类安装，也不能为了跑通 Claude Mods 示例而关掉组织托管保护。
+- pi 的 README 更接近宣传 + 仓库导览：extensions、skills、prompt templates、themes、packages、containerization、usage、cli、rpc、sdk 在原文里只是链接，正文没有内容，无法直接照抄步骤。
+- pi 没有内置权限系统，不限制文件系统、进程、网络或凭证访问，默认以启动它的用户和进程权限运行；不做容器化隔离就不适合让它接触敏感文件、凭证或网络。
+- pi 默认不含 sub-agents 和 plan mode；想开箱就有「先只读规划、再放权编辑」分工的人，应先看做法 D，或让 Pi 自己构建 / 装一个按你想要方式做的包。
+- pi 的原文没有效果数据、案例细节、对比测试，也没有任何性能或质量数字；主动推进只有 pi-durable、chord、pi-chat 这些基础设施线索，原文没有给出任何时间/事件/状态触发的配置或步骤，这一条无法照做。
+- 五条已有线索加 Claude Mods、pi 都没有给出「AI 是否让结果变好了」的对照评测方法或基准数据；Claude Mods 给出了验收矩阵与成本公式，但同样是作者提出的评估方法，不是 Anthropic 的计费公式。
+- 涉密或受管环境要额外做安全审查与权限约束，不能直接照搬 `curl | bash` 类安装，也不能为了跑通 Claude Mods 示例而关掉组织托管保护；pi 的 pi-telemetry / pi-share-hf 会话导出等于把工作数据上传，需先确认合规。
 
 ## 前置条件
 
@@ -71,9 +76,17 @@
 - 有组织托管配置的可见性；若组织提供了自己的 `prependPlugins` 列表，必须显式处理 `sec-default@builtin`。
 - 有独立控制与回滚负责人，且禁用/重载 Mod 时该控制仍生效。
 
+做法 G（pi 容器化试用）：
+- Node.js 22.19 或更高版本（macOS / Linux / Windows 安装器可按需代装）。
+- 一个非关键、有 git 版本控制、能随时回滚的仓库。
+- 优先有容器环境：三种模式里 Plain Docker 起步最简单；若只能在宿主机跑，先确认目录内没有凭证文件。
+- 一个模型订阅或 API key（在 Pi 内用 `/login` 接入）。
+- 需要固定版本或可复现环境时，有可用的 Nix（支持 Linux 与 macOS 的 ARM64、x86-64）。
+- 组织有数据外发限制时，先确认 `pi-telemetry` / `badlogic/pi-share-hf` 会话导出是否合规。
+
 ## 操作步骤
 
-六条做法按环境选：要服务器、多人、持久工作区、共享目录、Git 审查、按轮用量成本记录，选做法 A；只有一台非生产机器、想要通用 agent 并愿意自己接 MCP，选做法 B；已经在单个真实项目里用 Claude Code、想把项目级规则和自动化触发固定下来，选做法 C；需要先读懂陌生代码库、要一个默认只读、bash 前询问权限的 plan 模式，选做法 D；已经用 ChatGPT 订阅、想在本机装官方 CLI 跑通一次终端编码任务，选做法 E；需要更深的运行时事件组合或受支持界面行为，且能满足一次性项目、合成数据、有回滚负责人等条件，才考虑做法 F。做法 C 可以和 A 叠加：A 管服务器工作区与账号边界，C 管单个项目内的工具调用规则。做法 F 是做法 C 在 Claude Code 上的扩展面试点，不替代 Skills、MCP、经典 hook 或插件系统。
+七条做法按环境选：要服务器、多人、持久工作区、共享目录、Git 审查、按轮用量成本记录，选做法 A；只有一台非生产机器、想要通用 agent 并愿意自己接 MCP，选做法 B；已经在单个真实项目里用 Claude Code、想把项目级规则和自动化触发固定下来，选做法 C；需要先读懂陌生代码库、要一个默认只读、bash 前询问权限的 plan 模式，选做法 D；已经用 ChatGPT 订阅、想在本机装官方 CLI 跑通一次终端编码任务，选做法 E；需要更深的运行时事件组合或受支持界面行为，且能满足一次性项目、合成数据、有回滚负责人等条件，才考虑做法 F；要在同一套流程里换模型供应商、准备把 agent 嵌进脚本或服务，并且愿意自己容器化隔离，选做法 G。做法 C 可以和 A 叠加：A 管服务器工作区与账号边界，C 管单个项目内的工具调用规则。做法 F 是做法 C 在 Claude Code 上的扩展面试点，不替代 Skills、MCP、经典 hook 或插件系统。做法 G 与它们不是替代关系：pi 提供的是「统一多提供商接口 + 可嵌入的 harness」，权限边界要你自己用容器补，原文明确把 OpenClaw 列为它的真实集成案例。
 
 ### 做法 A：在 Linux 服务器上搭自托管 agentbox 工作区
 
@@ -605,6 +618,93 @@ my-reviewed-mod/
 
 在相同的任务集、模型配置与质量线下比较基线与启用 Mod 的运行，并且要报告失败与回归，而不只是最快的那个成功样例。
 
+### 做法 G：用 pi 把「统一模型接口 + 无内置权限」的 agent 放进容器里试
+
+Pi 是一个「极简、可扩展的 agent harness（智能体外壳）」，作者定位是「让 Pi 适应你的工作流，而不是反过来」。仓库为 monorepo，包含 `@earendil-works/pi-ai`（统一的多提供商 LLM API，覆盖 OpenAI、Anthropic、Google 等）、`@earendil-works/pi-agent-core`（带工具调用和状态管理的 agent 运行时）、`@earendil-works/pi-coding-agent`（交互式编码 agent CLI）、`@earendil-works/pi-durable`（持久对话、任务、文档运行时）、`@earendil-works/chord`（面向服务、复制状态、RPC、插件的应用组合运行时）以及 `@earendil-works/pi-tui`、`@earendil-works/pi-telemetry`。默认**不含** sub-agents 和 plan mode；作者建议要么让 Pi 自己构建，要么装一个按你想要方式做的包。使用方式有四种：交互式、print/JSON 模式自动化、RPC 控制、TypeScript SDK 构建应用。另有 `earendil-works/pi-chat` 面向 Slack/聊天自动化与工作流。
+
+1. 确认 Node.js 22.19 或更高版本。macOS / Linux / Windows 安装器可按需代装。
+
+2. 安装 CLI（安装器会 pin 住所有依赖）。
+
+```bash
+curl -fsSL https://pi.dev/install.sh | sh
+```
+
+Windows：
+
+```shell
+powershell -c "irm https://pi.dev/install.ps1 | iex"
+```
+
+后续用 `pi update` 更新。也可以直接用 npm 安装（注意：不 pin 传递依赖）：
+
+```bash
+npm install -g --ignore-scripts @earendil-works/pi-coding-agent
+```
+
+注意：与其他做法一样，这是从网络直接下载脚本并执行；受管或涉密环境应先审阅脚本内容与来源。预期结果：`pi` 命令可用。
+
+3. 在你希望它工作的目录里启动。
+
+```bash
+cd /path/to/project
+pi
+```
+
+4. 接入模型：在 Pi 内运行 `/login`，连接一个订阅或 API key，然后给它任务。预期结果：可以开始对话并执行编码任务。
+
+5. 设置权限边界（重要前提）：Pi **没有内置权限系统**，不限制文件系统、进程、网络或凭证访问，默认以启动它的用户和进程权限运行。需要更强边界时，原文给出三种容器化模式（详见 `packages/coding-agent/docs/containerization.md`）：
+   - **Gondolin extension**：`pi` 和 provider 认证留在宿主机，把内置工具和 `!` 命令路由进本地 Linux micro-VM。
+   - **Plain Docker**：把整个 `pi` 进程跑在本地容器里，隔离最简单。
+   - **OpenShell**：把整个 `pi` 进程跑在策略控制的 sandbox 里。
+
+预期结果：无论用哪种模式，Pi 触达的文件系统/网络范围都被限制在容器边界内。
+
+6. （可选，需要固定版本或可复现环境时）用 Nix 运行：
+
+```bash
+nix run github:earendil-works/pi/stable
+```
+
+```bash
+nix profile add github:earendil-works/pi/stable
+nix profile upgrade pi
+```
+
+`stable` 指向最新 release；用 tag（如 `github:earendil-works/pi/v1.0.0`）固定版本，或用 `github:earendil-works/pi` 取 main 上未发布改动。支持 Linux 与 macOS 的 ARM64、x86-64；Nix 从源码构建，构建离线，内置模型数据来自 `nix/model-catalog.json` 中 pin 的 pi.dev 模型目录 revision，运行时仍会覆盖 pi.dev 上的新目录数据。手工刷新 pin：
+
+```bash
+npm run update:model-catalog-pin
+```
+
+7. 定制工作流（前提：读完仓库内对应文档，原文只给了入口）：用 extensions、skills、prompt templates、themes 定制，再打包成 Pi packages 通过 npm 或 git 分享。原文未给出这些文件的具体写法与示例，只有链接：`packages/coding-agent/docs/extensions.md`、`skills.md`、`prompt-templates.md`、`themes.md`、`packages.md`。
+
+8. （可选）从源码开发或自建二进制：
+
+```bash
+npm install --ignore-scripts  # 装依赖但不跑生命周期脚本
+npm run build         # 刷新模型数据后构建所有包
+npm run build:offline # 用现有模型数据离线重建
+npm run check         # lint、format、类型检查
+./test.sh             # 跑测试（没有 API key 时跳过依赖 LLM 的测试）
+./pi-test.sh          # 从源码运行 pi，可在任意目录执行
+```
+
+从 release 源码构建独立二进制：
+
+```bash
+VERSION="<release-version>"
+tar -xzf "pi-${VERSION}-source.tar.gz"
+cd "pi-${VERSION}"
+./scripts/build-binaries.sh --offline-model-data --platform linux-x64 --out "$PWD/out"
+```
+
+`--offline-model-data` 表示用归档内的模型数据、不刷新 provider 目录；依赖已就绪时可加 `--skip-install`。
+
+9. （可选）想把编码 agent 能力嵌进别的系统时：走 print/JSON 模式、RPC 或 TypeScript SDK；原文把 OpenClaw 列为真实集成案例。
+
+诚实说明：几乎所有「怎么做」的细节（extensions、skills、prompt templates、themes、packages、containerization、usage、cli、rpc、sdk）在原文里只是链接，正文没有内容，无法直接照抄步骤；这份 README 更接近宣传 + 仓库导览。
+
 ## 怎么判断变好了
 
 做法 A（agentbox）看成本与交付把关，不看「结果是否更好」：
@@ -690,6 +790,23 @@ my-reviewed-mod/
 
 注意：做法 F 的调研自述是文档与源码审阅，不是实测 benchmark；文中命令是「源码记录的」，作者未声称在真实 Claude 会话中执行过；验收矩阵与成本公式是作者提出的评估方法，不是 Anthropic 的计费公式。
 
+做法 G（pi）最小试用方式（约半小时）：
+1. 选一个非关键、有 git 版本控制、能随时回滚的仓库。
+2. 记录用的是哪种安装：`curl -fsSL https://pi.dev/install.sh | sh` 还是 `npm install -g --ignore-scripts ...`。
+3. 因为默认无权限隔离，先在容器里跑（三种模式里 Plain Docker 起步最简单）；若只能在宿主机跑，先确认目录内没有凭证文件。
+4. `cd` 进仓库，`pi` 启动，`/login` 接入一个 provider。
+5. 给它一个边界清晰的小任务（例如「读某个文件并为其中函数补一个测试」），全程观察它调用哪些工具、动了哪些文件。
+6. 再用另一个 provider 重跑同一提示（验证 `pi-ai` 统一接口的可迁移性）。
+
+判断有没有改善的指标（原文没有基线，需自建对照——同一任务用你现有工具跑一遍做参照）：
+- 任务是否一次完成，需要人工介入几次；
+- 返工次数和需要你补的上下文量，相比现有工具是升是降；
+- 换 provider 后同一提示是否仍然跑通（这是 Pi 相对单模型工具的核心卖点，值得单独记一笔）；
+- 它实际触达的文件系统/网络范围，对照容器化边界判断隔离够不够；
+- 如果条件允许，用 `pi-telemetry` 或 `badlogic/pi-share-hf` 把会话导出留档，作为后续复盘的原始素材——但注意这本身也是把工作数据上传，需先确认合规。
+
+说明：pi 的原文没有定义任何指标或阈值；上面这套最小试用与对照方法来自调研报告，属于作者主张而非基准数据。
+
 ## 常见坑
 
 - agentbox 的权限默认值：原文自述存在 bypassPermissions 默认权限、凭据可被终端用户读取、单机单进程等硬约束。账号凭据会传给容器内 CLI，有终端权限的用户可以读到。
@@ -720,7 +837,7 @@ my-reviewed-mod/
 - Codex 独立安装脚本默认从 `https://releases.openai.com/codex` 下载，元数据或资源不可用时回退到 GitHub Releases；需要强制走 GitHub Releases 用 `CODEX_INSTALLER_USE_RELEASES_OPENAI_COM=false`。
 - Codex Web 是云端代理，原文没有任何关于定时、事件或状态触发的说明，不能据此做主动推进。
 - Codex 的 `curl | sh` / PowerShell `irm | iex` 同样是直接从网络下载脚本并执行；受管或涉密环境应先审阅脚本内容与来源，或改用 npm / brew / 手动下载二进制。
-- 不要把「服务器上默认放开」（agentbox 的 bypassPermissions 默认值）当成「项目内也可以不设白名单」；做法 C/D 的权限边界与 agentbox 的账号边界不是同一层。
+- 不要把「服务器上默认放开」（agentbox 的 bypassPermissions 默认值）当成「项目内也可以不设白名单」；做法 C/D/G 的权限边界与 agentbox 的账号边界不是同一层。
 - Claude Mods 源码目录明确标注接口为 early access，API 可能不通知就变；官方 9 月 9 日更新称「数周内」扩大发布，本审阅检查的 TypeScript 声明对应 Claude Code 2.1.273。
 - 不要混淆：社区仓库 `0xDarkMatter/claude-mods` 与 Anthropic 原生功能无关。
 - `/diff` 已是内置命令，会与你的实现争夺命令归属；「加载了一个目录」不足以证明某个 handler 真的跑了，要用测试或显式的非敏感诊断证据确认当前生效的实现。
@@ -731,6 +848,15 @@ my-reviewed-mod/
 - `telemetry` 自己的 README 比目录看起来更受限——它跑在开启分析的内部构建上，不打算用 `--plugin-dir` 独立安装，其分析能力不是通用公共日志服务，只能当架构范例，不能作为客户环境的安装建议。
 - 如果命令或特性不可用，停下来找管理员确认受支持权限，不要为了跑通示例而关掉组织托管保护；升级后要重新生成声明，不要假设旧的类型还适用。
 - 只在存在明确的运行时或界面限制、有受控测试数据、有负责人、有回滚手段时才试点；当需求已由 Skills、MCP、经典 hook 或 CI 满足，或该扩展会成为保护生产系统的唯一屏障时，应当等待。
+- pi **没有内置权限系统**：不限制文件系统、进程、网络或凭证访问，默认以启动它的用户和进程权限运行。不要在未隔离的情况下放任它访问敏感文件、凭证或网络；先按三种容器化模式之一建边界（Plain Docker 起步最简单）。
+- pi 的 README 更接近宣传 + 仓库导览：extensions、skills、prompt templates、themes、packages、containerization、usage、cli、rpc、sdk 在原文里只是链接，正文没有内容，无法直接照抄步骤；要定制必须先读仓库内对应文档。
+- pi 默认**不含** sub-agents 和 plan mode；不要指望它开箱就有「先只读规划、再放权编辑」的分工，要么让 Pi 自己构建，要么装一个按你想要方式做的包。
+- pi 的安装方式影响可复现性：`pi.dev` 安装器从 `packages/coding-agent/install-lock/` 安装以 pin 传递依赖，而 npm 包不 pin 传递依赖；团队要求可复现时用安装器或 Nix。
+- pi 的 Nix 路线从源码构建、构建离线，内置模型数据来自 `nix/model-catalog.json` 中 pin 的 pi.dev 模型目录 revision，可能滞后于 pi.dev 最新状态；需要时手工跑 `npm run update:model-catalog-pin`。
+- `pi-telemetry` / `badlogic/pi-share-hf` 导出会话等于把工作数据上传（作者自己发布过 `badlogicgames/pi-mono` 数据集做例子）；在用它做复盘之前先确认合规。
+- pi 的主动推进只有基础设施线索（`pi-durable` 的持久对话/任务/文档运行时、`chord` 的服务与插件、`pi-chat` 的 Slack/聊天自动化），原文**没有**给出任何时间/事件/状态触发的配置或步骤，不能据此做主动推进。
+- pi 原文没有效果数据、案例细节、对比测试，也没有性能或质量数字；「minimal, extensible」「adapt Pi to your workflows, not the other way around」、公开会话数据比玩具 benchmark 更有价值、「ships with powerful defaults」均为作者主张。仓库星标 111397 来自给定 metrics，README 正文未独立验证。
+- pi 的供应链加固做法可作为参考：直接外部依赖 pin 精确版本（内部 workspace 包仍是版本范围）；`.npmrc` 设 `save-exact=true` 和 `min-release-age=2`（避免当天发布的依赖被解析）；`package-lock.json` 是依赖事实来源，pre-commit 阻止意外的 lockfile 提交（除非设 `PI_ALLOW_LOCKFILE_CHANGE=1`）；`npm run check` 校验 pinned 直接依赖、原生 TypeScript 导入兼容性和生成的 coding-agent install lock；CI 用 `npm ci --ignore-scripts`，另有定时 workflow 跑 `npm audit --omit=dev` 和 `npm audit signatures --omit=dev`。
 
 ## 证据与来源
 
@@ -740,8 +866,9 @@ my-reviewed-mod/
 - 做法 D 依据调研《anomalyco/opencode》：安装命令列表（curl 脚本、npm/bun/pnpm/yarn、scoop、choco、brew tap 与官方 formula、pacman、paru、mise、nix）及「先卸载 0.1.x 之前版本」的提示、安装脚本目录优先级四档与两段示例命令、内置 agent 列表与 `Tab` 切换、`plan` 的默认权限行为、`@general` 调用方式、桌面版下载平台与包名与两条安装命令，均来自该报告转述的 README 正文。其中「The open source AI coding agent」是自我描述，README 未给许可证、代码规模或架构说明；211212 stars 来自输入元数据、README 正文未提及且量级异常；「Ideal for exploring unfamiliar codebases or planning changes」是作者对 plan agent 适用场景的主张，没有案例或对比支撑。「先把 `plan` 用于陌生代码库的定位与规划、确认后再切 `build` 执行」是调研结论中的作者主张。
 - 做法 E 依据调研《openai/codex》：安装命令（Mac/Linux 的 `curl | sh`、Windows 的 PowerShell、npm、Homebrew）、下载源与回退机制、`CODEX_INSTALLER_USE_RELEASES_OPENAI_COM` 环境变量、各平台二进制文件名、登录方式（Sign in with ChatGPT 优先，API key 需额外设置）、许可证（Apache-2.0）、仓库星标 127,454，均来自该报告转述的 README 首页。其中「推荐用 ChatGPT 账号登录以作为订阅计划的一部分使用」属于官方推荐，非第三方验证结论。抓取内容只有 README 首页，没有工作流、提示词、权限/沙箱/审批配置、性能或成本数据；做法 E 的「怎么判断变好了」指标由调研报告提出，原文未给出。
 - 做法 F 依据调研《Claude Mods: Setup, Function Hooks and Security》：实验开关 `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`、`/plugin-types`、`--plugin-dir`、`plugin test`、插件目录结构、`hooks.json` 的 `modules` 片段、选型表、验收矩阵、成本公式、`sec-default` 与 `telemetry` 的边界说明，均来自该报告转述的官方更新、源码与文档审阅。其中「作者自述这是文档与源代码审阅，不是实测 benchmark，也不是生产就绪证明」「文中所有命令是源码记录的，作者未声称在真实 Claude 会话中执行过」「三个试点设计是提出的试点设计，不是部署记录或担保的内置功能」「安全验收矩阵是待实现和验证的验收要求，不是对当前每种失败模式的断言」「供应链审阅清单是工程建议」「成本核算公式是作者自述的评估方法，不是 Anthropic 的计费公式」均为原文明确声明。没有测得的节省百分比；Mod 本身不是价格折扣；额外的工具调用、上下文、重试、开发与维护成本都要计入。原文还明确否认「hook 环境没有 Node.js 或浏览器 DOM」构成完整安全论证——能访问强大中介工具的 Mod 仍需要仔细划定信任边界，权限、网络限制、数据处理和管理配置必须单独审阅。
-- 五条已有线索加 Claude Mods 都没有给出「AI 是否让结果变好了」的对照评测方法或基准数据。agentbox 的成本与用量指标属于记账维度；goose 没有任务效果指标；claude-code-pro-course 没有效果数据；OpenCode 与 Codex 的 README 也没有效果数据；Claude Mods 的验收矩阵与成本公式是作者提出的评估方法。做法 C、D、E、F 的「怎么判断变好了」分别沿用做法 B 或调研报告提出的最小试用方法与指标，属于作者主张。
-- 与清单的关系：agentbox 不替代 Claude Code，而是给它（以及 Codex CLI）提供自托管环境；goose 这条线索给出了可复制安装命令和通过 MCP 供给工具权限、通过定制发行版预置配置两条路径；claude-code-pro-course 给出了项目级护栏与自动化触发的可复制配置；OpenCode 补上了可复制的安装命令和 `build`/`plan` 权限分工，但 README 不含效果数据，不足以支撑 adopt，可作为把清单中 OpenCode（watch）推进到 try 的依据；Codex CLI 给出了安装与登录路径，并说明可作为 Cursor 里的智能体使用（同一层叠加），但原文只到首页，可作为对比参照，没有给出与 Cursor 的功能差异证据；Claude Mods 补上了 Claude Code 的运行时/界面扩展面、选型表、验收矩阵与成本口径，但处于 early access，适合受控试点而非直接采纳。六条都可把评估从 watch 上调为 try，但都必须先读官方文档、审查安装脚本，并做一次实际任务。
+- 做法 G 依据调研《earendil-works/pi》：安装命令（`pi.dev` 安装脚本、Windows PowerShell、npm 安装）、Node.js 22.19+ 前提、`pi update`、启动与 `/login`、Nix 运行与固定版本命令及平台支持、各包列表与职责、三种容器化模式、源码开发与独立二进制构建命令、供应链加固机制、`pi-telemetry` 与 `badlogic/pi-share-hf`、OpenClaw 集成案例，均来自该报告转述的项目原文。其中 stars 111397 来自给定 metrics；「minimal, extensible」「adapt Pi to your workflows, not the other way around」、公开真实会话数据比玩具 benchmark 更能改进 agent、「ships with powerful defaults」为作者主张；extensions、skills、prompt templates、themes、packages、containerization、usage、cli、rpc、sdk 在原文里只是链接，正文没有内容；原文没有效果数据、案例细节、对比测试、性能或质量数字；主动推进只有基础设施线索，没有时间/事件/状态触发的配置或步骤。做法 G 的最小试用方式与对照指标由调研报告提出，原文没有基线或阈值。
+- 五条已有线索加 Claude Mods、pi 都没有给出「AI 是否让结果变好了」的对照评测方法或基准数据。agentbox 的成本与用量指标属于记账维度；goose 没有任务效果指标；claude-code-pro-course 没有效果数据；OpenCode 与 Codex 的 README 也没有效果数据；Claude Mods 的验收矩阵与成本公式是作者提出的评估方法；pi 的原文同样没有效果数据，其会话导出只是留档路径。做法 C、D、E、F、G 的「怎么判断变好了」分别沿用做法 B 或调研报告提出的最小试用方法与指标，属于作者主张。
+- 与清单的关系：agentbox 不替代 Claude Code，而是给它（以及 Codex CLI）提供自托管环境；goose 这条线索给出了可复制安装命令和通过 MCP 供给工具权限、通过定制发行版预置配置两条路径；claude-code-pro-course 给出了项目级护栏与自动化触发的可复制配置；OpenCode 补上了可复制的安装命令和 `build`/`plan` 权限分工，但 README 不含效果数据，不足以支撑 adopt，可作为把清单中 OpenCode（watch）推进到 try 的依据；Codex CLI 给出了安装与登录路径，并说明可作为 Cursor 里的智能体使用（同一层叠加），但原文只到首页，可作为对比参照，没有给出与 Cursor 的功能差异证据；Claude Mods 补上了 Claude Code 的运行时/界面扩展面、选型表、验收矩阵与成本口径，但处于 early access，适合受控试点而非直接采纳；pi 补上了「统一多提供商接口 + 可嵌入 harness」这一层，给出了安装、启动、登录、Nix 固定版本与三种容器化边界的可复制步骤，并把 OpenClaw 列为真实集成案例，但 README 是宣传 + 导览，扩展与容器化细节只给了链接，默认没有权限系统，没有效果数据，需要在容器里实测后再决定是否写进日常流程。七条都可把评估从 watch 上调为 try，但都必须先读官方文档、审查安装脚本，并做一次实际任务。
 
 ## 依据的调研
 
@@ -751,3 +878,4 @@ my-reviewed-mod/
 - [anomalyco/opencode](../research/radar/2026-10-02/511-anomalyco-opencode.md)：值得一试，可先在一台开发机上按 README 给的 brew/npm 命令安装 OpenCode，用 Tab 在 build 与 plan 之间切换，把「读陌生代码库、出改动计划」固定交给只读的 plan agent，确认后再切到 build 执行。理由：README 直接给出了可复制的安装命令和 plan agent 的权限行为（默认拒绝文件编辑、执行 bash 前询问），这套「先只读规划、再放权编辑」的分工流程可以照做；但仓库内容只到入口层，配置细节与效果未给，需自行验证。
 - [openai/codex](../research/radar/2026-10-02/516-openai-codex.md)：值得一试，可以按 README 给出的命令在本机装好 Codex CLI、用 ChatGPT 账号登录，先在真实小仓库里跑通一次终端编码任务；因为原文只提供了安装与登录这类可照做的步骤，没有可提炼的工作流配置，所以先小范围试而不是直接采用。
 - [Claude Mods: Setup, Function Hooks and Security](../research/radar/2026-10-02/851-claude-mods-setup-function-hooks-and-security.md)：值得一试，把 Claude Mods 当作受控试点的运行时/界面扩展面来用：先用实验开关与 /plugin-types 在一次性项目里跑通官方 diff 示例，再按文章的验收矩阵和「每被接受任务总成本」指标判断是否留下。理由是原文给出了可直接复制的启用命令、插件目录结构、hooks.json 片段和一整套安全验收检查，但它自认只是文档与源码审阅、API 处于 early access，因此不适合直接采纳为生产依赖。
+- [earendil-works/pi](../research/radar/2026-10-03/518-earendil-works-pi.md)：值得一试，建议小范围试：按 README 的安装脚本装好 pi，在单个有版本控制的项目目录里用 /login 接入模型跑一个边界清晰的小任务（优先在容器里跑），验证它作为「统一模型接口 + 编码 agent」能否承载可复用的协作工作流；理由是原文给出了安装、启动、登录、容器化三类能直接照做的步骤，但扩展、技能、提示词模板等定制细节全在外链文档里，只有实测才能判断值不值得写进手册。
