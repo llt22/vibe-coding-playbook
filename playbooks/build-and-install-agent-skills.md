@@ -1,16 +1,16 @@
-# 给编码 agent 试装技能包：先装一个，再做对照验证
+# 让编码 agent 按任务只装一个技能，并用对照证据验收
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：你已经在用编码 agent，但面对大量现成技能包（含 google/skills），不确定该装哪个、是否真的减少返工，且怕一次装太多反而更乱。
-> 先试这一步：选定一个非关键项目和一类重复任务，只装一个技能包（例如从 google/skills 里选一个与当前任务最接近的 Google 技能），用同一任务做有/无技能的对照。
+> 解决的问题：解决“装了很多技能或插件，却不确定是否真的减少返工，以及如何按任务只装一个、用同一任务的有无对照验证效果”的问题。
+> 先试这一步：先在一个非关键项目上，只装一个与当前任务最接近的技能，用同一任务做有/无各 3 次的对照，记录返工次数。
 > 最近修订：2026-10-03
 
 ## 解决什么问题
 
 你已经在用编码 agent，但每次都要重复描述同一套工程规范，或者不确定装一个技能包是否真的减少了返工——甚至因为一次装太多，上下文反而更乱。这篇手册给出一个可照做的流程：先小范围试装一个现成技能包（可以从一个大插件市场里只装一个单元，也可以只装一个技能），用同一任务做有/无技能的对照，确认有效后再考虑把自己的重复工作写成 `SKILL.md`，或者把一本反复查阅的技术书、一份内部文档半自动转成按需加载的技能；让 agent 代理编码 CLI 跑长任务并拿硬证据验收；给 agent 补一块行业设计知识；把一句模糊想法写成可让 agent 独立跑几小时的任务书；写一个把会话状态嵌进界面的 Claude Code mod；让 agent 把一句话描述／一个代码仓库变成可交互的架构图、工作流图、时序图、数据流图、生命周期图，或者把自然语言需求与已有的 draw.io / Mermaid / Excalidraw 源文件改成自包含的 HTML+SVG 图、并让它长得像你的品牌。
 
-同一套对照方法也适用于中文技术文档的写作与审稿、单篇论文的精读。给 agent 补一块 Postgres 领域知识与版本化官方文档检索（做法 O）；在已获授权的漏洞挖掘或外部红队场景里，按主题自动加载一套安全技能库，并在提交任何发现之前过 7-Question Gate（做法 P）；把读题分析、代码实现、文档撰写这类多步复杂任务拆成三个阶段，每阶段绑定固定交付物和阶段内只读门禁，不许攒到最后才质检（做法 Q）；用一套小而可组合的工程技能集，把「动手前先对齐、建共享语言、建反馈回路、管设计」做成可重复实践（做法 R）；需要 Google 产品与技术（Cloud、AI/ML、基础设施、数据库与分析、开发者工具、管理工具、安全与身份、Web/应用托管、广告、分析等）的技能时，从 google/skills 按任务只装一个（做法 S）。如果你还需要给 agent 补模型端点、权限或搜索能力，再用配置模板单独补，而不是整包采用。
+同一套对照方法也适用于中文技术文档的写作与审稿、单篇论文的精读。给 agent 补一块 Postgres 领域知识与版本化官方文档检索（做法 O）；在已获授权的漏洞挖掘或外部红队场景里，按主题自动加载一套安全技能库，并在提交任何发现之前过 7-Question Gate（做法 P）；把读题分析、代码实现、文档撰写这类多步复杂任务拆成三个阶段，每阶段绑定固定交付物和阶段内只读门禁，不许攒到最后才质检（做法 Q）；用一套小而可组合的工程技能集，把「动手前先对齐、建共享语言、建反馈回路、管设计」做成可重复实践（做法 R）；需要 Google 产品与技术（Cloud、AI/ML、基础设施、数据库与分析、开发者工具、管理工具、安全与身份、Web/应用托管、广告、分析等）的技能时，从 google/skills 按任务只装一个（做法 S）；需要让 agent 检索中国金融市场数据时，装 china-market-data 并检查数据来源与时间戳（做法 T）；需要把 iOS/Android 模拟器与真机画面接进 Codex 聊天、让 Codex 直接读日志和性能数据时，装 Mobile Dev（做法 U）。如果你还需要给 agent 补模型端点、权限或搜索能力，再用配置模板单独补，而不是整包采用。
 
 如果反复出现的是这四类失败——agent 没做我要的、agent 太啰嗦、代码跑不起来、造出一坨泥——做法 R 的对应手段分别是：动手前用拷问对齐、建一份共享术语表、补反馈回路（静态类型 / 浏览器访问 / 自动化测试）、每天投资设计。
 
@@ -37,7 +37,8 @@
 - 有一类多步、有明确交付物的复杂分析任务，希望 agent 分阶段推进、每阶段有独立质检（做法 Q）；
 - 已经在用支持 agent skills 的编码 agent，并且反复出现「agent 没做我要的 / 太啰嗦 / 代码跑不起来 / 造出一坨泥」这四类失败，想用一套小而可组合的技能集把工程基本功固化下来（做法 R）；
 - 你使用 Google Cloud、BigQuery、GKE、IAM、SecOps、Google Ads 等 Google 产品与技术，想给 agent 补一块可安装的 Google 相关技能（做法 S）；
-- 愿意按任务只装一个技能，并接受 Google Cloud 技能需要账号、项目、认证和 IAM 权限（做法 S）。
+- 需要中国股票市场数据检索与初步整理，且宿主能执行本地 Python（Cursor、Claude Code、Codex 等），愿意按数据边界核对来源与时间戳（做法 T）；
+- 在 Apple Silicon Mac 上用 Codex desktop，想把 iOS/Android 模拟器或真机画面接进聊天，让 Codex 读日志、检查元素、录制并对比性能（做法 U）。
 
 不适用：
 
@@ -68,7 +69,11 @@
 - 不想进入具体 skill 目录确认权限、配置和前提（做法 S）；
 - 在正式环境直接试高权限技能（做法 S）；
 - 没有 Google Cloud 账号、项目、认证与 IAM 权限却要装依赖它们的技能（做法 S）；
-- 期待 README 给出每个技能的完整步骤和效果数据（google/skills 只给列表和链接，做法 S）。
+- 期待 README 给出每个技能的完整步骤和效果数据（google/skills 只给列表和链接，做法 S）；
+- 只能聊天、不能执行本地脚本的宿主，或想直接驱动交易（做法 T）；
+- 想拿中国金融数据做投顾建议，或把代码开源当成数据开放授权、把免 Key 当成可自由商用（做法 T）；
+- 非 Apple Silicon Mac、非 Codex desktop，或拿不到该私有仓库访问权、没有对应 Xcode 版本（做法 U）；
+- 期待 Mobile Dev 接管 App 构建、安装、启动，或指望它给出现成的性能提升数字（做法 U）。
 
 ## 前置条件
 
@@ -94,10 +99,12 @@
 - 走 math-modeling-skill 路线（做法 Q）时额外准备：一个支持本地 Skills 或 Agent 工作流的宿主；一个可写的 `PROJECT_ROOT` 题目目录，与只读的 `SKILL_ROOT` 分开；题目附件保持只读；跑双引擎文献检索时设置 `ANYSEARCH_API_KEY` 或用 `--email`。
 - 走 mattpocock/skills 路线（做法 R）时额外准备：一个支持 agent skills 的编码 agent；想改技能源码的走 `npx skills@latest add mattpocock/skills`，只想要作者更新、不改的走 Claude Code 插件路线（两条只选一条）；一个 issue tracker；一组 triage 标签；一个放生成文档的目录；如果要用 `/grill-with-docs`，需要接受它会写 `GLOSSARY.md` 和 ADR；如果要用 `/tdd` 和 `/diagnosing-bugs`，需要静态类型、浏览器访问和自动化测试这些常规设施。
 - 走 google/skills 路线（做法 S）时额外准备：本机有 Node.js/npx，网络可访问 GitHub 和 skills.sh；使用 Google Cloud 相关技能需要相应的 Google Cloud 账号、项目和权限；插件安装需已安装对应 agent harness（Claude Code、Codex、Antigravity CLI）。README 只给列表和链接，具体每个技能需要的信息、工具、权限和配置要进入对应 skill 目录查看。
+- 走 china-market-data 路线（做法 T）时额外准备：Node.js 22.20+ / npm；Python 3.9+；网络可访问数据源；一个可写目录输出 JSON；目标宿主能执行本地 Python；iwencai 入口需要自备 `IWENCAI_API_KEY`，配置方法见 `SKILL.md#prerequisites`；不要把 Key、Cookie 或会话文件提交到仓库。
+- 走 Mobile Dev 路线（做法 U）时额外准备：Codex desktop，运行在 Apple Silicon Mac 上；使用 Codex 自带 Node runtime，不需要插件构建或 `npm install`；该仓库当前为 private，安装需要 GitHub 读权限且本机 Git 认证可用；按平台准备 Xcode 26+（真机 27+）与 simulator runtime、Android SDK platform-tools 与 emulator、已运行的 Metro server、宿主 WebCodecs 支持；部分性能能力还要 iOS 17.4+/Android 12+、development-signed 且带 `get-task-allow`、developer disk image 已挂载、Xcode/LLDB detached。
 
 ## 操作步骤
 
-怎么选：先做做法 A；A 里某个技能确实有效、且你有一件每周重复且规范明确的工作，再做做法 B；需要把外部文档变成智能体知识资产时用做法 C；需要给 Claude Code 补模型端点、权限、网页搜索时用做法 D；要写或审中文技术文档用做法 E；要精读单篇论文用做法 F；要给自己写一个把会话状态嵌进界面的 Claude Code mod 时用做法 G；已经在用 Cline CLI、想让 agent 代理长任务并用证据验收时用做法 H；要给 agent 补一块 UI/UX 设计知识时用做法 I；需要把一句话描述或一个代码仓库变成可交互的单文件 HTML 图时用做法 J；需要把自然语言需求或已有的 draw.io / Mermaid / Excalidraw 源文件改成自包含的 HTML+SVG 图、并让它长得像你的品牌时用做法 K；面对一个很大的插件市场、想按任务类型匹配模型档位并用现成评测做筛检时用做法 L；要把一本反复查阅的技术书或一份内部文档变成按需加载的技能时用做法 M；要把模糊想法写成可独立跑的任务书，或给破坏性操作加闸门、给文档与记忆做收尾对齐时用做法 N；要给 agent 补 Postgres 领域知识与版本化文档检索时用做法 O；在已获授权的漏洞挖掘或外部红队场景里，要让 agent 按主题自动加载安全技能库并在提交前过闸门时用做法 P；要把一道多步复杂任务拆成“分析 → 实现 → 交付”三阶段、每阶段过门禁再往下走时用做法 Q；想要一套小而可组合、跨模型可用的工程技能集时用做法 R；需要给 agent 补 Google 产品与技术（Cloud、AI/ML、基础设施、数据库与分析、开发者工具、管理工具、安全与身份、Web/应用托管、广告、分析等）的技能时用做法 S。
+怎么选：先做做法 A；A 里某个技能确实有效、且你有一件每周重复且规范明确的工作，再做做法 B；需要把外部文档变成智能体知识资产时用做法 C；需要给 Claude Code 补模型端点、权限、网页搜索时用做法 D；要写或审中文技术文档用做法 E；要精读单篇论文用做法 F；要给自己写一个把会话状态嵌进界面的 Claude Code mod 时用做法 G；已经在用 Cline CLI、想让 agent 代理长任务并用证据验收时用做法 H；要给 agent 补一块 UI/UX 设计知识时用做法 I；需要把一句话描述或一个代码仓库变成可交互的单文件 HTML 图时用做法 J；需要把自然语言需求或已有的 draw.io / Mermaid / Excalidraw 源文件改成自包含的 HTML+SVG 图、并让它长得像你的品牌时用做法 K；面对一个很大的插件市场、想按任务类型匹配模型档位并用现成评测做筛检时用做法 L；要把一本反复查阅的技术书或一份内部文档变成按需加载的技能时用做法 M；要把模糊想法写成可独立跑的任务书，或给破坏性操作加闸门、给文档与记忆做收尾对齐时用做法 N；要给 agent 补 Postgres 领域知识与版本化文档检索时用做法 O；在已获授权的漏洞挖掘或外部红队场景里，要让 agent 按主题自动加载安全技能库并在提交前过闸门时用做法 P；要把一道多步复杂任务拆成“分析 → 实现 → 交付”三阶段、每阶段过门禁再往下走时用做法 Q；想要一套小而可组合、跨模型可用的工程技能集时用做法 R；需要给 agent 补 Google 产品与技术（Cloud、AI/ML、基础设施、数据库与分析、开发者工具、管理工具、安全与身份、Web/应用托管、广告、分析等）的技能时用做法 S；需要中国金融数据检索与初步整理、且宿主能执行本地 Python 时用做法 T；在 Apple Silicon Mac 上用 Codex desktop、想把移动端模拟器或真机画面接进聊天时用做法 U。
 
 做法 J 与 K 都出图，区别是：J 出带 JavaScript 交互的单文件 HTML，验收靠 `validate`/`deliver` 的机器收据；K 默认出无 JS、无外部图片依赖的静态 HTML+SVG，验收靠品牌 onboarding 阶段的对比度校验和 fidelity receipt，以及你自己看产物能不能交付。要交互选 J，要品牌一致性和静态可交付选 K。
 
@@ -105,13 +112,17 @@
 
 做法 B 与 R 都涉及“自己组织技能”，区别是：B 是把你自己的重复工作写成单个 `SKILL.md`；R 是先用别人已经拆好的一套技能集。只有一件重复工作先用 B；有一整类跨会话的工程习惯要先固化，先用 R。
 
-E、F、G、H、I、J、K、L、M、N、O、P、Q、R、S 都必须套用 A 的对照方法，不要跳过验证直接纳入常规流程。
+做法 T 与 A 的关系：同样是装一个技能包做对照。需要中国金融数据检索、且宿主能执行本地 Python 时用 T；只能聊天不能执行脚本、要直接驱动交易、或想拿数据做投顾建议时不要用。
+
+做法 U 与 A 的关系：它同样是装一个现成插件做对照，区别是绑定 Codex desktop + Apple Silicon Mac + 私有仓库访问权，解决的是移动端模拟器/真机的观测与诊断，不接管构建、安装、启动。
+
+E、F、G、H、I、J、K、L、M、N、O、P、Q、R、S、T、U 都必须套用 A 的对照方法，不要跳过验证直接纳入常规流程。
 
 ### 做法 A：先用现成技能包做小范围试装（推荐先做）
 
-1. 选定一个非关键项目和一类重复任务。前提：你已经在用 Claude Code 或 Codex CLI；项目不是生产关键。预期：明确一个可对照的任务，例如“从 PDF 抽表单字段”或“给用户模块加批量导出功能”。
+1. 选定一个非关键项目和一类重复任务。前提：你已经在用 Claude Code 或 Codex CLI；项目不是生产关键。预期：明确一个可对照的任务。
 
-2. 只选一个技能包，只装一个，不要全装。以下七选一（其它现成来源见做法 L、M、N、Q、R、S）：
+2. 只选一个技能包，只装一个，不要全装。以下八选一（其它现成来源见做法 L、M、N、Q、R、S、T、U）：
 
    - 官方示例技能（Claude Code）：
 
@@ -210,6 +221,12 @@ E、F、G、H、I、J、K、L、M、N、O、P、Q、R、S 都必须套用 A 的�
 
      注意只选一个与当前任务最接近的技能，如 BigQuery 优化或 gcloud CLI；使用前进入对应 skill 目录确认权限与配置。
 
+   - 中国金融数据（做法 T，详见下文）：
+
+     ```bash
+     npx --yes skills@latest add clawyi-com/china-market-data -g
+     ```
+
    预期：插件安装成功，或只装上了你点名的技能。注意同一项目里不要同时用项目级安装和插件市场安装同一个技能包，否则 skills 会出现两份。
 
 3. 验证安装。前提：新开一个 Claude Code 会话。
@@ -242,6 +259,7 @@ E、F、G、H、I、J、K、L、M、N、O、P、Q、R、S 都必须套用 A 的�
    - leter/zh-tech-writing：先只审不改，`/zh-tech-writing 检查 docs/api.md，只列问题，不要改`，看它按「原句 → 改后 → 原因」列出的问题是否成立。
    - biomedical-paper-reader：拿一篇自己已经读过、心里有底的论文试跑，逐项对照自己的理解。
    - google/skills：只选一个与当前任务最接近的技能，例如 BigQuery 优化或 gcloud CLI，在隔离环境或测试项目跑一个具体任务。
+   - china-market-data：安装初始化后，直接问“贵州茅台现在的价格、PE、PB、市值和换手率”，检查返回结果是否包含数据来源、行情时间、抓取时间，以及是否区分缺失值与 0。
 
    预期：技能被触发，或在需要时以斜杠命令出现。
 
@@ -1547,6 +1565,173 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 
 6. 套用做法 A 的对照法：同一任务、同一输入，无技能和有技能各跑 3 次，或至少 5 个同类任务/一周。记录任务完成时间、一次性通过率、人工干预次数、错误率、权限范围是否收敛。预期：你能说清技能是否减少了返工；说不清就不要保留。
 
+### 做法 T：让 agent 检索中国金融市场数据，并核对来源与时间戳（可选，按 A 的对照法验证）
+
+定位：`clawyi-com/china-market-data` 是一个面向中国市场的金融数据 Skill，让 Cursor、Claude Code、Codex 等 AI Agent 通过可运行的 Python CLI 获取 A 股行情、研报、资金、公告、打板、期权、期货、宏观等真实数据。它提供 15 层能力、87 个端点、34 个数据来源，除 iwencai 外全部免 API Key。数据直接取回本机并写入 JSON，不经过第三方中转服务。原文声明它不是投顾建议，也不是付费数据商 SDK。与做法 A 的关系：它同样是装一个现成技能包做对照；区别是领域特定、依赖本地 Python，且存在数据授权与接口稳定性限制。
+
+1. 前提：Node.js 22.20+ / npm。安装 Skill（交互式全局安装，自动识别已安装的 Agent）：
+
+   ```bash
+   npx --yes skills@latest add clawyi-com/china-market-data -g
+   ```
+
+   指定宿主并跳过确认：
+
+   ```bash
+   npx --yes skills@latest add clawyi-com/china-market-data -g -y --agent cursor
+   ```
+
+   只查看仓库中可安装的技能：
+
+   ```bash
+   npx --yes skills@latest add clawyi-com/china-market-data --list
+   ```
+
+2. 前提：Python 3.9+。安装 Python 依赖。初始化脚本会在技能目录内创建 `.venv`、安装依赖并执行离线检查；全局安装的副本默认位于 `~/.agents/skills/china-market-data`。
+
+   macOS / Linux：
+
+   ```bash
+   SKILL_DIR="$HOME/.agents/skills/china-market-data"
+   python3 "$SKILL_DIR/tools/setup_env.py"
+   ```
+
+   Windows PowerShell：
+
+   ```powershell
+   $SkillDir = "$env:USERPROFILE\.agents\skills\china-market-data"
+   py -3 "$SkillDir\tools\setup_env.py"
+   ```
+
+   注意：`npx skills update` 或重新安装会整体替换技能目录，目录内的 `.venv` 也会被删除；更新后需再运行一次 `setup_env.py`。
+
+3. 可选：把虚拟环境放在技能目录外，避免更新技能时重建。之后一律用该解释器运行脚本：
+
+   ```bash
+   python3 <技能目录>/tools/setup_env.py --venv ~/.venvs/china-market-data
+   ~/.venvs/china-market-data/bin/python <技能目录>/scripts/run.py --check
+   ```
+
+   Windows 对应为 `py -3 <技能目录>\tools\setup_env.py --venv $env:USERPROFILE\.venvs\china-market-data`，解释器位于其中的 `Scripts\python.exe`。结果文件写到当前目录，请在可写目录下运行，或用 `--output` 指定路径。
+
+4. 装好后直接向 AI 助手提问。原文给出的示例问法包括：
+
+   - “贵州茅台现在的价格、PE、PB、市值和换手率”
+   - “拉宁德时代近一年前复权日 K 线”
+   - “今天涨停池、连板梯队和炸板率怎么样”
+   - “今天有哪些强势股，分别是什么题材”
+   - “北向资金今天的分钟流向”“概念板块近 5 日主力资金流入排名”
+   - “今天全市场龙虎榜净买入排名，以及某只股票的买卖席位”
+   - “比亚迪最近的券商研报和机构一致预期 EPS”
+   - “查某公司最新公告 PDF”“公司在互动易上怎么回应这个传闻”
+   - “300ETF 期权 T 型报价、隐含波动率和希腊字母”
+   - “螺纹钢主力连续日 K”“上期所持仓前 20 名”
+   - “最新 LPR、FR007 和中债国债收益率曲线”
+   - “本周新股申购”“可转债转股溢价率”
+   - “把这些代码转成聚宽格式，并拉申万行业历史归属”
+
+   只讨论概念或投资观点、不需要实际取数时，技能不会被加载。
+
+5. 也可直接运行 CLI（在技能根目录运行；输出文件需使用新文件名）：
+
+   ```bash
+   # 实时行情：裸 000001 是平安银行；上证指数用 sh000001
+   python3 scripts/tencent_quote.py sh000001 sz000001 510300 --output quotes.json
+
+   # 当日强势股与来源给出的题材标签
+   python3 scripts/run.py ths_hot_reason.py --output hot.json
+
+   # 概念板块最近 5 日涨幅；与主力资金流排名不同
+   python3 scripts/run.py eastmoney_signals.py board-quotes --board-type concept --period 5d --top-n 20 --output boards.json
+
+   # 查看某个命令的参数
+   python3 scripts/run.py eastmoney_signals.py board-quotes --help
+   ```
+
+   默认板块接口失败后，可显式尝试 `--source dataapi`。它仍属于东财，不是独立供应商，也不保证能绕开同源故障。大部分 CLI 将完整返回结构写入 JSON，终端只给预览；需要读取实际文件，不能把预览条数当成全部数据。
+
+6. iwencai 入口需要用户自己的 `IWENCAI_API_KEY`，配置方法见 SKILL.md#prerequisites。不要把 Key、Cookie 或会话文件提交到仓库。
+
+7. 开发者安装（需要修改代码或保留完整 Git 历史时）：
+
+   ```bash
+   git clone https://github.com/clawyi-com/china-market-data.git
+   cd china-market-data
+   python3 tools/setup_env.py
+   ```
+
+   手动复制或解压时，目标目录必须命名为 `china-market-data`，并保留 `SKILL.md`、`scripts/`、`references/`、`requirements.txt`、`LICENSE`、`NOTICE` 和 `UPSTREAM.md`；不能只复制一个 Markdown 文件。
+
+8. 开发验证（离线，不请求实时行情）：
+
+   ```bash
+   python3 -m compileall -q scripts tools tests
+   python3 -m unittest discover -s tests -v
+   python3 tools/build_release.py
+   npx --yes skills@latest add . --list
+   ```
+
+   这些检查不请求实时行情；离线测试通过不证明上游数据源此刻可用。
+
+预期：你能说清数据获取成功率、输出是否携带报价来源、行情时间和抓取时间；说不清就不要保留。
+
+### 做法 U：把移动端模拟器与真机画面接进 Codex 聊天，用日志和性能面板验收（可选，按 A 的对照法验证）
+
+定位：Mobile Dev 是给 Codex 桌面版用的插件（callstackincubator/codex-mobile-dev-plugin），把 iOS 模拟器、Android 模拟器以及已连接的 iPhone/iPad/Android 真机的画面放到 Codex 聊天旁边，并让 Codex 通过 MCP 工具检查可访问性元素、控制 App、读取日志、录制性能。支持 Expo、React Native、SwiftUI 以及其他原生移动项目。插件自带设备面板、检查、日志和性能工具；App 的构建、安装、启动仍然由项目自己的工具链完成，这是一个明确的分工。
+
+1. 确认前提（不满足则无法安装/运行）：
+
+   - Codex desktop，运行在 Apple Silicon Mac 上；
+   - 使用 Codex 自带的 Node runtime（来自其 workspace dependency cache），不需要插件构建或 `npm install`；
+   - 仓库当前为 private，安装需要 GitHub 读权限且本机 Git 认证可用。
+
+2. 安装预构建插件（在终端执行）：
+
+   ```sh
+   codex plugin marketplace add https://github.com/callstackincubator/codex-mobile-dev-plugin.git --ref release/latest
+   codex plugin add mobile-dev@mobile-dev
+   ```
+
+   安装后新开一个 chat。
+
+3. 更新已有安装：
+
+   ```sh
+   codex plugin marketplace upgrade mobile-dev
+   ```
+
+   更新后同样要新开一个 chat。
+
+4. 按用到的平台准备工具（来自原文需求表）：
+
+   - iOS 模拟器：Xcode 26 或更高，且已安装 simulator runtime。
+   - 物理 iPhone/iPad：Xcode 27 或更高、已配对并开启 Developer Mode 的设备、USB 或 Wi-Fi 连接；屏幕镜像需要宿主支持 HEVC WebCodecs。
+   - Android：Android SDK platform-tools 与 emulator，以及已授权的 USB/无线调试的 AVD 或真机；屏幕串流需要宿主支持 H.264 WebCodecs。
+   - Metro 日志与 React Native 检查：需要一个已在本地运行的 Metro server，且 App 有兼容的 inspector target。
+   - 物理 iOS 的 CPU/内存：iOS 17.4 或更高、运行 development-signed 且带 `get-task-allow` 的 App、已挂载 developer disk image、Xcode/LLDB 处于 detached 状态。
+   - Display FPS：Android 12 或更高（需 FrameTimeline 支持），或运行 iOS 17.4+ 的物理 iOS 设备；iOS 模拟器不支持 Display FPS。
+
+5. 启动：从 Codex 侧边栏打开 Mobile Dev，或直接让 Codex 在聊天旁边打开模拟器。在工具栏选设备——选中一个已停止的模拟器或 AVD 会自动启动它。用 iOS / Android 开关选择只显示某一端或两端并排显示。
+
+6. 让 Codex 干活（原文给出的示例指令，可直接复制）：
+
+   ```text
+   Build and run my Expo app in the simulator beside this chat.
+   Read the app logs and help me fix this error.
+   Record CPU and memory for 30 seconds while I scroll checkout.
+   Compare these two performance recordings.
+   ```
+
+7. 用面板做检查：打开 Logs 或 Performance 查看所选设备；用 Screenshot 把截图附到下一条消息；用 Select 标注某个元素或屏幕区域并留一条指令（在可用时会带上 React Native 组件与源码信息）。日志区可同时读 iOS unified logs、Android logcat 和 Metro console，可跟随前台 App、搜索过滤，并把一个错误及其堆栈发进聊天。注意物理 iOS 只支持点击和拖拽，键盘和硬件按键控制不可用。
+
+8. 按需关闭遥测（插件会向 Sentry 上报插件错误、崩溃和聚合性能指标；App 日志、截图、输入内容、工具载荷、设备性能录制被排除）：在 MCP 启动环境里设置
+
+   ```sh
+   MOBILE_DEV_TELEMETRY=off
+   ```
+
+预期：你能说清哪一次日志或性能对比减少了你排查移动端问题的轮次；说不清就不要保留。
+
 ## 怎么判断变好了
 
 最小试用方式：
@@ -1568,7 +1753,9 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 - 安全技能包类（做法 P）：在一个自建靶场或自有授权小资产上跑一次 `/hunt`，记录加载了哪些技能、攻击面排序是否合理、7-Question Gate 是否拦下了不该提交的发现；另拿不装技能时的同任务结果做基线。注意 README 没有改善幅度数据；
 - 复杂分析类（做法 Q）：先只跑单阶段“建模分析”，把 `题目分析报告.md` 和 `术语表格.md` 与你当初的人工版本对比（这一步不跑代码、不出图，最便宜）；再挑一道小题跑完整三阶段，重点观察 `P1` 有没有在全量计算和正式出图之前真的拦下不可运行的方案；最后换一道小题复跑一次，看第二、第三次的返工量是否低于第一次；
 - 工程技能集类（做法 R）：在一个真实仓库上先跑一次 `/setup-matt-pocock-skills`（定 issue tracker、triage 标签、文档目录），然后只从两个最高频入口开始——对一次真实改动先跑 `/grill-with-docs`，对一个小功能或 bug 跑 `/tdd`；记录人工介入次数与返工轮数，另拿同量级、不装技能的任务作对照；
-- Google 技能类（做法 S）：在隔离环境或测试项目中，用 `npx skills add google/skills` 只选一个与当前工作最相关的技能（如 BigQuery 优化或 gcloud CLI）；若用 Claude Code，按插件方式只安装一个插件。执行一个具体任务，记录是否减少查文档或手写命令的时间、命令/配置正确率、需要人工纠正次数、权限申请次数；与未使用技能时做对照；若没有对照，至少记录使用前后同一类任务的耗时和返工次数。不要在正式环境直接试高权限技能。
+- Google 技能类（做法 S）：在隔离环境或测试项目中，用 `npx skills add google/skills` 只选一个与当前工作最相关的技能（如 BigQuery 优化或 gcloud CLI）；若用 Claude Code，按插件方式只安装一个插件。执行一个具体任务，记录是否减少查文档或手写命令的时间、命令/配置正确率、需要人工纠正次数、权限申请次数；与未使用技能时做对照；若没有对照，至少记录使用前后同一类任务的耗时和返工次数。不要在正式环境直接试高权限技能；
+- 金融数据类（做法 T）：在支持本地 Python 执行的 Agent（如 Claude Code 或 Cursor）中按第 1–2 步安装并初始化，然后直接问：“贵州茅台现在的价格、PE、PB、市值和换手率”，检查返回结果是否包含数据来源、行情时间、抓取时间，以及是否区分缺失值与 0。也可在技能根目录直接运行 `python3 scripts/tencent_quote.py sh000001 sz000001 510300 --output quotes.json`，然后查看 `quotes.json` 是否包含上述字段；
+- 移动端调试类（做法 U）：在一台 Apple Silicon Mac 上装好 Xcode 26+ 与一个模拟器 runtime，确认能访问该私有仓库后执行安装命令，新开 chat，从侧边栏打开 Mobile Dev，选一个模拟器让它启动，然后让 Codex 执行 `Build and run my Expo app in the simulator beside this chat.`，再打开 Logs 确认能读到 iOS unified logs / Android logcat / Metro console。建议先拿一个 RN/Expo 或 SwiftUI 的小项目试，不要直接上主力项目；若拿不到仓库访问权或没有 Apple Silicon Mac，就跳过。
 
 可观察的指标：
 
@@ -1590,6 +1777,8 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 - 复杂分析类（做法 Q）：五个门禁的通过 / 失败记录（`M1`、`P1`、`P2`、`W1`、`W2`）；门禁拦截率——`P1`/`W1` 提前拦下的问题数 ÷ 总返工问题数；`results/复现清单.json` 是否齐全；LaTeX 侧是否做到资源—源码—产物哈希绑定；回归测试套件是否通过；换到非建模任务后，目录契约与只读质检这两个机制是否仍然成立。
 - 工程技能集类（做法 R）：`/grill-with-docs` 之后 `GLOSSARY.md` 与 ADR 是否真的被内联更新、术语是否在后续命名中一致；`/tdd` 是否按红-绿-重构一次一个垂直切片推进；`/diagnosing-bugs` 是否真的先建出能对当前 bug 变红的反馈回路再动手改；`/to-spec` 是否在写规格前先问你会动哪些模块；`/code-review` 的两个轴是否分开跑、有没有互相污染；`/improve-codebase-architecture` 每隔几天跑一次后，候选清单是否还有真东西。注意这些都是从原文职责描述推出的可观察项，原文没有给指标定义、基线或对照数据。
 - Google 技能类（做法 S）：任务完成时间、一次性通过率、人工干预次数、错误率、权限范围是否收敛；是否减少查文档或手写命令的时间、命令/配置正确率、需要人工纠正次数、权限申请次数。
+- 金融数据类（做法 T）：数据获取成功率（能成功返回 JSON 而非报错）；输出是否携带报价来源、行情时间和抓取时间；失败时是否明确报错而非返回空数据；更新技能后按提示重新初始化能否恢复正常；对同一标的，与官方来源（如交易所或腾讯财经页面）抽样比对关键字段是否一致（原文未提供自动比对工具，需人工核对）。
+- 移动端调试类（做法 U）：从“描述问题”到“Codex 指到具体元素或堆栈”的耗时；从提出修错请求到拿到可用修复的轮次/耗时；在模拟器、IDE 与终端之间切换的次数；用 Performance 面板记录的 CPU、内存、Display FPS、Android jank 统计在改动前后的对比——录制场景和时长保持一致（例如固定“滚动 checkout 30 秒”），并用“比较两次录制”复核；插件自身的稳定性（崩溃/报错频率，可用遥测或直接观察）。
 - 文档审稿：它列出的问题里你认可并采纳的比例；修改后的事实密度；AI 腔清单类别是否还有残留；让没参与写作的同事只读成稿，能否说出「读完能做成什么事」。
 - 论文精读：每张主图是否都被讲到、图注是否被引用、有无遗漏面板；是否区分独立个体数与细胞 / 切片数、观察与因果、作者解释与新增假设；是否列出「已读与未获取材料」；第⑥节是否给出可迁移环节与待验证设计；人工精读耗时 vs 生成加核对的耗时。
 - 工作流形态的产物是否稳定出现：例如 deep-research 是否每次都在 `.research/<name>/` 下留出 `prompts/`、`child_outputs/`、`logs/`、`raw/`、`final_report.md`。
@@ -1625,12 +1814,18 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 - 如果 `/improve-codebase-architecture` 的候选清单被当成改造方案直接执行，停一下：原文说它是勘察不是抢救（做法 R）。
 - 如果一周内没有任何一项指标变化，或安装的插件与仓库实际规范冲突导致返工增加，就回到“只借鉴组织方式、不装具体内容”的用法。
 - 如果 google/skills 的技能在测试项目里没有减少查文档或手写命令的时间，或权限申请次数反而增加，先只保留那一个技能，不要扩大到其他 Google 技能（做法 S）。
+- 如果 china-market-data 更新技能后 `.venv` 被删、脚本跑不起来，先按提示重新运行 `setup_env.py`，或改用技能目录外的虚拟环境（做法 T）。
+- 如果默认板块接口失败，显式 `--source dataapi` 仍失败，不要把它当成独立备用源；它仍属于东财（做法 T）。
+- 如果只看到终端预览条数就当成全部数据，回到技能根目录读完整 JSON 文件（做法 T）。
+- 如果 Mobile Dev 装不上，先确认是不是 Apple Silicon Mac + Codex desktop、以及有没有该私有仓库的 GitHub 读权限（做法 U）。
+- 如果物理 iOS 上发现键盘和硬件按键控制不可用，不要当成 bug；原文明确只支持点击和拖拽（做法 U）。
+- 如果 iOS 模拟器上看不到 Display FPS，不要继续调；原文说不支持（做法 U）。
 
 注意：`doctor`、`validate`、`npm test`、`claude plugin validate`、`npx @anthropics/skills-ref validate`、`archify doctor`、`validate --json`、`copilot skill list`、`python -m unittest discover -s tests` 这类检查只能证明“技能或 mod 装得上、格式合法、不带危险命令、图能通过校验、技能被宿主发现、回归测试能过”，不能证明“产出更好”。效果必须自己对照。
 
 ## 常见坑
 
-- 整体 adopt：一次装多个技能包，导致上下文过载或规则冲突。AAS 提到 Antigravity 会因监控的 skill 目录过载上下文，需要选择性激活；feiskyer/claude-code-settings 的 FAQ 也建议精选技能，不要全装。做法 H、I、J、K、L、N、Q、R、S 同理，先只装一个。
+- 整体 adopt：一次装多个技能包，导致上下文过载或规则冲突。AAS 提到 Antigravity 会因监控的 skill 目录过载上下文，需要选择性激活；feiskyer/claude-code-settings 的 FAQ 也建议精选技能，不要全装。做法 H、I、J、K、L、N、Q、R、S、T、U 同理，先只装一个。
 - 一次装整个插件市场：94 个插件、202 个 agent、184 个 skill 是目录规模，不是使用建议；一次只装一个插件或一个 skill，能走 `gh skill install` / `npx skills add` 的 skills-only 路径就别走全量。
 - 一次安装 google/skills 全部技能（做法 S）：README 只给列表和链接，没有效果数据；先只选一个与当前任务最接近的技能。
 - 不进入具体 skill 目录确认权限和配置（做法 S）：README 只给列表和链接，具体每个技能需要哪些信息、工具、权限和配置要自己看。
@@ -1646,15 +1841,15 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 - 把 `/to-spec` 当成新一轮访谈（做法 R）：它不再访谈，只是把你说过的东西综合成规格；要问清楚应该在更早的 `/grill-*` 阶段。
 - 手拷 hooks：把仓库里的 `hooks/hooks.json` 直接拷进 `~/.claude/settings.json` 或 `~/.claude/hooks/hooks.json`，会导致重复执行和跨平台 hook 冲突；hooks 必须用安装器写。
 - 在用户主目录安装：项目级安装应在具体项目目录执行；v1.2.1 起 superpowers-zh 会拒绝在主目录安装，老版本会把 skills 写进 home 目录，污染所有项目。
-- 只信 README：很多技能包的 README 没有贴出 `SKILL.md` 正文，质量无法核验；只有安装命令和自述，没有效果数据。feiskyer/claude-code-settings、zh-tech-writing、biomedical-paper-reader、cline-pilot、ui-ux-pro-max、archify、diagram-design、wshobson/agents、book-to-skill、khazix-skills、pg-aiguide、Claude-BugHunter、math-modeling-skill、mattpocock/skills、google/skills 都存在这个局限。
-- 把 README 当完整流程：book-to-skill 的 Steps 0–10、analyze-only / generate-from-analysis / update / fold-in 的具体用法都在未提供的 `docs/` 里；khazix-skills 的六个 `SKILL.md` 正文也没给；wshobson/agents 没有单个插件的质量数据；Claude-BugHunter 的 6 阶段流程在 README 里列了 5 个名字却称 6 阶段，要对照仓库内 `docs/architecture.md`；pg-aiguide 是否支持本地自建只在未提供的 `DEVELOPMENT.md` 里提到；math-modeling-skill 的角色规范与门禁判定标准也无法从 README 核验；google/skills 未展示任何具体 skill 的完整步骤、提示词、配置样例。用前先打开仓库确认。
-- 忽略安全：安装任何第三方技能前先通读它的 `SKILL.md`，并跑自己运行时的 doctor/audit 工具。`genspark-claw validate` 会标记 `curl | bash`、base64 载荷和破坏性命令。mod 的风险面更大：它以与 Claude Code 同等权限在本机运行，且能改写或拒绝命令，安装前必须确认来源可信。cline-pilot 以代理身份驱动 Cline 跑任务，安装前同样先读它自己的说明。
+- 只信 README：很多技能包的 README 没有贴出 `SKILL.md` 正文，质量无法核验；只有安装命令和自述，没有效果数据。feiskyer/claude-code-settings、zh-tech-writing、biomedical-paper-reader、cline-pilot、ui-ux-pro-max、archify、diagram-design、wshobson/agents、book-to-skill、khazix-skills、pg-aiguide、Claude-BugHunter、math-modeling-skill、mattpocock/skills、google/skills、china-market-data、Mobile Dev 都存在这个局限。
+- 把 README 当完整流程：book-to-skill 的 Steps 0–10、analyze-only / generate-from-analysis / update / fold-in 的具体用法都在未提供的 `docs/` 里；khazix-skills 的六个 `SKILL.md` 正文也没给；wshobson/agents 没有单个插件的质量数据；Claude-BugHunter 的 6 阶段流程在 README 里列了 5 个名字却称 6 阶段，要对照仓库内 `docs/architecture.md`；pg-aiguide 是否支持本地自建只在未提供的 `DEVELOPMENT.md` 里提到；math-modeling-skill 的角色规范与门禁判定标准也无法从 README 核验；google/skills 未展示任何具体 skill 的完整步骤、提示词、配置样例；china-market-data 的 Windows 命令未经过完整平台实测；Mobile Dev 的 README 只覆盖单机开发者视角，未提及团队权限、CI 或多人协作。用前先打开仓库确认。
+- 忽略安全：安装任何第三方技能前先通读它的 `SKILL.md`，并跑自己运行时的 doctor/audit 工具。`genspark-claw validate` 会标记 `curl | bash`、base64 载荷和破坏性命令。mod 的风险面更大：它以与 Claude Code 同等权限在本机运行，且能改写或拒绝命令，安装前必须确认来源可信。cline-pilot 以代理身份驱动 Cline 跑任务，安装前同样先读它自己的说明。Mobile Dev 会向 Sentry 上报插件错误、崩溃和聚合性能指标；App 日志、截图、输入内容、工具载荷、设备性能录制被排除；不想要就设 `MOBILE_DEV_TELEMETRY=off`。
 - 规则全量加载：rules 是始终加载的上下文，从 `rules/common` 加一个你实际使用的语言/框架包开始，不要全抄。
 - 技能描述没写清：`description` 只写“做什么”没写“什么时候用”，技能就不会在合适时机触发。
 - 配置模板照抄不动：作者模板默认指向 copilot-gateway（`http://localhost:4141`），模型名写的是 `claude-sonnet-5` 等；不按自己网关实际提供的模型替换，端点或模型对不上就用不起来。
 - 以为 settings.json 靠 Plugin 装：`settings.json` 不通过 Plugin 配置，必须手动设置，仓库根目录的只是作者模板。
 - 技能没有自动触发：先按五条排查——路径必须是 `~/.claude/skills/<name>/SKILL.md`（注意大小写）；Plugin 安装的技能需重启会话；检查双层嵌套 `skills/name/name/SKILL.md` 并上移一层；直接问 `What skills do you have access to?`；`disable-model-invocation: true` 的技能（如 grill-me、handoff）不自动触发，要用 `/skill-name` 手动调用。
-- 依赖具体工具：Agent Skills 要在支持它的工具上才能自动加载，不支持的工具上用不了；装技能的目录也随客户端变化（例如论文精读给了 `~/.codex/skills/` 的路径，cline-pilot 给了 `~/.hermes/skills/`、`~/.cline/skills/` 等，diagram-design 在 Kiro 会给 `.kiro/skills/`、在 OpenCode 要用 `.opencode/skills/`，book-to-skill 在 Hermes 还要按类别落到 `skills/<category>/`，math-modeling-skill 的加载方式要按各宿主当前文档来）。
+- 依赖具体工具：Agent Skills 要在支持它的工具上才能自动加载，不支持的工具上用不了；装技能的目录也随客户端变化（例如论文精读给了 `~/.codex/skills/` 的路径，cline-pilot 给了 `~/.hermes/skills/`、`~/.cline/skills/` 等，diagram-design 在 Kiro 会给 `.kiro/skills/`、在 OpenCode 要用 `.opencode/skills/`，book-to-skill 在 Hermes 还要按类别落到 `skills/<category>/`，math-modeling-skill 的加载方式要按各宿主当前文档来，china-market-data 全局安装默认落在 `~/.agents/skills/china-market-data`）。
 - 没装 autocorrect：第 5 步的格式修正会被跳过，空格与标点只能人工处理；另外材料里只提到 `autocorrect --fix` 这一个子命令，其他子命令是否存在要查该工具文档后再用。
 - 没说清只审不改：想只要意见时必须明说「只列问题，不要改」，否则它会直接动文件。
 - 删空话不补事实：审稿后逐条 diff，看它是否把形容词换成了数字、命令或报错原文。按 `zh-tech-writing` 的 README 说法，缺事实时它应该反问，检查它是否真的问了。
@@ -1664,7 +1859,7 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 - 盲目开 `bypassPermissions`：它能让你完全跳过确认，但 README 明确提示要先了解安全风险；更稳的做法是先在 `permissions.allow` 里配允许列表。
 - 在非官方 API 环境找不到网页搜索：WebSearch 只限官方 API 环境，其它环境要用 MCP 补；README 只给了四个 MCP 的链接，没有安装步骤。
 - 用 `npx skills add` 装到的版本可能滞后于仓库最新，挑技能时注意这一点。
-- 拿 star 数当质量证据：`zh-tech-writing` 的 312 stars、`biomedical-paper-reader` 的 31 stars、cline-pilot 的 91 stars、wshobson/agents 的 40,149、book-to-skill 的 33,277、khazix-skills 的 21,099、pg-aiguide 的 1853、math-modeling-skill 的 1848、google/skills 的 20,653 都只说明关注度，不说明产出改善幅度。
+- 拿 star 数当质量证据：`zh-tech-writing` 的 312 stars、`biomedical-paper-reader` 的 31 stars、cline-pilot 的 91 stars、wshobson/agents 的 40,149、book-to-skill 的 33,277、khazix-skills 的 21,099、pg-aiguide 的 1853、math-modeling-skill 的 1848、google/skills 的 20,653、Mobile Dev 的 64 都只说明关注度，不说明产出改善幅度。
 - 跳过冷启动门禁：做法 H 要求在任何 memory bank 启用之前，先把 `assets/global-memory-bank-prompt.md` 提示词逐字放到位；跳过这步，后面的规则种子没有统一落点。
 - 把项目架构知识塞进技能包：cline-pilot 明确不持有项目架构知识，那属于项目自己的 memory bank + clinerules；指望技能包记住架构事实，会得到互相矛盾的建议。
 - 采信 agent 的自我报告：做法 H 的原则是证据优先于自我报告，完成必须由 git status、测试报告数字、非空产物证明。只看到「已完成」三个字就收工，等于放弃验收。
@@ -1729,7 +1924,20 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 - 把 math-modeling-skill 的论文直接提交：原文反复声明生成的论文仅供参考，论文结构与格式必须以目标竞赛当届官方规则和官方模板为准，流程本身不保证合规。
 - 把作者设定的质量基线当硬要求：「CUMCM 默认约 15000 字词单位、约 20 页」「每道子问题最多使用两个独立模型体系」「至少 8 幅正式图」「三类各至少 3 张候选图」都是作者设定的基线，README 自己注明前一条是非官方要求，没有说明依据，按自己的任务调整。
 - 拿作者主张当效果结论（做法 R）：共享语言减少啰嗦、让命名一致、让代码库更好导航、让 agent 少花 token 思考，以及红-绿-重构「结果代码好得多」、并行子 agent「互不污染」，都是作者主张；原文没有指标定义、基线或对照数据。
-- 把材料当完整文档：本次调研在「与已有做法的关系」一节讲到 OpenCode 时被截断，Archify 在 OpenCode 上的支持细节没有给全；diagram-design 的调研在「重绘已有图（导入）」的 `import-drawio platform.drawio --size=slide-16x` 之后被截断，导出与后续步骤缺失；book-to-skill 的 docs 全部未包含在材料中；khazix-skills 的六个 `SKILL.md` 正文也没给；pg-aiguide 的 `DEVELOPMENT.md` 未读到；Claude-BugHunter 的 `SKILL.md`、`references/*` 与 `docs/architecture.md` 也未提供；math-modeling-skill 只到 README 一层，角色规范与门禁判定标准在 `SKILL.md`、`references/roles/*/SKILL.md`、`references/Subagent调度.md`、`tools/*/SKILL.md` 里；mattpocock/skills 同样只到 README 一层，各 `SKILL.md` 的实际提示词未提供；google/skills 只到 README 一层，未展示具体 skill 的完整步骤、提示词、配置样例。都要用前自己打开仓库确认。
+- 把材料当完整文档：本次调研在「与已有做法的关系」一节讲到 OpenCode 时被截断，Archify 在 OpenCode 上的支持细节没有给全；diagram-design 的调研在「重绘已有图（导入）」的 `import-drawio platform.drawio --size=slide-16x` 之后被截断，导出与后续步骤缺失；book-to-skill 的 docs 全部未包含在材料中；khazix-skills 的六个 `SKILL.md` 正文也没给；pg-aiguide 的 `DEVELOPMENT.md` 未读到；Claude-BugHunter 的 `SKILL.md`、`references/*` 与 `docs/architecture.md` 也未提供；math-modeling-skill 只到 README 一层，角色规范与门禁判定标准在 `SKILL.md`、`references/roles/*/SKILL.md`、`references/Subagent调度.md`、`tools/*/SKILL.md` 里；mattpocock/skills 同样只到 README 一层，各 `SKILL.md` 的实际提示词未提供；google/skills 只到 README 一层，未展示具体 skill 的完整步骤、提示词、配置样例；china-market-data 的 Windows 命令未经过完整平台实测；Mobile Dev 的 README 只覆盖单机开发者视角，未提及团队权限、CI 或多人协作。都要用前自己打开仓库确认。
+- 更新 china-market-data 后忘记重新初始化：`npx skills update` 或重新安装会整体替换技能目录，`.venv` 也被删除；更新后需再运行一次 `setup_env.py`（做法 T）。
+- 把东财 `--source dataapi` 当独立备用源：它仍属于东财，不是独立供应商，也不保证绕开同源故障（做法 T）。
+- 把终端预览条数当全部数据：大部分 CLI 将完整返回结构写入 JSON，终端只给预览；要读实际文件（做法 T）。
+- 忽略明文 HTTP 与多 agent 并发：部分接口仍使用明文 HTTP；东财节流主要在单进程内生效，多 agent 并发不会自动获得跨进程全局限流（做法 T）。
+- 把代码开源当数据开放授权：免费或免 Key 不等于可自由商用；本项目没有逐项取得再分发授权（做法 T）。
+- 只讨论概念或投资观点时仍指望技能加载：不需要实际取数时，技能不会被加载（做法 T）。
+- 把 Mobile Dev 当构建工具：插件的分工是设备面板、检查、日志、性能；App 的构建、安装、启动仍然由项目自己的工具链完成（做法 U）。
+- 在非 Apple Silicon Mac 或非 Codex desktop 上硬装 Mobile Dev：前提不满足就装不上（做法 U）。
+- 拿不到私有仓库访问权：仓库当前为 private，安装需要 GitHub 读权限且本机 Git 认证可用；外部用户可能根本装不上（做法 U）。
+- 以为物理 iOS 支持键盘和硬件按键：原文明确只支持点击和拖拽（做法 U）。
+- 以为 iOS 模拟器支持 Display FPS：不支持（做法 U）。
+- 忽略物理 iOS 的 CPU/内存前置条件：需要 iOS 17.4+、development-signed 且带 `get-task-allow`、developer disk image 已挂载、Xcode/LLDB detached（做法 U）。
+- 不想上报遥测但不动配置：插件会向 Sentry 上报插件错误、崩溃和聚合性能指标；不想要就设 `MOBILE_DEV_TELEMETRY=off`（做法 U）。
 
 ## 证据与来源
 
@@ -1758,7 +1966,9 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 - math-modeling-skill 路线的全部内容——两选一的安装命令（`git clone https://github.com/XiaoMaColtAI/math-modeling-skill.git`、`npx skills add https://github.com/xiaomacoltai/math-modeling-skill --skill math-modeling`）与 ZIP 解压方式、三阶段与角色对应（建模手 / 编程手 / 论文手）、各阶段固定交付物（`题目分析报告.md`、`术语表格.md`；代码、结果表格、三类各至少 3 张候选图、至少 1 幅总体建模流程图、`results/复现清单.json`；至少 8 幅正式图、默认 `完整论文.docx`、显式要求时的 LaTeX 源码/PDF/哈希清单）、五道独立门禁（`M1`、`P1`、`P2`、`W1`、`W2`）及触发时机、阶段内只读 Subagent 做质检而不是第四个固定角色、`SKILL_ROOT` 只读 + `PROJECT_ROOT` 可写 + 附件只读的目录契约与典型产物结构、六条可直接抄的提示词、阶段反馈回路（FAIL 由原阶段执行者修正并重新派发复验、主 Agent 不得自行覆盖失败结论、从被阻断阶段继续）、集成工具清单（科研可视化、双引擎论文搜索、DOCX、LaTeX、Excel、PDF）、`hybrid_scholar.py` 双引擎检索命令与 `--email` / `ANYSEARCH_API_KEY`、Python 与 MATLAB 两版动态依赖检查、算法资料渐进式加载与「每道子问题最多两个独立模型体系」、三条回归验证命令、dsh 预设的复制位置与 `mm_*` 工具、以及 1.3.0 版本更新说明——均来自调研《XiaoMaColtAI/math-modeling-skill》，即该仓库 README（版本 1.3.0，1848 stars）。原文给出的可核查内容只有这些：安装与运行命令、目录结构、五个门禁的定义与触发时机、集成工具清单、回归测试命令、版本语义化策略与 1.3.0 更新说明、2025 年国赛 A 题（烟幕干扰弹投放策略）和 B 题（碳化硅外延层厚度确定）的示例图。属作者主张、没有数据支撑的是：「CUMCM 默认以约 15000 字词单位、约 20 页作为完整度质量目标」（README 自己注明是非官方要求）、「每道子问题最多使用两个独立模型体系」「至少 8 幅正式图」「三类各至少 3 张候选图」（作者设定的质量基线，未说明依据），以及全文没有任何“用了它之后结果变好多少”的评测数据、对比实验或用户案例。局限：领域特定，面向 CUMCM、MCM/ICM、APMCM、MathorCup、认证杯、数维杯等竞赛与一般建模项目，不是通用分析框架；原文反复声明生成的论文仅供参考，结构格式必须以目标竞赛当届官方规则和官方模板为准；本次材料只有 README，真正的做法细节在 `SKILL.md`、`references/roles/*/SKILL.md`、`references/Subagent调度.md`、`tools/*/SKILL.md` 等子文件中，未包含在输入里，更细的角色规范与门禁判定标准无法核验；跨工具的可移植性未经验证。
 - mattpocock/skills 路线的全部内容——两条安装路线（`claude plugins install mattpocock-skills` 与 `/plugin install mattpocock-skills`、`npx skills@latest add mattpocock/skills`，以及两者只选一条、都装会让每个技能出现两份）、安装器里 `setup-matt-pocock-skills` 必须被选中、想改技能的人用同一安装器并 `npx skills update` 拉更新、`/setup-matt-pocock-skills` 在每个仓库跑一次且要在其他工程类技能之前、它问的三件事（issue tracker / triage 标签 / 文档存放位置）、用户调用型与模型调用型的分层规则（用户调用型负责编排、模型调用型承载可复用纪律；用户调用型可调用模型调用型，不可调用另一个用户调用型）、工程类与生产力类的完整技能清单、四个失败模式与对应手段、`/grill-me` 与 `/grill-with-docs` 的用途与后者内联更新 `GLOSSARY.md` 和 ADR、共享语言的 before/after 例子、`/tdd` 的红-绿-重构与一次一个垂直切片、`/diagnosing-bugs` 的六阶段（先建能对当前 bug 变红的反馈回路 → 最小化 → 提假设 → 插桩 → 修 → 回归测试）、`/to-spec` 写规格前先问模块且不再访谈、`/improve-codebase-architecture` 的可视化 HTML 报告与「每隔几天」和「勘察不是抢救」、`/to-spec` → `/to-tickets` → `/implement` 或 `/implement-spec` → `/code-review` 的链路、`/code-review` 的 Standards / Spec 双轴与并行子 agent、`/wayfinder`、`/pr`（单向门/双向门 + 爆炸半径）、`/retro`、`/handoff`、`/research`（后台 agent、带引用的 Markdown）、`/wizard`（交互式 bash 向导）、`ask-matt` 与 `writing-for-agents` 的定位——均来自调研《mattpocock/skills》，即该仓库 README。原文提供了可复制的安装命令、一次性配置的交互项、完整技能清单与每个技能的职责，以及一条清晰的能力分类轴；但各 `SKILL.md` 的实际提示词内容不在材料里，效果表述（共享语言减少啰嗦、让命名一致、让代码库更好导航、让 agent 少花 token 思考；红-绿-重构「给 agent 一致的反馈水平，结果代码好得多」；并行子 agent「互不污染」）全部是作者主张，原文**没有给任何指标定义、基线或对照数据**，也没有第三方复现记录，所以只能当 try 而不是 adopt。原文提到原生 Codex 插件在路线图上，属未实现项。
 - google/skills 路线（做法 S）的全部内容——`npx skills add google/skills`、`claude plugin marketplace add google/skills` + `claude plugin install <plugin>@google-plugins`、`codex plugin marketplace add google/skills` 与 `/plugins` 浏览器安装、`agy plugin install https://github.com/google/skills/<plugin-path>`、按任务从 Available Skills 列表选一个（如 gcloud CLI、BigQuery 优化、GKE 故障排查、IAM 策略管理）、使用前进入对应 skill 目录确认权限与配置、Google Cloud 技能依赖账号/项目/认证/IAM 权限——均来自调研《google/skills》，即该仓库 README。GitHub 指标显示 20653 stars、今日 78 stars，不构成有效性证据。局限：原文只有 README，未展示任何具体 skill 的完整步骤、提示词、配置样例；未提供使用案例、效果数据或对比；不同 agent harness 的插件安装命令未在 README 中给出完整插件名或路径；npx 和插件安装需要网络及运行环境。仓库主张这些技能可用，但未在材料中验证实际改善，所以只能小范围试，不能直接全面采用。
-- 文中提到的 star 数（如 anthropics/skills 179219、awesome-copilot 39,568、pro-workflow 2.9k、feiskyer/claude-code-settings 约 1.6k、zh-tech-writing 312、biomedical-paper-reader 31、cline-pilot 91、wshobson/agents 40,149、book-to-skill 33,277、khazix-skills 21,099、pg-aiguide 1853、math-modeling-skill 1848、google/skills 20653）来自 metrics，不构成有效性证据。
+- china-market-data 路线（做法 T）的全部内容——`npx --yes skills@latest add clawyi-com/china-market-data -g` 及指定宿主、`--list`、`tools/setup_env.py` 的 macOS/Linux 与 Windows 命令、外置虚拟环境 `--venv`、自然语言问法清单、`scripts/tencent_quote.py` / `scripts/run.py ths_hot_reason.py` / `eastmoney_signals.py board-quotes` 示例、`--source dataapi` 的说明、`IWENCAI_API_KEY` 配置要求、开发者 clone 安装与手动复制目录必须保留的文件、离线开发验证命令——均来自调研《clawyi-com/china-market-data》，即该仓库 README。15 层、87 个端点、34 个数据来源、除 iwencai 外免 API Key 是原文给出的能力数字；原文也给出了数据边界说明（时间戳、降级、缺失值处理、明文 HTTP 风险等）。作者主张：这不是投顾建议，也不是付费数据商 SDK；代码开源不代表数据开放授权；免费或免 Key 不等于可自由商用；本项目没有逐项取得再分发授权。局限：Windows 命令未经过完整平台实测；部分接口仍使用明文 HTTP；东财节流主要在单进程内生效，多 agent 并发不会自动获得跨进程全局限流；接口可能限流、认证变化、缺失、延迟或下线；部分历史数据只有本地已保存记录，不能承诺补齐；更新后需重新初始化 `.venv`；只讨论概念或投资观点、不需要实际取数时技能不会被加载。原文未给出与人工查询对比的量化指标。
+- Mobile Dev 路线（做法 U）的全部内容——安装与更新命令、平台/功能需求表、起步流程、4 条可直接复制的示例指令、隐私与遥测开关说明——均来自调研《callstackincubator/codex-mobile-dev-plugin》，即该仓库 README。可照做内容包括：`codex plugin marketplace add ... --ref release/latest`、`codex plugin add mobile-dev@mobile-dev`、`codex plugin marketplace upgrade mobile-dev`、Xcode 26/27 与 Android SDK 要求、Metro 与 WebCodecs 前提、物理 iOS 的 CPU/内存前置条件、Display FPS 支持范围、`MOBILE_DEV_TELEMETRY=off`。属产品说明/作者主张的是：所有功能描述（并排显示设备、元素检查、日志聚合、性能图表）都没有配套数据、案例或评测；README 未给出任何性能提升数字或对比基准。适用条件与硬性限制：仅限 Apple Silicon Mac 上的 Codex desktop；仓库当前为 private，安装需要 GitHub 读权限和可用的 Git 认证，外部用户可能根本装不上；Xcode 版本要求较高（26/27）；物理 iOS 不支持键盘与硬件按键控制；iOS 模拟器不支持 Display FPS；物理 iOS 的 CPU/内存监控有一串前置条件。成熟度信号：star 数 64，属早期项目；README 只覆盖单机开发者视角，未提及团队权限、CI 或多人协作场景。
+- 文中提到的 star 数（如 anthropics/skills 179219、awesome-copilot 39,568、pro-workflow 2.9k、feiskyer/claude-code-settings 约 1.6k、zh-tech-writing 312、biomedical-paper-reader 31、cline-pilot 91、wshobson/agents 40,149、book-to-skill 33,277、khazix-skills 21,099、pg-aiguide 1853、math-modeling-skill 1848、google/skills 20653、Mobile Dev 64）来自 metrics，不构成有效性证据。
 
 ## 依据的调研
 
@@ -1786,3 +1996,5 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 - [XiaoMaColtAI/math-modeling-skill](../research/radar/2026-10-02/600-xiaomacoltai-math-modeling-skill.md)：值得一试，把这个 skill 的三阶段拆分（建模分析→代码实现→论文撰写）加上「阶段内只读门禁 + 复现清单 + 目录契约」的骨架，小范围试用到自己的复杂分析任务上；它是可直接安装运行的完整 skill（含具体命令与配置），但面向数学建模竞赛，通用性来自流程结构而非领域内容，且原文未给出效果数据，所以先试不建议直接全盘采用。
 - [mattpocock/skills](../research/radar/2026-10-03/73-mattpocock-skills.md)：值得一试，值得在一个真实仓库里小范围试：按原文两条安装路径之一装上技能集，先跑 /setup-matt-pocock-skills 配好 issue tracker、triage 标签和文档目录，再从 /grill-with-docs + /tdd 这两个最高频入口开始用；理由是原文给出了可直接复制的安装命令、一次性配置项和每个技能的职责清单，但效果只有作者主张，需要自建指标验证。
 - [google/skills](../research/radar/2026-10-03/854-google-skills.md)：值得一试，建议小范围试：用 npx skills add google/skills 或对应 agent harness 的插件市场，按当前任务只安装一个 Google 相关技能，并先在测试项目验证；README 给出了可复制的安装流程和大量技能分类，但未展开单个技能的具体步骤与效果数据，暂不宜直接全面采用。
+- [clawyi-com/china-market-data](../research/radar/2026-10-03/920-clawyi-com-china-market-data.md)：值得一试，建议小范围试用：在 Claude Code 或 Cursor 等可执行本地 Python 的宿主中安装该 Skill，用于中国金融数据检索类任务；理由是它提供了可照做的安装、调用和验证步骤，但属于特定领域且存在数据授权与接口稳定性限制。
+- [callstackincubator/codex-mobile-dev-plugin](../research/radar/2026-10-03/921-callstackincubator-codex-mobile-dev-plugin.md)：值得一试，在符合条件的 Apple Silicon Mac 上按原文两条命令装上 Mobile Dev 小范围试用：把 iOS/Android 模拟器与真机画面、控制、日志和性能面板接进 Codex 聊天，让 Codex 直接读日志、检查元素、录制并对比性能；理由是原文给出了完整可照做的安装命令、平台依赖表和起步指令，但目前仓库为私有、只支持 Apple Silicon Mac + Codex desktop，且没有任何效果数据，所以先试不宜直接采用。
