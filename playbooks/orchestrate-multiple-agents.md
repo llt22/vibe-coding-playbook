@@ -1,14 +1,14 @@
-# 让多个子代理竞争并过验证闸门：AI 交付前的质量升级流程
+# 把 AI 的一次性回答变成可验证的交付物：多代理竞争、角色分工与测试闸门
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：当单个 AI 回答或单条串行 agent 会话给出的结果你没法验证时，如何把同一任务交给多个子代理用不同策略竞争、对抗、盲评，并让代码类成果必须通过你自己的测试才能真正落地。
-> 先试这一步：挑一个你确实不满意的真实任务（最好一个写文案类、一个代码类），装好 arena-skill 后把被你拒掉的旧答案用 --baseline-file 传进去，跑 `/arena --quick --seed 7 <把任务写具体>`，用它与旧答案的盲评比分判断值不值得继续。
+> 解决的问题：当单个 AI 回答或单条串行会话交付的东西不可靠、又没有验证手段时，怎么用多子代理的竞争、角色化分工和验证闸门拿到能落地、可核验的结果，并判断什么时候不值得这么做。
+> 先试这一步：挑一个你确实不满意、又能当天判定好坏的真实任务：先把任务写成自包含的文件，再跑一次最小规模的多代理（做法 A 的 `/arena --quick --seed 7 <任务>`，或做法 F 的 researcher + reporting_analyst 两个角色 Crew），看产出能不能直接用、你到底改了多少。
 > 最近修订：2026-10-02
 
 ## 解决什么问题
 
-单个 AI 回答、单条串行的 agent 会话，交付的往往是你没有验证过的结果：看起来合理，但可能漏了你真正在意的约束。这篇手册把「不满意就重问一次」升级成一套可执行的流程——把同一个任务交给多个子代理用不同策略并行求解、互相对抗、由独立裁判按公开标准打分淘汰；代码类任务则必须通过你自己的验证命令才能合入。同时给出成本预估、可观察指标，以及「什么时候不值得这么做」的判断线。
+单个 AI 回答、单条串行的 agent 会话，交付的往往是你没有验证过的结果：看起来合理，但可能漏了你真正在意的约束。这篇手册把「不满意就重问一次」升级成一套可执行的流程——把同一个任务交给多个子代理用不同策略并行求解、互相对抗、由独立裁判按公开标准打分淘汰；把有固定分工的多步任务（先搜集资料、再扩写成文）固化成角色化 Crew 流水线，产物落盘成文件；代码类任务则必须通过你自己的验证命令才能合入。同时给出成本预估、可观察指标，以及「什么时候不值得这么做」的判断线。
 
 ## 适用与不适用
 
@@ -19,6 +19,7 @@
 - 你同时使用多套编码 harness（如 Claude Code 与 Codex），需要座位、拓扑、快照恢复层面的统一管理。
 - 想在同一个会话内给难任务「升档」，用一个显式动作决定何时上多 agent、上贵模型。
 - 想自建长时程子代理 + 沙箱 + 记忆的执行底座。
+- 有稳定重复的多步分工（搜集资料 → 扩写成文），且你愿意写一点 Python、改 JSONC 配置：用角色化 Crew（做法 F）把这条链固化下来。
 
 **不适用**
 
@@ -27,6 +28,8 @@
 - 只想「多问几次」、不愿承担 token 成本：开销随 agent 数和任务体量线性增长。
 - 原生 Windows：openrig 仅支持 macOS / Linux，WSL2 未测试。
 - 非编码场景：OmO 的「做 deck、跨源研究」等只有一句话主张，没有可核对的案例。
+- 不愿意写代码、配环境：crewAI 是需要写代码、配环境的开发框架，不是装完即用的工具。
+- 打算立刻在涉密环境跑：调研原文第 11 步「关掉默认遥测」的命令被截断，拿到确切做法前不要往敏感数据上跑。
 
 ## 前置条件
 
@@ -36,6 +39,7 @@
 - 做法 C（openrig）：Node.js 22 或 24 + tmux，仅 macOS / Linux；启动会写入 provider hooks 和 workspace trust 设置，动手前先备份相关文件。
 - 做法 D（oh-my-openagent）：一台可弃用的机器或容器（安装脚本是 `curl | bash`）；一个自己的小项目目录；至少一家模型订阅或 API key。
 - 做法 E（deer-flow）：git、Docker Desktop/Engine、Docker Compose v2.24+（用 `docker compose version` 自检）；仓库自身要求 Python 3.12+ / Node.js 22+。
+- 做法 F（crewAI）：Python >= 3.10 且 < 3.14；命令行操作与基本 Python 编辑能力；用 uv 管理依赖；一个模型提供商的 API key（默认走 OpenAI API）；若任务要用网页搜索工具，另需 Serper.dev 的 key。Windows 上若遇 `chroma-hnswlib` 构建错误，需先装 Visual Studio Build Tools 并勾选 *Desktop development with C++*。
 
 ## 操作步骤
 
@@ -48,6 +52,7 @@
 | 同时跑 Claude Code + Codex 等多套 harness，要座位与恢复 | 做法 C |
 | 只想在同一会话里给难任务升档 | 做法 D（先做对照实验） |
 | 想自建长时程子代理 + 沙箱 + 记忆的底座 | 做法 E |
+| 有固定的多步分工（研究 → 成文），愿意写 Python / 改 JSONC | 做法 F |
 
 ### 做法 A：把不满意的回答送进锦标赛（arena-skill）
 
@@ -385,11 +390,235 @@ make support-bundle
 
 6. 部署规格起点（来自原文）：本地评测 / `make dev` 从 4 vCPU、8 GB RAM、20 GB SSD 起，推荐 8 vCPU、16 GB；Docker 开发 / `make docker-start` 从 4 vCPU、8 GB RAM、25 GB SSD 起；长跑服务 / `make up` 从 8 vCPU、16 GB RAM、40 GB SSD 起，推荐 16 vCPU、32 GB。
 
+### 做法 F：把多步任务固化成角色化流水线（crewAI）
+
+适用场景：你反复做同一种「先搜集资料、再扩写成文」的多步活，想把它固定成一条带角色分工的流水线，而不是每次重新描述一遍。代价是要写一点 Python、改 JSONC 配置。
+
+1. 先确认 Python 版本落在 `>=3.10, <3.14`：
+
+```bash
+python3 --version
+```
+
+2. 安装 uv（CrewAI 用它管理依赖）。
+
+macOS/Linux：
+
+```shell
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+没有 curl 时：
+
+```shell
+wget -qO- https://astral.sh/uv/install.sh | sh
+```
+
+Windows：
+
+```shell
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+3. 安装 CrewAI CLI 并验证：
+
+```shell
+uv tool install crewai
+```
+
+出现 PATH 警告时：
+
+```shell
+uv tool update-shell
+```
+
+Windows 上若遇 `chroma-hnswlib==0.7.6` 构建错误（`fatal error C1083: Cannot open include file: 'float.h'`），需安装 Visual Studio Build Tools 并勾选 *Desktop development with C++*。验证：
+
+```shell
+uv tool list
+```
+
+升级全局 CLI：
+
+```shell
+uv tool install crewai --upgrade
+```
+
+预期结果：`uv tool list` 里能看到 crewai。注意这条只升级全局 CLI，项目虚拟环境内的版本升级要另看官方 upgrading-crewai 文档。
+
+4. 创建项目：
+
+```shell
+crewai create crew <project_name>
+```
+
+生成的结构：
+
+```
+my_project/
+├── .gitignore
+├── .env
+├── agents/
+│   └── researcher.jsonc
+├── crew.jsonc
+├── knowledge/
+├── pyproject.toml
+├── README.md
+├── skills/
+└── tools/
+```
+
+需要旧式结构（`crew.py`、`config/agents.yaml`、`config/tasks.yaml`）时：
+
+```shell
+crewai create crew <project_name> --classic
+```
+
+5. 定义智能体：编辑 `agents/*.jsonc`，写清 role / goal / backstory / llm / tools / settings。第一个角色：
+
+```jsonc
+{
+  "role": "{topic} Senior Data Researcher",
+  "goal": "Uncover cutting-edge developments in {topic}",
+  "backstory": "You're a seasoned researcher who finds relevant information and presents it clearly.",
+  "llm": "openai/gpt-4o",
+  "tools": ["SerperDevTool"],
+  "settings": {
+    "verbose": true
+  }
+}
+```
+
+第二个角色：
+
+```jsonc
+{
+  "role": "{topic} Reporting Analyst",
+  "goal": "Create detailed reports based on {topic} data analysis and research findings",
+  "backstory": "You're a meticulous analyst who turns complex data into clear, concise reports.",
+  "llm": "openai/gpt-4o",
+  "settings": {
+    "verbose": true
+  }
+}
+```
+
+6. 定义任务与流程：编辑 `crew.jsonc`。`{placeholder}` 占位符可用在 agent 与 task 文本里，缺值会在 `crewai run` 时被 CLI 提示补全。
+
+```jsonc
+{
+  "name": "Latest AI Development",
+  "agents": ["researcher", "reporting_analyst"],
+  "tasks": [
+    {
+      "name": "research_task",
+      "description": "Conduct thorough research about {topic}. Find recent, relevant information.",
+      "expected_output": "A list with 10 bullet points of the most relevant information about {topic}.",
+      "agent": "researcher"
+    },
+    {
+      "name": "reporting_task",
+      "description": "Review the research and expand each topic into a full section for a report.",
+      "expected_output": "A markdown report with the main topics, each with a full section of information. No fenced code blocks around the whole document.",
+      "agent": "reporting_analyst",
+      "context": ["research_task"],
+      "output_file": "output/report.md",
+      "markdown": true
+    }
+  ],
+  "process": "sequential",
+  "verbose": true,
+  "inputs": {
+    "topic": "AI Agents"
+  }
+}
+```
+
+关键字段：`context` 把上游任务结果喂给下游；`output_file` 指定落盘路径；`markdown: true` 输出 Markdown；`process` 可换成 hierarchical——框架会自动加一个 manager 来规划、委派并验证结果。另有 `tools/` 下的自定义工具（以 `"custom:<name>"` 引用）、`knowledge/` 知识文件、`skills/` 技能文件。
+
+7. 配密钥：在 `.env` 里填模型提供商的 API key；若用网页搜索工具，填 Serper.dev 的 key。
+
+```
+SERPER_API_KEY=YOUR_KEY_HERE
+```
+
+8. 安装依赖并运行（在项目目录内）：
+
+```shell
+crewai install
+crewai run
+```
+
+需要额外包用 `uv add <package-name>`。预期：控制台打印执行过程，项目根目录生成 `output/report.md`。模型默认走 OpenAI API，也可按官方 LLM connections 文档接本地模型（Ollama、LM Studio）。
+
+9. 需要精确控制时，把 Crew 包进 Flow 做事件驱动编排：
+
+```python
+from crewai.flow.flow import Flow, listen, start, router, or_
+from crewai import Crew, Agent, Task, Process
+from pydantic import BaseModel
+
+class MarketState(BaseModel):
+    sentiment: str = "neutral"
+    confidence: float = 0.0
+    recommendations: list = []
+
+class AdvancedAnalysisFlow(Flow[MarketState]):
+    @start()
+    def fetch_market_data(self):
+        self.state.sentiment = "analyzing"
+        return {"sector": "tech", "timeframe": "1W"}
+
+    @listen(fetch_market_data)
+    def analyze_with_crew(self, market_data):
+        analyst = Agent(role="Senior Market Analyst",
+                        goal="Conduct deep market analysis with expert insight",
+                        backstory="You're a veteran analyst known for identifying subtle market patterns")
+        researcher = Agent(role="Data Researcher",
+                           goal="Gather and validate supporting market data",
+                           backstory="You excel at finding and correlating multiple data sources")
+        # ... 定义 Task 与 Crew(process=Process.sequential) 后 kickoff
+
+    @router(analyze_with_crew)
+    def determine_next_steps(self):
+        if self.state.confidence > 0.8:
+            return "high_confidence"
+        elif self.state.confidence > 0.5:
+            return "medium_confidence"
+        return "low_confidence"
+
+    @listen(or_("medium_confidence", "low_confidence"))
+    def request_additional_analysis(self):
+        self.state.recommendations.append("Gather more data")
+        return "Additional analysis required"
+```
+
+组合逻辑：`or_` 任一条件满足就触发，`and_` 全部满足才触发，可与 `@start`、`@listen`、`@router` 搭配。
+
+10. 让 AI 编码助手按 CrewAI 规范写代码（减少瞎猜 API）。Claude Code：
+
+```shell
+/plugin marketplace add crewAIInc/skills
+/plugin install crewai-skills@crewai-plugins
+/reload-plugins
+```
+
+Cursor、Codex、Windsurf 等：
+
+```shell
+npx skills add crewaiinc/skills
+```
+
+装上的四个 skill 分别负责：`getting-started`（脚手架、`LLM.call()`/`Agent`/`Crew`/`Flow` 选型、装配 `crew.jsonc`/`main.py`）、`design-agent`（role/goal/backstory/tools/LLM/memory/guardrails）、`design-task`（任务描述、依赖、结构化输出 `output_pydantic`/`output_json`、人工审核）、`ask-docs`（查 CrewAI 文档 MCP 服务器）。
+
+11. 涉密场景关掉默认遥测——调研原文在这一步被截断，具体命令缺失。在从仓库文档拿到确切写法之前，不要在有敏感数据的机器上跑。
+
 ### 通用收尾：不管走哪条路径
 
 - 开始前先固定「完成」的定义（哪条测试通过、谁来复核、在哪里看结果），不要只依赖 agent 的自证。
 - 代码类任务一律把测试或 lint 作为合入门槛，而不是事后补检查。
 - 保留可复现的随机种子或赛程记录，便于不同规模之间做对比。
+- 多步流水线一定要求产物落盘（如 `output_file`），否则你无法核对，也无法复用。
 
 ## 怎么判断变好了
 
@@ -400,6 +629,7 @@ make support-bundle
 - 做法 C：手动切换终端和人工传话的次数是否真的下降；`rig ps --nodes` 是否还有未解决的认证、信任或权限提示；恢复后逐节点报告的 resumed / fresh / failed 是否符合预期。
 - 做法 D：同一任务三轮对照（普通 prompt / 加 `ulw` / 加 `mass ulw`），每轮从同一个干净分支或干净工作区开始，记录返工次数与人工介入次数。注意这三轮本身才是证据，README 的好评不是。
 - 做法 E：`make doctor` 是否能无阻断跑完；能否跑通一个最小任务（受限于原文截断，skills / sub-agents / scheduled tasks 的用法需自行查仓库文档）。
+- 做法 F：`output/report.md` 是否真的落盘、内容能不能直接用（采用 / 部分采用 / 弃用）；下游任务拿到的到底是不是上游的结果（`context` 是否真的接上了）；需要你手动返工几轮；`{placeholder}` 是否按预期被注入。
 
 **最小试用**
 
@@ -408,11 +638,13 @@ make support-bundle
 - 做法 C：`rig setup --dry-run` + 一个仓库里的两座位 starter，只跑一个有界的「实现 + 独立复核」任务。
 - 做法 D：半天内在一台可弃用机器上跑完三轮对照。
 - 做法 E：先走 `make setup` → `make doctor` → `make docker-start`，确认能起来再谈能力面。
+- 做法 F：把手头一个「多步资料整理 → 成文」的活改写成 researcher + reporting_analyst 两个角色的 Crew，`crewai install` → `crewai run`，只看一件事：`output/report.md` 能不能直接用、你要改多少。
 
 **试多久、什么时候升级**
 
 - 做法 A 的决策规则（来自原文）：用 `--seed` 固定复现赛程；若 `--quick` 在 3 个以上任务上稳定优于 baseline，且攻击确实命中你没考虑到的地方，再升到 `--agents 32`；若比分持平、或只是措辞更漂亮，说明这类任务不值得这份开销，退回普通的「重问一次 + 自己改」。
 - 做法 B/C/D/E 都没有量化效果数据，先以一到两个任务、可弃用环境为限；只有当人工介入次数或返工次数可观察地下降，才扩大范围。
+- 做法 F 同样没有对比数据：先固定成一条流水线，连跑 2–3 次同类任务，如果每次都要大改 `output/report.md`（或流水线本身），说明这类活还不适合固化角色分工，先退回单 agent 手改；只有当产出基本可用、你只需要做少量编辑时，才值得把它变成常用链路。
 
 ## 常见坑
 
@@ -456,10 +688,22 @@ make support-bundle
 - 不受信任的任务保持 `auto_approve_permissions: false`。
 - `$DEER_FLOW_HOME/managed-models/` 要备份整个目录、限制文件系统访问，并在需要共享同一 catalog 的多个 Gateway worker 间同步。
 
+**做法 F（crewAI）**
+
+- 原文在 examples 与 FAQ 后半段被截断；第 11 步「关掉默认遥测」只给了标题、没给命令，涉密场景先自己查文档再跑。
+- 这是需要写代码、配环境的开发框架，不是装完即用的工具；把它当「写一个小组件」而不是「装个 app」。
+- 效果只有作者主张，没有基准或对照实验；先跑一个任务，用产物能不能直接用来说话。
+- 默认走 OpenAI API，要用 Ollama / LM Studio 得另按官方 LLM connections 文档接。
+- `uv tool install crewai --upgrade` 只升级全局 CLI，项目虚拟环境内的版本升级要另看官方 upgrading-crewai 文档。
+- Python 版本窗口是 `>=3.10, <3.14`，超出这个范围装不上。
+- Windows 上可能卡在 `chroma-hnswlib` 构建错误，需要先装 Visual Studio Build Tools 的 C++ 组件。
+- `process` 换成 hierarchical 时框架会自动加一个 manager 来规划、委派并验证结果，这多出来的调用要算进成本。
+
 **通用**
 
 - 别把「工具很多」当成改善证据；没有验证命令或盲评对比，只是把不确定性放大了。
 - 让 agent 自己声明「完成」不算完成；先把完成定义写成可执行检查。
+- 多步流水线不做落盘校验（只看聊天里的输出），事后无法复盘是哪一步坏了。
 
 ## 证据与来源
 
@@ -468,6 +712,7 @@ make support-bundle
 - **做法 C** 依据调研《mvschwarz/openrig》。可核对的内容：Node.js 22/24 与 tmux 要求、仅 macOS/Linux、npm 包名 `@openrig/cli`、三套 starter 与各自模型、`rig ps` / `rig send` / `rig queue` 等命令、0.6.0 的 Node 20 迁移说明。原文明确工具仍处早期版本且没有任何量化效果数据；「减少手动切换终端和人工传话成本」是调研给出的待验证假设。
 - **做法 D** 依据调研《code-yeongyu/oh-my-openagent》。可核对的内容：安装脚本与渠道参数、包名 `omo-ai`、配置路径与「就近优先」、关键字 `ultrawork` / `ulw` / `mass ulw`、`omo setup` / `omo doctor` / `omo update`、stars ≈ 69701、许可证徽章 SUL-1.0。属于作者主张的部分：「研究一万个来源」「一小时干完 Claude Code 七天的活」等，全部来自 README 自述或用户好评，没有基准、数据集或对照实验。
 - **做法 E** 依据调研《bytedance/deer-flow》。可核对的内容：`make setup` / `make doctor` / `make support-bundle` / `make docker-start` 等命令、模型配置 YAML 示例、CLI 后备 provider 的凭证来源、部署规格起点表、ACP agent 配置与 `auto_approve_permissions` 规则、MIT 协议、Python 3.12+ / Node.js 22+、83290 stars。重要限制：原文在「Option 2: Local Development」的 Prerequisit 处被截断，skills、sub-agents、scheduled tasks、memory 等小节只有标题、没有正文，因此本手册只写安装与配置，不写这些能力的具体用法。
+- **做法 F** 依据调研《crewAIInc/crewAI》。可核对的内容：MIT 许可、Python >=3.10 且 <3.14、uv 各平台安装命令、`uv tool install crewai` / `uv tool update-shell` / `uv tool list` / `uv tool install crewai --upgrade`、`crewai create crew` 生成的目录结构（`agents/*.jsonc` + `crew.jsonc`）与 `--classic` 旧式结构、researcher 与 reporting_analyst 两个 `agents/*.jsonc` 示例、`crew.jsonc` 里 `context` / `output_file` / `markdown` / `process: sequential|hierarchical` / `{placeholder}` 的用法、`crewai install` / `crewai run` / `uv add`、Flow 的 `@start` / `@listen` / `@router` 与 `or_` / `and_` 组合、`/plugin marketplace add crewAIInc/skills` 与 `npx skills add crewaiinc/skills`、四个 skill（getting-started / design-agent / design-task / ask-docs）的分工、Windows 上 `chroma-hnswlib==0.7.6` 的构建错误与 Visual Studio Build Tools 解决办法。属于作者主张、没有数据支撑的部分：多智能体角色分工能提升「多步资料整理 → 成文」的产出质量，README 没有给出基准、数据集或对照实验。重要限制：原文在 examples 与 FAQ 后半段被截断，第 11 步「关掉默认遥测」只有标题、没有命令，因此本手册不写它的具体做法。
 
 ## 依据的调研
 
@@ -476,3 +721,4 @@ make support-bundle
 - [mvschwarz/openrig](../research/radar/2026-10-02/67-mvschwarz-openrig.md)：值得一试，建议在单独的实验仓库里小范围试：按 README 的引导路径安装 OpenRig，用两座位 starter（复用已有 Claude Code 或 Codex 账号）跑一个「实现 + 独立复核」的有界任务，看是否真的减少了手动切换终端和人工传话的成本。理由是原文给出了从安装、启动、就绪检查、下发任务到权限与回滚的完整可复制命令，具备照做的条件；但工具仍处早期版本、会改写 provider 信任与 hook 配置、不支持 Windows，且没有任何量化效果数据，因此不宜直接写成手册主推做法。
 - [code-yeongyu/oh-my-openagent](../research/radar/2026-10-01/508-code-yeongyu-oh-my-openagent.md)：值得一试，建议在一个可弃用的环境里小范围试用 OmO：按 README 的一行命令安装，用同一个真实小任务分别跑普通 prompt、加 `ulw`、加 `mass ulw`，对比返工次数与人工介入次数。理由是可照做的安装与关键字工作流已经给出（`omo`、`ulw`、`mass ulw`、`omo setup/doctor`、两份 `omo.jsonc` 配置），但全部效果说明都只有作者主张和用户好评，没有可核对的指标。
 - [bytedance/deer-flow](../research/radar/2026-10-01/544-bytedance-deer-flow.md)：值得一试，可以按官方 Quick Start 在本地或小团队环境跑通 DeerFlow 2.0（clone → make setup → make doctor → make docker-start），把它作为长时程子代理＋沙箱＋记忆的执行底座试点；理由是原文给出了可直接复制的安装、模型接入、部署选型和安全配置步骤，但 skills、sub-agents、scheduled tasks 等核心能力的用法在抓到的原文里只剩目录标题，需进一步查阅仓库文档才能照做。
+- [crewAIInc/crewAI](../research/radar/2026-10-02/549-crewaiinc-crewai.md)：值得一试，建议小范围试：照着 README 的 "uv 安装 → crewai create crew → 改 agents/*.jsonc 与 crew.jsonc → crewai install/run" 链路，先把手头一个"多步资料整理→成文"的工作改成 researcher + reporting_analyst 两个角色的 Crew，并把产物落盘到 output/ 文件；因为原文给出了完整可复制的命令、目录结构和配置示例，可照做，但它本质是需要写代码、配环境的开发框架，效果只有作者主张、没有对比数据，先试一步再决定是否推广。

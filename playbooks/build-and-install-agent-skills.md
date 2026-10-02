@@ -1,14 +1,14 @@
-# 给编码 agent 补能力：先小范围对照，再用硬证据验收
+# 先小范围试装技能包，用对照和硬证据决定去留
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：面对技能包、mod、代理、设计知识与出图工具，如何用同一套有/无对照的方法判断它是否真的减少了返工，而不是只看安装成功。
-> 先试这一步：挑一个非关键项目和一类每周重复的任务，只装一个技能包（例如 Archify 或官方示例技能），同一输入各跑 3 次做对照，记录返工轮数。
+> 解决的问题：已经在用编码 agent，但不确定某个技能包值不值得留在日常流程里、该怎么验收它的产物——本篇给出一条从试装、对照到自写 SKILL.md 的完整路径。
+> 先试这一步：选一个非关键项目，只装一个技能包，用同一任务在无技能和有技能条件下各跑 3 次，看返工轮数和首稿可用率有没有变化。
 > 最近修订：2026-10-02
 
 ## 解决什么问题
 
-你已经在用编码 agent，但每次都要重复描述同一套工程规范，或者不确定装一个技能包是否真的减少了返工。这篇手册给出一个可照做的流程：先小范围试装一个现成技能包，用同一任务做有/无技能的对照，确认有效后再考虑把自己的重复工作写成 `SKILL.md`，让 agent 代理编码 CLI 跑长任务并拿硬证据验收，给 agent 补一块行业设计知识，写一个把会话状态嵌进界面的 Claude Code mod，或者让 agent 把一句话描述／一个代码仓库变成可交互的架构图、工作流图、时序图、数据流图、生命周期图。同一套对照方法也适用于中文技术文档的写作与审稿、单篇论文的精读。如果你还需要给 agent 补模型端点、权限或搜索能力，再用配置模板单独补，而不是整包采用。
+你已经在用编码 agent，但每次都要重复描述同一套工程规范，或者不确定装一个技能包是否真的减少了返工。这篇手册给出一个可照做的流程：先小范围试装一个现成技能包，用同一任务做有/无技能的对照，确认有效后再考虑把自己的重复工作写成 `SKILL.md`，让 agent 代理编码 CLI 跑长任务并拿硬证据验收，给 agent 补一块行业设计知识，写一个把会话状态嵌进界面的 Claude Code mod，让 agent 把一句话描述／一个代码仓库变成可交互的架构图、工作流图、时序图、数据流图、生命周期图，或者把自然语言需求与已有的 draw.io / Mermaid / Excalidraw 源文件改成自包含的 HTML+SVG 图、并让它长得像你的品牌。同一套对照方法也适用于中文技术文档的写作与审稿、单篇论文的精读。如果你还需要给 agent 补模型端点、权限或搜索能力，再用配置模板单独补，而不是整包采用。
 
 ## 适用与不适用
 
@@ -24,7 +24,9 @@
 - 已经在用 Cline CLI，想让 agent 代理派发任务、后台运行、持续监控，并在拿到硬证据之后才报完成（做法 H）；
 - 要给 agent 补一块 UI/UX 设计知识，让它在做界面时能查到风格、配色、字体、图表和 UX 规则（做法 I）；
 - 有一类反复的“讲清系统结构”的工作：一句话描述、仓库运行期架构、CI/CD 与审批流、API 调用链、数据管道、状态机，需要用一张可交互的图反复讲给别人听（做法 J）；
-- 愿意按图型对照表选图，并接受出图技能的验收靠 `validate`/`deliver` 的 JSON 收据，而不是靠“图好看”（做法 J）。
+- 愿意按图型对照表选图，并接受出图技能的验收靠 `validate`/`deliver` 的 JSON 收据，而不是靠“图好看”（做法 J）；
+- 需要把自然语言需求或已有的 draw.io / Mermaid / Excalidraw 源文件改成自包含的 HTML+SVG 图，并且希望产物长得像自己公司或客户的品牌（做法 K）；
+- 愿意先跑一次品牌 onboarding，让技能抓你的站点提取主色和字体，并核对它给出的对比度调整与 fidelity receipt（做法 K）。
 
 不适用：
 
@@ -40,7 +42,11 @@
 - 不愿先 dry-run 就让工具往仓库里写文件，或者不想为界面任务维护一份 `MASTER.md`（做法 I）；
 - 想找通用绘图编辑器、想换 Mermaid 主题，或想让 agent 自动解析 Mermaid、托管分享、所见即所得编辑（Archify 明确把这些排除在当前范围外）；
 - 想让出图工具推断架构变更的影响、风险或可合并性（`compare` 只给机器收据，明确不推断）；
-- 架构图要用 `deployment-ownership` profile，却给不出 authored 的 owner、区域位置、私有数据库范围与具名跨界项（缺任一项 fail closed，不会隐式补全，也不检查真实基础设施）。
+- 架构图要用 `deployment-ownership` profile，却给不出 authored 的 owner、区域位置、私有数据库范围与具名跨界项（缺任一项 fail closed，不会隐式补全，也不检查真实基础设施）；
+- 不常出图、或者其实只想要一个通用绘图编辑器——做法 K 的收益取决于你是否经常出图；
+- 不接受技能去抓你的公开站点做品牌 onboarding，或不愿让 agent 读改你的 `references/style-guide.md`；
+- 需要产物带 JavaScript 交互（做法 K 默认输出无 JS 的静态 HTML；要可交互请走做法 J）；
+- 只看 README 里罗列的图型和版式数量，就把效果当成结论（做法 K 的质量主张本次没有独立证据）。
 
 ## 前置条件
 
@@ -57,10 +63,11 @@
 - 走 cline-pilot 路线（做法 H）时额外准备：Cline CLI；Python 3；一个支持 Agent Skills 规范的宿主（Hermes / Cline / Claude Code / Codex / Cursor / OpenCode 之一）；冷启动阶段愿意使用付费的长上下文模型；稳态阶段有本地模型运行条件（如 Ollama）；项目侧已有或愿意先建立 memory bank 与 clinerules，因为技能本身不持有项目架构知识。
 - 走 UI/UX 设计知识路线（做法 I）时额外准备：Node/npm 用于装 CLI；本机 Python 3.x（脚本只用标准库、不装依赖、不联网）。README 明确要求这些安装步骤是给“人”做的，agent 不应自行在你的机器上安装软件，应向你询问。
 - 走 archify 路线（做法 J）时额外准备：本地 Node 环境，README 的不同集成对版本要求不同（Hermes 集成注明 Node ≥ 18，DeepSeek Harness 集成注明 `^22.19.0 || >=24.0.0`）；走 Claude.ai 上传 zip 的路线时，功能取决于沙箱里是否有 Node.js 访问；要出带源码证据的仓库图，需要 agent 能读到仓库并把证据固定到一个 public commit；用 `deployment-ownership` profile 时，owner、区域位置、私有数据库范围与具名跨界项必须由你 authored 提供，缺任一项 fail closed。
+- 走 diagram-design 路线（做法 K）时额外准备：一个受支持的 Agent Skills 宿主（Claude Code、Codex、Factory Droid、Pi、GitHub Copilot、Kiro、OpenCode 等）；走 Claude Code 时要记得第三方 marketplace 的自动更新默认关闭，需要手动打开；走 Kiro / OpenCode 时要接受没有 marketplace 包、更新只能靠重新导入或换目录；走可编辑安装时只建你用得到的那些 skills 根目录。
 
 ## 操作步骤
 
-怎么选：先做做法 A；A 里某个技能确实有效、且你有一件每周重复且规范明确的工作，再做做法 B；需要把外部文档变成智能体知识资产时用做法 C；需要给 Claude Code 补模型端点、权限、网页搜索时用做法 D；要写或审中文技术文档用做法 E；要精读单篇论文用做法 F；要给自己写一个把会话状态嵌进界面的 Claude Code mod 时用做法 G；已经在用 Cline CLI、想让 agent 代理长任务并用证据验收时用做法 H；要给 agent 补一块 UI/UX 设计知识时用做法 I；需要把一句话描述或一个代码仓库变成可交互的单文件 HTML 图（架构、工作流、时序、数据流、生命周期）时用做法 J。E、F、G、H、I、J 都必须套用 A 的对照方法，不要跳过验证直接纳入常规流程。
+怎么选：先做做法 A；A 里某个技能确实有效、且你有一件每周重复且规范明确的工作，再做做法 B；需要把外部文档变成智能体知识资产时用做法 C；需要给 Claude Code 补模型端点、权限、网页搜索时用做法 D；要写或审中文技术文档用做法 E；要精读单篇论文用做法 F；要给自己写一个把会话状态嵌进界面的 Claude Code mod 时用做法 G；已经在用 Cline CLI、想让 agent 代理长任务并用证据验收时用做法 H；要给 agent 补一块 UI/UX 设计知识时用做法 I；需要把一句话描述或一个代码仓库变成可交互的单文件 HTML 图（架构、工作流、时序、数据流、生命周期）时用做法 J；需要把自然语言需求或已有的 draw.io / Mermaid / Excalidraw 源文件改成自包含的 HTML+SVG 图、并让它长得像你的品牌时用做法 K。做法 J 与 K 都出图，区别是：J 出带 JavaScript 交互的单文件 HTML，验收靠 `validate`/`deliver` 的机器收据；K 默认出无 JS、无外部图片依赖的静态 HTML+SVG，验收靠品牌 onboarding 阶段的对比度校验和 fidelity receipt，以及你自己看产物能不能交付。要交互选 J，要品牌一致性和静态可交付选 K。E、F、G、H、I、J、K 都必须套用 A 的对照方法，不要跳过验证直接纳入常规流程。
 
 ### 做法 A：先用现成技能包做小范围试装（推荐先做）
 
@@ -932,6 +939,149 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 
 预期：你能说清哪一张图减少了你解释系统结构的轮次；说不清就不要保留。
 
+### 做法 K：把自然语言需求或已有图源改成自包含的 HTML+SVG 图（可选，按 A 的对照法验证）
+
+定位：`cathrynlavery/diagram-design` 是一个 Agent Skill，装上后让 agent 把自然语言需求或已有的 draw.io / Mermaid / Excalidraw 源文件改成自包含的 HTML + SVG 图。README 声明的性质：无构建步骤、无 JavaScript、无外部图片依赖，静态变体可直接在浏览器打开；每种图型提供三种静态变体（minimal light / minimal dark / full-editorial）；默认静态 HTML，可选 `reveal / step / loop` 无障碍动效，动效不新增图型。2.5.10 新增十种版式语法：Sankey、fishbone、Wardley map、kanban、user journey、deployment、dependency graph、UML class、story map、database schema；README 还展示了架构、IT 现状、流程图、时序、状态机、ER、时间线、泳道、四象限、雷达、飞轮（Loop）、嵌套、树、组织图、层叠、Venn、金字塔/漏斗、柱状、树图、折线、甘特、散点、High-Level、Process、Medallion、数据流、DP integration、DP security matrix、极坐标、瀑布、架构 delta 等图型。它同时是一份「约束式提示词 + 产物约束」的范本：语义角色 token（用 `accent` 而不是 `#eb6c36`）、语义模式先于版式、首次使用拦截、保真账本。与做法 A、J 的关系：它同样是一个技能包的试装，套用同一套对照方法；与 J 的区别见前面「怎么选」——J 出可交互单文件 HTML 且验收靠机器收据，K 默认出无 JS 的静态 HTML+SVG，验收靠品牌 onboarding 的对比度校验和 fidelity receipt。
+
+1. 前提：你需要一个受支持的编码智能体宿主（Claude Code、Codex、Factory Droid、Pi、GitHub Copilot、Kiro、OpenCode 等）。README 声明官方构建只出自本仓库，其它同名 listing 为非官方拷贝；网络行为见 PRIVACY.md（本次材料未展开）。
+
+2. 安装（按你的宿主各取一条，命令原文照抄）。
+
+   Claude Code：
+
+   ```text
+   /plugin marketplace add cathrynlavery/diagram-design
+   /plugin install diagram-design@diagram-design
+   ```
+
+   然后启用更新：运行 `/plugin` → 打开 **Marketplaces** → 选中 **diagram-design** → 选 **Enable auto-update**（Claude Code 对第三方 marketplace 默认关闭自动更新）；提示时运行 `/reload-plugins`。预期：技能装上并会自动跟进更新，而不是停在你装的那一版。
+
+   Codex：
+
+   ```bash
+   codex plugin marketplace add cathrynlavery/diagram-design
+   codex plugin add diagram-design@diagram-design
+   ```
+
+   要立即拉更新：`codex plugin marketplace upgrade diagram-design`，然后新开会话。
+
+   GitHub Copilot：
+
+   ```bash
+   copilot plugin marketplace add cathrynlavery/diagram-design
+   copilot plugin install diagram-design@diagram-design
+   ```
+
+   用 `copilot skill list`（或交互式会话里的 `/skills`）确认技能已被发现；更新：`copilot plugin marketplace update diagram-design` 再 `copilot plugin update diagram-design@diagram-design`。
+
+   Factory Droid：
+
+   ```bash
+   droid plugin marketplace add https://github.com/cathrynlavery/diagram-design
+   droid plugin install diagram-design@diagram-design --scope user
+   ```
+
+   前提：Droid 按 commit 跟踪 Git 插件，不看 manifest 里的显示版本号；更新用 `droid plugin marketplace update diagram-design` + `droid plugin update diagram-design@diagram-design --scope user`，再新开会话。
+
+   Pi：
+
+   ```bash
+   pi install https://github.com/cathrynlavery/diagram-design
+   ```
+
+   在已打开的 Pi 会话里运行 `/reload`；显式调用用 `/skill:diagram-design`；更新用 `pi update --extensions`。
+
+   Kiro：导入仓库子目录 URL：
+
+   ```text
+   https://github.com/cathrynlavery/diagram-design/tree/main/skills/diagram-design
+   ```
+
+   Kiro 会把技能拷进 `.kiro/skills/`（工作区）或 `~/.kiro/skills/`（全局），更新需重新导入该 URL。
+
+   OpenCode：把 `skills/diagram-design/` 拷或软链到项目的 `.opencode/skills/diagram-design`，或全局 `~/.config/opencode/skills/diagram-design`；没有 marketplace 包，只能换目录更新。
+
+   Claude Cowork（组织 marketplace）：先把公开仓库镜像到你组织自己的私有/内部仓库 → **Organization settings → Plugins → Add plugin → GitHub** 连接该镜像 → 在 marketplace 菜单勾 **Sync automatically**。同步只在「含插件版本号提升的 PR 合并到镜像默认分支」时触发，直接 push 不触发。
+
+   预期：技能装在你点名的宿主上，并且你清楚它下一次怎么更新。
+
+3. （可选）可编辑安装——准备改风格指南时走这条：
+
+   ```bash
+   git clone git@github.com:cathrynlavery/diagram-design.git ~/code/diagram-design
+
+   # Pi：把 checkout 注册为本地包
+   pi install ~/code/diagram-design
+
+   # Claude Code：软链内部技能
+   ln -s ~/code/diagram-design/skills/diagram-design ~/.claude/skills/diagram-design
+
+   # 其他 Agent Skills 宿主：只建你用得到的根目录
+   mkdir -p ~/.agents/skills ~/.cursor/skills ~/.cline/skills ~/.kiro/skills ~/.config/opencode/skills ~/.copilot/skills
+   ln -s ~/code/diagram-design/skills/diagram-design ~/.agents/skills/diagram-design
+   ln -s ~/code/diagram-design/skills/diagram-design ~/.cursor/skills/diagram-design
+   ln -s ~/code/diagram-design/skills/diagram-design ~/.cline/skills/diagram-design
+   ln -s ~/code/diagram-design/skills/diagram-design ~/.kiro/skills/diagram-design
+   ln -s ~/code/diagram-design/skills/diagram-design ~/.config/opencode/skills/diagram-design
+   ln -s ~/code/diagram-design/skills/diagram-design ~/.copilot/skills/diagram-design
+   ```
+
+   注意：只建你用得到的那几个根目录，不要照抄全部。前提：托管安装可能覆盖你对 `references/style-guide.md` 的直接修改；`~/.diagram-design/profiles/` 里的 profile 与带 `.diagram-design` 标记的项目不受更新影响。
+
+4. 做品牌 onboarding（README 称约 60 秒）。对智能体说：
+
+   ```text
+   onboard diagram-design to https://yoursite.com
+   ```
+
+   流程：抓首页 → 提取主色板与字体栈 → 映射到语义角色 `paper / ink / muted / accent / link` → 展示 proposed diff → 你回 `yes, apply it` → 写入 `references/style-guide.md`。提取映射的对应关系（README 表格）：`<body>` 背景→`paper`；主文字色→`ink`；次级/说明文字→`muted`；卡片或容器→`paper-2`；最常用品牌色（CTA/link/heading）→`accent`；`<h1>` 字体→`title`；`<body>` 字体→`node-name`；`<code>/<pre>` 字体→`sublabel`。
+
+   写 token 前它会校验 `ink` 在 `paper` 上的 WCAG AA 对比度：如果站点颜色在 9–12px 图表字号下不达标，它会提出调整值并解释原因。品牌匹配还会产出 fidelity receipt（采样 URL、精确颜色角色、字体族与字重、字体来源 URL，以及任何 fallback）；公开站字体直接用并在渲染后校验，而不是悄悄换成通用系统字体。
+
+   预期：`references/style-guide.md` 写进了你的品牌 token，并且你拿到一份 fidelity receipt 可以逐项核对。手工替代：直接编辑 `skills/diagram-design/references/style-guide.md` 的表格，下游（每张图、注释图元、gallery）全部读语义角色名。
+
+5. 知道首次使用会被拦一次。在一个新项目里第一次用时，技能检查 `style-guide.md` 是否被定制过；没有就停下来问，大意是：这是本项目第一张图、风格指南仍是默认值，要跑 onboarding、手工粘贴 token，还是就用默认？（详见 `references/onboarding.md`）。预期：它没有默默用默认配色出图。
+
+6. 多客户用命名 profile 隔离。给每个品牌 onboard 一次并存成命名 profile，在项目里放一个内容为 `profile: <slug>` 的 `.diagram-design` 标记文件；标记项目直接读 `~/.diagram-design/profiles/<slug>.md`，并行工作区可用不同品牌而不覆盖共享的 `style-guide.md`。profile 库在 Claude Code、Codex、Factory Droid、Pi 间共享；Claude Code 用 `/diagram-design:profile`，Factory Droid 或 Pi 用 `/profile`。预期：同一个工作目录切换客户时不用互相覆盖风格。
+
+7. 生成第一张图。直接自然语言提需求（原文示例）：
+
+   ```text
+   Make me an architecture diagram of my app: frontend, backend, database, Redis cache.
+   I need a quadrant showing Q2 projects by impact vs effort.
+   Give me a sequence of a bearer call with token refresh on 401.
+   ```
+
+   带分支的刷新用 `type-sequence.md` 里的 ALT combined-fragment 语法，参考 `skills/diagram-design/assets/example-sequence-oauth.html`，不是完整 authorize-code 握手。
+
+   或者从模板起步：
+
+   ```bash
+   cp skills/diagram-design/assets/template.html my-diagram.html        # minimal light
+   cp skills/diagram-design/assets/template-full.html my-diagram.html   # 带摘要卡的编辑风
+   cp skills/diagram-design/assets/template-motion.html my-diagram.html # 可选无障碍动效
+   ```
+
+   浏览全部图型：
+
+   ```bash
+   open skills/diagram-design/assets/index.html       # macOS
+   xdg-open skills/diagram-design/assets/index.html  # Linux
+   ```
+
+   预期：得到一份能直接在浏览器打开、不依赖 JS 和外部图片的 HTML+SVG。
+
+8. 重绘已有图（导入）。README 给了这两条命令原文：
+
+   ```text
+   /diagram-design:import-drawio platform.drawio
+   /diagram-design:import-drawio platform.drawio --size=slide-16x
+   ```
+
+   按 format / size / detail / audience 输出。注意：本次材料在导入这一节被截断，「导出」以及后续步骤在给定材料里没有，要用前先打开仓库 README 确认完整流程，不要照抄半截流程。
+
+9. 验收产物。README 里可核对的硬信号只有 onboarding 阶段的对比度校验与 fidelity receipt；图型覆盖数量、版式语法数量、三种静态变体的可用性、可重绘质量都只是作者主张。预期：你能说清哪一次出图减少了你向别人解释结构的时间，或者哪一次品牌 onboarding 让你不用手动配色；说不清就不要保留。
+
 ## 怎么判断变好了
 
 最小试用方式：
@@ -944,7 +1094,8 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 - mod 类任务：开一个 session，用 `claude --plugin-dir ./token-weather` 带插件跑几个回合，看它是否在回合结束时刷新；再把文件夹复制出去重装一次，确认能长期加载；
 - 代理类任务（做法 H）：在一个已有小仓库上，一周内跑通一次「装技能 → 首次配置生成 `references/local-config.md` → 放好全局 memory-bank 提示词 → 强模型做一次代码扫描产出规则种子和 1~2 个模板测试 → 本地模型跑 1~2 个 spec 明确的小批次 → 用 `session_report.py` 监控、用 git status 和测试报告验收」的闭环，并至少往 decision-log 记一次纠正；
 - 设计知识类（做法 I）：在单个真实前端项目上先 `uipro init --dry-run`，再按你的 agent 装一次；用一个页面跑 `--design-system --persist`，生成 `MASTER.md` 和 pages 覆盖文件，下一次建页时复用第 9 步的检索提示词，看它是否还反复重问同一套配色和字体；
-- 出图类任务（做法 J）：用同一段描述提示词和同一段仓库提示词各跑一次，记录从 `validate --json` 到 `deliver --json` 成功之间按 `diagnostics[]` 修了几轮；把产出的 HTML 发给一个不了解这个系统的人，看他能否只靠图说清主路径。
+- 出图类任务（做法 J）：用同一段描述提示词和同一段仓库提示词各跑一次，记录从 `validate --json` 到 `deliver --json` 成功之间按 `diagnostics[]` 修了几轮；把产出的 HTML 发给一个不了解这个系统的人，看他能否只靠图说清主路径；
+- 出图类任务（做法 K）：拿自己的站点跑一次 `onboard diagram-design to https://yoursite.com`，检查 proposed diff 是否可接受、对比度不达标时提出的调整值是否合理；再跑一遍生成 → 导入，看产物能否在没装任何东西的机器上直接用浏览器打开，并逐项核对 fidelity receipt 里的字体是不是站点字体、有没有 fallback。
 
 可观察的指标：
 
@@ -957,6 +1108,7 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 - 代理类任务（做法 H）：该批次测试是否通过、是否产出非空文件、git 是否有预期改动（不采信 agent 自述）；同一断言连续失败次数是否达到 3 次，把该批次升级强模型后是否解决；需要你处理的决策点回报次数是否下降；第二、第三批次的返工量是否明显低于冷启动前的手动基线；decision-log 中稳定偏好条目是否增长、同类决策落到「no precedent」的比例是否下降。
 - 设计知识类（做法 I）：交付前检查清单的 8 条是否在成稿里成立；跨会话复用 `MASTER.md` 之后，是否还需要反复重说同一套配色、字体和反模式。
 - 出图类（做法 J）：交付是否原子替换——只有通过校验的产物才替换目标文件，失败时上一份 last-good 产物是否还在；同一张图从首次验证到交付成功需要按 `diagnostics[]` 修的轮数；仓库图的节点是否带 `SRC n` 并能打开 Git 校验过的文件与行号范围；架构变更评审是否拿到机器收据，且没有被当成影响分析（`compare` 明确不推断影响、风险或可合并性）；非工程用途（团队协作、旅行行程、法律引证核查、合同审查、事故复盘）README 只是列出，没有数据，先别当效果证据。
+- 出图类（做法 K）：品牌 onboarding 之后，出图是否还需要你手动改配色和字体；fidelity receipt 里有没有 fallback、原因是什么；重绘已有的 draw.io 源文件后是否需要手工重排；产物是不是单个自包含 HTML（无 JS、无外部图片依赖），发给别人能不能直接打开。
 - 文档审稿：它列出的问题里你认可并采纳的比例；修改后的事实密度（「强大」「无缝」这类形容词是否换成数字、命令或报错原文）；AI 腔清单类别是否还有残留；让没参与写作的同事只读成稿，能否说出「读完能做成什么事」。
 - 论文精读：每张主图是否都被讲到、图注是否被引用、有无遗漏面板；是否区分独立个体数与细胞 / 切片数、观察与因果、作者解释与新增假设；是否列出「已读与未获取材料」、未核查附件处是否说明；第⑥节是否给出可迁移环节与待验证设计；人工精读耗时 vs 生成加核对的耗时。
 - 工作流形态的产物是否稳定出现：例如 deep-research 是否每次都在 `.research/<name>/` 下留出 `prompts/`、`child_outputs/`、`logs/`、`raw/`、`final_report.md`。
@@ -973,25 +1125,26 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 - 如果某个本地批次同一断言连续失败 3 次还在本地重试，判定为模板/规则缺口，把那一批次升级到强模型，而不是继续消耗本地重试。
 - 如果装了 UI/UX 技能后，`uipro init --dry-run` 显示它要往一堆你不用的 agent 目录里写文件，或者你仍然每次口头重说同一套界面规范，先缩小到单个 agent 目录再用。
 - 如果出图技能每次失败都要你盲重试，而不是按 `diagnostics[].supportedFixes` 修，说明没用上它的收据机制。
+- 如果装着 diagram-design 却仍然每次手动改配色和字体，说明你没做那 60 秒的品牌 onboarding，先跑一次再判断要不要留。
 - 如果你要的是通用绘图编辑器或 Mermaid 主题，先换工具，不要在这个技能上继续加提示。
 - 如果一周内没有任何一项指标变化，或安装的插件与仓库实际规范冲突导致返工增加，就回到“只借鉴组织方式、不装具体内容”的用法。
 
-注意：`doctor`、`validate`、`npm test`、`claude plugin validate`、`npx @anthropics/skills-ref validate`、`archify doctor`、`validate --json` 这类检查只能证明“技能或 mod 装得上、格式合法、不带危险命令、图能通过校验”，不能证明“产出更好”。效果必须自己对照。
+注意：`doctor`、`validate`、`npm test`、`claude plugin validate`、`npx @anthropics/skills-ref validate`、`archify doctor`、`validate --json`、`copilot skill list` 这类检查只能证明“技能或 mod 装得上、格式合法、不带危险命令、图能通过校验、技能被宿主发现”，不能证明“产出更好”。效果必须自己对照。
 
 ## 常见坑
 
-- 整体 adopt：一次装多个技能包，导致上下文过载或规则冲突。AAS 提到 Antigravity 会因监控的 skill 目录过载上下文，需要选择性激活；feiskyer/claude-code-settings 的 FAQ 也建议精选技能，不要全装。做法 H、I、J 同理，先只装一个。
+- 整体 adopt：一次装多个技能包，导致上下文过载或规则冲突。AAS 提到 Antigravity 会因监控的 skill 目录过载上下文，需要选择性激活；feiskyer/claude-code-settings 的 FAQ 也建议精选技能，不要全装。做法 H、I、J、K 同理，先只装一个。
 - 重复安装：在同一个项目里同时用项目级安装和 Claude Code 插件市场装同一个技能包，skills 会出现两份。
 - 手拷 hooks：把仓库里的 `hooks/hooks.json` 直接拷进 `~/.claude/settings.json` 或 `~/.claude/hooks/hooks.json`，会导致重复执行和跨平台 hook 冲突；hooks 必须用安装器写。
 - 在用户主目录安装：项目级安装应在具体项目目录执行；v1.2.1 起 superpowers-zh 会拒绝在主目录安装，老版本会把 skills 写进 home 目录，污染所有项目。
-- 只信 README：很多技能包的 README 没有贴出 `SKILL.md` 正文，质量无法核验；只有安装命令和自述，没有效果数据。feiskyer/claude-code-settings 虽然技能、子代理、settings 模板都列得很全，但技能效果仍是作者描述，没有对照数据。`zh-tech-writing` 的 SKILL.md 与两个 references 未在材料中给出，14 条 AI 腔清单只有类别没有逐条文本；`biomedical-paper-reader` 的 SKILL.md、各 references 与 `evals/RESULTS.md` 的实际内容同样看不到；cline-pilot 的「四要素格式」和 6 项验收清单只存在于 `SKILL.md` / `references/*`，README 里没有；ui-ux-pro-max 的能力数字（192 条规则、79 种风格等）全是作者自述，演示素材被作者自己标注为非本 skill 产物；archify 的 star 数、Trending 排名、案例同样都是创作者口径，没有独立验证。
+- 只信 README：很多技能包的 README 没有贴出 `SKILL.md` 正文，质量无法核验；只有安装命令和自述，没有效果数据。feiskyer/claude-code-settings 虽然技能、子代理、settings 模板都列得很全，但技能效果仍是作者描述，没有对照数据。`zh-tech-writing` 的 SKILL.md 与两个 references 未在材料中给出，14 条 AI 腔清单只有类别没有逐条文本；`biomedical-paper-reader` 的 SKILL.md、各 references 与 `evals/RESULTS.md` 的实际内容同样看不到；cline-pilot 的「四要素格式」和 6 项验收清单只存在于 `SKILL.md` / `references/*`，README 里没有；ui-ux-pro-max 的能力数字（192 条规则、79 种风格等）全是作者自述，演示素材被作者自己标注为非本 skill 产物；archify 的 star 数、Trending 排名、案例同样都是创作者口径，没有独立验证；diagram-design 的图型覆盖、十种新增版式语法、三种静态变体的可用性也全是作者口径。
 - 忽略安全：安装任何第三方技能前先通读它的 `SKILL.md`，并跑自己运行时的 doctor/audit 工具。`genspark-claw validate` 会标记 `curl | bash`、base64 载荷和破坏性命令。mod 的风险面更大：它以与 Claude Code 同等权限在本机运行，且能改写或拒绝命令，安装前必须确认来源可信。cline-pilot 以代理身份驱动 Cline 跑任务，安装前同样先读它自己的说明。
 - 规则全量加载：rules 是始终加载的上下文，从 `rules/common` 加一个你实际使用的语言/框架包开始，不要全抄。
 - 技能描述没写清：`description` 只写“做什么”没写“什么时候用”，技能就不会在合适时机触发。
 - 配置模板照抄不动：作者模板默认指向 copilot-gateway（`http://localhost:4141`），模型名写的是 `claude-sonnet-5` 等；不按自己网关实际提供的模型替换，端点或模型对不上就用不起来。
 - 以为 settings.json 靠 Plugin 装：`settings.json` 不通过 Plugin 配置，必须手动设置，仓库根目录的只是作者模板。
 - 技能没有自动触发：先按五条排查——路径必须是 `~/.claude/skills/<name>/SKILL.md`（注意大小写）；Plugin 安装的技能需重启会话；检查双层嵌套 `skills/name/name/SKILL.md` 并上移一层；直接问 `What skills do you have access to?`；`disable-model-invocation: true` 的技能（如 grill-me、handoff）不自动触发，要用 `/skill-name` 手动调用。
-- 依赖具体工具：Agent Skills 要在支持它的工具上才能自动加载，不支持的工具上用不了；装技能的目录也随客户端变化（例如论文精读给了 `~/.codex/skills/` 的路径，cline-pilot 给了 `~/.hermes/skills/`、`~/.cline/skills/` 等）。
+- 依赖具体工具：Agent Skills 要在支持它的工具上才能自动加载，不支持的工具上用不了；装技能的目录也随客户端变化（例如论文精读给了 `~/.codex/skills/` 的路径，cline-pilot 给了 `~/.hermes/skills/`、`~/.cline/skills/` 等，diagram-design 在 Kiro 会给 `.kiro/skills/`、在 OpenCode 要用 `.opencode/skills/`）。
 - 没装 autocorrect：第 5 步的格式修正会被跳过，空格与标点只能人工处理；另外材料里只提到 `autocorrect --fix` 这一个子命令，其他子命令是否存在要查该工具文档后再用。
 - 没说清只审不改：想只要意见时必须明说「只列问题，不要改」，否则它会直接动文件。
 - 删空话不补事实：审稿后逐条 diff，看它是否把形容词换成了数字、命令或报错原文。按 `zh-tech-writing` 的 README 说法，缺事实时它应该反问，检查它是否真的问了。
@@ -1025,7 +1178,15 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 - 架构图用 `deployment-ownership` profile 却缺 authored 字段：owner、区域位置、私有数据库范围、具名跨界项缺任一项就 fail closed，不会隐式补全，也不检查真实基础设施。
 - 忽略出图技能的更新检查联网：它可能 GET 固定的 stable manifest 以显示可选更新提醒（自己不下载也不安装），成功后约 24 小时再查，失败后 6 / 24 小时重试；不想联网就设 `ARCHIFY_UPDATE_CHECK_DISABLED=1`。
 - 在 DSH 集成里用 Web Produced Files：DSH 集成要求 shell 文件使用精确的工作区路径。
-- 把材料当完整文档：本次调研在「与已有做法的关系」一节讲到 OpenCode 时被截断，Archify 在 OpenCode 上的支持细节没有给全，要用前自己打开仓库确认。
+- 装完 diagram-design 就当会自动更新：Claude Code 对第三方 marketplace 默认关闭自动更新，要自己跑 `/plugin` → Marketplaces → 选中 diagram-design → Enable auto-update，提示时再 `/reload-plugins`。
+- 以为托管安装和可编辑安装可以同时改风格指南：托管安装可能覆盖你对 `references/style-guide.md` 的直接修改；要长期改风格就走可编辑安装，并记住 `~/.diagram-design/profiles/` 和带 `.diagram-design` 标记的项目不受更新影响。
+- 一次建齐所有宿主的软链目录：可编辑安装里的 `mkdir -p` 只建你用得到的根目录，全建只是多出一堆没人读的目录，还会让后续排查更麻烦。
+- 在 Claude Cowork 里直接 push 就指望同步：同步只在「含插件版本号提升的 PR 合并到镜像默认分支」时触发，直接 push 不触发。
+- 用 Kiro 或 OpenCode 却去找 marketplace：Kiro 要重新导入子目录 URL 才能更新，OpenCode 只能拷或软链、靠换目录更新。
+- 把 Droid 的版本号当更新依据：Droid 按 commit 跟踪 Git 插件，不看 manifest 里的显示版本号。
+- 期待带分支的时序图能生成完整授权握手：带分支的刷新要用 `type-sequence.md` 里的 ALT combined-fragment 语法，示例在 `assets/example-sequence-oauth.html`，不是完整 authorize-code 握手。
+- 以为动效是新的图型：`reveal / step / loop` 只是可选的无障碍动效，不新增图型。
+- 把材料当完整文档：本次调研在「与已有做法的关系」一节讲到 OpenCode 时被截断，Archify 在 OpenCode 上的支持细节没有给全；diagram-design 的调研则在「重绘已有图（导入）」的 `import-drawio platform.drawio --size=slide-16x` 之后被截断，导出与后续步骤缺失。两者都要用前自己打开仓库确认。
 
 ## 证据与来源
 
@@ -1045,6 +1206,7 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 - cline-pilot 路线的全部内容——安装命令（`npx skills add https://github.com/gongdear/cline-pilot`、四种宿主 skills 目录的 `mkdir -p` + `cp -r`）、首次配置写入私有的 `references/local-config.md`、`assets/global-memory-bank-prompt.md` 冷启动门禁、两条冷启动路径、两阶段模型策略（初始化用强的长上下文付费模型，稳态切本地小模型）、`qwen3.8:27b` 与「7 模块 Java 后端交付 50+ 测试类」、`python3 scripts/session_report.py 15 /path/to/repo` 监控、证据优先于自我报告、decision-log 与 ≥2 个一致样本的蒸馏阈值、push/删除/写 DB/花钱/改全局配置先问、`npx @anthropics/skills-ref validate .` 与 `python3 -m py_compile` 自检、渐进披露布局——均来自调研《gongdear/cline-pilot》。该仓库为 MIT，91 stars；README 称两阶段策略「在生产 Java 后端上验证过」，但这些验证数据均为作者自述，仓库内没有可核对的基准、对比数据或第三方复现记录。「固定四要素格式」的逐字格式、6 项验收清单的具体条目、冷启动门禁与两条路径的逐字内容都在 `SKILL.md` 与 `references/*` 中，本次材料只到 README 一层；`session_report.py` 的参数含义原文未说明。该项目与 Cline 强绑定，若不用 Cline CLI，主要只能借鉴其设计原则（确定性脚本优先、证据优先于自述、学习闭环）。
 - ui-ux-pro-max 路线的全部内容——`npm install -g ui-ux-pro-max-cli`（旧的 `uipro-cli` 已过期）、`uipro init --dry-run` 与各 `--ai` 目标、`--global` 与插件市场两种装法、Trae 的 SOLO 模式与 Kiro/Copilot/Roo Code/KiloCode 的 slash command、自然语言调用示例、`scripts/search.py` 的 `--design-system`/`-f markdown`/`--domain`/`--stack` 参数与示例命令、Web 栈的版本意识规则、`--persist` 生成的 `design-system/<project>/MASTER.md` 与 `pages/*.md` 结构、第 9 步的检索提示词原文、8 条 PRE-DELIVERY CHECKLIST 原文、`uipro versions`/`update`/`uninstall`/`init --offline`——均来自调研《nextlevelbuilder/ui-ux-pro-max-skill》，即该仓库 README。其中的能力数字（192 条行业推理规则、79 种风格其中 50 种 active、192 套配色、74 组字体搭配、25 种图表类型、22 个技术栈指南、119 条 UX 指南）全部为作者自述，没有对照数据；演示素材被作者自己标注为非本 skill 产物；页面大量篇幅是付费版与自家产品推广。README 明确要求安装步骤由人执行、agent 应询问，以及脚本「只用标准库、不装依赖、不联网」，同样属作者声明。
 - archify 路线的全部内容——`npx skills add tt-a1i/archify -g`、Cursor 的非交互安装、`npx skills use tt-a1i/archify@archify --agent codex` 先试用、两段提示词原文、五种图型（Architecture / Workflow / Sequence / Data Flow / Lifecycle）与选型对照表、`node archify/bin/archify.mjs guide` 的两种调用、`doctor`/`demo`/`validate`/`preview`/`deliver` 命令链与 `--quality showcase`/`--json`/`--open`/`--no-open`、preview 的回环监听与失败保留 last-good、`compare architecture base.json head.json architecture-delta.html --json`、`meta.locale` 与 `meta.translations` 的本地化范围、查看侧快捷键与 `#focus=`/`#route=` 等稳定链接、`hermes skills install skills-sh/tt-a1i/archify/archify -y` 与 `dsh plugin --profile web add @tt-a1i/archify-dsh@0.1.0` 两个社区集成、更新检查的 24 小时 / 6 小时 / 24 小时节奏与 `ARCHIFY_UPDATE_CHECK_DISABLED=1`——均来自调研《tt-a1i/archify》，即该仓库 README（MIT，README 标注稳定版 `v3.0.1`）。它把 `validate --json` / `deliver --json` 的稳定规则码、精确 subject、实测证据与只含受支持修复手段的 `diagnostics[]`、两轮修正上限、原子替换交付、官方 Proof Lab 的 11 个已检入场景及其 JSON 源和验证收据写进了 README，是本手册里验收信号最具体的一条；但 star 数、Trending 排名、社区案例（团队协作、旅行行程、法律引证核查、合同审查、事故复盘、飞书/钉钉讨论）全部是创作者口径，缺独立验证，`preview` 与 `compare` 的持续产出能力、`deployment-ownership` profile 的 fail-closed 行为也只有 README 描述。本次调研在「与已有做法的关系」一节讲 OpenCode 时被截断，该部分内容不完整。
+- diagram-design 路线的全部内容——支持的宿主列表（Claude Code、Codex、Factory Droid、Pi、GitHub Copilot、Kiro、OpenCode 等）、无构建步骤/无 JS/无外部图片依赖、三种静态变体（minimal light / minimal dark / full-editorial）、可选的 `reveal / step / loop` 无障碍动效、2.5.10 新增的十种版式语法与 README 展示的全部图型、可重绘 draw.io / Mermaid / Excalidraw、各宿主的安装与更新命令、Claude Code 第三方 marketplace 自动更新需手动打开、Claude Cowork 组织 marketplace 的镜像与「含版本号提升的 PR 合并才同步」规则、可编辑安装的 clone 与软链命令、`onboard diagram-design to https://yoursite.com` 的品牌 onboarding 流程与提取映射表、`ink` 在 `paper` 上的 WCAG AA 对比度校验、fidelity receipt 的字段、手工编辑 `references/style-guide.md` 的替代路径、首次使用拦截、命名 profile 与 `.diagram-design` 标记文件、三段自然语言提示词示例与 ALT combined-fragment 说明、模板拷贝与 `assets/index.html` 浏览命令、`import-drawio` 命令——均来自调研《cathrynlavery/diagram-design》，即该仓库 README。README 声明的「官方构建只出自本仓库」「网络行为见 PRIVACY.md」属作者声明，本次材料没有展开 PRIVACY.md 的内容；图型覆盖数量、版式语法数量、三种静态变体的可用性、可重绘质量都是作者口径，没有独立验证或对照数据。本次调研在「重绘已有图（导入）」的 `import-drawio platform.drawio --size=slide-16x` 处被截断，导出与后续步骤缺失，需打开仓库确认后再照做。
 - 文中提到的 star 数（如 anthropics/skills 179219、awesome-copilot 39,568、pro-workflow 2.9k、feiskyer/claude-code-settings 约 1.6k、zh-tech-writing 312、biomedical-paper-reader 31、cline-pilot 91）来自 metrics，不构成有效性证据。
 
 ## 依据的调研
@@ -1064,3 +1226,4 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 - [gongdear/cline-pilot](../research/radar/2026-10-02/488-gongdear-cline-pilot.md)：值得一试，建议小范围试：照 README 给出的安装命令、首次环境配置和「冷启动用强模型、稳态用本地小模型」的两阶段流程，在一个已有小仓库上跑通一次「冷启动→小批次任务→脚本监控→证据验收」的闭环。理由是可照做的命令与流程在原文中已经比较具体，但 4 段回报格式、6 项验收清单等核心内容位于 SKILL.md 和 references/*，本次只拿到 README，且验证数据均为作者自述。
 - [nextlevelbuilder/ui-ux-pro-max-skill](../research/radar/2026-10-02/515-nextlevelbuilder-ui-ux-pro-max-skill.md)：值得一试，先在单个真实前端项目上按 README 的命令装一遍（npm 装 ui-ux-pro-max-cli → uipro init --ai <你的 agent>），并用 --design-system --persist 生成 MASTER.md + pages 覆盖的分层检索方式试一个页面：原文给出了可直接复制的安装命令、search.py 参数、检索提示词和提交前检查清单，属于本项目中少见的“给 agent 补一块专业知识”的可照做做法；但所有能力数字均为作者自述、演示素材被作者自己标注为非本 skill 产物，且页面大量篇幅是付费版与自家产品推广，所以先小范围试、别全面铺开。
 - [tt-a1i/archify](../research/radar/2026-10-02/527-tt-a1i-archify.md)：值得一试，先把它当作“把设计沟通做成可复用技能”的小范围试用对象：按 README 给出的安装命令和两段提示词，分别跑一次“从描述出图”和“从仓库出图”，并用 validate/deliver 的 JSON 收据衡量返工轮次是否下降。理由：安装、提示词、CLI 校验-预览-交付流程都是可直接照抄的，但全部证据来自项目自述（star 数、Trending 排名、案例均为创作者口径），缺少独立验证，不宜直接 adopt。
+- [cathrynlavery/diagram-design](../research/radar/2026-10-02/565-cathrynlavery-diagram-design.md)：值得一试，建议小范围试：在 Claude Code（或 Codex/Pi）里装上这个 Agent Skill，先用自己的站点做一次品牌 onboarding，再跑一遍生成→导入→导出，用它自带的保真账本和对比度校验判断产物是否真能交付。理由：原文给的是可照抄的安装命令、四档参数、语义 token 与校验产出，不是只讲理念；但它本质是一个绘图技能，收益取决于你是否经常出图，且质量主张缺少独立证据。
