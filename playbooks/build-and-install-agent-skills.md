@@ -1,14 +1,14 @@
-# 先小范围试装技能包，用对照和硬证据决定去留
+# 给编码 agent 装技能：先小范围试装，再做有无对照，最后用硬证据验收
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：已经在用编码 agent，但不确定某个技能包值不值得留在日常流程里、该怎么验收它的产物——本篇给出一条从试装、对照到自写 SKILL.md 的完整路径。
-> 先试这一步：选一个非关键项目，只装一个技能包，用同一任务在无技能和有技能条件下各跑 3 次，看返工轮数和首稿可用率有没有变化。
+> 解决的问题：装了一堆技能包却说不清是否真的减少了返工，也没有一套可照做的流程把试装、对照、固化和验收串起来。
+> 先试这一步：挑一个正在做的真实任务，把它在“没装技能”和“只装一个技能”的条件下各跑 3 次，只保留能说清减少了你哪一次返工的那个技能。
 > 最近修订：2026-10-02
 
 ## 解决什么问题
 
-你已经在用编码 agent，但每次都要重复描述同一套工程规范，或者不确定装一个技能包是否真的减少了返工。这篇手册给出一个可照做的流程：先小范围试装一个现成技能包，用同一任务做有/无技能的对照，确认有效后再考虑把自己的重复工作写成 `SKILL.md`，让 agent 代理编码 CLI 跑长任务并拿硬证据验收，给 agent 补一块行业设计知识，写一个把会话状态嵌进界面的 Claude Code mod，让 agent 把一句话描述／一个代码仓库变成可交互的架构图、工作流图、时序图、数据流图、生命周期图，或者把自然语言需求与已有的 draw.io / Mermaid / Excalidraw 源文件改成自包含的 HTML+SVG 图、并让它长得像你的品牌。同一套对照方法也适用于中文技术文档的写作与审稿、单篇论文的精读。如果你还需要给 agent 补模型端点、权限或搜索能力，再用配置模板单独补，而不是整包采用。
+你已经在用编码 agent，但每次都要重复描述同一套工程规范，或者不确定装一个技能包是否真的减少了返工——甚至因为一次装太多，上下文反而更乱。这篇手册给出一个可照做的流程：先小范围试装一个现成技能包（可以从一个大插件市场里只装一个单元，也可以只装一个技能），用同一任务做有/无技能的对照，确认有效后再考虑把自己的重复工作写成 `SKILL.md`，或者把一本反复查阅的技术书、一份内部文档半自动转成按需加载的技能；让 agent 代理编码 CLI 跑长任务并拿硬证据验收；给 agent 补一块行业设计知识；把一句模糊想法写成可让 agent 独立跑几小时的任务书；写一个把会话状态嵌进界面的 Claude Code mod；让 agent 把一句话描述／一个代码仓库变成可交互的架构图、工作流图、时序图、数据流图、生命周期图，或者把自然语言需求与已有的 draw.io / Mermaid / Excalidraw 源文件改成自包含的 HTML+SVG 图、并让它长得像你的品牌。同一套对照方法也适用于中文技术文档的写作与审稿、单篇论文的精读。如果你还需要给 agent 补模型端点、权限或搜索能力，再用配置模板单独补，而不是整包采用。
 
 ## 适用与不适用
 
@@ -26,7 +26,10 @@
 - 有一类反复的“讲清系统结构”的工作：一句话描述、仓库运行期架构、CI/CD 与审批流、API 调用链、数据管道、状态机，需要用一张可交互的图反复讲给别人听（做法 J）；
 - 愿意按图型对照表选图，并接受出图技能的验收靠 `validate`/`deliver` 的 JSON 收据，而不是靠“图好看”（做法 J）；
 - 需要把自然语言需求或已有的 draw.io / Mermaid / Excalidraw 源文件改成自包含的 HTML+SVG 图，并且希望产物长得像自己公司或客户的品牌（做法 K）；
-- 愿意先跑一次品牌 onboarding，让技能抓你的站点提取主色和字体，并核对它给出的对比度调整与 fidelity receipt（做法 K）。
+- 愿意先跑一次品牌 onboarding，让技能抓你的站点提取主色和字体，并核对它给出的对比度调整与 fidelity receipt（做法 K）；
+- 面对一个很大的插件市场，你想按目录逐条试装、并按任务类型匹配模型档位（做法 L）；
+- 有一本反复打开到希望自己背下来的技术书，或一份反复查阅的内部 `docs/`（架构决策记录、runbook、入职指南、规范），想转成按需加载的技能（做法 M）；
+- 想把一句模糊想法变成可让 agent 独立跑数小时的任务书，或需要给磁盘清理这类破坏性操作加闸门、给项目文档与 Agent 记忆做一次收尾对齐（做法 N）。
 
 不适用：
 
@@ -46,7 +49,15 @@
 - 不常出图、或者其实只想要一个通用绘图编辑器——做法 K 的收益取决于你是否经常出图；
 - 不接受技能去抓你的公开站点做品牌 onboarding，或不愿让 agent 读改你的 `references/style-guide.md`；
 - 需要产物带 JavaScript 交互（做法 K 默认输出无 JS 的静态 HTML；要可交互请走做法 J）；
-- 只看 README 里罗列的图型和版式数量，就把效果当成结论（做法 K 的质量主张本次没有独立证据）。
+- 只看 README 里罗列的图型和版式数量，就把效果当成结论（做法 K 的质量主张本次没有独立证据）；
+- 想一次装完整个插件市场，或者只看 stars 与规模数字就决定采用（做法 L）；
+- 不做本地生成就去装 Antigravity / OpenCode / Pi（这几条路径需要 git + make）；
+- 没有合法访问权的书，或者打算把第三方版权书的生成 skill 再分发出去（做法 M）；
+- 只有扫描件却不愿先做 OCR，或者技术书想省掉 `docling` 的抽取时间（做法 M）；
+- 期待降级方案“效果一致”，或把 24×–51× 的 token 节省当成已核验结论（做法 M）；
+- 不打算回答 leader 提出的最多 5 个拍板问题，或不愿意给任务书写完成态、证据和反作弊条款（做法 N）；
+- 想让磁盘清理类技能一键删文件、不接受删除必须二次确认（做法 N）；
+- 想用 neat-freak 整理周报或处理纯代码任务（做法 N）。
 
 ## 前置条件
 
@@ -64,16 +75,19 @@
 - 走 UI/UX 设计知识路线（做法 I）时额外准备：Node/npm 用于装 CLI；本机 Python 3.x（脚本只用标准库、不装依赖、不联网）。README 明确要求这些安装步骤是给“人”做的，agent 不应自行在你的机器上安装软件，应向你询问。
 - 走 archify 路线（做法 J）时额外准备：本地 Node 环境，README 的不同集成对版本要求不同（Hermes 集成注明 Node ≥ 18，DeepSeek Harness 集成注明 `^22.19.0 || >=24.0.0`）；走 Claude.ai 上传 zip 的路线时，功能取决于沙箱里是否有 Node.js 访问；要出带源码证据的仓库图，需要 agent 能读到仓库并把证据固定到一个 public commit；用 `deployment-ownership` profile 时，owner、区域位置、私有数据库范围与具名跨界项必须由你 authored 提供，缺任一项 fail closed。
 - 走 diagram-design 路线（做法 K）时额外准备：一个受支持的 Agent Skills 宿主（Claude Code、Codex、Factory Droid、Pi、GitHub Copilot、Kiro、OpenCode 等）；走 Claude Code 时要记得第三方 marketplace 的自动更新默认关闭，需要手动打开；走 Kiro / OpenCode 时要接受没有 marketplace 包、更新只能靠重新导入或换目录；走可编辑安装时只建你用得到的那些 skills 根目录。
+- 走 wshobson/agents 路线（做法 L）时额外准备：已装 Claude Code 并能在会话内执行斜杠命令，或装了 `gh` / 可用 `npx`；走 Antigravity / OpenCode / Pi 需要 git 与 make，因为转换后的目录树被 gitignore，必须本地生成；用 plugin-eval 需要可用的 `uv`。
+- 走 book-to-skill 路线（做法 M）时额外准备：本机 Python 环境并能安装对应抽取器（先用 `python3 scripts/extract.py --check` 自查）；技术书需要 `docling`；扫描件需要先 `ocrmypdf`；宿主支持 Agent Skills 标准，并且你清楚它的技能目录在哪。
+- 走 khazix-skills 路线（做法 N）时额外准备：一个支持 Agent Skills 标准的 Agent（README 点名 Claude Code、Codex、Qoder、Kimi Code、iFlow、CodeBuddy、Cursor 等 40+）；项目里有 git、`CLAUDE.md`/`AGENTS.md`、`docs/`（没有也有轻量路径）；用 leader 时愿意回答它提出的最多 5 个必须你拍板的问题。
 
 ## 操作步骤
 
-怎么选：先做做法 A；A 里某个技能确实有效、且你有一件每周重复且规范明确的工作，再做做法 B；需要把外部文档变成智能体知识资产时用做法 C；需要给 Claude Code 补模型端点、权限、网页搜索时用做法 D；要写或审中文技术文档用做法 E；要精读单篇论文用做法 F；要给自己写一个把会话状态嵌进界面的 Claude Code mod 时用做法 G；已经在用 Cline CLI、想让 agent 代理长任务并用证据验收时用做法 H；要给 agent 补一块 UI/UX 设计知识时用做法 I；需要把一句话描述或一个代码仓库变成可交互的单文件 HTML 图（架构、工作流、时序、数据流、生命周期）时用做法 J；需要把自然语言需求或已有的 draw.io / Mermaid / Excalidraw 源文件改成自包含的 HTML+SVG 图、并让它长得像你的品牌时用做法 K。做法 J 与 K 都出图，区别是：J 出带 JavaScript 交互的单文件 HTML，验收靠 `validate`/`deliver` 的机器收据；K 默认出无 JS、无外部图片依赖的静态 HTML+SVG，验收靠品牌 onboarding 阶段的对比度校验和 fidelity receipt，以及你自己看产物能不能交付。要交互选 J，要品牌一致性和静态可交付选 K。E、F、G、H、I、J、K 都必须套用 A 的对照方法，不要跳过验证直接纳入常规流程。
+怎么选：先做做法 A；A 里某个技能确实有效、且你有一件每周重复且规范明确的工作，再做做法 B；需要把外部文档变成智能体知识资产时用做法 C；需要给 Claude Code 补模型端点、权限、网页搜索时用做法 D；要写或审中文技术文档用做法 E；要精读单篇论文用做法 F；要给自己写一个把会话状态嵌进界面的 Claude Code mod 时用做法 G；已经在用 Cline CLI、想让 agent 代理长任务并用证据验收时用做法 H；要给 agent 补一块 UI/UX 设计知识时用做法 I；需要把一句话描述或一个代码仓库变成可交互的单文件 HTML 图（架构、工作流、时序、数据流、生命周期）时用做法 J；需要把自然语言需求或已有的 draw.io / Mermaid / Excalidraw 源文件改成自包含的 HTML+SVG 图、并让它长得像你的品牌时用做法 K；面对一个很大的插件市场、想按任务类型匹配模型档位并用现成评测做筛检时用做法 L；要把一本反复查阅的技术书或一份内部文档变成按需加载的技能时用做法 M；要把模糊想法写成可独立跑的任务书，或给破坏性操作加闸门、给文档与记忆做收尾对齐时用做法 N。做法 J 与 K 都出图，区别是：J 出带 JavaScript 交互的单文件 HTML，验收靠 `validate`/`deliver` 的机器收据；K 默认出无 JS、无外部图片依赖的静态 HTML+SVG，验收靠品牌 onboarding 阶段的对比度校验和 fidelity receipt，以及你自己看产物能不能交付。要交互选 J，要品牌一致性和静态可交付选 K。E、F、G、H、I、J、K、L、M、N 都必须套用 A 的对照方法，不要跳过验证直接纳入常规流程。
 
 ### 做法 A：先用现成技能包做小范围试装（推荐先做）
 
 1. 选定一个非关键项目和一类重复任务。前提：你已经在用 Claude Code 或 Codex CLI；项目不是生产关键。预期：明确一个可对照的任务，例如“从 PDF 抽表单字段”或“给用户模块加批量导出功能”。
 
-2. 只选一个技能包，只装一个，不要全装。以下六选一：
+2. 只选一个技能包，只装一个，不要全装。以下六选一（其它现成来源见做法 L、M、N）：
 
    - 官方示例技能（Claude Code）：
 
@@ -1082,6 +1096,227 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 
 9. 验收产物。README 里可核对的硬信号只有 onboarding 阶段的对比度校验与 fidelity receipt；图型覆盖数量、版式语法数量、三种静态变体的可用性、可重绘质量都只是作者主张。预期：你能说清哪一次出图减少了你向别人解释结构的时间，或者哪一次品牌 onboarding 让你不用手动配色；说不清就不要保留。
 
+### 做法 L：从大插件市场只装一个单元，并按任务档位选模型（可选，按 A 的对照法验证）
+
+定位：wshobson/agents 是一个 agentic 插件市场仓库：单一 Markdown 源（`plugins/`）生成 6 个 harness 的本地化产物，Claude Code 为 source-of-truth，另适配 Codex CLI、Cursor、OpenCode、Antigravity CLI、Copilot、Pi。README 自述 94 个插件（92 本地 + 2 外部 git-subdir）、202 个 agent、184 个 skill、105 个 command、16 个 orchestrator。每个插件自包含且可组合：`agents/`、`commands/`、`skills/` 按目录结构自动发现；安装一个插件只把它自己的组件加载进上下文，而不是整个市场。与做法 A、I 的关系：它就是 A 里“装一个现成技能包做对照”的一个更大来源，目录本身还是一张“还没想到要交给 AI 的工作”清单；区别是它附带了 plugin-eval 这个现成评测工具，可以当筛子用。
+
+1. Claude Code 安装（前提：已装 Claude Code，能在会话内执行斜杠命令）。
+
+   ```bash
+   /plugin marketplace add wshobson/agents
+   /plugin install python-development          # 或 94 个插件中的任意一个
+   ```
+
+   预期：只装上你点名的那一个插件，而不是整个市场。
+
+2. 只装技能（前提：已装 `gh` 或可用 `npx`；不克隆、不用市场、不生成。注意只装 skills，不含 agents、commands、hooks）。
+
+   ```bash
+   gh skill install wshobson/agents                                 # 浏览后选一个技能，或加 --all
+   gh skill install wshobson/agents python-testing-patterns --agent claude-code
+   npx skills add wshobson/agents --skill python-testing-patterns   # 可加 -a claude-code；-g 表示用户级作用域
+   ```
+
+   预期：只有你点名的技能进目录。
+
+3. 其它 harness。前提：Codex / Cursor 从仓库已提交的 registry 原生安装；Antigravity / OpenCode / Pi 需要 git + make，转换后的目录树被 gitignore，需要本地生成。
+
+   ```bash
+   npx codex-marketplace add wshobson/agents        # Codex；之后逐个安装插件
+   # Cursor：先添加市场，再执行 /plugin install <name>（读取 .cursor-plugin/ 与源）
+   gh repo clone wshobson/agents ~/agents && cd ~/agents
+   make generate HARNESS=antigravity && make install-antigravity  # Antigravity (agy)
+   make install-opencode                                          # OpenCode（内部执行 generate + 建立符号链接）
+   make generate HARNESS=pi && make install-pi                    # Pi
+   ```
+
+   预期：产物落到你点名的 harness。注意 GitHub Copilot 这条路径仓库仍声明支持并生成 `.copilot/`，但材料里的清单已把它判为 drop，两者存在差异，先别在这条路径上投入。
+
+4. 批量生成与结构自检（前提：在仓库根目录）。
+
+   ```bash
+   make generate-all                        # 全部六个 harness
+   make validate                            # 结构检查
+   make garden                              # 漂移 / 死链 / 上限检测
+   ```
+
+   预期：通过结构检查；`garden` 会检出漂移、死链与上限问题。
+
+5. 按任务层级选模型（插件内的模型配置策略，照原文表格）。
+
+   | Tier | Model | 用途 |
+   |---|---|---|
+   | 0 | Fable 5 | 最长周期的自主工作——大规模迁移、数小时运行（需 opt-in，成本高） |
+   | 1 | Opus | 架构、安全、代码评审、生产关键路径 |
+   | 2 | inherit | 用户自选——后端、前端、AI/ML、专门领域 |
+   | 3 | Sonnet | 文档、测试、调试、API 参考 |
+   | 4 | Haiku | 快速操作类任务、SEO、部署、内容 |
+
+   预期：架构、安全、评审类任务走高档位，文档、测试、调试走中档，SEO、部署、内容走低档，而不是一个模型跑全部。注意 Fable 5 / Opus 的成本只有“premium cost / opt-in”的定性说法，材料没给数字。
+
+6. 对单个 skill 打分（前提：可用 `uv`）。
+
+   ```bash
+   uv run plugin-eval score path/to/skill --depth quick
+   uv run plugin-eval certify path/to/skill
+   ```
+
+   注意：plugin-eval 分三层——静态层是确定性 lint（frontmatter、标题、链接），不做模型调用；LLM judge 由 Haiku 和 Sonnet 按 4 个维度打分，标注为实验性且未经人工标注验证；Monte Carlo 在生成提示上跑 50 或 100 次，同样标注实验性且未验证。把它的输出当筛子，不是结论。
+
+7. 按 A 的对照法验证。只选一个与当前工作直接相关的单元（一个插件如 `python-development`，或一个技能如 `python-testing-patterns`），优先走 skills-only 安装；在一个真实小任务上跑一遍，例如给现有 Python 模块补测试、或做一次安全扫描，保留装插件前的同任务结果作为基线。预期：你能说清哪一项指标变了；没有明确改善、或内容与团队既有约定冲突，就退回只用 skill 层，不引入 agent / command / hook。
+
+### 做法 M：把一本反复查阅的书或一份内部文档变成按需加载的技能（可选，按 A 的对照法验证）
+
+定位：book-to-skill（MIT 许可）是一个转换器加 Agent Skill 定义，把技术书 PDF/EPUB/DOCX/HTML/RTF/MOBI、文档文件夹或一组来源，转换成一个符合 Agent Skills 开放标准的 skill，落到用户级跨代理技能目录 `~/.agents/skills/<slug>/`，供 GitHub Copilot CLI、Amp、Claude Code、Hermes Agent、OpenCode、OpenClaw 等宿主按需加载。生成物固定为五类文件，README 给出 token 预算：
+
+| 文件 | 用途 | 体量 |
+|------|------|------|
+| `SKILL.md` | 核心心智模型 + 章节索引 | ~4,000 tokens |
+| `chapters/ch01-*.md` … | 每章一个文件，按需加载 | 每个 ~1,000 tokens |
+| `glossary.md` | 全部关键术语，按字母序附章节引用 | ~1,500 tokens |
+| `patterns.md` | 所有技术、算法、设计模式 | ~2,000 tokens |
+| `cheatsheet.md` | 决策表与速查规则 | ~1,000 tokens |
+
+关键设计：章节文件按需加载，未被问到的章节不计入 skill 预算。官方声明在真实书籍上测得的 token 消耗比把整本书塞进上下文少 24×–51×——这是作者主张，方法学在未提供的 `docs/performance.md` 里，要自己测。仓库自带 `tools/discovery_tax.py`（测量 token 成本）和 `tools/validate_skill.py`（按宿主规则校验生成的 SKILL.md）。与做法 A、B 的关系：A 是装别人的技能，B 是自己写 `SKILL.md`，M 是把你已有的资料半自动生成成 `SKILL.md` 加章节文件；产物可以直接当 B 的输入，也必须照 A 做对照。README 明确列出的可迁移非书场景：内部文档（架构决策记录、runbook、入职指南）、品牌与设计系统（语气指南、组件原则）、研究聚类（论文堆 + 自己的笔记合并成一个 skill）、规范与标准（RFC、API 契约、合规文档）。判据是：一份文档你反复打开到希望自己背下来，它就是候选。
+
+1. 安装（前提：能执行 npx 或 git，且宿主支持 Agent Skills 标准）。
+
+   ```bash
+   # 一条命令，任意宿主
+   npx skills add virgiliojr94/book-to-skill
+
+   # 或手动 clone（注册 /book-to-skill）
+   git clone https://github.com/virgiliojr94/book-to-skill.git ~/.claude/skills/book-to-skill
+   ```
+
+   各宿主技能目录：Copilot CLI `~/.copilot/skills/`；Amp / 跨代理 `~/.agents/skills/`；Hermes Agent `${HERMES_HOME:-$HOME/.hermes}/skills/<category>/`；OpenClaw `${OPENCLAW_STATE_DIR:-$HOME/.openclaw}/skills/`（只有使用默认 state 时才走 `~/.agents/skills/`）；OpenCode `~/.agents/skills/`（也读 `~/.config/opencode/skills/`）。预期：技能装在你点名的目录。
+
+2. 检查抽取依赖（不需要文件）。
+
+   ```bash
+   python3 scripts/extract.py --check
+   ```
+
+   预期：打印每种格式已安装的抽取器，以及缺失项对应的确切安装命令。
+
+3. 按书型安装 PDF 抽取器（抽取器按格式逐个尝试，用第一个可用的）。
+
+   | 书型 | 工具 | 安装 | 速度 |
+   |------|------|------|------|
+   | 文本为主（散文、少表格） | `pdftotext` (poppler) | `sudo apt install poppler-utils` | 极快 |
+   | 文本为主（回退） | `pypdf` | `pip3 install pypdf` | 极快 |
+   | 文本为主（回退） | `pdfminer.six` | `pip3 install pdfminer.six` | 极快 |
+   | 技术类（代码、表格、公式） | `docling` | `pip3 install docling` | ~1.5 秒/页 |
+
+   其它格式：EPUB 用 `pip3 install ebooklib beautifulsoup4`（最佳）或内置 `zipfile`；DOCX 用 `pip3 install python-docx`（回退 stdlib ZIP/XML）；HTML 用 `pip3 install beautifulsoup4`；RTF 用 `pip3 install striprtf`；MOBI/AZW/AZW3 用 Calibre `ebook-convert`（外部应用，非 pip）；TXT/Markdown/reStructuredText/AsciiDoc 内置，无需额外依赖。预期：技术类走 `docling`，纯散文走 `pdftotext`，不要拿纯文本抽取器处理带代码和表格的技术书。
+
+4. 扫描版 PDF 必须先 OCR（无文字层的图片页这些工具抽不出东西；抽取器会检查前几页并立即停下说明原因）。
+
+   ```bash
+   ocrmypdf input.pdf output.pdf
+   ```
+
+   然后对 OCR 后的输出做转换。
+
+5. 运行转换。
+
+   ```text
+   /book-to-skill <path|folder|glob> [skill-name]
+   ```
+
+   例：`/book-to-skill ./my-book.pdf`。转换开始前会问这本书是 **technical** 还是 **text-heavy**，据此自动选抽取器（docling 保留 markdown 表格和代码块，pdftotext 对纯散文更快）。还支持 analyze-only、generate-from-analysis、update/fold-in 模式（README 未展开，具体用法在未提供的 `docs/usage.md`）。预期：生成物落到技能目录，五类文件齐全。
+
+6. 使用生成的 skill。
+
+   ```text
+   /your-book-slug replication
+   ```
+
+   预期：代理只读对应章节，从真实内容回答，而不是通读整本 PDF。
+
+7. 校验与（可选）发布。
+
+   ```bash
+   tools/validate_skill.py --lens claude|copilot|amp|hermes|opencode
+   ```
+
+   校验生成的 `SKILL.md` 是否符合宿主规则。发布到 GitHub（默认私有）后，任何宿主用 `npx skills add` 安装。注意：Claude Code 下运行时转换器会尝试在 `~/.claude/skills/<slug>/` 建符号链接，只有读回验证通过才算成功，否则运行报告会说明；Hermes 按类别分区、不扫描跨代理根目录，所以要落到 `${HERMES_HOME:-$HOME/.hermes}/skills/<category>/<slug>/`。
+
+8. 合规前提。工具不自带任何书籍内容，抽取与分析在本机完成、不上传文件；产出被定位为“你自己的结构化笔记”，官方要求不得再分发第三方版权作品的生成 skill。
+
+### 做法 N：把模糊想法写成可独立跑的任务书，并给破坏性操作加三色闸门（可选，按 A 的对照法验证）
+
+定位：khazix-skills 是作者把自己日常在用的 6 个技能开源出来的合集，遵循 Agent Skills 开放标准，号称可安装到 Claude Code、Codex、Qoder、Kimi Code、iFlow、CodeBuddy、Cursor 等 40+ 支持该标准的 Agent。六个技能分别是：leader（把一句模糊想法定义成清晰目标，产出可让 AI 独立跑数小时到完成的任务书）、storage-analyzer（一句话扫描整机磁盘，出交互式 HTML 报告，三色分级给清理决策）、aihot（让 Agent 一句话拿到 aihot.news 的 AI 日报与动态，无需 API Key / MCP）、neat-freak（干完活跑 `/neat`，对齐项目文档、CLAUDE.md/AGENTS.md、Agent 记忆并审计规则执行）、hv-analysis（对产品/公司/概念做纵向+横向分析，产出长报告）、khazix-writer（按作者口吻与禁忌词写公众号长文）。建议只装 1–2 个，优先 leader 与 neat-freak。与做法 A 的关系：它同样是装一个现成技能包，区别是它额外给出两样可照抄的规则——leader 的「目标七问」和 storage-analyzer 的三色分级安全模型，这两样即使不装技能也能用在你自己写的任务书上。
+
+1. 安装（前提：你的 Agent 支持 Agent Skills 标准）。在 Agent 里直接说（把 `leader` 换成 `neat-freak`、`hv-analysis`、`khazix-writer` 等）：
+
+   ```text
+   帮我安装这个 skill：https://github.com/KKKKhazix/khazix-skills/tree/main/leader
+   ```
+
+   预期：Agent 自己 clone 到对应目录，你不必手管路径。
+
+2. 降级方案（前提：Agent 不支持 Skill）。把对应目录的 `SKILL.md` 全文下载下来，当成项目规则文件，或直接贴进对话让 Agent 照着执行——README 称“效果一致”，这是作者主张，没有对照数据。
+
+3. 用 leader 写目标。触发词（任一句）：
+
+   ```text
+   帮我给 agent 写个目标
+   帮我详细拆一下这个目标
+   写个 goal 提示词
+   让 agent 自己跑这个项目
+   ```
+
+   流程：先说一句想法 → 它先实测调研（它强调动笔前一定先钻进代码库亲手跑一遍——文档里写的命令，实际可能根本不存在）→ 问你最多 5 个必须你拍板的问题 → 写出纯 Markdown 任务书。作者说全程约 12 分钟，属主张。拿到后粘进目标模式（Claude Code 的 `/goal`、Codex 的目标模式）；没有目标模式的 Agent 直接粘贴发送也一样用。
+
+4. 按「目标七问」检查任务书（外加第零问）。
+
+   | # | 问题 | 落到任务书 |
+   |---|---|---|
+   | 1 | 目的 | 遇到没写到的岔路口，它靠这句自己判断 |
+   | 2 | 完成态 | 具体到靠岸那一刻机器就能判 |
+   | 3 | 证据 | 每条验收都要贴出实际命令输出 |
+   | 4 | 反作弊 | 把偷懒路径一条条点名禁止 |
+   | 5 | 地界 | 白名单 + 跑满 N 轮即停 |
+   | 6 | 取舍 | 「算得对 > 做得全 > 做得快」 |
+   | 7 | 未知 | 拿不准的写进待裁决清单，跳过做别的 |
+
+   第零问：海图是自己实测的还是听来的。预期：七问里任何一条没答案，就不要丢进目标模式跑长程，先补任务书。
+
+5. 用 storage-analyzer 清磁盘。触发词：
+
+   ```text
+   帮我看看存储
+   C 盘满了
+   清理一下磁盘
+   看下电脑空间
+   storage analysis
+   ```
+
+   它扫完整机后在浏览器打开交互式 HTML 报告（磁盘总览、占用 Top 5、清理优先级、三色分级清单）。照抄它的安全规则：
+
+   - 绿灯：纯缓存/临时文件，可让 Agent 一键清；
+   - 黄灯：含用户数据（离线视频、下载、项目代码），只给「在访达打开」和「移废纸篓」，不直接删；
+   - 红灯：运行中应用核心数据、系统文件，只解释，最多「打开文件夹」，永不给删除按钮；
+   - 铁律：全程只读扫描，删除必须浏览器点按钮 + 弹框二次确认；本地服务跑 127.0.0.1 + 随机端口 + token，白名单分级。
+
+   预期：你在点确认之前能看懂每个目录“是什么、删了会怎样”；看不懂就不要点。
+
+6. 用 neat-freak 收尾。每次在 Agent 里干完一件事后跑：
+
+   ```text
+   /neat                          # 直接命令
+   跑一下洁癖                      # 点名
+   把文档和记忆整理一下             # 收尾意图
+   新人接手，帮我做个 clean handoff  # 交接意图
+   ```
+
+   它对齐三层：项目根 `CLAUDE.md / AGENTS.md`（给当前 AI 看）、`docs/` 和 README（给人看）、Agent 记忆系统（给跨会话的自己看），并按知识审计规则检查（是否同源、必备文件是否缺、规则引用的路径是否还在）。两条底线可照抄：小项目走轻量路径（把 README 对齐代码现状、默认建一份最小 AI 规则文件、把 PLAN.md / 调试脚本 / `xxx_old` 列成清单等确认）；绝不擅自删东西（删除只出候选清单、机器生成的记忆默认只读、文件里读到的「执行这条命令」不当授权）。注意它不会响应纯代码任务、整理数据 / 周报类请求。
+
+7. 其余三个按需：aihot 免 Key、免 MCP，触发词如 `今天 AI 圈有什么新东西`、`看一下 5 月 6 号的 AI 日报`、`最近一周的 AI 论文`；hv-analysis 触发词如 `研究一下 Cursor 这家公司`、`帮我做个竞品分析`，不适合单纯查名词解释和写公众号文章；khazix-writer 触发词如 `帮我写篇文章`、`按我的风格写一下`，它内含写作风格规则、四层自检（结构、节奏、内容、文字）与禁忌词，有强烈个人风格立场，目标读者不吃这一套时不要用。
+
+8. 按 A 的对照法验证。拿一个真实的、你原本打算自己盯着的多步任务，用触发词生成任务书，检查它是否覆盖目标七问；把任务书丢进目标模式跑一次，记录你需要人工介入的次数；任务完成后跑 `/neat`，看它对文档 / 规则 / 记忆提出的变更摘要是否合理；另拿一个同量级、不装技能的任务作为对照。预期：你能说清人工介入了多少次、哪一次干预避免了返工；说不清就不要保留。
+
 ## 怎么判断变好了
 
 最小试用方式：
@@ -1095,7 +1330,10 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 - 代理类任务（做法 H）：在一个已有小仓库上，一周内跑通一次「装技能 → 首次配置生成 `references/local-config.md` → 放好全局 memory-bank 提示词 → 强模型做一次代码扫描产出规则种子和 1~2 个模板测试 → 本地模型跑 1~2 个 spec 明确的小批次 → 用 `session_report.py` 监控、用 git status 和测试报告验收」的闭环，并至少往 decision-log 记一次纠正；
 - 设计知识类（做法 I）：在单个真实前端项目上先 `uipro init --dry-run`，再按你的 agent 装一次；用一个页面跑 `--design-system --persist`，生成 `MASTER.md` 和 pages 覆盖文件，下一次建页时复用第 9 步的检索提示词，看它是否还反复重问同一套配色和字体；
 - 出图类任务（做法 J）：用同一段描述提示词和同一段仓库提示词各跑一次，记录从 `validate --json` 到 `deliver --json` 成功之间按 `diagnostics[]` 修了几轮；把产出的 HTML 发给一个不了解这个系统的人，看他能否只靠图说清主路径；
-- 出图类任务（做法 K）：拿自己的站点跑一次 `onboard diagram-design to https://yoursite.com`，检查 proposed diff 是否可接受、对比度不达标时提出的调整值是否合理；再跑一遍生成 → 导入，看产物能否在没装任何东西的机器上直接用浏览器打开，并逐项核对 fidelity receipt 里的字体是不是站点字体、有没有 fallback。
+- 出图类任务（做法 K）：拿自己的站点跑一次 `onboard diagram-design to https://yoursite.com`，检查 proposed diff 是否可接受、对比度不达标时提出的调整值是否合理；再跑一遍生成 → 导入，看产物能否在没装任何东西的机器上直接用浏览器打开，并逐项核对 fidelity receipt 里的字体是不是站点字体、有没有 fallback；
+- 插件市场类（做法 L）：只选一个与当前工作直接相关的单元（一个插件或一个 skill），在一个真实小任务上跑一遍，保留装之前的同任务结果作为基线；用 `uv run plugin-eval score <skill> --depth quick` 和 `make validate` 做筛检；记录单次会话加载的 skill/agent 数量与上下文占用；
+- 文档转技能类（做法 M）：拿一本你反复查阅、且已知道答案的书，或一份内部 `docs/` 目录（避开扫描件；若必须用，先 `ocrmypdf`），转换后用 10 个问题逐个提问：8 个你已知答案、1 个书中明确没有的（考幻觉）、1 个跨章节综合的；
+- 目标书类（做法 N）：拿一个你原本打算自己盯着的多步任务，用 leader 生成任务书，检查七问是否全有答案；丢进目标模式跑一次，记录人工介入次数；完成后跑 `/neat` 看变更摘要是否合理；另拿一个不装技能的同量级任务做对照。
 
 可观察的指标：
 
@@ -1109,6 +1347,9 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 - 设计知识类（做法 I）：交付前检查清单的 8 条是否在成稿里成立；跨会话复用 `MASTER.md` 之后，是否还需要反复重说同一套配色、字体和反模式。
 - 出图类（做法 J）：交付是否原子替换——只有通过校验的产物才替换目标文件，失败时上一份 last-good 产物是否还在；同一张图从首次验证到交付成功需要按 `diagnostics[]` 修的轮数；仓库图的节点是否带 `SRC n` 并能打开 Git 校验过的文件与行号范围；架构变更评审是否拿到机器收据，且没有被当成影响分析（`compare` 明确不推断影响、风险或可合并性）；非工程用途（团队协作、旅行行程、法律引证核查、合同审查、事故复盘）README 只是列出，没有数据，先别当效果证据。
 - 出图类（做法 K）：品牌 onboarding 之后，出图是否还需要你手动改配色和字体；fidelity receipt 里有没有 fallback、原因是什么；重绘已有的 draw.io 源文件后是否需要手工重排；产物是不是单个自包含 HTML（无 JS、无外部图片依赖），发给别人能不能直接打开。
+- 插件市场类（做法 L）：同一任务的完成时间与返工次数（装前 / 装后各一次）；测试通过率、代码评审意见条数、lint 或安全扫描发现数；单次会话加载的组件数量与 token 或费用变化；同一提示重复 3–5 次的结果一致性。
+- 文档转技能类（做法 M）：8 个已知答案题的命中数与引用章节是否对得上；书中明确没有的那题是否被明确回答“书里没有”，这一项应为 0 幻觉，否则不要推广；用 `tools/discovery_tax.py` 或自行对比“整本塞上下文”与“按需加载章节”回答同一问题的 token 数，验证是否真接近 README 声称的量级；记录单次问答的耗时。
+- 目标书类（做法 N）：任务书是否七问全有答案；长程执行中你需要中途纠偏的次数（越少越好）；验收时能否逐条贴出实际命令输出而不是口头结论；是否出现「指标达成，事一件没干」；`/neat` 提出的变更摘要你是否认可。
 - 文档审稿：它列出的问题里你认可并采纳的比例；修改后的事实密度（「强大」「无缝」这类形容词是否换成数字、命令或报错原文）；AI 腔清单类别是否还有残留；让没参与写作的同事只读成稿，能否说出「读完能做成什么事」。
 - 论文精读：每张主图是否都被讲到、图注是否被引用、有无遗漏面板；是否区分独立个体数与细胞 / 切片数、观察与因果、作者解释与新增假设；是否列出「已读与未获取材料」、未核查附件处是否说明；第⑥节是否给出可迁移环节与待验证设计；人工精读耗时 vs 生成加核对的耗时。
 - 工作流形态的产物是否稳定出现：例如 deep-research 是否每次都在 `.research/<name>/` 下留出 `prompts/`、`child_outputs/`、`logs/`、`raw/`、`final_report.md`。
@@ -1127,24 +1368,31 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 - 如果出图技能每次失败都要你盲重试，而不是按 `diagnostics[].supportedFixes` 修，说明没用上它的收据机制。
 - 如果装着 diagram-design 却仍然每次手动改配色和字体，说明你没做那 60 秒的品牌 onboarding，先跑一次再判断要不要留。
 - 如果你要的是通用绘图编辑器或 Mermaid 主题，先换工具，不要在这个技能上继续加提示。
+- 如果 plugin-eval 的分数不错但真实任务没有改善，说明你把筛子当成了结论；回到同一任务的前后对照。
+- 如果 book-to-skill 生成的技能被问到书中没有的内容时开始编造，先停用，不要推广。
+- 如果任务书七个问题里有任何一条没答案，别丢进目标模式跑长程，先补任务书。
+- 如果磁盘清理类技能给出的删除建议你无法在点确认前看懂「删了会怎样」，不要点。
+- 如果装了插件市场的内容后与团队既有约定冲突、返工反而增加，退回只用 skill 层，不引入 agent / command / hook。
 - 如果一周内没有任何一项指标变化，或安装的插件与仓库实际规范冲突导致返工增加，就回到“只借鉴组织方式、不装具体内容”的用法。
 
 注意：`doctor`、`validate`、`npm test`、`claude plugin validate`、`npx @anthropics/skills-ref validate`、`archify doctor`、`validate --json`、`copilot skill list` 这类检查只能证明“技能或 mod 装得上、格式合法、不带危险命令、图能通过校验、技能被宿主发现”，不能证明“产出更好”。效果必须自己对照。
 
 ## 常见坑
 
-- 整体 adopt：一次装多个技能包，导致上下文过载或规则冲突。AAS 提到 Antigravity 会因监控的 skill 目录过载上下文，需要选择性激活；feiskyer/claude-code-settings 的 FAQ 也建议精选技能，不要全装。做法 H、I、J、K 同理，先只装一个。
+- 整体 adopt：一次装多个技能包，导致上下文过载或规则冲突。AAS 提到 Antigravity 会因监控的 skill 目录过载上下文，需要选择性激活；feiskyer/claude-code-settings 的 FAQ 也建议精选技能，不要全装。做法 H、I、J、K、L、N 同理，先只装一个。
+- 一次装整个插件市场：94 个插件、202 个 agent、184 个 skill 是目录规模，不是使用建议；一次只装一个插件或一个 skill，能走 `gh skill install` / `npx skills add` 的 skills-only 路径就别走全量。
 - 重复安装：在同一个项目里同时用项目级安装和 Claude Code 插件市场装同一个技能包，skills 会出现两份。
 - 手拷 hooks：把仓库里的 `hooks/hooks.json` 直接拷进 `~/.claude/settings.json` 或 `~/.claude/hooks/hooks.json`，会导致重复执行和跨平台 hook 冲突；hooks 必须用安装器写。
 - 在用户主目录安装：项目级安装应在具体项目目录执行；v1.2.1 起 superpowers-zh 会拒绝在主目录安装，老版本会把 skills 写进 home 目录，污染所有项目。
-- 只信 README：很多技能包的 README 没有贴出 `SKILL.md` 正文，质量无法核验；只有安装命令和自述，没有效果数据。feiskyer/claude-code-settings 虽然技能、子代理、settings 模板都列得很全，但技能效果仍是作者描述，没有对照数据。`zh-tech-writing` 的 SKILL.md 与两个 references 未在材料中给出，14 条 AI 腔清单只有类别没有逐条文本；`biomedical-paper-reader` 的 SKILL.md、各 references 与 `evals/RESULTS.md` 的实际内容同样看不到；cline-pilot 的「四要素格式」和 6 项验收清单只存在于 `SKILL.md` / `references/*`，README 里没有；ui-ux-pro-max 的能力数字（192 条规则、79 种风格等）全是作者自述，演示素材被作者自己标注为非本 skill 产物；archify 的 star 数、Trending 排名、案例同样都是创作者口径，没有独立验证；diagram-design 的图型覆盖、十种新增版式语法、三种静态变体的可用性也全是作者口径。
+- 只信 README：很多技能包的 README 没有贴出 `SKILL.md` 正文，质量无法核验；只有安装命令和自述，没有效果数据。feiskyer/claude-code-settings 虽然技能、子代理、settings 模板都列得很全，但技能效果仍是作者描述，没有对照数据。`zh-tech-writing` 的 SKILL.md 与两个 references 未在材料中给出，14 条 AI 腔清单只有类别没有逐条文本；`biomedical-paper-reader` 的 SKILL.md、各 references 与 `evals/RESULTS.md` 的实际内容同样看不到；cline-pilot 的「四要素格式」和 6 项验收清单只存在于 `SKILL.md` / `references/*`，README 里没有；ui-ux-pro-max 的能力数字（192 条规则、79 种风格等）全是作者自述，演示素材被作者自己标注为非本 skill 产物；archify 的 star 数、Trending 排名、案例同样都是创作者口径，没有独立验证；diagram-design 的图型覆盖、十种新增版式语法、三种静态变体的可用性也全是作者口径；wshobson/agents 的规模数字、book-to-skill 的 24×–51× 与 Steps 0–10、khazix-skills 的六个 `SKILL.md` 正文同样只看得到 README 这一层。
+- 把 README 当完整流程：book-to-skill 的 Steps 0–10、analyze-only / generate-from-analysis / update / fold-in 的具体用法都在未提供的 `docs/` 里；khazix-skills 的六个 `SKILL.md` 正文也没给；wshobson/agents 没有单个插件的质量数据。用前先打开仓库确认。
 - 忽略安全：安装任何第三方技能前先通读它的 `SKILL.md`，并跑自己运行时的 doctor/audit 工具。`genspark-claw validate` 会标记 `curl | bash`、base64 载荷和破坏性命令。mod 的风险面更大：它以与 Claude Code 同等权限在本机运行，且能改写或拒绝命令，安装前必须确认来源可信。cline-pilot 以代理身份驱动 Cline 跑任务，安装前同样先读它自己的说明。
 - 规则全量加载：rules 是始终加载的上下文，从 `rules/common` 加一个你实际使用的语言/框架包开始，不要全抄。
 - 技能描述没写清：`description` 只写“做什么”没写“什么时候用”，技能就不会在合适时机触发。
 - 配置模板照抄不动：作者模板默认指向 copilot-gateway（`http://localhost:4141`），模型名写的是 `claude-sonnet-5` 等；不按自己网关实际提供的模型替换，端点或模型对不上就用不起来。
 - 以为 settings.json 靠 Plugin 装：`settings.json` 不通过 Plugin 配置，必须手动设置，仓库根目录的只是作者模板。
 - 技能没有自动触发：先按五条排查——路径必须是 `~/.claude/skills/<name>/SKILL.md`（注意大小写）；Plugin 安装的技能需重启会话；检查双层嵌套 `skills/name/name/SKILL.md` 并上移一层；直接问 `What skills do you have access to?`；`disable-model-invocation: true` 的技能（如 grill-me、handoff）不自动触发，要用 `/skill-name` 手动调用。
-- 依赖具体工具：Agent Skills 要在支持它的工具上才能自动加载，不支持的工具上用不了；装技能的目录也随客户端变化（例如论文精读给了 `~/.codex/skills/` 的路径，cline-pilot 给了 `~/.hermes/skills/`、`~/.cline/skills/` 等，diagram-design 在 Kiro 会给 `.kiro/skills/`、在 OpenCode 要用 `.opencode/skills/`）。
+- 依赖具体工具：Agent Skills 要在支持它的工具上才能自动加载，不支持的工具上用不了；装技能的目录也随客户端变化（例如论文精读给了 `~/.codex/skills/` 的路径，cline-pilot 给了 `~/.hermes/skills/`、`~/.cline/skills/` 等，diagram-design 在 Kiro 会给 `.kiro/skills/`、在 OpenCode 要用 `.opencode/skills/`，book-to-skill 在 Hermes 还要按类别落到 `skills/<category>/`）。
 - 没装 autocorrect：第 5 步的格式修正会被跳过，空格与标点只能人工处理；另外材料里只提到 `autocorrect --fix` 这一个子命令，其他子命令是否存在要查该工具文档后再用。
 - 没说清只审不改：想只要意见时必须明说「只列问题，不要改」，否则它会直接动文件。
 - 删空话不补事实：审稿后逐条 diff，看它是否把形容词换成了数字、命令或报错原文。按 `zh-tech-writing` 的 README 说法，缺事实时它应该反问，检查它是否真的问了。
@@ -1154,7 +1402,7 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 - 盲目开 `bypassPermissions`：它能让你完全跳过确认，但 README 明确提示要先了解安全风险；更稳的做法是先在 `permissions.allow` 里配允许列表。
 - 在非官方 API 环境找不到网页搜索：WebSearch 只限官方 API 环境，其它环境要用 MCP 补；README 只给了四个 MCP 的链接，没有安装步骤。
 - 用 `npx skills add` 装到的版本可能滞后于仓库最新，挑技能时注意这一点。
-- 拿 star 数当质量证据：`zh-tech-writing` 的 312 stars 只说明关注度，`biomedical-paper-reader` 的 31 stars 同样，cline-pilot 的 91 stars 也只说明成熟度和外部验证有限，都不说明产出改善幅度。
+- 拿 star 数当质量证据：`zh-tech-writing` 的 312 stars、`biomedical-paper-reader` 的 31 stars、cline-pilot 的 91 stars、wshobson/agents 的 40,149、book-to-skill 的 33,277、khazix-skills 的 21,099 都只说明关注度，不说明产出改善幅度。
 - 跳过冷启动门禁：做法 H 要求在任何 memory bank 启用之前，先把 `assets/global-memory-bank-prompt.md` 提示词逐字放到位；跳过这步，后面的规则种子没有统一落点。
 - 把项目架构知识塞进技能包：cline-pilot 明确不持有项目架构知识，那属于项目自己的 memory bank + clinerules；指望技能包记住架构事实，会得到互相矛盾的建议。
 - 采信 agent 的自我报告：做法 H 的原则是证据优先于自我报告，完成必须由 git status、测试报告数字、非空产物证明。只看到「已完成」三个字就收工，等于放弃验收。
@@ -1186,7 +1434,20 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 - 把 Droid 的版本号当更新依据：Droid 按 commit 跟踪 Git 插件，不看 manifest 里的显示版本号。
 - 期待带分支的时序图能生成完整授权握手：带分支的刷新要用 `type-sequence.md` 里的 ALT combined-fragment 语法，示例在 `assets/example-sequence-oauth.html`，不是完整 authorize-code 握手。
 - 以为动效是新的图型：`reveal / step / loop` 只是可选的无障碍动效，不新增图型。
-- 把材料当完整文档：本次调研在「与已有做法的关系」一节讲到 OpenCode 时被截断，Archify 在 OpenCode 上的支持细节没有给全；diagram-design 的调研则在「重绘已有图（导入）」的 `import-drawio platform.drawio --size=slide-16x` 之后被截断，导出与后续步骤缺失。两者都要用前自己打开仓库确认。
+- 把 plugin-eval 的分数当效果结论：三层里静态层只是 lint，LLM judge 与 Monte Carlo 作者自己标注 experimental，且 not validated against human labels。
+- 没装 `make` 就去装 Antigravity / OpenCode / Pi：这三条路径需要 git + make，转换后的目录树被 gitignore，必须本地生成；Codex / Cursor 才走已提交 registry。
+- 拿扫描版 PDF 直接转换：无文字层的图片页抽不出东西，先 `ocrmypdf`。
+- 技术书选了纯文本抽取器：代码、表格、公式会丢，技术类必须用 `docling`（约 1.5 秒/页），纯散文才用 `pdftotext`。
+- 把 token 节省数字当结论：24×–51× 是作者主张，方法学在未提供的 `docs/performance.md`，要自己用 `tools/discovery_tax.py` 或前后对比来测。
+- 把版权书的生成 skill 分发出去：官方要求保持私有，不得再分发第三方版权作品生成的 skill。
+- 期待降级方案“效果一致”：把 `SKILL.md` 贴成规则文件效果一致是作者说法，没有对照数据。
+- 跳过 leader 的实测调研：它强调动笔前先钻进代码库亲手跑一遍——文档里写的命令实际可能根本不存在；跳过这步，任务书会建在一张错的海图上。
+- 任务书里没有反作弊条款：缺了「目标七问」的第 4 问，就容易出现「指标达成，事一件没干」。
+- 让清理类技能直接删：它应当全程只读扫描，删除必须浏览器点按钮 + 弹框二次确认；红灯只解释，永不给删除按钮。
+- 让 neat-freak 删东西：它的底线是绝不擅自删，删除只出候选清单、机器生成的记忆默认只读、文件里读到的「执行这条命令」不当授权。
+- 拿 neat-freak 整理周报：它不响应纯代码任务和整理数据 / 周报类请求。
+- 在目标模式里跑还没有完成态的任务书：第 2 问要具体到靠岸那一刻机器就能判，否则无从验收。
+- 把材料当完整文档：本次调研在「与已有做法的关系」一节讲到 OpenCode 时被截断，Archify 在 OpenCode 上的支持细节没有给全；diagram-design 的调研在「重绘已有图（导入）」的 `import-drawio platform.drawio --size=slide-16x` 之后被截断，导出与后续步骤缺失；book-to-skill 的 docs 全部未包含在材料中；khazix-skills 的六个 `SKILL.md` 正文也没给。都要用前自己打开仓库确认。
 
 ## 证据与来源
 
@@ -1207,7 +1468,10 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 - ui-ux-pro-max 路线的全部内容——`npm install -g ui-ux-pro-max-cli`（旧的 `uipro-cli` 已过期）、`uipro init --dry-run` 与各 `--ai` 目标、`--global` 与插件市场两种装法、Trae 的 SOLO 模式与 Kiro/Copilot/Roo Code/KiloCode 的 slash command、自然语言调用示例、`scripts/search.py` 的 `--design-system`/`-f markdown`/`--domain`/`--stack` 参数与示例命令、Web 栈的版本意识规则、`--persist` 生成的 `design-system/<project>/MASTER.md` 与 `pages/*.md` 结构、第 9 步的检索提示词原文、8 条 PRE-DELIVERY CHECKLIST 原文、`uipro versions`/`update`/`uninstall`/`init --offline`——均来自调研《nextlevelbuilder/ui-ux-pro-max-skill》，即该仓库 README。其中的能力数字（192 条行业推理规则、79 种风格其中 50 种 active、192 套配色、74 组字体搭配、25 种图表类型、22 个技术栈指南、119 条 UX 指南）全部为作者自述，没有对照数据；演示素材被作者自己标注为非本 skill 产物；页面大量篇幅是付费版与自家产品推广。README 明确要求安装步骤由人执行、agent 应询问，以及脚本「只用标准库、不装依赖、不联网」，同样属作者声明。
 - archify 路线的全部内容——`npx skills add tt-a1i/archify -g`、Cursor 的非交互安装、`npx skills use tt-a1i/archify@archify --agent codex` 先试用、两段提示词原文、五种图型（Architecture / Workflow / Sequence / Data Flow / Lifecycle）与选型对照表、`node archify/bin/archify.mjs guide` 的两种调用、`doctor`/`demo`/`validate`/`preview`/`deliver` 命令链与 `--quality showcase`/`--json`/`--open`/`--no-open`、preview 的回环监听与失败保留 last-good、`compare architecture base.json head.json architecture-delta.html --json`、`meta.locale` 与 `meta.translations` 的本地化范围、查看侧快捷键与 `#focus=`/`#route=` 等稳定链接、`hermes skills install skills-sh/tt-a1i/archify/archify -y` 与 `dsh plugin --profile web add @tt-a1i/archify-dsh@0.1.0` 两个社区集成、更新检查的 24 小时 / 6 小时 / 24 小时节奏与 `ARCHIFY_UPDATE_CHECK_DISABLED=1`——均来自调研《tt-a1i/archify》，即该仓库 README（MIT，README 标注稳定版 `v3.0.1`）。它把 `validate --json` / `deliver --json` 的稳定规则码、精确 subject、实测证据与只含受支持修复手段的 `diagnostics[]`、两轮修正上限、原子替换交付、官方 Proof Lab 的 11 个已检入场景及其 JSON 源和验证收据写进了 README，是本手册里验收信号最具体的一条；但 star 数、Trending 排名、社区案例（团队协作、旅行行程、法律引证核查、合同审查、事故复盘、飞书/钉钉讨论）全部是创作者口径，缺独立验证，`preview` 与 `compare` 的持续产出能力、`deployment-ownership` profile 的 fail-closed 行为也只有 README 描述。本次调研在「与已有做法的关系」一节讲 OpenCode 时被截断，该部分内容不完整。
 - diagram-design 路线的全部内容——支持的宿主列表（Claude Code、Codex、Factory Droid、Pi、GitHub Copilot、Kiro、OpenCode 等）、无构建步骤/无 JS/无外部图片依赖、三种静态变体（minimal light / minimal dark / full-editorial）、可选的 `reveal / step / loop` 无障碍动效、2.5.10 新增的十种版式语法与 README 展示的全部图型、可重绘 draw.io / Mermaid / Excalidraw、各宿主的安装与更新命令、Claude Code 第三方 marketplace 自动更新需手动打开、Claude Cowork 组织 marketplace 的镜像与「含版本号提升的 PR 合并才同步」规则、可编辑安装的 clone 与软链命令、`onboard diagram-design to https://yoursite.com` 的品牌 onboarding 流程与提取映射表、`ink` 在 `paper` 上的 WCAG AA 对比度校验、fidelity receipt 的字段、手工编辑 `references/style-guide.md` 的替代路径、首次使用拦截、命名 profile 与 `.diagram-design` 标记文件、三段自然语言提示词示例与 ALT combined-fragment 说明、模板拷贝与 `assets/index.html` 浏览命令、`import-drawio` 命令——均来自调研《cathrynlavery/diagram-design》，即该仓库 README。README 声明的「官方构建只出自本仓库」「网络行为见 PRIVACY.md」属作者声明，本次材料没有展开 PRIVACY.md 的内容；图型覆盖数量、版式语法数量、三种静态变体的可用性、可重绘质量都是作者口径，没有独立验证或对照数据。本次调研在「重绘已有图（导入）」的 `import-drawio platform.drawio --size=slide-16x` 处被截断，导出与后续步骤缺失，需打开仓库确认后再照做。
-- 文中提到的 star 数（如 anthropics/skills 179219、awesome-copilot 39,568、pro-workflow 2.9k、feiskyer/claude-code-settings 约 1.6k、zh-tech-writing 312、biomedical-paper-reader 31、cline-pilot 91）来自 metrics，不构成有效性证据。
+- wshobson/agents 路线的全部内容——`/plugin marketplace add wshobson/agents` 与单插件安装、`/plugin install python-development`、`gh skill install wshobson/agents [skill] --agent claude-code` 与 `npx skills add wshobson/agents --skill ...`（可加 `-a`/`-g`）、`npx codex-marketplace add wshobson/agents`、Antigravity / OpenCode / Pi 的 `make generate` + `make install-*`、`make generate-all` / `make validate` / `make garden`、Tier 0–4 模型档位表、`uv run plugin-eval score` 与 `certify`——均来自调研《wshobson/agents》，即该仓库 README。94 插件 / 202 agent / 184 skill / 105 command / 16 orchestrator、40,149 stars 都是作者与指标口径，没有交叉验证；plugin-eval 的 LLM judge 与 Monte Carlo 层作者自己标注 experimental 且 not validated against human labels；没有单个插件的质量数据、没有基准对比、没有“用了之后改善多少”的案例；README 的“production-ready”“idiomatic, harness-native artifacts”“one source-of-truth, six target harnesses”属作者主张；GitHub Copilot 这条路径仓库仍声明支持并生成 `.copilot/`，但材料里的清单已判为 drop，两者存在差异；Antigravity/OpenCode/Pi 需要 git + make。
+- book-to-skill 路线的全部内容——`npx skills add virgiliojr94/book-to-skill` 与手动 clone、各宿主技能目录（Copilot CLI / Amp / Hermes / OpenClaw / OpenCode）、`python3 scripts/extract.py --check`、逐格式的抽取器与安装命令表、`ocrmypdf` 先 OCR 的要求、`/book-to-skill <path|folder|glob> [skill-name]` 与 technical / text-heavy 的选择、五类生成文件及各自 token 预算、`tools/validate_skill.py --lens <宿主>`、`tools/discovery_tax.py`、MIT 许可与“不得再分发第三方版权作品生成 skill”的合规要求——均来自调研《virgiliojr94/book-to-skill》，即该仓库 README。24×–51× 的 token 节省、Steps 0–10 的完整生成流程、analyze-only / generate-from-analysis / update / fold-in 各模式的具体用法、FAQ 与架构文档都在未提供的 `docs/` 里，属作者主张；输出质量（抽取准确度、章节切分是否合理、是否幻觉）没有任何第三方验证数据；stars=33277 来自给定指标，不构成有效性证据。
+- khazix-skills 路线的全部内容——六个技能各自的一句话作用、一句话安装命令、不支持 Agent Skills 时的降级方案、leader 的触发词与“约 12 分钟”、目标七问表（含第零问）、storage-analyzer 的触发词与三色分级 + 只读扫描 + 二次确认 + 127.0.0.1/随机端口/token 的安全模型、neat-freak 的触发词与三层对齐 + 两条底线 + 不响应纯代码任务/周报、aihot 的免 Key 免 MCP、hv-analysis 与 khazix-writer 的触发词与不适用场景、21099 stars——均来自调研《KKKKhazix/khazix-skills》，即该仓库 README。本次只拿到 README，六个技能的 `SKILL.md` 正文均未提供，内部完整指令无法照抄；“效果一致”“确实省事”“10,000–30,000 字 PDF”、模型搭配（Claude Fable 5 规划 + GPT-5.6 Sol 执行、Kimi K3 / GLM-5.2）均为作者自述，无基准或对比测试；README 带推广性质；storage-analyzer 的 Windows 支持只写“代码就绪（多盘符已支持）”，未称实测；aihot 依赖第三方服务 aihot.news 在线可用。
+- 文中提到的 star 数（如 anthropics/skills 179219、awesome-copilot 39,568、pro-workflow 2.9k、feiskyer/claude-code-settings 约 1.6k、zh-tech-writing 312、biomedical-paper-reader 31、cline-pilot 91、wshobson/agents 40,149、book-to-skill 33,277、khazix-skills 21,099）来自 metrics，不构成有效性证据。
 
 ## 依据的调研
 
@@ -1227,3 +1491,6 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 - [nextlevelbuilder/ui-ux-pro-max-skill](../research/radar/2026-10-02/515-nextlevelbuilder-ui-ux-pro-max-skill.md)：值得一试，先在单个真实前端项目上按 README 的命令装一遍（npm 装 ui-ux-pro-max-cli → uipro init --ai <你的 agent>），并用 --design-system --persist 生成 MASTER.md + pages 覆盖的分层检索方式试一个页面：原文给出了可直接复制的安装命令、search.py 参数、检索提示词和提交前检查清单，属于本项目中少见的“给 agent 补一块专业知识”的可照做做法；但所有能力数字均为作者自述、演示素材被作者自己标注为非本 skill 产物，且页面大量篇幅是付费版与自家产品推广，所以先小范围试、别全面铺开。
 - [tt-a1i/archify](../research/radar/2026-10-02/527-tt-a1i-archify.md)：值得一试，先把它当作“把设计沟通做成可复用技能”的小范围试用对象：按 README 给出的安装命令和两段提示词，分别跑一次“从描述出图”和“从仓库出图”，并用 validate/deliver 的 JSON 收据衡量返工轮次是否下降。理由：安装、提示词、CLI 校验-预览-交付流程都是可直接照抄的，但全部证据来自项目自述（star 数、Trending 排名、案例均为创作者口径），缺少独立验证，不宜直接 adopt。
 - [cathrynlavery/diagram-design](../research/radar/2026-10-02/565-cathrynlavery-diagram-design.md)：值得一试，建议小范围试：在 Claude Code（或 Codex/Pi）里装上这个 Agent Skill，先用自己的站点做一次品牌 onboarding，再跑一遍生成→导入→导出，用它自带的保真账本和对比度校验判断产物是否真能交付。理由：原文给的是可照抄的安装命令、四档参数、语义 token 与校验产出，不是只讲理念；但它本质是一个绘图技能，收益取决于你是否经常出图，且质量主张缺少独立证据。
+- [wshobson/agents](../research/radar/2026-10-02/566-wshobson-agents.md)：值得一试，先按 README 的最小路径小范围试用——Claude Code 用 `/plugin marketplace add` + 安装单个插件，或走 skills-only 的 `gh skill install` / `npx skills add` 只装技能，再用其自带的 `plugin-eval` 与 `make validate` 做质量筛检后再决定是否扩大；它给的是可直接复制的安装、生成与评测命令以及任务类型到模型档位的映射，但质量评测方法自认未经人工标注验证，规模数字也仅为自述，不宜直接全量采用。
+- [virgiliojr94/book-to-skill](../research/radar/2026-10-02/569-virgiliojr94-book-to-skill.md)：值得一试，把反复查阅的技术书/内部文档用 book-to-skill 转成 Agent Skill，让代理按需读取章节而不是整本塞上下文——安装与运行命令齐备、产物结构明确，但完整流程和 24×–51× 的省 token 数据都在未提供的 docs 里，属于作者主张，建议先拿一本自己的文档小范围试并自测正确率与幻觉率再决定是否推广。
+- [KKKKhazix/khazix-skills](../research/radar/2026-10-02/573-kkkkhazix-khazix-skills.md)：值得一试，建议先小范围试装其中 1–2 个技能（优先 leader 与 neat-freak），按 README 给的一句话安装命令装进支持 Agent Skills 的 Agent，再用它给的触发词跑真实任务对照效果；因为原文提供了可照抄的安装流程、降级方案、触发词，以及目标七问、三色分级等可直接复用的规则，但各 SKILL.md 正文和效果数据均未给出，只到小范围验证的程度。
