@@ -1,14 +1,14 @@
-# 给编码 agent 装技能：先小范围试装，再做有无对照，最后用硬证据验收
+# 给编码 agent 装技能包：先小范围对照，再按证据验收
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：装了一堆技能包却说不清是否真的减少了返工，也没有一套可照做的流程把试装、对照、固化和验收串起来。
-> 先试这一步：挑一个正在做的真实任务，把它在“没装技能”和“只装一个技能”的条件下各跑 3 次，只保留能说清减少了你哪一次返工的那个技能。
+> 解决的问题：已经在用编码 agent，却不确定装一个技能包、知识包或安全技能库是否真的减少了返工——这篇手册给出可照做的流程：只装一个单元，用同一任务做有/无对照，确认有效后再决定是否保留。
+> 先试这一步：选一个非关键项目和一类重复任务，只装一个技能包，用同一任务在没有技能和有技能的条件下各跑 3 次，记录差异。
 > 最近修订：2026-10-02
 
 ## 解决什么问题
 
-你已经在用编码 agent，但每次都要重复描述同一套工程规范，或者不确定装一个技能包是否真的减少了返工——甚至因为一次装太多，上下文反而更乱。这篇手册给出一个可照做的流程：先小范围试装一个现成技能包（可以从一个大插件市场里只装一个单元，也可以只装一个技能），用同一任务做有/无技能的对照，确认有效后再考虑把自己的重复工作写成 `SKILL.md`，或者把一本反复查阅的技术书、一份内部文档半自动转成按需加载的技能；让 agent 代理编码 CLI 跑长任务并拿硬证据验收；给 agent 补一块行业设计知识；把一句模糊想法写成可让 agent 独立跑几小时的任务书；写一个把会话状态嵌进界面的 Claude Code mod；让 agent 把一句话描述／一个代码仓库变成可交互的架构图、工作流图、时序图、数据流图、生命周期图，或者把自然语言需求与已有的 draw.io / Mermaid / Excalidraw 源文件改成自包含的 HTML+SVG 图、并让它长得像你的品牌。同一套对照方法也适用于中文技术文档的写作与审稿、单篇论文的精读。如果你还需要给 agent 补模型端点、权限或搜索能力，再用配置模板单独补，而不是整包采用。
+你已经在用编码 agent，但每次都要重复描述同一套工程规范，或者不确定装一个技能包是否真的减少了返工——甚至因为一次装太多，上下文反而更乱。这篇手册给出一个可照做的流程：先小范围试装一个现成技能包（可以从一个大插件市场里只装一个单元，也可以只装一个技能），用同一任务做有/无技能的对照，确认有效后再考虑把自己的重复工作写成 `SKILL.md`，或者把一本反复查阅的技术书、一份内部文档半自动转成按需加载的技能；让 agent 代理编码 CLI 跑长任务并拿硬证据验收；给 agent 补一块行业设计知识；把一句模糊想法写成可让 agent 独立跑几小时的任务书；写一个把会话状态嵌进界面的 Claude Code mod；让 agent 把一句话描述／一个代码仓库变成可交互的架构图、工作流图、时序图、数据流图、生命周期图，或者把自然语言需求与已有的 draw.io / Mermaid / Excalidraw 源文件改成自包含的 HTML+SVG 图、并让它长得像你的品牌。同一套对照方法也适用于中文技术文档的写作与审稿、单篇论文的精读。给 agent 补一块 Postgres 领域知识与版本化官方文档检索（做法 O）；在已获授权的漏洞挖掘或外部红队场景里，按主题自动加载一套安全技能库，并在提交任何发现之前过 7-Question Gate（做法 P）。如果你还需要给 agent 补模型端点、权限或搜索能力，再用配置模板单独补，而不是整包采用。
 
 ## 适用与不适用
 
@@ -29,7 +29,9 @@
 - 愿意先跑一次品牌 onboarding，让技能抓你的站点提取主色和字体，并核对它给出的对比度调整与 fidelity receipt（做法 K）；
 - 面对一个很大的插件市场，你想按目录逐条试装、并按任务类型匹配模型档位（做法 L）；
 - 有一本反复打开到希望自己背下来的技术书，或一份反复查阅的内部 `docs/`（架构决策记录、runbook、入职指南、规范），想转成按需加载的技能（做法 M）；
-- 想把一句模糊想法变成可让 agent 独立跑数小时的任务书，或需要给磁盘清理这类破坏性操作加闸门、给项目文档与 Agent 记忆做一次收尾对齐（做法 N）。
+- 想把一句模糊想法变成可让 agent 独立跑数小时的任务书，或需要给磁盘清理这类破坏性操作加闸门、给项目文档与 Agent 记忆做一次收尾对齐（做法 N）；
+- 经常写 Postgres DDL 或设计 schema，想让 agent 按最佳实践生成、少在事后补索引补约束（做法 O）；
+- 在已获授权的漏洞挖掘或外部红队场景里（自有资产、书面授权、CTF、赏金 in-scope），想让 agent 按主题自动加载安全技能库，并在提交前过闸门（做法 P）。
 
 不适用：
 
@@ -57,7 +59,12 @@
 - 期待降级方案“效果一致”，或把 24×–51× 的 token 节省当成已核验结论（做法 M）；
 - 不打算回答 leader 提出的最多 5 个拍板问题，或不愿意给任务书写完成态、证据和反作弊条款（做法 N）；
 - 想让磁盘清理类技能一键删文件、不接受删除必须二次确认（做法 N）；
-- 想用 neat-freak 整理周报或处理纯代码任务（做法 N）。
+- 想用 neat-freak 整理周报或处理纯代码任务（做法 N）；
+- 不用 Postgres / TimescaleDB / PostGIS（做法 O 只在这些任务上有用，pgvector 仍标注为 coming soon）；
+- 团队不允许把 schema 信息发往第三方 MCP 端点，又不愿按 `DEVELOPMENT.md` 自建（做法 O）；
+- 只做防御性开发、不愿接触攻击性安全工具链，或没有可授权的目标（做法 P）；
+- 以为用插件方式装了 Claude-BugHunter 就同时拿到 `/hunt` 脚手架（插件路径不含脚手架，`cbh` CLI 也要单独 `pipx install`）；
+- 把 Opus 5 在高风险安全请求后回落到 Opus 4.8 当成模型变差（做法 P）。
 
 ## 前置条件
 
@@ -78,10 +85,12 @@
 - 走 wshobson/agents 路线（做法 L）时额外准备：已装 Claude Code 并能在会话内执行斜杠命令，或装了 `gh` / 可用 `npx`；走 Antigravity / OpenCode / Pi 需要 git 与 make，因为转换后的目录树被 gitignore，必须本地生成；用 plugin-eval 需要可用的 `uv`。
 - 走 book-to-skill 路线（做法 M）时额外准备：本机 Python 环境并能安装对应抽取器（先用 `python3 scripts/extract.py --check` 自查）；技术书需要 `docling`；扫描件需要先 `ocrmypdf`；宿主支持 Agent Skills 标准，并且你清楚它的技能目录在哪。
 - 走 khazix-skills 路线（做法 N）时额外准备：一个支持 Agent Skills 标准的 Agent（README 点名 Claude Code、Codex、Qoder、Kimi Code、iFlow、CodeBuddy、Cursor 等 40+）；项目里有 git、`CLAUDE.md`/`AGENTS.md`、`docs/`（没有也有轻量路径）；用 leader 时愿意回答它提出的最多 5 个必须你拍板的问题。
+- 走 pg-aiguide 路线（做法 O）时额外准备：本机可用 `npx`，目标 agent 支持 Agent Skills 或 MCP；一个真实但不紧急的 Postgres schema 设计或重构任务，首次试验不要用线上迁移；如果团队不允许把 schema 信息发往第三方端点，需要先评估或改为自建。README 未说明公共 MCP 服务的可用性保证、速率限制与数据隐私。
+- 走 Claude-BugHunter 路线（做法 P）时额外准备：已装 Claude Code；只对你自己拥有、或有书面授权评估的资产使用（README 的授权条款：赏金项目 in-scope 资产、渗透测试授权书、CTF、自有基础设施）；可选 Burp Suite + MCP Server 扩展；若做授权的攻击性安全工作，按 README 指引申请 Anthropic 免费的 Cyber Verification Program（CVP）。
 
 ## 操作步骤
 
-怎么选：先做做法 A；A 里某个技能确实有效、且你有一件每周重复且规范明确的工作，再做做法 B；需要把外部文档变成智能体知识资产时用做法 C；需要给 Claude Code 补模型端点、权限、网页搜索时用做法 D；要写或审中文技术文档用做法 E；要精读单篇论文用做法 F；要给自己写一个把会话状态嵌进界面的 Claude Code mod 时用做法 G；已经在用 Cline CLI、想让 agent 代理长任务并用证据验收时用做法 H；要给 agent 补一块 UI/UX 设计知识时用做法 I；需要把一句话描述或一个代码仓库变成可交互的单文件 HTML 图（架构、工作流、时序、数据流、生命周期）时用做法 J；需要把自然语言需求或已有的 draw.io / Mermaid / Excalidraw 源文件改成自包含的 HTML+SVG 图、并让它长得像你的品牌时用做法 K；面对一个很大的插件市场、想按任务类型匹配模型档位并用现成评测做筛检时用做法 L；要把一本反复查阅的技术书或一份内部文档变成按需加载的技能时用做法 M；要把模糊想法写成可独立跑的任务书，或给破坏性操作加闸门、给文档与记忆做收尾对齐时用做法 N。做法 J 与 K 都出图，区别是：J 出带 JavaScript 交互的单文件 HTML，验收靠 `validate`/`deliver` 的机器收据；K 默认出无 JS、无外部图片依赖的静态 HTML+SVG，验收靠品牌 onboarding 阶段的对比度校验和 fidelity receipt，以及你自己看产物能不能交付。要交互选 J，要品牌一致性和静态可交付选 K。E、F、G、H、I、J、K、L、M、N 都必须套用 A 的对照方法，不要跳过验证直接纳入常规流程。
+怎么选：先做做法 A；A 里某个技能确实有效、且你有一件每周重复且规范明确的工作，再做做法 B；需要把外部文档变成智能体知识资产时用做法 C；需要给 Claude Code 补模型端点、权限、网页搜索时用做法 D；要写或审中文技术文档用做法 E；要精读单篇论文用做法 F；要给自己写一个把会话状态嵌进界面的 Claude Code mod 时用做法 G；已经在用 Cline CLI、想让 agent 代理长任务并用证据验收时用做法 H；要给 agent 补一块 UI/UX 设计知识时用做法 I；需要把一句话描述或一个代码仓库变成可交互的单文件 HTML 图（架构、工作流、时序、数据流、生命周期）时用做法 J；需要把自然语言需求或已有的 draw.io / Mermaid / Excalidraw 源文件改成自包含的 HTML+SVG 图、并让它长得像你的品牌时用做法 K；面对一个很大的插件市场、想按任务类型匹配模型档位并用现成评测做筛检时用做法 L；要把一本反复查阅的技术书或一份内部文档变成按需加载的技能时用做法 M；要把模糊想法写成可独立跑的任务书，或给破坏性操作加闸门、给文档与记忆做收尾对齐时用做法 N；要给 agent 补 Postgres 领域知识与版本化文档检索时用做法 O；在已获授权的漏洞挖掘或外部红队场景里，要让 agent 按主题自动加载安全技能库并在提交前过闸门时用做法 P。做法 J 与 K 都出图，区别是：J 出带 JavaScript 交互的单文件 HTML，验收靠 `validate`/`deliver` 的机器收据；K 默认出无 JS、无外部图片依赖的静态 HTML+SVG，验收靠品牌 onboarding 阶段的对比度校验和 fidelity receipt，以及你自己看产物能不能交付。要交互选 J，要品牌一致性和静态可交付选 K。E、F、G、H、I、J、K、L、M、N、O、P 都必须套用 A 的对照方法，不要跳过验证直接纳入常规流程。
 
 ### 做法 A：先用现成技能包做小范围试装（推荐先做）
 
@@ -943,7 +952,7 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
     hermes skills install skills-sh/tt-a1i/archify/archify -y
     ```
 
-    ```bash
+    ```text
     dsh plugin --profile web add @tt-a1i/archify-dsh@0.1.0
     ```
 
@@ -1317,6 +1326,215 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 
 8. 按 A 的对照法验证。拿一个真实的、你原本打算自己盯着的多步任务，用触发词生成任务书，检查它是否覆盖目标七问；把任务书丢进目标模式跑一次，记录你需要人工介入的次数；任务完成后跑 `/neat`，看它对文档 / 规则 / 记忆提出的变更摘要是否合理；另拿一个同量级、不装技能的任务作为对照。预期：你能说清人工介入了多少次、哪一次干预避免了返工；说不清就不要保留。
 
+### 做法 O：给 agent 补一块 Postgres 领域知识与版本化文档检索（可选，按 A 的对照法验证）
+
+定位：pg-aiguide 是 Timescale（TigerData）开源的 PostgreSQL 知识包（Apache 2.0，README 标注 1853 stars），由三部分组成：对官方 PostgreSQL 手册（按版本区分）、TimescaleDB、PostGIS 文档做语义检索，通过公共 MCP server 暴露 `search_docs`；把有倾向性的 Postgres 最佳实践固化成 agent 可自动调用的技能，覆盖既有 schema/对象探查、schema 设计、索引策略、数据类型、数据完整性与约束、命名规范、性能调优、现代 Postgres 特性；扩展生态文档目前支持 TimescaleDB 与 PostGIS，pgvector 标注为 coming soon。三种接入形态：Agent Skills（`npx skills`，声称兼容 Claude Code、Cursor、Codex、Gemini CLI、VS Code 等 40+ agent）、公共 MCP server（任意支持 MCP 的 agent）、Claude Code 插件。与做法 A 的关系：同样是装一个技能包做对照；区别是它把可照抄的 A/B 提示词直接给了出来（第 5 步），而且效果证据只有厂商自己一次演示，更要自己做对照。
+
+1. 前提：本机可用 `npx`，目标 agent 支持 Agent Skills 或 MCP。
+
+2. 装技能（二选一或都装）：
+
+   ```bash
+   npx skills add timescale/pg-aiguide --skill postgres
+   npx skills add timescale/pg-aiguide --skill schema-exploration
+   ```
+
+   交互式挑选单个技能：
+
+   ```bash
+   npx skills add timescale/pg-aiguide
+   ```
+
+   预期：`postgres`（最佳实践）与 `schema-exploration`（调查既有数据库）落到你点名的技能目录。
+
+3. 接入 MCP server（前提：agent 支持 MCP）。公共端点 `https://mcp.tigerdata.com/docs`，通用 JSON 配置：
+
+   ```json
+   {
+     "mcpServers": {
+       "pg-aiguide": {
+         "url": "https://mcp.tigerdata.com/docs"
+       }
+     }
+   }
+   ```
+
+   按环境分别配置：
+
+   Claude Code（插件方式，同时带上 skills 与 MCP）：
+
+   ```bash
+   claude plugin marketplace add timescale/pg-aiguide
+   claude plugin install pg@aiguide
+   ```
+
+   Codex：
+
+   ```bash
+   codex mcp add --url "https://mcp.tigerdata.com/docs" pg-aiguide
+   ```
+
+   Gemini CLI：
+
+   ```bash
+   gemini mcp add -s user pg-aiguide "https://mcp.tigerdata.com/docs" -t http
+   ```
+
+   Cursor（写入 `.cursor/mcp.json`，或使用 README 提供的一键安装链接）：
+
+   ```json
+   {
+     "mcpServers": {
+       "pg-aiguide": {
+         "url": "https://mcp.tigerdata.com/docs"
+       }
+     }
+   }
+   ```
+
+   Windsurf（写入 `~/.codeium/windsurf/mcp_config.json`，注意这里字段名是 `serverUrl`）：
+
+   ```json
+   {
+     "mcpServers": {
+       "pg-aiguide": {
+         "serverUrl": "https://mcp.tigerdata.com/docs"
+       }
+     }
+   }
+   ```
+
+   OpenCode（写入 `~/.config/opencode/opencode.json` 或项目级 `opencode.json`，并在提示词里加 `use pg-aiguide`）：
+
+   ```json
+   {
+     "$schema": "https://opencode.ai/config.json",
+     "mcp": {
+       "pg-aiguide": {
+         "type": "remote",
+         "url": "https://mcp.tigerdata.com/docs"
+       }
+     }
+   }
+   ```
+
+   VS Code：
+
+   ```bash
+   code --add-mcp '{"name":"pg-aiguide","type":"http","url":"https://mcp.tigerdata.com/docs"}'
+   ```
+
+   VS Code Insiders 把 `code` 换成 `code-insiders`。README 还提供 Cursor / VS Code / Visual Studio / Goose / LM Studio 的一键安装徽章链接。
+
+   预期：agent 能检索到版本化的 Postgres 官方手册、TimescaleDB 与 PostGIS 文档。
+
+4. 用具体任务触发它。README 给的示例提示词可直接复制。简单：
+
+   ```text
+   Create a Postgres table schema for storing usernames and unique email addresses.
+   ```
+
+   复杂：
+
+   ```text
+   You are a senior software engineer. You are given a task to generate a Postgres schema for an IoT device company.
+   The devices collect environmental data on a factory floor. The data includes temperature, humidity, pressure, as
+   the main data points as well as other measurements that vary from device to device. Each device has a unique id
+   and a human-readable name. We want to record the time the data was collected as well. Analysis for recent data
+   includes finding outliers and anomalies based on measurements, as well as analyzing the data of particular devices for ad-hoc analysis. Historical data analysis includes analyzing the history of data for one device or getting statistics for all devices over long periods of time.
+   ```
+
+5. 用 README 演示的 A/B 法自测（原文提供的验证提示词，原样复制）：
+
+   ```text
+   Please describe the schema you would create for an e-commerce website two times, first with the tiger mcp server disabled, then with the tiger mcp server enabled. For each time, write the schema to its own file in the current working directory. Then compare the two files and let me know which approach generated the better schema, using both qualitative and quantitative reasons. For this example, only use standard Postgres.
+   ```
+
+   预期：拿到两份可逐项对比的 DDL。注意：单次 A/B 结果受提示词与模型随机性影响很大，同一任务重复 3 次以上、或换 2–3 个任务再下结论。
+
+6. 只在真实但不紧急的任务上长期开启。不要用线上迁移做首次试验。若结果正向，再在日常会话里长期开启 MCP 与 `postgres` 技能。
+
+### 做法 P：在已获授权的漏洞挖掘场景按主题自动加载安全技能库（可选，按 A 的对照法验证）
+
+定位：Claude-BugHunter（仓库 `elementalsouls/Claude-BugHunter`）是一个面向漏洞挖掘与外部红队（external red-team）的 Claude Code 技能包。README 自述含 83 个技能、15 个 slash 命令、681 条已披露报告模式（其中 433 条单独引用、可审计），覆盖 24 类核心漏洞，另含企业身份与基础设施攻击矩阵、engagement 目录脚手架、Burp MCP 集成。它把能力叠成四层：Think（`bb-methodology` + `redteam-mindset`）、Hunt webapps（58 个 `hunt-*` 技能，从 681 篇 HackerOne 披露报告整理出的检测模式、payload、绕过表、链式模板）、Hit the perimeter（M365/Entra、Okta、vCenter、SSL-VPN 设备、SharePoint、云 IAM 的 2024–2026 CVE 链与拿到凭证后的提权）、Ship it（`triage-validation` + 报告 + `evidence-hygiene`：7-Question Gate、VRT-aware 严重度、OOS 反驳、PII 脱敏、红队交付物）。关键机制是技能按主题自动加载，不用按名字调用——用自然语言描述你在测什么，相关技能自动载入。与做法 A 的关系：同样是装一个技能包做对照；区别是它的边界更强——只对自有或书面授权资产使用，且知识层可移植、slash 命令与 `/hunt` 引擎只在 Claude Code 可用。
+
+1. 前提：已装 Claude Code；只对你自己拥有、或有书面授权评估的资产使用（README 的授权条款：赏金项目 in-scope 资产、渗透测试授权书、CTF、自有基础设施）。可选：Burp Suite + MCP Server 扩展。不要用 Claude-BugHunter 去做未授权目标。
+
+2. 方式 A（推荐）——作为 Claude Code 插件安装：
+
+   ```text
+   /plugin marketplace add elementalsouls/Claude-BugHunter
+   /plugin install claude-bughunter@elementalsouls
+   ```
+
+   预期：83 个技能 + 15 个命令以 `claude-bughunter:` 命名空间加载，bump 插件版本即更新，不往 `~/.claude/` 拷任何文件。注意：此路径不含 `hunt` engagement 脚手架（脚手架只在 clone 里）；`cbh` CLI 需另行 pipx 安装。
+
+3. 方式 B——拷贝安装（没有插件系统，或想钉住某个 clone 时）：
+
+   ```bash
+   git clone https://github.com/elementalsouls/Claude-BugHunter.git
+   cd Claude-BugHunter
+   ```
+
+   ```bash
+   # macOS / Linux
+   bash scripts/install.sh
+
+   # Windows (PowerShell)
+   pwsh ./scripts/install.ps1
+   ```
+
+   把技能 + 命令拷进 `~/.claude/`（Windows 为 `%USERPROFILE%\.claude\`）并接好 `hunt` engagement 脚手架。三条路径的差别按 README 的表：
+
+   | 路径 | 83 skills + 15 slash commands | `cbh` CLI | `hunt` scaffolder |
+   |---|---|---|---|
+   | A — plugin | ✅ 命名空间 `claude-bughunter:` | ➕ 需单独 `pipx install` | ❌ 仅 clone 有 |
+   | B — copy install | ✅ 拷进 `~/.claude/` | ✅ 来自 clone | ✅ 来自 clone |
+
+4. 多 harness 一次装全（前提：技能是标准 Agent Skills `SKILL.md` 格式，README 称 Claude Code / OpenCode / Codex CLI / Hermes / AntiGravity 都能读）：
+
+   ```bash
+   # macOS / Linux
+   bash scripts/install.sh --all --burp-mcp
+
+   # Windows (PowerShell)
+   pwsh ./scripts/install.ps1 -All -BurpMcp
+   ```
+
+   `--all` 自动探测已装的 harness 并分别拷贝；`--burp-mcp` 给每个 harness 接上 Burp MCP server。目标目录对应关系（照 README 的表）：
+
+   | Harness | 技能目录 | 开关 |
+   |---|---|---|
+   | Claude Code（基线） | `~/.claude/skills/` | 默认 |
+   | OpenCode | 读 `~/.claude/skills/` 与 `~/.agents/skills/` | 默认 / `--agents` |
+   | OpenAI Codex CLI | `~/.agents/skills/` | `--agents` |
+   | Hermes Agent | `~/.hermes/skills/` | `--hermes` |
+   | Google AntiGravity | `~/.gemini/config/skills/` | `--antigravity` |
+
+   边界：知识层（技能）可移植到全部五个 harness；slash 命令与 `/hunt` 引擎按设计只在 Claude Code 可用。
+
+5. 装 `cbh` CLI（终端原生 runner，编排 recon + classify + triage + report）：
+
+   ```bash
+   pipx install git+https://github.com/elementalsouls/Claude-BugHunter
+   ```
+
+6. 开一个 engagement：用 `/hunt` 建 engagement 目录结构、状态与编排。注意 README 强调 `/hunt` 会在第一轮就声明 engagement 背景（已授权、scope 限定、可修复的发现），因为 Anthropic 的实时网络防护会拦这类请求。随后按 README 自述的 6 阶段非线性流程走——原文列出的阶段名是 `recon → map & rank → hunt → validate → report`（原文如此，列了 5 个名字却称 6 阶段，使用前以仓库内 `docs/architecture.md` 为准）；scope 由代码强制。
+
+7. 日常用法：自然语言描述目标，技能自动加载。README 给的示例（作者自己标注为示意 transcript，非真实录制）：
+
+   ```text
+   > Testing acme.com — an in-scope HackerOne target. Run recon and rank the surface.
+   ```
+
+   预期：加载 `web2-recon`、`offensive-osint`、`bb-methodology` 等技能，输出排序后的攻击面并主动问下一步。注意示例输出里的域名与结论是示意，不是真实结果。
+
+8. 提交前过闸门：`triage-validation` 的 7-Question Gate 必须在提交任何东西之前过——其中 Q3 问资产是否在 scope 内，Q2 问是否在项目认可的 impact 列表内。证据按 `evidence-hygiene` 脱敏（README 点名的问题是截图泄露 cookie 与受害者 PII）。报告按平台分流：H1、Bugcrowd（VRT-aware）、Intigriti、Immunefi，以及客户侧红队交付格式（50KB+ MD + DOCX 带内嵌截图）。
+
+9. 授权与运行时注意事项：若做授权的攻击性安全工作（渗透/赏金/红队），按 README 指引申请 Anthropic 免费的 Cyber Verification Program（CVP），以获得针对合法双用途工作的策略调整；不要把攻击性 engagement 改写成“防御性”措辞去绕分类器。另有一条容易忽略的现象：Opus 5 对 exploit generation、binary-based vulnerability scanning、penetration testing 一类更高风险请求会回落到 Opus 4.8 而非拒绝，长 agentic 运行中会滚动过去、看起来像“Opus 5 悄悄变差”；若只是不想要自动切换，可在 Settings → Capabilities 关掉。
+
+10. 按 A 的对照法验证：拿一个自建靶场（README 提到 DVWA / OWASP Juice Shop / Hacker101 / testphp.vulnweb.com）或一个你自己拥有的小资产，跑一次 `/hunt` 加一个明确的自然语言目标，看它加载了哪些技能、给出的攻击面排序是否合理、7-Question Gate 是否真的拦下不该提交的发现；保留不装技能时的同任务结果作为基线。预期：你能说清哪一次闸门栏下了不该提交的发现；说不清就不要保留。注意 README 没有给改善幅度数据（没有时间节省、误报率、有效率的前后对比），只有两次 engagement 暴露的能力缺口清单；per-engagement memory、program-rules-parser、HackerOne MCP 都是 README 里未勾选的路线图项，不能当现有能力用。
+
 ## 怎么判断变好了
 
 最小试用方式：
@@ -1333,7 +1551,9 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 - 出图类任务（做法 K）：拿自己的站点跑一次 `onboard diagram-design to https://yoursite.com`，检查 proposed diff 是否可接受、对比度不达标时提出的调整值是否合理；再跑一遍生成 → 导入，看产物能否在没装任何东西的机器上直接用浏览器打开，并逐项核对 fidelity receipt 里的字体是不是站点字体、有没有 fallback；
 - 插件市场类（做法 L）：只选一个与当前工作直接相关的单元（一个插件或一个 skill），在一个真实小任务上跑一遍，保留装之前的同任务结果作为基线；用 `uv run plugin-eval score <skill> --depth quick` 和 `make validate` 做筛检；记录单次会话加载的 skill/agent 数量与上下文占用；
 - 文档转技能类（做法 M）：拿一本你反复查阅、且已知道答案的书，或一份内部 `docs/` 目录（避开扫描件；若必须用，先 `ocrmypdf`），转换后用 10 个问题逐个提问：8 个你已知答案、1 个书中明确没有的（考幻觉）、1 个跨章节综合的；
-- 目标书类（做法 N）：拿一个你原本打算自己盯着的多步任务，用 leader 生成任务书，检查七问是否全有答案；丢进目标模式跑一次，记录人工介入次数；完成后跑 `/neat` 看变更摘要是否合理；另拿一个不装技能的同量级任务做对照。
+- 目标书类（做法 N）：拿一个你原本打算自己盯着的多步任务，用 leader 生成任务书，检查七问是否全有答案；丢进目标模式跑一次，记录人工介入次数；完成后跑 `/neat` 看变更摘要是否合理；另拿一个不装技能的同量级任务做对照；
+- Postgres 知识类（做法 O）：按 README 的 A/B 提示词，同一任务关闭 MCP 生成一份、打开生成一份，两份都落到文件，逐项对比；重复 3 次以上或换 2–3 个任务再下结论；
+- 安全技能包类（做法 P）：在一个自建靶场或自有授权小资产上跑一次 `/hunt`，记录加载了哪些技能、攻击面排序是否合理、7-Question Gate 是否拦下了不该提交的发现；另拿不装技能时的同任务结果做基线。注意 README 没有改善幅度数据。
 
 可观察的指标：
 
@@ -1350,6 +1570,8 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 - 插件市场类（做法 L）：同一任务的完成时间与返工次数（装前 / 装后各一次）；测试通过率、代码评审意见条数、lint 或安全扫描发现数；单次会话加载的组件数量与 token 或费用变化；同一提示重复 3–5 次的结果一致性。
 - 文档转技能类（做法 M）：8 个已知答案题的命中数与引用章节是否对得上；书中明确没有的那题是否被明确回答“书里没有”，这一项应为 0 幻觉，否则不要推广；用 `tools/discovery_tax.py` 或自行对比“整本塞上下文”与“按需加载章节”回答同一问题的 token 数，验证是否真接近 README 声称的量级；记录单次问答的耗时。
 - 目标书类（做法 N）：任务书是否七问全有答案；长程执行中你需要中途纠偏的次数（越少越好）；验收时能否逐条贴出实际命令输出而不是口头结论；是否出现「指标达成，事一件没干」；`/neat` 提出的变更摘要你是否认可。
+- Postgres 知识类（做法 O）：约束数量（NOT NULL / CHECK / 唯一约束 / 外键）；索引数量与类型，特别是 partial 与 expression 索引；是否使用了与目标 PG 版本匹配的现代语法（如 `GENERATED ALWAYS AS IDENTITY`、`NULLS NOT DISTINCT`）；人工 review 的返工次数与修改条数；DDL 应用后是否需要补加索引或补约束；对同一版本问题，答案是否与官方手册一致（可用 MCP 的 `search_docs` 交叉核对）。
+- 安全技能包类（做法 P）：7-Question Gate 是否在提交前拦下了不该提交的发现；技能是否按主题自动加载、加载得对不对；攻击面排序是否合理；evidence-hygiene 是否把截图里的 cookie 与 PII 脱掉；README 没有时间节省、误报率、有效率的前后对比，这些要自己记录。
 - 文档审稿：它列出的问题里你认可并采纳的比例；修改后的事实密度（「强大」「无缝」这类形容词是否换成数字、命令或报错原文）；AI 腔清单类别是否还有残留；让没参与写作的同事只读成稿，能否说出「读完能做成什么事」。
 - 论文精读：每张主图是否都被讲到、图注是否被引用、有无遗漏面板；是否区分独立个体数与细胞 / 切片数、观察与因果、作者解释与新增假设；是否列出「已读与未获取材料」、未核查附件处是否说明；第⑥节是否给出可迁移环节与待验证设计；人工精读耗时 vs 生成加核对的耗时。
 - 工作流形态的产物是否稳定出现：例如 deep-research 是否每次都在 `.research/<name>/` 下留出 `prompts/`、`child_outputs/`、`logs/`、`raw/`、`final_report.md`。
@@ -1373,6 +1595,11 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 - 如果任务书七个问题里有任何一条没答案，别丢进目标模式跑长程，先补任务书。
 - 如果磁盘清理类技能给出的删除建议你无法在点确认前看懂「删了会怎样」，不要点。
 - 如果装了插件市场的内容后与团队既有约定冲突、返工反而增加，退回只用 skill 层，不引入 agent / command / hook。
+- 如果 pg-aiguide 的 A/B 结果只有一次正向、换任务就消失，说明你把一次演示当成了稳定收益，先重复 3 次以上再判断。
+- 如果团队不允许把 schema 信息发往第三方端点，就改用本地自建或不要开启公共 MCP。
+- 如果在未授权目标上使用 Claude-BugHunter，或把它改写成“防御性”措辞去绕分类器，立即停用。
+- 如果装了 Claude-BugHunter 的插件方式却发现 `/hunt` 脚手架缺失，别以为是没装好——脚手架只在 clone 路径里。
+- 如果发现 Opus 5 在高风险安全请求上“变差”，先确认是不是回落到了 Opus 4.8，而不是直接换工具。
 - 如果一周内没有任何一项指标变化，或安装的插件与仓库实际规范冲突导致返工增加，就回到“只借鉴组织方式、不装具体内容”的用法。
 
 注意：`doctor`、`validate`、`npm test`、`claude plugin validate`、`npx @anthropics/skills-ref validate`、`archify doctor`、`validate --json`、`copilot skill list` 这类检查只能证明“技能或 mod 装得上、格式合法、不带危险命令、图能通过校验、技能被宿主发现”，不能证明“产出更好”。效果必须自己对照。
@@ -1384,8 +1611,8 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 - 重复安装：在同一个项目里同时用项目级安装和 Claude Code 插件市场装同一个技能包，skills 会出现两份。
 - 手拷 hooks：把仓库里的 `hooks/hooks.json` 直接拷进 `~/.claude/settings.json` 或 `~/.claude/hooks/hooks.json`，会导致重复执行和跨平台 hook 冲突；hooks 必须用安装器写。
 - 在用户主目录安装：项目级安装应在具体项目目录执行；v1.2.1 起 superpowers-zh 会拒绝在主目录安装，老版本会把 skills 写进 home 目录，污染所有项目。
-- 只信 README：很多技能包的 README 没有贴出 `SKILL.md` 正文，质量无法核验；只有安装命令和自述，没有效果数据。feiskyer/claude-code-settings 虽然技能、子代理、settings 模板都列得很全，但技能效果仍是作者描述，没有对照数据。`zh-tech-writing` 的 SKILL.md 与两个 references 未在材料中给出，14 条 AI 腔清单只有类别没有逐条文本；`biomedical-paper-reader` 的 SKILL.md、各 references 与 `evals/RESULTS.md` 的实际内容同样看不到；cline-pilot 的「四要素格式」和 6 项验收清单只存在于 `SKILL.md` / `references/*`，README 里没有；ui-ux-pro-max 的能力数字（192 条规则、79 种风格等）全是作者自述，演示素材被作者自己标注为非本 skill 产物；archify 的 star 数、Trending 排名、案例同样都是创作者口径，没有独立验证；diagram-design 的图型覆盖、十种新增版式语法、三种静态变体的可用性也全是作者口径；wshobson/agents 的规模数字、book-to-skill 的 24×–51× 与 Steps 0–10、khazix-skills 的六个 `SKILL.md` 正文同样只看得到 README 这一层。
-- 把 README 当完整流程：book-to-skill 的 Steps 0–10、analyze-only / generate-from-analysis / update / fold-in 的具体用法都在未提供的 `docs/` 里；khazix-skills 的六个 `SKILL.md` 正文也没给；wshobson/agents 没有单个插件的质量数据。用前先打开仓库确认。
+- 只信 README：很多技能包的 README 没有贴出 `SKILL.md` 正文，质量无法核验；只有安装命令和自述，没有效果数据。feiskyer/claude-code-settings 虽然技能、子代理、settings 模板都列得很全，但技能效果仍是作者描述，没有对照数据。`zh-tech-writing` 的 SKILL.md 与两个 references 未在材料中给出，14 条 AI 腔清单只有类别没有逐条文本；`biomedical-paper-reader` 的 SKILL.md、各 references 与 `evals/RESULTS.md` 的实际内容同样看不到；cline-pilot 的「四要素格式」和 6 项验收清单只存在于 `SKILL.md` / `references/*`，README 里没有；ui-ux-pro-max 的能力数字（192 条规则、79 种风格等）全是作者自述，演示素材被作者自己标注为非本 skill 产物；archify 的 star 数、Trending 排名、案例同样都是创作者口径，没有独立验证；diagram-design 的图型覆盖、十种新增版式语法、三种静态变体的可用性也全是作者口径；wshobson/agents 的规模数字、book-to-skill 的 24×–51× 与 Steps 0–10、khazix-skills 的六个 `SKILL.md` 正文同样只看得到 README 这一层。pg-aiguide 的效果数字只有厂商自己的一次 e-commerce schema 演示；Claude-BugHunter 的 83 个技能、15 个命令、681 条报告模式也都是作者口径。
+- 把 README 当完整流程：book-to-skill 的 Steps 0–10、analyze-only / generate-from-analysis / update / fold-in 的具体用法都在未提供的 `docs/` 里；khazix-skills 的六个 `SKILL.md` 正文也没给；wshobson/agents 没有单个插件的质量数据；Claude-BugHunter 的 6 阶段流程在 README 里列了 5 个名字却称 6 阶段，要对照仓库内 `docs/architecture.md`；pg-aiguide 是否支持本地自建只在未提供的 `DEVELOPMENT.md` 里提到。用前先打开仓库确认。
 - 忽略安全：安装任何第三方技能前先通读它的 `SKILL.md`，并跑自己运行时的 doctor/audit 工具。`genspark-claw validate` 会标记 `curl | bash`、base64 载荷和破坏性命令。mod 的风险面更大：它以与 Claude Code 同等权限在本机运行，且能改写或拒绝命令，安装前必须确认来源可信。cline-pilot 以代理身份驱动 Cline 跑任务，安装前同样先读它自己的说明。
 - 规则全量加载：rules 是始终加载的上下文，从 `rules/common` 加一个你实际使用的语言/框架包开始，不要全抄。
 - 技能描述没写清：`description` 只写“做什么”没写“什么时候用”，技能就不会在合适时机触发。
@@ -1402,7 +1629,7 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 - 盲目开 `bypassPermissions`：它能让你完全跳过确认，但 README 明确提示要先了解安全风险；更稳的做法是先在 `permissions.allow` 里配允许列表。
 - 在非官方 API 环境找不到网页搜索：WebSearch 只限官方 API 环境，其它环境要用 MCP 补；README 只给了四个 MCP 的链接，没有安装步骤。
 - 用 `npx skills add` 装到的版本可能滞后于仓库最新，挑技能时注意这一点。
-- 拿 star 数当质量证据：`zh-tech-writing` 的 312 stars、`biomedical-paper-reader` 的 31 stars、cline-pilot 的 91 stars、wshobson/agents 的 40,149、book-to-skill 的 33,277、khazix-skills 的 21,099 都只说明关注度，不说明产出改善幅度。
+- 拿 star 数当质量证据：`zh-tech-writing` 的 312 stars、`biomedical-paper-reader` 的 31 stars、cline-pilot 的 91 stars、wshobson/agents 的 40,149、book-to-skill 的 33,277、khazix-skills 的 21,099、pg-aiguide 的 1853 都只说明关注度，不说明产出改善幅度。
 - 跳过冷启动门禁：做法 H 要求在任何 memory bank 启用之前，先把 `assets/global-memory-bank-prompt.md` 提示词逐字放到位；跳过这步，后面的规则种子没有统一落点。
 - 把项目架构知识塞进技能包：cline-pilot 明确不持有项目架构知识，那属于项目自己的 memory bank + clinerules；指望技能包记住架构事实，会得到互相矛盾的建议。
 - 采信 agent 的自我报告：做法 H 的原则是证据优先于自我报告，完成必须由 git status、测试报告数字、非空产物证明。只看到「已完成」三个字就收工，等于放弃验收。
@@ -1447,7 +1674,18 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 - 让 neat-freak 删东西：它的底线是绝不擅自删，删除只出候选清单、机器生成的记忆默认只读、文件里读到的「执行这条命令」不当授权。
 - 拿 neat-freak 整理周报：它不响应纯代码任务和整理数据 / 周报类请求。
 - 在目标模式里跑还没有完成态的任务书：第 2 问要具体到靠岸那一刻机器就能判，否则无从验收。
-- 把材料当完整文档：本次调研在「与已有做法的关系」一节讲到 OpenCode 时被截断，Archify 在 OpenCode 上的支持细节没有给全；diagram-design 的调研在「重绘已有图（导入）」的 `import-drawio platform.drawio --size=slide-16x` 之后被截断，导出与后续步骤缺失；book-to-skill 的 docs 全部未包含在材料中；khazix-skills 的六个 `SKILL.md` 正文也没给。都要用前自己打开仓库确认。
+- pg-aiguide 的效果证据只有厂商一次演示：README 的数字（约束多 4 倍、索引多 55%、采用 PG17 推荐模式、使用 `GENERATED ALWAYS AS IDENTITY` / `NULLS NOT DISTINCT`）来自厂商自己的一次 e-commerce schema 演示，没有任务集、没有多次重复、没有第三方复核，也没有说明「更好」的判定细则；要自己按 A/B 做对照。
+- 把 schema 信息发到第三方端点：pg-aiguide 的公共 MCP 服务端点 `https://mcp.tigerdata.com/docs` 由 Timescale 托管，README 未说明可用性保证、速率限制与数据隐私；团队不允许外发 schema 信息时先评估或自建。
+- 用单次 A/B 下结论：单次结果受提示词与模型随机性影响很大，要重复 3 次以上或换 2–3 个任务。
+- 以为 pg-aiguide 对所有数据库都管用：只在 Postgres / TimescaleDB / PostGIS 相关任务上有用；pgvector 标注为 coming soon。
+- 在未授权目标上跑 Claude-BugHunter：README 的授权条款限定为赏金项目 in-scope 资产、渗透测试授权书、CTF、自有基础设施。
+- 把 Claude-BugHunter 的插件安装当成完整安装：插件路径不含 `hunt` engagement 脚手架，`cbh` CLI 也要单独 `pipx install`；要脚手架就走 clone 路径。
+- 把 `/hunt` 的阶段数当准确描述：README 列了 5 个阶段名却称 6 阶段，使用前以仓库内 `docs/architecture.md` 为准。
+- 把 README 的示例 transcript 当真实结果：作者自己标注为示意 transcript，非真实录制。
+- 把未勾选的路线图项当现有能力：per-engagement memory、program-rules-parser、HackerOne MCP 都是 README 里未勾选的路线图项。
+- 把 Opus 5 的回落当模型变差：高风险安全请求会回落到 Opus 4.8 而非拒绝，长 agentic 运行中会滚动过去；若只是不想要自动切换，可在 Settings → Capabilities 关掉。
+- 为绕分类器改写措辞：不要把攻击性 engagement 改写成“防御性”措辞；授权工作按 README 指引申请 CVP。
+- 把材料当完整文档：本次调研在「与已有做法的关系」一节讲到 OpenCode 时被截断，Archify 在 OpenCode 上的支持细节没有给全；diagram-design 的调研在「重绘已有图（导入）」的 `import-drawio platform.drawio --size=slide-16x` 之后被截断，导出与后续步骤缺失；book-to-skill 的 docs 全部未包含在材料中；khazix-skills 的六个 `SKILL.md` 正文也没给；pg-aiguide 的 `DEVELOPMENT.md` 未读到；Claude-BugHunter 的 `SKILL.md`、`references/*` 与 `docs/architecture.md` 也未提供。都要用前自己打开仓库确认。
 
 ## 证据与来源
 
@@ -1471,7 +1709,9 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 - wshobson/agents 路线的全部内容——`/plugin marketplace add wshobson/agents` 与单插件安装、`/plugin install python-development`、`gh skill install wshobson/agents [skill] --agent claude-code` 与 `npx skills add wshobson/agents --skill ...`（可加 `-a`/`-g`）、`npx codex-marketplace add wshobson/agents`、Antigravity / OpenCode / Pi 的 `make generate` + `make install-*`、`make generate-all` / `make validate` / `make garden`、Tier 0–4 模型档位表、`uv run plugin-eval score` 与 `certify`——均来自调研《wshobson/agents》，即该仓库 README。94 插件 / 202 agent / 184 skill / 105 command / 16 orchestrator、40,149 stars 都是作者与指标口径，没有交叉验证；plugin-eval 的 LLM judge 与 Monte Carlo 层作者自己标注 experimental 且 not validated against human labels；没有单个插件的质量数据、没有基准对比、没有“用了之后改善多少”的案例；README 的“production-ready”“idiomatic, harness-native artifacts”“one source-of-truth, six target harnesses”属作者主张；GitHub Copilot 这条路径仓库仍声明支持并生成 `.copilot/`，但材料里的清单已判为 drop，两者存在差异；Antigravity/OpenCode/Pi 需要 git + make。
 - book-to-skill 路线的全部内容——`npx skills add virgiliojr94/book-to-skill` 与手动 clone、各宿主技能目录（Copilot CLI / Amp / Hermes / OpenClaw / OpenCode）、`python3 scripts/extract.py --check`、逐格式的抽取器与安装命令表、`ocrmypdf` 先 OCR 的要求、`/book-to-skill <path|folder|glob> [skill-name]` 与 technical / text-heavy 的选择、五类生成文件及各自 token 预算、`tools/validate_skill.py --lens <宿主>`、`tools/discovery_tax.py`、MIT 许可与“不得再分发第三方版权作品生成 skill”的合规要求——均来自调研《virgiliojr94/book-to-skill》，即该仓库 README。24×–51× 的 token 节省、Steps 0–10 的完整生成流程、analyze-only / generate-from-analysis / update / fold-in 各模式的具体用法、FAQ 与架构文档都在未提供的 `docs/` 里，属作者主张；输出质量（抽取准确度、章节切分是否合理、是否幻觉）没有任何第三方验证数据；stars=33277 来自给定指标，不构成有效性证据。
 - khazix-skills 路线的全部内容——六个技能各自的一句话作用、一句话安装命令、不支持 Agent Skills 时的降级方案、leader 的触发词与“约 12 分钟”、目标七问表（含第零问）、storage-analyzer 的触发词与三色分级 + 只读扫描 + 二次确认 + 127.0.0.1/随机端口/token 的安全模型、neat-freak 的触发词与三层对齐 + 两条底线 + 不响应纯代码任务/周报、aihot 的免 Key 免 MCP、hv-analysis 与 khazix-writer 的触发词与不适用场景、21099 stars——均来自调研《KKKKhazix/khazix-skills》，即该仓库 README。本次只拿到 README，六个技能的 `SKILL.md` 正文均未提供，内部完整指令无法照抄；“效果一致”“确实省事”“10,000–30,000 字 PDF”、模型搭配（Claude Fable 5 规划 + GPT-5.6 Sol 执行、Kimi K3 / GLM-5.2）均为作者自述，无基准或对比测试；README 带推广性质；storage-analyzer 的 Windows 支持只写“代码就绪（多盘符已支持）”，未称实测；aihot 依赖第三方服务 aihot.news 在线可用。
-- 文中提到的 star 数（如 anthropics/skills 179219、awesome-copilot 39,568、pro-workflow 2.9k、feiskyer/claude-code-settings 约 1.6k、zh-tech-writing 312、biomedical-paper-reader 31、cline-pilot 91、wshobson/agents 40,149、book-to-skill 33,277、khazix-skills 21,099）来自 metrics，不构成有效性证据。
+- pg-aiguide 路线的全部内容——`npx skills add timescale/pg-aiguide --skill postgres` / `--skill schema-exploration`、公共 MCP 端点 `https://mcp.tigerdata.com/docs` 与各环境配置（Claude Code 插件 `claude plugin marketplace add timescale/pg-aiguide` + `claude plugin install pg@aiguide`、Codex、Gemini CLI、Cursor 的 `.cursor/mcp.json`、Windsurf 的 `serverUrl`、OpenCode、VS Code `code --add-mcp`）、简单与复杂两段示例提示词、A/B 自测提示词——均来自调研《timescale/pg-aiguide》，即该仓库 README（Apache 2.0，1853 stars）。README 自述的技能覆盖范围（schema/对象探查、schema 设计、索引策略、数据类型、数据完整性与约束、命名规范、性能调优、现代 Postgres 特性）、扩展生态（TimescaleDB、PostGIS，pgvector coming soon）、以及「技能会被 AI agent 自动使用」都属作者声明。效果数据只有厂商自己的一次 e-commerce schema 演示（约束多 4 倍、索引多 55%、采用 PG17 推荐模式、使用 `GENERATED ALWAYS AS IDENTITY` / `NULLS NOT DISTINCT`），没有任务集、多次重复、第三方复核，也没说明「更好」的判定细则；“dramatically better”“more robust, performant, maintainable”属宣传性表述。README 未说明公共 MCP 服务的可用性保证、速率限制与数据隐私（查询内容会发送到 Timescale 托管的端点）；是否支持本地自建只在未提供的 `DEVELOPMENT.md` 里提到。
+- Claude-BugHunter 路线的全部内容——`/plugin marketplace add elementalsouls/Claude-BugHunter` 与 `/plugin install claude-bughunter@elementalsouls`、clone + `bash scripts/install.sh` / `pwsh ./scripts/install.ps1`、三条路径的能力差异表、`--all` / `--burp-mcp` 与五个 harness 的技能目录映射、`pipx install git+https://github.com/elementalsouls/Claude-BugHunter`、`/hunt` 第一轮声明授权背景、6 阶段流程、自然语言示例与示意输出、7-Question Gate 的 Q2/Q3、evidence-hygiene 的脱敏范围、报告分流、CVP 与 Opus 5 回落 Opus 4.8——均来自调研《elementalsouls/Claude-BugHunter》，即该仓库 README。83 个技能、15 个命令、681 条披露报告模式（433 条单独引用）都是作者口径，没有第三方验证；README 没有给改善幅度数据（没有时间节省、误报率、有效率的前后对比），只有两次 engagement 暴露的能力缺口清单；示例 transcript 被作者自己标注为非真实录制；Atlas Cloud 是赞助商推广位；per-engagement memory、program-rules-parser、HackerOne MCP 都是未勾选的路线图项；README 列了 5 个阶段名却称 6 阶段，需以仓库内 `docs/architecture.md` 为准。
+- 文中提到的 star 数（如 anthropics/skills 179219、awesome-copilot 39,568、pro-workflow 2.9k、feiskyer/claude-code-settings 约 1.6k、zh-tech-writing 312、biomedical-paper-reader 31、cline-pilot 91、wshobson/agents 40,149、book-to-skill 33,277、khazix-skills 21,099、pg-aiguide 1853）来自 metrics，不构成有效性证据。
 
 ## 依据的调研
 
@@ -1494,3 +1734,5 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 - [wshobson/agents](../research/radar/2026-10-02/566-wshobson-agents.md)：值得一试，先按 README 的最小路径小范围试用——Claude Code 用 `/plugin marketplace add` + 安装单个插件，或走 skills-only 的 `gh skill install` / `npx skills add` 只装技能，再用其自带的 `plugin-eval` 与 `make validate` 做质量筛检后再决定是否扩大；它给的是可直接复制的安装、生成与评测命令以及任务类型到模型档位的映射，但质量评测方法自认未经人工标注验证，规模数字也仅为自述，不宜直接全量采用。
 - [virgiliojr94/book-to-skill](../research/radar/2026-10-02/569-virgiliojr94-book-to-skill.md)：值得一试，把反复查阅的技术书/内部文档用 book-to-skill 转成 Agent Skill，让代理按需读取章节而不是整本塞上下文——安装与运行命令齐备、产物结构明确，但完整流程和 24×–51× 的省 token 数据都在未提供的 docs 里，属于作者主张，建议先拿一本自己的文档小范围试并自测正确率与幻觉率再决定是否推广。
 - [KKKKhazix/khazix-skills](../research/radar/2026-10-02/573-kkkkhazix-khazix-skills.md)：值得一试，建议先小范围试装其中 1–2 个技能（优先 leader 与 neat-freak），按 README 给的一句话安装命令装进支持 Agent Skills 的 Agent，再用它给的触发词跑真实任务对照效果；因为原文提供了可照抄的安装流程、降级方案、触发词，以及目标七问、三色分级等可直接复用的规则，但各 SKILL.md 正文和效果数据均未给出，只到小范围验证的程度。
+- [elementalsouls/Claude-BugHunter](../research/radar/2026-10-02/590-elementalsouls-claude-bughunter.md)：值得一试，在已获授权的漏洞挖掘/外部红队场景中，按 README 的插件方式小范围装这套技能包，用 `/hunt` 跑一个自建靶场并按 7-Question Gate 校验产出；它把「技能包分层 + 按主题自动加载 + 阶段化流程 + 提交前闸门 + 证据脱敏」这套可复制的工作流给全了（含可照抄的安装命令和多 harness 目录映射），但仅凭 README 无法验证 83 个技能的实际质量，且覆盖范围被明确限定在外部攻击面。
+- [timescale/pg-aiguide](../research/radar/2026-10-02/599-timescale-pg-aiguide.md)：值得一试，按 README 给出的命令给 AI 编码助手装上 pg-aiguide 的 Postgres 技能与文档 MCP，然后用它的开/关对照法在一个真实 Postgres schema 任务上小范围验证收益。理由是安装与配置步骤完整可直接照做、覆盖多种主流 agent，但效果证据只有厂商自己的一次演示，尚不足以直接 adopt。
