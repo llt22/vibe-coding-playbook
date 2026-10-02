@@ -1,14 +1,14 @@
-# 把 AI 的一次性回答变成可验证的交付物：多代理竞争、角色分工与测试闸门
+# 把 AI 的「完成」变成可验证的交付：多策略竞争、测试闸门与 QA 复核
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：当单个 AI 回答或单条串行会话交付的东西不可靠、又没有验证手段时，怎么用多子代理的竞争、角色化分工和验证闸门拿到能落地、可核验的结果，并判断什么时候不值得这么做。
-> 先试这一步：挑一个你确实不满意、又能当天判定好坏的真实任务：先把任务写成自包含的文件，再跑一次最小规模的多代理（做法 A 的 `/arena --quick --seed 7 <任务>`，或做法 F 的 researcher + reporting_analyst 两个角色 Crew），看产出能不能直接用、你到底改了多少。
+> 解决的问题：让 AI 交付的结果必须经过验证才算完成——多策略竞争淘汰、测试闸门合入、QA 在真实环境复核后才允许合并。
+> 先试这一步：挑一个你确实不满意、且能验证的真实任务，跑一次最小规模的多策略竞争：`/arena --quick --seed 7 <把任务写具体>`，并用 `--baseline-file` 把被拒的旧答案传进去，看盲评比分和攻击命中的缺口。
 > 最近修订：2026-10-02
 
 ## 解决什么问题
 
-单个 AI 回答、单条串行的 agent 会话，交付的往往是你没有验证过的结果：看起来合理，但可能漏了你真正在意的约束。这篇手册把「不满意就重问一次」升级成一套可执行的流程——把同一个任务交给多个子代理用不同策略并行求解、互相对抗、由独立裁判按公开标准打分淘汰；把有固定分工的多步任务（先搜集资料、再扩写成文）固化成角色化 Crew 流水线，产物落盘成文件；代码类任务则必须通过你自己的验证命令才能合入。同时给出成本预估、可观察指标，以及「什么时候不值得这么做」的判断线。
+单个 AI 回答、单条串行的 agent 会话，交付的往往是你没有验证过的结果：看起来合理，但可能漏了你真正在意的约束。这篇手册把「不满意就重问一次」升级成一套可执行的流程——把同一个任务交给多个子代理用不同策略并行求解、互相对抗、由独立裁判按公开标准打分淘汰；把有固定分工的多步任务（先搜集资料、再扩写成文）固化成角色化 Crew 流水线，产物落盘成文件；代码类任务则必须通过你自己的验证命令才能合入，再进一步可以把整条链固化成 GitHub 上的 issue → PR → 浏览器实测 → 合并。同时给出成本预估、可观察指标，以及「什么时候不值得这么做」的判断线。
 
 ## 适用与不适用
 
@@ -20,6 +20,7 @@
 - 想在同一个会话内给难任务「升档」，用一个显式动作决定何时上多 agent、上贵模型。
 - 想自建长时程子代理 + 沙箱 + 记忆的执行底座。
 - 有稳定重复的多步分工（搜集资料 → 扩写成文），且你愿意写一点 Python、改 JSONC 配置：用角色化 Crew（做法 F）把这条链固化下来。
+- 有一个低风险、已有测试基础、且托管在 GitHub 上的小仓库，想验证「issue → PR → 浏览器实测 → 合并」这条自动链路到底能拦住多少问题（做法 G）。
 
 **不适用**
 
@@ -30,6 +31,9 @@
 - 非编码场景：OmO 的「做 deck、跨源研究」等只有一句话主张，没有可核对的案例。
 - 不愿意写代码、配环境：crewAI 是需要写代码、配环境的开发框架，不是装完即用的工具。
 - 打算立刻在涉密环境跑：调研原文第 11 步「关掉默认遥测」的命令被截断，拿到确切做法前不要往敏感数据上跑。
+- 项目只在本地、没有托管到 GitHub：cubefarm 的 issue 和 PR 是唯一协作媒介，纯本地项目用不了（做法 G）。
+- 没有编码 agent 的付费订阅，或不愿让多个 agent 共享同一份用量限额：cubefarm 的所有 agent 共用同一份额度。
+- 非 Web 类项目：cubefarm 的 QA 在真实浏览器里测，依赖 Google Chrome，README 未说明非 Web 项目怎么 QA。
 
 ## 前置条件
 
@@ -40,6 +44,7 @@
 - 做法 D（oh-my-openagent）：一台可弃用的机器或容器（安装脚本是 `curl | bash`）；一个自己的小项目目录；至少一家模型订阅或 API key。
 - 做法 E（deer-flow）：git、Docker Desktop/Engine、Docker Compose v2.24+（用 `docker compose version` 自检）；仓库自身要求 Python 3.12+ / Node.js 22+。
 - 做法 F（crewAI）：Python >= 3.10 且 < 3.14；命令行操作与基本 Python 编辑能力；用 uv 管理依赖；一个模型提供商的 API key（默认走 OpenAI API）；若任务要用网页搜索工具，另需 Serper.dev 的 key。Windows 上若遇 `chroma-hnswlib` 构建错误，需先装 Visual Studio Build Tools 并勾选 *Desktop development with C++*。
+- 做法 G（cubefarm）：Node.js 22 或更新版本；`git`；已登录的 GitHub CLI（`gh auth login`）；一个编码 agent 的订阅（cubefarm 自带 Claude Code 作为默认 agent，CEO 也跑它，无需另行安装，登录一次即可；你本机已装并登录的 Codex 或 OpenCode 也可以被选中）；Google Chrome（QA agent 要在浏览器里测你的应用）；项目必须托管在 GitHub 上；办公室数据在 `~/.cubefarm`（设置、仓库克隆、每个 agent 一份独立工作副本），可用 `SWARM_HOME` 换目录。
 
 ## 操作步骤
 
@@ -53,6 +58,7 @@
 | 只想在同一会话里给难任务升档 | 做法 D（先做对照实验） |
 | 想自建长时程子代理 + 沙箱 + 记忆的底座 | 做法 E |
 | 有固定的多步分工（研究 → 成文），愿意写 Python / 改 JSONC | 做法 F |
+| 有 GitHub 上的低风险小仓库，想验证 issue → PR → 浏览器实测 → 合并 这条链 | 做法 G |
 
 ### 做法 A：把不满意的回答送进锦标赛（arena-skill）
 
@@ -534,7 +540,7 @@ crewai create crew <project_name> --classic
 }
 ```
 
-关键字段：`context` 把上游任务结果喂给下游；`output_file` 指定落盘路径；`markdown: true` 输出 Markdown；`process` 可换成 hierarchical——框架会自动加一个 manager 来规划、委派并验证结果。另有 `tools/` 下的自定义工具（以 `"custom:<name>"` 引用）、`knowledge/` 知识文件、`skills/` 技能文件。
+关键字段：`context` 把上游任务结果喂给下游；`output_file` 指定落盘路径；`markdown: true` 输出 Markdown；`process` 可换成 hierarchical——框架会自动加一个 manager 来规划、委派并验证结果。另有 `tools/` 下的自定义工具（以 "custom:<name>" 引用）、`knowledge/` 知识文件、`skills/` 技能文件。
 
 7. 配密钥：在 `.env` 里填模型提供商的 API key；若用网页搜索工具，填 Serper.dev 的 key。
 
@@ -613,12 +619,79 @@ npx skills add crewaiinc/skills
 
 11. 涉密场景关掉默认遥测——调研原文在这一步被截断，具体命令缺失。在从仓库文档拿到确切写法之前，不要在有敏感数据的机器上跑。
 
+### 做法 G：把 issue → PR → 浏览器实测 → 合并 做成一条自动链路（cubefarm）
+
+把这条路径当作待验证的候选：它把多 agent 分工、浏览器实测和 auto-merge 门禁写成了可执行流程，但只有 README 级证据（53 stars，没有基准或案例数据），不足以直接采用。
+
+1. 先体检环境，确认下面几项都齐：
+
+```bash
+npx cubefarm doctor
+```
+
+前提：Node.js 22+、`git`、已登录的 `gh`、一个编码 agent 订阅、Google Chrome。缺一项都不要往下走。
+
+2. 登录内置编码 agent（前提：有 Claude Code 订阅）：
+
+```bash
+npx cubefarm login
+```
+
+3. 想先不花钱、不改动任何东西地看看，用 demo 模式（伪造 GitHub 和 agent）：
+
+```bash
+npx cubefarm --demo
+```
+
+预期结果：能在界面里认清工位、白板、手机、经理电脑的位置，且不产生真实调用。
+
+4. 正式启动办公室，它会在浏览器中打开：
+
+```bash
+npx cubefarm
+```
+
+首次 `npx` 会问是否安装 cubefarm，回答 yes。可选参数：
+
+```bash
+npx cubefarm --port 4400   # 换端口（默认 4317）
+npx cubefarm --no-open     # 不自动打开浏览器
+```
+
+预期结果：浏览器里出现卡通 3D 办公室与从 backlog 到 merged 的 Kanban 白板。
+
+5. 建公司：按向导输入你的名字、给公司命名、认识 CEO。
+
+6. 搬入一个项目（前提：该项目必须在 GitHub 上，因为 issue 和 PR 是团队的工作方式）：选一个本地项目文件夹、一个 GitHub 仓库，或新建一个；每个项目获得自己的楼层。
+
+7. 让 CEO 做规划：CEO 会研究项目、写 QA 检查清单、把工作规划成 GitHub issues，并提议招谁。按 `P` 打开手机与 CEO 对话、批准招聘。预期结果：出现一批 GitHub issues 和一份 QA 检查清单。
+
+8. 观察与介入：开发者领 issue、开 PR；走到某 agent 工位后面可打开它的真实终端，直接输入干预。按团队整体或按单个 agent 选择编码 agent、模型和 effort。
+
+9. 控制并发额度：所有 agent 共用同一个编码 agent 订阅的用量限额，在经理控制台里设置 session limit 来限制同时工作的 agent 数量；第一次试跑先设为 1–2。
+
+10. 合并门禁：QA 在真实浏览器里审查和测试每个 PR，贴出带截图的报告；开启 auto-merge 后，QA 通过且 GitHub checks 全绿时 PR 自行合并。第一次试跑先不要开 auto-merge，人工确认每一份 QA 报告和 PR 差异。
+
+11. 更新（`npx` 会一直用第一次下载的版本，启动时会提示有新版）：
+
+```bash
+npx cubefarm@latest
+# 或永久安装
+npm install -g cubefarm
+cubefarm
+```
+
+安全边界（照做时须知）：agent 在你机器上、以你自己的编码 agent 方式工作，沿用你的 skills、MCP servers 和 settings，各自在仓库的独立副本里；它们不能 push 到主分支，也不能合并——合并由办公室在 QA 之后执行。
+
+界面操作键：`W A S D`/方向键走动，`Shift` 跑，鼠标环视（需先点击画面），`E` 使用当前看着的东西（工位/白板/电梯/经理电脑），`P` 手机，`H` 帮助，`Esc` 松开鼠标或关闭面板。
+
 ### 通用收尾：不管走哪条路径
 
 - 开始前先固定「完成」的定义（哪条测试通过、谁来复核、在哪里看结果），不要只依赖 agent 的自证。
 - 代码类任务一律把测试或 lint 作为合入门槛，而不是事后补检查。
 - 保留可复现的随机种子或赛程记录，便于不同规模之间做对比。
 - 多步流水线一定要求产物落盘（如 `output_file`），否则你无法核对，也无法复用。
+- 带自动合并能力的链路（如做法 G 的 auto-merge），先用人工确认跑过 3–5 个真实 issue，再考虑对低风险改动打开。
 
 ## 怎么判断变好了
 
@@ -630,6 +703,7 @@ npx skills add crewaiinc/skills
 - 做法 D：同一任务三轮对照（普通 prompt / 加 `ulw` / 加 `mass ulw`），每轮从同一个干净分支或干净工作区开始，记录返工次数与人工介入次数。注意这三轮本身才是证据，README 的好评不是。
 - 做法 E：`make doctor` 是否能无阻断跑完；能否跑通一个最小任务（受限于原文截断，skills / sub-agents / scheduled tasks 的用法需自行查仓库文档）。
 - 做法 F：`output/report.md` 是否真的落盘、内容能不能直接用（采用 / 部分采用 / 弃用）；下游任务拿到的到底是不是上游的结果（`context` 是否真的接上了）；需要你手动返工几轮；`{placeholder}` 是否按预期被注入。
+- 做法 G：QA 报告的**真阳性率**（它标出的问题里，多少经人工复核确认是真问题）；QA 通过的 PR 中人工复核后确实可用的比例（漏检率）；同一类 issue 从开单到合并的周期时间 vs 你自己动手的基线；每个 issue 消耗的订阅用量；每个 PR 你要动手改多少、终端里介入多少次；开启 auto-merge 后是否出现被合入但需要回滚的改动。
 
 **最小试用**
 
@@ -639,12 +713,14 @@ npx skills add crewaiinc/skills
 - 做法 D：半天内在一台可弃用机器上跑完三轮对照。
 - 做法 E：先走 `make setup` → `make doctor` → `make docker-start`，确认能起来再谈能力面。
 - 做法 F：把手头一个「多步资料整理 → 成文」的活改写成 researcher + reporting_analyst 两个角色的 Crew，`crewai install` → `crewai run`，只看一件事：`output/report.md` 能不能直接用、你要改多少。
+- 做法 G：`npx cubefarm doctor` 确认环境齐全 → `npx cubefarm --demo` 走一遍界面 → 选一个低风险、已有测试基础的小仓库接入，把 session limit 设为 1–2 → 先关闭 auto-merge，人工确认每一份 QA 报告和 PR 差异，跑 3–5 个真实 issue。
 
 **试多久、什么时候升级**
 
 - 做法 A 的决策规则（来自原文）：用 `--seed` 固定复现赛程；若 `--quick` 在 3 个以上任务上稳定优于 baseline，且攻击确实命中你没考虑到的地方，再升到 `--agents 32`；若比分持平、或只是措辞更漂亮，说明这类任务不值得这份开销，退回普通的「重问一次 + 自己改」。
 - 做法 B/C/D/E 都没有量化效果数据，先以一到两个任务、可弃用环境为限；只有当人工介入次数或返工次数可观察地下降，才扩大范围。
 - 做法 F 同样没有对比数据：先固定成一条流水线，连跑 2–3 次同类任务，如果每次都要大改 `output/report.md`（或流水线本身），说明这类活还不适合固化角色分工，先退回单 agent 手改；只有当产出基本可用、你只需要做少量编辑时，才值得把它变成常用链路。
+- 做法 G 同样没有量化数据：以 3–5 个真实 issue 为最小样本；若 QA 真阳性率接近零，或人工介入次数没有下降，说明当前形态的价值主要在演示而非产出，应考虑退回不用（或只当演示看）。熟悉后再对低风险改动尝试 auto-merge，并保留人工抽查。
 
 ## 常见坑
 
@@ -699,6 +775,17 @@ npx skills add crewaiinc/skills
 - Windows 上可能卡在 `chroma-hnswlib` 构建错误，需要先装 Visual Studio Build Tools 的 C++ 组件。
 - `process` 换成 hierarchical 时框架会自动加一个 manager 来规划、委派并验证结果，这多出来的调用要算进成本。
 
+**做法 G（cubefarm）**
+
+- 项目必须已托管在 GitHub 上：issue 和 PR 是唯一的协作媒介，纯本地项目用不了。
+- 所有 agent 共用同一份编码 agent 订阅额度，成本随并发线性上升；先用 session limit 1–2 试。
+- QA 在真实浏览器里测，依赖 Google Chrome；README 没有说明非 Web 类项目怎么 QA。
+- auto-merge 的「QA 通过 + GitHub checks 全绿」只有 README 描述，没有成功率、误合并率、成本或周期时间数字；先关掉它，人工确认每一份 QA 报告和 PR 差异。
+- `npx` 会一直用第一次下载的版本，升级要 `npx cubefarm@latest` 或 `npm install -g cubefarm`。
+- 本次材料只有 README；它指向的 `docs/how-it-works.md`（issue 生命周期、QA、auto-merge、模型与用量、安全模型）和 `CONTRIBUTING.md` 都没拿到，QA 具体怎么测、auto-merge 的判定细节、模型与额度策略都无法核实。
+- agent 沿用你本机的 skills、MCP servers 和 settings，各自在仓库的独立副本里工作；它们不能 push 主分支、也不能合并，合并由办公室在 QA 之后执行。
+- 唯一的量化指标是 53 stars；办公室「看起来在工作」、CEO 会写 QA 检查清单、QA 报告能起到把关作用，都只是作者主张，没有可验证数据。
+
 **通用**
 
 - 别把「工具很多」当成改善证据；没有验证命令或盲评对比，只是把不确定性放大了。
@@ -713,6 +800,7 @@ npx skills add crewaiinc/skills
 - **做法 D** 依据调研《code-yeongyu/oh-my-openagent》。可核对的内容：安装脚本与渠道参数、包名 `omo-ai`、配置路径与「就近优先」、关键字 `ultrawork` / `ulw` / `mass ulw`、`omo setup` / `omo doctor` / `omo update`、stars ≈ 69701、许可证徽章 SUL-1.0。属于作者主张的部分：「研究一万个来源」「一小时干完 Claude Code 七天的活」等，全部来自 README 自述或用户好评，没有基准、数据集或对照实验。
 - **做法 E** 依据调研《bytedance/deer-flow》。可核对的内容：`make setup` / `make doctor` / `make support-bundle` / `make docker-start` 等命令、模型配置 YAML 示例、CLI 后备 provider 的凭证来源、部署规格起点表、ACP agent 配置与 `auto_approve_permissions` 规则、MIT 协议、Python 3.12+ / Node.js 22+、83290 stars。重要限制：原文在「Option 2: Local Development」的 Prerequisit 处被截断，skills、sub-agents、scheduled tasks、memory 等小节只有标题、没有正文，因此本手册只写安装与配置，不写这些能力的具体用法。
 - **做法 F** 依据调研《crewAIInc/crewAI》。可核对的内容：MIT 许可、Python >=3.10 且 <3.14、uv 各平台安装命令、`uv tool install crewai` / `uv tool update-shell` / `uv tool list` / `uv tool install crewai --upgrade`、`crewai create crew` 生成的目录结构（`agents/*.jsonc` + `crew.jsonc`）与 `--classic` 旧式结构、researcher 与 reporting_analyst 两个 `agents/*.jsonc` 示例、`crew.jsonc` 里 `context` / `output_file` / `markdown` / `process: sequential|hierarchical` / `{placeholder}` 的用法、`crewai install` / `crewai run` / `uv add`、Flow 的 `@start` / `@listen` / `@router` 与 `or_` / `and_` 组合、`/plugin marketplace add crewAIInc/skills` 与 `npx skills add crewaiinc/skills`、四个 skill（getting-started / design-agent / design-task / ask-docs）的分工、Windows 上 `chroma-hnswlib==0.7.6` 的构建错误与 Visual Studio Build Tools 解决办法。属于作者主张、没有数据支撑的部分：多智能体角色分工能提升「多步资料整理 → 成文」的产出质量，README 没有给出基准、数据集或对照实验。重要限制：原文在 examples 与 FAQ 后半段被截断，第 11 步「关掉默认遥测」只有标题、没有命令，因此本手册不写它的具体做法。
+- **做法 G** 依据调研《leonvanzyl/cubefarm》。可核对的内容：可执行命令（`npx cubefarm`、`npx cubefarm login`、`npx cubefarm doctor`、`--demo`、`--port`、`--no-open`、`npx cubefarm@latest`、`npm install -g cubefarm`）、前提清单（Node 22+、git、已登录的 `gh`、一个编码 agent 订阅、Chrome）、五步上手流程、界面操作键、用 session limit 控制并发、数据目录 `~/.cubefarm` 与 `SWARM_HOME`、安全模型要点（agent 各持独立仓库副本、不能 push 主分支、不能合并，由办公室在 QA 后合并）、QA 在真实浏览器里审查并发布带截图的报告、合并门禁为「QA 通过且 GitHub checks 全绿」、白板 Kanban 覆盖从 backlog 到 merged。属于作者主张、没有数据支撑的部分：办公室「看起来在工作」、CEO 会写出 QA 检查清单、QA 报告能起到把关作用、auto-merge 安全——没有成功率、误合并率、成本或周期时间的数字，唯一的量化指标是 53 stars。重要限制：本次输入只有 README，它指向的 `docs/how-it-works.md`（issue 生命周期、QA、auto-merge、模型与用量、安全模型）与 `CONTRIBUTING.md` 均未包含在材料中，因此 QA 具体如何测、auto-merge 的判定细节、模型与额度策略都无法核实。适用条件：项目必须已在 GitHub 上；必须持有编码 agent 的付费订阅且所有 agent 共享同一份用量限额；QA 依赖 Chrome，对非 Web 类项目的 QA 能力 README 未说明；游戏化 3D 界面长期使用是否顺手未验证。
 
 ## 依据的调研
 
@@ -722,3 +810,4 @@ npx skills add crewaiinc/skills
 - [code-yeongyu/oh-my-openagent](../research/radar/2026-10-01/508-code-yeongyu-oh-my-openagent.md)：值得一试，建议在一个可弃用的环境里小范围试用 OmO：按 README 的一行命令安装，用同一个真实小任务分别跑普通 prompt、加 `ulw`、加 `mass ulw`，对比返工次数与人工介入次数。理由是可照做的安装与关键字工作流已经给出（`omo`、`ulw`、`mass ulw`、`omo setup/doctor`、两份 `omo.jsonc` 配置），但全部效果说明都只有作者主张和用户好评，没有可核对的指标。
 - [bytedance/deer-flow](../research/radar/2026-10-01/544-bytedance-deer-flow.md)：值得一试，可以按官方 Quick Start 在本地或小团队环境跑通 DeerFlow 2.0（clone → make setup → make doctor → make docker-start），把它作为长时程子代理＋沙箱＋记忆的执行底座试点；理由是原文给出了可直接复制的安装、模型接入、部署选型和安全配置步骤，但 skills、sub-agents、scheduled tasks 等核心能力的用法在抓到的原文里只剩目录标题，需进一步查阅仓库文档才能照做。
 - [crewAIInc/crewAI](../research/radar/2026-10-02/549-crewaiinc-crewai.md)：值得一试，建议小范围试：照着 README 的 "uv 安装 → crewai create crew → 改 agents/*.jsonc 与 crew.jsonc → crewai install/run" 链路，先把手头一个"多步资料整理→成文"的工作改成 researcher + reporting_analyst 两个角色的 Crew，并把产物落盘到 output/ 文件；因为原文给出了完整可复制的命令、目录结构和配置示例，可照做，但它本质是需要写代码、配环境的开发框架，效果只有作者主张、没有对比数据，先试一步再决定是否推广。
+- [leonvanzyl/cubefarm](../research/radar/2026-10-02/725-leonvanzyl-cubefarm.md)：值得一试，用 npx cubefarm 在低风险仓库上小范围试跑 issue→PR→QA→合并 这条自动链路，重点验证 QA 环节的真实拦截能力；因为它把多 agent 分工、浏览器实测和 auto-merge 门禁写成了可执行流程，但只有 README 级证据（53 stars、无基准与案例数据），不足以直接采用。
