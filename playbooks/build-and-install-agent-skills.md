@@ -1,14 +1,14 @@
-# 给编码 agent 补能力：先小范围试装，用对照和硬证据验收
+# 给编码 agent 补能力：先小范围对照，再用硬证据验收
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：怎么判断给编码 agent 装的技能包、设计知识或代理流程真的减少了返工，而不是只多了一堆配置。
-> 先试这一步：在一个非关键项目上只装一个技能包，对同一任务做有技能和无技能各 3 次的对照，记下返工轮数。
+> 解决的问题：面对技能包、mod、代理、设计知识与出图工具，如何用同一套有/无对照的方法判断它是否真的减少了返工，而不是只看安装成功。
+> 先试这一步：挑一个非关键项目和一类每周重复的任务，只装一个技能包（例如 Archify 或官方示例技能），同一输入各跑 3 次做对照，记录返工轮数。
 > 最近修订：2026-10-02
 
 ## 解决什么问题
 
-你已经在用编码 agent，但每次都要重复描述同一套工程规范，或者不确定装一个技能包是否真的减少了返工。这篇手册给出一个可照做的流程：先小范围试装一个现成技能包，用同一任务做有/无技能的对照，确认有效后再考虑把自己的重复工作写成 `SKILL.md`，让 agent 代理编码 CLI 跑长任务并拿硬证据验收，给 agent 补一块行业设计知识，或者写一个把会话状态嵌进界面的 Claude Code mod。同一套对照方法也适用于中文技术文档的写作与审稿、单篇论文的精读。如果你还需要给 agent 补模型端点、权限或搜索能力，再用配置模板单独补，而不是整包采用。
+你已经在用编码 agent，但每次都要重复描述同一套工程规范，或者不确定装一个技能包是否真的减少了返工。这篇手册给出一个可照做的流程：先小范围试装一个现成技能包，用同一任务做有/无技能的对照，确认有效后再考虑把自己的重复工作写成 `SKILL.md`，让 agent 代理编码 CLI 跑长任务并拿硬证据验收，给 agent 补一块行业设计知识，写一个把会话状态嵌进界面的 Claude Code mod，或者让 agent 把一句话描述／一个代码仓库变成可交互的架构图、工作流图、时序图、数据流图、生命周期图。同一套对照方法也适用于中文技术文档的写作与审稿、单篇论文的精读。如果你还需要给 agent 补模型端点、权限或搜索能力，再用配置模板单独补，而不是整包采用。
 
 ## 适用与不适用
 
@@ -22,7 +22,9 @@
 - 需要给 agent 补模型端点、工具权限或网页搜索能力，且愿意手动填自己的网关信息；
 - 想让 Claude Code 会话多一层界面或拦截能力（上下文占用、危险命令拦截、改动回放），愿意照教程先在本机小范围试；
 - 已经在用 Cline CLI，想让 agent 代理派发任务、后台运行、持续监控，并在拿到硬证据之后才报完成（做法 H）；
-- 要给 agent 补一块 UI/UX 设计知识，让它在做界面时能查到风格、配色、字体、图表和 UX 规则（做法 I）。
+- 要给 agent 补一块 UI/UX 设计知识，让它在做界面时能查到风格、配色、字体、图表和 UX 规则（做法 I）；
+- 有一类反复的“讲清系统结构”的工作：一句话描述、仓库运行期架构、CI/CD 与审批流、API 调用链、数据管道、状态机，需要用一张可交互的图反复讲给别人听（做法 J）；
+- 愿意按图型对照表选图，并接受出图技能的验收靠 `validate`/`deliver` 的 JSON 收据，而不是靠“图好看”（做法 J）。
 
 不适用：
 
@@ -35,7 +37,10 @@
 - 不接受 mods API 会随版本变化、不想核对当前版本写出的类型声明；
 - 不确认 mod 来源就安装（mod 以与 Claude Code 同等权限在本机运行）；
 - 不用 Cline CLI（做法 H 与 Cline 强绑定，只能借鉴它的设计原则，不能直接套用）；
-- 不愿先 dry-run 就让工具往仓库里写文件，或者不想为界面任务维护一份 `MASTER.md`（做法 I）。
+- 不愿先 dry-run 就让工具往仓库里写文件，或者不想为界面任务维护一份 `MASTER.md`（做法 I）；
+- 想找通用绘图编辑器、想换 Mermaid 主题，或想让 agent 自动解析 Mermaid、托管分享、所见即所得编辑（Archify 明确把这些排除在当前范围外）；
+- 想让出图工具推断架构变更的影响、风险或可合并性（`compare` 只给机器收据，明确不推断）；
+- 架构图要用 `deployment-ownership` profile，却给不出 authored 的 owner、区域位置、私有数据库范围与具名跨界项（缺任一项 fail closed，不会隐式补全，也不检查真实基础设施）。
 
 ## 前置条件
 
@@ -51,10 +56,11 @@
 - 走 mod 路线（做法 G）时额外准备：Claude Code 2.1.287 或更高；先确认这个 mod 的来源可信，因为它以与 Claude Code 同等权限在本机运行。
 - 走 cline-pilot 路线（做法 H）时额外准备：Cline CLI；Python 3；一个支持 Agent Skills 规范的宿主（Hermes / Cline / Claude Code / Codex / Cursor / OpenCode 之一）；冷启动阶段愿意使用付费的长上下文模型；稳态阶段有本地模型运行条件（如 Ollama）；项目侧已有或愿意先建立 memory bank 与 clinerules，因为技能本身不持有项目架构知识。
 - 走 UI/UX 设计知识路线（做法 I）时额外准备：Node/npm 用于装 CLI；本机 Python 3.x（脚本只用标准库、不装依赖、不联网）。README 明确要求这些安装步骤是给“人”做的，agent 不应自行在你的机器上安装软件，应向你询问。
+- 走 archify 路线（做法 J）时额外准备：本地 Node 环境，README 的不同集成对版本要求不同（Hermes 集成注明 Node ≥ 18，DeepSeek Harness 集成注明 `^22.19.0 || >=24.0.0`）；走 Claude.ai 上传 zip 的路线时，功能取决于沙箱里是否有 Node.js 访问；要出带源码证据的仓库图，需要 agent 能读到仓库并把证据固定到一个 public commit；用 `deployment-ownership` profile 时，owner、区域位置、私有数据库范围与具名跨界项必须由你 authored 提供，缺任一项 fail closed。
 
 ## 操作步骤
 
-怎么选：先做做法 A；A 里某个技能确实有效、且你有一件每周重复且规范明确的工作，再做做法 B；需要把外部文档变成智能体知识资产时用做法 C；需要给 Claude Code 补模型端点、权限、网页搜索时用做法 D；要写或审中文技术文档用做法 E；要精读单篇论文用做法 F；要给自己写一个把会话状态嵌进界面的 Claude Code mod 时用做法 G；已经在用 Cline CLI、想让 agent 代理长任务并用证据验收时用做法 H；要给 agent 补一块 UI/UX 设计知识时用做法 I。E、F、G、H、I 都必须套用 A 的对照方法，不要跳过验证直接纳入常规流程。
+怎么选：先做做法 A；A 里某个技能确实有效、且你有一件每周重复且规范明确的工作，再做做法 B；需要把外部文档变成智能体知识资产时用做法 C；需要给 Claude Code 补模型端点、权限、网页搜索时用做法 D；要写或审中文技术文档用做法 E；要精读单篇论文用做法 F；要给自己写一个把会话状态嵌进界面的 Claude Code mod 时用做法 G；已经在用 Cline CLI、想让 agent 代理长任务并用证据验收时用做法 H；要给 agent 补一块 UI/UX 设计知识时用做法 I；需要把一句话描述或一个代码仓库变成可交互的单文件 HTML 图（架构、工作流、时序、数据流、生命周期）时用做法 J。E、F、G、H、I、J 都必须套用 A 的对照方法，不要跳过验证直接纳入常规流程。
 
 ### 做法 A：先用现成技能包做小范围试装（推荐先做）
 
@@ -806,6 +812,126 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 
 预期：你能说清哪一条检索结果改变了你的页面决策；说不清就不要保留。另需注意：该 README 页面大量篇幅是付费版与自家产品推广，且演示素材被作者自己标注为非本 skill 产物。
 
+### 做法 J：让 agent 从一句话或一个仓库产出可交互的架构图（可选，按 A 的对照法验证）
+
+定位：Archify（仓库 `tt-a1i/archify`，MIT 许可，README 标注当前稳定版 `v3.0.1`）是一个 agent skill，也带一个零依赖 CLI。它把“一句话描述”或“一个代码仓库”转成可交互的单文件 HTML 图，支持五种图型：架构（Architecture）、工作流（Workflow）、时序（Sequence）、数据流（Data Flow）、生命周期（Lifecycle）。README 明确它不是通用绘图编辑器，也不是 Mermaid 主题。它的工作管线是 Generate（agent 生成 typed JSON IR）→ Validate（校验器与布局规则检查源文件，失败给机器可读 JSON 并定位到要修的局部）→ Preview（可选，仅回环地址）→ Deliver（同目录候选渲染并检查，只有通过校验的产物才原子替换目标文件）→ Iterate（agent 更新源文件，不相关结构保持稳定）。与做法 A、B 的关系：它同样是一个技能包的试装，所以套用同一套对照方法；区别是它的验收信号更硬——`validate --json` 与 `deliver --json` 返回规则码、精确 subject、实测证据和只含受支持修复手段的 `diagnostics[]`，可以直接数返工轮次。
+
+1. 前提检查。本地有 Node.js；README 的不同集成对版本要求不同（Hermes 集成注明 Node ≥ 18，DeepSeek Harness 集成注明 `^22.19.0 || >=24.0.0`）；走 Claude.ai 上传 zip 的路线时，功能取决于沙箱里是否有 Node.js 访问。
+
+2. 安装 skill（全局）。
+
+   ```bash
+   npx skills add tt-a1i/archify -g
+   ```
+
+   Cursor 的非交互安装：
+
+   ```bash
+   npx -y skills add tt-a1i/archify --skill archify --agent cursor --global --copy --yes
+   ```
+
+   不想安装先试用：
+
+   ```bash
+   npx skills use tt-a1i/archify@archify --agent codex
+   ```
+
+   预期：技能落到你点名的目录（README 明确支持 Claude Code，安装位置 `~/.claude/skills/` 或 `.claude/skills/`，能力为“完整渲染器 + 校验工作流”）。
+
+3. 从描述出图（不需要仓库）。把下面这段原样发给 agent：
+
+   ```text
+   Use Archify to diagram a web request: Browser calls the API,
+   the API checks Redis, and a cache miss queries PostgreSQL and fills the cache.
+   ```
+
+   预期：agent 生成 typed JSON IR，经校验后交付一个可打开的单文件 HTML。
+
+4. 从仓库出图（要源码证据）。在打开仓库的会话里发：
+
+   ```text
+   Analyze this repository, then use archify to create a high-level runtime architecture diagram.
+   Show 8–12 core components, one primary path, external dependencies, and trust boundaries.
+   Put supporting detail in cards instead of adding more edges.
+   ```
+
+   前提：agent 能读取仓库，并把证据固定到一个 public commit 的文件与行号。预期：带证据的架构节点会标 `SRC n`，可打开 Git 校验过的文件与行号范围；普通产物不带源码证据。README 的仓库案例是 `mco-org/mco`（commit `9f1a1cf`）。
+
+5. 在对话里迭代。用聚焦请求继续改，例如 `add Redis`、`move auth to the left`、`highlight the rollback path`；typed source 会保留，供定向修改。
+
+6. 选对图型。按 README 的对照表把类型写进提示词：
+
+   | 类型 | 适用 | 提示词里要写 |
+   |---|---|---|
+   | Architecture | 组件、服务、存储、边界 | 范围、核心组件、主路径 |
+   | Workflow | CI/CD、审批、工具调用、runbook | 参与者、顺序、分支、异常 |
+   | Sequence | API 调用、缓存回退、鉴权、异步链路 | 调用方、被调方、返回、时序 |
+   | Data Flow | 管道、血缘、PII、消费方 | 来源、转换、存储、边界 |
+   | Lifecycle | 状态、重试、等待、终态 | 状态、事件、重试与取消路径 |
+
+   拿不准用哪种时问 CLI：
+
+   ```bash
+   node archify/bin/archify.mjs guide "Show an API request with Redis cache miss"
+   node archify/bin/archify.mjs guide "Map Kafka topics, consumer groups, replay, and DLQ" --json
+   ```
+
+7. 在仓库里跑完整命令链（README「Useful repository commands」）：
+
+   ```bash
+   cd archify
+   node bin/archify.mjs doctor
+   node bin/archify.mjs demo /tmp/archify-demo
+   node bin/archify.mjs guide "Show CI/CD checks, approval, deploy, and rollback"
+   node bin/archify.mjs validate workflow examples/agent-tool-call.workflow.json --quality showcase --json
+   node bin/archify.mjs preview workflow examples/agent-tool-call.workflow.json /tmp/workflow.html --quality showcase
+   node bin/archify.mjs deliver workflow examples/agent-tool-call.workflow.json /tmp/workflow.html --quality showcase --open --json
+   ```
+
+   `preview` 是显式回环模式：监听一个 JSON 文件、随机 `127.0.0.1` 端口、失败时保留上一份已验证输出、Ctrl-C 停止，且不给生成的 HTML 加运行时代码；测试时可加 `--no-open`。预期：只有通过全部门禁的最新候选才刷新，失败时还是上一份 last-good 产物。
+
+8. 失败时按收据修，不要盲重试。`validate --json` 与 `deliver --json` 失败时只输出一个 JSON 对象，只应用 `diagnostics[]` 各 subject 的 `supportedFixes`，且限制在 skill 的两轮修正之内；视觉审查是另一件事。
+
+9. 改架构前做差异评审（Architecture Delta，含机器收据）：
+
+   ```bash
+   node archify/bin/archify.mjs compare architecture base.json head.json architecture-delta.html --json
+   ```
+
+   对比经过校验的 Before / Delta / After 快照；可以选择一个 authored change，或播放一次有限时长的 viewer-only Review。README 明确它不推断影响、风险或可合并性。
+
+10. 设置输出元信息（放进源的 `meta` 里）：
+
+    ```json
+    {
+      "meta": {
+        "locale": "en",
+        "animation": "trace",
+        "visual_preset": "signal-flow"
+      }
+    }
+    ```
+
+    `meta.locale` 只本地化页面标题、Legend、状态/错误、a11y、HTML/SVG 的 `lang`，不会本地化你写的内容。内置 `en`/`zh-CN`；其他语言（如 `es`）需要 `meta.translations`（message key → 译文，可参考 `examples/locales/es.json`），否则渲染器回退英文并披露这一事实。静态导出省略 `animation`。
+
+11. 交付与查看。产物是一个 HTML 文件，下载后浏览器直接打开即可用，看图不需要装 Archify；转发给别人交互也一并带走，但外链和地图链接需要联网。查看侧快捷键：`?` 打开 Diagram Guide，`/` 查找并聚焦节点，`R`/`PATH` 探路径，`L`/`LENS` 对比角色，`M`/`MAP` 概览雷达，`F` 进入演示舞台，`S`/`T`/`E` 切样式/主题/导出，`+`/`-`/`0` 缩放重置。稳定链接可带 `#focus=<id>`、`#focus=<id>&reach=upstream|downstream`、`#relation=<id>`、`#route=<source>~<target>`、`#lens=<kind>~<kind>`。
+
+12. （可选）其他集成。README 标注为社区集成、非官方产品、无遥测：
+
+    ```bash
+    hermes skills install skills-sh/tt-a1i/archify/archify -y
+    ```
+
+    ```bash
+    dsh plugin --profile web add @tt-a1i/archify-dsh@0.1.0
+    ```
+
+    DSH 里的调用语：`Use the archify skill to map this repository's runtime architecture.`；移除：`dsh plugin --profile web remove @tt-a1i/archify-dsh`。DSH 集成要求 shell 文件使用精确的工作区路径，不能用 Web Produced Files。
+
+13. 更新检查可关。Archify 可能 GET 固定的 stable manifest 以显示可选更新提醒，它自己不下载也不安装更新；成功检查后约 24 小时（±20%）再查，活跃使用下失败后 6 小时、再 24 小时重试；服务端只看到普通 HTTP 元数据，收不到版本、Agent、项目数据、提示词、账号/设备 ID 或 ETag。设 `ARCHIFY_UPDATE_CHECK_DISABLED=1` 可关闭联网与提醒状态写入。
+
+预期：你能说清哪一张图减少了你解释系统结构的轮次；说不清就不要保留。
+
 ## 怎么判断变好了
 
 最小试用方式：
@@ -817,7 +943,8 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 - 论文类任务：用一篇自己已读过、心里有底、含多张主图（或主表）的论文生成精读报告，逐项对照自己的理解；再对一篇只有摘要或片段可得的论文试一次，看它是否正确声明覆盖范围与暂定判断；
 - mod 类任务：开一个 session，用 `claude --plugin-dir ./token-weather` 带插件跑几个回合，看它是否在回合结束时刷新；再把文件夹复制出去重装一次，确认能长期加载；
 - 代理类任务（做法 H）：在一个已有小仓库上，一周内跑通一次「装技能 → 首次配置生成 `references/local-config.md` → 放好全局 memory-bank 提示词 → 强模型做一次代码扫描产出规则种子和 1~2 个模板测试 → 本地模型跑 1~2 个 spec 明确的小批次 → 用 `session_report.py` 监控、用 git status 和测试报告验收」的闭环，并至少往 decision-log 记一次纠正；
-- 设计知识类（做法 I）：在单个真实前端项目上先 `uipro init --dry-run`，再按你的 agent 装一次；用一个页面跑 `--design-system --persist`，生成 `MASTER.md` 和 pages 覆盖文件，下一次建页时复用第 9 步的检索提示词，看它是否还反复重问同一套配色和字体。
+- 设计知识类（做法 I）：在单个真实前端项目上先 `uipro init --dry-run`，再按你的 agent 装一次；用一个页面跑 `--design-system --persist`，生成 `MASTER.md` 和 pages 覆盖文件，下一次建页时复用第 9 步的检索提示词，看它是否还反复重问同一套配色和字体；
+- 出图类任务（做法 J）：用同一段描述提示词和同一段仓库提示词各跑一次，记录从 `validate --json` 到 `deliver --json` 成功之间按 `diagnostics[]` 修了几轮；把产出的 HTML 发给一个不了解这个系统的人，看他能否只靠图说清主路径。
 
 可观察的指标：
 
@@ -829,6 +956,7 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 - 规则类返工次数：代码评审里关于风格、规范、命名的意见条数是否下降。
 - 代理类任务（做法 H）：该批次测试是否通过、是否产出非空文件、git 是否有预期改动（不采信 agent 自述）；同一断言连续失败次数是否达到 3 次，把该批次升级强模型后是否解决；需要你处理的决策点回报次数是否下降；第二、第三批次的返工量是否明显低于冷启动前的手动基线；decision-log 中稳定偏好条目是否增长、同类决策落到「no precedent」的比例是否下降。
 - 设计知识类（做法 I）：交付前检查清单的 8 条是否在成稿里成立；跨会话复用 `MASTER.md` 之后，是否还需要反复重说同一套配色、字体和反模式。
+- 出图类（做法 J）：交付是否原子替换——只有通过校验的产物才替换目标文件，失败时上一份 last-good 产物是否还在；同一张图从首次验证到交付成功需要按 `diagnostics[]` 修的轮数；仓库图的节点是否带 `SRC n` 并能打开 Git 校验过的文件与行号范围；架构变更评审是否拿到机器收据，且没有被当成影响分析（`compare` 明确不推断影响、风险或可合并性）；非工程用途（团队协作、旅行行程、法律引证核查、合同审查、事故复盘）README 只是列出，没有数据，先别当效果证据。
 - 文档审稿：它列出的问题里你认可并采纳的比例；修改后的事实密度（「强大」「无缝」这类形容词是否换成数字、命令或报错原文）；AI 腔清单类别是否还有残留；让没参与写作的同事只读成稿，能否说出「读完能做成什么事」。
 - 论文精读：每张主图是否都被讲到、图注是否被引用、有无遗漏面板；是否区分独立个体数与细胞 / 切片数、观察与因果、作者解释与新增假设；是否列出「已读与未获取材料」、未核查附件处是否说明；第⑥节是否给出可迁移环节与待验证设计；人工精读耗时 vs 生成加核对的耗时。
 - 工作流形态的产物是否稳定出现：例如 deep-research 是否每次都在 `.research/<name>/` 下留出 `prompts/`、`child_outputs/`、`logs/`、`raw/`、`final_report.md`。
@@ -844,17 +972,19 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 - 如果 agent 只凭自己的声明就宣布完成，而 git status 和测试报告不支持，回到做法 H 第 8 步的证据优先原则，把这一批次的结论作废重跑。
 - 如果某个本地批次同一断言连续失败 3 次还在本地重试，判定为模板/规则缺口，把那一批次升级到强模型，而不是继续消耗本地重试。
 - 如果装了 UI/UX 技能后，`uipro init --dry-run` 显示它要往一堆你不用的 agent 目录里写文件，或者你仍然每次口头重说同一套界面规范，先缩小到单个 agent 目录再用。
+- 如果出图技能每次失败都要你盲重试，而不是按 `diagnostics[].supportedFixes` 修，说明没用上它的收据机制。
+- 如果你要的是通用绘图编辑器或 Mermaid 主题，先换工具，不要在这个技能上继续加提示。
 - 如果一周内没有任何一项指标变化，或安装的插件与仓库实际规范冲突导致返工增加，就回到“只借鉴组织方式、不装具体内容”的用法。
 
-注意：`doctor`、`validate`、`npm test`、`claude plugin validate`、`npx @anthropics/skills-ref validate` 这类检查只能证明“技能或 mod 装得上、格式合法、不带危险命令”，不能证明“产出更好”。效果必须自己对照。
+注意：`doctor`、`validate`、`npm test`、`claude plugin validate`、`npx @anthropics/skills-ref validate`、`archify doctor`、`validate --json` 这类检查只能证明“技能或 mod 装得上、格式合法、不带危险命令、图能通过校验”，不能证明“产出更好”。效果必须自己对照。
 
 ## 常见坑
 
-- 整体 adopt：一次装多个技能包，导致上下文过载或规则冲突。AAS 提到 Antigravity 会因监控的 skill 目录过载上下文，需要选择性激活；feiskyer/claude-code-settings 的 FAQ 也建议精选技能，不要全装。做法 H、I 同理，先只装一个。
+- 整体 adopt：一次装多个技能包，导致上下文过载或规则冲突。AAS 提到 Antigravity 会因监控的 skill 目录过载上下文，需要选择性激活；feiskyer/claude-code-settings 的 FAQ 也建议精选技能，不要全装。做法 H、I、J 同理，先只装一个。
 - 重复安装：在同一个项目里同时用项目级安装和 Claude Code 插件市场装同一个技能包，skills 会出现两份。
 - 手拷 hooks：把仓库里的 `hooks/hooks.json` 直接拷进 `~/.claude/settings.json` 或 `~/.claude/hooks/hooks.json`，会导致重复执行和跨平台 hook 冲突；hooks 必须用安装器写。
 - 在用户主目录安装：项目级安装应在具体项目目录执行；v1.2.1 起 superpowers-zh 会拒绝在主目录安装，老版本会把 skills 写进 home 目录，污染所有项目。
-- 只信 README：很多技能包的 README 没有贴出 `SKILL.md` 正文，质量无法核验；只有安装命令和自述，没有效果数据。feiskyer/claude-code-settings 虽然技能、子代理、settings 模板都列得很全，但技能效果仍是作者描述，没有对照数据。`zh-tech-writing` 的 SKILL.md 与两个 references 未在材料中给出，14 条 AI 腔清单只有类别没有逐条文本；`biomedical-paper-reader` 的 SKILL.md、各 references 与 `evals/RESULTS.md` 的实际内容同样看不到；cline-pilot 的「四要素格式」和 6 项验收清单只存在于 `SKILL.md` / `references/*`，README 里没有；ui-ux-pro-max 的能力数字（192 条规则、79 种风格等）全是作者自述，演示素材被作者自己标注为非本 skill 产物。
+- 只信 README：很多技能包的 README 没有贴出 `SKILL.md` 正文，质量无法核验；只有安装命令和自述，没有效果数据。feiskyer/claude-code-settings 虽然技能、子代理、settings 模板都列得很全，但技能效果仍是作者描述，没有对照数据。`zh-tech-writing` 的 SKILL.md 与两个 references 未在材料中给出，14 条 AI 腔清单只有类别没有逐条文本；`biomedical-paper-reader` 的 SKILL.md、各 references 与 `evals/RESULTS.md` 的实际内容同样看不到；cline-pilot 的「四要素格式」和 6 项验收清单只存在于 `SKILL.md` / `references/*`，README 里没有；ui-ux-pro-max 的能力数字（192 条规则、79 种风格等）全是作者自述，演示素材被作者自己标注为非本 skill 产物；archify 的 star 数、Trending 排名、案例同样都是创作者口径，没有独立验证。
 - 忽略安全：安装任何第三方技能前先通读它的 `SKILL.md`，并跑自己运行时的 doctor/audit 工具。`genspark-claw validate` 会标记 `curl | bash`、base64 载荷和破坏性命令。mod 的风险面更大：它以与 Claude Code 同等权限在本机运行，且能改写或拒绝命令，安装前必须确认来源可信。cline-pilot 以代理身份驱动 Cline 跑任务，安装前同样先读它自己的说明。
 - 规则全量加载：rules 是始终加载的上下文，从 `rules/common` 加一个你实际使用的语言/框架包开始，不要全抄。
 - 技能描述没写清：`description` 只写“做什么”没写“什么时候用”，技能就不会在合适时机触发。
@@ -888,6 +1018,14 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 - 把教程当稳定 API：mods API 会随版本变化，教程照做能跑通，但每次加载时写进 `.claude-plugin/types/` 的类型声明才是你这个版本的权威依据，升级后要重新核对。
 - 只装在临时目录：让 Claude 自己写的 mod 只在当前会话加载、目录之后会被清理，要长期用必须把文件夹复制出去按普通插件安装。
 - 一个 mod 塞多个模块入口：`hooks/hooks.json` 的 `modules` 只指一个模块，多写不会变成多个 mod。
+- 出图失败就盲重试：`validate --json` / `deliver --json` 的失败输出是一个 JSON 对象，正确做法是只应用 `diagnostics[]` 中各 subject 的 `supportedFixes`，而且限制在两轮修正之内；视觉审查是另一件事，不要混在一起。
+- 把 `compare` 当成影响分析：Architecture Delta 只给 Before / Delta / After 的机器收据，README 明确它不推断影响、风险或可合并性；要判断风险得另外做。
+- 以为 `meta.locale` 会翻译你写的内容：它只本地化页面标题、Legend、状态/错误、a11y 和 HTML/SVG 的 `lang`；非内置语言（如 `es`）要提供 `meta.translations`，否则渲染器回退英文并披露这一事实。
+- 以为看图的同事也要装 Archify：产物是单个自包含 HTML，浏览器直接打开即可；但外链和地图链接需要联网。
+- 架构图用 `deployment-ownership` profile 却缺 authored 字段：owner、区域位置、私有数据库范围、具名跨界项缺任一项就 fail closed，不会隐式补全，也不检查真实基础设施。
+- 忽略出图技能的更新检查联网：它可能 GET 固定的 stable manifest 以显示可选更新提醒（自己不下载也不安装），成功后约 24 小时再查，失败后 6 / 24 小时重试；不想联网就设 `ARCHIFY_UPDATE_CHECK_DISABLED=1`。
+- 在 DSH 集成里用 Web Produced Files：DSH 集成要求 shell 文件使用精确的工作区路径。
+- 把材料当完整文档：本次调研在「与已有做法的关系」一节讲到 OpenCode 时被截断，Archify 在 OpenCode 上的支持细节没有给全，要用前自己打开仓库确认。
 
 ## 证据与来源
 
@@ -906,6 +1044,7 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 - “主 SKILL.md 放流程与规则、细则拆到 `references/` 按需加载、确定性格式修正交给外部 CLI”来自 leter/zh-tech-writing 的目录组织与写法，属可观察的仓库结构；“按需加载能减少上下文占用”是据此推断，材料没有对照数据。
 - cline-pilot 路线的全部内容——安装命令（`npx skills add https://github.com/gongdear/cline-pilot`、四种宿主 skills 目录的 `mkdir -p` + `cp -r`）、首次配置写入私有的 `references/local-config.md`、`assets/global-memory-bank-prompt.md` 冷启动门禁、两条冷启动路径、两阶段模型策略（初始化用强的长上下文付费模型，稳态切本地小模型）、`qwen3.8:27b` 与「7 模块 Java 后端交付 50+ 测试类」、`python3 scripts/session_report.py 15 /path/to/repo` 监控、证据优先于自我报告、decision-log 与 ≥2 个一致样本的蒸馏阈值、push/删除/写 DB/花钱/改全局配置先问、`npx @anthropics/skills-ref validate .` 与 `python3 -m py_compile` 自检、渐进披露布局——均来自调研《gongdear/cline-pilot》。该仓库为 MIT，91 stars；README 称两阶段策略「在生产 Java 后端上验证过」，但这些验证数据均为作者自述，仓库内没有可核对的基准、对比数据或第三方复现记录。「固定四要素格式」的逐字格式、6 项验收清单的具体条目、冷启动门禁与两条路径的逐字内容都在 `SKILL.md` 与 `references/*` 中，本次材料只到 README 一层；`session_report.py` 的参数含义原文未说明。该项目与 Cline 强绑定，若不用 Cline CLI，主要只能借鉴其设计原则（确定性脚本优先、证据优先于自述、学习闭环）。
 - ui-ux-pro-max 路线的全部内容——`npm install -g ui-ux-pro-max-cli`（旧的 `uipro-cli` 已过期）、`uipro init --dry-run` 与各 `--ai` 目标、`--global` 与插件市场两种装法、Trae 的 SOLO 模式与 Kiro/Copilot/Roo Code/KiloCode 的 slash command、自然语言调用示例、`scripts/search.py` 的 `--design-system`/`-f markdown`/`--domain`/`--stack` 参数与示例命令、Web 栈的版本意识规则、`--persist` 生成的 `design-system/<project>/MASTER.md` 与 `pages/*.md` 结构、第 9 步的检索提示词原文、8 条 PRE-DELIVERY CHECKLIST 原文、`uipro versions`/`update`/`uninstall`/`init --offline`——均来自调研《nextlevelbuilder/ui-ux-pro-max-skill》，即该仓库 README。其中的能力数字（192 条行业推理规则、79 种风格其中 50 种 active、192 套配色、74 组字体搭配、25 种图表类型、22 个技术栈指南、119 条 UX 指南）全部为作者自述，没有对照数据；演示素材被作者自己标注为非本 skill 产物；页面大量篇幅是付费版与自家产品推广。README 明确要求安装步骤由人执行、agent 应询问，以及脚本「只用标准库、不装依赖、不联网」，同样属作者声明。
+- archify 路线的全部内容——`npx skills add tt-a1i/archify -g`、Cursor 的非交互安装、`npx skills use tt-a1i/archify@archify --agent codex` 先试用、两段提示词原文、五种图型（Architecture / Workflow / Sequence / Data Flow / Lifecycle）与选型对照表、`node archify/bin/archify.mjs guide` 的两种调用、`doctor`/`demo`/`validate`/`preview`/`deliver` 命令链与 `--quality showcase`/`--json`/`--open`/`--no-open`、preview 的回环监听与失败保留 last-good、`compare architecture base.json head.json architecture-delta.html --json`、`meta.locale` 与 `meta.translations` 的本地化范围、查看侧快捷键与 `#focus=`/`#route=` 等稳定链接、`hermes skills install skills-sh/tt-a1i/archify/archify -y` 与 `dsh plugin --profile web add @tt-a1i/archify-dsh@0.1.0` 两个社区集成、更新检查的 24 小时 / 6 小时 / 24 小时节奏与 `ARCHIFY_UPDATE_CHECK_DISABLED=1`——均来自调研《tt-a1i/archify》，即该仓库 README（MIT，README 标注稳定版 `v3.0.1`）。它把 `validate --json` / `deliver --json` 的稳定规则码、精确 subject、实测证据与只含受支持修复手段的 `diagnostics[]`、两轮修正上限、原子替换交付、官方 Proof Lab 的 11 个已检入场景及其 JSON 源和验证收据写进了 README，是本手册里验收信号最具体的一条；但 star 数、Trending 排名、社区案例（团队协作、旅行行程、法律引证核查、合同审查、事故复盘、飞书/钉钉讨论）全部是创作者口径，缺独立验证，`preview` 与 `compare` 的持续产出能力、`deployment-ownership` profile 的 fail-closed 行为也只有 README 描述。本次调研在「与已有做法的关系」一节讲 OpenCode 时被截断，该部分内容不完整。
 - 文中提到的 star 数（如 anthropics/skills 179219、awesome-copilot 39,568、pro-workflow 2.9k、feiskyer/claude-code-settings 约 1.6k、zh-tech-writing 312、biomedical-paper-reader 31、cline-pilot 91）来自 metrics，不构成有效性证据。
 
 ## 依据的调研
@@ -924,3 +1063,4 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 - [Getting started with Claude Code mods](../research/radar/2026-10-02/720-getting-started-with-claude-code-mods.md)：值得一试，可以照原文从零搭一个约 80 行的 Claude Code mod（Token Weather），在本机小范围试，验证它能否把上下文占用、危险命令拦截、改动回放这类信息嵌进会话；给 try 而不是 adopt，是因为教程本身完整可照做，但 mods API 会随版本变化，且 mod 以与 Claude Code 同等权限在本机运行，需要先确认信任来源。
 - [gongdear/cline-pilot](../research/radar/2026-10-02/488-gongdear-cline-pilot.md)：值得一试，建议小范围试：照 README 给出的安装命令、首次环境配置和「冷启动用强模型、稳态用本地小模型」的两阶段流程，在一个已有小仓库上跑通一次「冷启动→小批次任务→脚本监控→证据验收」的闭环。理由是可照做的命令与流程在原文中已经比较具体，但 4 段回报格式、6 项验收清单等核心内容位于 SKILL.md 和 references/*，本次只拿到 README，且验证数据均为作者自述。
 - [nextlevelbuilder/ui-ux-pro-max-skill](../research/radar/2026-10-02/515-nextlevelbuilder-ui-ux-pro-max-skill.md)：值得一试，先在单个真实前端项目上按 README 的命令装一遍（npm 装 ui-ux-pro-max-cli → uipro init --ai <你的 agent>），并用 --design-system --persist 生成 MASTER.md + pages 覆盖的分层检索方式试一个页面：原文给出了可直接复制的安装命令、search.py 参数、检索提示词和提交前检查清单，属于本项目中少见的“给 agent 补一块专业知识”的可照做做法；但所有能力数字均为作者自述、演示素材被作者自己标注为非本 skill 产物，且页面大量篇幅是付费版与自家产品推广，所以先小范围试、别全面铺开。
+- [tt-a1i/archify](../research/radar/2026-10-02/527-tt-a1i-archify.md)：值得一试，先把它当作“把设计沟通做成可复用技能”的小范围试用对象：按 README 给出的安装命令和两段提示词，分别跑一次“从描述出图”和“从仓库出图”，并用 validate/deliver 的 JSON 收据衡量返工轮次是否下降。理由：安装、提示词、CLI 校验-预览-交付流程都是可直接照抄的，但全部证据来自项目自述（star 数、Trending 排名、案例均为创作者口径），缺少独立验证，不宜直接 adopt。
