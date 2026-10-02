@@ -10,6 +10,8 @@ export function loadCatalog(path: string) {
   for (const e of entries) {
     byId.set(e.id, e);
     if (!e.url) continue;
+    // 指向仓库子目录的条目（如某个示例扩展）只代表那一部分，不能把整个仓库标成已在清单
+    if (/^https?:\/\/(?:www\.)?github\.com\/[^/]+\/[^/]+\/(?:tree|blob)\//i.test(e.url)) continue;
     try {
       byKey.set(itemKey(e.url), e);
     } catch {
