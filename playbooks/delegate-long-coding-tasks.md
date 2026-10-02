@@ -1,0 +1,268 @@
+# 把一次长任务完整交给编码 agent：交底、完成线、停走规则与合并前审查
+
+> **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
+>
+> 解决的问题：让 Opus 5.5 在 Claude / Claude Code 里自主跑完一个长任务、少打断少返工，同时你仍守住破坏性操作和合并前的把关。
+> 先试这一步：挑一个手头的真实长任务，一句话交底整个任务并写明「完成」长什么样，再补一句什么情况下才需要停下来问你。
+> 最近修订：2026-10-02
+
+## 解决什么问题
+
+一次长任务跑到一半就停下、返工；上下文被摘要后你只能读滚动回放；它宣布完成时你没法确认是否真完成。本文给出一套在 Claude / Claude Code 里跑长任务的规程：一次性交底 + 明确完成线 + CLAUDE.md 停走规则 + TASKS.md 清单 + 子代理分工 + 合并前审查。
+
+所有做法出自一篇针对 Opus 5.5 的操作指南，收益表述全部来自厂商/作者单方主张、没有可复现的量化证据，建议先在一个真实长任务上小范围验证。
+
+## 适用与不适用
+
+适用：
+
+- 长、多步骤、有明确完成线的工作，例如贯穿大仓库的改动直到测试通过。
+- 大代码库的审计、迁移、跨服务评审，可拆给子代理并行做。
+- 信息在图表、示意图、日历截图里，需要问依赖空间位置关系的问题。
+- 需要先跑一轮合并前审查，或要成品文件（可分享的表格、文档）而不是大纲。
+
+不适用或需谨慎：
+
+- 这套做法强绑定 Opus 5.5 这一具体版本（原文开篇即讲 Opus 5.5 的三点行为差异），不要直接搬到其他模型上当作通用规律。
+- 长链分析类项目不要用「已答过的问题视为定稿」这条项目指令：后面的步骤可能暴露前面答案的错误。
+- 需要你每一步都参与的成对编程，不要用自主长任务的停走规则，改用做法 B。
+- 收益没有可复现的量化证据，按 try 使用，不要按 adopt 全面铺开。
+
+## 前置条件
+
+- 在 Claude 应用里，先确认模型选择器显示的是 Opus 5.5。
+- 在 Claude Code 里，项目根目录有或可新建 CLAUDE.md，按项目实际修改。
+- 你自己清楚验收标准，才能写出「完成」长什么样。
+- 破坏性命令的权限提示保持开启（原文明确要求）。
+- fast mode 是随 Opus 5.5 发布的研究预览功能，需要开启额外用量（extra usage），每 token 成本高于标准模式。
+
+## 操作步骤
+
+先选做法：
+
+- 做法 A（自主长任务）：任务长、多步骤、有明确完成线，你不想全程盯着。默认先试这套。
+- 做法 B（成对编程）：你希望每一步都参与，开始前一行计划、结束时一段简短回顾。CLAUDE.md 按做法 B 反向配置。
+
+原文说两种方式 Opus 5.5 都遵守。
+
+### 做法 A：让长任务自主跑
+
+**1. 一次性交底整个任务，并写明「完成」长什么样。**
+
+前提：你清楚验收标准。在 Claude Code 里用下面这段（原文示例，内容按你的任务改）：
+
+```
+Migrate the payment endpoints from the old client to the new one.
+Done means: every endpoint uses the new client, the old client is deleted, and the test suite passes.
+Stop and ask me only if a test fails for a reason you can't explain.
+```
+
+预期结果：它自己知道什么时候算完，不因为「要不要继续」反复停你。原文理由：Opus 5.5 在多步骤长任务上比 Opus 5 撑得更久，早期测试者让它跑数小时编码任务而几乎不用盯着。
+
+**2. 删掉「think carefully」「think step by step」这类话。**
+
+包括提示词里和已保存的指令里。前提：你用的确实是 Opus 5.5。原文理由：它每次回复前都会思考，并由自己决定思考多少。
+
+- 要快速回答简单问题时，直接写 “Answer directly.”。
+- 要在 Claude Code 里调整思考量，改 effort 设置，而不是写「think hard」。
+
+**3. 任务跑到一半想起补充要求，直接打字追加，不用重启。**
+
+在 Claude Code 里趁它工作时输入消息并按 Enter，例如：
+
+```
+Also keep the old endpoint names as aliases.
+```
+
+预期结果：长任务继续跑，不因补充要求重来。原文理由：现在长任务跑得久，重启代价更大。
+
+**4. 在 CLAUDE.md 里写清楚「什么时候停、什么时候继续」。**
+
+前提：项目根目录有或可新建 CLAUDE.md；按项目实际修改。原文原文：
+
+```
+When a step doesn't need my input, keep going. Put status notes in the same message as your next action.
+Stop and ask only when you can't continue without me, or before anything destructive: deleting data, force-pushing, or changing anything outside this repository.
+```
+
+预期结果：减少以 “Want me to continue?” 结束的停顿。原文补充：如果一次运行这样停下，回一句 “continue” 即可；如果经常这样，这条规则能减少停顿。
+
+注意：规则让它可以继续跑，就意味着你更要保留自己的把关——所以最后一行要保留「破坏性操作前先停」，并且破坏性命令的权限提示要保持开启。
+
+**5. 把任务清单放进文件里。**
+
+前提：任务会跑较久。指令原文：
+
+```
+Keep a checklist in TASKS.md. Tick each item when it's done, and add anything new you find.
+```
+
+预期结果：一眼看到做完什么、还剩什么。原文理由：长任务会填满上下文窗口，Claude Code 随后会摘要较早的回合；写在文件里的清单能熬过这个过程。读这个文件，而不是读滚动回放。
+
+**6. 大范围工作拆给子代理，并逐个核对证据。**
+
+前提：审计、迁移、跨大代码库评审这类任务。原文示例：
+
+```
+Audit every service in services/ for the retry bug in the linked issue.
+Give each service to its own subagent. When a subagent reports back, check its evidence before you accept it.
+Finish with one table: service, affected yes or no, and the evidence.
+```
+
+预期结果：收到一张「服务 / 是否受影响 / 证据」的表，且每条结论你都先看过证据再接受。原文理由：早期测试者让 Opus 5.5 协调多个并行子代理做长审计和迁移，几乎不用盯着。
+
+**7. 长任务结束后，先读「它需要你做什么」的部分。**
+
+比如它留给你决定的事、要你批准的改动，然后再读其余总结。原文理由：Opus 5.5 的进展更新和最终总结会说清做了什么、发现了什么、需要你什么。
+
+要改总结格式就在 CLAUDE.md 里写，例如：
+
+```
+End every run with three headings: Blocked on me, Changed, Found.
+```
+
+**8. 在人工评审之前先让它做一轮代码审查。**
+
+提示词原文：
+
+```
+Review the diff on this branch against main.
+List only problems you'd block the merge for. For each one, give the file and line, why it's wrong, and how to show it fails.
+```
+
+预期结果：拿到一份「会阻塞合并」的问题清单，每条带文件、行号、错在哪、怎么证明它失败。原文理由（属早期测试者主张）：一位早期测试者称 Opus 5.5 在最低 effort 下抓到的 bug 比 Opus 5 在高 effort 下还多，误报更少；它还会用平实语言解释改动，PR 描述更好审。
+
+**9. 要求它标注自己无法确认的东西。**
+
+在你的请求里加上：
+
+```
+Mark anything you couldn't confirm, and say where you looked
+```
+
+原文说这在 Claude 研究类回答和 Claude Code 里都适用。预期结果：你能分清哪些是查证过的、哪些只是它的推断。
+
+### 做法 B：成对编程
+
+**10. 反过来配置 CLAUDE.md。**
+
+前提：你希望每一步都参与。在 CLAUDE.md 里写成：开始前先给一行计划，结束时给一段简短回顾。原文说两种方式 Opus 5.5 都遵守。
+
+### Claude 应用里的补充做法
+
+**11. 先确认模型选择器显示的是 Opus 5.5。**
+
+**12. 直接附上图表/截图本身，不要手打数字。**
+
+前提：信息在图片里。附上并问一个具体问题，例如：
+
+```
+Which of these services call the billing API directly?
+```
+
+原文理由：Opus 5.5 读图表、示意图、截图更准且不需要额外步骤，也更擅长依赖位置关系的含义（箭头连接哪些框、两版示意图之间改了什么、日历截图里会议几点开始几点结束）。
+
+**13. 让它检查长文档的自相矛盾之处。**
+
+提示词原文：
+
+```
+Check this deck for anything that contradicts itself: numbers, dates and names. Quote each problem and say where it is.
+```
+
+**14. 直接要成品文件，不要大纲。**
+
+示例：
+
+```
+Make this a spreadsheet I can share: one row per vendor, with columns for cost, contract end date and owner.
+```
+
+原文理由：它做出的表格和文档在分享前需要的编辑比 Opus 5 少。
+
+**15. 在项目（Project）里声明「已答过的问题视为定稿」。**
+
+用于长对话中追加短问题变慢的情况。写进项目指令：
+
+```
+Once you have answered something, treat that answer as done. Focus on what I'm asking now, and don't go back over an earlier answer unless I ask about it or point out a problem with it.
+```
+
+适用条件（原文明确）：长链分析类项目不要加这条，因为后面的步骤可能暴露前面答案的错误。
+
+**16. 设计类任务点名你不想要的风格。**
+
+不要只说「别做得太平庸」（原文说这种笼统指令基本只是换一种默认风格）。示例：
+
+```
+Build a personal website with placeholder content.
+Don't use a cream or off-white background, italic accent words in headings, numbered "01 / 02 / 03" section labels, monospace labels, or pill-shaped buttons.
+```
+
+后续动作：做完后先看它改用了什么；如果也不满意，把它加进这个清单再要一次。
+
+**17. 来回式工作可以开 fast mode。**
+
+在 Claude Code 里输入 `/fast`。前提条件（原文明确）：这是随 Opus 5.5 发布的研究预览功能，需要开启额外用量（extra usage），每 token 成本高于标准模式；换来的是同一个模型的文本更早到达。适用于你逐条等回复的来回式工作，不适用于长任务自主跑。
+
+### 消息被安全策略拦截时
+
+**18. 知道怎么切回、怎么先被询问。**
+
+原文称 Opus 5.5 是首个带 Fable 级生物/网络安全防护的 Opus 模型；应用和 Claude Code 里大多数被标记的消息会转到较老的模型上继续，工作不中断；在源码中查找安全漏洞是被允许的，日常健康和教育问题也应正常。
+
+- Claude 应用：会看到以 “Switched to” 开头的提示和较老模型名，对话留在该模型上。要回到 Opus 5.5，在模型选择器里选它；如果那条消息还在对话里，可能再次被标记，开新对话可以避免。想先被询问，去 Settings → Capabilities，关掉 “Switch models when a message is flagged”，会看到一张带选项的 “paused” 卡片。注意：检查覆盖对话里的全部内容，包括文件和搜索结果，所以标记可能来自更早的内容而非你最后一条消息。
+- Claude Code：提示里会点名较老的模型，会话继续在该模型上。要切回，运行 `/model`；按两次 Esc 编辑上一条消息重试；想先被询问，运行 `/config` 修改 “Switch models when a message is flagged”；如果是误判，运行 `/feedback`。
+
+**19. 不要在回复里要求它复现内部推理。**
+
+这是会被拒的类别之一。改为要你需要的东西，例如：
+
+```
+Explain why you chose this approach in three sentences.
+```
+
+## 怎么判断变好了
+
+原文自带一份收尾清单，可以直接当检查表用，每一条都是可观察的：
+
+- 提问侧：任务写清了「完成」长什么样；提示词和保存的指令里没有 “think hard” 类句子；设计请求列出了要排除的风格；图表和截图是附件而不是重打的数字。
+- Claude Code 长任务侧：CLAUDE.md 写明何时停何时继续、破坏性操作前必停；破坏性命令的权限提示仍然开启；大型审计和迁移拆给了子代理；任务清单保存在 TASKS.md 里。
+- 核查侧：先读报告里「需要你」的部分；人工评审前先跑了一轮审查；研究类回答标注了无法确认的内容。
+- 拦截侧：知道怎么切回（模型选择器或 `/model`）；“Switch models when a message is flagged” 按你的意愿设置。
+
+另外可观察的：
+
+- 一次运行中途问你「要不要继续」的次数是否变少。
+- 子代理汇报是否附了可核对的证据，最终表是否完整。
+- 它标注的「无法确认」项，与你事后发现的盲区是否吻合。
+- 合并前审查给出的阻塞项里，多少是真问题、多少是误报。
+
+最小试用方式：挑一个你手头的真实长任务，按做法 A 的 1–9 步跑一遍，先不全面铺开。原文没有给出试用时长和量化阈值，试多久由你按任务长度决定。
+
+## 常见坑
+
+- 让它自主跑就放松把关。规则让它可以继续跑，就意味着你更要保留自己的把关；「破坏性操作前先停」这条必须留在 CLAUDE.md 里，破坏性命令的权限提示也要保持开启。
+- 靠读滚动回放看进度。长任务会填满上下文窗口，Claude Code 会摘要较早的回合；要看 TASKS.md。
+- 还在提示词里写「think hard / think step by step」。前提是你用的确实是 Opus 5.5；要控制思考量就改 effort 设置，简单问题直接写 “Answer directly.”。
+- 用「别做得平庸」这种笼统说法排除设计风格。原文说这基本只是换一种默认风格，要列具体的排除项。
+- 在长链分析类项目里加「已答过的问题视为定稿」。后面的步骤可能暴露前面答案的错误。
+- 在回复里要求复现内部推理。这是会被拒的类别之一。
+- 拦截后一直卡在原对话里。那条消息可能再次被标记，开新对话可以避免；标记也可能来自更早的内容（包括文件和搜索结果），不一定是最后一条消息。
+- 把 fast mode 当成默认。它是研究预览功能，需要额外用量、每 token 更贵，只适合逐条等回复的来回式工作。
+
+## 证据与来源
+
+全部做法来自 claude.dev 博客（作者 Addy Osmani，2026-09-22）的一篇 Opus 5.5 操作指南。文中的提示词、CLAUDE.md 规则、斜杠命令和收尾清单均按该文原文照抄。
+
+按证据强度分三类：
+
+- 原文明确的前提条件，可直接当规则用：fast mode 是研究预览功能、需要开启额外用量且每 token 成本更高；长链分析类项目不要加「已答过的问题视为定稿」；拦截检查覆盖对话里的全部内容，包括文件和搜索结果；要求复现内部推理会被拒。
+- 作者/厂商单方主张，没有可复现的量化证据：Opus 5.5 自主工作时间更长、会直白说明自己做了什么、每次回复前都会先思考；在多步骤长任务上比 Opus 5 撑得更久；读图表、示意图、截图更准；做出的表格和文档分享前需要的编辑更少；是首个带 Fable 级生物/网络安全防护的 Opus 模型。
+- 转述的早期测试者说法，二手且无数据：让它跑数小时编码任务几乎不用盯着；协调多个并行子代理做长审计和迁移几乎不用盯着；在最低 effort 下抓到的 bug 比 Opus 5 在高 effort 下还多、误报更少。
+
+因为收益表述全部来自厂商/作者一方，且强绑定 Opus 5.5 这一具体版本，这套做法按 try 使用，不要按 adopt 全面铺开。
+
+## 依据的调研
+
+- [Getting the most out of Opus 5.5 in Claude and Claude Code](../research/radar/2026-10-02/395-getting-the-most-out-of-opus-5-5-in-claude-and-cla.md)：值得一试，把这篇文章当作一份可直接照搬的 Opus 5.5 使用规程：在 Claude Code 里用「一句话交底 + 明确完成线 + CLAUDE.md 停走规则 + TASKS.md 清单 + 子代理分工 + 合并前审查」这套组合跑一个真实长任务，先小范围验证是否真的减少打断和返工。给 try 而不是 adopt，是因为所有收益表述都来自厂商/作者单方主张，且强绑定 Opus 5.5 这一具体版本，没有可复现的量化证据。
