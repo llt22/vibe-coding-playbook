@@ -4,9 +4,9 @@
 
 | 手册 | 解决的问题 | 先试这一步 | 最近修订 |
 |---|---|---|---|
+| [让 AI 在你项目里持续干活：搭 harness、补生产分层、定位它为什么卡住](build-agent-from-scratch.md) | 解决“AI 只在聊天框里说话、自建 Agent 不可靠不可控、出了问题只能靠回放提示词猜”三件事：补齐可操作的 harness 环境、补齐生产级分层，并在慢/卡/失败时用真实 telemetry 定位。 | 先把 harness 五件套（Tools / Knowledge / Observation / Action Interfaces / Permissions）按你当前的真实任务填一遍，缺哪项补哪项，然后跑一个真实小任务看它能不能自己闭环。 | 2026-10-03 |
 | [把编码 agent 从随手跑一次变成可控环境里反复跑](host-coding-agents.md) | 把编码 agent 从本机随手跑一次，变成在可控环境里按项目规则反复跑，并为每一项扩展做法给出可照做的步骤、验收信号和回退边界。 | 先挑一个可回退的真实项目，按做法 C 写短 CLAUDE.md、配 allow/ask/deny 权限和一个 PostToolUse 格式化 hook，用 Plan mode 跑通一次任务。 | 2026-10-02 |
 | [让 AI 跨会话记住项目背景：搭一个带记忆目录的工作文件夹](persistent-memory-for-coding-agents.md) | 解决 AI 每次开新会话都要重新交代背景、跨会话资料无法沉淀的问题。 | 先建一个独立的 `second-brain` 工作目录，在里面放 `memory` 子目录和一份写明记忆规则的 `CLAUDE.md`，只拿非敏感材料试 1～2 周。 | 2026-10-02 |
-| [让自建 agent 从能跑到可靠：先搭 harness，再补生产级分层](build-agent-from-scratch.md) | 你只在聊天框里用 AI，或自建 Agent 只能跑起来但不可靠、不可控；这份手册帮你搭好可操作环境，并用生产级分层补齐可靠性、安全、可观测与评估。 | 先跑通一个最小 agent loop（如 learn-claude-code 的 `python s01_agent_loop/code.py`），确认模型能通过工具执行动作，再决定补 harness 还是补生产级分层。 | 2026-10-02 |
 | [让 agent 在可测量的窄目标上爬坡：先立基线，再锁死只能下降的基准](performance-optimization-with-agents.md) | 怎么让 agent 只在能重复测量、有正确性判据的窄目标上做优化，并用只能变好的基准和独立复现防止收益回退。 | 挑一个有明显性能痛点、能用一条命令重复启动的任务，先手工跑 2–3 次量出基线波动范围，再让 agent 在同一个测量上动手。 | 2026-10-02 |
 | [让 AI 写码时你仍然做决定：用检查点边做边学](learn-while-coding-with-agents.md) | 在 Claude Code 这类 AI 编码工具里，如何通过分段检查点保留自己的方案判断和设计决策，避免变成只看结果的旁观者。 | 在一个小项目里安装 VibeWise 并运行 /vibe-wise:learn，让 Claude 实现一个小功能，完整走一遍 Build→Design→Implementation 检查点。 | 2026-10-02 |
 | [让模型用受控语言解释内容，让读者少追问](controlled-language-explanations.md) | 当你需要别人准确读懂一段模型输出或技术解释时，如何用受控语言约束模型的写法，并用可观察的读者反馈判断有没有变好。 | 挑一份需要别人读懂的解释性文本，让模型用 `Explain <要解释的内容> in ASD-STE100.` 改写一版，先自己并排读原版和改写版。 | 2026-10-02 |
