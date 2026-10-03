@@ -1,10 +1,10 @@
-# 让同一台机器上的多个编码 agent 共读一套规则
+# 给编码 agent 的上下文做一次可验证的减负与审查
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：同一台机器上同时用 Claude Code、Codex 等编码 agent 时，同一条规则要在每处各写一遍、两边行为还不一致；本手册说明如何用一份共享 AGENTS.MD 软链给多个 agent 共读，并先用可观察的方式验证规则真的被读到。
-> 先试这一步：挑一个最常用的 repo，建一个共享文件夹、写一份 AGENTS.MD，先只放一条一眼可验的规则（例如要求每次回复开头写某个固定词），按各工具文档软链给 Claude Code 和 Codex，用同一个日常任务各跑一遍，确认两个工具都读到了这份文件。
-> 最近修订：2026-10-02
+> 解决的问题：编码 agent 在真实任务里被工具输出、会话失忆、多工具规则分散和过时提示习惯拖累，如何用可验证的小步做法逐一改善。
+> 先试这一步：先挑一个正在用的项目，备份 CLAUDE.md 后运行 `/claude-api prompt-audit`，只记录它指出的条目、先不改动；如果上下文塞满更痛，就先做做法 A。
+> 最近修订：2026-10-04
 
 ## 解决什么问题
 
@@ -12,7 +12,9 @@
 
 还有一类浪费发生在机器层面：同一台机器上装了 Claude Code、Codex 等多个编码 agent，每个工具各维护一份自己的指令文件，同一条规则要写好几遍，而且两边行为还可能不一致。
 
-本手册把对应这几类浪费的做法合在一起：把工具输出挡在上下文窗口之外（Context Mode、headroom）、把「读很多、只判断一点」的略读外包给小模型（Quicksilver）、用持久记忆保住跨会话状态（claude-mem、mem0、cognee）、把执行计划写到磁盘并靠 hook 重注入（planning-with-files）、把团队 trace 固化成可复用技能（hivemind）、用录屏口述补上下文和反馈（blurt）、把 agent 规则集中成一份共享 AGENTS.MD 软链给同机多个工具共读（做法 L）。核心要求是：不只看节省比例，要用任务侧指标验证结果有没有变好。
+还有一类浪费发生在上下文配置本身：写进 CLAUDE.md 或 skills 的旧提示习惯（“逐步思考”“仔细检查你的工作”）可能在较新的模型上变成不必要的拖累。一条推文称 Anthropic 的 Lance Martin 给出 `/claude-api prompt-audit` 来扫描 skills 和 CLAUDE.md，但原文在说明处截断，命令输出与判读方式未知，只能小范围试。
+
+本手册把对应这几类浪费的做法合在一起：把工具输出挡在上下文窗口之外（Context Mode、headroom）、把「读很多、只判断一点」的略读外包给小模型（Quicksilver）、用持久记忆保住跨会话状态（claude-mem、mem0、cognee）、把执行计划写到磁盘并靠 hook 重注入（planning-with-files）、把团队 trace 固化成可复用技能（hivemind）、用录屏口述补上下文和反馈（blurt）、把 agent 规则集中成一份共享 AGENTS.MD 软链给同机多个工具共读（做法 L）、以及定期审查 CLAUDE.md / skills 里的过时指令（做法 M）。核心要求是：不只看节省比例，要用任务侧指标验证结果有没有变好。
 
 ## 适用与不适用
 
@@ -26,6 +28,7 @@
 - 你要做长时编码任务，计划需要挺过 /clear、崩溃和 compaction。
 - 你想让团队里多个 agent 复用已解决的问题，或想给 agent 加可编程的持久记忆。
 - 你本机同时使用两个及以上支持「项目/全局指令文件」约定的编码 agent（如 Claude Code、Codex），希望同一套规则只维护一份、两边都遵守。
+- 你在维护 CLAUDE.md 或 skills，里面还残留为旧模型写的提示习惯，想系统审查一遍再决定删不删。
 - 你愿意装 MCP server / 插件 / hook / 本地代理 / skill，并接受一次小范围试用。
 
 不适用：
@@ -41,6 +44,9 @@
 - 你的系统不支持符号链接。macOS / Linux 原生支持；Windows 需另想办法，做法 L 的原文没有给出 Windows 路径。
 - 你想照抄一份现成的规则文本或仓库链接。这条材料是二手转述，原文没给开源仓库链接、没给具体路径，也没给规则内容，路径必须按各工具当前文档自行确认。
 - 你不想引入 Postgres demo、Docker、Deeplake 账号或 600 MB 本地嵌入模型。
+- 你用的不是 Claude Code：`/claude-api prompt-audit` 是 Claude Code 内的斜杠命令，材料没有说其他工具可用。
+- 你希望命令自动帮你改写文件：原文截断，没有说明会产生修改建议或自动改写，不要预设。
+- 你对“旧指令拖累新模型”这个主张要求现成实验证据：目前只有一条推文的作者主张，没有对照实验、样本或指标。
 
 ## 前置条件
 
@@ -48,6 +54,7 @@
 - Node.js/npm 可用。Quicksilver 要 Node 18+；claude-mem 要 Node 20.0.0+，Bun 和 uv 缺失时会自动安装，SQLite 3 已捆绑；headroom 要 Python 3.10+；hivemind 要 Node >= 22.0.0；planning-with-files 安装走 npx skills。
 - 一个真实编码任务，最好本来就有大量工具调用，能对比前后差异。不要用玩具任务，否则看不出节省。
 - 做法 L 额外需要：本机确实同时使用两个及以上支持同类指令文件约定的编码 agent；系统支持符号链接（macOS / Linux 原生支持，Windows 需另想办法）。
+- 做法 M 额外需要：本机已安装并可正常使用 Claude Code；目标项目里已有 CLAUDE.md 或 skills 配置文件，否则没有可审查的对象；先备份当前 CLAUDE.md。
 - 各自的凭据与许可：
   - Quicksilver：到 console.typesafe.ai 申请一个 Jev key。内容会被发送到 TypeSafe 的 API，所以不要拿它处理不能给第三方的数据。
   - claude-mem：标准安装会要求浏览器登录（邮箱 magic link，无需信用卡）；不想要账号交互就显式传 --provider、设 CLAUDE_MEM_ONLINE_OPTIN=false，或在 CI / 非交互 shell 里运行。
@@ -75,6 +82,7 @@
 - 需要可编程、按 user_id 隔离的持久记忆 → 做法 H（mem0）。
 - 需要本地优先、知识图谱、无 LLM 也能检索 → 做法 I（cognee）。
 - 同一台机器上同时用 Claude Code 和 Codex，规则要在多处维护、两边行为还不一致 → 做法 L（共享 AGENTS.MD + 软链）。这条按「值得小范围试」对待，不要一上来就铺到所有 repo。
+- 主要痛点是 CLAUDE.md / skills 里堆着旧提示习惯，想先审一遍再决定删不删 → 做法 M（`/claude-api prompt-audit`，先只记录不改动）。
 
 这些做法可以叠加，但一次只加一个，否则分不清是哪个起了作用。
 
@@ -642,6 +650,31 @@ hivemind codex uninstall
 
 8. 只在一个 repo 上跑一到两周，不铺开到所有 repo。记录下面「怎么判断变好了」里的几个指标，再决定是否扩大范围。
 
+### 做法 M：审查 CLAUDE.md / skills 里的过时提示习惯（先只记录不改动）
+
+适用形态：你已经在用 Claude Code，并且项目里有 CLAUDE.md 或 skills 配置；你想检查里面是否还留着为旧模型写的提示习惯（例如“逐步思考”“仔细检查你的工作”），再决定删不删。这条材料只有一条推文，原文在命令说明处截断，按 study / 小范围试对待，不要当 adopt。
+
+1. 前提：本机已安装并可正常使用 Claude Code；目标项目里已经有 CLAUDE.md 或 skills 配置文件，否则没有可审查的对象。先保存当前 CLAUDE.md 的副本，方便回滚。
+
+2. 在关心的那个项目目录下打开 Claude Code 会话。
+
+3. 运行推文中给出的命令：
+   ```
+   /claude-api prompt-audit
+   ```
+
+4. 观察它对 CLAUDE.md 与 skills 的扫描结果。**注意**：原文在此截断，没有说明输出形式、是否给出修改建议、是否需要人工确认、是否真实存在、适用哪些模型版本。先只记录它指出的条目，不要预设它会自动改写文件。
+
+5. 依据扫描结果，逐条复核 CLAUDE.md 中的旧式指令（如“逐步思考”“仔细检查你的工作”），判断保留、改写还是删除。第 4、5 步的具体内容属于对推文主张的合理延伸，原文并未给出，执行时需自行判断。
+
+6. 做 A/B 小范围验证：把“逐步思考 / 自我检查”一类指令摘出，A 组保留原样，B 组删除或改写这些指令，用同一批 5–10 个真实任务各跑一遍。
+
+7. 如果命令运行失败或不存在，本条的可用部分只剩“定期审查 CLAUDE.md 里的过时指令”这一原则，此时应降级为 study，不要当 adopt。
+
+8. 与做法 L 的关系：做法 L 是把规则集中成一份共享 AGENTS.MD，再软链给多个工具；做法 M 是审查这份文件（以及各工具自己的 CLAUDE.md / skills）里的规则内容是否还适用于当前模型。两者可以组合：先集中，再审查；不要在审查清楚前急着铺开软链。
+
+9. 与 Context Mode「不要加激进简洁提示词」的关系：那条反对的是加激进的简洁约束；做法 M 审查的是旧式的“逐步思考 / 仔细检查”习惯。两者不是同一类指令，不直接冲突，但共同说明：提示词的增减都要靠任务侧指标验证，不能凭感觉。
+
 ### 核心用法：用代码思考（Think in Code）
 
 不管用哪种做法，关键动作是：让模型写脚本做分析，只 console.log() 结果，而不是把 50 个文件读进上下文再数函数。示例：
@@ -649,7 +682,7 @@ hivemind codex uninstall
 // Before: 47 × Read() = 700 KB.  After: 1 × ctx_execute() = 3.6 KB.
 ctx_execute("javascript", `
   const files = fs.readdirSync('src').filter(f => f.endsWith('.ts'));
-  files.forEach(f => console.log(f + ': ' + fs.readFileSync('src/'+f,'utf8').split('\\n').length + ' lines'));
+  files.forEach(f => console.log(f + ': ' + fs.readFileSync('src/'+f,'utf8').split('\n').length + ' lines'));
 `);
 ```
 注意：这里的 700 KB / 3.6 KB 和 47×Read() 是 README 里的说法，未经验证。
@@ -670,6 +703,7 @@ ctx_execute("javascript", `
 - planning-with-files：在同一个长时编码任务上做 A/B，让智能体把 phases 写进 task_plan.md 并靠 hook 每轮重注入，观察 /clear 或 compaction 后的重新定位轮数是否下降。原文自测数据：基准 96.7% 断言通过（29/30）、3/3 盲测 A/B 获胜、磁盘计划把重新定位从 13.3 回合降到 5.0 回合、hook 单次触发优化后 289ms。这些需要自己复现。
 - hivemind：先在一个仓库、一个 agent（如 Claude Code）上小范围试，用 .hivemind 限定捕获范围，再看 skillify 是否真的产出被复用的 SKILL.md。基准数据是作者自测。
 - 做法 L：这条材料没有给出任何工具侧指标，也没有命令可以读回执。唯一能用的是行为观察——两个工具是否真的读到了同一份文件、是否遵守同一条规则。
+- 做法 M：材料没有给出任何工具侧指标，也没有命令可以读回执；推文互动量（58 赞 / 2 转发 / 13 回复）只反映传播度，不是效果证据。
 
 任务侧指标：
 
@@ -684,6 +718,10 @@ ctx_execute("javascript", `
 - 行为不一致次数（做法 L）：两个工具在同一个任务上的输出/行为不一致次数，应下降。
 - 维护成本（做法 L）：修改一条通用规则时需要改动的文件数，应从「有几个工具/几个 repo 就改几处」降到 1 处。
 - 返工次数（做法 L）：因两个工具遵循不同规则而产生的返工次数，应下降。
+- 一次通过率（做法 M）：不需要返工的比例。
+- 人工纠正/追问次数（做法 M）：需要介入纠正或追问 agent 的次数。
+- 输出长度与 token 消耗（做法 M）：旧指令被指“增加拖累”，这里应能看到差别。
+- 反向校验（做法 M）：删掉检查步骤后错误率是否上升；若结果不变甚至更好，说明这些指令可能是冗余负担。
 
 最小试用方式：
 
@@ -697,6 +735,7 @@ ctx_execute("javascript", `
 8. planning-with-files：选一个跨多会话的真实长任务，在支持 hook 的宿主上执行，做 A/B，观察重新定位轮数。
 9. hivemind：先只在一个仓库、一个 agent 上安装，用 .hivemind 限定范围，看 skillify 产出的 SKILL.md 是否被复用。
 10. 做法 L：挑 1 个自己最常用的 repo，建一个共享文件夹，写一份 AGENTS.MD；里面先放一条可明确观察是否生效的独特规则（例如「改动代码后必须先运行测试再汇报」，或一个特定的输出格式要求）；按各工具文档把 AGENTS.MD 软链给 Claude Code 和 Codex；用同一个日常任务分别在这两个工具里跑一遍，先确认它们确实读到了这份文件，再观察正式规则是否被遵守；只在一个 repo 上跑一到两周，不铺开到所有 repo。
+11. 做法 M：挑一个正在用的项目，保存当前 CLAUDE.md 的副本；运行 `/claude-api prompt-audit`，记录它指出的条目（原文没保证它会自动改，所以先只记录、不改动）；把 CLAUDE.md 里“逐步思考 / 自我检查”一类指令摘出，做 A/B：A 组保留原样，B 组删除或改写这些指令，用同一批任务（建议 5–10 个真实任务）各跑一遍。
 
 试多久：
 
@@ -708,6 +747,7 @@ ctx_execute("javascript", `
 - planning-with-files 至少覆盖一次 /clear 或 compaction，再比较重新定位轮数。
 - hivemind 先在一个仓库一个 agent 上试，确认捕获范围和 skillify 质量后再扩展团队。
 - 做法 L 只在一个 repo 上跑一到两周。失败信号很明确：软链后任一工具的行为没有变化，说明链路没接上，此时先用一条一眼可验的规则确认「读到了没有」，再谈效果。
+- 做法 M 原文没有给时长，只能按任务数：建议 5–10 个真实任务做 A/B；如果命令运行失败或不存在，降级为定期审查原则。
 
 ## 常见坑
 
@@ -803,9 +843,19 @@ hivemind：
 - 适用条件是本机确实同时使用多个支持同类指令文件约定的编码 agent；只用单一 agent 时这条做法的收益不成立。
 - 本手册把它按「值得小范围试」而非「采纳」对待：不要一上来就铺到所有 repo。
 
+CLAUDE.md / prompt-audit 审查（做法 M）：
+
+- 来源是单条推文转述，且原文在“它会扫描你的技能、CLAUDE.md”处截断；命令是否存在、输出形式、是否自动改写、适用模型版本均未确认。
+- “Anthropic 的 Lance Martin 分享了这个方法”属转述，未附原始出处，无法核验。
+- “像‘逐步思考’和‘仔细检查你的工作’这样的旧习惯，在新模型上可能会增加不必要的拖累”没有任何对照实验、样本或指标支撑。
+- 推文互动量 58 赞 / 2 转发 / 13 回复只说明传播度，不是效果证据。
+- 不要预设它会自动改写文件；先备份、只记录、再小范围 A/B。
+- 适用范围仅使用 Claude Code 并维护 CLAUDE.md / skills 的用户；不涉及其他模型或工具链。
+- 如果命令运行失败或不存在，只保留“定期审查 CLAUDE.md 里的过时指令”这一原则，降级为 study。
+
 ## 证据与来源
 
-本手册合并了十份材料：mksglu/context-mode、UditAkhourii/quicksilver、AGIHunt/blurt、thedotmack/claude-mem、headroomlabs-ai/headroom、mem0ai/mem0、topoteretes/cognee、OthmanAdi/planning-with-files、activeloopai/hivemind，以及一条转述 Peter Steinberger（OpenClaw 作者）开源其个人 agent 配置的推文（@oliviscusAI）。以下逐条标注依据和性质。
+本手册合并了十一份材料：mksglu/context-mode、UditAkhourii/quicksilver、AGIHunt/blurt、thedotmack/claude-mem、headroomlabs-ai/headroom、mem0ai/mem0、topoteretes/cognee、OthmanAdi/planning-with-files、activeloopai/hivemind、一条转述 Peter Steinberger（OpenClaw 作者）开源其个人 agent 配置的推文（@oliviscusAI），以及一条关于 CLAUDE.md / prompt-audit 的推文（@RoundtableSpace）。以下逐条标注依据和性质。
 
 Context Mode（来自 README 与调研报告）：
 
@@ -881,6 +931,13 @@ hivemind（来自 README 调研）：
 - 本手册为这条材料补的判定指标（规则生效次数、重复交代次数、行为不一致次数、维护成本从多处降到 1 处、返工次数）、「先用一眼可验的规则确认链路」的步骤、「只在一个 repo 上跑一到两周」的试用范围，都是基于原文机制推导出的验证方式，不是原文给出的内容——原文没有给出任何验证方式或改善数据。
 - 与 OpenClaw 的关系原文完全没有说明，本手册不做假设。
 
+CLAUDE.md / prompt-audit（来自 @RoundtableSpace 的转述推文）：
+
+- 事实性内容：推文提出旧提示习惯（“逐步思考”“仔细检查你的工作”）在新模型上可能变成拖累；称 Anthropic 的 Lance Martin 给了修复方法：在 Claude Code 运行 `/claude-api prompt-audit`，扫描 skills 和 CLAUDE.md。原文在“它会扫描你的技能、CLAUDE.md”处截断；命令是否存在、输出形式、是否自动改写、适用哪些模型版本，材料里都没有交代。推文互动量 58 赞 / 2 转发 / 13 回复。
+- 只是作者/转述者主张：“像‘逐步思考’和‘仔细检查你的工作’这样的旧习惯，在新模型上可能会增加不必要的拖累”没有任何对照实验、样本或指标支撑；“Anthropic 的 Lance Martin 分享了这个方法”属转述，未附原始出处，无法核验。
+- 本手册为其补的最小试用方式和指标（备份、只记录不改动、A/B 5–10 个真实任务、一次通过率、人工纠正/追问次数、输出长度与 token 消耗、反向校验）是基于推文主张推导出的验证方式，不是原文给出的内容。
+- 适用条件：仅对使用 Claude Code 并维护 CLAUDE.md / skills 的用户有意义；不涉及其他模型或工具链。如果命令运行失败或不存在，则本条可用部分只剩“定期审查 CLAUDE.md 里的过时指令”这一原则，此时应降级为 study。
+
 ## 依据的调研
 
 - [mksglu/context-mode](../research/radar/2026-10-01/68-mksglu-context-mode.md)：值得一试，建议先在 Claude Code（或 Cursor）上做小范围试用：用 MCP-only 方式跑一个真实编码任务，对照 ctx_stats 的上下文节省与实际任务结果，再决定是否推广到团队。理由是它直指“工具输出塞满上下文 + 会话压缩后失忆”这两个具体痛点，安装与回退成本低；但 README 的 98% 节省数字、100x 说法和企业 logo 墙均为自述，缺少第三方验证，且 ELv2 许可对商用有限制。
@@ -893,3 +950,4 @@ hivemind（来自 README 调研）：
 - [OthmanAdi/planning-with-files](../research/radar/2026-10-01/571-othmanadi-planning-with-files.md)：值得一试，先用一条安装命令把 planning-with-files 装进 Claude Code 或 Codex 这类支持 hook 的宿主，在同一个长时编码任务上做 A/B：让智能体把 phases 写进 task_plan.md 并靠 hook 每轮重注入，观察 /clear 或 compaction 后的重新定位轮数是否下降。理由是原文给出了可照做的安装命令、三文件模式与 hook 生命周期，但这些效果数字全部来自项目自测，需要自己复现验证。
 - [activeloopai/hivemind](../research/radar/2026-10-01/604-activeloopai-hivemind.md)：值得一试，建议先在一个仓库、一个 agent（如 Claude Code）上小范围试：按 README 的安装命令接入、用 `.hivemind` 限定捕获范围、再看 skillify 是否真的产出被复用的 SKILL.md；它给出了可直接照做的安装/配置/触发步骤，但基准数据是作者自测，且默认把全部会话 prompt 与工具输出写进团队共享 workspace。
 - [@oliviscusAI: Peter Steinberger, the creator of OpenClaw, open-sourced his entire agent setup.](../research/radar/2026-10-02/708-peter-steinberger-the-creator-of-openclaw-open-sou.md)：值得一试，值得小范围试：在一台同时使用 Claude Code 和 Codex 的机器上，把 agent 规则集中成一份 AGENTS.MD，软链给两个工具共读，先验证同一条规则能否被两边自动遵守；给 try 而非 adopt，是因为原文只是第三方转述、且在“Every repo”处截断，仓库链接、具体路径和规则内容都没有，需自行按各工具文档补全。
+- [@RoundtableSpace: 你的 CLAUDE.md 实际上可能会让 Opus 5.5 变得更糟。](../research/radar/2026-10-04/1053-claude-md-opus-5-5.md)：值得一试，先在 Claude Code 里对现有 CLAUDE.md 与 skills 跑一遍 `/claude-api prompt-audit`，再逐条评估“逐步思考”“仔细检查你的工作”这类旧指令是否该删；因为推文主张这类旧习惯在新模型上反而增加拖累，且给出了一个可直接执行的审查命令，但原文被截断、命令行为与判读方式均未说明，只能小范围试。
