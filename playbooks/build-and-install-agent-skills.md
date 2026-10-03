@@ -1,9 +1,9 @@
-# 给编码 agent 装技能：一次只装一个，用对照验证再决定留下
+# 先小范围试装技能做对照，再让 agent 观察你的重复摩擦并沉淀成技能
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：解决「想给编码 agent 补规范，但整包采用后上下文更乱、也无法判断是否真的减少了返工」的问题。
-> 先试这一步：选一个非关键项目和一类重复任务，只装一个现成技能（做法 A；只想要一个 Markdown 技能可用做法 V 的一行 curl），同一任务做有技能／无技能的对照，一周后再决定是否留下。
+> 解决的问题：你装了技能却说不清它是否真的减少了返工，也发现不了自己反复在纠正、反复在手工做的那类摩擦该沉淀成什么技能。
+> 先试这一步：挑一个非关键项目的一类重复任务，只装一个技能，同一输入做有/无技能各 3 次对照；对照有效后，再在 `CLAUDE.md` 里加上 task-observer 的激活指令，让它观察你怎么用技能。
 > 最近修订：2026-10-03
 
 ## 解决什么问题
@@ -12,7 +12,7 @@
 
 如果你只需要给 Claude Code 装一个 Markdown 技能，还可以走更小的一条路（做法 V）：按 README 给的一行 curl 命令把某个 `skills/<name>/SKILL.md` 装进项目的 `.claude/skills/` 或全局的 `~/.claude/skills/`，重启会话后用一次解释类请求验证它是否按 `description` 自动加载；装完先打开这个 `SKILL.md` 读实际提示词，再决定值不值得沉淀成本团队的写法。
 
-同一套对照方法也适用于中文技术文档的写作与审稿、单篇论文的精读。给 agent 补一块 Postgres 领域知识与版本化官方文档检索（做法 O）；在已获授权的漏洞挖掘或外部红队场景里，按主题自动加载一套安全技能库，并在提交任何发现之前过 7-Question Gate（做法 P）；把读题分析、代码实现、文档撰写这类多步复杂任务拆成三个阶段，每阶段绑定固定交付物和阶段内只读门禁，不许攒到最后才质检（做法 Q）；用一套小而可组合的工程技能集，把「动手前先对齐、建共享语言、建反馈回路、管设计」做成可重复实践（做法 R）；需要 Google 产品与技术（Cloud、AI/ML、基础设施、数据库与分析、开发者工具、管理工具、安全与身份、Web/应用托管、广告、分析等）的技能时，从 google/skills 按任务只装一个（做法 S）；需要让 agent 检索中国金融市场数据时，装 china-market-data 并检查数据来源与时间戳（做法 T）；需要把 iOS/Android 模拟器与真机画面接进 Codex 聊天、让 Codex 直接读日志和性能数据时，装 Mobile Dev（做法 U）；需要只装一个 Markdown 技能、并用一次解释类请求验证它是否按 `description` 自动加载时，装 agentic-dev-kit 的 `explain`（做法 V）。如果你还需要给 agent 补模型端点、权限或搜索能力，再用配置模板单独补，而不是整包采用。
+同一套对照方法也适用于中文技术文档的写作与审稿、单篇论文的精读。给 agent 补一块 Postgres 领域知识与版本化官方文档检索（做法 O）；在已获授权的漏洞挖掘或外部红队场景里，按主题自动加载一套安全技能库，并在提交任何发现之前过 7-Question Gate（做法 P）；把读题分析、代码实现、文档撰写这类多步复杂任务拆成三个阶段，每阶段绑定固定交付物和阶段内只读门禁，不许攒到最后才质检（做法 Q）；用一套小而可组合的工程技能集，把「动手前先对齐、建共享语言、建反馈回路、管设计」做成可重复实践（做法 R）；需要 Google 产品与技术（Cloud、AI/ML、基础设施、数据库与分析、开发者工具、管理工具、安全与身份、Web/应用托管、广告、分析等）的技能时，从 google/skills 按任务只装一个（做法 S）；需要让 agent 检索中国金融市场数据时，装 china-market-data 并检查数据来源与时间戳（做法 T）；需要把 iOS/Android 模拟器与真机画面接进 Codex 聊天、让 Codex 直接读日志和性能数据时，装 Mobile Dev（做法 U）；需要只装一个 Markdown 技能、并用一次解释类请求验证它是否按 `description` 自动加载时，装 agentic-dev-kit 的 `explain`（做法 V）；已经装了几个技能、想持续发现自己反复在纠正或手工重复的那类摩擦时，装 task-observer 这个元技能，让它在会话里并行观察你如何使用其它技能，产出观察日志和 staged 更新（做法 W）。如果你还需要给 agent 补模型端点、权限或搜索能力，再用配置模板单独补，而不是整包采用。
 
 如果反复出现的是这四类失败——agent 没做我要的、agent 太啰嗦、代码跑不起来、造出一坨泥——做法 R 的对应手段分别是：动手前用拷问对齐、建一份共享术语表、补反馈回路（静态类型 / 浏览器访问 / 自动化测试）、每天投资设计。
 
@@ -41,7 +41,9 @@
 - 你使用 Google Cloud、BigQuery、GKE、IAM、SecOps、Google Ads 等 Google 产品与技术，想给 agent 补一块可安装的 Google 相关技能（做法 S）；
 - 需要中国股票市场数据检索与初步整理，且宿主能执行本地 Python（Cursor、Claude Code、Codex 等），愿意按数据边界核对来源与时间戳（做法 T）；
 - 在 Apple Silicon Mac 上用 Codex desktop，想把 iOS/Android 模拟器或真机画面接进聊天，让 Codex 读日志、检查元素、录制并对比性能（做法 U）；
-- 已在用 Claude Code，想只装一个 Markdown 技能（做法 V：agentic-dev-kit）、用一次解释类请求验证它是否按 `description` 自动加载，并且愿意装完先打开 `SKILL.md` 读实际提示词再判断。
+- 已在用 Claude Code，想只装一个 Markdown 技能（做法 V：agentic-dev-kit）、用一次解释类请求验证它是否按 `description` 自动加载，并且愿意装完先打开 `SKILL.md` 读实际提示词再判断；
+- 已经在用 Claude Code（桌面版或命令行）或 Cowork，并且已经装了几个技能、想让 agent 持续发现自己「重复做或反复纠正」的地方，把它沉淀成新建技能或对已有技能的改动（做法 W）；
+- 愿意在 `CLAUDE.md`（或平台等价文件）里加一段激活指令，并且每周安排固定时间复核观察日志（做法 W）。
 
 不适用：
 
@@ -79,7 +81,12 @@
 - 期待 Mobile Dev 接管 App 构建、安装、启动，或指望它给出现成的性能提升数字（做法 U）；
 - 期待 README 展示技能正文或效果数据（agentic-dev-kit 的 README 只列了一个 `explain` 技能，没有展示任何一个 `SKILL.md` 的内容，做法 V）；
 - 不能访问 raw.githubusercontent.com 又不愿改用 clone + cp 方式安装（做法 V）；
-- 想一次装完一整套覆盖 SDLC 各阶段的技能（README 的技能表当前只有一个 `explain`，别的技能名会 404，做法 V）。
+- 想一次装完一整套覆盖 SDLC 各阶段的技能（README 的技能表当前只有一个 `explain`，别的技能名会 404，做法 V）；
+- 只有少数几个技能、平时也少用，直接手改技能更快（做法 W 的作者自己划的边界）；
+- 平台没有文件系统访问（Claude.ai web、桌面/手机 Claude Chat）却想要完整体验——这条路径只提供 handoff doc 模式（做法 W）；
+- 只装 `SKILL.md`、不装 `references/` 和 `scripts/`，或者装完不加激活指令——技能能跑但降级，而且仅靠 `description` 匹配会严重欠触发（做法 W）；
+- 想让它自动改你已安装的技能——它只会产出 staged 更新，必须你复核并安装后才生效（做法 W）；
+- 期待 README 给出观察质量、误报率或改善幅度的数据（材料只到 README 一层，做法 W）。
 
 ## 前置条件
 
@@ -108,10 +115,11 @@
 - 走 china-market-data 路线（做法 T）时额外准备：Node.js 22.20+ / npm；Python 3.9+；网络可访问数据源；一个可写目录输出 JSON；目标宿主能执行本地 Python；iwencai 入口需要自备 `IWENCAI_API_KEY`，配置方法见 `SKILL.md#prerequisites`；不要把 Key、Cookie 或会话文件提交到仓库。
 - 走 Mobile Dev 路线（做法 U）时额外准备：Codex desktop，运行在 Apple Silicon Mac 上；使用 Codex 自带 Node runtime，不需要插件构建或 `npm install`；该仓库当前为 private，安装需要 GitHub 读权限且本机 Git 认证可用；按平台准备 Xcode 26+（真机 27+）与 simulator runtime、Android SDK platform-tools 与 emulator、已运行的 Metro server、宿主 WebCodecs 支持；部分性能能力还要 iOS 17.4+/Android 12+、development-signed 且带 `get-task-allow`、developer disk image 已挂载、Xcode/LLDB detached。
 - 走 agentic-dev-kit 路线（做法 V）时额外准备：本机已安装 Claude Code；走一行 curl 安装时需能访问 raw.githubusercontent.com，否则改用 clone + cp；一个可回滚的小项目，项目级安装要在项目根目录执行。
+- 走 task-observer 路线（做法 W）时额外准备：走命令行安装需要 Node.js（Vercel 的 skills CLI）；把 `SKILL.md`、`references/`、`scripts/` 三部分放在一起；一个作为观察日志落盘位置的共享文件夹；能在 `CLAUDE.md`（或平台等价文件）加激活指令，或安装 session-start hook；愿意安排定期的复核会话；完整体验需要文件系统访问（Cowork 含 Dispatch、桌面版 Claude Code），Claude.ai web 与桌面/手机 Claude Chat 只能走交接文档模式。
 
 ## 操作步骤
 
-怎么选：先做做法 A；A 里某个技能确实有效、且你有一件每周重复且规范明确的工作，再做做法 B；需要把外部文档变成智能体知识资产时用做法 C；需要给 Claude Code 补模型端点、权限、网页搜索时用做法 D；要写或审中文技术文档用做法 E；要精读单篇论文用做法 F；要给自己写一个把会话状态嵌进界面的 Claude Code mod 时用做法 G；已经在用 Cline CLI、想让 agent 代理长任务并用证据验收时用做法 H；要给 agent 补一块 UI/UX 设计知识时用做法 I；需要把一句话描述或一个代码仓库变成可交互的单文件 HTML 图时用做法 J；需要把自然语言需求或已有的 draw.io / Mermaid / Excalidraw 源文件改成自包含的 HTML+SVG 图、并让它长得像你的品牌时用做法 K；面对一个很大的插件市场、想按任务类型匹配模型档位并用现成评测做筛检时用做法 L；要把一本反复查阅的技术书或一份内部文档变成按需加载的技能时用做法 M；要把模糊想法写成可独立跑的任务书，或给破坏性操作加闸门、给文档与记忆做收尾对齐时用做法 N；要给 agent 补 Postgres 领域知识与版本化文档检索时用做法 O；在已获授权的漏洞挖掘或外部红队场景里，要让 agent 按主题自动加载安全技能库并在提交前过闸门时用做法 P；要把一道多步复杂任务拆成“分析 → 实现 → 交付”三阶段、每阶段过门禁再往下走时用做法 Q；想要一套小而可组合、跨模型可用的工程技能集时用做法 R；需要给 agent 补 Google 产品与技术（Cloud、AI/ML、基础设施、数据库与分析、开发者工具、管理工具、安全与身份、Web/应用托管、广告、分析等）的技能时用做法 S；需要中国金融数据检索与初步整理、且宿主能执行本地 Python 时用做法 T；在 Apple Silicon Mac 上用 Codex desktop、想把移动端模拟器或真机画面接进聊天时用做法 U；只需要给 Claude Code 装一个 Markdown 技能、并用一次解释类请求验证它是否按 `description` 自动加载时用做法 V。
+怎么选：先做做法 A；A 里某个技能确实有效、且你有一件每周重复且规范明确的工作，再做做法 B；需要把外部文档变成智能体知识资产时用做法 C；需要给 Claude Code 补模型端点、权限、网页搜索时用做法 D；要写或审中文技术文档用做法 E；要精读单篇论文用做法 F；要给自己写一个把会话状态嵌进界面的 Claude Code mod 时用做法 G；已经在用 Cline CLI、想让 agent 代理长任务并用证据验收时用做法 H；要给 agent 补一块 UI/UX 设计知识时用做法 I；需要把一句话描述或一个代码仓库变成可交互的单文件 HTML 图时用做法 J；需要把自然语言需求或已有的 draw.io / Mermaid / Excalidraw 源文件改成自包含的 HTML+SVG 图、并让它长得像你的品牌时用做法 K；面对一个很大的插件市场、想按任务类型匹配模型档位并用现成评测做筛检时用做法 L；要把一本反复查阅的技术书或一份内部文档变成按需加载的技能时用做法 M；要把模糊想法写成可独立跑的任务书，或给破坏性操作加闸门、给文档与记忆做收尾对齐时用做法 N；要给 agent 补 Postgres 领域知识与版本化文档检索时用做法 O；在已获授权的漏洞挖掘或外部红队场景里，要让 agent 按主题自动加载安全技能库并在提交前过闸门时用做法 P；要把一道多步复杂任务拆成“分析 → 实现 → 交付”三阶段、每阶段过门禁再往下走时用做法 Q；想要一套小而可组合、跨模型可用的工程技能集时用做法 R；需要给 agent 补 Google 产品与技术（Cloud、AI/ML、基础设施、数据库与分析、开发者工具、管理工具、安全与身份、Web/应用托管、广告、分析等）的技能时用做法 S；需要中国金融数据检索与初步整理、且宿主能执行本地 Python 时用做法 T；在 Apple Silicon Mac 上用 Codex desktop、想把移动端模拟器或真机画面接进聊天时用做法 U；只需要给 Claude Code 装一个 Markdown 技能、并用一次解释类请求验证它是否按 `description` 自动加载时用做法 V；已经装了几个技能、想让一个元技能在你的会话里并行观察你怎么用它们、把反复出现的摩擦沉淀成新建技能或已有技能的 staged 改动时用做法 W。
 
 做法 J 与 K 都出图，区别是：J 出带 JavaScript 交互的单文件 HTML，验收靠 `validate`/`deliver` 的机器收据；K 默认出无 JS、无外部图片依赖的静态 HTML+SVG，验收靠品牌 onboarding 阶段的对比度校验和 fidelity receipt，以及你自己看产物能不能交付。要交互选 J，要品牌一致性和静态可交付选 K。
 
@@ -119,13 +127,17 @@
 
 做法 B 与 R 都涉及“自己组织技能”，区别是：B 是把你自己的重复工作写成单个 `SKILL.md`；R 是先用别人已经拆好的一套技能集。只有一件重复工作先用 B；有一整类跨会话的工程习惯要先固化，先用 R。
 
+做法 W 与 B、R 的关系：B 是你在已经知道自己要固化什么之后动手写单个 `SKILL.md`；R 是先用别人拆好的一整套技能集；W 不替你写技能，也不改你已装的技能——它在你的会话里并行观察你如何使用其它技能，产出观察日志和 staged 更新，由你复核后安装，用来持续发现「该写成技能的是什么」。已经有明确的重复工作要固化用 B；想先固化一整类工程习惯用 R；想持续发现自己漏掉的摩擦用 W。
+
 做法 A 与 V 都涉及“装一个别人的技能做对照”，区别是：A 走插件市场或 `npx skills add`，装上的是一个技能包（可能带 skill、子代理、命令、hook）；V 只把单个 `SKILL.md` 拷到 `.claude/skills/` 或 `~/.claude/skills/`，不装仓库、不装插件，代价小但收益上限也小，而且必须先打开文件读实际提示词，才谈得上是否按 B 沉淀成团队写法。想验证“这类技能到底有没有用”先做 A；只想先看一个 Markdown 技能长什么样、或想给自己写第一个 `SKILL.md` 找参照，用 V。
 
 做法 T 与 A 的关系：同样是装一个技能包做对照。需要中国金融数据检索、且宿主能执行本地 Python 时用 T；只能聊天不能执行脚本、要直接驱动交易、或想拿数据做投顾建议时不要用。
 
 做法 U 与 A 的关系：它同样是装一个现成插件做对照，区别是绑定 Codex desktop + Apple Silicon Mac + 私有仓库访问权，解决的是移动端模拟器/真机的观测与诊断，不接管构建、安装、启动。
 
-E、F、G、H、I、J、K、L、M、N、O、P、Q、R、S、T、U、V 都必须套用 A 的对照方法，不要跳过验证直接纳入常规流程。
+做法 W 与 A 的关系：它同样要按 A 的对照方法验证——先有过「装技能是否真的减少返工」的判断，再让元技能去观察你的用法；区别是 W 的产出的不是某类任务的产出改善，而是「哪些摩擦该被沉淀成技能」这份清单，以及一批需要你自己安装才生效的 staged 更新。
+
+E、F、G、H、I、J、K、L、M、N、O、P、Q、R、S、T、U、V、W 都必须套用 A 的对照方法，不要跳过验证直接纳入常规流程。
 
 ### 做法 A：先用现成技能包做小范围试装（推荐先做）
 
@@ -1780,6 +1792,58 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 
 预期：你能说清这个技能是被自动触发的还是被你点名触发的、它的产出是否符合 `description` 描述的形态；说不清就不要保留。
 
+### 做法 W：让一个元技能观察你怎么用技能，把重复摩擦沉淀成技能改动（可选，按 A 的对照法验证）
+
+定位：task-observer（仓库 `rebelytics/one-skill-to-rule-them-all`）是一个「元技能」：它本身不完成具体工作，而是在你的 Claude 会话中并行运行，观察你如何使用其它技能，产出结构化观察日志，并提出两类建议——新建技能候选、修改已有技能。作者称它是 Augmented Expertise 方法论的落地实现。关键设计：它不直接改动你已安装的技能，流程是「会话中观察 → 写入观察日志 → 人工复核 → 生成 staged 更新 → 你安装后才生效」；作者也强调只装文件不等于激活。与做法 B、R 的关系见前面「怎么选」。
+
+1. 取文件。前提：三个部分必须放在一起。下载最新 release 附带的 `.skill` 包，或把仓库下载为 ZIP（Code → Download ZIP）/ clone。预期：`SKILL.md`、`references/`、`scripts/` 都在。只装 `SKILL.md` 也能跑但会降级，技能会提示缺了哪些文件。
+
+2. 按平台安装。命令行安装（Vercel 的 skills CLI，需要 Node.js）：
+
+   ```bash
+   npx skills add rebelytics/one-skill-to-rule-them-all --skill task-observer
+   ```
+
+   加 `-g` 可安装到你的所有项目。Claude 应用（web、桌面、手机、Cowork）：在 Settings → Customize 上传 `.skill` 包（或把 `SKILL.md`、`references/`、`scripts/` 放进一个文件夹再打包上传）。Claude Code：把文件夹放到 `.claude/skills/task-observer/`（项目级），或放到你的用户级技能目录，保留 `references/`、`scripts/` 子目录。其它系统：按平台要求保持目录结构不变，让 AI 引导你配置。预期：技能落在你点名的位置，目录结构完整。
+
+3. 激活（这一步最容易漏，只安装不够）。把 `references/environments.md` 里的激活指令加进你的 `CLAUDE.md`（或平台等价文件），或者安装 session-start hook。理由：仅靠 `description` 匹配会严重欠触发。
+
+4. 在新会话里验证它真的会被调用。前提：安装所在的那个会话无法证明它生效。预期：在**新会话**里确认技能在第一次工具调用**之前**就被调用。
+
+5. 跑几轮真实工作，然后看日志目录。观察日志落在：
+
+   ```text
+   [你的共享文件夹]/skill-observations/observation-log/
+   ```
+
+   一条观察一个小文件；建议的技能更新落在：
+
+   ```text
+   [你的共享文件夹]/skill-updates/
+   ```
+
+   硬性外部信号：几轮真实工作后 `skill-observations/observation-log/` 还不存在，说明激活从未发生——先解决激活，再谈效果。
+
+6. 每次会话结束问一句。原文给的提示词：
+
+   ```text
+   Any observations logged?
+   ```
+
+   作者说这一问有时会让技能补出之前没记下来的改进点；他自己的习惯是每次归档会话时都问一次。
+
+7. 安排定期复核会话，应用所有未处理的观察。作者的排期是周一、周三、周五早上，按自己需要调整。规则：交互式复核里你逐条批准每个改动；定期复核只把「不需要你决策」的观察应用到 staged 副本；在你安装更新包之前，任何改动都不会上线。
+
+8. 利用跨领域原则日志。不属于某个具体技能的观察会被记成 cross-cutting principles，放在单独的日志里；新建或更新任何技能时都会自动对照这些原则检查。用得越久，整个技能库的质量下限越高。
+
+9. 知道平台差异。Cowork（含 Dispatch）和桌面版 Claude Code 是完整体验，观察日志写到文件系统、跨会话留存。Claude.ai web、桌面/手机 Claude Chat 没有文件系统访问，走「handoff doc 模式」：会话结束产出一份结构化交接文档，你另开一个会话用它去更新技能。
+
+10. 不确定怎么配就先别装。把仓库内容（技能、README、用户指南）直接喂给你用的 AI，让它按你的具体环境给出配置方案；即使平台不支持 skills，这套方法论也能套到 AI 能访问的其它知识库上。
+
+作者给的自检信号：一个坑你存进项目记忆超过一次，或在多个项目里都出现，它就已经不是项目问题、而是技能问题了。项目记忆（Claude Code Projects 的 project memory）自动写入、作为指令生效、随项目删除、只作用于单个项目；task-observer 把反复出现的摩擦转成可复用技能的改动，进入所有加载该技能的项目，且中间有人工复核。
+
+预期：你能说清哪一条观察被你接受并变成了技能改动、以及它替掉了你原本手工重复做的哪件事；说不清就不要保留。
+
 ## 怎么判断变好了
 
 最小试用方式：
@@ -1804,7 +1868,8 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 - Google 技能类（做法 S）：在隔离环境或测试项目中，用 `npx skills add google/skills` 只选一个与当前工作最相关的技能（如 BigQuery 优化或 gcloud CLI）；若用 Claude Code，按插件方式只安装一个插件。执行一个具体任务，记录是否减少查文档或手写命令的时间、命令/配置正确率、需要人工纠正次数、权限申请次数；与未使用技能时做对照；若没有对照，至少记录使用前后同一类任务的耗时和返工次数。不要在正式环境直接试高权限技能；
 - 金融数据类（做法 T）：在支持本地 Python 执行的 Agent（如 Claude Code 或 Cursor）中按第 1–2 步安装并初始化，然后直接问：“贵州茅台现在的价格、PE、PB、市值和换手率”，检查返回结果是否包含数据来源、行情时间、抓取时间，以及是否区分缺失值与 0。也可在技能根目录直接运行 `python3 scripts/tencent_quote.py sh000001 sz000001 510300 --output quotes.json`，然后查看 `quotes.json` 是否包含上述字段；
 - 移动端调试类（做法 U）：在一台 Apple Silicon Mac 上装好 Xcode 26+ 与一个模拟器 runtime，确认能访问该私有仓库后执行安装命令，新开 chat，从侧边栏打开 Mobile Dev，选一个模拟器让它启动，然后让 Codex 执行 `Build and run my Expo app in the simulator beside this chat.`，再打开 Logs 确认能读到 iOS unified logs / Android logcat / Metro console。建议先拿一个 RN/Expo 或 SwiftUI 的小项目试，不要直接上主力项目；若拿不到仓库访问权或没有 Apple Silicon Mac，就跳过；
-- Markdown 技能类（做法 V）：在一个小项目里按第 1 步装入 `explain`，重启 Claude Code，提一个「解释这段代码」类型的请求，观察技能是否按 `description` 自动加载；若没触发，再显式点名该技能，以区分「没匹配上」和「技能没装成」；然后打开 `.claude/skills/explain/SKILL.md` 读实际提示词，只有这一步有正面结果才考虑推广。
+- Markdown 技能类（做法 V）：在一个小项目里按第 1 步装入 `explain`，重启 Claude Code，提一个「解释这段代码」类型的请求，观察技能是否按 `description` 自动加载；若没触发，再显式点名该技能，以区分「没匹配上」和「技能没装成」；然后打开 `.claude/skills/explain/SKILL.md` 读实际提示词，只有这一步有正面结果才考虑推广；
+- 元技能类（做法 W）：选一个你会连续用几天的 Claude Code 项目，按第 2 步安装（或先把仓库内容喂给 AI，让它按你的环境给配置），按第 3 步在 `CLAUDE.md` 加激活指令，然后正常干活 3–5 个会话，中间照常结束会话，最后安排一次复核会话；先过生效验证（新会话里技能在第一次工具调用前被调用、`skill-observations/observation-log/` 出现文件），再看产出。
 
 可观察的指标：
 
@@ -1829,6 +1894,7 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 - 金融数据类（做法 T）：数据获取成功率（能成功返回 JSON 而非报错）；输出是否携带报价来源、行情时间和抓取时间；失败时是否明确报错而非返回空数据；更新技能后按提示重新初始化能否恢复正常；对同一标的，与官方来源（如交易所或腾讯财经页面）抽样比对关键字段是否一致（原文未提供自动比对工具，需人工核对）。
 - 移动端调试类（做法 U）：从“描述问题”到“Codex 指到具体元素或堆栈”的耗时；从提出修错请求到拿到可用修复的轮次/耗时；在模拟器、IDE 与终端之间切换的次数；用 Performance 面板记录的 CPU、内存、Display FPS、Android jank 统计在改动前后的对比——录制场景和时长保持一致（例如固定“滚动 checkout 30 秒”），并用“比较两次录制”复核；插件自身的稳定性（崩溃/报错频率，可用遥测或直接观察）。
 - Markdown 技能类（做法 V）：是否被自动触发（不显式调用也能加载），触发率低就是 `description` 写法需要调整；产出是否符合描述中的形态（简化英语、ELI13 语气、图示、HTML 页面）；同类请求重复多次是否稳定，而不是碰运气；相比不用技能时，你自己写的提示词长度是否明显缩短。
+- 元技能类（做法 W）：观察条数、被接受并装入的技能改动数、新建技能候选数；同一个坑是否还在多个项目里被反复写进 project memory（按原文信号，重复出现即说明该沉淀成技能）；同类纠正是否仍在后续会话重复出现。注意原文没有给改进指标，需要自己先跑一段不装观察器的会话作基线。
 - 文档审稿：它列出的问题里你认可并采纳的比例；修改后的事实密度；AI 腔清单类别是否还有残留；让没参与写作的同事只读成稿，能否说出「读完能做成什么事」。
 - 论文精读：每张主图是否都被讲到、图注是否被引用、有无遗漏面板；是否区分独立个体数与细胞 / 切片数、观察与因果、作者解释与新增假设；是否列出「已读与未获取材料」；第⑥节是否给出可迁移环节与待验证设计；人工精读耗时 vs 生成加核对的耗时。
 - 工作流形态的产物是否稳定出现：例如 deep-research 是否每次都在 `.research/<name>/` 下留出 `prompts/`、`child_outputs/`、`logs/`、`raw/`、`final_report.md`。
@@ -1873,6 +1939,9 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 - 如果装了 `explain` 之后每次都要显式点名才触发，先改 `description` 或改用法，不要急着把它推广成团队规范（做法 V）。
 - 如果除 README 之外看不到任何 `SKILL.md` 正文，就不要把「参考其提示与上下文组织方式」当成已经拿到的收益——先打开装下来的文件读完再判断（做法 V）。
 - 如果 `curl` 安装拿不到文件（例如内网不能访问 raw.githubusercontent.com），先改用 clone + cp 的第 4 步，不要怀疑是技能本身有问题（做法 V）。
+- 如果装完 task-observer 后跑了几个会话、`skill-observations/observation-log/` 仍不存在，说明激活从未发生，先补 `CLAUDE.md` 里的激活指令或 session-start hook，不要先怀疑技能（做法 W）。
+- 如果连续几个会话只产出零散、无法行动的观察，或者你的技能只有少数几个、直接编辑更快，按作者给的边界退出或降级，不要为了这个元技能额外背一套日志和复核流程（做法 W）。
+- 如果以为它已经替你改了技能，回到 staged 更新的规则：在你安装更新包之前，任何改动都不会上线（做法 W）。
 
 注意：`doctor`、`validate`、`npm test`、`claude plugin validate`、`npx @anthropics/skills-ref validate`、`archify doctor`、`validate --json`、`copilot skill list`、`python -m unittest discover -s tests` 这类检查只能证明“技能或 mod 装得上、格式合法、不带危险命令、图能通过校验、技能被宿主发现、回归测试能过”，不能证明“产出更好”。效果必须自己对照。
 
@@ -1912,7 +1981,7 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 - 盲目开 `bypassPermissions`：它能让你完全跳过确认，但 README 明确提示要先了解安全风险；更稳的做法是先在 `permissions.allow` 里配允许列表。
 - 在非官方 API 环境找不到网页搜索：WebSearch 只限官方 API 环境，其它环境要用 MCP 补；README 只给了四个 MCP 的链接，没有安装步骤。
 - 用 `npx skills add` 装到的版本可能滞后于仓库最新，挑技能时注意这一点。
-- 拿 star 数当质量证据：`zh-tech-writing` 的 312 stars、`biomedical-paper-reader` 的 31 stars、cline-pilot 的 91 stars、wshobson/agents 的 40,149、book-to-skill 的 33,277、khazix-skills 的 21,099、pg-aiguide 的 1853、math-modeling-skill 的 1848、google/skills 的 20,653、Mobile Dev 的 64、agentic-dev-kit 的 37 都只说明关注度，不说明产出改善幅度。
+- 拿 star 数当质量证据：`zh-tech-writing` 的 312 stars、`biomedical-paper-reader` 的 31 stars、cline-pilot 的 91 stars、wshobson/agents 的 40,149、book-to-skill 的 33,277、khazix-skills 的 21,099、pg-aiguide 的 1853、math-modeling-skill 的 1848、google/skills 的 20,653、Mobile Dev 的 64、agentic-dev-kit 的 37、one-skill-to-rule-them-all 的 3,115 都只说明关注度，不说明产出改善幅度。
 - 跳过冷启动门禁：做法 H 要求在任何 memory bank 启用之前，先把 `assets/global-memory-bank-prompt.md` 提示词逐字放到位；跳过这步，后面的规则种子没有统一落点。
 - 把项目架构知识塞进技能包：cline-pilot 明确不持有项目架构知识，那属于项目自己的 memory bank + clinerules；指望技能包记住架构事实，会得到互相矛盾的建议。
 - 采信 agent 的自我报告：做法 H 的原则是证据优先于自我报告，完成必须由 git status、测试报告数字、非空产物证明。只看到「已完成」三个字就收工，等于放弃验收。
@@ -1977,7 +2046,7 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 - 把 math-modeling-skill 的论文直接提交：原文反复声明生成的论文仅供参考，论文结构与格式必须以目标竞赛当届官方规则和官方模板为准，流程本身不保证合规。
 - 把作者设定的质量基线当硬要求：「CUMCM 默认约 15000 字词单位、约 20 页」「每道子问题最多使用两个独立模型体系」「至少 8 幅正式图」「三类各至少 3 张候选图」都是作者设定的基线，README 自己注明前一条是非官方要求，没有说明依据，按自己的任务调整。
 - 拿作者主张当效果结论（做法 R）：共享语言减少啰嗦、让命名一致、让代码库更好导航、让 agent 少花 token 思考，以及红-绿-重构「结果代码好得多」、并行子 agent「互不污染」，都是作者主张；原文没有指标定义、基线或对照数据。
-- 把材料当完整文档：本次调研在「与已有做法的关系」一节讲到 OpenCode 时被截断，Archify 在 OpenCode 上的支持细节没有给全；diagram-design 的调研在「重绘已有图（导入）」的 `import-drawio platform.drawio --size=slide-16x` 之后被截断，导出与后续步骤缺失；book-to-skill 的 docs 全部未包含在材料中；khazix-skills 的六个 `SKILL.md` 正文也没给；pg-aiguide 的 `DEVELOPMENT.md` 未读到；Claude-BugHunter 的 `SKILL.md`、`references/*` 与 `docs/architecture.md` 也未提供；math-modeling-skill 只到 README 一层，角色规范与门禁判定标准在 `SKILL.md`、`references/roles/*/SKILL.md`、`references/Subagent调度.md`、`tools/*/SKILL.md` 里；mattpocock/skills 同样只到 README 一层，各 `SKILL.md` 的实际提示词未提供；google/skills 只到 README 一层，未展示具体 skill 的完整步骤、提示词、配置样例；china-market-data 的 Windows 命令未经过完整平台实测；Mobile Dev 的 README 只覆盖单机开发者视角，未提及团队权限、CI 或多人协作；agentic-dev-kit 只到 README 一层，技能表只有一个 `explain`，任何 `SKILL.md` 的实际内容都未提供。都要用前自己打开仓库确认。
+- 把材料当完整文档：本次调研在「与已有做法的关系」一节讲到 OpenCode 时被截断，Archify 在 OpenCode 上的支持细节没有给全；diagram-design 的调研在「重绘已有图（导入）」的 `import-drawio platform.drawio --size=slide-16x` 之后被截断，导出与后续步骤缺失；book-to-skill 的 docs 全部未包含在材料中；khazix-skills 的六个 `SKILL.md` 正文也没给；pg-aiguide 的 `DEVELOPMENT.md` 未读到；Claude-BugHunter 的 `SKILL.md`、`references/*` 与 `docs/architecture.md` 也未提供；math-modeling-skill 只到 README 一层，角色规范与门禁判定标准在 `SKILL.md`、`references/roles/*/SKILL.md`、`references/Subagent调度.md`、`tools/*/SKILL.md` 里；mattpocock/skills 同样只到 README 一层，各 `SKILL.md` 的实际提示词未提供；google/skills 只到 README 一层，未展示具体 skill 的完整步骤、提示词、配置样例；china-market-data 的 Windows 命令未经过完整平台实测；Mobile Dev 的 README 只覆盖单机开发者视角，未提及团队权限、CI 或多人协作；agentic-dev-kit 只到 README 一层，技能表只有一个 `explain`，任何 `SKILL.md` 的实际内容都未提供；task-observer 也只有 README，`SKILL.md`、`references/`、`scripts/` 的内容都未提供。都要用前自己打开仓库确认。
 - 更新 china-market-data 后忘记重新初始化：`npx skills update` 或重新安装会整体替换技能目录，`.venv` 也被删除；更新后需再运行一次 `setup_env.py`（做法 T）。
 - 把东财 `--source dataapi` 当独立备用源：它仍属于东财，不是独立供应商，也不保证绕开同源故障（做法 T）。
 - 把终端预览条数当全部数据：大部分 CLI 将完整返回结构写入 JSON，终端只给预览；要读实际文件（做法 T）。
@@ -1989,12 +2058,20 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 - 拿不到私有仓库访问权：仓库当前为 private，安装需要 GitHub 读权限且本机 Git 认证可用；外部用户可能根本装不上（做法 U）。
 - 以为物理 iOS 支持键盘和硬件按键：原文明确只支持点击和拖拽（做法 U）。
 - 以为 iOS 模拟器支持 Display FPS：不支持（做法 U）。
-- 忽略物理 iOS 的 CPU/内存前置条件：需要 iOS 17.4+、development-signed 且带 `get-task-allow`、developer disk image 已挂载、Xcode/LLDB detached（做法 U）。
+- 忽略物理 iOS 的 CPU/内存前置条件：需要 iOS 17.4+、development-signed 带 `get-task-allow`、developer disk image 已挂载、Xcode/LLDB detached（做法 U）。
 - 不想上报遥测但不动配置：插件会向 Sentry 上报插件错误、崩溃和聚合性能指标；不想要就设 `MOBILE_DEV_TELEMETRY=off`（做法 U）。
 - 拿 README 的技能表当技能清单：agentic-dev-kit 的 README 标题声称改善 SDLC 的编码/架构/评审/测试/发布各阶段，但技能表里当前只有一个 `explain`，把命令里的技能名换成别的多半会 404（做法 V）。
 - 把「装上了」当成「有效」：agentic-dev-kit 没有展示任何一个 `SKILL.md` 的实际内容，也没有效果数据、案例或对比；必须先读文件、再按 A 做对照（做法 V）。
 - 内网或不能访问 raw.githubusercontent.com 时硬用一行 curl：改用 clone + cp 的第 4 步（做法 V）。
 - 以为 README 写清了 frontmatter 格式：它只说 frontmatter 里要有 `name` 和 `description` 两个字段，没有给完整示例；技能命名冲突怎么解、`description` 怎么写才容易被匹配、适用的 Claude Code 版本也都没说明（做法 V）。
+- 只安装不激活（做法 W）：只把文件放进去不等于激活；必须把 `references/environments.md` 的激活指令加进 `CLAUDE.md`（或平台等价文件）或装 session-start hook——原文明确说仅靠 `description` 匹配会严重欠触发。
+- 在安装的那个会话里验证（做法 W）：安装所在会话无法证明它生效，要在新会话里确认技能在第一次工具调用之前被调用。
+- 把缺失的观察日志当成技能质量差（做法 W）：`skill-observations/observation-log/` 不存在是激活失败的信号，不是观察质量的问题。
+- 只装 `SKILL.md`（做法 W）：技能能跑但会降级，而且会提示缺了哪些文件；`references/` 和 `scripts/` 必须一起装。
+- 自己动手改已安装的技能去“接上”观察结果（做法 W）：它只产出 staged 更新，要你在复核里逐条批准、安装更新包之后才生效。
+- 指望它在技能很少时也划算（做法 W）：作者自己划的边界是技能库和用量增长后才划算；技能少时 AI 系统自带的记忆功能可能覆盖大部分场景而且开销更小，直接编辑技能也快。
+- 在 Claude.ai web 或手机/桌面 Claude Chat 上期待完整体验（做法 W）：没有文件系统访问，只有 handoff doc 模式。
+- 把 1,600+ 条观察、9,000+ 次安装当效果证据（做法 W）：前者是作者自述、后者是 opt-out 遥测口径下的下界，都不说明产出改善。
 
 ## 证据与来源
 
@@ -2026,7 +2103,8 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 - china-market-data 路线（做法 T）的全部内容——`npx --yes skills@latest add clawyi-com/china-market-data -g` 及指定宿主、`--list`、`tools/setup_env.py` 的 macOS/Linux 与 Windows 命令、外置虚拟环境 `--venv`、自然语言问法清单、`scripts/tencent_quote.py` / `scripts/run.py ths_hot_reason.py` / `eastmoney_signals.py board-quotes` 示例、`--source dataapi` 的说明、`IWENCAI_API_KEY` 配置要求、开发者 clone 安装与手动复制目录必须保留的文件、离线开发验证命令——均来自调研《clawyi-com/china-market-data》，即该仓库 README。15 层、87 个端点、34 个数据来源、除 iwencai 外免 API Key 是原文给出的能力数字；原文也给出了数据边界说明（时间戳、降级、缺失值处理、明文 HTTP 风险等）。作者主张：这不是投顾建议，也不是付费数据商 SDK；代码开源不代表数据开放授权；免费或免 Key 不等于可自由商用；本项目没有逐项取得再分发授权。局限：Windows 命令未经过完整平台实测；部分接口仍使用明文 HTTP；东财节流主要在单进程内生效，多 agent 并发不会自动获得跨进程全局限流；接口可能限流、认证变化、缺失、延迟或下线；部分历史数据只有本地已保存记录，不能承诺补齐；更新后需重新初始化 `.venv`；只讨论概念或投资观点、不需要实际取数时技能不会被加载。原文未给出与人工查询对比的量化指标。
 - Mobile Dev 路线（做法 U）的全部内容——安装与更新命令、平台/功能需求表、起步流程、4 条可直接复制的示例指令、隐私与遥测开关说明——均来自调研《callstackincubator/codex-mobile-dev-plugin》，即该仓库 README。可照做内容包括：`codex plugin marketplace add ... --ref release/latest`、`codex plugin add mobile-dev@mobile-dev`、`codex plugin marketplace upgrade mobile-dev`、Xcode 26/27 与 Android SDK 要求、Metro 与 WebCodecs 前提、物理 iOS 的 CPU/内存前置条件、Display FPS 支持范围、`MOBILE_DEV_TELEMETRY=off`。属产品说明/作者主张的是：所有功能描述（并排显示设备、元素检查、日志聚合、性能图表）都没有配套数据、案例或评测；README 未给出任何性能提升数字或对比基准。适用条件与硬性限制：仅限 Apple Silicon Mac 上的 Codex desktop；仓库当前为 private，安装需要 GitHub 读权限和可用的 Git 认证，外部用户可能根本装不上；Xcode 版本要求较高（26/27）；物理 iOS 不支持键盘与硬件按键控制；iOS 模拟器不支持 Display FPS；物理 iOS 的 CPU/内存监控有一串前置条件。成熟度信号：star 数 64，属早期项目；README 只覆盖单机开发者视角，未提及团队权限、CI 或多人协作场景。
 - agentic-dev-kit 路线（做法 V）的全部内容——一行 `curl` 安装单个技能的命令、`cp -r` 的两种复制方式、项目级 `.claude/skills/<name>/SKILL.md` 与全局级 `~/.claude/skills/<name>/SKILL.md` 的作用域差异、重启 Claude Code 后按 `description` 匹配触发、自建技能要写 `name` 与 `description` 两个 frontmatter 字段——均来自调研《ARYANK-08/agentic-dev-kit》，即该仓库 README。可照做的部分只有安装命令、目录结构、作用域与触发机制；README 标题声称改善 SDLC 的编码/架构/评审/测试/发布各阶段，但技能表当前只列出 `explain` 一个技能，且**没有展示任何一个 `SKILL.md` 的实际内容**，所以“参考其提示与上下文组织方式”在现有材料里没有落地证据，也没有效果数据、案例或对比。未说明的事项：适用的 Claude Code 版本、frontmatter 的完整格式、技能命名冲突如何解决、`description` 怎么写才容易被匹配、curl 安装对 raw.githubusercontent.com 的依赖。仓库 37 stars，不构成有效性证据。
-- 文中提到的 star 数（如 anthropics/skills 179219、awesome-copilot 39,568、pro-workflow 2.9k、feiskyer/claude-code-settings 约 1.6k、zh-tech-writing 312、biomedical-paper-reader 31、cline-pilot 91、wshobson/agents 40,149、book-to-skill 33,277、khazix-skills 21,099、pg-aiguide 1853、math-modeling-skill 1848、google/skills 20653、Mobile Dev 64、agentic-dev-kit 37）来自 metrics，不构成有效性证据。
+- task-observer 路线（做法 W）的全部内容——`npx skills add rebelytics/one-skill-to-rule-them-all --skill task-observer` 与 `-g`、Claude 应用在 Settings → Customize 上传 `.skill` 包、Claude Code 的 `.claude/skills/task-observer/`（保留 `references/`、`scripts/` 子目录）、`CLAUDE.md` 里的激活指令或 session-start hook、新会话在第一次工具调用前验证、`skill-observations/observation-log/` 与 `skill-updates/` 两个目录、`Any observations logged?` 提示词、周一/周三/周五的复核排期与「交互式逐条批准 / 定期复核只应用不需要你决策的观察」的 staged 更新规则、cross-cutting principles 日志、Cowork（含 Dispatch）/桌面版 Claude Code 与 web/手机的 handoff doc 模式差异、以及项目记忆与它的分工判据——均来自调研《rebelytics/one-skill-to-rule-them-all》，即该仓库 README。原文给出的数字：作者自述在其 81 个技能中记下 1,600+ 条观察、「大部分被转成了技能改进」，81 个技能里大多数本身就是基于该元技能的观察创建的；69 位贡献者参与改进、关闭 99 个 issue 和 PR；skills.sh 列出页报告 9,000+ 次安装（作者注明是下界，因为 CLI 的安装遥测是 opt-out）；提到 Gen Agent Trust Hub、Socket、Snyk 的独立安全审计并附 Oathe security 报告徽章链接；仓库指标 3,115 stars；从 3.0 之前升级时第一个会话会自动转换旧的单文件日志。属作者主张的是：1,600+ 观察、「大部分转成改进」、元技能优于手动编辑技能、「技能库越大价值越大」。作者自己给的适用边界：正式观察日志和复核循环在技能库和用量增长后才划算（技能多、并行会话多、有定时复核）；技能少时 AI 系统自带的记忆功能可能覆盖大部分场景而且开销更小，直接编辑技能也很快；完整体验需要文件系统访问；非 Claude 平台需要自行适配（技能内容假设了 Claude 架构的 `<available_skills>` 与 skill-creator 引用）。平台适配口径：Cowork、Dispatch、Claude.ai web、Claude 手机端、桌面版 Claude Code 是「测试并设计针对」的环境，无桌面版的 Claude Code 被用户确认可用，ChatGPT / Gemini CLI / Cursor 等列为「可能兼容但有前提」，OpenClaw 与 Hermes 只有用户自述集成成功、没有步骤，Obsidian 只有一句用户说法；清单中没有 Atlas 相关条目。局限：材料只到 README 一层，`SKILL.md`、`references/`、`scripts/` 的内容都未提供，观察日志的确切格式、提示词、脚本行为无法核对，观察质量与误报率无法判断，改进效果也没有可验证的数据。
+- 文中提到的 star 数（如 anthropics/skills 179219、awesome-copilot 39,568、pro-workflow 2.9k、feiskyer/claude-code-settings 约 1.6k、zh-tech-writing 312、biomedical-paper-reader 31、cline-pilot 91、wshobson/agents 40,149、book-to-skill 33,277、khazix-skills 21,099、pg-aiguide 1853、math-modeling-skill 1848、google/skills 20653、Mobile Dev 64、agentic-dev-kit 37、one-skill-to-rule-them-all 3,115）来自 metrics，不构成有效性证据。
 
 ## 依据的调研
 
@@ -2057,3 +2135,4 @@ mod 与做法 A、B 的关系：技能是给 agent 加规范，mod 是给会话�
 - [clawyi-com/china-market-data](../research/radar/2026-10-03/920-clawyi-com-china-market-data.md)：值得一试，建议小范围试用：在 Claude Code 或 Cursor 等可执行本地 Python 的宿主中安装该 Skill，用于中国金融数据检索类任务；理由是它提供了可照做的安装、调用和验证步骤，但属于特定领域且存在数据授权与接口稳定性限制。
 - [callstackincubator/codex-mobile-dev-plugin](../research/radar/2026-10-03/921-callstackincubator-codex-mobile-dev-plugin.md)：值得一试，在符合条件的 Apple Silicon Mac 上按原文两条命令装上 Mobile Dev 小范围试用：把 iOS/Android 模拟器与真机画面、控制、日志和性能面板接进 Codex 聊天，让 Codex 直接读日志、检查元素、录制并对比性能；理由是原文给出了完整可照做的安装命令、平台依赖表和起步指令，但目前仓库为私有、只支持 Apple Silicon Mac + Codex desktop，且没有任何效果数据，所以先试不宜直接采用。
 - [ARYANK-08/agentic-dev-kit](../research/radar/2026-10-03/984-aryank-08-agentic-dev-kit.md)：值得一试，按 README 给的一行 curl 命令把某个 skills/<name>/SKILL.md 装到项目的 .claude/skills/ 或全局的 ~/.claude/skills/，重启 Claude Code 后用一次解释类请求验证它是否按 description 自动加载；可以试是因为安装和自建技能的步骤具体可复制，但 README 里没有任何技能正文，实际收益必须装完读文件再判断。
+- [rebelytics/one-skill-to-rule-them-all](../research/radar/2026-10-03/1005-rebelytics-one-skill-to-rule-them-all.md)：值得一试，值得在一个活跃的 Claude Code 项目里小范围试：按 README 的命令安装，并务必在 CLAUDE.md 补上激活指令，跑几轮真实会话后用 observation-log 目录是否出现来确认它真的在跑。理由：仓库给出了可直接照做的安装、激活、验证和定期复核流程，但给到的材料只有 README，看不到技能本体、观察格式和改进质量，收益目前主要是作者自述。
