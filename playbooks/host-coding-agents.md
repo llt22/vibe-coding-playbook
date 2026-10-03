@@ -1,14 +1,14 @@
-# 把编码 agent 从「随手跑一次」变成「在可控边界里按项目规则反复跑」
+# 让编码 agent 在可控边界里反复跑，并且看得见、拦得住
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：本手册解决的是：如何把编码 agent 从本机一次性试用，变成有持久工作区、明确权限边界、项目级护栏、可核算成本、可回退的固定工作方式，并且能在换模型供应商时不必重做整套流程。
-> 先试这一步：先在一个可回退的真实 Git 项目里只落地三样东西——短 CLAUDE.md、permissions 的 allow/ask/deny、一个 PostToolUse 格式化 hook——用 Plan mode 跑一次并记录人工介入时间；如果你在意「同一套流程换模型」，再在容器里用 pi 对同一任务做一次对照。
-> 最近修订：2026-10-03
+> 解决的问题：把编码 agent 从「在本机随手跑一次」变成「在可控环境里按项目规则反复跑」，并且能实时看到它在读什么、写什么，在危险动作发生前拦住它。
+> 先试这一步：先在一个可回退的 Git 项目里落地短 CLAUDE.md、allow/ask/deny 权限和一个 PostToolUse 格式化 hook；跑顺后再装 mission-control + token-weather，看清 agent 实际读了哪些文件、上下文还剩多少。
+> 最近修订：2026-10-04
 
 ## 解决什么问题
 
-本手册解决的是：把编码 agent（Claude Code / Codex CLI / OpenCode / goose / pi / agentbox 里的 agent）从「在本机随手跑一次」变成「在可控环境里、按项目规则反复跑」。要补八件事：工作区与文件持久化、权限与凭据边界、工具与扩展供给、项目级护栏（上下文供给 + 自动化触发）、按轮次的用量成本记录、「先只读规划、再放权编辑」的分工、「运行时/界面扩展面」的受控试点，以及「跨模型统一接口」——让同一套流程换供应商而不改上层。给出七条可照做的路径：做法 A 是在 Linux 服务器上自托管 agentbox 工作区；做法 B 是在非生产机器上装 goose，用 MCP 供给工具与权限；做法 C 是在单个真实项目里给 Claude Code 配 CLAUDE.md、allow/ask/deny 权限、hook、subagent、skill，并把主工作流固定成 Explore → Plan → Code → Verify → Commit；做法 D 是用 OpenCode 的 build/plan 双 agent 把「先只读规划、再放权编辑」固定成分工；做法 E 是在本机装 Codex CLI 并用 ChatGPT 账号登录，先跑通一次终端编码任务；做法 F 是在一次性项目里用实验开关试点 Claude Mods（function hooks），按验收矩阵检查后再决定是否留下；做法 G 是按 pi 的官方安装脚本装好 CLI，用 `/login` 接入模型，在容器边界内跑一个边界清晰的小任务，验证「同一套流程换 provider」是否成立。
+本手册解决的是：把编码 agent（Claude Code / Codex CLI / OpenCode / goose / pi / agentbox 里的 agent）从「在本机随手跑一次」变成「在可控环境里、按项目规则反复跑」，并且能实时看到它在读什么、写什么。要补九件事：工作区与文件持久化、权限与凭据边界、工具与扩展供给、项目级护栏（上下文供给 + 自动化触发）、按轮次的用量成本记录、「先只读规划、再放权编辑」的分工、「运行时/界面扩展面」的受控试点、「跨模型统一接口」——让同一套流程换供应商而不改上层，以及「实时观察与危险动作闸门」。给出八条可照做的路径：做法 A 是在 Linux 服务器上自托管 agentbox 工作区；做法 B 是在非生产机器上装 goose，用 MCP 供给工具与权限；做法 C 是在单个真实项目里给 Claude Code 配 CLAUDE.md、allow/ask/deny 权限、hook、subagent、skill，并把主工作流固定成 Explore → Plan → Code → Verify → Commit；做法 D 是用 OpenCode 的 build/plan 双 agent 把「先只读规划、再放权编辑」固定成分工；做法 E 是在本机装 Codex CLI 并用 ChatGPT 账号登录，先跑通一次终端编码任务；做法 F 是在一次性项目里用实验开关试点 Claude Mods（function hooks），按验收矩阵检查后再决定是否留下；做法 G 是按 pi 的官方安装脚本装好 CLI，用 `/login` 接入模型，在容器边界内跑一个边界清晰的小任务，验证「同一套流程换 provider」是否成立；做法 H 是在真实仓库里装 hamzafer/claude-code-mods 的 mission-control 与观察类插件，先看清 agent 的读写与上下文水位，再决定是否加 blast-radius 这类危险命令闸门。
 
 ## 适用与不适用
 
@@ -20,6 +20,8 @@
 - 已有 ChatGPT Plus / Pro / Business / Edu / Enterprise 订阅之一，想在本机装官方编码 CLI、用账号登录跑通一次终端编码任务的人（做法 E）。
 - 想在一次性项目、合成数据、无生产凭据的前提下，试点 Claude Code 的运行时/界面扩展面（Claude Mods / function hooks），并有一套验收矩阵和成本口径来判断是否留下的人（做法 F）。
 - 想验证「同一套流程换模型供应商而不改上层」、需要把 agent 能力嵌进脚本/服务/其他应用（print/JSON、RPC、TypeScript SDK），并且愿意自己承担隔离边界的人（做法 G）。
+- 已经在用 Claude Code、想先看清它读了哪些文件、写了什么、上下文还剩多少，并且想给 `rm -r`、force push、migration 设一道闸门的人（做法 H）。
+- 愿意接受「Code 视图需要 macOS + Chrome + 支持图片的终端」这一前提，或只用 Who 视图（`w`，任何环境可用）的人（做法 H）。
 - 能给出一台非生产机器或一个可回退的 Git 分支，愿意先小范围试用再扩大的人。
 
 不适用：
@@ -33,8 +35,12 @@
 - pi 没有内置权限系统，不限制文件系统、进程、网络或凭证访问，默认以启动它的用户和进程权限运行；不做容器化隔离就不适合让它接触敏感文件、凭证或网络。
 - pi 默认不含 sub-agents 和 plan mode；想开箱就有「先只读规划、再放权编辑」分工的人，应先看做法 D，或让 Pi 自己构建 / 装一个按你想要方式做的包。
 - pi 的原文没有效果数据、案例细节、对比测试，也没有任何性能或质量数字；主动推进只有 pi-durable、chord、pi-chat 这些基础设施线索，原文没有给出任何时间/事件/状态触发的配置或步骤，这一条无法照做。
-- 五条已有线索加 Claude Mods、pi 都没有给出「AI 是否让结果变好了」的对照评测方法或基准数据；Claude Mods 给出了验收矩阵与成本公式，但同样是作者提出的评估方法，不是 Anthropic 的计费公式。
-- 涉密或受管环境要额外做安全审查与权限约束，不能直接照搬 `curl | bash` 类安装，也不能为了跑通 Claude Mods 示例而关掉组织托管保护；pi 的 pi-telemetry / pi-share-hf 会话导出等于把工作数据上传，需先确认合规。
+- hamzafer/claude-code-mods 的材料只有 README：没有基准、耗时、token 节省或用户反馈数据；颜色语义的准确性、token-weather「Compact soon」阈值的合理性、blast-radius 能否拦住全部危险命令、next-steps 建议的质量都只是作者主张，不是验证结论。
+- 该仓库的 Code 视图限 macOS + Google Chrome + 能显示图片的终端（Ghostty、kitty、iTerm2）；Linux / Windows 或普通终端只能用到 Who 视图（`w`）。
+- 「My setup」类插件（glance、merge-gate、rulebook-guard、session-saver）是作者按自己的工具和规则搭的，README 自己都要求 fork 后改规则；merge-gate 依赖 `gh` 和 Codex CLI 且 review 模型写死。直接照用会把别人的写作/git 约束带进来。
+- hamzafer/claude-code-mods 需要 Claude Code 2.1.287+（版本号本身无法从材料中验证）；稳定性、对上游版本升级的兼容性、多插件同开时的性能开销，README 都没有交代。
+- 五条已有线索加 Claude Mods、pi、hamzafer/claude-code-mods 都没有给出「AI 是否让结果变好了」的对照评测方法或基准数据；Claude Mods 给出了验收矩阵与成本公式，但同样是作者提出的评估方法，不是 Anthropic 的计费公式。
+- 涉密或受管环境要额外做安全审查与权限约束，不能直接照搬 `curl | bash` 类安装，也不能为了跑通 Claude Mods 示例而关掉组织托管保护；pi 的 pi-telemetry / pi-share-hf 会话导出等于把工作数据上传，需先确认合规；第三方插件集合要走组织审批流程。
 
 ## 前置条件
 
@@ -84,9 +90,17 @@
 - 需要固定版本或可复现环境时，有可用的 Nix（支持 Linux 与 macOS 的 ARM64、x86-64）。
 - 组织有数据外发限制时，先确认 `pi-telemetry` / `badlogic/pi-share-hf` 会话导出是否合规。
 
+做法 H（hamzafer/claude-code-mods）：
+- Claude Code 2.1.287+（版本号来自 README，本次材料无法独立验证）。
+- Code 视图（`c`）需要 macOS + Google Chrome + 能显示图片的终端（Ghostty、kitty、iTerm2）；Who 视图（`w`）在任何环境都可用。
+- 一个非关键的 Git 仓库，改动可回退。
+- 能执行 `claude plugin marketplace add` / `claude plugin install`，或能 `git clone` 后配合 `claude --plugin-dir` 临时试。
+- 先不装「My setup」类插件；merge-gate 另需 `gh` 与 Codex CLI。
+- 组织有插件/供应链审批要求时，先按该流程审阅发布者与源码。
+
 ## 操作步骤
 
-七条做法按环境选：要服务器、多人、持久工作区、共享目录、Git 审查、按轮用量成本记录，选做法 A；只有一台非生产机器、想要通用 agent 并愿意自己接 MCP，选做法 B；已经在单个真实项目里用 Claude Code、想把项目级规则和自动化触发固定下来，选做法 C；需要先读懂陌生代码库、要一个默认只读、bash 前询问权限的 plan 模式，选做法 D；已经用 ChatGPT 订阅、想在本机装官方 CLI 跑通一次终端编码任务，选做法 E；需要更深的运行时事件组合或受支持界面行为，且能满足一次性项目、合成数据、有回滚负责人等条件，才考虑做法 F；要在同一套流程里换模型供应商、准备把 agent 嵌进脚本或服务，并且愿意自己容器化隔离，选做法 G。做法 C 可以和 A 叠加：A 管服务器工作区与账号边界，C 管单个项目内的工具调用规则。做法 F 是做法 C 在 Claude Code 上的扩展面试点，不替代 Skills、MCP、经典 hook 或插件系统。做法 G 与它们不是替代关系：pi 提供的是「统一多提供商接口 + 可嵌入的 harness」，权限边界要你自己用容器补，原文明确把 OpenClaw 列为它的真实集成案例。
+八条做法按环境选：要服务器、多人、持久工作区、共享目录、Git 审查、按轮用量成本记录，选做法 A；只有一台非生产机器、想要通用 agent 并愿意自己接 MCP，选做法 B；已经在单个真实项目里用 Claude Code、想把项目级规则和自动化触发固定下来，选做法 C；需要先读懂陌生代码库、要一个默认只读、bash 前询问权限的 plan 模式，选做法 D；已经用 ChatGPT 订阅、想在本机装官方 CLI 跑通一次终端编码任务，选做法 E；需要更深的运行时事件组合或受支持界面行为，且能满足一次性项目、合成数据、有回滚负责人等条件，才考虑做法 F；要在同一套流程里换模型供应商、准备把 agent 嵌进脚本或服务，并且愿意自己容器化隔离，选做法 G；已经在用 Claude Code、想先看清它在读写在跑什么、并在危险命令前设一道闸门，选做法 H。做法 C 可以和 A 叠加：A 管服务器工作区与账号边界，C 管单个项目内的工具调用规则。做法 F 是做法 C 在 Claude Code 上的扩展面试点，不替代 Skills、MCP、经典 hook 或插件系统。做法 G 与它们不是替代关系：pi 提供的是「统一多提供商接口 + 可嵌入的 harness」，权限边界要你自己用容器补，原文明确把 OpenClaw 列为它的真实集成案例。做法 H 与做法 F 不是同一层：F 是 Anthropic 原生 function hooks 的受控试点（early access），H 是第三方插件集合，走 `claude plugin marketplace add` / `claude plugin install`，属于对已采用 Claude Code 的观察与守卫增强；两者都建立在做法 C 的项目级护栏之上，都不能替代 Skills、MCP、经典 hook。
 
 ### 做法 A：在 Linux 服务器上搭自托管 agentbox 工作区
 
@@ -705,6 +719,49 @@ cd "pi-${VERSION}"
 
 诚实说明：几乎所有「怎么做」的细节（extensions、skills、prompt templates、themes、packages、containerization、usage、cli、rpc、sdk）在原文里只是链接，正文没有内容，无法直接照抄步骤；这份 README 更接近宣传 + 仓库导览。
 
+### 做法 H：在真实仓库里装 Claude Code 观察面与危险命令闸门
+
+来源是第三方插件集合 `hamzafer/claude-code-mods`（MIT，37 stars）。它的主力插件 mission-control 把每个子 agent、每次工具调用、每个被读写的文件画在聊天旁边的面板里：蓝色 = agent 正在读某文件，橙色 = 正在写，绿色 = 完成并附一行变更说明。注意它与做法 F 的 Anthropic 原生 Claude Mods（function hooks，early access）不是一回事，也不要与社区仓库 `0xDarkMatter/claude-mods` 混淆。
+
+前提：Claude Code 2.1.287+（版本号来自 README，本次材料无法独立验证）。Code 视图另外需要 macOS、Google Chrome，以及能显示图片的终端（Ghostty、kitty、iTerm2）；Who 视图（`w`）在任何环境都可用。在一个非关键的 Git 仓库里操作。
+
+1. 安装 mission-control。在终端执行：
+
+```sh
+claude plugin marketplace add hamzafer/claude-code-mods
+claude plugin install mission-control@claude-code-mods
+```
+
+预期结果：插件安装命令返回成功。
+
+2. 重启 Claude Code，然后输入 `/mission` 打开面板；输入 `/mission code` 直接打开代码地图；按 `q` 关闭。预期结果：聊天旁边出现实时面板。
+
+3. 在面板里按 `w` 查看 agents 和每一次工具调用（实时）；按 `c` 查看代码地图及 import 箭头。预期结果：能看到当前哪些子 agent 在跑、每个工具调用的目标文件。
+
+4. 用颜色判断状态：**蓝色** = agent 正在读文件，**橙色** = 正在写，**绿色** = 完成，并附一行说明改了什么。
+
+5. 装其他插件：同样两条命令，把插件名替换掉 `mission-control`，例如：
+
+```sh
+claude plugin marketplace add hamzafer/claude-code-mods
+claude plugin install token-weather@claude-code-mods
+```
+
+6. 不安装、临时试某一个插件：
+
+```sh
+git clone https://github.com/hamzafer/claude-code-mods && cd claude-code-mods
+claude --plugin-dir mods/token-weather
+```
+
+7. 建议同时装的观察类插件及其命令：`/where`（where-am-i，列出目标、当前在做什么、在等你什么、下一步）、`/radar`（agent-radar，每个运行中子 agent 一行）、`/browser`（browser-lanes）、`/replay`（replay-theater，按 diff 逐步回放上一轮编辑）、`/md`（md-preview，前后并排渲染 Markdown）；next-steps 用 `1` `2` `3` 键起草下一句提示、`0` 隐藏。token-weather 与 usage-meter 没有列出命令。
+
+8. 防护：装上 blast-radius 后，遇到 `rm -r`、force push、migration 时插件会先展示影响范围并等待确认，超时未回应则取消——适合在真实仓库里当兜底闸门。先在含可丢弃文件的目录里演练一次再用于真实仓库。
+
+9. 个人配置类插件（glance、merge-gate、rulebook-guard、session-saver）按 README 说法是围绕作者自己的工具和规则搭的，用前先 fork 改规则；merge-gate 依赖 `gh` 和 Codex CLI，README 提示 review 跑在一个固定模型上，需要改成自己的。
+
+诚实说明：该仓库的材料只有 README（`docs/mods.md`、`docs/demo.md`、GIF 与视频均未包含），上面的安装命令、快捷键、版本与平台前提全部来自 README 自述，未在本次材料中独立验证；没有基准、耗时、token 节省或用户反馈数据。做法 H 属于对已采用 Claude Code 的观察与守卫增强，不替代 Skills、MCP、经典 hook 或做法 C 的项目级护栏；它也不替代做法 F——F 管的是自己写 function hooks 来组合运行时事件，H 管的是装现成的观察与守卫插件。
+
 ## 怎么判断变好了
 
 做法 A（agentbox）看成本与交付把关，不看「结果是否更好」：
@@ -807,6 +864,22 @@ cd "pi-${VERSION}"
 
 说明：pi 的原文没有定义任何指标或阈值；上面这套最小试用与对照方法来自调研报告，属于作者主张而非基准数据。
 
+做法 H（hamzafer/claude-code-mods）最小试用方式（半天内可完成）：
+1. 在一个非关键的 git 仓库里按上面第 1、5 步安装 `mission-control` 和 `token-weather`（先不装「My setup」类插件）。
+2. 派一个会改 3–5 个文件、且会拉起至少一个子 agent 的任务（例如按演示场景做一个 logout 功能）。
+3. 全程用 `w` 看工具调用、`c` 看代码地图，记录是否出现「读了不该读的文件」「写到预期外的文件」以及你是在第几步发现的。
+4. 单独做一次 blast-radius 演练：在一个含可丢弃文件的目录里让 agent 执行 `rm -r`，确认它是否真的先展示影响范围、以及超时是否如描述般取消。
+5. 只在确认上面两步有效后，再考虑 `/where`、`/replay`、`/md`、`/gate`。
+
+判断有没有改善的指标（试用前后各测一次同类任务；以下指标由调研报告提出，README 未给出）：
+- 发现错误读写的时延：从「改错了文件」到「你发现」的轮数或分钟数。
+- 上下文事故次数：因触发 compact 而丢失上下文的次数（用 token-weather 在 “Compact soon” 之前主动介入，看能否降到 0）。
+- 你被阻塞的次数与时长：`/where` 中 “waiting on you” 出现的次数，以及从出现到你回应的间隔。
+- 危险命令的拦截率：构造的 `rm -r` / force push / migration 场景中被拦下的比例（目标 100%，任何漏拦都说明这道闸不能用于真实仓库）。
+- 成本对照：usage-meter 显示的 5 小时/7 天额度消耗与本会话成本，同类任务是否上升（若观察成本明显抬升而事故率没降，就退回不装）。
+
+退出条件：如果 Code 视图在你的平台上根本打不开，或安装后会话不稳定、与现有插件冲突，就停在这一步，仅保留结论“需要 macOS + Chrome + 图片终端才可用”。
+
 ## 常见坑
 
 - agentbox 的权限默认值：原文自述存在 bypassPermissions 默认权限、凭据可被终端用户读取、单机单进程等硬约束。账号凭据会传给容器内 CLI，有终端权限的用户可以读到。
@@ -837,9 +910,9 @@ cd "pi-${VERSION}"
 - Codex 独立安装脚本默认从 `https://releases.openai.com/codex` 下载，元数据或资源不可用时回退到 GitHub Releases；需要强制走 GitHub Releases 用 `CODEX_INSTALLER_USE_RELEASES_OPENAI_COM=false`。
 - Codex Web 是云端代理，原文没有任何关于定时、事件或状态触发的说明，不能据此做主动推进。
 - Codex 的 `curl | sh` / PowerShell `irm | iex` 同样是直接从网络下载脚本并执行；受管或涉密环境应先审阅脚本内容与来源，或改用 npm / brew / 手动下载二进制。
-- 不要把「服务器上默认放开」（agentbox 的 bypassPermissions 默认值）当成「项目内也可以不设白名单」；做法 C/D/G 的权限边界与 agentbox 的账号边界不是同一层。
+- 不要把「服务器上默认放开」（agentbox 的 bypassPermissions 默认值）当成「项目内也可以不设白名单」；做法 C/D/G/H 的权限边界与 agentbox 的账号边界不是同一层。
 - Claude Mods 源码目录明确标注接口为 early access，API 可能不通知就变；官方 9 月 9 日更新称「数周内」扩大发布，本审阅检查的 TypeScript 声明对应 Claude Code 2.1.273。
-- 不要混淆：社区仓库 `0xDarkMatter/claude-mods` 与 Anthropic 原生功能无关。
+- 不要混淆三个对象：社区仓库 `0xDarkMatter/claude-mods` 与 Anthropic 原生功能无关；第三方插件集合 `hamzafer/claude-code-mods`（做法 H）走 `claude plugin marketplace add` 安装；做法 F 说的是 Anthropic 原生 Claude Mods（function hooks）。
 - `/diff` 已是内置命令，会与你的实现争夺命令归属；「加载了一个目录」不足以证明某个 handler 真的跑了，要用测试或显式的非敏感诊断证据确认当前生效的实现。
 - 官方 diff 的 `hooks.json` 只是加载器片段，既不是完整可用的插件，也不是安全控制。
 - 不要使用凭空发明的命令（例如所谓「万能 Mod 安装器」）；分发走受支持的插件机制与组织审批流程。
@@ -857,6 +930,10 @@ cd "pi-${VERSION}"
 - pi 的主动推进只有基础设施线索（`pi-durable` 的持久对话/任务/文档运行时、`chord` 的服务与插件、`pi-chat` 的 Slack/聊天自动化），原文**没有**给出任何时间/事件/状态触发的配置或步骤，不能据此做主动推进。
 - pi 原文没有效果数据、案例细节、对比测试，也没有性能或质量数字；「minimal, extensible」「adapt Pi to your workflows, not the other way around」、公开会话数据比玩具 benchmark 更有价值、「ships with powerful defaults」均为作者主张。仓库星标 111397 来自给定 metrics，README 正文未独立验证。
 - pi 的供应链加固做法可作为参考：直接外部依赖 pin 精确版本（内部 workspace 包仍是版本范围）；`.npmrc` 设 `save-exact=true` 和 `min-release-age=2`（避免当天发布的依赖被解析）；`package-lock.json` 是依赖事实来源，pre-commit 阻止意外的 lockfile 提交（除非设 `PI_ALLOW_LOCKFILE_CHANGE=1`）；`npm run check` 校验 pinned 直接依赖、原生 TypeScript 导入兼容性和生成的 coding-agent install lock；CI 用 `npm ci --ignore-scripts`，另有定时 workflow 跑 `npm audit --omit=dev` 和 `npm audit signatures --omit=dev`。
+- hamzafer/claude-code-mods 的材料只有 README（`docs/mods.md`、`docs/demo.md`、GIF 与视频均未包含），没有实测数据、基准、耗时、token 节省或用户反馈；颜色语义的准确性、token-weather “Compact soon” 阈值的合理性、blast-radius 真能拦住全部危险命令、next-steps 建议的质量都只是作者主张，不是验证结论。
+- 版本与平台前提：hamzafer/claude-code-mods 需要 Claude Code 2.1.287+（版本号本身无法从材料中验证）；Code 视图限 macOS + Google Chrome + 支持图片的终端，Linux / Windows 或普通终端只能用到 Who 视图（`w`）。
+- 「My setup」类插件（glance、merge-gate、rulebook-guard、session-saver）是作者按自己规则写的，README 自己都要求 fork 后改规则，直接照用会引入别人的写作/git 约束；merge-gate 依赖 `gh` 和 Codex CLI，且 review 模型写死。
+- 稳定性、对上游版本升级的兼容性、多插件同开时的性能开销，README 都没有交代；blast-radius 在真实仓库里用之前，必须先在含可丢弃文件的目录演练，漏拦一次就不该作为真实仓库的唯一闸门。
 
 ## 证据与来源
 
@@ -867,8 +944,9 @@ cd "pi-${VERSION}"
 - 做法 E 依据调研《openai/codex》：安装命令（Mac/Linux 的 `curl | sh`、Windows 的 PowerShell、npm、Homebrew）、下载源与回退机制、`CODEX_INSTALLER_USE_RELEASES_OPENAI_COM` 环境变量、各平台二进制文件名、登录方式（Sign in with ChatGPT 优先，API key 需额外设置）、许可证（Apache-2.0）、仓库星标 127,454，均来自该报告转述的 README 首页。其中「推荐用 ChatGPT 账号登录以作为订阅计划的一部分使用」属于官方推荐，非第三方验证结论。抓取内容只有 README 首页，没有工作流、提示词、权限/沙箱/审批配置、性能或成本数据；做法 E 的「怎么判断变好了」指标由调研报告提出，原文未给出。
 - 做法 F 依据调研《Claude Mods: Setup, Function Hooks and Security》：实验开关 `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`、`/plugin-types`、`--plugin-dir`、`plugin test`、插件目录结构、`hooks.json` 的 `modules` 片段、选型表、验收矩阵、成本公式、`sec-default` 与 `telemetry` 的边界说明，均来自该报告转述的官方更新、源码与文档审阅。其中「作者自述这是文档与源代码审阅，不是实测 benchmark，也不是生产就绪证明」「文中所有命令是源码记录的，作者未声称在真实 Claude 会话中执行过」「三个试点设计是提出的试点设计，不是部署记录或担保的内置功能」「安全验收矩阵是待实现和验证的验收要求，不是对当前每种失败模式的断言」「供应链审阅清单是工程建议」「成本核算公式是作者自述的评估方法，不是 Anthropic 的计费公式」均为原文明确声明。没有测得的节省百分比；Mod 本身不是价格折扣；额外的工具调用、上下文、重试、开发与维护成本都要计入。原文还明确否认「hook 环境没有 Node.js 或浏览器 DOM」构成完整安全论证——能访问强大中介工具的 Mod 仍需要仔细划定信任边界，权限、网络限制、数据处理和管理配置必须单独审阅。
 - 做法 G 依据调研《earendil-works/pi》：安装命令（`pi.dev` 安装脚本、Windows PowerShell、npm 安装）、Node.js 22.19+ 前提、`pi update`、启动与 `/login`、Nix 运行与固定版本命令及平台支持、各包列表与职责、三种容器化模式、源码开发与独立二进制构建命令、供应链加固机制、`pi-telemetry` 与 `badlogic/pi-share-hf`、OpenClaw 集成案例，均来自该报告转述的项目原文。其中 stars 111397 来自给定 metrics；「minimal, extensible」「adapt Pi to your workflows, not the other way around」、公开真实会话数据比玩具 benchmark 更能改进 agent、「ships with powerful defaults」为作者主张；extensions、skills、prompt templates、themes、packages、containerization、usage、cli、rpc、sdk 在原文里只是链接，正文没有内容；原文没有效果数据、案例细节、对比测试、性能或质量数字；主动推进只有基础设施线索，没有时间/事件/状态触发的配置或步骤。做法 G 的最小试用方式与对照指标由调研报告提出，原文没有基线或阈值。
-- 五条已有线索加 Claude Mods、pi 都没有给出「AI 是否让结果变好了」的对照评测方法或基准数据。agentbox 的成本与用量指标属于记账维度；goose 没有任务效果指标；claude-code-pro-course 没有效果数据；OpenCode 与 Codex 的 README 也没有效果数据；Claude Mods 的验收矩阵与成本公式是作者提出的评估方法；pi 的原文同样没有效果数据，其会话导出只是留档路径。做法 C、D、E、F、G 的「怎么判断变好了」分别沿用做法 B 或调研报告提出的最小试用方法与指标，属于作者主张。
-- 与清单的关系：agentbox 不替代 Claude Code，而是给它（以及 Codex CLI）提供自托管环境；goose 这条线索给出了可复制安装命令和通过 MCP 供给工具权限、通过定制发行版预置配置两条路径；claude-code-pro-course 给出了项目级护栏与自动化触发的可复制配置；OpenCode 补上了可复制的安装命令和 `build`/`plan` 权限分工，但 README 不含效果数据，不足以支撑 adopt，可作为把清单中 OpenCode（watch）推进到 try 的依据；Codex CLI 给出了安装与登录路径，并说明可作为 Cursor 里的智能体使用（同一层叠加），但原文只到首页，可作为对比参照，没有给出与 Cursor 的功能差异证据；Claude Mods 补上了 Claude Code 的运行时/界面扩展面、选型表、验收矩阵与成本口径，但处于 early access，适合受控试点而非直接采纳；pi 补上了「统一多提供商接口 + 可嵌入 harness」这一层，给出了安装、启动、登录、Nix 固定版本与三种容器化边界的可复制步骤，并把 OpenClaw 列为真实集成案例，但 README 是宣传 + 导览，扩展与容器化细节只给了链接，默认没有权限系统，没有效果数据，需要在容器里实测后再决定是否写进日常流程。七条都可把评估从 watch 上调为 try，但都必须先读官方文档、审查安装脚本，并做一次实际任务。
+- 做法 H 依据调研《hamzafer/claude-code-mods》：安装命令 `claude plugin marketplace add hamzafer/claude-code-mods` / `claude plugin install mission-control@claude-code-mods`、`claude --plugin-dir mods/token-weather` 临时试用、`/mission`、`w` / `c` 快捷键、颜色语义（蓝=读、橙=写、绿=完成）、token-weather / where-am-i / next-steps / usage-meter / agent-radar / browser-lanes / replay-theater / md-preview、blast-radius 拦截 `rm -r` / force push / migration 并超时取消、glance / merge-gate / rulebook-guard / session-saver 的个人配置属性，均来自该报告转述的 README 自述。MIT 许可、CI badge、37 stars、mission-control 4x 演示图（两个子 agent + 一个 logout 功能落在四个文件上）、作者自述早期项目 cursor-commands 有 600+ stars 是可核对的「硬信息」；除此之外没有任何基准、耗时、token 节省或用户反馈数据，颜色语义的准确性、token-weather 阈值合理性、blast-radius 的拦截完整性、next-steps 建议质量均属作者主张。原文明确的前提是 Claude Code 2.1.287+（版本号本身无法从材料中验证）、Code 视图限 macOS + Chrome + 支持图片的终端；稳定性、上游升级兼容性、多插件同开的性能开销都未交代。做法 H 的最小试用与五项指标由调研报告提出，README 未给出。
+- 五条已有线索加 Claude Mods、pi、hamzafer/claude-code-mods 都没有给出「AI 是否让结果变好了」的对照评测方法或基准数据。agentbox 的成本与用量指标属于记账维度；goose 没有任务效果指标；claude-code-pro-course 没有效果数据；OpenCode 与 Codex 的 README 也没有效果数据；Claude Mods 的验收矩阵与成本公式是作者提出的评估方法；pi 的原文同样没有效果数据，其会话导出只是留档路径；hamzafer/claude-code-mods 只有 README，没有基准、耗时、token 节省或用户反馈数据。做法 C、D、E、F、G、H 的「怎么判断变好了」分别沿用做法 B 或调研报告提出的最小试用方法与指标，属于作者主张。
+- 与清单的关系：agentbox 不替代 Claude Code，而是给它（以及 Codex CLI）提供自托管环境；goose 这条线索给出了可复制安装命令和通过 MCP 供给工具权限、通过定制发行版预置配置两条路径；claude-code-pro-course 给出了项目级护栏与自动化触发的可复制配置；OpenCode 补上了可复制的安装命令和 `build`/`plan` 权限分工，但 README 不含效果数据，不足以支撑 adopt，可作为把清单中 OpenCode（watch）推进到 try 的依据；Codex CLI 给出了安装与登录路径，并说明可作为 Cursor 里的智能体使用（同一层叠加），但原文只到首页，可作为对比参照，没有给出与 Cursor 的功能差异证据；Claude Mods 补上了 Claude Code 的运行时/界面扩展面、选型表、验收矩阵与成本口径，但处于 early access，适合受控试点而非直接采纳；pi 补上了「统一多提供商接口 + 可嵌入 harness」这一层，给出了安装、启动、登录、Nix 固定版本与三种容器化边界的可复制步骤，并把 OpenClaw 列为真实集成案例，但 README 是宣传 + 导览，扩展与容器化细节只给了链接，默认没有权限系统，没有效果数据，需要在容器里实测后再决定是否写进日常流程；hamzafer/claude-code-mods 补上了 Claude Code 会话内的实时观察面与危险命令闸门，给出了可复制的 marketplace 安装命令、快捷键和平台前提，足以小范围试，但材料只有 README，无实测数据，且 Code 视图限 macOS + Chrome。八条都可把评估从 watch 上调为 try，但都必须先读官方文档、审查安装脚本，并做一次实际任务。
 
 ## 依据的调研
 
@@ -879,3 +957,4 @@ cd "pi-${VERSION}"
 - [openai/codex](../research/radar/2026-10-02/516-openai-codex.md)：值得一试，可以按 README 给出的命令在本机装好 Codex CLI、用 ChatGPT 账号登录，先在真实小仓库里跑通一次终端编码任务；因为原文只提供了安装与登录这类可照做的步骤，没有可提炼的工作流配置，所以先小范围试而不是直接采用。
 - [Claude Mods: Setup, Function Hooks and Security](../research/radar/2026-10-02/851-claude-mods-setup-function-hooks-and-security.md)：值得一试，把 Claude Mods 当作受控试点的运行时/界面扩展面来用：先用实验开关与 /plugin-types 在一次性项目里跑通官方 diff 示例，再按文章的验收矩阵和「每被接受任务总成本」指标判断是否留下。理由是原文给出了可直接复制的启用命令、插件目录结构、hooks.json 片段和一整套安全验收检查，但它自认只是文档与源码审阅、API 处于 early access，因此不适合直接采纳为生产依赖。
 - [earendil-works/pi](../research/radar/2026-10-03/518-earendil-works-pi.md)：值得一试，建议小范围试：按 README 的安装脚本装好 pi，在单个有版本控制的项目目录里用 /login 接入模型跑一个边界清晰的小任务（优先在容器里跑），验证它作为「统一模型接口 + 编码 agent」能否承载可复用的协作工作流；理由是原文给出了安装、启动、登录、容器化三类能直接照做的步骤，但扩展、技能、提示词模板等定制细节全在外链文档里，只有实测才能判断值不值得写进手册。
+- [hamzafer/claude-code-mods](../research/radar/2026-10-04/1071-hamzafer-claude-code-mods.md)：值得一试，建议在受控项目里小范围试装 mission-control（配合 token-weather、按需 blast-radius），用实时视图观察 agent 读了哪些文件、写了什么、上下文还剩多少，并在危险命令前设一道闸；理由是 README 给出了可直接照抄的安装命令、快捷键和版本要求，属于可执行流程，但全部依据仅为该 README，无实测数据，且部分视图依赖特定 Claude Code 版本与 macOS/Chrome 环境。
