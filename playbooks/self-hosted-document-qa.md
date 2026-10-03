@@ -1,14 +1,14 @@
-# 让 agent 把自有文档变成带引用的问答与定时产出
+# 把自有文档变成带来源引用的问答与定时流水线
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：如何把散落的自有文档变成带来源引用的问答入口，并让 agent 按固定节奏复用这些结果。
-> 先试这一步：先选 20–50 份同主题文档，跑通一条「导入→提问→带引用回答→导出」的最小流水线，记录引用命中率；已在用 Claude Code 等 agent 的，可先用 notebooklm-py 跑通 create → source add → ask → download。
-> 最近修订：2026-10-02
+> 解决的问题：如何把一批自有文档变成带来源引用、可定时、可被 agent 编排的问答入口，并在不放弃检索地基的前提下逐步升级检索方案。
+> 先试这一步：先挑一条路（要最快见效选现成应用，要对照检索方案选自建 RAG 全栈），拿 20–50 份同主题文档跑通「导入 → 提问 → 拿到带引用回答」这一条端到端流水线，并记下耗时与引用命中情况作为基线。
+> 最近修订：2026-10-04
 
 ## 解决什么问题
 
-把散落的自有文档（PDF/TXT/DOCX）变成能带来源引用回答的入口，并把每周重复的固定动作交给定时任务；进一步，让 agent 能程序化驱动一个「有据可依的昂贵阅读与综合层」，自己只负责编排和最后一公里。同时避免被一份很长的功能清单牵着走——README 给的是能力入口，不是可照做的参数，先小范围试、再决定用不用。
+把散落的自有文档（PDF/TXT/DOCX）变成能带来源引用回答的入口，并把每周重复的固定动作交给定时任务；进一步，让 agent 能程序化驱动一个「有据可依的昂贵阅读与综合层」，自己只负责编排和最后一公里。如果你还想弄清答对答错出在检索的哪一环、想把这条链路握在自己手里，就需要第三条路：在本地起一套完整 RAG 栈，按周从关键词检索做到混合检索、再到 Agentic RAG，用同一批问题做对照。三条路共同的纪律是：不被一份很长的功能清单牵着走——README 给的是能力入口，不是可照做的参数，先小范围试，再决定用不用。
 
 ## 适用与不适用
 
@@ -22,15 +22,23 @@
 - 需要 Web UI 不提供的批量下载、测验/闪卡的 JSON/Markdown/HTML 导出、思维导图 JSON 提取。
 - 有本地模型（Ollama / LM Studio / LocalAI / llama.cpp 兼容模型）或已在用的云端 provider（AnythingLLM README 列出 30+ LLM provider、10+ embedder、9 个向量库）。
 - 需要多用户与权限、或需要把问答挂件嵌到网站——这两项**仅 AnythingLLM 的 Docker 版本提供**。
+- 想自己掌控检索层、看清「关键词检索 / 混合检索 / Agentic RAG」三档差别，而不是只要一个能用就行的问答框（做法 C）。
+- 需要本地 LLM 且数据不出本地（Ollama，端口 11434），同时要监控与缓存（Langfuse、Redis）。
+- 需要定时自动抓取与编排（Airflow DAG），或需要把问答做到移动端（Telegram Bot）。
+- 手上有一套可被 Docling 解析的 PDF 文档；课程本身以 arXiv 论文为贯穿案例。
+- 有 Docker 资源余量：8GB+ 内存、20GB+ 空闲磁盘。
 
 **不适用**
 
 - 只是偶尔问一次问题，不需要文档库和调度。
-- 敏感数据场景且需要安全/合规结论——两份调研都未提供安全或合规说明。
-- 出网严格受限的环境——AnythingLLM 即使关掉遥测，使用外部模型/向量库仍有对应厂商外连，应用本身还会连 `cdn.anythingllm.com` 与 github/githubusercontent；notebooklm-py 依赖 Google 服务。
+- 敏感数据场景且需要安全/合规结论——三份调研都未提供安全或合规说明。
+- 出网严格受限的环境——AnythingLLM 即使关掉遥测，使用外部模型/向量库仍有对应厂商外连，应用本身还会连 `cdn.anythingllm.com` 与 github/githubusercontent；notebooklm-py 依赖 Google 服务；做法 C 的混合检索要 Jina API、监控要 Langfuse，也都是外连。
 - 不能接受非官方 API、未公开 Google API 的稳定性和限额风险。
 - 没有本地浏览器做首次交互式登录，且未准备 master token / 专用账号。
 - 想直接照抄 AnythingLLM 的定时任务、动态模型路由、Agent Flows 的具体参数——README 对这些只给文档链接和一句话描述，没有配置样例。
+- 不想承担自建与运维成本：做法 C 要自己起 Docker 全栈、配 `.env`、管端口和内存。
+- 只想尽快拿到一个能用的文档问答入口，不打算做检索方案对照实验——那做法 A 更划算。
+- 不愿意读代码和 notebook：做法 C 的提示词、LangGraph 图定义和评估脚本不在 README，而在仓库代码/notebooks 与博客里，README 只到架构与入口层面。
 
 ## 前置条件
 
@@ -44,14 +52,20 @@
 - notebooklm-py：首次交互式登录需要本地浏览器（会下载 Chromium，约 170 MB）。
 - notebooklm-py：推荐用 uv、pipx 或虚拟环境隔离，避免 PEP 668 的 `externally-managed-environment` 报错。
 - notebooklm-py：无头/服务器场景需要可接受使用专用账号和 master token。
+- 做法 C：Docker Desktop（含 Docker Compose）。
+- 做法 C：Python 3.12+ 与 UV 包管理器。
+- 做法 C：8GB+ 内存、20GB+ 空闲磁盘。
+- 做法 C：`.env`（从 `.env.example` 复制）；其中 `JINA_API_KEY` 在 Week 4 及以后必需（混合检索的向量嵌入），`TELEGRAM__BOT_TOKEN` 在 Week 7 必需（Telegram Bot），`LANGFUSE__PUBLIC_KEY` 与 `LANGFUSE__SECRET_KEY` 在 Week 6 可选（监控）。
+- 做法 C：可被 Docling 解析的 PDF 文档。
 
 ## 操作步骤
 
 先决定走哪条路：
 
-- **做法 A：AnythingLLM，本地优先文档问答 + 定时任务**。要开多用户、要把问答挂件嵌进网站，只能走 Docker；本地看效果、要改代码，走源码开发模式。
+- **做法 A：AnythingLLM，本地优先文档问答 + 定时任务**。要开多用户、要把问答挂件嵌进网站，只能走 Docker；本地看效果、要改代码，走源码开发模式。最短路径，几乎不写代码，但检索层是黑盒。
 - **做法 B：notebooklm-py，让 agent 程序化驱动 NotebookLM / Gemini Notebook**。适合已经在用 agent、想把昂贵阅读与综合外包给 NotebookLM 的团队；但它是非官方 API，依赖未公开的 Google API，稳定性和限额必须自行验证。
-- **可组合**：NotebookLM 做 grounded 阅读与综合，agent 只负责编排和最后一公里；AnythingLLM 做本地文档库与 cron 定时任务。先各自跑通一条端到端流水线，再决定是否固化进 SKILL.md 或定时任务。
+- **做法 C：自建 production-agentic-rag-course 全栈**。适合想掌控检索层、要做「关键词 / 混合 / Agentic」对照的团队。它的路线主张是先用 BM25 关键词检索打底、再用向量增强，而不是一上来就向量检索。代价是要自己起 Docker 全栈、读仓库代码与 notebook。
+- **可组合**：NotebookLM 做 grounded 阅读与综合，agent 只负责编排和最后一公里；AnythingLLM 做本地文档库与 cron 定时任务；做法 C 做检索质量对照与自建链路。先各自跑通一条端到端流水线，再决定是否固化进 SKILL.md 或定时任务。
 
 ### 做法 A：AnythingLLM 本地优先
 
@@ -270,9 +284,149 @@ async def main():
 
 B10. 小范围试：先用 `create → source add → ask → download` 跑通一条端到端流水线，再决定是否固化进 SKILL.md 或定时任务。
 
+### 做法 C：自建生产级 RAG 全栈（production-agentic-rag-course）
+
+C1. 前提：Docker Desktop（含 Docker Compose）、Python 3.12+、UV 包管理器、8GB+ 内存、20GB+ 空闲磁盘。
+
+C2. 克隆并起全栈（前提：完成 C1）：
+
+```bash
+# 1. Clone and setup
+git clone <repository-url>
+cd arxiv-paper-curator
+
+# 2. Configure environment (IMPORTANT!)
+cp .env.example .env
+# The .env file contains all necessary configuration for OpenSearch, 
+# arXiv API, and service connections. Defaults work out of the box.
+# You need to add Jina embeddings free api key and langfuse keys (check the blogs)
+
+# 3. Install dependencies
+uv sync
+
+# 4. Start all services
+docker compose up --build -d
+
+# 5. Verify everything works
+curl http://localhost:8000/api/v1/health
+```
+
+   - 注意：README 的克隆命令里写的是 `arxiv-paper-curator` 这个仓库名，而当前页面的仓库名是 `production-agentic-rag-course`，克隆前先确认实际地址。
+   - 预期结果：健康检查有响应；服务全部起来大约要等 2–3 分钟。
+
+C3. 配置必需变量（前提：`.env` 已由 `.env.example` 生成）：
+
+```bash
+cp .env.example .env
+# Edit .env for your environment
+```
+
+   - `JINA_API_KEY`：Week 4 及以后必需（混合检索的向量嵌入）。
+   - `TELEGRAM__BOT_TOKEN`：Week 7 必需（Telegram Bot）。
+   - `LANGFUSE__PUBLIC_KEY` & `LANGFUSE__SECRET_KEY`：Week 6 可选（监控）。
+   - 完整选项见仓库 `.env.example`。
+
+C4. 访问各服务（前提：`docker compose up --build -d` 成功）：
+
+| 服务 | URL | 用途 |
+|---|---|---|
+| API Documentation | http://localhost:8000/docs | 交互式 API 测试 |
+| Gradio RAG Interface | http://localhost:7861 | 聊天界面 |
+| Langfuse Dashboard | http://localhost:3000 | RAG 链路监控与追踪 |
+| Airflow Dashboard | http://localhost:8080 | 工作流管理 |
+| OpenSearch Dashboards | http://localhost:5601 | 搜索引擎 UI |
+
+   - Airflow 用户名/密码见 `airflow/simple_auth_manager_passwords.json.generated`。
+   - 预期结果：五个入口都能打开；记一次冷启动到可用的耗时作为基线。
+
+C5. 按周推进，每周跑对应 notebook（前提：C2–C4 已通过）：
+
+```bash
+uv run jupyter notebook notebooks/week1/week1_setup.ipynb
+uv run jupyter notebook notebooks/week2/week2_arxiv_integration.ipynb
+uv run jupyter notebook notebooks/week3/week3_opensearch.ipynb
+uv run jupyter notebook notebooks/week4/week4_hybrid_search.ipynb
+uv run jupyter notebook notebooks/week5/week5_complete_rag_system.ipynb
+uv run jupyter notebook notebooks/week6/week6_cache_testing.ipynb
+uv run jupyter notebook notebooks/week7/week7_agentic_rag.ipynb
+```
+
+   启动 Gradio 界面：
+
+```bash
+uv run python gradio_launcher.py
+# Open http://localhost:7861
+```
+
+C6. 只取某一周的代码做对照实验（前提：想跳过前面周次）：
+
+```bash
+# Clone a specific week's code
+git clone --branch <WEEK_TAG> https://github.com/jamwithai/arxiv-paper-curator
+cd arxiv-paper-curator
+uv sync
+docker compose down -v
+docker compose up --build -d
+
+# Replace <WEEK_TAG> with: week1.0, week2.0, etc.
+```
+
+   - 可用 tag：`week1.0` … `week7.0`。
+   - 预期结果：同一批问题可以在不同周的检索实现上重复提问，做对照。
+
+C7. 构建检索层（Week 3 → Week 4，这是可迁移的核心流程）：
+   1. 先在 OpenSearch 建索引/mapping，跑 BM25 关键词检索（`src/services/opensearch/`、`src/routers/search.py`，端点 `POST /api/v1/search`）。
+   2. 再用 `src/services/indexing/text_chunker.py` 做按章节切分（带 overlap）。
+   3. 用 `src/services/embeddings/`（Jina AI，含 fallback 策略）生成向量。
+   4. 通过 `src/routers/hybrid_search.py`（端点 `POST /api/v1/hybrid-search/`）用 RRF 融合关键词与语义结果。
+   - 预期结果：同一批问题分别拿到关键词检索与混合检索两套结果；Week 3 用 precision、recall、relevance scoring 记录质量。
+
+C8. 接 LLM 与流式输出（Week 5）：
+   - 端点：`/api/v1/ask` 与 `/api/v1/stream`（`src/routers/ask.py`）。
+   - 系统提示词文件：`src/services/ollama/prompts/rag_system.txt`（针对学术论文优化）。
+   - LLM 服务：`src/services/ollama/`（本地 Ollama，端口 11434，数据不出本地）。
+
+C9. 加监控与缓存（Week 6）：
+   - Langfuse：`src/services/langfuse/`，在 RAG 端点挂 tracing，看延迟/成本仪表盘。
+   - Redis：`src/services/cache/`，精确匹配缓存 + 优雅降级，缓存键与 TTL 在服务内管理。
+   - `docker-compose.yml` 增加 Redis 与 Langfuse 本地实例。
+
+C10. 升级为 Agentic RAG（Week 7）：
+   - 节点实现：`src/services/agents/nodes/`（guardrail、retrieve、grade、rewrite、generate）。
+   - 工作流编排：`src/services/agents/agentic_rag.py`（LangGraph）。
+   - 智能体端点：`src/routers/agentic_ask.py`；Telegram Bot：`src/services/telegram/`。
+   - 关键机制：决策节点自适应选检索策略、文档相关性打分（document grading）、结果不足时查询改写重试（query rewriting / adaptive retrieval）、域外问题 guardrail 拦截（防幻觉）、暴露推理步骤便于调试。
+   - 预期结果：域外问题被拦截而不是硬答；检索结果不足时会改写重试；推理步骤可见。
+
+C11. 日常操作与排障（前提：位于仓库根目录）：
+
+```bash
+make help          # View all available commands
+make start         # Start all services
+make health        # Check all services health
+make test          # Run tests
+make stop          # Stop services
+```
+
+   直接命令替代方案：
+
+```bash
+docker compose up --build -d    # Start services
+docker compose ps               # Check status
+docker compose logs            # View logs
+uv run pytest                 # Run tests
+```
+
+   - 排障：服务起不来先等 2–3 分钟并看 `docker compose logs`；端口冲突释放 8000 / 8080 / 5432 / 9200；内存不足调大 Docker Desktop 内存。
+   - 完全重置：
+
+```bash
+docker compose down --volumes && docker compose up --build -d
+```
+
 ## 怎么判断变好了
 
-**最小试用方式（单机、单人、一周内可完成）**
+**最小试用方式（单机、单人）**
 
 1. 做法 A：按 A1–A7 起一个实例，先设 `DISABLE_TELEMETRY=true`，记录一次冷启动到可用的耗时。
 2. 做法 A：只接一个你已经在用的模型，作为基线，不做切换对比。
@@ -280,7 +434,8 @@ B10. 小范围试：先用 `create → source add → ask → download` 跑通�
 4. 做法 A：准备 10 个你已知答案的问题，逐个提问，逐条记录：答案是否正确、引用是否指向真正含答案的那份文档、回答耗时。
 5. 做法 A：配 1 个 cron 定时任务，选一件你本来每周手动做一次的固定动作，连续观察 2–3 次触发是否按时、产出是否可用。
 6. 做法 B：先用 `create → source add → ask → download` 跑通一条端到端流水线，建议连续做多次真实任务；记录 ask 回答是否有引用、产物能否下载、agent 调用成功率、认证失效/限额触发次数。再决定是否固化进 SKILL.md 或定时任务。
-7. 对照基线：同一批问题用你现在的做法（手工翻文档，或直接把文档贴进通用聊天窗口）走一遍，用同样的记录口径。
+7. 做法 C：先用默认分支跑到 `curl http://localhost:8000/api/v1/health` 通过、五个服务入口能打开；再用 `week3.0` 与 `week4.0` 两个 tag 各起一次，用同一批问题对比 BM25 与混合检索。只有这一步出现可观察差异，再考虑 Week 5–7。
+8. 对照基线：同一批问题用你现在的做法（手工翻文档，或直接把文档贴进通用聊天窗口）走一遍，用同样的记录口径。
 
 **可观察的指标**
 
@@ -289,10 +444,12 @@ B10. 小范围试：先用 `create → source add → ask → download` 跑通�
 - 单次回答耗时，以及冷启动到可用的耗时。
 - 定时任务 2–3 次触发的按时率与产出可用率。
 - notebooklm-py：端到端流水线跑通次数、产物下载成功率、agent skill 调用成功率、认证保活是否无人值守、限额/失败次数。
+- 做法 C：同一批问题在 BM25 / 混合检索 / Agentic RAG 三档下的 precision、recall、relevance scoring；Langfuse 仪表盘上的端到端延迟与成本；重复问题命中 Redis 缓存后的耗时；Agentic 侧 guardrail 拦截次数、查询改写重试次数、推理步骤是否可读。
 
 **试多久**
 
-一周。一周内如果引用命中率没有明显优势，或定时任务产出不可用，就不要继续投入。notebooklm-py 若认证频繁失效或限额触发，不要固化进 SKILL.md 或定时任务。
+- 做法 A、B：一周。一周内如果引用命中率没有明显优势，或定时任务产出不可用，就不要继续投入。notebooklm-py 若认证频繁失效或限额触发，不要固化进 SKILL.md 或定时任务。
+- 做法 C：课程本身按 7 周递进，不要一周内全做完。至少把 Week 3 与 Week 4 的对照跑完再决定是否继续投入 Week 5–7；如果混合检索相对 BM25 没有可观察提升，就不要继续往后投。
 
 ## 常见坑
 
@@ -314,6 +471,14 @@ B10. 小范围试：先用 `create → source add → ask → download` 跑通�
 - **每个 notebook 的来源数量上限取决于账号等级**；批量导入前先确认限额。
 - **notebooklm-py 的 stars 19591 来自本次线索的 metrics 字段**，不是效果、性能或成本数据。
 - **「零 token 综合层/记忆层」是调研建议**，不是 README 数据；先小范围试，再决定是否固化。
+- **课程仓库的克隆命令与页面仓库名不一致**：README 写 `cd arxiv-paper-curator`，而当前页面仓库名是 `production-agentic-rag-course`，克隆前先确认实际地址。
+- **做法 C 的 README 只到架构与入口层面**：提示词、LangGraph 图定义和评估脚本都在仓库代码/notebooks 与博客里，照着 README 走不到「用好」。
+- **不要跳过前几周直接上 Week 7**：课程按 7 周递进，作者的路线主张是先 BM25 关键词检索打底、再用向量增强；顺序本身是课程主张，实际差距要自己测。
+- **做法 C 的密钥要分清必需与可选**：Jina 是 Week 4 及以后必需，Telegram Bot Token 是 Week 7 必需，Langfuse 公私钥 Week 6 可选。
+- **做法 C 服务起不来通常只是没等够**：等 2–3 分钟再看 `docker compose logs`；端口冲突释放 8000 / 8080 / 5432 / 9200；内存不足调大 Docker Desktop 内存。
+- **Airflow 登录信息不在 README 正文里**：见 `airflow/simple_auth_manager_passwords.json.generated`。
+- **Week 6 的 Redis 是精确匹配缓存**：字面不同但语义相近的问题不会命中。
+- **课程以 arXiv 论文为贯穿案例**：摄取层围绕 arXiv API 构建，用到自己的文档前先确认这条路径能改到你的数据源。
 
 ## 证据与来源
 
@@ -336,7 +501,18 @@ B10. 小范围试：先用 `create → source add → ask → download` 跑通�
 - 调研结论建议小范围试：把 notebooklm-py 作为「零 token 综合层/记忆层」接进 Claude Code 等 agent 的研究与写作工作流，先用 create → source add → ask → download 跑通一条端到端流水线再决定是否固化进 SKILL.md 或定时任务。这是调研建议，不是厂商数据。
 - 本份 notebooklm-py 调研没有官方文档正文，也没有性能、成本、效果或安全合规数据。文中把 notebooklm-py 纳入同一周试用，是本次合并时的操作化安排，不是厂商数据；「怎么算变好」需要自己按上述口径采集。
 
+**production-agentic-rag-course 部分**
+
+- 全部操作项来自 jamwithai/production-agentic-rag-course 仓库 README：MIT、免费课程，以 arXiv Paper Curator 为贯穿案例，7 周递进、每周一个独立 release tag（`week1.0` … `week7.0`），以及 Quick Start 命令、`.env` 必需变量清单、五个服务入口、`make` 命令与完全重置命令。
+- 课程结构（Week 1 基础设施 → Week 2 摄取 → Week 3 BM25 → Week 4 分块 + 混合检索 → Week 5 完整 RAG → Week 6 监控与缓存 → Week 7 Agentic RAG + Telegram）与各周对应的源码路径、端点，来自该 README。
+- Week 3 的 precision / recall / relevance scoring 是课程给出的质量指标；Week 6 的 Langfuse 端到端追踪与 Redis 精确匹配缓存、Week 7 的 guardrail / document grading / query rewriting / 推理步骤暴露，都是课程 README 列出的内容。
+- 「先用扎实的关键词搜索地基，再用向量增强」是作者明确主张的路线，属于主张而非效果数据。
+- 该调研同样只有 README，没有官方文档正文，也没有性能、成本、效果或安全合规数据；README 本身只到架构与入口层面，提示词、LangGraph 图定义与评估脚本在仓库代码/notebooks 与博客里。
+- README 克隆命令中的仓库名（`arxiv-paper-curator`）与页面仓库名（`production-agentic-rag-course`）不一致，这是本次合并时发现的材料内部不一致，照抄前需确认。
+- 文中把做法 C 与做法 A/B 放进同一份试用与对照口径，是本次合并时的操作化安排，不是厂商数据。
+
 ## 依据的调研
 
 - [Mintplex-Labs/anything-llm](../research/radar/2026-10-02/546-mintplex-labs-anything-llm.md)：值得一试，可以小范围试：按 README 给出的开发/自托管入口把 AnythingLLM 在本机或内网部署起来，接入已有模型，用「文档问答」和「cron 定时任务」各跑一个真实场景，理由是它把本地文档上下文、多模型、agent 与定时调度打包成一套可直接部署的应用；但 README 只给功能入口链接、缺少定时任务/模型路由等关键功能的可照做参数，也没有任何效果数据，因此先试不直接采用。
 - [teng-lin/notebooklm-py](../research/radar/2026-10-02/584-teng-lin-notebooklm-py.md)：值得一试，建议小范围试：把 notebooklm-py 作为「零 token 综合层/记忆层」接进 Claude Code 等 agent 的研究与写作工作流，先用 create → source add → ask → download 跑通一条端到端流水线再决定是否固化进 SKILL.md 或定时任务。README 给出了可复制的安装、认证、CLI/Python API 与 agent 集成步骤，但它依赖未公开的 Google API，稳定性和限额必须自行验证。
+- [jamwithai/production-agentic-rag-course](../research/radar/2026-10-04/1063-jamwithai-production-agentic-rag-course.md)：值得一试，建议小范围试：按 README 的 Quick Start 在本地起完整栈（Docker + FastAPI + PostgreSQL + OpenSearch + Airflow + Ollama），先跑 Week 3 的 BM25 关键词检索、再加 Week 4 混合检索，最后对比 Week 7 的 Agentic RAG 与普通 RAG 的效果；理由是原文给出了可直接复制的命令、配置项、服务入口和按周递进的可复现路径，且 Langfuse 追踪与 Redis 缓存提供了现成的效果验证手段，但提示词、LangGraph 图定义和评估脚本都在仓库代码/notebooks 与博客里，README 本身只到架构与入口层面。

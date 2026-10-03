@@ -1,14 +1,14 @@
-# 把 AI 的「完成」变成可验证的交付：多策略竞争、测试闸门与 QA 复核
+# 让多个 AI 子代理竞争、互评，并通过验证门再交付
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：让 AI 交付的结果必须经过验证才算完成——多策略竞争淘汰、测试闸门合入、QA 在真实环境复核后才允许合并。
-> 先试这一步：挑一个你确实不满意、且能验证的真实任务，跑一次最小规模的多策略竞争：`/arena --quick --seed 7 <把任务写具体>`，并用 `--baseline-file` 把被拒的旧答案传进去，看盲评比分和攻击命中的缺口。
-> 最近修订：2026-10-02
+> 解决的问题：单个 AI 回答、单条串行的 agent 会话交付的往往是你没验证过的结果；这篇手册把「不满意就重问一次」升级成可执行流程——多策略并行竞争、角色化流水线、每个 agent 独立 worktree 与项目记忆、提交前互评，以及必须通过你自己的验证命令才能合入。
+> 先试这一步：挑一个你确实不满意、且能写清验收标准的真实任务，先用做法 A 的 `--quick` 跑一次，并把被拒的旧答案作为 baseline 传进去。
+> 最近修订：2026-10-04
 
 ## 解决什么问题
 
-单个 AI 回答、单条串行的 agent 会话，交付的往往是你没有验证过的结果：看起来合理，但可能漏了你真正在意的约束。这篇手册把「不满意就重问一次」升级成一套可执行的流程——把同一个任务交给多个子代理用不同策略并行求解、互相对抗、由独立裁判按公开标准打分淘汰；把有固定分工的多步任务（先搜集资料、再扩写成文）固化成角色化 Crew 流水线，产物落盘成文件；代码类任务则必须通过你自己的验证命令才能合入，再进一步可以把整条链固化成 GitHub 上的 issue → PR → 浏览器实测 → 合并。同时给出成本预估、可观察指标，以及「什么时候不值得这么做」的判断线。
+单个 AI 回答、单条串行的 agent 会话，交付的往往是你没有验证过的结果：看起来合理，但可能漏了你真正在意的约束。这篇手册把「不满意就重问一次」升级成一套可执行的流程——把同一个任务交给多个子代理用不同策略并行求解、互相对抗、由独立裁判按公开标准打分淘汰；把有固定分工的多步任务（先搜集资料、再扩写成文）固化成角色化 Crew 流水线，产物落盘成文件；代码类任务则必须通过你自己的验证命令才能合入，再进一步可以把整条链固化成 GitHub 上的 issue → PR → 浏览器实测 → 合并。同时给出成本预估、可观察指标，以及「什么时候不值得这么做」的判断线。新增的做法 H 把「隔离、记忆、评审」三件事落成可手工照做的流程：每个 agent 一个 git worktree、项目记忆写成 conventions.md/plan.md/dead-ends.md、第二个 agent 在提交前读 diff 做同行评审；Offrun 是这套流程在 macOS 上的一种现成实现。
 
 ## 适用与不适用
 
@@ -21,6 +21,8 @@
 - 想自建长时程子代理 + 沙箱 + 记忆的执行底座。
 - 有稳定重复的多步分工（搜集资料 → 扩写成文），且你愿意写一点 Python、改 JSONC 配置：用角色化 Crew（做法 F）把这条链固化下来。
 - 有一个低风险、已有测试基础、且托管在 GitHub 上的小仓库，想验证「issue → PR → 浏览器实测 → 合并」这条自动链路到底能拦住多少问题（做法 G）。
+- 你想在一个已有 git 的仓库里，用轻量方式隔离多个 agent（每个一个 worktree），并把项目记忆写成可提交的纯文件，让第二个 agent 在提交前读 diff 评审（做法 H）。
+- 你有一台 Apple Silicon Mac（M1+）、macOS 14 Sonoma 或更高，想用 Offrun 把这套流程跑起来；或者你不在这个环境，但愿意手工照做同样的三条流程。
 
 **不适用**
 
@@ -34,6 +36,10 @@
 - 项目只在本地、没有托管到 GitHub：cubefarm 的 issue 和 PR 是唯一协作媒介，纯本地项目用不了（做法 G）。
 - 没有编码 agent 的付费订阅，或不愿让多个 agent 共享同一份用量限额：cubefarm 的所有 agent 共用同一份额度。
 - 非 Web 类项目：cubefarm 的 QA 在真实浏览器里测，依赖 Google Chrome，README 未说明非 Web 项目怎么 QA。
+- 不是 Apple Silicon Mac 或系统低于 macOS 14：Offrun 本身用不了；做法 H 的三条流程可以手工照做，不受此限。
+- 想靠 Offrun 的「免费无限」「无服务器」「不经手密钥」等厂商声明作为选型依据：原文未给审计或第三方说明。
+- 需要跨 Mac 通知或本地听写：这些只在 Offrun/macOS 生态成立。
+- 希望评审后自动合并：做法 H 默认「Nothing merges on its own」，发现落到 chat 里由你判断；这与做法 B/G 的自动合入闸门不同。
 
 ## 前置条件
 
@@ -45,6 +51,7 @@
 - 做法 E（deer-flow）：git、Docker Desktop/Engine、Docker Compose v2.24+（用 `docker compose version` 自检）；仓库自身要求 Python 3.12+ / Node.js 22+。
 - 做法 F（crewAI）：Python >= 3.10 且 < 3.14；命令行操作与基本 Python 编辑能力；用 uv 管理依赖；一个模型提供商的 API key（默认走 OpenAI API）；若任务要用网页搜索工具，另需 Serper.dev 的 key。Windows 上若遇 `chroma-hnswlib` 构建错误，需先装 Visual Studio Build Tools 并勾选 *Desktop development with C++*。
 - 做法 G（cubefarm）：Node.js 22 或更新版本；`git`；已登录的 GitHub CLI（`gh auth login`）；一个编码 agent 的订阅（cubefarm 自带 Claude Code 作为默认 agent，CEO 也跑它，无需另行安装，登录一次即可；你本机已装并登录的 Codex 或 OpenCode 也可以被选中）；Google Chrome（QA agent 要在浏览器里测你的应用）；项目必须托管在 GitHub 上；办公室数据在 `~/.cubefarm`（设置、仓库克隆、每个 agent 一份独立工作副本），可用 `SWARM_HOME` 换目录。
+- 做法 H（Offrun 或手工照做）：项目在 git 下（worktree 依赖 git）；至少一个你已在用的 agent CLI 和账号，有第二个账号更好（用于限额切换）。若用 Offrun 本身：Apple Silicon Mac（M1 或更新）、macOS 14 Sonoma 或更高；下载 Offrun 拖进 Applications；在 Settings → Agents 添加账号。若手工照做：任意支持 git 的环境，能创建 worktree 的 git 版本，agent CLI 能在指定目录运行。
 
 ## 操作步骤
 
@@ -59,6 +66,7 @@
 | 想自建长时程子代理 + 沙箱 + 记忆的底座 | 做法 E |
 | 有固定的多步分工（研究 → 成文），愿意写 Python / 改 JSONC | 做法 F |
 | 有 GitHub 上的低风险小仓库，想验证 issue → PR → 浏览器实测 → 合并 这条链 | 做法 G |
+| 想在一个已有 git 的仓库里轻量隔离多个 agent、把项目记忆落成文件、提交前互评 | 做法 H |
 
 ### 做法 A：把不满意的回答送进锦标赛（arena-skill）
 
@@ -685,6 +693,54 @@ cubefarm
 
 界面操作键：`W A S D`/方向键走动，`Shift` 跑，鼠标环视（需先点击画面），`E` 使用当前看着的东西（工位/白板/电梯/经理电脑），`P` 手机，`H` 帮助，`Esc` 松开鼠标或关闭面板。
 
+### 做法 H：worktree 隔离 + 项目记忆文件 + 提交前互评（Offrun 或手工照做）
+
+把这条路径当作可迁移流程来试，而不是直接采用 Offrun 本身：调研结论是先在单个有 git 的仓库上小范围试三条流程——每个 agent 一个 worktree、项目记忆落成 conventions.md/plan.md/dead-ends.md、第二个 agent 在提交前读 diff 做评审——再决定是否长期用 Offrun。理由是这几条流程具体、可照做且不依赖工具存活，而 Offrun 自身的收益目前只有厂商自述，且限定 Apple Silicon Mac。
+
+1. 前提：项目在 git 下。若用 Offrun：下载 Offrun，拖进 Applications；Settings → Agents 添加账号（Claude Code、Codex、AGY、Grok Build 等；有第二个账号也一并添加）。页面示例里的账号是 Claude Code（Default、Work 两个）、Codex（用 ChatGPT 登录）、AGY（用 Google 登录）、Grok Build（用 X 登录）。预期结果：能在工作区里看到已连接的 agent。
+
+2. 让每个 agent 拿到独立 worktree：在 Offrun 里，选一个项目，给它一个任务；项目里的每个 agent 都有自己的 git worktree，同一 repo 的两个 agent 不会碰同一批文件。手工照做：
+
+```bash
+git worktree add ../repo-agent1 -b agent1
+git worktree add ../repo-agent2 -b agent2
+```
+
+预期结果：可以同时跑重构和修 bug，各自分支，按你自己的节奏合并。注意与做法 B 的差异：做法 B 用 Docker 容器克隆仓库来隔离，做法 H 在同一仓库用 worktree，更轻，但隔离边界是文件系统路径而非容器。
+
+3. 建立项目记忆（原文给了文件名和读写时机）：在项目文件夹里存纯文件，可打开、可编辑、可提交：
+
+```
+conventions.md   # 仓库级约定，每个 agent 都读
+plan.md          # 这个功能的做法
+dead-ends.md     # 试过、失败、记下来
+```
+
+agent 在每次会话开始时读这些上下文，在工作中写回。原文的意图是：第四个会话知道第一个会话已经试过什么。手工照做时，把这些文件提交进仓库，并在每次任务开始时在 prompt 里要求 agent 先读它们、结束时把失败尝试写回 dead-ends.md。预期结果：第二个同类会话不再重复解释约定、不再重复踩 dead-ends 里已有的坑。
+
+4. 让第二个 agent 做提交前评审：挑一个 reviewer，它的发现在工作还没提交时就直接落到 chat 里；你可以让它按意见改，改动落到你的消息框里由你读。原文强调 "Nothing merges on its own"。示例输出（原文给的形态）：
+
+```
+Review by Codex · changes requested
+1. Warning in src/retry.js:2
+   The 30 second cap is longer than the gateway's 25 second timeout,
+   so the last retry is cut off.
+```
+
+预期结果：评审抓的是跨文件约束（如上限与上游超时不一致），而不是格式挑刺。手工照做时，在提交前把 diff 交给另一个 agent，让它只找会改的实质问题。
+
+5. 撞限额时切换登录：给不同 agent 指向不同登录；某个登录到限额后，Offrun 把 chat 移到还有余量的登录并告知；你重发消息，新登录接续整段对话；没有可用登录时它提议换另一个 agent。原文示例文案："Claude Code resets 3am. Codex can pick up this chat. It gets the whole conversation." 预期结果：等待限额的时间下降，对话不丢。
+
+6. 按需要切换模式：Build —— 做出改动并运行以证明它能工作；Planner —— 只想出做法并写下来，不改任何文件。任意 chat 可随时切换。手工照做：需要「证明能跑通」时要求 agent 运行测试/命令；只需要方案时明确说「只写方案，不改文件」。
+
+7. 开通知（Offrun）：Offrun 监听 Mac 上任何位置的编码 agent，包括它没启动的终端里的；agent 完成或停下来提问时通知你。原文示例："Codex needs your approval — Run npm install in billing-svc" "Claude is waiting — Shall I push the tag for 2.4.0?"
+
+8. 在 chat 旁边读产出：改动文件、带行号的 diff、渲染后的 markdown 和表格、图片、PDF，还有一个小浏览器。
+
+9. 本地听写（可选，Offrun）：按住键说话，本机转写，按你代码的拼写纠正术语；可以针对词条加 voice sample（示例：mac book→MacBook、jason→JSON、retry backoff helper→retryBackoffHelper、Kubernetes）。原文称转写完全在本机、不录音不上传。
+
+10. 数据边界（原文有一张明示表）：留在本机的是听写和项目文件；memory、chats、worktrees 在项目文件夹里；离开本机的是 agent 提示词和代码，直接发往你自己的 Anthropic / OpenAI / Google / xAI 账号；Offrun 服务器不在路径中。
+
 ### 通用收尾：不管走哪条路径
 
 - 开始前先固定「完成」的定义（哪条测试通过、谁来复核、在哪里看结果），不要只依赖 agent 的自证。
@@ -692,6 +748,7 @@ cubefarm
 - 保留可复现的随机种子或赛程记录，便于不同规模之间做对比。
 - 多步流水线一定要求产物落盘（如 `output_file`），否则你无法核对，也无法复用。
 - 带自动合并能力的链路（如做法 G 的 auto-merge），先用人工确认跑过 3–5 个真实 issue，再考虑对低风险改动打开。
+- 做法 H 的同行评审不要只看风格；让它明确读 diff 找跨文件约束冲突，并把结论落到 chat 里由你判断，不要自动合并。
 
 ## 怎么判断变好了
 
@@ -704,6 +761,7 @@ cubefarm
 - 做法 E：`make doctor` 是否能无阻断跑完；能否跑通一个最小任务（受限于原文截断，skills / sub-agents / scheduled tasks 的用法需自行查仓库文档）。
 - 做法 F：`output/report.md` 是否真的落盘、内容能不能直接用（采用 / 部分采用 / 弃用）；下游任务拿到的到底是不是上游的结果（`context` 是否真的接上了）；需要你手动返工几轮；`{placeholder}` 是否按预期被注入。
 - 做法 G：QA 报告的**真阳性率**（它标出的问题里，多少经人工复核确认是真问题）；QA 通过的 PR 中人工复核后确实可用的比例（漏检率）；同一类 issue 从开单到合并的周期时间 vs 你自己动手的基线；每个 issue 消耗的订阅用量；每个 PR 你要动手改多少、终端里介入多少次；开启 auto-merge 后是否出现被合入但需要回滚的改动。
+- 做法 H：并行任务时文件互相覆盖/冲突的次数（期望 0）；第二个同类会话的返工量——是否还要重复解释约定、是否重复踩 dead-ends 里已有的坑；同行评审提出的问题里，你判断有效（会改）的比例，以及误报率；撞到用量限额导致的等待时间是否下降（切登录后能否无缝继续）。
 
 **最小试用**
 
@@ -714,6 +772,7 @@ cubefarm
 - 做法 E：先走 `make setup` → `make doctor` → `make docker-start`，确认能起来再谈能力面。
 - 做法 F：把手头一个「多步资料整理 → 成文」的活改写成 researcher + reporting_analyst 两个角色的 Crew，`crewai install` → `crewai run`，只看一件事：`output/report.md` 能不能直接用、你要改多少。
 - 做法 G：`npx cubefarm doctor` 确认环境齐全 → `npx cubefarm --demo` 走一遍界面 → 选一个低风险、已有测试基础的小仓库接入，把 session limit 设为 1–2 → 先关闭 auto-merge，人工确认每一份 QA 报告和 PR 差异，跑 3–5 个真实 issue。
+- 做法 H：半天到一天，一个仓库。装好 Offrun（或手工照做），接两个你已有的 agent 账号（至少 Claude Code 加另一个），挑一个有 git、且有能跑的测试的 repo。别一次全上，只试两件事：隔离（同一 repo 同时开两个任务——一个重构、一个修 bug，确认两个 worktree 不互相改文件，各自分支能分别合并）；记忆（手工建 conventions.md / plan.md / dead-ends.md，把仓库约定和不许再试的死路写进去，开第二个会话时确认 agent 是否真读了，以及失败尝试是否被写回 dead-ends.md）。再试同行评审：让另一个 agent 在提交前读 diff，重点看它能不能抓到跨文件的数值/契约冲突（如上限与上游超时不一致这类）。
 
 **试多久、什么时候升级**
 
@@ -721,6 +780,7 @@ cubefarm
 - 做法 B/C/D/E 都没有量化效果数据，先以一到两个任务、可弃用环境为限；只有当人工介入次数或返工次数可观察地下降，才扩大范围。
 - 做法 F 同样没有对比数据：先固定成一条流水线，连跑 2–3 次同类任务，如果每次都要大改 `output/report.md`（或流水线本身），说明这类活还不适合固化角色分工，先退回单 agent 手改；只有当产出基本可用、你只需要做少量编辑时，才值得把它变成常用链路。
 - 做法 G 同样没有量化数据：以 3–5 个真实 issue 为最小样本；若 QA 真阳性率接近零，或人工介入次数没有下降，说明当前形态的价值主要在演示而非产出，应考虑退回不用（或只当演示看）。熟悉后再对低风险改动尝试 auto-merge，并保留人工抽查。
+- 做法 H 只在一个 repo、一两个任务上观察两周再决定是否推广；记忆是纯文件、chat 和 worktree 都在项目文件夹里，退回现有流程没有迁移成本。若同行评审有效比例低或误报高，先调整 reviewer 的 prompt 或换模型，再决定是否保留。
 
 ## 常见坑
 
@@ -786,6 +846,17 @@ cubefarm
 - agent 沿用你本机的 skills、MCP servers 和 settings，各自在仓库的独立副本里工作；它们不能 push 主分支、也不能合并，合并由办公室在 QA 之后执行。
 - 唯一的量化指标是 53 stars；办公室「看起来在工作」、CEO 会写 QA 检查清单、QA 报告能起到把关作用，都只是作者主张，没有可验证数据。
 
+**做法 H（Offrun 或手工照做）**
+
+- 适用条件窄：Offrun 本身仅 Apple Silicon Mac（M1+）+ macOS 14 Sonoma 或更高；不是这个环境就只能手工照做三条流程。
+- 「免费无限、无服务器、不经手密钥」是厂商声明，原文未给审计或第三方说明。
+- 「50 runs in a row」「41 of 50 → 50 of 50」是页面演示，不是可复现评测；无版本号、无发布日志、无第三方用户案例。
+- 项目必须在 git 下；worktree 依赖 git。
+- 同行评审的发现是落到 chat 里由你判断（"Nothing merges on its own"），不要让它自动合并；这与做法 B/G 的自动合入闸门不同，做法 H 默认不自动合并。
+- 记忆文件要靠 agent 每次会话去读；如果它没读或没写回，记忆就是空的。需要在 prompt 里明确要求，并抽查 dead-ends.md 是否真的被追加。
+- 限额切换需要你手动重发消息；不是自动推进。
+- 材料质量：抓取到的文本夹有站点源码注释（编码声明位置、tab 标题长度取舍、以及 "demo 账号是编造的、别在页面上放真实地址或登录名" 的开发备注），页面示例里的 sam@studio.dev / sam@acme.co 是占位账号；不要把它们当步骤。
+
 **通用**
 
 - 别把「工具很多」当成改善证据；没有验证命令或盲评对比，只是把不确定性放大了。
@@ -801,6 +872,7 @@ cubefarm
 - **做法 E** 依据调研《bytedance/deer-flow》。可核对的内容：`make setup` / `make doctor` / `make support-bundle` / `make docker-start` 等命令、模型配置 YAML 示例、CLI 后备 provider 的凭证来源、部署规格起点表、ACP agent 配置与 `auto_approve_permissions` 规则、MIT 协议、Python 3.12+ / Node.js 22+、83290 stars。重要限制：原文在「Option 2: Local Development」的 Prerequisit 处被截断，skills、sub-agents、scheduled tasks、memory 等小节只有标题、没有正文，因此本手册只写安装与配置，不写这些能力的具体用法。
 - **做法 F** 依据调研《crewAIInc/crewAI》。可核对的内容：MIT 许可、Python >=3.10 且 <3.14、uv 各平台安装命令、`uv tool install crewai` / `uv tool update-shell` / `uv tool list` / `uv tool install crewai --upgrade`、`crewai create crew` 生成的目录结构（`agents/*.jsonc` + `crew.jsonc`）与 `--classic` 旧式结构、researcher 与 reporting_analyst 两个 `agents/*.jsonc` 示例、`crew.jsonc` 里 `context` / `output_file` / `markdown` / `process: sequential|hierarchical` / `{placeholder}` 的用法、`crewai install` / `crewai run` / `uv add`、Flow 的 `@start` / `@listen` / `@router` 与 `or_` / `and_` 组合、`/plugin marketplace add crewAIInc/skills` 与 `npx skills add crewaiinc/skills`、四个 skill（getting-started / design-agent / design-task / ask-docs）的分工、Windows 上 `chroma-hnswlib==0.7.6` 的构建错误与 Visual Studio Build Tools 解决办法。属于作者主张、没有数据支撑的部分：多智能体角色分工能提升「多步资料整理 → 成文」的产出质量，README 没有给出基准、数据集或对照实验。重要限制：原文在 examples 与 FAQ 后半段被截断，第 11 步「关掉默认遥测」只有标题、没有命令，因此本手册不写它的具体做法。
 - **做法 G** 依据调研《leonvanzyl/cubefarm》。可核对的内容：可执行命令（`npx cubefarm`、`npx cubefarm login`、`npx cubefarm doctor`、`--demo`、`--port`、`--no-open`、`npx cubefarm@latest`、`npm install -g cubefarm`）、前提清单（Node 22+、git、已登录的 `gh`、一个编码 agent 订阅、Chrome）、五步上手流程、界面操作键、用 session limit 控制并发、数据目录 `~/.cubefarm` 与 `SWARM_HOME`、安全模型要点（agent 各持独立仓库副本、不能 push 主分支、不能合并，由办公室在 QA 后合并）、QA 在真实浏览器里审查并发布带截图的报告、合并门禁为「QA 通过且 GitHub checks 全绿」、白板 Kanban 覆盖从 backlog 到 merged。属于作者主张、没有数据支撑的部分：办公室「看起来在工作」、CEO 会写出 QA 检查清单、QA 报告能起到把关作用、auto-merge 安全——没有成功率、误合并率、成本或周期时间的数字，唯一的量化指标是 53 stars。重要限制：本次输入只有 README，它指向的 `docs/how-it-works.md`（issue 生命周期、QA、auto-merge、模型与用量、安全模型）与 `CONTRIBUTING.md` 均未包含在材料中，因此 QA 具体如何测、auto-merge 的判定细节、模型与额度策略都无法核实。适用条件：项目必须已在 GitHub 上；必须持有编码 agent 的付费订阅且所有 agent 共享同一份用量限额；QA 依赖 Chrome，对非 Web 类项目的 QA 能力 README 未说明；游戏化 3D 界面长期使用是否顺手未验证。
+- **做法 H** 依据调研《Show HN: Offrun – manage every coding agent from one workspace》。可核对的内容：安装流程（下载、拖进 Applications、Settings → Agents 添加账号）、每个 agent 一个 git worktree、三个记忆文件名（conventions.md / plan.md / dead-ends.md）与读写时机、同行评审的示例输出、限额切换的提示文案、数据边界表、50 次运行的对照表、Build/Planner 两种模式、通知与听写的描述。属于作者主张、没有外部验证的部分：「50 runs in a row」「41 of 50 → 50 of 50」、免费无限/无服务器/不经手密钥、办公室「看起来在工作」等；无版本号、无发布日志、无第三方用户案例，HN 上 51 分、23 条评论的讨论内容不在给定材料里。适用条件：Apple Silicon（M1+）、macOS 14 Sonoma 或更高、至少一个已在用的 agent CLI；Pi 与 OpenCode 尚未支持。重要限制：原文是产品页面，本手册只采用其中可迁移的三条流程（worktree、记忆文件、提交前互评），Offrun 本身作为其中一种实现方式；跨 Mac 通知、本地听写等只在 macOS 生态成立。
 
 ## 依据的调研
 
@@ -811,3 +883,4 @@ cubefarm
 - [bytedance/deer-flow](../research/radar/2026-10-01/544-bytedance-deer-flow.md)：值得一试，可以按官方 Quick Start 在本地或小团队环境跑通 DeerFlow 2.0（clone → make setup → make doctor → make docker-start），把它作为长时程子代理＋沙箱＋记忆的执行底座试点；理由是原文给出了可直接复制的安装、模型接入、部署选型和安全配置步骤，但 skills、sub-agents、scheduled tasks 等核心能力的用法在抓到的原文里只剩目录标题，需进一步查阅仓库文档才能照做。
 - [crewAIInc/crewAI](../research/radar/2026-10-02/549-crewaiinc-crewai.md)：值得一试，建议小范围试：照着 README 的 "uv 安装 → crewai create crew → 改 agents/*.jsonc 与 crew.jsonc → crewai install/run" 链路，先把手头一个"多步资料整理→成文"的工作改成 researcher + reporting_analyst 两个角色的 Crew，并把产物落盘到 output/ 文件；因为原文给出了完整可复制的命令、目录结构和配置示例，可照做，但它本质是需要写代码、配环境的开发框架，效果只有作者主张、没有对比数据，先试一步再决定是否推广。
 - [leonvanzyl/cubefarm](../research/radar/2026-10-02/725-leonvanzyl-cubefarm.md)：值得一试，用 npx cubefarm 在低风险仓库上小范围试跑 issue→PR→QA→合并 这条自动链路，重点验证 QA 环节的真实拦截能力；因为它把多 agent 分工、浏览器实测和 auto-merge 门禁写成了可执行流程，但只有 README 级证据（53 stars、无基准与案例数据），不足以直接采用。
+- [Show HN: Offrun – manage every coding agent from one workspace](../research/radar/2026-10-04/1066-show-hn-offrun-manage-every-coding-agent-from-one-.md)：值得一试，先在单个有 git 的仓库上小范围试三条可迁移流程——每个 agent 一个 worktree、项目记忆落成 conventions.md/plan.md/dead-ends.md、第二个 agent 在提交前读 diff 做评审——再决定是否长期用 Offrun 本身；理由是这几条流程具体、可照做且不依赖工具存活，而 Offrun 自身的收益（限额自动切换、全 Mac 通知、免费无限）目前只有厂�自述，且限定 Apple Silicon Mac。
