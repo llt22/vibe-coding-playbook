@@ -1,9 +1,9 @@
-# 先看清编码 agent 的上下文账单，再逐项砍掉浪费
+# 给编码 agent 的上下文瘦身，并让长会话在爆掉前自动交接
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：编码 agent 的上下文窗口被工具输出、CLAUDE.md、MCP 工具定义和完整聊天记录反复占用，导致会话频繁压缩、配额提前耗尽，而绝大多数节省数字缺少任务侧验证。
-> 先试这一步：在 Claude Code 里跑一个真实任务，先执行 /context 记下 CLAUDE.md、聊天记录、MCP 工具三类 token 占比当基线，然后只禁用当前会话用不到的 MCP 服务器，再测一次。
+> 解决的问题：编码 agent 会把大量工具输出、反复重发的规则文件和完整聊天记录塞进上下文，会话一压缩就失忆，长会话还得手动 /clear 再重述一遍；本手册给出一套可逐项落地、且用任务侧指标验证的上下文与长会话管理办法。
+> 先试这一步：先在 Claude Code 里用 /context 看清 token 到底花在哪里（CLAUDE.md、聊天记录、用不到的 MCP 工具三类各占多少），记下基线，再动手砍第一项。
 > 最近修订：2026-10-04
 
 ## 解决什么问题
@@ -16,7 +16,9 @@
 
 还有一类浪费发生在会话的 token 账本上：同一条消息里被反复重发的 CLAUDE.md、完整聊天记录、以及你从不调用的 MCP 工具定义，都在持续吃配额。一条推文把这三项点成「用量限制午饭前就耗尽」的主因，并给出先用 `/context` 看清 token 去向、再把自动压缩阈值从 95% 提前到 60%、再精简 MCP 的路径；原文同样在 `/mcp` 处截断，而且全文没有一个数字。
 
-本手册把对应这几类浪费的做法合在一起：把工具输出挡在上下文窗口之外（Context Mode、headroom）、把「读很多、只判断一点」的略读外包给小模型（Quicksilver）、用持久记忆保住跨会话状态（claude-mem、mem0、cognee）、把执行计划写到磁盘并靠 hook 重注入（planning-with-files）、把团队 trace 固化成可复用技能（hivemind）、用录屏口述补上下文和反馈（blurt）、把 agent 规则集中成一份共享 AGENTS.MD 软链给同机多个工具共读（做法 L）、定期审查 CLAUDE.md / skills 里的过时指令（做法 M），以及先给上下文预算做一次审计、再逐项砍浪费（做法 N）。核心要求是：不只看节省比例，要用任务侧指标验证结果有没有变好。
+还有一类浪费发生在长会话的交接上：上下文快到窗口上限时，你要手动 `/clear`，再从头把背景、决策、当前进度重述一遍；同一个纠正，可能要说第四遍。有一份材料给出了 ctx-handoff 这个 Claude Code mod 的做法：上下文达到阈值（默认 600k，或窗口的 80%，取较低者）时自动写交接摘要、`/clear`、在新会话里提交；空闲 55 分钟时 fork 一个极小请求刷新 prompt cache 保活；缓存还热时把对话沉淀成 memory 和 rule 两类条目。作者自标 experimental，构建在 Claude Code 的 early-access function-hooks API 上。
+
+本手册把对应这几类浪费的做法合在一起：把工具输出挡在上下文窗口之外（Context Mode、headroom）、把「读很多、只判断一点」的略读外包给小模型（Quicksilver）、用持久记忆保住跨会话状态（claude-mem、mem0、cognee）、把执行计划写到磁盘并靠 hook 重注入（planning-with-files）、把团队 trace 固化成可复用技能（hivemind）、用录屏口述补上下文和反馈（blurt）、把 agent 规则集中成一份共享 AGENTS.MD 软链给同机多个工具共读（做法 L）、定期审查 CLAUDE.md / skills 里的过时指令（做法 M）、先给上下文预算做一次审计再逐项砍浪费（做法 N），以及把长会话的自动交接与沉淀也交给工具（做法 O）。核心要求是：不只看节省比例，要用任务侧指标验证结果有没有变好。
 
 ## 适用与不适用
 
@@ -32,14 +34,15 @@
 - 你本机同时使用两个及以上支持「项目/全局指令文件」约定的编码 agent（如 Claude Code、Codex），希望同一套规则只维护一份、两边都遵守。
 - 你在维护 CLAUDE.md 或 skills，里面还残留为旧模型写的提示习惯，想系统审查一遍再决定删不删。
 - 你在用 Claude Code，有较长的 CLAUDE.md，接了多个 MCP 服务器而多数用不到，并且对用量/配额敏感。
-- 你愿意装 MCP server / 插件 / hook / 本地代理 / skill，并接受一次小范围试用。
+- 你在 1M 上下文模型 + Claude 订阅（1 小时 prompt cache）上跑很长的 Claude Code 主会话，经常手动 /clear 再重述上下文，或者同一条纠正要重复交代。
+- 你愿意装 MCP server / 插件 / hook / 本地代理 / skill / mod，并接受一次小范围试用。
 
 不适用：
 
 - 你对商用许可敏感。Context Mode 是 ELv2 许可，对商用有限制；cognee 的单 Postgres 图存储和本地 GLiNER 抽取器是 demo，生产版是授权产品。
 - 你不能把内容发给第三方。Quicksilver 会把待扫描内容发到 TypeSafe 的 API（api.typesafe.ai）；mem0 默认依赖 LLM 与 embedding 供应商；cognee 配 LLM 后会发起 provider 调用；hivemind 默认把全部会话 prompt 与工具输出写进团队共享 workspace。
-- 你希望直接拿到第三方验证过的 98% 节省、100x 提升、~10x token 节省、mem0 托管高分、cognee BEAM 分数、planning-with-files 自测数据、hivemind 基准。这些数字都是各自 README 或项目自述，调研没有找到第三方验证或实验数据。
-- 你的任务很小、工具输出很少，装 hook / 代理 / 持久记忆的开销可能不划算。headroom 原文也写了：短对话、散文、已经密集的载荷收益很小甚至为零，小于 min_input_words 的块原样返回。
+- 你希望直接拿到第三方验证过的 98% 节省、100x 提升、~10x token 节省、mem0 托管高分、cognee BEAM 分数、planning-with-files 自测数据、hivemind 基准、ctx-handoff 的 94/94 测试。这些数字都是各自 README 或项目自述，调研没有找到第三方验证或实验数据。
+- 你的任务很小、工具输出很少，装 hook / 代理 / 持久记忆 / mod 的开销可能不划算。headroom 原文也写了：短对话、散文、已经密集的载荷收益很小甚至为零，小于 min_input_words 的块原样返回。
 - 你不想改配置、不想重启客户端，或者沙箱里跑不了本地进程（headroom 需要本机进程和端口）。
 - 你的问题是纯后端、无界面、又拍不到。blurt 的前提是能看到问题或用手机拍到（终端、TUI、桌面应用可以）。
 - 你只用单一 provider、也不需要跨 agent 记忆——headroom 的这部分收益对你不成立。
@@ -47,11 +50,15 @@
 - 你的系统不支持符号链接。macOS / Linux 原生支持；Windows 需另想办法，做法 L 的原文没有给出 Windows 路径。
 - 你想照抄一份现成的规则文本或仓库链接。这条材料是二手转述，原文没给开源仓库链接、没给具体路径，也没给规则内容，路径必须按各工具当前文档自行确认。
 - 你不想引入 Postgres demo、Docker、Deeplake 账号或 600 MB 本地嵌入模型。
-- 你用的不是 Claude Code：`/claude-api prompt-audit`、`/context`、`/compact`、`/mcp` 都是 Claude Code 内的斜杠命令，材料没有说其他工具可用。
+- 你用的不是 Claude Code：`/claude-api prompt-audit`、`/context`、`/compact`、`/mcp`、`/handoff` 都是 Claude Code 内的斜杠命令，材料没有说其他工具可用。
 - 你希望命令自动帮你改写文件：prompt-audit 原文截断，没有说明会产生修改建议或自动改写，不要预设。
 - 你对“旧指令拖累新模型”这个主张要求现成实验证据：目前只有一条推文的作者主张，没有对照实验、样本或指标。
 - 你的 CLAUDE.md 很短、也不接 MCP：做法 N 几乎没有可操作空间，只剩「顺手看一眼 /context」的价值。
 - 你希望做法 N 给出确定的节省数字：原文全文没有一个数字、截图或对比实验，只有「限制总是在午饭前耗尽」这句体感描述。
+- 你用 5 分钟 prompt cache（API key、Bedrock、Vertex 用户，以及进入 usage credits 的订阅用户）。ctx-handoff 的空闲刷新在 5 分钟 TTL 下会发现缓存已失效，而每次刷新会重写整个上下文；mod 不检测 TTL，必须手动 `/handoff refresh off`。
+- 你的 Claude Code build 不带 function hooks（mods）。ctx-handoff 依赖 early-access function-hooks API，作者开发测试版本为 2.1.287。
+- 你要的是稳定、久经考验的方案。ctx-handoff 由作者自标 experimental，且空闲缓存刷新等关键行为尚未实测。
+- 你希望交接能带上图片/附件：被暂扣的只有文本，图片/附件必须在交接后重新粘贴。
 
 ## 前置条件
 
@@ -61,6 +68,7 @@
 - 做法 L 额外需要：本机确实同时使用两个及以上支持同类指令文件约定的编码 agent；系统支持符号链接（macOS / Linux 原生支持，Windows 需另想办法）。
 - 做法 M 额外需要：本机已安装并可正常使用 Claude Code；目标项目里已有 CLAUDE.md 或 skills 配置文件，否则没有可审查的对象；先备份当前 CLAUDE.md。
 - 做法 N 额外需要：本机已安装并可正常使用 Claude Code；有较长的 CLAUDE.md；接入了多个 MCP 服务器而其中多数用不到；对用量/配额敏感。做法 N 不需要装任何新工具，只需要在 Claude Code 设置里确认自动压缩阈值项的位置。
+- 做法 O 额外需要：带 function hooks（mods）的 Claude Code build（作者在 2.1.287 上开发测试）；目标场景是 1M 上下文模型 + 1 小时 prompt cache 的订阅用户；能把 mod 克隆到本地并以 `--plugin-dir` 加载，或能改 `~/.claude/settings.json` 的 `env`。
 - 各自的凭据与许可：
   - Quicksilver：到 console.typesafe.ai 申请一个 Jev key。内容会被发送到 TypeSafe 的 API，所以不要拿它处理不能给第三方的数据。
   - claude-mem：标准安装会要求浏览器登录（邮箱 magic link，无需信用卡）；不想要账号交互就显式传 --provider、设 CLAUDE_MEM_ONLINE_OPTIN=false，或在 CI / 非交互 shell 里运行。
@@ -89,7 +97,8 @@
 - 需要本地优先、知识图谱、无 LLM 也能检索 → 做法 I（cognee）。
 - 同一台机器上同时用 Claude Code 和 Codex，规则要在多处维护、两边行为还不一致 → 做法 L（共享 AGENTS.MD + 软链）。这条按「值得小范围试」对待，不要一上来就铺到所有 repo。
 - 主要痛点是 CLAUDE.md / skills 里堆着旧提示习惯，想先审一遍再决定删不删 → 做法 M（`/claude-api prompt-audit`，先只记录不改动）。
-- 主要痛点是「配额/用量限制提前耗尽」，CLAUDE.md 很长、MCP 服务器一大堆 → 做法 N（先 `/context` 审计，再逐项砍）。这条不用装东西，成本最低，适合在做 A–M 之前先做一遍。
+- 主要痛点是「配额/用量限制提前耗尽」，CLAUDE.md 很长、MCP 服务器一大堆 → 做法 N（先 `/context` 审计，再逐项砍）。这条不用装东西，成本最低，适合在做 A–O 之前先做一遍。
+- 长会话经常撞上下文上限、每次都要手动 /clear 再重述 → 做法 O（ctx-handoff mod，先只跑 `/handoff dry` 看一次交接成本）。这条只作用于主会话，且作者自标 experimental，先小范围试。
 
 这些做法可以叠加，但一次只加一个，否则分不清是哪个起了作用。
 
@@ -684,7 +693,7 @@ hivemind codex uninstall
 
 ### 做法 N：先审计上下文预算，再一次只改一项
 
-适用形态：你在用 Claude Code，配置了 CLAUDE.md，接了至少一个 MCP 服务器，并且感觉用量/配额提前耗尽。这条材料只有一条推文，原文在 `/mcp` 处被截断，全文没有任何数字或对比实验，按 study / 小范围试对待，不要当 adopt。它不用装任何新工具，成本最低，适合在 A–M 之前先做一遍。
+适用形态：你在用 Claude Code，配置了 CLAUDE.md，接了至少一个 MCP 服务器，并且感觉用量/配额提前耗尽。这条材料只有一条推文，原文在 `/mcp` 处被截断，全文没有任何数字或对比实验，按 study / 小范围试对待，不要当 adopt。它不用装任何新工具，成本最低，适合在 A–O 之前先做一遍。
 
 1. 前提确认：Claude Code 可用；有较长的 CLAUDE.md；接入了多个 MCP 服务器而其中多数用不到；对用量/配额敏感。如果 CLAUDE.md 很短、也不接 MCP，这条几乎没有可操作空间。
 
@@ -713,6 +722,84 @@ hivemind codex uninstall
 7. 记住权衡：更早压缩意味着更频繁丢失上下文细节，可能换来更多重述和返工。原文默认「越早压缩越好」，这是一个需要自己验证的假设，不是结论。
 
 8. 与做法 M 的分工：做法 N 是看 CLAUDE.md 本身吃掉多少 token（体积问题），做法 M 是审 CLAUDE.md 里的指令内容还适不适用（内容问题）。两者可以叠加：先用 N 看清账本、砍掉用不到的 MCP，再用 M 逐条审指令。
+
+### 做法 O：长会话自动交接与沉淀（ctx-handoff，experimental）
+
+适用形态：你在 1M 上下文模型 + Claude 订阅（1 小时 prompt cache）上跑长时间 Claude Code 主会话。这个 mod 做三件事：主会话停止且上下文到阈值时自动交接（写交接摘要 → `/clear` → 新会话接着做）、空闲时刷新 prompt cache 保活、缓存还热时把对话沉淀成 memory / rule。只作用于主会话，子代理回合被忽略。作者自标 experimental，构建在 Claude Code 的 early-access function-hooks API 上，开发与测试版本为 2.1.287。
+
+1. 前提：需要一个带 function hooks（mods）的 Claude Code build。这一步是整个做法能否跑起来的前提，版本不符时不要继续。
+
+2. 克隆并首次加载：
+   ```sh
+   git clone https://github.com/cablate/ctx-handoff-mod ~/.claude/mods/ctx-handoff
+   claude --plugin-dir ~/.claude/mods/ctx-handoff
+   ```
+   预期：会话里能调用 `/handoff`。
+
+3. 跑 `/handoff` 自检。预期输出类似（模块消息为繁体中文）：
+   ```
+   [ctx-handoff] context 12034 / 門檻 600000（視窗 1000000）
+   快取刷新 on，本次閒置已刷新 0/3，計時器未啟動
+   ```
+   能看到上下文用量、门槛、刷新计数，即可认为接线成功。看不到就把 build 或插件路径这条链路先查通。
+
+4. 想让每个会话都加载，在 `~/.claude/settings.json` 的 `env` 里加绝对路径；多个文件夹 Windows 用 `;`，macOS/Linux 用 `:`：
+   ```json
+   "env": { "CLAUDE_CODE_PLUGIN_DIRS": "/home/you/.claude/mods/ctx-handoff" }
+   ```
+
+5. 按需调参：数值是 `hooks/register.ts` 顶部的常量，改那里；若该文件夹被监听，改动会热重载。
+
+   | 常量 | 默认 | 含义 |
+   |---|---|---|
+   | `THRESHOLD` | `600_000` | 触发交接的上下文 token 数 |
+   | `WINDOW_RATIO` | `0.8` | 小窗口时阈值为 `window × ratio` |
+   | `IDLE_MS` | 55 min | 触发刷新前的空闲时间（按 1 小时缓存调校） |
+   | `MAX_REFRESH` | `3` | away handoff 前的刷新次数 |
+   | `MIN_TOKENS` | `30_000` | 低于此值跳过刷新和 away handoff |
+
+   作者对阈值的说明：社区反馈和 Anthropic 的 MRCR 数据提示质量大致在 200k–300k token 附近开始下滑；600k 是刻意选的、为了少交接。如果你发现模型在交接触发前就变差，就把它调低。这是作者引用的间接依据，不是本项目测量。
+
+6. 如果你用 5 分钟缓存（API key、Bedrock、Vertex，或订阅已进入 usage credits），必须关掉刷新：
+   ```
+   /handoff refresh off
+   ```
+   原因：5 分钟 TTL 下，55 分钟时的刷新会发现缓存已失效，而每次刷新会重写整个上下文。mod 不检测 TTL，需要你手动关。关掉后空闲 55 分钟直接保存 away handoff。
+
+7. 正式依赖它之前，先用 `/handoff dry` 看一次交接成本：它生成交接并显示成本，**不清空**会话。预期：能看到这次交接本身的成本。确认可接受，再让阈值触发的自动交接接管。
+
+8. 日常不需要敲命令，需要时用唯一的 `/handoff` 及其子命令：
+
+   | 命令 | 用途 |
+   |---|---|
+   | `/handoff` | 显示上下文用量、阈值、刷新与 distill 状态、待处理的 away handoff、用法 |
+   | `/handoff now` | 立刻交接（会清空会话） |
+   | `/handoff dry` | 生成交接并显示其成本，**不清空** |
+   | `/handoff distill` | 立刻 distill 当前项目的 memory 和 rules |
+   | `/handoff resume` | 使用 away handoff：先 `/clear` 再提交，外加被暂扣的那条消息 |
+   | `/handoff continue` | 丢弃 away handoff，在老会话里发被暂扣的消息 |
+   | `/handoff resend` | 重新提交没送达的交接（本进程记录，否则最近一次生成的）；不执行 `/clear` |
+   | `/handoff refresh on\|off` | 开关空闲缓存刷新 |
+   | `/handoff distill on\|off` | 开关后台 distill |
+
+   最近 5 次交接保留在 mod 的 store 里。
+
+9. 了解几条会影响使用的行为（照做时要知道）：
+   - 交接到提交之间输入的消息会被暂扣并附到交接文本后面（只暂扣文本，图片/附件必须在交接后重新粘贴）；交接在 `/clear` 前失败则在老会话里重新提交。`/handoff dry` 和 away handoff 从不暂扣消息。
+   - 后台 distill 结果乘在下一条真正进入会话的消息上；有变更时会有 toast 显示变更条目数和写入的每个 notes 文件全路径。
+   - distill 输出是 JSONL，由程序校验并落盘：每行一个 action，位于 `=== ACTIONS ===` 与 `=== END ===` 之间（`add_memory`、`update_memory`、`delete_memory`、`add_rule`、`confirm_rule`、`update_rule`、`delete_rule`，以及一步完成跨项目移动的 `move_memory`/`move_rule`），始终用繁体中文（台湾），代码、命令、路径、报错保持原样。非法行被丢弃并计数，最多保留 3 个样本连同原因，由 `/handoff` 展示；任何含疑似密钥字段的 action 整条丢弃且不保留样本。
+   - notes 按项目归档：会话从父目录启动但触碰多个 repo 时，按工具路径和 Bash 工作目录记录触碰的项目，取有 `.git` 的最近祖先；会话根是 `P1`（默认），Bash `cd` 到别的 repo 不会改变它；触碰的项目为 `P2`、`P3`……最多 8 个。
+   - 失败可见可恢复：每次交接失败（写、`/clear`、提交）都被记录并由 `/handoff` 展示；3 分钟未应答的交接 fork 被放弃、暂扣消息回到老会话，distill fork 8 分钟放弃；阈值交接失败后等 3 条用户消息或 10 分钟再重试。
+   - 推迟有硬上限：后台工作让交接一直等时，上下文达到 `min(90% of the window, threshold + 150k)` 就照常交接。
+
+10. 开发/自检命令（可选）：
+    ```sh
+    claude plugin validate .
+    claude plugin test .
+    tsc -p .   # after the mod has loaded once, which writes .claude-plugin/types/
+    ```
+
+11. 先在单个会话、单个项目上验证：跑一次自动交接，确认新会话确实接上了；再跑一次 `/handoff distill`，打开项目里的 `ctx-handoff.md` 看 memory / rule 写对没有。确认之后再考虑让它常驻。
 
 ### 核心用法：用代码思考（Think in Code）
 
@@ -744,6 +831,7 @@ ctx_execute("javascript", `
 - 做法 L：这条材料没有给出任何工具侧指标，也没有命令可以读回执。唯一能用的是行为观察——两个工具是否真的读到了同一份文件、是否遵守同一条规则。
 - 做法 M：材料没有给出任何工具侧指标，也没有命令可以读回执；推文互动量（58 赞 / 2 转发 / 13 回复）只反映传播度，不是效果证据。
 - 做法 N：唯一的工具侧反馈就是 `/context` 本身——看 CLAUDE.md、聊天记录、MCP 工具三类来源的 token 占比是否下降。这是最直接、最可比的指标。原文没有给任何基线或阈值。
+- 做法 O：`/handoff` 一次显示上下文用量、阈值、刷新与 distill 状态、待处理的 away handoff、交接失败原因、非法 JSONL 样本与原因；distill 有变更时 toast 显示变更条目数和写入的每个 notes 文件全路径；`claude plugin test` 94/94 通过（覆盖 JSONL 校验与拒绝样本、跨项目移动、fork 超时、暂扣消息去重与附件、密钥不外泄等）。交接成本本身也能量：`/handoff dry` 会显示这次交接的成本。
 
 任务侧指标：
 
@@ -765,6 +853,9 @@ ctx_execute("javascript", `
 - 人工纠正/追问次数（做法 M）：需要介入纠正或追问 agent 的次数。
 - 输出长度与 token 消耗（做法 M）：旧指令被指“增加拖累”，这里应能看到差别。
 - 反向校验（做法 M）：删掉检查步骤后错误率是否上升；若结果不变甚至更好，说明这些指令可能是冗余负担。
+- 交接后重新定位轮数（做法 O）：自动交接后，新会话需要重新交代背景/决策的轮数是否下降。
+- 同一纠正的重复次数（做法 O）：同一条纠正需要说几遍，应下降——这是这个 mod 想直接消掉的那件事。
+- 交接与 distill 的成本（做法 O）：`/handoff dry` 显示的交接成本；原文实测 distill 在 476k 约 95 秒、800k 约 3 分钟，800k 时交接本身约 28 秒。这些数字只反映作者环境，需要自己测。
 
 最小试用方式：
 
@@ -780,6 +871,7 @@ ctx_execute("javascript", `
 10. 做法 L：挑 1 个自己最常用的 repo，建一个共享文件夹，写一份 AGENTS.MD；里面先放一条可明确观察是否生效的独特规则（例如「改动代码后必须先运行测试再汇报」，或一个特定的输出格式要求）；按各工具文档把 AGENTS.MD 软链给 Claude Code 和 Codex；用同一个日常任务分别在这两个工具里跑一遍，先确认它们确实读到了这份文件，再观察正式规则是否被遵守；只在一个 repo 上跑一到两周，不铺开到所有 repo。
 11. 做法 M：挑一个正在用的项目，保存当前 CLAUDE.md 的副本；运行 `/claude-api prompt-audit`，记录它指出的条目（原文没保证它会自动改，所以先只记录、不改动）；把 CLAUDE.md 里“逐步思考 / 自我检查”一类指令摘出，做 A/B：A 组保留原样，B 组删除或改写这些指令，用同一批任务（建议 5–10 个真实任务）各跑一遍。
 12. 做法 N：挑一个你常做的、长度中等的真实任务，按平常方式跑一遍，中途运行 `/context`，记录 CLAUDE.md、聊天记录、MCP 工具三类的占比（截图或抄下关键数字）作为基线；然后只改**一项**——先禁用所有当前会话里没用到的 MCP 服务器（这一步最确定不会丢信息）——跑同样类型的任务，再记录一次 `/context`；如果还想继续，再单独把压缩阈值调早（60%），重复一次同类任务和 `/context`；如果这两项都有效，最后才回头精简 CLAUDE.md。
+13. 做法 O：按 README Quick start 在**单个 Claude Code 会话**里小范围试——clone 后以 `--plugin-dir` 加载、跑 `/handoff` 验证状态，先用 `/handoff dry` 观察一次交接成本，再在长任务上启用自动交接与 distill。先确认 `/handoff` 自检能看到上下文用量与阈值，再看自动交接后新会话是否接上了上一段的进度。
 
 试多久：
 
@@ -793,6 +885,7 @@ ctx_execute("javascript", `
 - 做法 L 只在一个 repo 上跑一到两周。失败信号很明确：软链后任一工具的行为没有变化，说明链路没接上，此时先用一条一眼可验的规则确认「读到了没有」，再谈效果。
 - 做法 M 原文没有给时长，只能按任务数：建议 5–10 个真实任务做 A/B；如果命令运行失败或不存在，降级为定期审查原则。
 - 做法 N 原文没有给时长，也没给任何数值目标。判定标准只有一条组合：只有当「可工作轮数/时长增加」且「质量与返工次数没有变差」同时成立时，才值得把这几步固化成习惯；如果只是 `/context` 占比降低但返工明显变多，说明该阈值不适合你的任务类型。一次只改一项，每项至少跑一个同类真实任务再下结论。
+- 做法 O：至少覆盖一次自动交接触发，以及一次空闲 55 分钟后的刷新（或 away handoff）流程。作者自标 experimental，先只在一个会话、一个项目上试，确认交接后能接上、distill 写出的 memory / rule 确实有用，再考虑常驻。
 
 ## 常见坑
 
@@ -909,9 +1002,21 @@ CLAUDE.md / prompt-audit 审查（做法 M）：
 - 适用条件是「CLAUDE.md 长 + MCP 服务器多且多数用不到 + 对配额敏感」；如果本来就只有一个短 CLAUDE.md、不接 MCP，这条几乎没有可操作空间。
 - 一次只改一项，否则分不清是哪个起了作用；先砍 MCP 再动压缩阈值，最后才精简 CLAUDE.md。
 
+ctx-handoff（做法 O，长会话自动交接）：
+
+- 作者自标 experimental，构建在 Claude Code 的 early-access function-hooks API 上，开发与测试版本为 2.1.287；换版本可能直接不可用。
+- 只作用于主会话，子代理回合被忽略。指望它管住子代理的上下文是不成立的。
+- 5 分钟缓存用户（API key、Bedrock、Vertex，或订阅已进入 usage credits）不关刷新，会反复重写整个上下文；mod 不检测 TTL，必须手动 `/handoff refresh off`。
+- 交接只暂扣文本，图片/附件必须在交接后重新粘贴，通知里会说明这一点。
+- 阈值 600k 的合理性依据是「社区反馈和 Anthropic MRCR 数据提示 200k–300k 开始下滑」，属于间接引用，不是本项目测量。
+- distill 写出的 rule 需要出现 2 次及以上才注入新会话，按出现次数排序——不要期待一次纠正就被记住；memory 与 rule 落在每个项目自己的 ctx-handoff.md，纯 Markdown，手改会被保留。
+- 失败路径虽然可恢复（3 分钟未应答的交接 fork 被放弃、distill fork 8 分钟放弃、阈值交接失败后等 3 条用户消息或 10 分钟重试），但都要你去看 `/handoff` 才知道，不会主动弹错。
+- 空闲保活 / away handoff 的实测数据，本次材料没有单独给出；作者也说明空闲缓存刷新等关键行为尚未实测。
+- 与 Context Mode 同属上下文管理方向，但材料没有说明两者能否共用，只能并列参考。
+
 ## 证据与来源
 
-本手册合并了十二份材料：mksglu/context-mode、UditAkhourii/quicksilver、AGIHunt/blurt、thedotmack/claude-mem、headroomlabs-ai/headroom、mem0ai/mem0、topoteretes/cognee、OthmanAdi/planning-with-files、activeloopai/hivemind、一条转述 Peter Steinberger（OpenClaw 作者）开源其个人 agent 配置的推文（@oliviscusAI）、一条关于 CLAUDE.md / prompt-audit 的推文（@RoundtableSpace），以及一条关于「CLAUDE.md 正在吞噬你的令牌限制」的推文（@thegreatest_sv）。以下逐条标注依据和性质。
+本手册合并了十三份材料：mksglu/context-mode、UditAkhourii/quicksilver、AGIHunt/blurt、thedotmack/claude-mem、headroomlabs-ai/headroom、mem0ai/mem0、topoteretes/cognee、OthmanAdi/planning-with-files、activeloopai/hivemind、cablate/ctx-handoff-mod，一条转述 Peter Steinberger（OpenClaw 作者）开源其个人 agent 配置的推文（@oliviscusAI）、一条关于 CLAUDE.md / prompt-audit 的推文（@RoundtableSpace），以及一条关于「CLAUDE.md 正在吞噬你的令牌限制」的推文（@thegreatest_sv）。以下逐条标注依据和性质。
 
 Context Mode（来自 README 与调研报告）：
 
@@ -1003,6 +1108,14 @@ CLAUDE.md / prompt-audit（来自 @RoundtableSpace 的转述推文）：
 - 本手册为这条材料补的最小试用方式、观察指标（`/context` 三类来源占比、同配额下可工作轮数/时长）与反面指标（重述需求次数、返工/纠正次数），以及「一次只改一项、先砍用不到的 MCP、最后才动 CLAUDE.md」的顺序，都是基于原文机制推导出的验证方式，不是原文给出的内容——原文没有给出任何验证方式、指标或改善数据。
 - 适用条件：使用 Claude Code；有较长 CLAUDE.md；接入了多个 MCP 服务器而其中多数用不到；对用量/配额敏感。如果本来就只有一个短 CLAUDE.md、不接 MCP，这条几乎没有可操作空间。
 
+ctx-handoff（来自 cablate/ctx-handoff-mod README 调研）：
+
+- 事实性内容：mod 做三件事（自动交接、空闲保活 / away handoff、distill）；默认阈值 600k 或窗口 80% 取较低者；常量表 THRESHOLD / WINDOW_RATIO / IDLE_MS / MAX_REFRESH / MIN_TOKENS；`/handoff` 子命令表；安装与 `CLAUDE_CODE_PLUGIN_DIRS` 配置；distill 的 JSONL action 与繁体中文（台湾）输出约定；notes 按项目归档（P1..P8）；失败与推迟机制；`claude plugin test` 94/94。
+- 原文实测数据：用探针 mod 现场验证「从 mod 里 `/clear` 后 `prompt.submit` 可用」；对一个 102k token 对话做 fork，输入 102,523 token 中 102,003 从缓存读取（约 99.5%）；distill 在 476k 约 95 秒、800k 约 3 分钟（800k 时交接本身约 28 秒），因此交接在 60 秒后不再等它；2026-10-04 现场确认若干行为。
+- 只是作者主张或间接引用：阈值 600k 的合理性依据是「社区报告和 Anthropic MRCR 数据提示 200k–300k 开始下滑」，属于间接引用，不是本项目测量；作者自标 experimental；空闲缓存刷新等关键行为尚未实测。
+- 本手册为这条材料补的最小试用方式（先 `/handoff dry`、单会话小范围试）和判定指标（交接后重新定位轮数、同一纠正重复次数、交接成本），是基于原文机制推导出的验证方式，不是原文给出的内容。
+- 与 Context Mode 的关系：同属上下文管理方向，但给出的材料没有说明两者的具体关系或能否共用，只能并列参考。
+
 ## 依据的调研
 
 - [mksglu/context-mode](../research/radar/2026-10-01/68-mksglu-context-mode.md)：值得一试，建议先在 Claude Code（或 Cursor）上做小范围试用：用 MCP-only 方式跑一个真实编码任务，对照 ctx_stats 的上下文节省与实际任务结果，再决定是否推广到团队。理由是它直指“工具输出塞满上下文 + 会话压缩后失忆”这两个具体痛点，安装与回退成本低；但 README 的 98% 节省数字、100x 说法和企业 logo 墙均为自述，缺少第三方验证，且 ELv2 许可对商用有限制。
@@ -1017,3 +1130,4 @@ CLAUDE.md / prompt-audit（来自 @RoundtableSpace 的转述推文）：
 - [@oliviscusAI: Peter Steinberger, the creator of OpenClaw, open-sourced his entire agent setup.](../research/radar/2026-10-02/708-peter-steinberger-the-creator-of-openclaw-open-sou.md)：值得一试，值得小范围试：在一台同时使用 Claude Code 和 Codex 的机器上，把 agent 规则集中成一份 AGENTS.MD，软链给两个工具共读，先验证同一条规则能否被两边自动遵守；给 try 而非 adopt，是因为原文只是第三方转述、且在“Every repo”处截断，仓库链接、具体路径和规则内容都没有，需自行按各工具文档补全。
 - [@RoundtableSpace: 你的 CLAUDE.md 实际上可能会让 Opus 5.5 变得更糟。](../research/radar/2026-10-04/1053-claude-md-opus-5-5.md)：值得一试，先在 Claude Code 里对现有 CLAUDE.md 与 skills 跑一遍 `/claude-api prompt-audit`，再逐条评估“逐步思考”“仔细检查你的工作”这类旧指令是否该删；因为推文主张这类旧习惯在新模型上反而增加拖累，且给出了一个可直接执行的审查命令，但原文被截断、命令行为与判读方式均未说明，只能小范围试。
 - [@thegreatest_sv: 你的 CLAUDE.md 正在他妈的吞噬你的令牌限制。](../research/radar/2026-10-04/1081-claude-md.md)：值得一试，先在 Claude Code 会话里运行 /context 摸清 token 去向，然后一次只改一项——把自动压缩阈值从 95% 降到 60%、关掉从不调用的 MCP 服务器——再跑 /context 对比前后。原文只给了三个方向性命令、末尾还被截断，且没有任何数据支撑，所以适合小范围试而不是直接写进手册。
+- [cablate/ctx-handoff-mod](../research/radar/2026-10-04/1185-cablate-ctx-handoff-mod.md)：值得一试，可以直接照 README 的 Quick start 在单个 Claude Code 会话里小范围试：clone 后以 --plugin-dir 加载、跑 /handoff 验证状态，先用 /handoff dry 观察交接成本，再在长任务上启用自动交接与 distill。理由是原文给出了可复制的安装/配置/命令与明确的触发条件，但作者自己标注为 experimental、依赖早期 function-hooks API，且空闲缓存刷新等关键行为尚未实测，所以只建议试不建议直接采用。

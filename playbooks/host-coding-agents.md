@@ -1,14 +1,14 @@
-# 让编码 agent 在可控边界里反复跑，并且看得见、拦得住
+# 让编码 agent 在可控环境里按规则跑，并把关键审批移到手机
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：把编码 agent 从「在本机随手跑一次」变成「在可控环境里按项目规则反复跑」，并且能实时看到它在读什么、写什么，在危险动作发生前拦住它。
-> 先试这一步：先在一个可回退的 Git 项目里落地短 CLAUDE.md、allow/ask/deny 权限和一个 PostToolUse 格式化 hook；跑顺后再装 mission-control + token-weather，看清 agent 实际读了哪些文件、上下文还剩多少。
+> 解决的问题：把编码 agent 从「本机随手跑一次」变成「在可控环境里按项目规则反复跑、看得见它在读写什么」，并把「回应待确认操作」和「完成通知」延伸到手机，不必一直守着电脑。
+> 先试这一步：先选一条与你现状最接近的做法跑通最小闭环：做法 C 的短 CLAUDE.md + allow/ask/deny 白名单 + 一个 PostToolUse 格式化 hook；如果你日常在用 Codex App，紧接着按做法 I 只开局域网 + 账号密码，用手机扫码接入一条已有会话，发一条消息并回应一次待确认操作。
 > 最近修订：2026-10-04
 
 ## 解决什么问题
 
-本手册解决的是：把编码 agent（Claude Code / Codex CLI / OpenCode / goose / pi / agentbox 里的 agent）从「在本机随手跑一次」变成「在可控环境里、按项目规则反复跑」，并且能实时看到它在读什么、写什么。要补九件事：工作区与文件持久化、权限与凭据边界、工具与扩展供给、项目级护栏（上下文供给 + 自动化触发）、按轮次的用量成本记录、「先只读规划、再放权编辑」的分工、「运行时/界面扩展面」的受控试点、「跨模型统一接口」——让同一套流程换供应商而不改上层，以及「实时观察与危险动作闸门」。给出八条可照做的路径：做法 A 是在 Linux 服务器上自托管 agentbox 工作区；做法 B 是在非生产机器上装 goose，用 MCP 供给工具与权限；做法 C 是在单个真实项目里给 Claude Code 配 CLAUDE.md、allow/ask/deny 权限、hook、subagent、skill，并把主工作流固定成 Explore → Plan → Code → Verify → Commit；做法 D 是用 OpenCode 的 build/plan 双 agent 把「先只读规划、再放权编辑」固定成分工；做法 E 是在本机装 Codex CLI 并用 ChatGPT 账号登录，先跑通一次终端编码任务；做法 F 是在一次性项目里用实验开关试点 Claude Mods（function hooks），按验收矩阵检查后再决定是否留下；做法 G 是按 pi 的官方安装脚本装好 CLI，用 `/login` 接入模型，在容器边界内跑一个边界清晰的小任务，验证「同一套流程换 provider」是否成立；做法 H 是在真实仓库里装 hamzafer/claude-code-mods 的 mission-control 与观察类插件，先看清 agent 的读写与上下文水位，再决定是否加 blast-radius 这类危险命令闸门。
+本手册解决的是：把编码 agent（Claude Code / Codex CLI / OpenCode / goose / pi / agentbox 里的 agent）从「在本机随手跑一次」变成「在可控环境里、按项目规则反复跑」，并且能实时看到它在读什么、写什么。要补十件事：工作区与文件持久化、权限与凭据边界、工具与扩展供给、项目级护栏（上下文供给 + 自动化触发）、按轮次的用量成本记录、「先只读规划、再放权编辑」的分工、「运行时/界面扩展面」的受控试点、「跨模型统一接口」——让同一套流程换供应商而不改上层、「实时观察与危险动作闸门」，以及「把桌面 Codex 会话接到手机做异步审批与完成通知」。给出九条可照做的路径：做法 A 是在 Linux 服务器上自托管 agentbox 工作区；做法 B 是在非生产机器上装 goose，用 MCP 供给工具与权限；做法 C 是在单个真实项目里给 Claude Code 配 CLAUDE.md、allow/ask/deny 权限、hook、subagent、skill，并把主工作流固定成 Explore → Plan → Code → Verify → Commit；做法 D 是用 OpenCode 的 build/plan 双 agent 把「先只读规划、再放权编辑」固定成分工；做法 E 是在本机装 Codex CLI 并用 ChatGPT 账号登录，先跑通一次终端编码任务；做法 F 是在一次性项目里用实验开关试点 Claude Mods（function hooks），按验收矩阵检查后再决定是否留下；做法 G 是按 pi 的官方安装脚本装好 CLI，用 `/login` 接入模型，在容器边界内跑一个边界清晰的小任务，验证「同一套流程换 provider」是否成立；做法 H 是在真实仓库里装 hamzafer/claude-code-mods 的 mission-control 与观察类插件，先看清 agent 的读写与上下文水位，再决定是否加 blast-radius 这类危险命令闸门；做法 I 是在一台已运行 Codex App 的 macOS/Windows 电脑上装 Codex Mobile Bridge 桌面 App，只开局域网和账号密码，用手机扫码接入已有会话，回应待确认操作、切模型与 Skill、配 Bark/ntfy 通知，再决定是否开外网入口。
 
 ## 适用与不适用
 
@@ -22,6 +22,9 @@
 - 想验证「同一套流程换模型供应商而不改上层」、需要把 agent 能力嵌进脚本/服务/其他应用（print/JSON、RPC、TypeScript SDK），并且愿意自己承担隔离边界的人（做法 G）。
 - 已经在用 Claude Code、想先看清它读了哪些文件、写了什么、上下文还剩多少，并且想给 `rm -r`、force push、migration 设一道闸门的人（做法 H）。
 - 愿意接受「Code 视图需要 macOS + Chrome + 支持图片的终端」这一前提，或只用 Who 视图（`w`，任何环境可用）的人（做法 H）。
+- 已经在用 Codex App 桌面会话，想让「回应权限请求、回答问题卡片、看进度」离开桌面、在手机上完成，并且需要一个完成/待办通知通道的人（做法 I）。
+- 能保持一台 macOS/Windows 10/11 电脑唤醒、联网，且手机与电脑在同一局域网（或已有 cloudflared 临时 HTTPS、自有服务器 SSH、NAS/反向代理入口）的人（做法 I）。
+- 需要「手机不登录与电脑相同的 OpenAI 账号、也不把模型 API key 放到手机」这种远程审批入口的人（做法 I；这是项目设计说明，不是第三方评测结论）。
 - 能给出一台非生产机器或一个可回退的 Git 分支，愿意先小范围试用再扩大的人。
 
 不适用：
@@ -39,6 +42,13 @@
 - 该仓库的 Code 视图限 macOS + Google Chrome + 能显示图片的终端（Ghostty、kitty、iTerm2）；Linux / Windows 或普通终端只能用到 Who 视图（`w`）。
 - 「My setup」类插件（glance、merge-gate、rulebook-guard、session-saver）是作者按自己的工具和规则搭的，README 自己都要求 fork 后改规则；merge-gate 依赖 `gh` 和 Codex CLI 且 review 模型写死。直接照用会把别人的写作/git 约束带进来。
 - hamzafer/claude-code-mods 需要 Claude Code 2.1.287+（版本号本身无法从材料中验证）；稳定性、对上游版本升级的兼容性、多插件同开时的性能开销，README 都没有交代。
+- Codex Mobile Bridge 是社区项目，与 OpenAI 无隶属关系，当前 32 stars；实现依赖 Codex App 内部 IPC，App 更新后可能不兼容。
+- Codex Mobile Bridge 的 Linux 为实验性；macOS/Windows 的实测范围需看该仓库的 VERIFICATION.md。
+- Codex Mobile Bridge 无多用户角色隔离，不应共享账号；免密模式风险高，仅适合受控网络。
+- 云聊天、SSH 文件下载尚未接入；复杂 MCP 表单、身份验证挑战和部分特殊请求需回到桌面处理。
+- 保存历史可能含上下文注入文本，手机排版不保证与桌面完全一致；临时隧道地址会变化、无持续可用性保证；通知不承诺严格恰好一次投递。
+- 外网和蜂窝网络可达性必须在真实设备上验收，只测 `127.0.0.1` 不算。
+- Codex Mobile Bridge 的效果主张（手机无需登录与电脑相同的 OpenAI 账号、不要求把模型 API key 放到手机、任务继续在原电脑或 SSH 服务器执行、模型请求沿用会话 provider 与认证）是项目设计说明，未见独立性能数据或第三方评测。
 - 五条已有线索加 Claude Mods、pi、hamzafer/claude-code-mods 都没有给出「AI 是否让结果变好了」的对照评测方法或基准数据；Claude Mods 给出了验收矩阵与成本公式，但同样是作者提出的评估方法，不是 Anthropic 的计费公式。
 - 涉密或受管环境要额外做安全审查与权限约束，不能直接照搬 `curl | bash` 类安装，也不能为了跑通 Claude Mods 示例而关掉组织托管保护；pi 的 pi-telemetry / pi-share-hf 会话导出等于把工作数据上传，需先确认合规；第三方插件集合要走组织审批流程。
 
@@ -98,9 +108,17 @@
 - 先不装「My setup」类插件；merge-gate 另需 `gh` 与 Codex CLI。
 - 组织有插件/供应链审批要求时，先按该流程审阅发布者与源码。
 
+做法 I（Codex Mobile Bridge）：
+- macOS 或 Windows 10/11，电脑已安装并运行 Codex App。
+- 电脑保持唤醒、联网；日常使用发布版桌面 App 无需安装 Python、Node.js 或打开终端。
+- 仅源码部署时才需要 Python 3.9+（网关本身只用 Python 标准库）。
+- 手机与电脑在同一局域网；需要外网时，准备 cloudflared 临时 HTTPS、自有服务器 + SSH，或 NAS/已有反向代理之一。
+- 若要手机通知：iPhone 装 Bark（服务地址 + Device Key）；Android 装 ntfy（服务地址 + 完整主题名，公共匿名主题 Token 留空），并允许系统通知、锁屏显示和后台运行。
+- 一条获准测试的已有 Codex 会话，以及一个非关键、可回退的仓库。
+
 ## 操作步骤
 
-八条做法按环境选：要服务器、多人、持久工作区、共享目录、Git 审查、按轮用量成本记录，选做法 A；只有一台非生产机器、想要通用 agent 并愿意自己接 MCP，选做法 B；已经在单个真实项目里用 Claude Code、想把项目级规则和自动化触发固定下来，选做法 C；需要先读懂陌生代码库、要一个默认只读、bash 前询问权限的 plan 模式，选做法 D；已经用 ChatGPT 订阅、想在本机装官方 CLI 跑通一次终端编码任务，选做法 E；需要更深的运行时事件组合或受支持界面行为，且能满足一次性项目、合成数据、有回滚负责人等条件，才考虑做法 F；要在同一套流程里换模型供应商、准备把 agent 嵌进脚本或服务，并且愿意自己容器化隔离，选做法 G；已经在用 Claude Code、想先看清它在读写在跑什么、并在危险命令前设一道闸门，选做法 H。做法 C 可以和 A 叠加：A 管服务器工作区与账号边界，C 管单个项目内的工具调用规则。做法 F 是做法 C 在 Claude Code 上的扩展面试点，不替代 Skills、MCP、经典 hook 或插件系统。做法 G 与它们不是替代关系：pi 提供的是「统一多提供商接口 + 可嵌入的 harness」，权限边界要你自己用容器补，原文明确把 OpenClaw 列为它的真实集成案例。做法 H 与做法 F 不是同一层：F 是 Anthropic 原生 function hooks 的受控试点（early access），H 是第三方插件集合，走 `claude plugin marketplace add` / `claude plugin install`，属于对已采用 Claude Code 的观察与守卫增强；两者都建立在做法 C 的项目级护栏之上，都不能替代 Skills、MCP、经典 hook。
+九条做法按环境选：要服务器、多人、持久工作区、共享目录、Git 审查、按轮用量成本记录，选做法 A；只有一台非生产机器、想要通用 agent 并愿意自己接 MCP，选做法 B；已经在单个真实项目里用 Claude Code、想把项目级规则和自动化触发固定下来，选做法 C；需要先读懂陌生代码库、要一个默认只读、bash 前询问权限的 plan 模式，选做法 D；已经用 ChatGPT 订阅、想在本机装官方 CLI 跑通一次终端编码任务，选做法 E；需要更深的运行时事件组合或受支持界面行为，且能满足一次性项目、合成数据、有回滚负责人等条件，才考虑做法 F；要在同一套流程里换模型供应商、准备把 agent 嵌进脚本或服务，并且愿意自己容器化隔离，选做法 G；已经在用 Claude Code、想先看清它在读写在跑什么、并在危险命令前设一道闸门，选做法 H；已经有 Codex App 桌面会话、想让审批和完成通知离开桌面，选做法 I。做法 C 可以和 A 叠加：A 管服务器工作区与账号边界，C 管单个项目内的工具调用规则。做法 F 是做法 C 在 Claude Code 上的扩展面试点，不替代 Skills、MCP、经典 hook 或插件系统。做法 G 与它们不是替代关系：pi 提供的是「统一多提供商接口 + 可嵌入的 harness」，权限边界要你自己用容器补，原文明确把 OpenClaw 列为它的真实集成案例。做法 H 与做法 F 不是同一层：F 是 Anthropic 原生 function hooks 的受控试点（early access），H 是第三方插件集合，走 `claude plugin marketplace add` / `claude plugin install`，属于对已采用 Claude Code 的观察与守卫增强；两者都建立在做法 C 的项目级护栏之上，都不能替代 Skills、MCP、经典 hook。做法 I 与做法 E 也不是替代关系：E 管在本机装 Codex CLI 跑通终端任务，I 管把 Codex App 已有的桌面会话延伸到手机浏览器做异步审批与通知，模型和权限策略默认继承原会话，链路是手机 → 网关 → 原电脑（或经 SSH 到原服务器）；两者可以并存。
 
 ### 做法 A：在 Linux 服务器上搭自托管 agentbox 工作区
 
@@ -762,6 +780,68 @@ claude --plugin-dir mods/token-weather
 
 诚实说明：该仓库的材料只有 README（`docs/mods.md`、`docs/demo.md`、GIF 与视频均未包含），上面的安装命令、快捷键、版本与平台前提全部来自 README 自述，未在本次材料中独立验证；没有基准、耗时、token 节省或用户反馈数据。做法 H 属于对已采用 Claude Code 的观察与守卫增强，不替代 Skills、MCP、经典 hook 或做法 C 的项目级护栏；它也不替代做法 F——F 管的是自己写 function hooks 来组合运行时事件，H 管的是装现成的观察与守卫插件。
 
+### 做法 I：把电脑上的 Codex 会话接到手机做异步审批与完成通知
+
+来源是社区项目 `try2love/codex-mobile-bridge`（当前 32 stars）。它把电脑上 Codex App 的已有聊天接到手机浏览器：手机可查看回复、发送消息、选择模型与 Skill、回应待确认操作；本地任务仍在原电脑执行，SSH 任务仍在原服务器执行，模型请求沿用原会话的 provider 和认证。网关提供独立账号密码登录，不要求手机登录与电脑相同的 OpenAI 账号，支持局域网、临时 Cloudflare HTTPS、自有服务器 SSH、NAS/Docker 反代，并支持 Bark/ntfy 手机通知。桌面 App 为 v1.3.1，支持 macOS 和 Windows，Linux 为实验性。注意：它与 OpenAI 无隶属关系，依赖 Codex App 内部 IPC，App 更新后可能不兼容；下面每一步的按钮名、路径与命令都来自该仓库 README，未在本次材料中独立验证。
+
+前提：macOS 或 Windows 10/11，电脑已安装并运行 Codex App；电脑保持唤醒、联网；日常使用发布版桌面 App 无需安装 Python、Node.js 或打开终端。先在一个非关键、可回退的仓库和一条获准测试的已有会话上做。
+
+1. 下载桌面 App。到 Release 下载 v1.3.1 对应系统安装包：Windows x64 用 Setup.exe 或完整 ZIP；macOS Apple Silicon 用 arm64 DMG，Intel 用 x64 DMG；Ubuntu x64/ARM64 可试 .deb（实验性）。ZIP 必须完整解压后运行，不要单独移动 exe。
+
+2. 安装并首次打开。Windows 运行安装包后从快捷方式打开；macOS 打开 DMG，将 Codex Mobile Bridge.app 拖入「应用程序」。macOS 未公证，首次打开可能需到 系统设置 → 隐私与安全性 → 仍要打开。若提示「已损坏」，先核对 SHA-256，确认来源可信后再移除下载隔离标记：
+
+```sh
+xattr -dr com.apple.quarantine '/Applications/Codex Mobile Bridge.app'
+```
+
+3. 启动局域网网关。在电脑上打开原来的 Codex App，再打开 Codex Mobile Bridge。在「网络与登录」保留局域网访问，保存后点击「启动网关」；已有配置时沿用原端口。预期结果：网关在电脑上监听，且与 Codex App 的 IPC 连接可用。
+
+4. 手机扫码登录。手机连接同一局域网，在 App 首页展开对应地址下的「扫码登录」，用手机相机扫描进入，无需输入密码。二维码 5 分钟内有效、仅可使用一次；网关重启后全部失效。也可以手动打开地址，使用 App 提供的登录凭据。使用期间保持电脑唤醒、Codex App 和网关运行。
+
+5. 在手机继续会话。选择已有聊天或新建聊天，看到「已连接」后即可发送消息、补充当前任务、排队、撤回待发送消息、停止任务；可回应命令、文件、临时权限请求及提问卡片；可切换模型与推理强度、选择 Skill、上传附件（每消息最多 10 个，单个 1 字节至 20 MiB，总计不超过 100 MiB）、使用计划模式或目标模式。复杂 MCP 表单、身份验证挑战和部分特殊请求需回到桌面处理。
+
+6. 配置手机通知（可选）。iPhone 推荐 Bark：安装 Bark 并允许通知，在桌面 App「手机通知 → Bark 推送」填服务地址和 Device Key；例如手机展示 `https://api.day.app/你的密钥`，服务地址填 `https://api.day.app`，Device Key 只填密钥。Android 用 ntfy：安装 ntfy 并允许系统通知、锁屏显示和后台运行；测试可用 `https://ntfy.sh`，点「生成随机主题」，手机 ntfy 订阅相同服务和完整主题名，公共匿名主题 Token 留空。启用通道、保存，再分别点「发送 Bark 测试通知」或「发送 ntfy 测试通知」，以手机实际收到为验收标准。启动网关后，在网页 设置 → 全会话通知 选择请求处理通知和运行完毕通知；每个聊天的「提醒」可跟随全局、开启或关闭。
+
+7. 需要外网访问时再配入口。临时 HTTPS：在「网络与登录」添加并启用「临时 HTTPS · Cloudflare」，在「运行配置」点击「一键下载并安装」 cloudflared，保存后启动网关；等待入口就绪并检查实际 HTTPS 地址，`127.0.0.1` 不是手机外网入口。自有服务器 + SSH：填固定 HTTPS 地址、已有 SSH 别名或 user@hostname，可导出 Caddy Docker 包；链路是 手机 → 服务器 HTTPS → 服务器回环端口 → SSH → 电脑网关 → 原 Codex App。NAS / 已有反代：填固定 HTTPS 地址和 NAS 可达的电脑 HTTP 地址，可直接反代或导出 Nginx Docker 包；反向代理读取超时建议不少于 300 秒，保留外部 Host。
+
+8. 仅源码部署时的命令行启动。前提：Python 3.9+；网关本身只用 Python 标准库。Windows 在 PowerShell 执行：
+
+```powershell
+git clone https://github.com/try2love/codex-mobile-bridge.git
+cd codex-mobile-bridge
+py -3 -B .\run.py --lan
+```
+
+macOS 执行：
+
+```sh
+git clone https://github.com/try2love/codex-mobile-bridge.git
+cd codex-mobile-bridge
+python3 -B "$PWD/run.py" --lan
+```
+
+临时外网追加 `--tunnel --cloudflared <实际路径>`；已有自有 HTTPS 入口追加 `--origin https://codex.example.com`。修改密码：
+
+```sh
+python3 -B run.py --set-password
+```
+
+显式免密仅适合受控网络：
+
+```sh
+python3 -B "$PWD/run.py" --lan --no-auth
+```
+
+9. 安全与数据。默认账号密码，密码至少 12 位；登录有效期默认 12 小时，可设 0–87600 小时，0 表示不自动过期。HTTP API、SSE 和长轮询都需要登录，并校验 Host、Origin；写操作另校验 CSRF。免密时任何能访问网关的人都能读取聊天并控制对应 Codex 会话。配置、通知密钥、凭据和投递记录位于网关数据目录；`.local/` 不应上传到 issue 或公开仓库。
+
+10. 可把下面这段原样复制给电脑上的 Agent 做部署：
+
+```text
+请帮我部署并运行 https://github.com/try2love/codex-mobile-bridge ：先识别当前电脑是 Windows 还是 macOS，阅读仓库 README 中的「给部署 Agent 的执行说明」，优先使用已发布的桌面 App 或复用现有安装，按我的需求完成配置、启动和验收；复用现有 Codex App 会话及模型认证，默认启用账号密码和局域网访问，保持已有局域网端口。若我需要外网访问，优先复用已有 NAS/HTTPS 反向代理，有自有服务器和域名时可配置 SSH 回程与固定 HTTPS，没有现成入口再配置临时 HTTPS 隧道；验证聊天读取、实时同步和可用的操作链路，保持服务运行，最后给我可点击的手机访问地址、登录凭据获取方式、App 启停操作或命令、验证结果及仍需我完成的步骤。
+```
+
+诚实说明：README 给出的是 v1.3.1 的下载与安装步骤、四种入口的配置方式、通知配置、命令行参数与验证记录入口，没有给出独立性能数据或第三方评测；「手机无需登录与电脑相同的 OpenAI 账号」「不要求把模型 API key 放到手机」「任务继续在原电脑或 SSH 服务器执行」「模型请求沿用会话提供商与认证」均为项目设计说明。部署完成不等于可用：必须按下面的最小试用逐项实测。
+
 ## 怎么判断变好了
 
 做法 A（agentbox）看成本与交付把关，不看「结果是否更好」：
@@ -878,7 +958,27 @@ claude --plugin-dir mods/token-weather
 - 危险命令的拦截率：构造的 `rm -r` / force push / migration 场景中被拦下的比例（目标 100%，任何漏拦都说明这道闸不能用于真实仓库）。
 - 成本对照：usage-meter 显示的 5 小时/7 天额度消耗与本会话成本，同类任务是否上升（若观察成本明显抬升而事故率没降，就退回不装）。
 
-退出条件：如果 Code 视图在你的平台上根本打不开，或安装后会话不稳定、与现有插件冲突，就停在这一步，仅保留结论“需要 macOS + Chrome + 图片终端才可用”。
+退出条件：如果 Code 视图在你的平台上根本打不开，或安装后会话不稳定、与现有插件冲突，就停在这一步，仅保留结论「需要 macOS + Chrome + 图片终端才可用」。
+
+做法 I（Codex Mobile Bridge）最小试用方式（1 台电脑 + 1 部手机 + 同一局域网，约半小时）：
+1. 在一台 macOS 或 Windows、已运行 Codex App 的电脑上安装 v1.3.1 桌面 App，只启用局域网和账号密码，不开启外网。
+2. 启动网关后，用手机同局域网扫码登录，选择一条获准测试的已有聊天。
+3. 从手机发送一个短标记，确认原 Codex App 同一会话收到输入并产生助手回复。
+4. 在手机上测试一次待确认卡片回应；切换模型或推理强度后恢复原设置。
+5. 配置 Bark/ntfy 并分别发送测试通知，以手机实际收到为验收标准。
+6. 关闭手机网页后，观察完成通知是否仍触发。
+7. 重启网关，确认未过期登录保留、地址和会话仍可用。
+
+判断有没有改善的指标（来自该项目的验收维度，属项目自述而非独立评测）：
+- 手机能读取原会话历史并看到实时更新；
+- 手机消息到达原会话并产生回复；
+- 手机审批能作用于对应请求；
+- 通知手机实际收到且不重复轰炸；
+- 未登录读取聊天返回 401；
+- 停止网关后手机不可访问，重启后能恢复；
+- 没有出现重复提交、重复执行或误操作。
+
+退出与扩展条件：一旦出现 IPC 不兼容、外网暴露风险或无法稳定保持运行，回退到只用桌面 Codex。要做外网，必须用真实手机蜂窝网络访问 HTTPS 地址并确认长轮询有更新，只测 `127.0.0.1` 不算通过。
 
 ## 常见坑
 
@@ -934,6 +1034,15 @@ claude --plugin-dir mods/token-weather
 - 版本与平台前提：hamzafer/claude-code-mods 需要 Claude Code 2.1.287+（版本号本身无法从材料中验证）；Code 视图限 macOS + Google Chrome + 支持图片的终端，Linux / Windows 或普通终端只能用到 Who 视图（`w`）。
 - 「My setup」类插件（glance、merge-gate、rulebook-guard、session-saver）是作者按自己规则写的，README 自己都要求 fork 后改规则，直接照用会引入别人的写作/git 约束；merge-gate 依赖 `gh` 和 Codex CLI，且 review 模型写死。
 - 稳定性、对上游版本升级的兼容性、多插件同开时的性能开销，README 都没有交代；blast-radius 在真实仓库里用之前，必须先在含可丢弃文件的目录演练，漏拦一次就不该作为真实仓库的唯一闸门。
+- Codex Mobile Bridge 是社区项目、与 OpenAI 无隶属关系，实现依赖 Codex App 内部 IPC：Codex App 更新后可能不兼容，不要把它当成 OpenAI 官方支持的远程访问方案。
+- 不要为了图省事开 `--no-auth`：免密时任何能访问网关的人都能读取聊天并控制对应 Codex 会话。默认账号密码至少 12 位，登录有效期默认 12 小时（可设 0–87600 小时，0 表示不自动过期）。
+- `.local/`（配置、通知密钥、凭据和投递记录所在的网关数据目录相关内容）不应上传到 issue 或公开仓库。
+- 只测 `127.0.0.1` 不代表外网可用：临时 HTTPS 入口要等就绪后检查实际 HTTPS 地址，并用真实手机蜂窝网络验证；反向代理读取超时建议不少于 300 秒，且要保留外部 Host。
+- 手机扫码登录的二维码 5 分钟内有效、仅可使用一次，网关重启后全部失效；使用期间电脑必须保持唤醒、联网，且 Codex App 与网关都在运行。
+- 复杂 MCP 表单、身份验证挑战和部分特殊请求在手机上处理不了，需要回到桌面；云聊天、SSH 文件下载尚未接入，不要据此设计工作流。
+- 通知不承诺严格恰好一次投递；验收要看「手机实际收到」，并观察是否重复轰炸。
+- 保存历史可能含上下文注入文本，手机排版也不保证与桌面完全一致；不要把手机端看到的内容当作唯一事实来源。
+- 无多用户角色隔离，不应共享账号；Linux 为实验性，macOS/Windows 的实测范围需看该仓库的 VERIFICATION.md。
 
 ## 证据与来源
 
@@ -945,8 +1054,9 @@ claude --plugin-dir mods/token-weather
 - 做法 F 依据调研《Claude Mods: Setup, Function Hooks and Security》：实验开关 `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`、`/plugin-types`、`--plugin-dir`、`plugin test`、插件目录结构、`hooks.json` 的 `modules` 片段、选型表、验收矩阵、成本公式、`sec-default` 与 `telemetry` 的边界说明，均来自该报告转述的官方更新、源码与文档审阅。其中「作者自述这是文档与源代码审阅，不是实测 benchmark，也不是生产就绪证明」「文中所有命令是源码记录的，作者未声称在真实 Claude 会话中执行过」「三个试点设计是提出的试点设计，不是部署记录或担保的内置功能」「安全验收矩阵是待实现和验证的验收要求，不是对当前每种失败模式的断言」「供应链审阅清单是工程建议」「成本核算公式是作者自述的评估方法，不是 Anthropic 的计费公式」均为原文明确声明。没有测得的节省百分比；Mod 本身不是价格折扣；额外的工具调用、上下文、重试、开发与维护成本都要计入。原文还明确否认「hook 环境没有 Node.js 或浏览器 DOM」构成完整安全论证——能访问强大中介工具的 Mod 仍需要仔细划定信任边界，权限、网络限制、数据处理和管理配置必须单独审阅。
 - 做法 G 依据调研《earendil-works/pi》：安装命令（`pi.dev` 安装脚本、Windows PowerShell、npm 安装）、Node.js 22.19+ 前提、`pi update`、启动与 `/login`、Nix 运行与固定版本命令及平台支持、各包列表与职责、三种容器化模式、源码开发与独立二进制构建命令、供应链加固机制、`pi-telemetry` 与 `badlogic/pi-share-hf`、OpenClaw 集成案例，均来自该报告转述的项目原文。其中 stars 111397 来自给定 metrics；「minimal, extensible」「adapt Pi to your workflows, not the other way around」、公开真实会话数据比玩具 benchmark 更能改进 agent、「ships with powerful defaults」为作者主张；extensions、skills、prompt templates、themes、packages、containerization、usage、cli、rpc、sdk 在原文里只是链接，正文没有内容；原文没有效果数据、案例细节、对比测试、性能或质量数字；主动推进只有基础设施线索，没有时间/事件/状态触发的配置或步骤。做法 G 的最小试用方式与对照指标由调研报告提出，原文没有基线或阈值。
 - 做法 H 依据调研《hamzafer/claude-code-mods》：安装命令 `claude plugin marketplace add hamzafer/claude-code-mods` / `claude plugin install mission-control@claude-code-mods`、`claude --plugin-dir mods/token-weather` 临时试用、`/mission`、`w` / `c` 快捷键、颜色语义（蓝=读、橙=写、绿=完成）、token-weather / where-am-i / next-steps / usage-meter / agent-radar / browser-lanes / replay-theater / md-preview、blast-radius 拦截 `rm -r` / force push / migration 并超时取消、glance / merge-gate / rulebook-guard / session-saver 的个人配置属性，均来自该报告转述的 README 自述。MIT 许可、CI badge、37 stars、mission-control 4x 演示图（两个子 agent + 一个 logout 功能落在四个文件上）、作者自述早期项目 cursor-commands 有 600+ stars 是可核对的「硬信息」；除此之外没有任何基准、耗时、token 节省或用户反馈数据，颜色语义的准确性、token-weather 阈值合理性、blast-radius 的拦截完整性、next-steps 建议质量均属作者主张。原文明确的前提是 Claude Code 2.1.287+（版本号本身无法从材料中验证）、Code 视图限 macOS + Chrome + 支持图片的终端；稳定性、上游升级兼容性、多插件同开的性能开销都未交代。做法 H 的最小试用与五项指标由调研报告提出，README 未给出。
-- 五条已有线索加 Claude Mods、pi、hamzafer/claude-code-mods 都没有给出「AI 是否让结果变好了」的对照评测方法或基准数据。agentbox 的成本与用量指标属于记账维度；goose 没有任务效果指标；claude-code-pro-course 没有效果数据；OpenCode 与 Codex 的 README 也没有效果数据；Claude Mods 的验收矩阵与成本公式是作者提出的评估方法；pi 的原文同样没有效果数据，其会话导出只是留档路径；hamzafer/claude-code-mods 只有 README，没有基准、耗时、token 节省或用户反馈数据。做法 C、D、E、F、G、H 的「怎么判断变好了」分别沿用做法 B 或调研报告提出的最小试用方法与指标，属于作者主张。
-- 与清单的关系：agentbox 不替代 Claude Code，而是给它（以及 Codex CLI）提供自托管环境；goose 这条线索给出了可复制安装命令和通过 MCP 供给工具权限、通过定制发行版预置配置两条路径；claude-code-pro-course 给出了项目级护栏与自动化触发的可复制配置；OpenCode 补上了可复制的安装命令和 `build`/`plan` 权限分工，但 README 不含效果数据，不足以支撑 adopt，可作为把清单中 OpenCode（watch）推进到 try 的依据；Codex CLI 给出了安装与登录路径，并说明可作为 Cursor 里的智能体使用（同一层叠加），但原文只到首页，可作为对比参照，没有给出与 Cursor 的功能差异证据；Claude Mods 补上了 Claude Code 的运行时/界面扩展面、选型表、验收矩阵与成本口径，但处于 early access，适合受控试点而非直接采纳；pi 补上了「统一多提供商接口 + 可嵌入 harness」这一层，给出了安装、启动、登录、Nix 固定版本与三种容器化边界的可复制步骤，并把 OpenClaw 列为真实集成案例，但 README 是宣传 + 导览，扩展与容器化细节只给了链接，默认没有权限系统，没有效果数据，需要在容器里实测后再决定是否写进日常流程；hamzafer/claude-code-mods 补上了 Claude Code 会话内的实时观察面与危险命令闸门，给出了可复制的 marketplace 安装命令、快捷键和平台前提，足以小范围试，但材料只有 README，无实测数据，且 Code 视图限 macOS + Chrome。八条都可把评估从 watch 上调为 try，但都必须先读官方文档、审查安装脚本，并做一次实际任务。
+- 做法 I 依据调研《try2love/codex-mobile-bridge》：v1.3.1 桌面 App 的下载与安装步骤（Windows x64 Setup.exe / 完整 ZIP、macOS arm64 与 x64 DMG、Ubuntu .deb 实验性）、macOS 未公证提示与 `xattr -dr com.apple.quarantine` 命令、局域网网关启动、手机扫码登录（二维码 5 分钟内有效、仅一次、网关重启失效）、手机端可做的事（发消息、排队、撤回、停止、回应命令/文件/临时权限请求/提问卡片、切换模型与推理强度、选择 Skill、上传附件每消息最多 10 个且单个 1 字节至 20 MiB、总计不超过 100 MiB、计划模式/目标模式）、Bark 与 ntfy 通知配置、四种入口（临时 HTTPS · Cloudflare、自有服务器 + SSH、NAS / 已有反代、反向代理读取超时建议不少于 300 秒）、仅源码部署的命令行参数（`--lan`、`--tunnel --cloudflared`、`--origin`、`--set-password`、`--no-auth`）、安全与数据说明（密码至少 12 位、登录有效期默认 12 小时且可设 0–87600 小时、HTTP API/SSE/长轮询需登录并校验 Host 与 Origin、写操作另校验 CSRF、`.local/` 不应上传）、可直接复制给部署 Agent 的提示词，均来自该报告转述的仓库 README。来源是仓库 README，非 OpenAI 官方文档；当前 stars 为 32。作者主张包括：手机无需登录与电脑相同的 OpenAI 账号、不要求把模型 API key 放到手机、任务继续在原电脑或 SSH 服务器执行、模型请求沿用会话提供商与认证；未见独立性能数据或第三方评测。局限包括：社区项目、与 OpenAI 无隶属关系、依赖 Codex App 内部 IPC、App 更新后可能不兼容、macOS/Windows 实测范围需看 VERIFICATION.md、Linux 为实验性、无多用户角色隔离、云聊天与 SSH 文件下载未接入、复杂 MCP 表单与身份验证挑战需桌面处理、临时隧道地址会变化且无持续可用性保证、通知不承诺严格恰好一次投递。做法 I 的最小试用与指标来自该报告的验收维度（登录与访问保护、原 App 会话读取、同一会话发消息、手机回应、模型与 Skill、SSH、列表、外网、持续运行），属项目自述而非独立评测。
+- 五条已有线索加 Claude Mods、pi、hamzafer/claude-code-mods、Codex Mobile Bridge 都没有给出「AI 是否让结果变好了」的对照评测方法或基准数据。agentbox 的成本与用量指标属于记账维度；goose 没有任务效果指标；claude-code-pro-course 没有效果数据；OpenCode 与 Codex 的 README 也没有效果数据；Claude Mods 的验收矩阵与成本公式是作者提出的评估方法；pi 的原文同样没有效果数据，其会话导出只是留档路径；hamzafer/claude-code-mods 只有 README，没有基准、耗时、token 节省或用户反馈数据；Codex Mobile Bridge 的指标来自项目 README 自述的验收维度，没有独立性能数据或第三方评测。做法 C、D、E、F、G、H、I 的「怎么判断变好了」分别沿用做法 B 或调研报告提出的最小试用方法与指标，属于作者主张。
+- 与清单的关系：agentbox 不替代 Claude Code，而是给它（以及 Codex CLI）提供自托管环境；goose 这条线索给出了可复制安装命令和通过 MCP 供给工具权限、通过定制发行版预置配置两条路径；claude-code-pro-course 给出了项目级护栏与自动化触发的可复制配置；OpenCode 补上了可复制的安装命令和 `build`/`plan` 权限分工，但 README 不含效果数据，不足以支撑 adopt，可作为把清单中 OpenCode（watch）推进到 try 的依据；Codex CLI 给出了安装与登录路径，并说明可作为 Cursor 里的智能体使用（同一层叠加），但原文只到首页，可作为对比参照，没有给出与 Cursor 的功能差异证据；Claude Mods 补上了 Claude Code 的运行时/界面扩展面、选型表、验收矩阵与成本口径，但处于 early access，适合受控试点而非直接采纳；pi 补上了「统一多提供商接口 + 可嵌入 harness」这一层，给出了安装、启动、登录、Nix 固定版本与三种容器化边界的可复制步骤，并把 OpenClaw 列为真实集成案例，但 README 是宣传 + 导览，扩展与容器化细节只给了链接，默认没有权限系统，没有效果数据，需要在容器里实测后再决定是否写进日常流程；hamzafer/claude-code-mods 补上了 Claude Code 会话内的实时观察面与危险命令闸门，给出了可复制的 marketplace 安装命令、快捷键和平台前提，足以小范围试，但材料只有 README，无实测数据，且 Code 视图限 macOS + Chrome；Codex Mobile Bridge 补上了「把 Codex App 桌面会话延伸到手机做异步审批与完成通知」这一层，给出了桌面 App 安装、局域网/临时 HTTPS/自有服务器 SSH/NAS 反代四种入口、Bark 与 ntfy 通知、命令行参数与安全说明等可照做的步骤，但材料同样只有 README，依赖 Codex App 内部 IPC，无多用户隔离，无独立评测，适合在局域网 + 账号密码下先小范围试。九条都可把评估从 watch 上调为 try，但都必须先读官方文档、审查安装脚本或社区项目源码，并做一次实际任务。
 
 ## 依据的调研
 
@@ -958,3 +1068,4 @@ claude --plugin-dir mods/token-weather
 - [Claude Mods: Setup, Function Hooks and Security](../research/radar/2026-10-02/851-claude-mods-setup-function-hooks-and-security.md)：值得一试，把 Claude Mods 当作受控试点的运行时/界面扩展面来用：先用实验开关与 /plugin-types 在一次性项目里跑通官方 diff 示例，再按文章的验收矩阵和「每被接受任务总成本」指标判断是否留下。理由是原文给出了可直接复制的启用命令、插件目录结构、hooks.json 片段和一整套安全验收检查，但它自认只是文档与源码审阅、API 处于 early access，因此不适合直接采纳为生产依赖。
 - [earendil-works/pi](../research/radar/2026-10-03/518-earendil-works-pi.md)：值得一试，建议小范围试：按 README 的安装脚本装好 pi，在单个有版本控制的项目目录里用 /login 接入模型跑一个边界清晰的小任务（优先在容器里跑），验证它作为「统一模型接口 + 编码 agent」能否承载可复用的协作工作流；理由是原文给出了安装、启动、登录、容器化三类能直接照做的步骤，但扩展、技能、提示词模板等定制细节全在外链文档里，只有实测才能判断值不值得写进手册。
 - [hamzafer/claude-code-mods](../research/radar/2026-10-04/1071-hamzafer-claude-code-mods.md)：值得一试，建议在受控项目里小范围试装 mission-control（配合 token-weather、按需 blast-radius），用实时视图观察 agent 读了哪些文件、写了什么、上下文还剩多少，并在危险命令前设一道闸；理由是 README 给出了可直接照抄的安装命令、快捷键和版本要求，属于可执行流程，但全部依据仅为该 README，无实测数据，且部分视图依赖特定 Claude Code 版本与 macOS/Chrome 环境。
+- [try2love/codex-mobile-bridge](../research/radar/2026-10-04/1187-try2love-codex-mobile-bridge.md)：值得一试，建议在单台 macOS/Windows 电脑上加装该桌面 App，先在局域网和账号密码模式下小范围试用，把已有 Codex 会话接到手机做异步审批和完成通知；原因是它给出了可照做的安装、启动、通知和部署 Agent 步骤，但依赖 Codex App 内部 IPC、属社区项目，外网暴露和安全边界需自行验收。
