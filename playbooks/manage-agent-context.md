@@ -1,10 +1,10 @@
-# 给编码 agent 的上下文瘦身，并让长会话在爆掉前自动交接
+# 让编码 agent 不再撑爆上下文：挡输出、保状态、到阈值自动交接
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：编码 agent 会把大量工具输出、反复重发的规则文件和完整聊天记录塞进上下文，会话一压缩就失忆，长会话还得手动 /clear 再重述一遍；本手册给出一套可逐项落地、且用任务侧指标验证的上下文与长会话管理办法。
-> 先试这一步：先在 Claude Code 里用 /context 看清 token 到底花在哪里（CLAUDE.md、聊天记录、用不到的 MCP 工具三类各占多少），记下基线，再动手砍第一项。
-> 最近修订：2026-10-04
+> 解决的问题：编码 agent 在长任务里被工具输出、重复发送的配置和失忆的会话撑爆上下文，需要一套按成本排序、能用任务侧指标验证的做法。
+> 先试这一步：先挑一个你常做的中等长度真实任务，在 Claude Code 里跑一遍并中途运行 `/context`，记下 CLAUDE.md、聊天记录、MCP 工具三类的 token 占比作为基线，再按需叠加一个做法。
+> 最近修订：2026-10-05
 
 ## 解决什么问题
 
@@ -18,7 +18,9 @@
 
 还有一类浪费发生在长会话的交接上：上下文快到窗口上限时，你要手动 `/clear`，再从头把背景、决策、当前进度重述一遍；同一个纠正，可能要说第四遍。有一份材料给出了 ctx-handoff 这个 Claude Code mod 的做法：上下文达到阈值（默认 600k，或窗口的 80%，取较低者）时自动写交接摘要、`/clear`、在新会话里提交；空闲 55 分钟时 fork 一个极小请求刷新 prompt cache 保活；缓存还热时把对话沉淀成 memory 和 rule 两类条目。作者自标 experimental，构建在 Claude Code 的 early-access function-hooks API 上。
 
-本手册把对应这几类浪费的做法合在一起：把工具输出挡在上下文窗口之外（Context Mode、headroom）、把「读很多、只判断一点」的略读外包给小模型（Quicksilver）、用持久记忆保住跨会话状态（claude-mem、mem0、cognee）、把执行计划写到磁盘并靠 hook 重注入（planning-with-files）、把团队 trace 固化成可复用技能（hivemind）、用录屏口述补上下文和反馈（blurt）、把 agent 规则集中成一份共享 AGENTS.MD 软链给同机多个工具共读（做法 L）、定期审查 CLAUDE.md / skills 里的过时指令（做法 M）、先给上下文预算做一次审计再逐项砍浪费（做法 N），以及把长会话的自动交接与沉淀也交给工具（做法 O）。核心要求是：不只看节省比例，要用任务侧指标验证结果有没有变好。
+还有一类浪费发生在会话撞上上下文上限的那一刻：内置的 auto-compact 在原地压缩，你没法控制它保留什么、丢掉什么；压完 agent 可能已经忘了当前任务的关键决策。有一份材料给出了 claude-auto-handoff 这个 Claude Code mod 的做法：接近阈值时不再原地压缩，而是让 Haiku 依据 transcript 写一份结构化交接简报落到磁盘——进行中的工作、决策、待验证的假设、死路、你的最后请求及是否已被回答、下一步；其中 files/commits/issues 等段落由代码直接从 transcript 提取、不依赖模型记忆；写完执行 `/clear`，再用一行提示把新会话接上，新会话读简报后继续干活。该项目定位明确：替换内置 auto-compact。它同样是作者自测的早期项目（0.8.x）。
+
+本手册把对应这几类浪费的做法合在一起：把工具输出挡在上下文窗口之外（Context Mode、headroom）、把「读很多、只判断一点」的略读外包给小模型（Quicksilver）、用持久记忆保住跨会话状态（claude-mem、mem0、cognee）、把执行计划写到磁盘并靠 hook 重注入（planning-with-files）、把团队 trace 固化成可复用技能（hivemind）、用录屏口述补上下文和反馈（blurt）、把 agent 规则集中成一份共享 AGENTS.MD 软链给同机多个工具共读（做法 L）、定期审查 CLAUDE.md / skills 里的过时指令（做法 M）、先给上下文预算做一次审计再逐项砍浪费（做法 N），以及把长会话的自动交接与沉淀也交给工具（做法 O、做法 P）。核心要求是：不只看节省比例，要用任务侧指标验证结果有没有变好。
 
 ## 适用与不适用
 
@@ -35,13 +37,14 @@
 - 你在维护 CLAUDE.md 或 skills，里面还残留为旧模型写的提示习惯，想系统审查一遍再决定删不删。
 - 你在用 Claude Code，有较长的 CLAUDE.md，接了多个 MCP 服务器而多数用不到，并且对用量/配额敏感。
 - 你在 1M 上下文模型 + Claude 订阅（1 小时 prompt cache）上跑很长的 Claude Code 主会话，经常手动 /clear 再重述上下文，或者同一条纠正要重复交代。
+- 你在 Claude Code 里跑长会话，经常撞上下文上限，想用一份结构固定、可编辑、落盘的交接简报替换内置 auto-compact，并且愿意接受一个 0.8.x 的早期 mod。
 - 你愿意装 MCP server / 插件 / hook / 本地代理 / skill / mod，并接受一次小范围试用。
 
 不适用：
 
 - 你对商用许可敏感。Context Mode 是 ELv2 许可，对商用有限制；cognee 的单 Postgres 图存储和本地 GLiNER 抽取器是 demo，生产版是授权产品。
 - 你不能把内容发给第三方。Quicksilver 会把待扫描内容发到 TypeSafe 的 API（api.typesafe.ai）；mem0 默认依赖 LLM 与 embedding 供应商；cognee 配 LLM 后会发起 provider 调用；hivemind 默认把全部会话 prompt 与工具输出写进团队共享 workspace。
-- 你希望直接拿到第三方验证过的 98% 节省、100x 提升、~10x token 节省、mem0 托管高分、cognee BEAM 分数、planning-with-files 自测数据、hivemind 基准、ctx-handoff 的 94/94 测试。这些数字都是各自 README 或项目自述，调研没有找到第三方验证或实验数据。
+- 你希望直接拿到第三方验证过的 98% 节省、100x 提升、~10x token 节省、mem0 托管高分、cognee BEAM 分数、planning-with-files 自测数据、hivemind 基准、ctx-handoff 的 94/94 测试、claude-auto-handoff 的 7 秒恢复。这些数字都是各自 README 或项目自述，调研没有找到第三方验证或实验数据。
 - 你的任务很小、工具输出很少，装 hook / 代理 / 持久记忆 / mod 的开销可能不划算。headroom 原文也写了：短对话、散文、已经密集的载荷收益很小甚至为零，小于 min_input_words 的块原样返回。
 - 你不想改配置、不想重启客户端，或者沙箱里跑不了本地进程（headroom 需要本机进程和端口）。
 - 你的问题是纯后端、无界面、又拍不到。blurt 的前提是能看到问题或用手机拍到（终端、TUI、桌面应用可以）。
@@ -56,9 +59,13 @@
 - 你的 CLAUDE.md 很短、也不接 MCP：做法 N 几乎没有可操作空间，只剩「顺手看一眼 /context」的价值。
 - 你希望做法 N 给出确定的节省数字：原文全文没有一个数字、截图或对比实验，只有「限制总是在午饭前耗尽」这句体感描述。
 - 你用 5 分钟 prompt cache（API key、Bedrock、Vertex 用户，以及进入 usage credits 的订阅用户）。ctx-handoff 的空闲刷新在 5 分钟 TTL 下会发现缓存已失效，而每次刷新会重写整个上下文；mod 不检测 TTL，必须手动 `/handoff refresh off`。
-- 你的 Claude Code build 不带 function hooks（mods）。ctx-handoff 依赖 early-access function-hooks API，作者开发测试版本为 2.1.287。
-- 你要的是稳定、久经考验的方案。ctx-handoff 由作者自标 experimental，且空闲缓存刷新等关键行为尚未实测。
-- 你希望交接能带上图片/附件：被暂扣的只有文本，图片/附件必须在交接后重新粘贴。
+- 你的 Claude Code build 不带 function hooks（mods）。ctx-handoff 与 claude-auto-handoff 都依赖它；ctx-handoff 作者开发测试版本为 2.1.287。
+- 你要的是稳定、久经考验的方案。ctx-handoff 由作者自标 experimental，claude-auto-handoff 仓库 39 stars、版本 0.8.x、自测为主，两者的关键行为都尚未被第三方实测。
+- 你希望交接能带上图片/附件：两条自动交接做法被暂扣的只有文本，图片/附件必须在交接后重新粘贴。
+- 你把会话用 wrapper 管道化：claude-auto-handoff 与这种管道不兼容，需要设 `DISABLE_AUTO_COMPACT`，而那会关掉这个 mod（viewer 服务仍会运行）。
+- 你希望交接简报页在公网或任意设备可达：claude-auto-handoff 的 `viewer` 默认只在 Tailscale 网内可达，未装 Tailscale 时退到 127.0.0.1 仅本机。
+- 你希望由 mod 自己判断简报写得好不好：claude-auto-handoff 的有效性判定很宽松（Haiku 回复含至少一个标题即算有效），否则回退 facts-only 简报，可能损失信息。
+- 你已经用做法 O 管同一个会话：做法 O 与做法 P 都是「到阈值就自动交接」，材料没有说明两者能否共用，同一条会话二选一，不要叠加。
 
 ## 前置条件
 
@@ -69,6 +76,7 @@
 - 做法 M 额外需要：本机已安装并可正常使用 Claude Code；目标项目里已有 CLAUDE.md 或 skills 配置文件，否则没有可审查的对象；先备份当前 CLAUDE.md。
 - 做法 N 额外需要：本机已安装并可正常使用 Claude Code；有较长的 CLAUDE.md；接入了多个 MCP 服务器而其中多数用不到；对用量/配额敏感。做法 N 不需要装任何新工具，只需要在 Claude Code 设置里确认自动压缩阈值项的位置。
 - 做法 O 额外需要：带 function hooks（mods）的 Claude Code build（作者在 2.1.287 上开发测试）；目标场景是 1M 上下文模型 + 1 小时 prompt cache 的订阅用户；能把 mod 克隆到本地并以 `--plugin-dir` 加载，或能改 `~/.claude/settings.json` 的 `env`。
+- 做法 P 额外需要：带 mods（function-hook plugins）的 Claude Code 构建；能 clone 仓库并以 `--plugin-dir` 加载，或能改 `~/.claude/settings.json` 的 env；`~/.claude/state` 与 `~/.claude/auto-handoff/` 可写；可选 Tailscale（跨设备看简报页）、jq（状态栏链接脚本）、终端超链接支持（`FORCE_HYPERLINK=1`）。
 - 各自的凭据与许可：
   - Quicksilver：到 console.typesafe.ai 申请一个 Jev key。内容会被发送到 TypeSafe 的 API，所以不要拿它处理不能给第三方的数据。
   - claude-mem：标准安装会要求浏览器登录（邮箱 magic link，无需信用卡）；不想要账号交互就显式传 --provider、设 CLAUDE_MEM_ONLINE_OPTIN=false，或在 CI / 非交互 shell 里运行。
@@ -97,8 +105,9 @@
 - 需要本地优先、知识图谱、无 LLM 也能检索 → 做法 I（cognee）。
 - 同一台机器上同时用 Claude Code 和 Codex，规则要在多处维护、两边行为还不一致 → 做法 L（共享 AGENTS.MD + 软链）。这条按「值得小范围试」对待，不要一上来就铺到所有 repo。
 - 主要痛点是 CLAUDE.md / skills 里堆着旧提示习惯，想先审一遍再决定删不删 → 做法 M（`/claude-api prompt-audit`，先只记录不改动）。
-- 主要痛点是「配额/用量限制提前耗尽」，CLAUDE.md 很长、MCP 服务器一大堆 → 做法 N（先 `/context` 审计，再逐项砍）。这条不用装东西，成本最低，适合在做 A–O 之前先做一遍。
+- 主要痛点是「配额/用量限制提前耗尽」，CLAUDE.md 很长、MCP 服务器一大堆 → 做法 N（先 `/context` 审计，再逐项砍）。这条不用装东西，成本最低，适合在做 A–P 之前先做一遍。
 - 长会话经常撞上下文上限、每次都要手动 /clear 再重述 → 做法 O（ctx-handoff mod，先只跑 `/handoff dry` 看一次交接成本）。这条只作用于主会话，且作者自标 experimental，先小范围试。
+- 长会话经常撞上下文上限、你想用一份可编辑、可落盘的交接简报替换内置 auto-compact → 做法 P（claude-auto-handoff，先用 `AUTO_HANDOFF_TOKENS=60000` 跑一次交接）。做法 P 与做法 O 同属「阈值自动交接」，同一条会话里二选一，不要叠加。
 
 这些做法可以叠加，但一次只加一个，否则分不清是哪个起了作用。
 
@@ -693,7 +702,7 @@ hivemind codex uninstall
 
 ### 做法 N：先审计上下文预算，再一次只改一项
 
-适用形态：你在用 Claude Code，配置了 CLAUDE.md，接了至少一个 MCP 服务器，并且感觉用量/配额提前耗尽。这条材料只有一条推文，原文在 `/mcp` 处被截断，全文没有任何数字或对比实验，按 study / 小范围试对待，不要当 adopt。它不用装任何新工具，成本最低，适合在 A–O 之前先做一遍。
+适用形态：你在用 Claude Code，配置了 CLAUDE.md，接了至少一个 MCP 服务器，并且感觉用量/配额提前耗尽。这条材料只有一条推文，原文在 `/mcp` 处被截断，全文没有任何数字或对比实验，按 study / 小范围试对待，不要当 adopt。它不用装任何新工具，成本最低，适合在 A–P 之前先做一遍。
 
 1. 前提确认：Claude Code 可用；有较长的 CLAUDE.md；接入了多个 MCP 服务器而其中多数用不到；对用量/配额敏感。如果 CLAUDE.md 很短、也不接 MCP，这条几乎没有可操作空间。
 
@@ -801,6 +810,76 @@ hivemind codex uninstall
 
 11. 先在单个会话、单个项目上验证：跑一次自动交接，确认新会话确实接上了；再跑一次 `/handoff distill`，打开项目里的 `ctx-handoff.md` 看 memory / rule 写对没有。确认之后再考虑让它常驻。
 
+12. 与做法 P 的关系：两者都在阈值处自动交接，但定位和组成不同——做法 O 另带空闲缓存保活和 distill（把对话沉淀成 memory / rule），做法 P 明确以「替换内置 auto-compact」为定位，简报由 Haiku 写、files/commits/issues 由代码从 transcript 提取。材料没有说明两者能否共用；同一条会话里二选一，不要叠加。
+
+### 做法 P：用结构化交接简报替换内置 auto-compact（claude-auto-handoff，先小范围试）
+
+适用形态：你在 Claude Code 里跑长会话，接近上下文上限时不想让内置 auto-compact 原地压缩，而是希望得到一份结构固定、可编辑、落盘的交接简报，再由新会话读简报续接。这个 mod 做四步：写简报 → `/clear` → 起新会话 → 新会话恢复。简报里包含进行中的工作、决策、待验证的假设、死路、你的最后请求及是否已被回答、下一步；其中 files/commits/issues 等段落由代码直接从 transcript 提取，不依赖模型记忆。仓库 0.8.x、39 stars，作者自测，按 study / 小范围试对待。
+
+1. 前提：需要一个带 mods（function-hook plugins）的 Claude Code 构建。版本不符时不要继续。
+
+2. 克隆并以插件目录加载：
+   ```sh
+   git clone https://github.com/alexknowshtml/claude-auto-handoff.git ~/claude-auto-handoff
+   claude --plugin-dir ~/claude-auto-handoff
+   ```
+   预期：mod 加载成功；以 `--plugin-dir` 加载时保存文件会热重载。
+
+3. （可选）让每个会话都加载：把插件目录写进 shell 环境变量，或写进 `~/.claude/settings.json` 的 `env` 块：
+   ```json
+   { "env": { "CLAUDE_CODE_PLUGIN_DIRS": "~/claude-auto-handoff" } }
+   ```
+
+4. 配置。所有设置是 `/config` 里 auto-handoff 下的行，存储在 `~/.claude/settings.json` 的 `pluginConfigs`。默认值与作用：
+
+   | 设置 | 默认 | 作用 |
+   |---|---|---|
+   | `threshold` | `160000` | 触发交接的上下文 token 数（为 200k 窗口留出简报与当前回合的空间）。被种子化的会话至少要在自身起始大小之后 40k 才交接；设得更低时面板会告诉你实际阈值线在哪 |
+   | `maxConsecutiveHandoffs` | `2` | 在你输入提示之前允许的连续交接次数，超过则暂停等待你输入 |
+   | `briefTemplate` | `~/.claude/auto-handoff/brief.md` | Haiku 要写的章节模板 |
+   | `instructionsTemplate` | `~/.claude/auto-handoff/instructions.md` | 新会话被告知要做什么 |
+   | `ignoreFiles` | 空 | 正则，匹配要从简报中排除的已编辑文件（如缓存、同步状态） |
+   | `viewer` | `tailscale:3846` | 简报页面的服务地址 `host:port`；host 为 `tailscale` 表示本机 Tailscale IP，未装 Tailscale 时用 `127.0.0.1`；留空则不启服务，链接为本地文件 |
+
+   环境变量：
+   - `AUTO_HANDOFF_TOKENS=60000` 为单次运行覆盖阈值，用于不填满 160k 也能观察一次交接（该 shell 内持续生效）。种子会话起始约 45k，低于约 85k 的取值会使其剩余空间不足 40k，此时改为 start + 40k 交接，面板显示 `threshold 60k (AUTO_HANDOFF_TOKENS) leaves 15k ...`。
+   - `AUTO_HANDOFF_DISABLE=1` 对单个会话关闭该 mod（含 viewer 服务）。
+   - `DISABLE_AUTO_COMPACT` 也会关闭它；当别的东西在管理上下文上限（如把会话管道化的 wrapper）时使用，否则 `/clear` 会破坏管道。viewer 服务仍会运行。
+
+5. 改简报结构与规则。默认模板在仓库 `templates/` 下。会话首次启动时，mod 会把 `templates/brief.md` 和 `templates/instructions.md` 复制到 `~/.claude/auto-handoff/`（若不存在）。改这两个副本，不要改仓库里的，这样 `git pull` 不会覆盖你的修改，下一次交接就用你的版本。想恢复默认就删掉副本，下次启动会重新复制；想放到别处就把 `briefTemplate` / `instructionsTemplate` 指过去。
+   - 编辑 `brief.md`：增删、改名或重排 `## ` 章节，标题下的文字告诉 Haiku 该写什么。Haiku 回复中只要包含你的至少一个标题就算有效，否则回退到 facts-only 简报。不要写 files 和 commits 段，这两段由 mod 从 transcript 用代码添加。
+   - 编辑 `instructions.md`：它有一个开关：
+     ```md
+     {{#priority}}Shown when the last request is not fully answered.{{/priority}}
+     {{^priority}}Shown when it is.{{/priority}}
+     ```
+     该开关读取简报的 `## Last Request from the User` 段及其 `Status:` 行；想让开关生效，这两者都要保留在 `brief.md` 里。
+
+6. （可选）状态栏链接：`statusline/handoff-link.sh` 包装你原有的状态栏命令，当会话来自交接时追加一行 `↪ <link>`。在 `~/.claude/settings.json` 里把它设为 `statusLine` 命令，原有命令放在它后面：
+   ```json
+   "statusLine": { "type": "command", "command": "~/claude-auto-handoff/statusline/handoff-link.sh ~/.claude/my-statusline.sh" }
+   ```
+   需要 `jq`。它从上一份简报的头部（`to:` 写本会话名、`viewer:` 写页面地址）里找链接。
+
+7. 运行机制（了解即可，便于排障）：
+   - 阈值：每轮之后、每次模型请求之前检查上下文大小（含尚未计量的工具输出）；超过阈值后拒绝新的工具调用，避免一次批量读取撑爆窗口；未计量的工具输出是可能偏高的估计，所以真实大小有时低于阈值；被拒绝的调用仍会在下一次请求或回合结束时触发交接。
+   - 简报：Haiku 依据 transcript 写；Haiku 失败时用仅事实的简报兜底；简报写到 `~/.claude/state/auto-handoff/<session-id>.md`。
+   - 清空并播种：mod 执行 `/clear`，给新会话发一行——读简报并按其 Instructions 段执行；纯 SSH 下终端通常不识别链接，若终端支持可设 `FORCE_HYPERLINK=1`，或用状态栏链接。
+   - 面板：提示框上方有面板，显示每步的盲文 spinner，完成后读 `✓ handed off · 162k → 45k` 并带 `open brief` 链接，10 秒后收起；失败、循环守卫暂停、facts-only 简报、阈值过紧会一直停留到你按 Dismiss；自己输入 `/clear` 会关掉面板（正在交接时除外）；移动端 App 和 VS Code 不画面板，改以 toast 呈现。
+   - 查看器：每份简报在 `~/.claude/state/auto-handoff/pages/` 有可读页面，同一轮的所有交接按顺序互链，链接形如 `http://100.x.y.z:3846/1a2b3c4d`。
+
+8. （开发用）校验：
+   ```sh
+   claude plugin validate .
+   claude plugin test .
+   ```
+
+9. 日志：全部动作记录在 `~/.claude/state/auto-handoff/auto-handoff.log`。
+
+10. 最小试用：在一个不那么关键的长会话里跑一次——设 `AUTO_HANDOFF_TOKENS=60000` 降低阈值，省去填满 160k 的等待；正常干活直到面板出现，观察四步：写简报 → 清空 → 起新会话 → 新会话恢复，顺手确认被拒绝的工具调用确实以交接收尾；打开 `~/.claude/state/auto-handoff/<session-id>.md` 逐条核对工作进展、决策、待验证假设、死路、最后请求及 Status、下一步；查 `~/.claude/state/auto-handoff/auto-handoff.log` 有无失败与 facts-only 回退；觉得结构不合适就改 `~/.claude/auto-handoff/brief.md`（不加 files/commits 段）和 `instructions.md`，再跑第二次比较。
+
+11. 与做法 O 的关系见做法 O 第 12 步：两者都在阈值处自动交接，定位不同；材料没有说明能否共用，同一条会话二选一。
+
 ### 核心用法：用代码思考（Think in Code）
 
 不管用哪种做法，关键动作是：让模型写脚本做分析，只 console.log() 结果，而不是把 50 个文件读进上下文再数函数。示例：
@@ -832,6 +911,7 @@ ctx_execute("javascript", `
 - 做法 M：材料没有给出任何工具侧指标，也没有命令可以读回执；推文互动量（58 赞 / 2 转发 / 13 回复）只反映传播度，不是效果证据。
 - 做法 N：唯一的工具侧反馈就是 `/context` 本身——看 CLAUDE.md、聊天记录、MCP 工具三类来源的 token 占比是否下降。这是最直接、最可比的指标。原文没有给任何基线或阈值。
 - 做法 O：`/handoff` 一次显示上下文用量、阈值、刷新与 distill 状态、待处理的 away handoff、交接失败原因、非法 JSONL 样本与原因；distill 有变更时 toast 显示变更条目数和写入的每个 notes 文件全路径；`claude plugin test` 94/94 通过（覆盖 JSONL 校验与拒绝样本、跨项目移动、fork 超时、暂扣消息去重与附件、密钥不外泄等）。交接成本本身也能量：`/handoff dry` 会显示这次交接的成本。
+- 做法 P：面板的 `✓ handed off · 162k → 45k` 前后 token 对比与 `open brief` 链接；`~/.claude/state/auto-handoff/auto-handoff.log` 记录全部动作、失败与 facts-only 回退；每份简报在 `~/.claude/state/auto-handoff/pages/` 有页面，同一轮交接按顺序互链。0.8.3 起简报必须写入真实数字（交接时 token、阈值及其来源、会话起始大小、无人输入时已运行几次交接），否则写 "unknown"；0.8.4 起不在 Handoff Numbers 里的 token 数字被标记 `[unverified: not in Handoff Numbers]` 并记日志。作者自测：阈值设 80k 时的一次运行，mod 在阈值处拒绝一次读取、写简报、清空，新会话约 7 秒后回到工作、处于 31k（附 demo.gif / demo.mp4）。
 
 任务侧指标：
 
@@ -856,6 +936,8 @@ ctx_execute("javascript", `
 - 交接后重新定位轮数（做法 O）：自动交接后，新会话需要重新交代背景/决策的轮数是否下降。
 - 同一纠正的重复次数（做法 O）：同一条纠正需要说几遍，应下降——这是这个 mod 想直接消掉的那件事。
 - 交接与 distill 的成本（做法 O）：`/handoff dry` 显示的交接成本；原文实测 distill 在 476k 约 95 秒、800k 约 3 分钟，800k 时交接本身约 28 秒。这些数字只反映作者环境，需要自己测。
+- 新会话能否直接续上（做法 P）：简报里的「下一步」是否可执行、是否需要你重新解释背景。
+- 简报事实准确率（做法 P）：files/commits/issues 等代码提取段是否与实际一致；Haiku 写的 token 数字是否被标 `[unverified: not in Handoff Numbers]`。
 
 最小试用方式：
 
@@ -872,6 +954,7 @@ ctx_execute("javascript", `
 11. 做法 M：挑一个正在用的项目，保存当前 CLAUDE.md 的副本；运行 `/claude-api prompt-audit`，记录它指出的条目（原文没保证它会自动改，所以先只记录、不改动）；把 CLAUDE.md 里“逐步思考 / 自我检查”一类指令摘出，做 A/B：A 组保留原样，B 组删除或改写这些指令，用同一批任务（建议 5–10 个真实任务）各跑一遍。
 12. 做法 N：挑一个你常做的、长度中等的真实任务，按平常方式跑一遍，中途运行 `/context`，记录 CLAUDE.md、聊天记录、MCP 工具三类的占比（截图或抄下关键数字）作为基线；然后只改**一项**——先禁用所有当前会话里没用到的 MCP 服务器（这一步最确定不会丢信息）——跑同样类型的任务，再记录一次 `/context`；如果还想继续，再单独把压缩阈值调早（60%），重复一次同类任务和 `/context`；如果这两项都有效，最后才回头精简 CLAUDE.md。
 13. 做法 O：按 README Quick start 在**单个 Claude Code 会话**里小范围试——clone 后以 `--plugin-dir` 加载、跑 `/handoff` 验证状态，先用 `/handoff dry` 观察一次交接成本，再在长任务上启用自动交接与 distill。先确认 `/handoff` 自检能看到上下文用量与阈值，再看自动交接后新会话是否接上了上一段的进度。
+14. 做法 P：clone 后以 `claude --plugin-dir ~/claude-auto-handoff` 在一个**不那么关键**的长会话里启动；设 `AUTO_HANDOFF_TOKENS=60000` 降低阈值，省去填满 160k 的等待；正常干活直到面板出现，观察四步（写简报 → 清空 → 起新会话 → 新会话恢复）；打开 `~/.claude/state/auto-handoff/<session-id>.md` 逐条核对工作进展、决策、待验证假设、死路、最后请求及 Status、下一步；查 `~/.claude/state/auto-handoff/auto-handoff.log` 有无失败与 facts-only 回退；觉得结构不合适就改 `~/.claude/auto-handoff/brief.md`（不加 files/commits 段）和 `instructions.md`，再跑第二次比较。
 
 试多久：
 
@@ -886,6 +969,7 @@ ctx_execute("javascript", `
 - 做法 M 原文没有给时长，只能按任务数：建议 5–10 个真实任务做 A/B；如果命令运行失败或不存在，降级为定期审查原则。
 - 做法 N 原文没有给时长，也没给任何数值目标。判定标准只有一条组合：只有当「可工作轮数/时长增加」且「质量与返工次数没有变差」同时成立时，才值得把这几步固化成习惯；如果只是 `/context` 占比降低但返工明显变多，说明该阈值不适合你的任务类型。一次只改一项，每项至少跑一个同类真实任务再下结论。
 - 做法 O：至少覆盖一次自动交接触发，以及一次空闲 55 分钟后的刷新（或 away handoff）流程。作者自标 experimental，先只在一个会话、一个项目上试，确认交接后能接上、distill 写出的 memory / rule 确实有用，再考虑常驻。
+- 做法 P：原文没有给建议时长，只给了一次 80k 阈值的运行案例。先按 `AUTO_HANDOFF_TOKENS=60000` 在单个会话、单个项目上跑一次完整交接，核对简报与日志；确认新会话能接上、简报事实没写错，再考虑调回 `threshold` 让它在真实长会话里常驻。
 
 ## 常见坑
 
@@ -1013,10 +1097,26 @@ ctx-handoff（做法 O，长会话自动交接）：
 - 失败路径虽然可恢复（3 分钟未应答的交接 fork 被放弃、distill fork 8 分钟放弃、阈值交接失败后等 3 条用户消息或 10 分钟重试），但都要你去看 `/handoff` 才知道，不会主动弹错。
 - 空闲保活 / away handoff 的实测数据，本次材料没有单独给出；作者也说明空闲缓存刷新等关键行为尚未实测。
 - 与 Context Mode 同属上下文管理方向，但材料没有说明两者能否共用，只能并列参考。
+- 与做法 P 同属「阈值自动交接」，材料同样没有说明两者能否共用；同一条会话二选一，不要叠加。
+
+claude-auto-handoff（做法 P，替换内置 auto-compact）：
+
+- 需要带 mods（function-hook plugins）的 Claude Code 构建，不一定人人可用。
+- 仓库 39 stars、版本 0.8.x，属早期项目，自测为主，没有第三方评测或对照实验。
+- 未计量工具输出是「可能偏高」的估计，真实大小有时低于阈值，所以交接可能比你预期更早（或更晚）触发；被拒绝的工具调用仍会在下一次请求或回合结束时触发交接。
+- `viewer` 默认只在 Tailscale 网内可达，否则退到 127.0.0.1 仅本机；纯 SSH 终端通常不识别简报链接，需要 `FORCE_HYPERLINK=1` 或用状态栏链接。
+- 与把会话管道化的 wrapper 不兼容（需 `DISABLE_AUTO_COMPACT`，但那会关掉该 mod，viewer 服务仍运行）。
+- 简报有效性的判定标准很宽松（Haiku 回复含至少一个标题即算有效），否则回退 facts-only 简报，可能损失信息。
+- 不要改仓库里的模板；改 `~/.claude/auto-handoff/` 下的副本，否则 `git pull` 会覆盖你的修改。想恢复默认就删掉副本，下次启动会重新复制。
+- 不要往 `brief.md` 里加 files 和 commits 段，那两段由 mod 从 transcript 用代码添加；也不要删掉 `## Last Request from the User` 及其 `Status:` 行，`instructions.md` 里的 priority 开关依赖它们。
+- Haiku 失败时用 facts-only 简报兜底，这本身就是一条降级路径；看到 facts-only 出现在日志或面板时，要人工核对简报。
+- 连续交接有守卫：`maxConsecutiveHandoffs` 默认 2，超过会暂停等你输入；新会话刚启动就很大时也会被阻止立刻再次交接。
+- 0.8.3 起简报必须写入真实数字，否则写 "unknown"；0.8.4 起不在 Handoff Numbers 里的 token 数字被标 `[unverified: not in Handoff Numbers]` 并记日志——看到这类标记就说明这份简报的数字不可信。
+- 与做法 O 同属自动交接，材料没有说明能否共用，同一条会话二选一。
 
 ## 证据与来源
 
-本手册合并了十三份材料：mksglu/context-mode、UditAkhourii/quicksilver、AGIHunt/blurt、thedotmack/claude-mem、headroomlabs-ai/headroom、mem0ai/mem0、topoteretes/cognee、OthmanAdi/planning-with-files、activeloopai/hivemind、cablate/ctx-handoff-mod，一条转述 Peter Steinberger（OpenClaw 作者）开源其个人 agent 配置的推文（@oliviscusAI）、一条关于 CLAUDE.md / prompt-audit 的推文（@RoundtableSpace），以及一条关于「CLAUDE.md 正在吞噬你的令牌限制」的推文（@thegreatest_sv）。以下逐条标注依据和性质。
+本手册合并了十四份材料：mksglu/context-mode、UditAkhourii/quicksilver、AGIHunt/blurt、thedotmack/claude-mem、headroomlabs-ai/headroom、mem0ai/mem0、topoteretes/cognee、OthmanAdi/planning-with-files、activeloopai/hivemind、cablate/ctx-handoff-mod、alexknowshtml/claude-auto-handoff，一条转述 Peter Steinberger（OpenClaw 作者）开源其个人 agent 配置的推文（@oliviscusAI）、一条关于 CLAUDE.md / prompt-audit 的推文（@RoundtableSpace），以及一条关于「CLAUDE.md 正在吞噬你的令牌限制」的推文（@thegreatest_sv）。以下逐条标注依据和性质。
 
 Context Mode（来自 README 与调研报告）：
 
@@ -1116,6 +1216,14 @@ ctx-handoff（来自 cablate/ctx-handoff-mod README 调研）：
 - 本手册为这条材料补的最小试用方式（先 `/handoff dry`、单会话小范围试）和判定指标（交接后重新定位轮数、同一纠正重复次数、交接成本），是基于原文机制推导出的验证方式，不是原文给出的内容。
 - 与 Context Mode 的关系：同属上下文管理方向，但给出的材料没有说明两者的具体关系或能否共用，只能并列参考。
 
+claude-auto-handoff（来自 alexknowshtml/claude-auto-handoff README 调研）：
+
+- 事实性内容：mod 定位为替换内置 auto-compact；四步流程（写简报 → `/clear` → 起新会话 → 新会话恢复）；简报章节（进行中的工作、决策、待验证的假设、死路、最后请求及是否已被回答、下一步）；files/commits/issues 由代码从 transcript 提取；安装与 `--plugin-dir`、`CLAUDE_CODE_PLUGIN_DIRS`；配置表（threshold / maxConsecutiveHandoffs / briefTemplate / instructionsTemplate / ignoreFiles / viewer）；三个环境变量（`AUTO_HANDOFF_TOKENS`、`AUTO_HANDOFF_DISABLE`、`DISABLE_AUTO_COMPACT`）；模板复制到 `~/.claude/auto-handoff/` 与 priority 开关；状态栏脚本与 jq；运行机制五步（阈值、简报、清空并播种、面板、查看器）；简报路径 `~/.claude/state/auto-handoff/<session-id>.md`、pages 路径、日志路径；`claude plugin validate .` / `claude plugin test .`；0.8.3 起简报必须写入真实数字、0.8.4 起 `[unverified: not in Handoff Numbers]` 标记。
+- 给出的数据/案例：一次在 Haiku 上的实际运行，阈值设 80k——mod 在阈值处拒绝一次读取、写简报、清空，新会话约 7 秒后回到工作、处于 31k（附 demo.gif / demo.mp4）；面板文案示例 `✓ handed off · 162k → 45k`；changelog 记录 0.5.0–0.8.4 的具体行为变更与修复（如被拒调用必定导致交接、第二个会话遇到端口被占用时安静退出、真实数字与 `[unverified]` 标记）。
+- 只是作者主张：为何不用 auto-compact——「原地压缩无法控制保留什么，而交接简报结构固定、可编辑」；「files/commits/issues 来自 transcript 的代码提取，不依赖模型记忆」。这些是设计论断，原文没有对照实验或质量评估数据。
+- 适用条件与局限：需要带 mods 的 Claude Code 构建（不一定人人可用）；仓库 39 stars、版本 0.8.x，属早期项目，自测为主；未计量工具输出是「可能偏高」的估计，真实大小有时低于阈值；`viewer` 默认只在 Tailscale 网内可达，否则退到 127.0.0.1 仅本机；与把会话管道化的 wrapper 不兼容（需 `DISABLE_AUTO_COMPACT`）；简报有效性的判定标准很宽松（含至少一个标题即算有效），否则回退 facts-only，可能损失信息。
+- 本手册为这条材料补的最小试用方式（先 `AUTO_HANDOFF_TOKENS=60000` 单会话跑一次）、判定指标（新会话能否直接续上、简报事实准确率、`[unverified]` 标记）、与做法 O 的关系说明，都是基于原文机制推导出的验证方式，不是原文给出的内容——原文没有给出任务侧质量指标或与 ctx-handoff 的对照。
+
 ## 依据的调研
 
 - [mksglu/context-mode](../research/radar/2026-10-01/68-mksglu-context-mode.md)：值得一试，建议先在 Claude Code（或 Cursor）上做小范围试用：用 MCP-only 方式跑一个真实编码任务，对照 ctx_stats 的上下文节省与实际任务结果，再决定是否推广到团队。理由是它直指“工具输出塞满上下文 + 会话压缩后失忆”这两个具体痛点，安装与回退成本低；但 README 的 98% 节省数字、100x 说法和企业 logo 墙均为自述，缺少第三方验证，且 ELv2 许可对商用有限制。
@@ -1131,3 +1239,4 @@ ctx-handoff（来自 cablate/ctx-handoff-mod README 调研）：
 - [@RoundtableSpace: 你的 CLAUDE.md 实际上可能会让 Opus 5.5 变得更糟。](../research/radar/2026-10-04/1053-claude-md-opus-5-5.md)：值得一试，先在 Claude Code 里对现有 CLAUDE.md 与 skills 跑一遍 `/claude-api prompt-audit`，再逐条评估“逐步思考”“仔细检查你的工作”这类旧指令是否该删；因为推文主张这类旧习惯在新模型上反而增加拖累，且给出了一个可直接执行的审查命令，但原文被截断、命令行为与判读方式均未说明，只能小范围试。
 - [@thegreatest_sv: 你的 CLAUDE.md 正在他妈的吞噬你的令牌限制。](../research/radar/2026-10-04/1081-claude-md.md)：值得一试，先在 Claude Code 会话里运行 /context 摸清 token 去向，然后一次只改一项——把自动压缩阈值从 95% 降到 60%、关掉从不调用的 MCP 服务器——再跑 /context 对比前后。原文只给了三个方向性命令、末尾还被截断，且没有任何数据支撑，所以适合小范围试而不是直接写进手册。
 - [cablate/ctx-handoff-mod](../research/radar/2026-10-04/1185-cablate-ctx-handoff-mod.md)：值得一试，可以直接照 README 的 Quick start 在单个 Claude Code 会话里小范围试：clone 后以 --plugin-dir 加载、跑 /handoff 验证状态，先用 /handoff dry 观察交接成本，再在长任务上启用自动交接与 distill。理由是原文给出了可复制的安装/配置/命令与明确的触发条件，但作者自己标注为 experimental、依赖早期 function-hooks API，且空闲缓存刷新等关键行为尚未实测，所以只建议试不建议直接采用。
+- [alexknowshtml/claude-auto-handoff](../research/radar/2026-10-05/1225-alexknowshtml-claude-auto-handoff.md)：值得一试，建议小范围试：先按 README 的安装步骤在支持 mods 的 Claude Code 构建上装好，用 AUTO_HANDOFF_TOKENS=60000 在一个长会话里跑一次交接，检查生成的简报是否准确、新会话能否续接；理由是它给出了完整可照做的安装、配置与模板改法，但依赖尚未普及的 mods 构建、版本仅 0.8.x 且只有作者自测数据，不足以直接 adopt。
