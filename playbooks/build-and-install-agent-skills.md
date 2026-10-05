@@ -1,16 +1,16 @@
-# 给编码 agent 装技能包：先小范围对照，再决定留下哪一个
+# 给编码 agent 补技能和角色：先小范围试装一个，做对照，再决定是否固化成自己的流程
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：你已经在用编码 agent，但不确定装一个技能包是否真的减少了返工，也不知道该装哪个、装完怎么验收，甚至因为一次装太多反而让上下文更乱。
-> 先试这一步：挑一个非关键项目和一类重复任务，只装一个技能包，用同一任务做有/无技能各 3 次的对照，记录返工轮数与首稿可用率。
-> 最近修订：2026-10-04
+> 解决的问题：解决「装了技能包或角色后不确定是否真的减少返工」的问题，给出从试装、对照到沉淀或退回的可照做流程。
+> 先试这一步：选一个非关键项目，只装一个技能包（做法 A），用同一任务做有/无技能的对照，记录返工轮数和首稿可用率。
+> 最近修订：2026-10-06
 
 ## 解决什么问题
 
 你已经在用编码 agent，但每次都要重复描述同一套工程规范，或者不确定装一个技能包是否真的减少了返工——甚至因为一次装太多，上下文反而更乱。这篇手册给出一个可照做的流程：先小范围试装一个现成技能包，用同一任务做有/无技能的对照，确认有效后再考虑把自己的重复工作写成 `SKILL.md`，或者把一本反复查阅的技术书、一份内部文档半自动转成按需加载的技能。
 
-它也覆盖一批具体场景：让 agent 代理编码 CLI 跑长任务并拿硬证据验收；给 agent 补一块行业设计知识；把一句模糊想法写成可让 agent 独立跑几小时的任务书；写一个把会话状态嵌进界面的 Claude Code mod；让 agent 把一句话描述／一个代码仓库变成可交互的架构图、工作流图、时序图、数据流图、生命周期图，或者把自然语言需求与已有的 draw.io / Mermaid / Excalidraw 源文件改成自包含的 HTML+SVG 图、并让它长得像你的品牌；让 agent 检索中国金融市场数据；把移动端模拟器与真机画面接进 Codex 聊天；把多步复杂任务拆成三阶段并加门禁；以及本次新增的一条——把中英文学术写作（论文、摘要、讨论、审稿回复）去模板化改写，同时用命题级核对保住数字、引文与证据强度（做法 Y）。
+它也覆盖一批具体场景：让 agent 代理编码 CLI 跑长任务并拿硬证据验收；给 agent 补一块行业设计知识；把一句模糊想法写成可让 agent 独立跑几小时的任务书；写一个把会话状态嵌进界面的 Claude Code mod；让 agent 把一句话描述／一个代码仓库变成可交互的架构图、工作流图、时序图、数据流图、生命周期图，或者把自然语言需求与已有的 draw.io / Mermaid / Excalidraw 源文件改成自包含的 HTML+SVG 图、并让它长得像你的品牌；让 agent 检索中国金融市场数据；把移动端模拟器与真机画面接进 Codex 聊天；把多步复杂任务拆成三阶段并加门禁；把中英文学术写作（论文、摘要、讨论、审稿回复）去模板化改写，同时用命题级核对保住数字、引文与证据强度（做法 Y）；让路由技能自动选工作流并对 bug 交出失败→通过证据（做法 Z）；按职能只装少量 agent 角色并用真实任务与默认提示对照（做法 AA）。
 
 ## 适用与不适用
 
@@ -24,6 +24,8 @@
 - 反复写或审中文技术文档（做法 E），或反复改写中英文学术写作并要核对命题（做法 Y）。
 - 需要给 agent 补模型端点、工具权限或网页搜索能力（做法 D），或想给 Claude Code 会话加一层界面与拦截能力（做法 G）。
 - 需要从一个大插件市场按任务只装一个单元（做法 L），或一次装齐全栈开发技能并按请求自动激活（做法 X）。
+- 想让 agent 自己选工作流（复现 → 调查 → 委派修复 → 重跑失败用例）并对 bug 交出失败与通过的证据（做法 Z）。
+- 想按职能给 agent 补一个专业角色（代码审查、前端、无障碍、FinOps 等），并且只装少量角色（做法 AA）。
 
 不适用：
 
@@ -31,6 +33,8 @@
 - 直接在生产关键项目上全量安装；一次装完整个插件市场。
 - 只看 stars、README 徽章或 CI 状态就决定采用。
 - 各做法自己的边界见对应小节（例如：E 只针对中文技术文档；F 只针对生物医学论文；M 不适用于无合法访问权的书或打算再分发第三方版权书生成的 skill；O 只在 Postgres / TimescaleDB / PostGIS 任务上有用；P 只对自有或书面授权资产；Q 的领域内容不通用；T 不支持直接驱动交易或投顾建议；U 需要 Apple Silicon Mac + Codex desktop + 私有仓库访问权；X 面向全栈开发，非开发类工作基本用不上；Y 需要能加载完整 Skill 文件夹的环境，且 DOCX 抽取保留不了复杂样式、批注、修订记录、脚注与文本框）。
+- Z 的完整工作流定义在未抓取的 `docs/reference.md` 与 `SKILL.md` 中，本次无法核对实际步骤；需要 harness 支持插件/hook，Codex 需额外信任 hook；按角色配 effort 依赖插件自带 agent 存在；skills 会把 session transcripts 等读取内容发往模型 provider。
+- AA 只给了角色目录，没给任何一个 agent 文件的内容，也没有效果证据；OpenCode 运行时约 119 个 agent 上限，超出会被静默丢弃。
 
 ## 前置条件
 
@@ -61,10 +65,12 @@
 - V：本机已安装 Claude Code；能访问 raw.githubusercontent.com，否则改用 clone + cp。W：Node.js；`SKILL.md`、`references/`、`scripts/` 三部分放在一起；一个共享文件夹放观察日志；能在 `CLAUDE.md`（或平台等价文件）加激活指令或装 session-start hook。
 - X：已安装并使用 Claude Code；第 6 步的项目管理工作流额外要求配置 Atlassian MCP server 并具备 Jira / Confluence 使用权。
 - Y：Python 3.10+ 与标准库（用于 `validate_package.py` / `content_lock.py`）；PDF 文本抽取需 Poppler `pdftotext`；平台能加载完整 Skill 文件夹并保持 `SKILL.md`、`references/`、可选 `scripts/` 的相对位置；仅文本平台要同时提供 `references/` 等参考文件；准备术语表与作者写作样本；DOCX 抽取不能保留所有样式、批注、修订记录、脚注或文本框，可编辑 Word 交付需要相应文档工具。
+- Z：先装好对应 harness（Claude Code / Codex / Pi 之一）；Codex 需先通过 `/hooks` 信任路由 hook；Pi 需要 extension 提供的 subagent、question、wake-up 工具；按角色配 effort 依赖插件自带的 `pstack:effort-<level>` / `pstack:poteto-agent-<level>` agent 存在。
+- AA：本地有 git 与 bash；脚本方式需本地有仓库（原文未给 clone 命令，只说明脚本方式需本地有仓库）；app 方式需 macOS/Linux/Windows 桌面环境；已安装目标工具（如 Claude Code 且有 `~/.claude/agents/` 目录）；仓库内有 `strategy/runbooks.json` 且本地有 python3 才能按 runbook 整队安装。
 
 ## 操作步骤
 
-怎么选：先做做法 A；A 里某个技能确实有效、且你有一件每周重复且规范明确的工作，再做做法 B。其余按场景选：C 多来源知识打包；D 补模型端点/权限/搜索；E 中文技术文档写作与审稿；F 单篇论文精读；G 写一个 Claude Code mod；H 用 Cline CLI 代理长任务拿硬证据验收；I 补 UI/UX 设计知识；J 出带交互的单文件 HTML 图；K 出品牌一致的静态 HTML+SVG 图；L 从大插件市场只装一个单元并按任务档位选模型；M 把书或内部文档转成按需加载技能；N 把模糊想法写成任务书并给破坏性操作加闸门；O 补 Postgres 领域知识与版本化文档检索；P 在授权安全场景按主题加载安全技能库；Q 把多步任务拆成三阶段加门禁；R 装一套小而可组合的工程技能集；S 从 google/skills 按任务只装一个；T 让 agent 检索中国金融市场数据并核对来源与时间戳；U 把移动端模拟器与真机画面接进 Codex 聊天；V 用一行 curl 装单个 Markdown 技能；W 用元技能观察你怎么用技能；X 装一套全栈开发技能包按请求自动激活；Y 把中英文学术写作去模板化改写并用命题核对保住事实。
+怎么选：先做做法 A；A 里某个技能确实有效、且你有一件每周重复且规范明确的工作，再做做法 B。其余按场景选：C 多来源知识打包；D 补模型端点/权限/搜索；E 中文技术文档写作与审稿；F 单篇论文精读；G 写一个 Claude Code mod；H 用 Cline CLI 代理长任务拿硬证据验收；I 补 UI/UX 设计知识；J 出带交互的单文件 HTML 图；K 出品牌一致的静态 HTML+SVG 图；L 从大插件市场只装一个单元并按任务档位选模型；M 把书或内部文档转成按需加载技能；N 把模糊想法写成任务书并给破坏性操作加闸门；O 补 Postgres 领域知识与版本化文档检索；P 在授权安全场景按主题加载安全技能库；Q 把多步任务拆成三阶段加门禁；R 装一套小而可组合的工程技能集；S 从 google/skills 按任务只装一个；T 让 agent 检索中国金融市场数据并核对来源与时间戳；U 把移动端模拟器与真机画面接进 Codex 聊天；V 用一行 curl 装单个 Markdown 技能；W 用元技能观察你怎么用技能；X 装一套全栈开发技能包按请求自动激活；Y 把中英文学术写作去模板化改写并用命题核对保住事实；Z 用路由技能自动选工作流并对 bug 交出失败→通过证据；AA 按职能只装少量 agent 角色并用真实任务与默认提示对照。
 
 几组容易混的：
 
@@ -77,7 +83,9 @@
 - U 与 A：同样是装一个现成插件做对照，区别是绑定 Codex desktop + Apple Silicon Mac + 私有仓库访问权，解决移动端模拟器/真机的观测与诊断，不接管构建、安装、启动。
 - W 与 A：同样要按 A 的对照方法验证；区别是 W 的产出不是某类任务的产出改善，而是「哪些摩擦该被沉淀成技能」这份清单，以及一批需要你自己安装才生效的 staged 更新。
 - Y 与 E：E 面向中文技术文档（README、设计文档、接口说明、教程），规则来源是中文技术写作规范，装的是 leter/zh-tech-writing；Y 面向中英文学术写作（论文、摘要、讨论、审稿回复），装的是 heise3/academic-deai，且额外提供 `content_lock.py` 做命题级核对。要文档去 AI 腔用 E；要论文去模板化又不敢改数字引文，用 Y。
-- E、F、G、H、I、J、K、L、M、N、O、P、Q、R、S、T、U、V、W、X、Y 都必须套用 A 的对照方法，不要跳过验证直接纳入常规流程。
+- Z 与 A：Z 同样走插件市场安装，但核心是 `poteto-mode` 路由技能与按角色配模型/推理强度；A 是通用小范围试装流程，Z 也必须套用 A 的对照方法。
+- AA 与 X / R：AA 装的是按职能组织的 agent 角色文件（可只装一个 division 或几个 agent），X 是一个 Claude Code 全栈技能包按请求自动激活，R 是一套小而可组合的工程技能集；AA 没有自动激活机制，需在会话里显式激活角色。
+- E、F、G、H、I、J、K、L、M、N、O、P、Q、R、S、T、U、V、W、X、Y、Z、AA 都必须套用 A 的对照方法，不要跳过验证直接纳入常规流程。
 
 ### 做法 A：先用现成技能包做小范围试装（推荐先做）
 
@@ -1074,6 +1082,138 @@ README 给出质量门禁 `skill-seekers quality output/react/ --threshold 7`，
 
 9. 按 A 的对照法验证：用一段自己真实的中文讨论段落（含数字、引文编号、置信区间或不确定性表述），另存为 `original.md`；装好 Skill 后用中文提示词跑一轮，输出另存为 `revised.md`；运行 `python3 scripts/content_lock.py original.md revised.md --strict`，人工逐条核对被标记的命题差异。有条件时做一次不使用 Skill 的同提示词对照，以及一次人工盲评（原文没有提供这两类数据，需自建）。预期：你能说清哪些模板化表达被删掉、哪些数字与引文被保住；说不清就不要保留。
 
+### 做法 Z：让路由技能自动选择工作流，并对 bug 交出「失败→通过」证据（可选，按 A 的对照法验证）
+
+定位：michael-denyer/pstack-claude 把 Lauren Tan 写的 Cursor 插件栈 pstack 移植到 Claude Code、Codex、Pi 及其他 agent harness，核心入口是一个名为 `poteto-mode` 的路由技能：你只告诉它目标，它自行调用合适的工作流，目标是让代码保持精简、简单且经过验证。另有独立插件 agent-formal-verify 处理测试触达不到的并发 bug 与不变量，方式是 TLA+ 模型检查与 Lean 证明。完整工作流定义在未抓取的 `docs/reference.md` 与 `SKILL.md` 中。
+
+1. 前提：先装好对应 harness（Claude Code / Codex / Pi 之一）。
+
+2. 在 Claude Code 内安装：
+
+   ```text
+   /plugin marketplace add michael-denyer/pstack-claude
+   /plugin install pstack@pstack-claude
+   ```
+
+3. 或在终端用 Codex 安装：
+
+   ```shell
+   codex plugin marketplace add michael-denyer/pstack-claude
+   codex plugin add pstack@pstack-claude
+   ```
+
+4. 或在终端用 Pi 安装：
+
+   ```shell
+   pi install git:github.com/michael-denyer/pstack-claude
+   ```
+
+   Pi 下该包会加载 skills 与 pstack Pi extension，后者提供 skills 所需的 subagent、question、wake-up 工具，并加入 `/loop` 和路由指令；用 `/skill:<name>` 调用具体技能。
+
+5. 配置角色模型与推理强度：运行 `setup-pstack`（Claude Code 中用 `/pstack:setup-pstack`）。可改模型默认值、按角色设定 reasoning effort、或关闭自动路由。README 给的写法示例是 `arena runners: opus @xhigh, fable @max`；Claude Code 通过插件提供的 `pstack:effort-<level>` 或 `pstack:poteto-agent-<level>` agent 派发；未指定 level 的角色沿用当前 session 的 effort，除非配置表的 `default effort` 行另有指定。
+
+6. 处理 hook 信任：插件会在 Claude Code 和 Codex 上安装 routing hook；Codex 需要先通过 `/hooks` 信任它才会运行。
+
+7. 其他 harness：Prime Agent、OpenCode、Gemini CLI，或任意 harness 的 skills-only 安装，参见 `docs/reference.md#shared-skills-installation`（本次未抓到正文）。
+
+8. 使用示例（原文给的入门提示）：
+
+   ```text
+   Use poteto-mode to fix the search filter resetting when I change pages.
+   ```
+
+   对 bug，它会复现失败，用 `how` 和 `why` 调查，委派修复，再重跑失败用例；若修复跨越函数边界，会在实现前引入 `architect`。你拿到修复，以及失败与通过的证据。
+
+9. 选 playbook：poteto-mode 的 playbooks 覆盖规划、功能开发、重构、性能问题、调查、原型、PR 维护、发布，以及较长周期项目（见 `plugins/pstack/skills/poteto-mode/SKILL.md#playbooks`）。
+
+10. 已知局限：完整工作流定义在未抓取的 `docs/reference.md` 与 `SKILL.md` 中；仓库指标 1345 stars 不能作为效果证据；skills 会把 session transcripts 等读取内容发往模型 provider，涉及隐私与合规时先确认。MIT 许可。
+
+### 做法 AA：按职能只装少量 agent 角色，用真实任务和默认提示对照（可选，按 A 的对照法验证）
+
+定位：msitarzewski/agency-agents 是一个按职能组织的「AI 专业角色」Markdown 集合。每个 agent 是一个文件，原文声明其结构为：身份与性格、核心使命与工作流、带代码示例的技术交付出物、成功指标与沟通风格。角色按 division 分组（材料中可见 Engineering、Design、Paid Media、Sales、Marketing 等），每个角色给两列信息：专长与何时使用。交付形态有三层：原生桌面 app、一套 `scripts/` 安装脚本、纯参考模式。原文还提到 `strategy/runbooks.json` 里的 runbook 有 roster（一组 agent 组成的团队），可整队安装。
+
+1. 前提：本地有 git 与 bash；脚本方式需本地有仓库（原文未给 clone 命令，只说明脚本方式需本地有仓库）；app 方式需 macOS/Linux/Windows 桌面环境。
+
+2. 最省事：装桌面 app，一键写入你已在用的工具：
+
+   ```bash
+   brew install --cask msitarzewski/agency-agents/agency-agents
+   ```
+
+   或从 releases 页面下载：`https://github.com/msitarzewski/agency-agents-app/releases/latest`。app 会自动更新，省掉后续所有脚本步骤。
+
+3. 用脚本装进 Claude Code（前提：已安装 Claude Code，且本机存在 `~/.claude/agents/` 目录）：
+
+   ```bash
+   # 一次装全部 agent 到 Claude Code 目录
+   ./scripts/install.sh --tool claude-code
+
+   # 或只手动复制一个 division
+   cp engineering/*.md ~/.claude/agents/
+   ```
+
+4. 在会话里激活某个角色（前提：第 3 步已把对应 agent 文件放进工具目录）：
+
+   ```text
+   Hey Claude, activate Frontend Developer mode and help me build a React component
+   ```
+
+5. 装到 Claude Code 以外的工具（前提：目标工具已安装；`convert.sh` 在仓库内执行）：
+
+   ```bash
+   # Step 1 -- generate integration files for all supported tools
+   ./scripts/convert.sh
+
+   # Step 2 -- install interactively (auto-detects what you have installed)
+   ./scripts/install.sh
+   ```
+
+   也可以直接指定工具：
+
+   ```bash
+   ./scripts/install.sh --tool antigravity
+   ./scripts/install.sh --tool gemini-cli
+   ./scripts/install.sh --tool opencode
+   ./scripts/install.sh --tool copilot
+   ./scripts/install.sh --tool openclaw
+   ./scripts/install.sh --tool cursor
+   ./scripts/install.sh --tool aider
+   ./scripts/install.sh --tool windsurf
+   ./scripts/install.sh --tool kimi
+   ./scripts/install.sh --tool codex
+   ./scripts/install.sh --tool osaurus
+   ./scripts/install.sh --tool hermes
+   ./scripts/install.sh --tool vibe
+   ./scripts/install.sh --tool dsh
+   ```
+
+6. 只装需要的团队，先看再装：
+
+   ```bash
+   ./scripts/install.sh                                    # interactive wizard: pick tools + teams
+   ./scripts/install.sh --tool claude-code --division engineering,security
+   ./scripts/install.sh --tool cursor --agent frontend-developer,ui-designer
+   ./scripts/install.sh --list teams                       # see every team + agent count
+   ./scripts/install.sh --tool opencode --division engineering --dry-run
+   ```
+
+   说明（原文）：`--agent` / `--agents-file` 接受 agent 的 slug、显示名，或去掉 `.md` 的文件名，也就是 runbook roster 使用的 id。
+
+7. 按 runbook 的名单整队安装（前提：仓库内有 `strategy/runbooks.json`，本地有 python3）：
+
+   ```bash
+   python3 -c 'import json, sys
+   for r in json.load(open("strategy/runbooks.json"))["runbooks"]:
+       if r["slug"] == sys.argv[1]: [print(a) for g in r["roster"] for a in g["agents"]]' startup-mvp > team.txt
+   ./scripts/install.sh --tool claude-code --agents-file team.txt
+   ```
+
+8. OpenCode 用户注意：运行时上限约 119 个 agent，超出会被静默丢弃；用 `--division` 装子集保持在限制内。
+
+9. 不想装，就当参考用：每个 agent 文件含身份/性格、使命与工作流、带代码示例的交付物、成功指标与沟通风格，可浏览后复制/改编你需要的那些。
+
+10. 已知局限：只给了角色目录，没给任何一个 agent 文件的内容，也没有效果证据；「Production-Ready」「battle-tested workflows」等属宣传语；README 没有给出指标定义、评测方法或对照数据；材料在 Marketing 表格中途被截断。
+
 ## 怎么判断变好了
 
 最小试用方式：
@@ -1099,6 +1239,8 @@ README 给出质量门禁 `skill-seekers quality output/react/ --threshold 7`，
 - 元技能类（做法 W）：选一个会连续用几天的项目，装好并在 `CLAUDE.md` 加激活指令，正常干活 3–5 个会话，再安排一次复核会话；先过生效验证，再看产出。
 - 全栈技能包类（做法 X）：选一个单点任务和一个链式任务，各先在不装插件的普通 Claude Code 做一次、再装插件做一次；记录激活命中/未命中次数、加载的 reference 是否相关、返工轮次与整链耗时。
 - 学术写作类（做法 Y）：用一段自己真实的中文讨论段落（含数字、引文编号、置信区间或不确定性表述），另存为 `original.md`；按第 2 步装好后用中文提示词跑一轮，输出另存为 `revised.md`；运行 `python3 scripts/content_lock.py original.md revised.md --strict`，人工逐条核对被标记的命题差异（主体、对象、方向、时间、条件、引文支持位置）；有条件时做一次不使用 Skill 的同提示词对照，以及一次人工盲评（原文没有提供这两类数据，需自建）。
+- 路由类（做法 Z）：装好后用 `Use poteto-mode to fix <该 bug 的现象>` 跑一个当前会失败、且你能独立复现的小 bug，记录是否先复现失败、是否用 `how`/`why` 调查、是否在跨函数边界时引入 `architect`、最终是否交付失败改通过的证据；与「同一 bug 用普通 Claude Code 会话」做对照。
+- 角色类（做法 AA）：按 division 只装少量 agent（如 code-reviewer、frontend-developer）进你在用的 Claude Code 或 Cursor，用真实任务跟默认提示做对照，记录激活命中、人工纠正次数、返工轮数。
 
 可观察的指标：
 
@@ -1121,6 +1263,8 @@ README 给出质量门禁 `skill-seekers quality output/react/ --threshold 7`，
 - 做法 W：观察条数、被接受并装入的技能改动数、新建技能候选数；同一个坑是否还在多个项目里被反复写进 project memory。
 - 做法 X：激活是否命中（被激活的技能是否是你预期的那个、加载的 reference 是否相关）；返工轮次；交付物质量；流程链收益；`/common-ground` 暴露出的、你确实没交代且会影响结果的假设数。
 - 做法 Y：模板化表达减少——空泛开头、重复收尾、机械段落的数量是否下降；事实与证据不变——数字、引文编号、置信区间、不确定性表述、术语是否原样保留，`content_lock.py --strict` 是否无未解释的命题变化；无新造事实；作者声音保留——与作者样本/术语表的一致性是否提高；交付质量——修订稿是否仍满足章节结构、篇幅下限等硬性要求。
+- 做法 Z：是否产出可核验的失败→通过证据；是否减少人工纠正路由或流程的次数；最终 diff 的规模与新增抽象是否更小；达到通过状态所需往返轮数是否下降；试用 Codex 时 routing hook 信任后是否确实在任务开始时触发路由。
+- 做法 AA：角色激活是否命中；同一任务与默认提示相比返工轮数、人工纠正次数、首稿可用率；OpenCode 下是否因 119 上限静默丢弃 agent。
 
 反向指标：
 
@@ -1146,12 +1290,14 @@ README 给出质量门禁 `skill-seekers quality output/react/ --threshold 7`，
 - 做法 Y：如果它添加了原稿没有的事实或观点，按提示词里「不要添加新事实」的核对项回退。
 - 做法 Y：如果 DOCX 交付后样式、批注、修订记录、脚注或文本框丢了，先换文档工具走可编辑 Word 流程，不要把抽取结果当最终交付。
 - 做法 Y：如果期待它有盲评、模型间对照或检测器分数——作者自己声明没有，先自建基线和盲评再判断。
+- 做法 Z：若产出没有失败→通过证据、或 hook/agent 派发不生效，退回 study，只借鉴「路由 + 复现/调查/委派/重跑失败用例」的流程骨架。
+- 做法 AA：把角色目录当效果证据，或一次装全部 agent 导致上下文占用过高；OpenCode 装超 119 个 agent，先卸掉多余角色。
 
 注意：`doctor`、`validate`、`npm test`、`claude plugin validate`、`npx @anthropics/skills-ref validate`、`archify doctor`、`validate --json`、`python -m unittest discover -s tests` 这类检查只能证明「技能或 mod 装得上、格式合法、不带危险命令、图能通过校验、回归测试能过」，不能证明「产出更好」。效果必须自己对照。做法 Y 的 `validate_package.py`、`unittest`、`content_lock.py --strict` 同理，作者明确说它们各自只证明其覆盖范围。
 
 ## 常见坑
 
-- 整体 adopt：一次装多个技能包，导致上下文过载或规则冲突。先只装一个，做法 A、H、I、J、K、L、N、Q、R、S、T、U、V、X、Y 同理。
+- 整体 adopt：一次装多个技能包，导致上下文过载或规则冲突。先只装一个，做法 A、H、I、J、K、L、N、Q、R、S、T、U、V、X、Y、Z、AA 同理。
 - 一次装整个插件市场：94 个插件、202 个 agent、184 个 skill 是目录规模，不是使用建议。
 - 重复安装：同一项目里同时用项目级安装和插件市场装同一个技能包，skills 会出现两份。
 - 两条安装路径都装（做法 R）：原文明确说两个都装会让每个技能出现两份；只选一条。
@@ -1184,6 +1330,8 @@ README 给出质量门禁 `skill-seekers quality output/react/ --threshold 7`，
 - 用 DOCX 抽取结果当可编辑 Word 交付（做法 Y）：抽取不保留所有样式、批注、修订记录、脚注或文本框。
 - 从 PDF 抽取正文却不装 Poppler（做法 Y）：需要 `pdftotext`。
 - 期待它自动串联其他编辑器（做法 Y）：README 明确说明不需要装 Humanizer，也不自动串联其他编辑器。
+- 做法 Z：Codex 不先 `/hooks` 信任 routing hook 就期待路由触发；Pi 缺少 extension 提供的 subagent / question / wake-up 工具；把仓库 stars（1345）当效果证据；忽略 skills 会把 session transcripts 等读取内容发往模型 provider。
+- 做法 AA：一次装全部 agent、把角色目录当效果证据、在 OpenCode 里装超过约 119 个 agent、把 app 的自动更新当成效果改善。
 
 ## 证据与来源
 
@@ -1217,6 +1365,8 @@ README 给出质量门禁 `skill-seekers quality output/react/ --threshold 7`，
 - task-observer 路线（做法 W）的全部内容均来自调研《rebelytics/one-skill-to-rule-them-all》，即该仓库 README。作者自述在其 81 个技能中记下 1,600+ 条观察、「大部分被转成了技能改进」；skills.sh 报告 9,000+ 次安装（作者注明是下界）。材料只到 README 一层，`SKILL.md`、`references/`、`scripts/` 的内容都未提供，观察质量与误报率无法判断。
 - Jeffallan/claude-skills 路线（做法 X）的全部内容均来自调研《Jeffallan/claude-skills》，即该仓库 README。67 个技能、12 个类别、371 个参考文件、9 个工作流命令，版本 0.4.18，MIT 协议，11725 stars。自动激活的实际准确率、误激活率无数据；9 个 workflow 命令的实际效果无数据；仓库徽章里的 CI 状态与技能是否改善使用者的工作结果无关。本次输入只有 README，没有 `SKILL.md`、`references` 内容、`QUICKSTART` 或其他文档的正文。
 - academic-deai 路线（做法 Y）的全部内容——用途（论文校对、语言润色、学术翻译、授权范围内结构修订）、各平台安装路径表、clone + `cp -R` 安装命令、升级先备份再整体替换、中英文提示词原文、编辑规则清单、`validate_package.py` / `unittest` / `content_lock.py --strict` 三条验证命令、PDF 需 Poppler、DOCX 抽取的保留范围限制、无需 Humanizer 与不自动串联其他编辑器、结构编辑思路参考 Humanizer 3.1.0——均来自调研《heise3/academic-deai》，即该仓库 README（v3.1.0，MIT）。属作者主张、没有独立验证的是：模型中立、跨平台可用、效果随模型不同；非 Codex 平台的兼容性按官方文档核对，实际编辑只在本地 Codex 会话验证。效果证据只有作者自制的四组合成案例（中文研究短文、English abstract and discussion、技术综述、审稿回复），其研究、数据、引文编号、投稿改动均为虚构；四例用 3.0.0 执行，3.1.0 保留原稿与修订稿并更新展示与平台说明；两个编辑回合读取 Skill 后修订，另一个模型回合提取并核对 41 条原稿命题。作者自述没有独立人工盲评、模型间对照或检测器分数，并声明案例「展示本次修改，不证明一般写作质量提升或其他工具的排名」。局限：需要支持 Agent Skills 的平台或能加载完整参考文本的环境；DOCX 交付能力受限；PDF 抽取需额外安装 Poppler；本次输入只到 README 一层，非 Codex 平台的安装与调用细节在未提供的 `docs/agent-platforms.md` 中。
+- pstack-claude 路线（做法 Z）的全部内容——pstack 原为 Lauren Tan 写的 Cursor 插件栈、本仓库移植到 Claude Code/Codex/Pi 及其他 harness、核心入口 `poteto-mode` 路由技能、三条安装命令、`setup-pstack` / `/pstack:setup-pstack` 的用途、reasoning effort 示例 `arena runners: opus @xhigh, fable @max`、Claude Code 通过 `pstack:effort-<level>` / `pstack:poteto-agent-<level>` agent 派发、Codex 需 `/hooks` 信任、Pi 的 extension 与 `/loop`、`/skill:<name>`、poteto-mode 入门提示词、bug 流程交付「修复 + 失败与通过的证据」、playbooks 覆盖范围——均来自调研《michael-denyer/pstack-claude》，即该仓库 README。属作者主张、没有数据支撑的是：「improves agent outcomes」「keeps your code concise, simple and verified」、bug 流程产出「失败与通过证据」；本线索给到的数字只有仓库指标（1345 stars、今日 222 stars），不能作为效果证据。完整工作流定义在未抓取的 `docs/reference.md` 与 SKILL.md 中，无法核对 playbook 的实际步骤；skills 会把 session transcripts 等读取内容发往模型 provider。
+- agency-agents 路线（做法 AA）的全部内容——按 division 组织的 agent 角色目录、三层交付形态（桌面 app / 安装脚本 / 纯参考）、各工具安装命令、`--tool` / `--division` / `--agent` / `--agents-file` / `--list teams` / `--dry-run` 参数、`convert.sh` 两步流程、按 runbook 生成 team.txt 的 python 片段、OpenCode 约 119 个 agent 上限——均来自调研《msitarzewski/agency-agents》，即该仓库 README。属作者主张、没有证据的是「Production-Ready」「battle-tested workflows」「可衡量的结果」「成功指标」等；README 没有给出指标定义、评测方法或对照数据。材料在 Marketing 表格中途被截断；只给了角色目录，没给 agent 文件正文。仓库指标 star 数（157,073，今日 595）来自输入元数据而非 README 正文，且数值异常高，不宜作为质量证据引用。
 - 文中提到的 star 数（如 anthropics/skills 179219、awesome-copilot 39,568、pro-workflow 2.9k、feiskyer/claude-code-settings 约 1.6k、zh-tech-writing 312、biomedical-paper-reader 31、cline-pilot 91、wshobson/agents 40,149、book-to-skill 33,277、khazix-skills 21,099、pg-aiguide 1853、math-modeling-skill 1848、google/skills 20653、Mobile Dev 64、agentic-dev-kit 37、one-skill-to-rule-them-all 3,115、Jeffallan/claude-skills 11725）来自 metrics，不构成有效性证据。
 
 ## 依据的调研
@@ -1251,3 +1401,5 @@ README 给出质量门禁 `skill-seekers quality output/react/ --threshold 7`，
 - [rebelytics/one-skill-to-rule-them-all](../research/radar/2026-10-03/1005-rebelytics-one-skill-to-rule-them-all.md)：值得一试，值得在一个活跃的 Claude Code 项目里小范围试：按 README 的命令安装，并务必在 CLAUDE.md 补上激活指令，跑几轮真实会话后用 observation-log 目录是否出现来确认它真的在跑。理由：仓库给出了可直接照做的安装、激活、验证和定期复核流程，但给到的材料只有 README，看不到技能本体、观察格式和改进质量，收益目前主要是作者自述。
 - [Jeffallan/claude-skills](../research/radar/2026-10-04/1164-jeffallan-claude-skills.md)：值得一试，建议先在 Claude Code 中按 README 给出的两条插件命令安装 fullstack-dev-skills，挑 1–2 个具体开发任务（如加认证、写组件）验证技能是否按预期自动激活、工作流链是否真的串起来；理由是原文只提供了安装方式与使用模式，没有效果数据或验证方法，属于值得小范围试而非直接采用。
 - [heise3/academic-deai](../research/radar/2026-10-04/1188-heise3-academic-deai.md)：值得一试，建议小范围试：按仓库给出的路径把 academic-deai 装成 Agent Skill，用它的自然语言提示词做论文润色／翻译／结构修订，再用 content_lock.py 做命题级核对；理由是安装、提示词、验证命令都可直接照抄，但效果证据只有作者自制的合成案例，且作者自述没有盲评、模型间对照或检测器分数。
+- [michael-denyer/pstack-claude](../research/radar/2026-10-06/1417-michael-denyer-pstack-claude.md)：值得一试，可以在 Claude Code（或 Codex/Pi）上按 README 给出的两条命令安装 pstack，再用 poteto-mode 跑一个已知小 bug，验证它是否真的复现失败、委派修复并交出通过证据；理由是仓库提供了可直接复制的安装命令、路由入口和按角色配置模型/推理强度的 setup 语法，但完整工作流定义在未被抓取的 docs/reference.md 与 SKILL.md 中，需小范围试用后再固化。
+- [msitarzewski/agency-agents](../research/radar/2026-10-06/1421-msitarzewski-agency-agents.md)：值得一试，建议小范围试：按 division 只装少量 agent（如 code-reviewer、frontend-developer）进你在用的 Claude Code 或 Cursor，用真实任务跟默认提示做对照。理由是原文给出了可直接照抄的安装、筛选和激活命令，但只给了角色目录，没给任何一个 agent 文件的内容，也没有任何效果证据，值不值得用只能自己验。
