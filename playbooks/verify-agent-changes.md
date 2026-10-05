@@ -1,10 +1,10 @@
-# 让编码 agent 在宣布完成前拿出证据，包括它亲眼看到的界面
+# 让编码 agent 在宣布完成前拿出可核对的证据
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：把「确保正确、100% 确定」这种没法执行的指令，换成一串具名检查：agent 必须在说「完成」之前同时交出代码侧和界面侧的证据。
-> 先试这一步：挑一个仓库小范围试装 first-pass，让下一个改动完整走一遍 premortem → 只修真实伤害 → breaker 评审 → ship-check；如果这次改的是前端，只再加一件事：让它多尺寸截图并定位移动端溢出，和手动 F12 对照。
-> 最近修订：2026-10-02
+> 解决的问题：agent 自称「已完成、测试都过了」，但改动周围的问题、界面上的事实、以及测试输出的真相都没人核对。
+> 先试这一步：下一次改动收尾时，先要求 agent 交出 `Verified: <what was run> → <result>` 和明确列出的「没被验证的部分」，给不出就别接受 done。
+> 最近修订：2026-10-06
 
 ## 解决什么问题
 
@@ -12,7 +12,9 @@
 
 这篇手册把「确保正确」换成一串具名、可执行的检查，并规定 agent 在宣布「完成」之前必须交出证据。
 
-还有第二件事：「跑过测试」不等于「用户看到的界面是对的」——移动端横向滚动、console 报错、接口 4xx/5xx、坏图坏链、按钮「没反应」、上线前的样式回归，这些代码和测试都拦不住。所以还要给 agent 一双能自己在后台开浏览器的眼睛，把它看到的东西（截图、报告、前后比对）作为证据交回来。
+第二件事：「跑过测试」不等于「用户看到的界面是对的」——移动端横向滚动、console 报错、接口 4xx/5xx、坏图坏链、按钮「没反应」、上线前的样式回归，这些代码和测试都拦不住。所以还要给 agent 一双能自己在后台开浏览器的眼睛，把它看到的东西（截图、报告、前后比对）作为证据交回来。
+
+第三件事：「测试通过」这四个字本身也可能是假的。dotpals 的做法是**读测试输出而不是听 agent 自称**——它把每个测试结果归为 `✅ ran successfully` / `❌ failed` / `❔ unclear` / `⚪ not run`，识别「伪造通过」（改测试去掉断言、加 skip、改期望值），并指出「测试通过后又改了文件、此后没再测过」这类时点问题；在 Claude Code 上还会在 agent 试图结束、commit 或 push 时把失败测试回推给它修。
 
 ## 适用与不适用
 
@@ -22,6 +24,7 @@
 - Claude Code：能拿到插件和 hooks，可以扣住编辑、把没有证据的「done」打回、会话开始时报告漂移。
 - Cursor、Codex、Windsurf 等：能拿到同样的规则和技能，但**没有 hooks**。
 - 有界面的项目：浏览器 skill 以后台方式运行，不占用你正在用的浏览器，前端、后端、非 Node 项目都能用。
+- 有测试套件的编码项目：dotpals 读测试输出判定真通过、识别伪造通过，并在 Claude Code 上回推修复；对「改了代码但测试通过后又改文件」这类时点问题特别有用。
 
 **不适用 / 需要知道**
 
@@ -30,6 +33,8 @@
 - first-pass 原文没有描述后台自主推进的长任务：所有触发都来自 setup、hook、会话开始或你显式输入的斜杠命令。
 - 浏览器 skill 是 **49 stars 的单作者第三方 skill（MIT）**，效果数据只来自「各跑一次」的对比，不足以直接写成标准做法；建议先在一个前端项目里小范围试跑。它原文也**没有**给定时/事件/状态触发的编排方案，唯一与持续运行沾边的是「把流程转成项目内 Playwright Test 后在 CI 里跑」（原文只列了 `references/project-tests.md`，未展开）。
 - 后端纯逻辑改动、没有页面的项目，用不上浏览器这一套；别为了用而用。
+- dotpals 很新（**31 stars、v0.10**）：**强制回推修复只支持 Claude Code**；Cursor / Gemini CLI / OpenCode / GitHub Copilot CLI 只挂只读 hook，原文明确「none of them can approve or block anything」，只能事后观察和提醒。
+- 无测试的项目不会被 dotpals 拦住；它对「没改代码、只是让你跑测试」的请求只报告失败，对「Claude 动手前就已经失败」的测试也只报告、不强制修。
 
 ## 前置条件
 
@@ -47,7 +52,18 @@
 - 目标 URL 可用，且 dev server 在跑（`localhost` 不通时 Claude 会告知，并可帮你起）。
 - 需要登录的站点：先人工登录一次并保存会话；只有你输入凭据，凭据不被存储。
 
+**dotpals**
+
+- **Node.js 20 或更新**（安装命令的前提）。
+- 项目里有测试套件才会被拦：jest、vitest、mocha、node:test、pytest、go、cargo、dotnet、Maven、Gradle、PHPUnit、RSpec 等；无测试的项目不会被拦住。
+- 想拿到「强制回推修复」需要装 Claude Code 插件；Codex 零安装（跟随 `~/.codex/sessions`）；Cursor / Gemini CLI / OpenCode / GitHub Copilot CLI 只挂只读 hook，其中 Gemini CLI 需 **0.26+** 且在你信任的目录里。
+- 接自定义 agent：本地 bridge 在跑，监听 `127.0.0.1:5175`。
+- 二次复核：Laya 需 **Python 3.10+**；云端 TypeSafe Jev **默认关**，需要你自己的 key。
+- 首次会下载 Electron runtime（约 **100 MB**，只下一次）。
+
 ## 操作步骤
+
+下面 1–20 是「规定什么才算完成」和「让它自己看到界面事实」；21–28 是去核对 agent 说的「测试通过」是不是真的。三组可以各自单独用。
 
 ### 1. 安装 first-pass：选做法 A 还是 B
 
@@ -275,6 +291,125 @@ Claude Code on Windows 默认用 Git Bash，会把以 `/` 开头的参数改写�
 - 卸载：删 skill 目录和 `~/.claude/playwright/`；浏览器缓存在删目录前先跑 `npx playwright uninstall --all`，或手动删 `~/Library/Caches/ms-playwright`（macOS）、`~/.cache/ms-playwright`（Linux）、`%LOCALAPPDATA%\ms-playwright`（Windows）。
 - 想让它进 CI：README 说可以把一条流程转成项目内 Playwright Test（细节在 `references/project-tests.md`，原文未展开）。
 
+### 21. 装 dotpals（前提：Node 20 或更新）
+
+```bash
+npx dotpals@latest setup
+```
+
+从 GitHub 直装：
+
+```bash
+npx --allow-git=all github:rikinshah787/dotpals setup
+```
+
+这一步会：把桌面 pal 装到 `~/.dotpals` 并下载 runtime（Electron，约 100 MB，一次）；若装了 Claude Code 就加插件；若装了 Codex 自动接管；启动 pal、开启「登录时打开」、打开 dashboard。
+
+可选参数：`--no-claude`（跳过插件）、`--no-login`（不要开机自启）、`--no-start`。随时重跑即可更新。
+
+**预期结果**：dashboard 打开，`dotpals status` 能看到什么在跑、连了哪些 agent。
+
+### 22. 只装 Claude Code 插件 / Codex 零安装
+
+在 Claude Code 里：
+
+```
+/plugin marketplace add rikinshah787/dotpals
+/plugin install dotpals@dotpals
+```
+
+重启 Claude Code，然后运行 `/dotpals:pals`。首次会询问是否下载桌面窗口的 runtime；之后每个 Claude Code 会话启动时 pal 自动出现。
+
+**Codex（无需安装）**：dotpals 跟随 Codex 的会话日志 `~/.codex/sessions`，CLI、IDE 扩展和 app 都会显示。保持 pal 运行（托盘里勾 *Open when I log in*）。用 `DOTPALS_CODEX=0` 可关掉。
+
+### 23. 接入其他 agent
+
+打开 dashboard 的 **Agents** 页，对要用的 agent 按 **Connect**。Connect 会先备份原文件、合并而非覆盖、读不了的文件不动；**Disconnect** 只移除 dotpals 加的内容；**Send a test event** 会跑真实命令，收到则有个 pal 打招呼。Connect 会改动这些文件：
+
+| Agent | Connect 改动的文件 |
+| ----- | -------------------- |
+| Cursor | `~/.cursor/hooks.json`（保存即重载） |
+| Gemini CLI | `~/.gemini/settings.json`（需 Gemini CLI 0.26+，且在你信任的目录里） |
+| OpenCode | 新增 `~/.config/opencode/plugins/dotpals.js`（需重启 OpenCode） |
+| GitHub Copilot CLI | 新增 `~/.copilot/hooks/dotpals.json` |
+
+每个集成也可以在 `~/.dotpals/config.json` 里用 `{ "agents": { "cursor": false } }` 关掉，id 为 `claude`、`codex`、`cursor`、`gemini`、`opencode`、`copilot`、`generic`。
+
+**怎么选**：只有 Claude Code 有 hook + transcript 的完整观测和**强制回推修复**；Cursor / Gemini CLI / OpenCode / GitHub Copilot CLI 只挂只读 hook（原文明确它们不能批准或阻止任何东西），只能事后观察和提醒。只想看、不想拦，装到任一个即可；想让它把失败测试回推给 agent 修，就用 Claude Code。
+
+### 24. 接自定义 agent（POST JSON）
+
+前提：本地 bridge 在跑，监听 `127.0.0.1:5175`。同一个 `id` 的行会被合并，所以可以在工具调用开始时发一次、结束时再发一次：
+
+```bash
+# a tool call starts…
+curl -s localhost:5175/event -d '{
+  "session": "run-42", "harness": "my-agent", "label": "my-project",
+  "state": "working", "text": "Running tests",
+  "activity": { "id": "call-1", "kind": "run", "tool": "shell", "title": "Run the tests",
+                "status": "running", "body": { "command": "npm test" } }
+}'
+
+# …and finishes
+curl -s localhost:5175/event -d '{
+  "session": "run-42", "harness": "my-agent", "state": "thinking",
+  "activity": { "id": "call-1", "status": "ok", "ms": 5120, "body": { "output": "42 passing" } }
+}'
+
+# a file edit, with its diff
+curl -s localhost:5175/event -d '{
+  "session": "run-42", "harness": "my-agent",
+  "activity": { "id": "call-2", "kind": "edit", "tool": "write_file", "title": "src/app.js", "status": "ok",
+                "files": [{ "path": "/abs/path/src/app.js", "change": "edit" }],
+                "body": { "patch": "-const a = 1;\n+const a = 2;" } }
+}'
+```
+
+字段：`activity.kind` 取 `prompt`/`read`/`edit`/`write`/`run`/`search`/`web`/`agent`/`mcp`/`skill`/`plan`/`tool`/`done`/`error`；`activity.status` 取 `running`/`waiting`/`ok`/`failed`/`stopped`/`info`；`activity.files` 为 `[{ path, change: "read"|"edit"|"write"|"delete" }]`；`activity.body` 为 `{ command?, patch?, output?, args? }`。要新增一个 agent，在 `bridge/adapters/` 写同形状的模块（`id`、`name`、`detect()`、`connect()`、`disconnect()`、`apply()`）并在 `index.js` 里登记。
+
+### 25. 让任意助手通过 MCP 问 dotpals
+
+Claude Code：
+
+```bash
+claude mcp add dotpals -- npx dotpals mcp
+```
+
+Codex，写进 `~/.codex/config.toml`：
+
+```toml
+[mcp_servers.dotpals]
+command = "npx"
+args = ["dotpals", "mcp"]
+```
+
+Cursor 等：命令 `npx`，参数 `dotpals mcp`。前提是 dotpals 在跑（MCP 只读本地 pal）。
+
+可用工具：`agents_now`、`test_status`、`ready_to_merge`、`recap`、`today`、`risky_steps`、`handoff_note`、`check_my_work`。可以直接问「What are my agents doing?」「Is this really tested?」「Is feat/login ready to merge?」「What did Codex change in billing this morning?」。项目默认取助手所在的目录，按 agent 真实工作的文件夹匹配（同名文件夹、monorepo 包、git worktree 会区分开）。
+
+### 26. 打开「让 agent 修失败测试」
+
+Claude Code 上默认开启，可在 Settings 或 notch 里的齿轮关掉。行为：测试失败即刻告知 Claude 并说明原因；当它测试失败或最后一次改动后没跑测试却想结束/commit/push 时，回推去修，**每个请求最多两次**，之后可以停下并由 pal 告诉你。没改代码的请求（「跑测试告诉我结果」）只报告失败；Claude 动手前就已失败的测试只报告、不强制它修；输出被 `| tail` 之类切断而无法判读时让它重跑，仍读不出就请你人工看。无测试的项目不会被拦住。
+
+### 27. 判读不清时的二次复核
+
+`Settings → Set up Laya` 或 `dotpals laya`（需 Python 3.10+）在本地复核；或 `Settings → Double-check unclear test results` 选云端 TypeSafe Jev（默认关，需要你的 key，会发送去除密码/密钥/邮箱/IP 后的测试输出尾部）。
+
+### 28. 常用命令与快捷键
+
+```bash
+dotpals start       # open the floating pal
+dotpals dashboard   # open the dashboard
+dotpals status      # what's running and connected
+dotpals doctor      # no pal or notch? checks and fixes it (setup runs the same check at the end)
+dotpals bridge      # only the bridge, e.g. on a machine without a desktop; dashboard at http://127.0.0.1:5175/dashboard
+dotpals mcp         # an MCP server, so any assistant can ask dotpals what your agents did (see below)
+dotpals statusline  # Claude Code 只有通过 status line 才共享用量上限，运行一次即可
+dotpals notch --auto | --off
+```
+
+快捷键：`Ctrl+Alt+P`（macOS `⌘⌥P`）显示/隐藏 pal；批准卡显示时 `Ctrl+Alt+N` / `Ctrl+Alt+Y`（macOS `⌘⌥N` / `⌘⌥Y`）拒绝/允许。
+
 ## 怎么判断变好了
 
 **可观察的指标（first-pass）**
@@ -293,15 +428,26 @@ Claude Code on Windows 默认用 Git Bash，会把以 `/` 开头的参数改写�
 - UI 流程每步有截图，失败自动截图。
 - CLI 每条命令输出一行 JSON，便于后续判断。
 
+**可观察的指标（dotpals）**
+
+- 每个测试结果被归为 `✅ ran successfully` / `❌ failed` / `❔ unclear` / `⚪ not run`，而不是 agent 的一句「都过了」。
+- 「伪造通过」能被点出来：断言被删、加了 skip、期望值被改。
+- 「测试通过后又改了文件、此后没再测过」这类时点问题显示成 `Changed 2 files after the tests passed: not tested since`。
+- Claude Code 在测试失败、或最后一次改动后没跑测试却想结束 / commit / push 时被回推去修；同一个请求最多两次，之后停下并告知你。
+- 会话故事是可以直接用的文本：`today` + **Copy today** 出 standup 便条，**Copy recap** 出 PR 描述或 commit message，`handoff_note` 把会话交接给另一个 agent。
+- `risky_steps` 能列出 force push、递归删除、`.env` 改动这类风险步骤。
+
 **最小试用方式**
 
 - first-pass：在**一个仓库**上小范围试装，第一个改动完整走一遍 premortem → 修改（只当场修真实伤害）→ breaker 评审 → ship-check。
 - 浏览器 skill：先在**一个前端项目**里只做「多尺寸截图 + 移动端溢出定位」这一件事，把结果和手动 F12 的结论对照，确认它对得上再扩展。
+- dotpals：在**一个有测试套件的小项目**上按 README 一条命令装起来，小范围试。先让 agent 报一次「测试通过」，再用 `test_status` / MCP 核对它说的和实际是否一致；有条件的话加一次「改测试让它变绿」的对照，看它是否识别并回推。
 
 **试多久**
 
 - first-pass：作者的建议是跑**几周**再判断是否铺开。成本要有预期：小 demo 上修一个重复扣费 bug 加 ship-check 约 29 美元，且作者自己说每次改动更慢更贵、收益尚未测量。
 - 浏览器 skill：原文只给了「各跑一次」的对比数据，没有多轮、没有跨项目验证，因此没有可信的试用时长建议。先按上面的最小试用走，自己记录 2–3 次真实任务里「它报的问题是否成立、漏报了什么」，再决定是否常驻。
+- dotpals：报告没有给出试用时长建议；项目是 31 stars、v0.10，先记录 2–3 次真实任务里「它拦下的失败是否成立、误报和漏报各几次」，再决定是否长期用。注意强制回修只在 Claude Code 上有效，其他 agent 只能事后观察。
 
 ## 常见坑
 
@@ -318,6 +464,13 @@ Claude Code on Windows 默认用 Git Bash，会把以 `/` 开头的参数改写�
 - **成本主要在「看图」**：每张约 1.5k–2k token。只截需要的尺寸、直接给 URL 能省；别顺手「把整个后台菜单都截一遍」。
 - **它不认识你的 dev server。** `localhost` 不通就是没起，先起服务再下任务；内网自签证书先确认主机可信再加 `--insecure`。
 - **别把它当已成熟方案。** 49 stars、单作者、对比只跑了一次，先在一个前端项目小范围试，别直接当成团队标准。
+- **dotpals 别当成熟方案。** 31 stars、v0.10，且**强制回修只支持 Claude Code**；Cursor / Gemini CLI / OpenCode / GitHub Copilot CLI 只挂只读 hook，不能批准或阻止任何东西，只能事后观察和提醒。
+- **dotpals 拦不住没有测试的项目**，也不会对「跑测试告诉我结果」这类没改代码的请求强制修；Claude 动手前就已经失败的测试只报告、不强制它修。
+- **回推有次数上限**：同一个请求最多两次，之后它会停下并由 pal 告诉你，不是无限重试。
+- **输出被 `| tail` 之类切断时它读不出结论**，会让你重跑；仍读不出就请你人工看。
+- **Connect 会改你的配置文件**（会先备份、只合并不覆盖、读不了的文件不动），**Disconnect 只移除 dotpals 加的内容**；不想用某个集成就在 `~/.dotpals/config.json` 里按 id 关掉。
+- **云端二次复核默认是关的**，开了会把去除密码/密钥/邮箱/IP 之后的测试输出尾部发到 TypeSafe Jev，需要你自己的 key。
+- **MCP 只读本地 pal**，dotpals 没在跑时问不到东西。
 
 ## 证据与来源
 
@@ -348,9 +501,23 @@ Claude Code on Windows 默认用 Git Bash，会把以 `/` 开头的参数改写�
 - 「你的项目目录永不被碰」是 README 的说法，未做独立验证。
 - 与清单里已有做法的关系：**Claude Code**（adopt）——本 skill 就是它的扩展；**Playwright Test**（try）——README 说能把流程转成项目内 Playwright Test 在 CI 跑，但细节只在 `references/project-tests.md`，原文未展开。清单中没有其它相关条目。
 
-**没有证据支撑的部分**：把浏览器实测和「完成的定义」串成一条流程、以及「先在一个前端项目只做多尺寸截图 + 移动端溢出」这个试用建议，是本次合并时按上述材料做的编排，不是原文给出的验证结论。
+**dotpals 部分**来自本次调研的 **Rikinshah787/dotpals** 报告（仓库 **31 stars、v0.10**）：一键安装 `npx dotpals@latest setup` 与 GitHub 直装、三个可选参数、Claude Code 插件命令与 `/dotpals:pals`、Codex 的日志跟随与 `DOTPALS_CODEX=0`、dashboard Agents 页的 Connect / Disconnect / Send a test event 行为与各 agent 改动的文件清单、`~/.dotpals/config.json` 按 id 关闭集成、`POST /event` 接口的字段与同 id 合并语义、`bridge/adapters/` 自定义 adapter 的模块形状、MCP 接入命令与可用工具清单、默认开启的「回推修复失败测试」行为与几类只报告不强制修的情形、Laya / TypeSafe Jev 二次复核、CLI 命令与快捷键。
+
+报告里的数据与局限（均为作者 / README 自述，未见第三方复现）：
+
+- 测试结果的四态：`✅ ran successfully` / `❌ failed` / `❔ unclear` / `⚪ not run`。
+- 能识别的「伪造通过」：改测试去掉断言、加 skip、改期望值。
+- 时点问题示例：`Changed 2 files after the tests passed: not tested since`。
+- 失败原因示例：`expected 3, got -1 (test/math.test.js:5)`。
+- 支持读测试输出的框架：jest、vitest、mocha、node:test、pytest、go、cargo、dotnet、Maven、Gradle、PHPUnit、RSpec 等。
+- 项目很新（31 stars、v0.10）；强制回修只支持 Claude Code，其余 agent 只挂只读 hook，原文明确「none of them can approve or block anything」。
+- 回推上限是**每个请求最多两次**。
+- 云端 TypeSafe Jev 默认关，需要你的 key，会发送去除密码/密钥/邮箱/IP 后的测试输出尾部。
+
+**没有证据支撑的部分**：把 dotpals 的测试状态核对接在 first-pass 的「完成的定义」之后、以及「在已有测试套件的小项目上小范围试，并加一次改绿测试看它是否识别」这套试用方式，是本次合并时按上述材料做的编排，报告本身没有给出验证结论，也没有给试用时长；三组做法之间可以互相替代的部分，材料里也没有做过交叉验证。
 
 ## 依据的调研
 
 - [joetawil7/first-pass](../research/radar/2026-10-01/8-joetawil7-first-pass.md)：值得一试，建议在一个仓库上小范围试装并跑几周，因为它把“确保正确”这类模糊要求换成了可执行的具名检查（十个问题、非作者评审、改动前失败的测试），直接对应本项目的任务匹配与效果验证问题；但作者自己说这是 0.5 版、收益尚未测量，且每次改动更慢更贵（小 demo 上修一个重复扣费 bug 加 ship-check 约 29 美元），因此不宜直接全团队采用。
 - [AndyShiu/claude-skill-playwright-browser](../research/radar/2026-10-01/22-andyshiu-claude-skill-playwright-browser.md)：值得一试，建议在一个前端项目里按 README 的安装与命令做小范围试跑（先只做「多尺寸截图 + 移动端溢出定位」这一件事，与手动 F12 对照），因为原文给出了可直接复制的安装步骤、CLI 命令、登录流程和排错表，且自带视觉比对与健康检查等验证手段；但它只是 49 stars 的单作者第三方 skill，效果数据仅来自各跑一次的对比，不足以直接写成标准做法。
+- [Rikinshah787/dotpals](../research/radar/2026-10-06/1427-rikinshah787-dotpals.md)：值得一试，建议在已有测试套件的小项目上按 README 一条命令装起来小范围试：用 dotpals 读取测试输出、识别“伪造通过”，并在 Claude Code 试图收尾/commit/push 时把失败测试回推给它修。理由是它给出了完整可照做的安装、MCP 接入和自定义 agent 事件接口，且自带一份逐条人工核对的准确率数据；但项目很新（31 stars、v0.10），强制回修只支持 Claude Code，其余 agent 只能事后观察，需先验证再决定是否长期用。
