@@ -1,24 +1,26 @@
-# 让常驻 agent 接走你的周期性重复工作：四条路线的两周试跑与验收
+# 让常驻 agent 接一件周期性工作，两周后用数字决定去留
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：面对 nanobot / CowAgent / Eigent / NanoClaw 这类自托管或桌面常驻 AI agent，如何用两周的小范围试跑和可观察指标，判断它是否值得接管你的周期性重复工作，而不是被 README 的能力清单说服。
-> 先试这一步：在一个可丢弃的环境里只选一条路线跑通（Docker 优先、只开本地访问、只接一个模型、只配一个定时任务），并从第一次运行起就记录「按时完成率 / 人工介入次数 / token 成本」。
-> 最近修订：2026-10-02
+> 解决的问题：在一堆只有安装说明、没有效果数据的常驻/桌面 AI agent 里，用两周跑出一条自己的证据链，决定它是留在日常工作流还是降级到观察清单。
+> 先试这一步：先选一条路线，用 Docker 或本地开发模式在 loopback 上起一个实例、只配一个 Chat 模型，建一个固定时间的定时任务，并从第一次运行就开始记指标。
+> 最近修订：2026-10-05
 
 ## 解决什么问题
 
 周期性重复的工作——按固定时间汇总某个信息源、每周重复读同一批文件、跑同一批命令、查同一类网页——看起来很适合交给一个常驻的本地/服务器端 AI agent，或者一个桌面端的多 agent 应用。但这类项目的 README 只给安装和配置步骤，不给效果数据、对比案例或评估方法。
 
-这份手册给出一条可执行的试跑路径：起一个实例 → 只接一个模型 → 配一个定时任务 → 跑两周 → 用「按时投递成功率 + 人工返工时间 + token 成本」决定它是否进入你的日常工作流。四条路线（nanobot / CowAgent / Eigent / NanoClaw）共用同一套判断标准，选一条走完即可。
+这份手册给出一条可执行的试跑路径：起一个实例 → 只接一个模型 → 配一个定时任务 → 跑两周 → 用「按时投递成功率 + 人工返工时间 + token 成本」决定它是否进入你的日常工作流。五条路线（nanobot / CowAgent / Eigent / NanoClaw / Comma）共用同一套判断标准，选一条走完即可。
+
+Comma 和另外四条不是同一层东西：它不是又一个编码 agent，而是上层编排 + 持久 Task 状态 + 事件/时间触发 + 权限边界。它把 Codex、Claude Code 这类已有 agent 当应用调用，或注册为 Worker / Sub-agent。如果你只是想要一个编码 agent，沿用原来的四条路线更直接。
 
 ## 适用与不适用
 
 **适用**
 
-- 你手上有明确的周期性重复工作，形态落在「读文件 / 跑命令 / 查网 / 按计划重复 / 拆给多个子代理」里。
-- 有一台可联网、且你信得过的 Linux / macOS / Windows 机器或服务器；如果你想试 Eigent，还需要桌面环境；如果你想试 NanoClaw，需要 macOS 或 Linux（Windows 走 WSL2）以及 Docker。
-- 至少有一个模型厂商的 API key，或者能在本机跑起一个本地推理服务（Eigent 支持 Ollama / vLLM / LM Studio 一类；NanoClaw 可以通过 `/add-ollama-provider` 接本地开源权重模型）。
+- 你手上有明确的周期性重复工作，形态落在「读文件 / 跑命令 / 查网 / 按计划重复 / 拆给多个子代理 / 盯收件箱或仓库的事件」里。
+- 有一台可联网、且你信得过的 Linux / macOS / Windows 机器或服务器；如果你想试 Eigent，还需要桌面环境；如果你想试 NanoClaw，需要 macOS 或 Linux（Windows 走 WSL2）以及 Docker；如果你想试 Comma 的自建实例，需要 Docker Engine + Compose v2.24 以上，以及足够磁盘容纳构建层。
+- 至少有一个模型厂商的 API key，或者能在本机跑起一个本地推理服务（Eigent 支持 Ollama / vLLM / LM Studio 一类；NanoClaw 可以通过 `/add-ollama-provider` 接本地开源权重模型；Comma 自带模型即 BYO API key，或使用 ChatGPT / Claude 套餐，也可登录后在 Settings 里配私有模型）。
 - 能接受先花 1–2 周观察期，而不是马上全量切换。
 
 **不适用**
@@ -26,8 +28,10 @@
 - 没有重复性工作，只是想试个新工具。
 - 必须部署在不受信任的环境——CowAgent 的 README 明确说 Agent 能访问本机操作系统，只能在可信环境部署。
 - 承担不了 token 成本——同一份 README 明确警告 Agent 模式消耗显著多于普通对话。
-- 期待有现成效果数据可抄——四份调研都指出各自原文没有任何效果数据、对比案例或指标（Eigent 只有 stars 数，NanoClaw 的 30866 stars 同理，那反映的是热度，不是效果）。
+- 期待有现成效果数据可抄——五份调研都指出各自原文没有任何效果数据、对比案例或指标（Eigent 只有 stars 数，NanoClaw 的 30866 stars 同理，Comma 的 172 stars 和运行时形式化验证同样不构成任务效果证据）。
 - 不想动代码：NanoClaw 的定制哲学是「Customization = code changes」，README 也承认主干只接受安全修复、bug 修复和明确改进，其余一律以 skill 形式自带，不想改代码的人上手成本高。
+- 不想维护重栈：Comma 的运行时主要为 Elixir/OTP，关键系统组件用 Lean，核心分布式协议用 TLA+ 模型检查；首次构建会下载 Lean、Elixir、Go、Node 等公共工具链。如果你不打算长期维护这套栈，别把它当首选。
+- 需要 Comma 的会议（Meetings）或 Agent VMM host——这两者需要的运行时**不包含在本仓库内**。
 
 ## 前置条件
 
@@ -35,20 +39,22 @@
 - **用 CowAgent**：一台可联网的 Linux / macOS / Windows 机器或服务器；至少一个模型厂商的 API key，在 Web console 里配置，不需要手改文件。
 - **用 Eigent**：桌面环境；快速开始模式需要 Node.js 18–22 和 npm；后端 Python 依赖用 uv 管理。**本地部署与 MCP / Skill 配置的具体命令不在 README 正文里**——本地部署看 `./server/README_EN.md`，工具与能力配置看 `https://docs.eigent.ai`，本次材料未包含这两部分内容。
 - **用 NanoClaw**：macOS 或 Linux（Windows 走 WSL2）；Node.js 22+ 与 pnpm 10+（缺失时安装脚本会装）；Docker Desktop（macOS/Windows）或 Docker Engine（Linux）；**Claude Code**——它负责 `/customize`、`/debug`、安装出错时的恢复，以及所有 `/add-<channel>` skill；另外需要 Anthropic 凭据（或改用其他 provider）。
-- **常驻前提**：nanobot 的定时投递要生效，网关必须一直运行；CowAgent 本身定位就是可 7×24 跑在个人电脑或服务器上；Eigent 的 Automation 定位是「人离开时任务继续跑」，但前提是应用/服务在跑；NanoClaw 是「Node 宿主进程 + 每个 agent group 一个 Docker 容器」，只要宿主和容器在跑，定时任务就由宿主唤醒。
-- **试用期约定**：Docker 优先（便于清理），只开本地访问，先不要把控制台暴露到外网。注意例外：**Eigent 的快速开始模式会连接 Eigent 云端服务、需要注册账号，不是完全本地**；如果你的目标是「数据不出本机」，别把 Quick Start 当成最终形态。NanoClaw 的安装默认在本地构建镜像、不联网、不需要账号，但**匿名安装诊断默认开启**，可用 `NANOCLAW_NO_DIAGNOSTICS=1` 关闭；可选账号只用于拉取预构建加固镜像和托管 Slack app（会看到你的邮箱和拉取时间）。
+- **用 Comma**：自建实例需要 Docker Engine + Compose v2.24 或更高、足够磁盘容纳构建层、一个可用的模型服务商账号（默认栈**不含** mock 模型，不配就没有真实模型调用）；不需要 Comma 账号，也不需要私有仓库 token。本地开发模式需要 pnpm（先跑一次 `pnpm install`）。要让它操作你自己的电脑，需要连接这台机器（Salix），并在设备设置里手动连接；群组云电脑需要 Cloudflare 配置。
+- **常驻前提**：nanobot 的定时投递要生效，网关必须一直运行；CowAgent 本身定位就是可 7×24 跑在个人电脑或服务器上；Eigent 的 Automation 定位是「人离开时任务继续跑」，但前提是应用/服务在跑；NanoClaw 是「Node 宿主进程 + 每个 agent group 一个 Docker 容器」，只要宿主和容器在跑，定时任务就由宿主唤醒；Comma 的 Task 被自动转成独立的 agent loop，只要实例在跑就继续 plan → execute → review → verify。
+- **试用期约定**：Docker 优先（便于清理），只开本地访问，先不要把控制台暴露到外网。注意例外：**Eigent 的快速开始模式会连接 Eigent 云端服务、需要注册账号，不是完全本地**；如果你的目标是「数据不出本机」，别把 Quick Start 当成最终形态。NanoClaw 的安装默认在本地构建镜像、不联网、不需要账号，但**匿名安装诊断默认开启**，可用 `NANOCLAW_NO_DIAGNOSTICS=1` 关闭；可选账号只用于拉取预构建加固镜像和托管 Slack app（会看到你的邮箱和拉取时间）。Comma 自建实例首次启动会生成持久密钥并初始化空存储，默认所有公开端口只绑定 loopback，这正好适合试用期。
 
 ## 操作步骤
 
 ### 第 1 步：先选一种做法，别同时上多个
 
-A、B、C、D 属于同一类「长驻 / 桌面 agent harness」，能力清单高度重叠（本地文件与 shell、网页搜索与抓取、MCP 工具、cron/调度、长期记忆、子代理委派、多模型路由）。区别只在形态与侧重，且这些侧重全部来自各自的 README 自述，没有第三方对比测试，也没有效果数据：
+A、B、C、D、E 属于同一类「长驻 / 桌面 / 编排 agent harness」，能力清单高度重叠（本地文件与 shell、网页搜索与抓取、MCP 工具、cron/调度、长期记忆、子代理委派、多模型路由）。区别只在形态与侧重，且这些侧重全部来自各自的 README 自述，没有第三方对比测试，也没有效果数据：
 
 - 想接主流 IM 渠道（微信、飞书、钉钉、企微、QQ、公众号、Telegram、Slack、Discord 等）、想用现成技能市场、想要对话式技能生成 → **做法 B：CowAgent**。
 - 想要更小的内核、WebUI + 终端 workbench、OpenAI 兼容 API / Python SDK、可自托管的 Python 包 → **做法 A：nanobot**。
 - 想要桌面图形界面、要在一个任务里并行跑多个 agent 分工、要接本地推理模型让数据不出本机、要内置浏览器与终端工具包 → **做法 C：Eigent**。
 - 想要容器级文件系统隔离（容器只挂载你显式允许的目录）、不想让 agent 持有原始 API key（出站请求经凭据网关在请求时注入，支持按 agent 的策略和限流）、想按频道选择「各自独立 agent / 共享一个 agent / 折叠成单一共享会话」、且能接受「定制即改代码」→ **做法 D：NanoClaw**。它原生跑 Anthropic 官方 Claude Agent SDK，等于 Claude Code 的容器化 + 常驻化外壳，所以 Claude Code 必须在手边；换后端可以装 `/add-codex`、`/add-opencode`、`/add-ollama-provider`，provider 粒度是 per agent group。
-- 如果团队里已经在用 OpenClaw 一类做法：nanobot 的 `nanobot gateway` 被作者描述为「从 OpenClaw 过来、把 agent 当长驻服务跑的人熟悉的入口」；CowAgent 的 Skill Hub 声明技能格式与 OpenClaw、Claude Code 互通，可共用同一套技能资产；NanoClaw 则反过来把 OpenClaw 当对比对象——README 自述对方近 50 万行代码、53 个配置文件、70+ 依赖、应用层权限校验、单 Node 进程共享内存，自己定位为「同样核心功能、但代码小到能读懂 + 容器隔离」，这些数字全部是作者主张、原文无法核实；Eigent 只声明定位与 Claude Cowork / Codex 相似，没有给对比数据、迁移路径或兼容性说明，不能当作已验证的替代方案。
+- 想要「会话只是界面、Task 才是持久执行状态」，想让已有的 Codex / Claude Code 被当成应用调用或注册为 Worker / Sub-agent，想让 agent 自己写一个小 Loop 去盯收件箱 / 仓库 / 信息流、只在有事时才唤醒主 agent，能接受自建一整套栈（Docker Compose，默认五个界面端口）→ **做法 E：Comma**。它和 NanoClaw 的区别值得先说清：NanoClaw 是「给 Claude Code 套一个容器化常驻外壳」，Comma 是「在上层编排多个已有 agent，并把 Task 变成跨设备、跨对话、跨界面延续的持久状态」；两者可以并存，Comma 调研原文也把 Claude Code 列为它可调用的对象之一。
+- 如果团队里已经在用 OpenClaw 一类做法：nanobot 的 `nanobot gateway` 被作者描述为「从 OpenClaw 过来、把 agent 当长驻服务跑的人熟悉的入口」；CowAgent 的 Skill Hub 声明技能格式与 OpenClaw、Claude Code 互通，可共用同一套技能资产；NanoClaw 则反过来把 OpenClaw 当对比对象——README 自述对方近 50 万行代码、53 个配置文件、70+ 依赖、应用层权限校验、单 Node 进程共享内存，自己定位为「同样核心功能、但代码小到能读懂 + 容器隔离」，这些数字全部是作者主张、原文无法核实；Eigent 只声明定位与 Claude Cowork / Codex 相似，没有给对比数据、迁移路径或兼容性说明，不能当作已验证的替代方案。Comma 的调研没有提到 OpenClaw。
 
 任选其一即可。同时开两个以上，两周后你分不清是哪个在起作用。
 
@@ -355,14 +361,98 @@ bash nanoclaw.sh --uninstall
 
 每次安装带 per-checkout id，卸载器只删属于这份拷贝的东西（后台服务、容器与镜像、应用数据与日志、agent 文件、这份拷贝的网关 agent），共享的东西（网关服务、你的凭据、机器上其他 NanoClaw 拷贝）不动；会逐项列出并逐组确认。`--dry-run` 预览，`--yes` 跳过确认，`.env` 删除前会备份。预期结果：脚本跑完后，再手动删掉 checkout 目录，机器回到试跑前的状态。
 
-### 第 6 步：无论 A / B / C / D，都收敛到同一个最小闭环
+### 第 6 步（做法 E）：部署 Comma 并跑通一个长周期任务
 
-这一步是整篇手册的核心，四份调研给出的建议一致：
+前提：想零成本先跑通链路，用 E-1；想跑真实模型，用 E-2。两条路都不要在同一台机器上同时开。
 
-1. **实例只开本地访问**。Docker 优先；先不要把控制台暴露到外网（CowAgent 调研的建议就是先不要把 `web_host` 设为 `0.0.0.0`；Eigent 的 Quick Start 会连云端，要「不出本机」必须走 C-3 的本地部署；NanoClaw 默认本地构建、不联网，但要显式关掉匿名诊断并核对容器挂载清单）。
-2. **只配一个 Chat 模型**，不接多渠道，先把「模型能用」这一步单独确认掉。NanoClaw 对应的是：只配一个 provider（默认 Anthropic），装别的 provider skill 留到跑通之后。
-3. **只装 / 建一个技能或工具，范围严格限定在「一件你每周都要重复做的小事」**。装不到合适技能，就退回让 agent 用对话生成一个最小技能（CowAgent 用 `skill-creator`；NanoClaw 用自然语言直接对 Claude Code 改，或 `/customize`）。
-4. **建一个定时任务**，例如固定时间汇总某个信息源并推送，观察它能否在无人干预下完成（nanobot 用 Automations / Tasks，前提是网关常驻；CowAgent 用内置 `scheduler`，在 Web console 里管理；Eigent 用 Automation；NanoClaw 用触发词让 agent 建 recurring job，用 `list all scheduled tasks across groups` 核对、`pause` 暂停）。
+**E-1 本地开发模式**（确定性 mock 模型，不需要 API key，最适合做最小验证）：
+
+```sh
+pnpm install
+make dev
+```
+
+预期结果：本地后端与 Web 客户端启动，使用确定性 mock 模型。用 `comma-local@example.com` 登录，登录码在 Mailpit `http://127.0.0.1:8025` 读取。Mac app 用 `make dev-electron`。在仓库根目录还可以跑三组测试：
+
+```sh
+make test-clients
+make test-systems
+make test-policy
+```
+
+这一步的作用是先把「装得上、登录得了、界面能开」和「模型调用是否正常」两件事拆开——mock 模型下不存在 provider 配置问题。
+
+**E-2 自建单机实例（Docker Compose）**：
+
+1. 复制示例配置：
+
+   ```sh
+   cp .env.example .env
+   ```
+
+2. 把 `COMMA_OWNER_EMAIL` 设成你自己的邮箱——这个账号拿到 Admin 权限。
+3. 在 `.env` 里设置模型服务商；或者跳过这步，登录后在 Settings 里配置私有模型。
+4. 构建并启动整个栈：
+
+   ```sh
+   docker compose up -d --build
+   ```
+
+5. 打开 `http://localhost:8080`，用你的邮箱请求登录码。
+6. 在本地收件箱 `http://localhost:8025` 读取登录码。
+
+首次启动会生成持久密钥并初始化空存储；默认所有公开端口只绑定 loopback。
+
+**E-3 环境变量（`.env`）**：
+
+| 变量 | 用途 |
+|---|---|
+| `COMMA_OWNER_EMAIL` | 第一个 owner 账号和 Admin 权限 |
+| `COMMA_ALLOW_SIGNUP` | 公开注册，默认关闭 |
+| `COMMA_LLM_BASE_URL` | 模型服务商端点 |
+| `COMMA_LLM_PROTOCOL` | 服务商协议，如 `chat_completions` |
+| `COMMA_LLM_MODEL` | 服务商模型 ID |
+| `COMMA_LLM_API_KEY` | 服务商凭据 |
+| `COMMA_LLM_CONTEXT_TOKENS` | 模型上下文预算 |
+| `COMMA_LLM_MAX_TOKENS` | 输出 token 上限 |
+| `COMMA_EXA_API_KEY` | 可选，Exa 的 key，用于网页搜索和读页 |
+| `COMMA_SMTP_*` | 登录码邮件服务器 |
+| `COMMA_PUBLIC_URL`、`COMMA_API_URL`、`COMMA_ADMIN_URL`、`COMMA_SALIX_URL` | 浏览器 origin |
+
+模型调用走你自己的服务商账号，可能产生服务商费用；自建实例不需要 Stripe 或 Comma credits。
+
+**E-4 各界面默认地址**：
+
+| 界面 | 默认地址 |
+|---|---|
+| Comma Web | `http://localhost:8080` |
+| Comma Admin | `http://localhost:8082` |
+| Comma Product API | `http://localhost:8081` |
+| Salix dashboard | `http://localhost:4000/dash` |
+| Local inbox | `http://localhost:8025` |
+
+**E-5 对外暴露（试用阶段先别做）**：需要公开时，把 Comma 放在你自己的 HTTPS 反向代理后面；Web、Admin、Product API 必须是同一可注册域名下的不同 origin，例如 `app.example.com`、`admin.example.com`、`api.example.com`；换用真实 SMTP 服务器，本地收件箱只能用于 loopback，因为能读到它的人就能用里面的登录码。
+
+**E-6 升级与备份**（原文给出的硬性操作要求）：升级前先停栈；一起备份全部五个 named volume：`config`、`postgres`、`objects`、`clickhouse`、`redis`。其中 `config` 卷保存加密密钥和认证密钥，**不要删除、不要重新生成它的密钥**。`docker compose down` 会保留数据；除非确实要删掉实例，否则不要加 `-v`。公开部署、升级或恢复前先读 `systems/DEPLOYMENT.md#self-hosted-compose`。
+
+**E-7 让它操作你自己的电脑**：在设备设置里连接这台电脑；需要改文件、跑命令、把活转交给 Codex / Claude Code / Pi / Kimi 时，必须打开 **Allow operations**。群组云电脑需要 Cloudflare 配置；会议（Meetings）和 Agent VMM host 需要的运行时**不包含在本仓库内**。试用期建议先不开这个总开关。
+
+**E-8 交给它一个真实的长周期任务**：把一件周期性重复、输入输出边界清楚的工作交给它的 Task + Loop 机制，跑一两周。三种触发方式对应三类活儿：
+
+- **Task**：请求自动转成独立 agent loop，持续 plan → execute → review → verify，直到目标完成，并自行判断 Task 何时算完成；需要你决策时 Task 停在 Needs Review。
+- **Routines**（时间触发）：按设定时间给你简报。
+- **Loops**（事件触发）：agent 自己写的小程序，盯收件箱、仓库或信息流，只在有事时才唤醒 agent——安静的一小时不消耗大模型 token。
+
+预期结果：任务在看板四态 Backlog / In progress / Needs Review / Done 之间推进，你能随时看到它卡在哪、需要你做什么决定。注意一个已知行为：**被中断的写操作不会自动重跑**。
+
+### 第 7 步：无论 A / B / C / D / E，都收敛到同一个最小闭环
+
+这一步是整篇手册的核心，五份调研给出的建议一致：
+
+1. **实例只开本地访问**。Docker 优先；先不要把控制台暴露到外网（CowAgent 调研的建议就是先不要把 `web_host` 设为 `0.0.0.0`；Eigent 的 Quick Start 会连云端，要「不出本机」必须走 C-3 的本地部署；NanoClaw 默认本地构建、不联网，但要显式关掉匿名诊断并核对容器挂载清单；Comma 默认所有公开端口只绑 loopback，别急着按 E-5 暴露）。
+2. **只配一个 Chat 模型**，不接多渠道，先把「模型能用」这一步单独确认掉。NanoClaw 对应的是：只配一个 provider（默认 Anthropic），装别的 provider skill 留到跑通之后。Comma 对应的是：先用 E-1 的 mock 模型跑通界面与登录，再用 E-2 配一个真实 provider，不要一上来就调 `COMMA_LLM_*` 全套参数。
+3. **只装 / 建一个技能或工具，范围严格限定在「一件你每周都要重复做的小事」**。装不到合适技能，就退回让 agent 用对话生成一个最小技能（CowAgent 用 `skill-creator`；NanoClaw 用自然语言直接对 Claude Code 改，或 `/customize`）。Comma 上对应的是：只给它一个 Task，并把 Allow operations 当总开关按需打开。
+4. **建一个定时任务**，例如固定时间汇总某个信息源并推送，观察它能否在无人干预下完成（nanobot 用 Automations / Tasks，前提是网关常驻；CowAgent 用内置 `scheduler`，在 Web console 里管理；Eigent 用 Automation；NanoClaw 用触发词让 agent 建 recurring job，用 `list all scheduled tasks across groups` 核对、`pause` 暂停；Comma 用 Routines 做时间触发、用 Loops 做事件触发，用看板核对它有没有真的推进）。
 5. **让它连续处理同一类任务 5–10 次**，每次都检查两件事：一是任务是否完成，二是后续对话里它是否自动检索到了之前的记忆 / 知识，而不需要你重新交代背景。
 6. **从第一次运行就开始记录指标**（见下一节）。否则两周后你只有印象，没有依据。
 
@@ -370,33 +460,44 @@ bash nanoclaw.sh --uninstall
 
 **如果选的是 NanoClaw，按这个顺序收敛**：D-1 装好并只配对**一个**频道（本地 CLI 或你最常用的那个）→ D-3 用「每周一 8am 新闻简报」这一条建一个定时任务，连续跑几个周期 → 核对容器挂载清单，确认 agent 只看到你显式允许的目录 → 需要换本地模型或换渠道时，再分别装 `/add-ollama-provider`、`/add-telegram` 这类 skill → **最后**再试 `/manage-channels` 的隔离与共享组合。先动挂载和权限再搭任务，一旦出问题你分不清是权限配置还是任务本身。
 
+**如果选的是 Comma，按这个顺序收敛**：E-1 的 `make dev` + mock 模型零成本跑通登录和界面 → E-2 起自建实例、只配**一个**真实模型 → E-8 只建一个 Routine 或一个 Loops（盯一个信息源），连续跑一两周 → 需要它动手时再打开 Allow operations，先只给读权限、让有副作用的操作停在 Needs Review → **最后**才考虑 E-5 的对外暴露和把 Codex / Claude Code 注册成 Worker。顺序反了的话，出问题你分不清是模型判断、调度触发还是权限放行造成的。
+
 预期结果：两周内你拿到一组自己的数字，而不是一份 README 的承诺。
 
 ## 怎么判断变好了
 
-四份调研都没有给出官方指标，下面这套是「调研作者建议 + 你需要自建基线」的组合。
+五份调研都没有给出官方指标，下面这套是「调研作者建议 + 你需要自建基线」的组合。
 
 **可观察的指标**
 
 - **定时任务按时完成率**，以及需要你人工介入的次数（按次记录）。
 - **单次任务的实际耗时与返工次数**，对比「你自己做」或「用普通对话式 AI 做」的基线。Eigent 调研把它拆成两条：人工耗时差（从全程自己做变成只审核产出物）和首次通过率（产出需要返工或重做的比例）。
-- **Token 成本**：算清每完成一件任务花多少钱。CowAgent README 明确警告 Agent 模式消耗显著多于普通对话，这是最容易失控的一项。NanoClaw 的定时任务可配 script gates，无活时不唤醒 agent，属于同一项成本上的一个可调开关（具体写法原文只给了链接）。
+- **Token 成本**：算清每完成一件任务花多少钱。CowAgent README 明确警告 Agent 模式消耗显著多于普通对话，这是最容易失控的一项。NanoClaw 的定时任务可配 script gates，无活时不唤醒 agent；Comma 的 Loops 同理——只在有事时唤醒 agent，安静的一小时不消耗大模型 token（两处具体写法原文都只给了链接或描述，没有正文）。
 - **技能复用次数**：同一个技能被稳定调用多少次；如果一周内没有被重复调用，说明它没有固化成产能。
 - **记忆有效性**：随机抽查后续会话，看它是否引用了正确的历史结论，而不是要你重新交代背景。
-- **数据边界**（Eigent 调研建议）：在本地部署模式下，能否确认文件、凭据、上下文没有被送出本机。NanoClaw 上这一项最容易做成可检查项——容器只挂载你显式允许的目录，且 agent 不持有原始 API key（由凭据网关在请求时注入），你可以直接拿挂载清单和出站策略来核对；但它同样没有第三方验证，别把「设计如此」当成「实测成立」。
-- **失败可诊断性**（Eigent 调研建议）：任务失败时能否从日志 / 步骤回放定位原因。NanoClaw 的路径是把排障直接交给 Claude Code（问它为什么调度没跑、日志里有什么），或 `/debug`。
+- **数据边界**（Eigent 调研建议）：在本地部署模式下，能否确认文件、凭据、上下文没有被送出本机。NanoClaw 上这一项最容易做成可检查项——容器只挂载你显式允许的目录，且 agent 不持有原始 API key（由凭据网关在请求时注入），你可以直接拿挂载清单和出站策略来核对；但它同样没有第三方验证，别把「设计如此」当成「实测成立」。Comma 上的对应说法是「云端干活、设备管身份」——长任务跑在它自己的环境，敏感身份、会话、支付和私密数据留在你自己的设备；这是 README 的定位描述，需要你自己在试用里核实。
+- **失败可诊断性**（Eigent 调研建议）：任务失败时能否从日志 / 步骤回放定位原因。NanoClaw 的路径是把排障直接交给 Claude Code（问它为什么调度没跑、日志里有什么），或 `/debug`；Comma 的路径是看板四态——卡在 Needs Review 说明在等你决定，长期停在 Backlog / In progress 说明 loop 没有推进。
 
-**注意区分「可观测」和「有效果」**：nanobot 的 WebUI 可以展开查看推理过程、工具调用、文件改动、差分、命令输出和产出物，输入区的上下文指示器显示上下文大小、每轮输入 token 和 provider 上报的缓存复用，还有上下文压缩（compaction）时间线，配置里可接 Langfuse；CowAgent 有上下文用量可视化、`/compact` 上下文压缩、模型缓存命中率提升；NanoClaw 有 per-checkout id、可逐组确认的卸载清单、可关闭的匿名诊断、容器与凭据网关。这些说明「用了多少」「装在哪」，不说明「是否改善」，不能拿来当效果证据。同理，Eigent 的 15,457 stars 和 NanoClaw 的 30866 stars 只反映热度，不是效果证据。
+**注意区分「可观测」和「有效果」**：nanobot 的 WebUI 可以展开查看推理过程、工具调用、文件改动、差分、命令输出和产出物，输入区的上下文指示器显示上下文大小、每轮输入 token 和 provider 上报的缓存复用，还有上下文压缩（compaction）时间线，配置里可接 Langfuse；CowAgent 有上下文用量可视化、`/compact` 上下文压缩、模型缓存命中率提升；NanoClaw 有 per-checkout id、可逐组确认的卸载清单、可关闭的匿名诊断、容器与凭据网关。这些说明「用了多少」「装在哪」，不说明「是否改善」，不能拿来当效果证据。同理，Eigent 的 15,457 stars 和 NanoClaw 的 30866 stars 只反映热度，不是效果证据；Comma 的 172 stars 同理。
 
-**最小试用方式**：单机跑通一个实例，只开本地访问（Eigent 若走 Quick Start 会连云端），只配一个模型，装 1 个技能，建 1 个定时任务，连续跑 5–10 次同类任务。
+**Comma 独有的「运行时可靠性」怎么用**：原文列出六条被检查的性质——已接受的工作在失败和重启后不会静默丢失；失败的回复不算已完成工作；有副作用的操作在开始前先记录；被中断的变更操作不会被意外执行两次；过期 worker 不能覆盖更新的 agent 状态；数据只在策略允许的边界间流动。这些性质由 Lean 机器检查和 TLA+ 模型检查覆盖，可以作为「它不会悄悄把事情丢掉」的观察项。但原文**明确声明：形式化验证不证明模型判断或任务成功**，它只验证「即使出错，运行时仍按我们设计的规则行事」。不要把运行时可靠误读成结果可靠。
 
-**试多久**：nanobot 调研建议把这件周期性工作配成 automation 跑两周；CowAgent 调研建议 1–2 周；Eigent 调研未给观察期长度，沿用两周作为默认观察期；NanoClaw 调研建议 1 天内搭完、2 周判断。统一按两周执行。
+**最小试用方式**：单机跑通一个实例，只开本地访问（Eigent 若走 Quick Start 会连云端），只配一个模型，装 1 个技能，建 1 个定时任务，连续跑 5–10 次同类任务。Comma 的零成本入口是 E-1 的 `make dev` + mock 模型。
 
-**降级 / 放弃条件**（出现任一即可停）：一周内跑不出任何可复用的稳定产出；或 token 成本明显高于人工 / 普通对话方案；或必须开放外网与高权限才能用。Eigent 上的等价说法是：只有在那个周期任务上做到「人工时间明显下降且返工比例可接受」，才考虑纳入日常工作流，在此之前保持 try 状态。NanoClaw 上还可以加一条：如果为了让它跑起来必须持续改代码而你又不想维护这份 fork，直接停。出现任一情况，把项目从 try 降为 watch，只在观察清单里跟踪；NanoClaw 可以直接用 `bash nanoclaw.sh --uninstall` 干净回滚，不需要留一台挂着的机器。
+**试多久**：nanobot 调研建议把这件周期性工作配成 automation 跑两周；CowAgent 调研建议 1–2 周；Eigent 调研未给观察期长度，沿用两周作为默认观察期；NanoClaw 调研建议 1 天内搭完、2 周判断；Comma 调研建议把一个真实长周期任务交给 Task + Loop 跑一两周。统一按两周执行。
+
+**降级 / 放弃条件**（出现任一即可停）：一周内跑不出任何可复用的稳定产出；或 token 成本明显高于人工 / 普通对话方案；或必须开放外网与高权限才能用。Eigent 上的等价说法是：只有在那个周期任务上做到「人工时间明显下降且返工比例可接受」，才考虑纳入日常工作流，在此之前保持 try 状态。NanoClaw 上还可以加一条：如果为了让它跑起来必须持续改代码而你又不想维护这份 fork，直接停。Comma 上再加两条：如果你不打算长期维护 Elixir/Lean/TLA+ 这套重栈，别把它留在日常工作流；除运行时形式化验证外它没有任何任务成功率或效果数据，不宜直接采用。出现任一情况，把项目从 try 降为 watch，只在观察清单里跟踪；NanoClaw 可以直接用 `bash nanoclaw.sh --uninstall` 干净回滚，不需要留一台挂着的机器，Comma 用 `docker compose down` 停栈即可（记得不要加 `-v`，除非确实要删实例）。
 
 ## 常见坑
 
-- **把「装好了、能回复」当成「工作变好了」**。四份调研都明确指出原文只有安装与能力清单，没有效果数据、对比案例、基准分数或成本节省数据。
+- **把「装好了、能回复」当成「工作变好了」**。五份调研都明确指出原文只有安装与能力清单，没有效果数据、对比案例、基准分数或成本节省数据。
+- **把 Comma 的运行时形式化验证当成任务效果证据**。Lean 机器检查 + TLA+ 模型检查只覆盖上面那六条运行时性质，原文明确声明它不证明模型判断或任务成功。
+- **自建 Comma 时忘了默认栈不含 mock 模型**。E-2 的 compose 栈不配模型就没有真实模型调用；想零成本先跑通链路，要用 E-1 的 `pnpm install` + `make dev`。
+- **公开暴露 Comma 时把 Web / Admin / Product API 放到不同顶级域名**。三者的 origin 必须属于同一个可注册域名；并且要换真实 SMTP，本地收件箱只能用于 loopback，能读到它的人就能用里面的登录码。
+- **升级 Comma 前没停栈，或者删了 `config` volume / 重新生成它的密钥**。`config` 卷保存加密密钥和认证密钥；五个 named volume 要一起备份；`docker compose down` 不要随手加 `-v`。
+- **一上来就打开 Allow operations**。它是改文件、跑命令、把活转交 Codex / Claude Code / Pi / Kimi 的总开关；先用只读和 Needs Review 跑通，再逐项放开。
+- **把 Comma 当又一个编码 agent**。它的定位是常驻调度层，把 Codex / Claude Code 当应用调用或注册为 Worker / Sub-agent；如果你只是想要一个编码 agent，回到第 1 步重选。
+- **期望 Comma 的 Meetings 或 Agent VMM host 开箱可用**。这两个需要的运行时不在本仓库内。
 - **把 Eigent 的「Zero Setup - No technical configuration required」当真**。这与后文要求 Node.js 18–22 + npm + `uv sync` 的实际步骤相互矛盾，应按后者准备环境。
 - **把 Eigent 的 Quick Start 当成「本地部署」**。该模式会连接 Eigent 云端服务、需要注册账号，不是完全本地；要验证数据不出本机，必须走 `./server/README_EN.md` 的本地部署（本次材料未含该文档的具体命令）。
 - **把 Eigent 的 Roadmap 当现有能力**。Context Engineering（Prompt caching、System prompt optimize、Toolkit docstring optimize、Context compression）、多 agent 固定工作流、多轮对话、Document Toolkit 动态编辑都是未完成项，不能算作已具备的能力。
@@ -407,15 +508,15 @@ bash nanoclaw.sh --uninstall
 - **以为 NanoClaw 有配置文件可改行为**。它的做法是不用配置文件，直接对 Claude Code 说要什么，或跑 `/customize`；想加频道、换 provider 也只能通过 `/add-<channel>` 这类 skill，而 skill 需要在 Claude Code 里执行。
 - **忘了关匿名安装诊断**。NanoClaw 的匿名诊断默认开启，用 `NANOCLAW_NO_DIAGNOSTICS=1` 关闭；可选账号会看到你的邮箱和拉取时间，只用于预构建加固镜像和托管 Slack app。
 - **卸载时以为会删干净一切**。NanoClaw 的卸载器是 per-checkout 的：只删属于这份拷贝的后台服务、容器与镜像、应用数据与日志、agent 文件和这份拷贝的网关 agent，共享的网关服务、你的凭据、机器上其他拷贝都不动；最后要手动删掉 checkout 目录。先跑 `--dry-run` 看一眼要删什么。
-- **文档有缺口就卡住**。CowAgent 的 MCP 集成只有一句描述、没有 `mcp.json` 示例，技能创作只有「用对话生成」没有演示，需查官方文档页；Eigent 的本地部署命令在 `server/README_EN.md`、MCP / Skill 配置在 `docs.eigent.ai`、用例步骤在官网 guide，都不在 README 正文里；nanobot 的上下文与隐私用法（不同任务用不同 topic、Temporary chat 不写历史或长期记忆、一个 workbench 最多并排四个会话）分散在 README 里；NanoClaw 的定时任务 script gates 具体写法和 `docs/` 里各文档细节，原文只有链接、没有正文，要照做必须先另行查阅。
-- **把作者自述当事实**。CowAgent 的 stars 数是仓库自报；「proactively plans」「self-evolution」「grows alongside you」「Agent Harness engineering 的参考实现」、记忆分层与 Deep Dream、知识库自动整理与知识图谱、Self-Evolution 的具体效果，全部是自述，没有案例或数据支撑。Eigent 的「boosts productivity」「exceptional productivity」「turn your most complex workflows into automated tasks」同样无任何量化。nanobot 的能力清单同样只是项目自述。NanoClaw 对 OpenClaw 的对比数字（近 50 万行代码、53 个配置文件、70+ 依赖、应用层安全 vs OS 级隔离）以及「Claude 能安全修改这么小的代码库」也都是作者主张，原文无法核实。
-- **定时任务不生效**。nanobot 的定时投递要靠网关常驻，`nanobot gateway --background` 是唯一把它提升为持久后台模式的命令；关掉终端就等着收不到结果。NanoClaw 侧则要先确认宿主进程和容器都在跑，再用 `list all scheduled tasks across groups` 确认任务确实登记了。
-- **试用期就开放外网或高权限**。CowAgent README 明确说 Agent 能访问本机操作系统，只能在可信环境部署；服务器暴露控制台必须设 `web_password` 并限制端口。试用阶段就把实例锁在 localhost。NanoClaw 侧对应的是：先核对容器挂载清单、别急着用 `/manage-channels` 把多个频道折进一个共享会话，也先别让 agent 去改自己的代码。
+- **文档有缺口就卡住**。CowAgent 的 MCP 集成只有一句描述、没有 `mcp.json` 示例，技能创作只有「用对话生成」没有演示，需查官方文档页；Eigent 的本地部署命令在 `server/README_EN.md`、MCP / Skill 配置在 `docs.eigent.ai`、用例步骤在官网 guide，都不在 README 正文里；nanobot 的上下文与隐私用法（不同任务用不同 topic、Temporary chat 不写历史或长期记忆、一个 workbench 最多并排四个会话）分散在 README 里；NanoClaw 的定时任务 script gates 具体写法和 `docs/` 里各文档细节，原文只有链接、没有正文；Comma 的公开部署、升级、恢复细节在 `systems/DEPLOYMENT.md#self-hosted-compose`，本次材料只给了这一入口，要照做必须先另行查阅。
+- **把作者自述当事实**。CowAgent 的 stars 数是仓库自报；「proactively plans」「self-evolution」「grows alongside you」「Agent Harness engineering 的参考实现」、记忆分层与 Deep Dream、知识库自动整理与知识图谱、Self-Evolution 的具体效果，全部是自述，没有案例或数据支撑。Eigent 的「boosts productivity」「exceptional productivity」「turn your most complex workflows into automated tasks」同样无任何量化。nanobot 的能力清单同样只是项目自述。NanoClaw 对 OpenClaw 的对比数字（近 50 万行代码、53 个配置文件、70+ 依赖、应用层安全 vs OS 级隔离）以及「Claude 能安全修改这么小的代码库」也都是作者主张，原文无法核实。Comma 的「sessionless / relentless / swarm intelligence」效果性表述（减少上下文压缩、漂移、污染）、7×24 持续完成目标、「你管目标不管 swarm」，同样没有任何成功率、耗时或成本对比数据；示例视频（购物比价与结账、交付工作与生活）在文本中没有对应指标。
+- **定时任务不生效**。nanobot 的定时投递要靠网关常驻，`nanobot gateway --background` 是唯一把它提升为持久后台模式的命令；关掉终端就等着收不到结果。NanoClaw 侧则要先确认宿主进程和容器都在跑，再用 `list all scheduled tasks across groups` 确认任务确实登记了。Comma 侧要先确认实例在跑（`docker compose up -d --build` 之后的容器没停），Loops 只在事件触发时才唤醒 agent——如果它一直没动静，先确认你盯的那个信息源真的没有新事件。
+- **试用期就开放外网或高权限**。CowAgent README 明确说 Agent 能访问本机操作系统，只能在可信环境部署；服务器暴露控制台必须设 `web_password` 并限制端口。试用阶段就把实例锁在 localhost。NanoClaw 侧对应的是：先核对容器挂载清单、别急着用 `/manage-channels` 把多个频道折进一个共享会话，也先别让 agent 去改自己的代码。Comma 侧对应的是：默认端口本来就只绑 loopback，先别按 E-5 暴露；Allow operations 先别开。
 - **pip 报 `externally-managed-environment`**：改用一键安装器、`uv tool install nanobot-ai`、`pipx install nanobot-ai`，或装进虚拟环境。
 - **`nanobot` 不在 PATH**：用 `uv tool run --from nanobot-ai nanobot ...` 或 `pipx run --spec nanobot-ai nanobot ...`。
 - **拉完代码忘了同步依赖（Eigent）**：前端要在项目根目录 `npm install`，后端要 `cd backend && uv sync`，两步都做。
 - **技能装不通就放弃**。退回用 `skill-creator` 生成一个最小技能，范围严格限定在「一件你每周都要重复做的小事」。
-- **把所有任务塞进同一个会话**。nanobot 支持按 topic 分开任务，并用 Temporary chat 做临时对话（不写入历史或长期记忆）；混在一起会污染记忆检索，也会让「记忆是否有效」这项指标失效。NanoClaw 上用 `/manage-channels` 决定「各自独立 agent / 共享一个 agent / 折叠成单一共享会话」时同理——共享记忆是便利，也是污染源，先按隔离跑。
+- **把所有任务塞进同一个会话**。nanobot 支持按 topic 分开任务，并用 Temporary chat 做临时对话（不写入历史或长期记忆）；混在一起会污染记忆检索，也会让「记忆是否有效」这项指标失效。NanoClaw 上用 `/manage-channels` 决定「各自独立 agent / 共享一个 agent / 折叠成单一共享会话」时同理——共享记忆是便利，也是污染源，先按隔离跑。Comma 上同理：Task 是持久状态、会话只是界面，但一个 Task 里混进太多目标，看板就分不清它到底卡在哪一步。
 
 ## 证据与来源
 
@@ -423,9 +524,10 @@ bash nanoclaw.sh --uninstall
 - **做法 B 的全部命令**（run.sh / run.ps1 / docker compose、`cow` CLI、`/skill` 斜杠命令、`cow install-browser`、控制台端口 9899、`config.json` 的 `web_host`/`web_password`）：来自 zhayujie/CowAgent 调研，均为 README 原文。该调研给出可核事实：MIT 许可、仓库自报 47192 stars、版本序列到 v2.2.0（2026.09.30）；并引用原文的风险声明：Agent 模式 token 消耗显著多于普通对话、Agent 可访问本机操作系统只能在可信环境部署。
 - **做法 C 的全部命令**（`git clone` + `npm install` + `npm run dev` 快速开始、前端 `npm install` / 后端 `uv sync` 的依赖同步）：来自 eigent-ai/eigent 调研，均为 README 原文。可核事实：Apache 2.0 许可、仓库约 15,457 stars、技术栈为 FastAPI + uv + Uvicorn + CAMEL 后端与 React + Electron + TypeScript + Tailwind/Radix 前端（流程编辑器用 React Flow）。「单 agent 适合聚焦任务 / Workforce 适合复杂多步并行」是 README 的划分，**没有给出选择规则**；「本地部署包含本地后端、本地模型集成 vLLM/Ollama/LM Studio、与云服务完全隔离、零外部依赖」是 README 的定位描述，**具体命令在未提供的 `server/README_EN.md`**；Automation 只有一句功能描述，**未给调度配置格式**；用例库只有标题 + 一句描述 + 链接，**步骤在官网 guide**。
 - **做法 D 的全部命令与机制**（`git clone ... nanoclaw-v2` + `bash nanoclaw.sh`、`migrate-v2.sh` 与 `NANOCLAW_V1_PATH`、`@Andy` 三个示例提示词与 `list/pause/join` 管理指令、`/customize`、`/add-telegram` `/add-codex` `/add-opencode` `/add-ollama-provider`、`.env` 的 `ANTHROPIC_BASE_URL`/`ANTHROPIC_AUTH_TOKEN`、`/manage-channels` 与 `docs/isolation-model.md`、`ncl groups create --template`、`NANOCLAW_NO_DIAGNOSTICS=1`、`bash nanoclaw.sh --uninstall` 及 `--dry-run`/`--yes`）：来自 nanocoai/nanoclaw 调研，均为项目 README 原文。可核事实：仓库 30866 stars（仓库指标，不构成质量或效果证据）。架构描述（Node 宿主进程 + 每个 agent group 独立 Docker 容器；消息经「用户 → 消息群 → agent group → 会话」路由写入 `inbound.db` 唤醒容器；容器内 agent-runner 用 Bun + Claude Agent SDK 轮询、执行、写 `outbound.db`，宿主再轮询并投递回聊天工具；每会话两个 SQLite 文件、各自单一写入者、不走 IPC 也不走 stdin；宿主有 60 秒 sweep，见 `src/host-sweep.ts`）以及容器文件系统隔离、凭据网关注入并支持按 agent 的策略与限流、每个 agent group 有自己的 `CLAUDE.md`/记忆/容器，均来自 README 自述。**定时任务 script gates 的具体写法、`docs/` 各文档的细节，原文只有链接没有正文，无法据此照做。定时任务与 `ncl` 的示例来自 README，未附效果数据。**
-- **最小闭环与判断指标**：「只配一个模型 + 一个技能 + 一个定时任务」「连续处理同类任务 5–10 次」「按时完成率 / 人工介入次数 / 耗时与返工 / token 成本 / 技能复用次数 / 记忆有效性」「1–2 周」「跑两周」「降级为 watch 的条件」，来自 nanobot 与 CowAgent 两份调研的结论与验证建议；「人工耗时对比 / 首次通过率 / 调度可靠性 / 数据边界 / 失败可诊断性」「先 Quick Start → 换本地模型验证数据边界 → 再试 Workforce → 最后试 Automation」「只有人工时间明显下降且返工比例可接受才纳入日常工作流」来自 Eigent 调研的验证建议；「在可丢弃的环境里小范围试、只接一个频道、配一到两个可人工核对的定时任务跑两周」「排障交给 Claude Code 或 `/debug`」「用 `/uninstall` 干净回滚」来自 NanoClaw 调研的验证建议。这些都是调研作者给出的自建方法，不是项目官方提供。
-- **只是作者主张**：nanobot 的「小而可读」内核、Dream 长期记忆、多智能体委派的实际效果；CowAgent 的「proactively plans」「self-evolution」「grows alongside you」「Agent Harness engineering 的参考实现」、记忆分层与 Deep Dream 蒸馏、知识库自动整理、Self-Evolution 的具体效果；Eigent 的「boosts productivity」「exceptional productivity」「turn your most complex workflows into automated tasks」「Zero Setup」；NanoClaw 与 OpenClaw 的对比数字（行数、配置文件数、依赖数、安全层级）以及「代码小到 Claude 能安全修改」——均无案例、基准或第三方评测支撑，四份调研都明确标注为自述或矛盾表述。
-- **项目间关系**：nanobot 的 `nanobot gateway` 自述对 OpenClaw 用户是熟悉的入口；CowAgent 的 Skill Hub 声明技能可用于 CowAgent、OpenClaw、Claude Code 等，两者技能格式互通、可共用技能资产；NanoClaw 原生使用 Anthropic 官方 Claude Agent SDK（是 Claude Code 的容器化 + 常驻化外壳），并把 OpenClaw 作为对比对象，同时可通过 `/add-opencode` 接 OpenRouter / Google / DeepSeek、通过 `/add-ollama-provider` 接本地开源权重模型；Eigent 只声明定位与 Claude Cowork / Codex 相似，无迁移或兼容性说明。四份调研都没有给出这些项目之间的直接对比测试，因此本手册不比较优劣，只按形态偏好与渠道需求选一个。
+- **做法 E 的全部命令与机制**（`cp .env.example .env`、`docker compose up -d --build`、`pnpm install` + `make dev`、`make dev-electron`、`make test-clients`/`make test-systems`/`make test-policy`、界面端口 8080/8082/8081/4000(dash)/8025、`.env` 环境变量表、五个 named volume `config`/`postgres`/`objects`/`clickhouse`/`redis`、`systems/DEPLOYMENT.md#self-hosted-compose`、mock 模型的 `comma-local@example.com` 登录方式）：来自 AFK-surf/Comma 调研，均为 README 原文。可核事实：AGPL-3.0-only，修改后对外提供服务需保留 `/source.tar.gz` 下载；贡献需签 AFK AI, Inc. CLA；仓库星标 172（来自本次线索 metrics，不构成效果证据）。运行时主要为 Elixir/OTP，关键系统组件用 Lean，核心分布式协议用 TLA+ 模型检查；每个 agent 是 Erlang VM 上一个独立进程，失败即重启、其余 agent 继续跑；Salix 已接受的消息在重启后仍存活；被中断的写操作不会自动重跑。**原文明确声明：形式化验证不证明模型判断或任务成功，它只验证「即使出错，运行时仍按我们设计的规则行事」。**
+- **最小闭环与判断指标**：「只配一个模型 + 一个技能 + 一个定时任务」「连续处理同类任务 5–10 次」「按时完成率 / 人工介入次数 / 耗时与返工 / token 成本 / 技能复用次数 / 记忆有效性」「1–2 周」「跑两周」「降级为 watch 的条件」，来自 nanobot 与 CowAgent 两份调研的结论与验证建议；「人工耗时对比 / 首次通过率 / 调度可靠性 / 数据边界 / 失败可诊断性」「先 Quick Start → 换本地模型验证数据边界 → 再试 Workforce → 最后试 Automation」「只有人工时间明显下降且返工比例可接受才纳入日常工作流」来自 Eigent 调研的验证建议；「在可丢弃的环境里小范围试、只接一个频道、配一到两个可人工核对的定时任务跑两周」「排障交给 Claude Code 或 `/debug`」「用 `/uninstall` 干净回滚」来自 NanoClaw 调研的验证建议；「先用 `make dev` 跑通，再按 compose.yaml 自建单机实例，把一个真实的长周期任务交给 Task + Loop 跑一两周」「栈很重，不宜直接采用」「除运行时形式化验证外没有任何任务成功率或效果数据」来自 Comma 调研的结论。这些都是调研作者给出的自建方法，不是项目官方提供。
+- **只是作者主张**：nanobot 的「小而可读」内核、Dream 长期记忆、多智能体委派的实际效果；CowAgent 的「proactively plans」「self-evolution」「grows alongside you」「Agent Harness engineering 的参考实现」、记忆分层与 Deep Dream 蒸馏、知识库自动整理、Self-Evolution 的具体效果；Eigent 的「boosts productivity」「exceptional productivity」「turn your most complex workflows into automated tasks」「Zero Setup」；NanoClaw 与 OpenClaw 的对比数字（行数、配置文件数、依赖数、安全层级）以及「代码小到 Claude 能安全修改」；Comma 的「sessionless / relentless / swarm intelligence」效果性表述、24/7 持续完成目标、「你管目标不管 swarm」，以及示例视频（购物比价与结账、交付工作与生活）——均无案例、基准或第三方评测支撑，五份调研都明确标注为自述或矛盾表述。
+- **项目间关系**：nanobot 的 `nanobot gateway` 自述对 OpenClaw 用户是熟悉的入口；CowAgent 的 Skill Hub 声明技能可用于 CowAgent、OpenClaw、Claude Code 等，两者技能格式互通、可共用技能资产；NanoClaw 原生使用 Anthropic 官方 Claude Agent SDK（是 Claude Code 的容器化 + 常驻化外壳），并把 OpenClaw 作为对比对象，同时可通过 `/add-opencode` 接 OpenRouter / Google / DeepSeek、通过 `/add-ollama-provider` 接本地开源权重模型；Eigent 只声明定位与 Claude Cowork / Codex 相似，无迁移或兼容性说明；Comma 调研明确把 Claude Code（清单中 kind: tool、status: adopt）当作被编排对象——Codex、Claude Code 等可「像应用一样被调用」，也可注册为 Worker / Sub-agent，因此 Comma 与 Claude Code 是互补关系，手册里把它描述为「常驻调度层」而不是又一个编码 agent；Comma 调研没有提到清单中其他条目。五份调研都没有给出这些项目之间的直接对比测试，因此本手册不比较优劣，只按形态偏好与渠道需求选一个。
 
 ## 依据的调研
 
@@ -433,3 +535,4 @@ bash nanoclaw.sh --uninstall
 - [zhayujie/CowAgent](../research/radar/2026-10-02/552-zhayujie-cowagent.md)：值得一试，建议小范围试：在可信的本地/服务器环境用原文给出的一行命令部署 CowAgent，跑通“一个模型 + 一个技能 + 一个定时任务”的最小闭环，再决定是否扩用；理由是原文提供了可直接复制的安装、cow CLI、技能安装与 MCP/调度/多模型路由的配置骨架，但完全没有具体工作场景的流程、提示词或效果数据，且 Agent 模式成本高、有本地系统权限风险。
 - [eigent-ai/eigent](../research/radar/2026-10-02/577-eigent-ai-eigent.md)：值得一试，建议小范围试：按 README 给出的命令把 Eigent 桌面端跑起来，先在一个周期性、输入输出明确的任务（如每月汇总 PR 生成报告）上验证「多 agent 并行 + 定时自动化」是否真能减少人工；理由是原文给了可照做的安装与更新命令、明确的单 agent/多 agent 分工和本地部署选项，但完全没有给效果数据，所以不能直接 adopt。
 - [nanocoai/nanoclaw](../research/radar/2026-10-02/583-nanocoai-nanoclaw.md)：值得一试，建议在一个可丢弃的环境里小范围试：按 README 的 nanoclaw.sh 一键装好，只接一个频道、配一到两个可人工核对的定时任务跑两周，因为它给出了可照抄的安装/使用/调试/卸载流程和容器级隔离，但全部依据仅来自项目 README，没有效果数据或第三方验证，且定制方式是改代码。
+- [AFK-surf/Comma](../research/radar/2026-10-05/1312-afk-surf-comma.md)：值得一试，先用 `make dev`（内置确定性 mock 模型、无需 API key）在本机跑通，再按根目录 compose.yaml 自建单机实例，把一个真实的长周期任务（如仓库/收件箱监控）交给它的 Task+Loop 机制跑一两周；README 给出了可直接照做的部署步骤、完整环境变量表和权限开关，适合作为“常驻代理 + 工具权限供给 + 触发式推进”的试点对象，但它除运行时形式化验证外没有任何任务成功率或效果数据，且栈很重，不宜直接采用。
