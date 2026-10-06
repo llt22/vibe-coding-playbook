@@ -372,7 +372,16 @@ settings: {
   },
 }
 ```
-含义：在距离硬阈值尚有 backgroundTokens 时后台生成摘要；超过 contextWindow - reserveTokens 后，下一请求等待摘要。provider 仍报上下文过长时，harness 会压缩并重试一次。手动压缩入口是 root.compact(...)；给定报告在 Keep the names of th 处截断，不要照抄不完整调用，按仓库文档补全。
+含义：在距离硬阈值尚有 backgroundTokens 时后台生成摘要；超过 contextWindow - reserveTokens 后，下一请求等待摘要。provider 仍报上下文过长时，harness 会压缩并重试一次。手动压缩时可以在指令中明确必须保留的事实：
+
+```ts
+await root.compact(
+  "Keep the names of the failing tests",
+  context,
+);
+```
+
+compaction 不删除 storage 中的原 entries，但模型后续主要看到摘要。应用应同时提供历史检索入口，并把目标、约束和关键测试名是否保留列入试验指标。
 
 ### 机制对照表（按需跳到 learn-claude-code 对应章节）
 - s01 Agent Loop：messages / while True / tool_use
@@ -465,13 +474,12 @@ settings: {
 - Pi Durable：忘了处理单实例选主、storage 备份、进程锁、认证授权、ExecutionEnv 隔离、秘密注入和版本迁移；这些不是自动提供。
 - Pi Durable：SQLite synchronous=NORMAL 不保证断电、宿主故障或存储损坏时不丢最新数据。
 - Pi Durable：fork 继承 transcript 和 agent/document 语义，不复制文件系统、容器、网络资源等外部状态。
-- Pi Durable：把截断的 root.compact(Keep the names of th 直接当可复制代码——原文片段不完整，需查仓库补全。
 
 ## 证据与来源
 - 本手册保留的 harness 公式、最小 agent loop、s01→s17 机制、旧 12 课、Kode CLI、姊妹仓库 claw0 / OpenClaw 的 Heartbeat 与 Cron、web 端命令，均来自 shareAI-lab/learn-claude-code 的 README 与目录结构（给定指标：77,855 stars，MIT 许可）。s05 的“先列步骤，完成率翻倍”README 未给数据来源，只是作者主张。仓库效果主张缺数据，建议小范围试。
 - hello-agent-system 的 32 节课、不依赖 Agent 框架、课程结构（讲义 + demo.py + exercise.py + solution.py + test_exercise.py，测试离线、确定性、零成本）、工具书文档（79 种失败模式、199 条设计评审清单、76 道面试题、框架对照表、一页纸速查、术语表、生产就绪指南、135 条延伸阅读）、综合实战 ITBuddy、生产组件替换（Postgres / Redis / Temporal / OpenTelemetry / LiteLLM / Cedar）、组装骨架与分布式 worker 代码，均来自 heaven999b/hello-agent-system 的 README（MIT、约 32 星、中英双语）。本次只拿到 README，没有讲义正文与数据，性能数字和组件可靠性均未核实；模型名 gpt-5.6-luna 来自作者环境，必须替换。结论建议小范围试：先跑 08 可靠性、11 评估两课，并把失败模式图鉴、设计评审清单、Agent 构造骨架套到自己项目；因为原文给出了可照抄的配置、代码和全离线测试，能低成本验证生产级分层是否补得上。
 - blazo 的可照做内容来自 agentblazo/blazo README：安装与启动命令、SDK 三段 API（observe / span / log）示例与语义、blazo.config.json 的全部默认值与字段名、collector 的 11 个 HTTP 端点与 SSE 事件名、五条检测规则的触发条件与默认阈值、六个 dashboard 页面的路由与内容、五类数据实体（Run / Span / Log / Error / Finding）的字段、端口 4318 与 3000、SQLite（WAL）、OTLP/HTTP JSON、默认每 5 秒周期扫描、仓库目录结构与测试命令。只是作者主张、未经第三方验证的部分：“install Blazo, run an agent, and immediately see its execution live”“run appears in the dashboard within ~2s”等；项目自标 MVP，dashboard 配图标注为目标设计而非当前 UI；原文只给规则定义，没有“用 findings 发现新任务”的案例，手册里那一层推断已标注。结论仍建议小范围试：先在一个真实 TypeScript agent 的调试环节接入，用 runs / inspect 定位一次慢、卡死或重复错误，再决定是否长期使用。
-- Pi Durable 的安装命令、最小持久 harness 代码、稳定 requestId 示例、工具 replay safe 示例与禁用清单、durable memo 审批 hook、子 agent ownership 代码、compaction 配置，均来自给定调研报告“Pi Durable”，其依据是 @earendil-works/pi-durable 官方 README。结论建议：如果要把 coding agent 做成长期在线、可重连、可从崩溃恢复的应用，先用 SQLite + 单进程 owner 做一个受控原型，重点验证 submission 去重、工具重放边界、外部副作用幂等和故障恢复；不要把它直接当成稳定 API、分布式工作流平台或 exactly-once 执行系统。官方 README 标为 Experimental，API 可能无通知变化。报告正文在手动 compaction 示例处截断（Keep the names of th），不能照抄。审批权限与审计原文未提供完整方案；支付示例的 payment-${task.id} 幂等键与 abort 补偿退款是作者示例，不是已验证生产方案。需把三个包锁到精确版本，升级单独做故障恢复回归测试。
+- Pi Durable 的安装命令、最小持久 harness 代码、稳定 requestId 示例、工具 replay safe 示例与禁用清单、durable memo 审批 hook、子 agent ownership 代码、compaction 配置，均来自调研报告《Pi Durable》及其核验的原文、官方 README、官方示例目录和 Context7 当前文档。结论建议：如果要把 coding agent 做成长期在线、可重连、可从崩溃恢复的应用，先用 SQLite + 单进程 owner 做一个受控原型，重点验证 submission 去重、工具重放边界、外部副作用幂等和故障恢复；不要把它直接当成稳定 API、分布式工作流平台或 exactly-once 执行系统。官方 README 标为 Experimental，API 可能无通知变化。审批权限与审计原文未提供完整方案；支付示例的 payment-${task.id} 幂等键与 abort 补偿退款是作者示例，不是已验证生产方案。需把三个包锁到精确版本，升级单独做故障恢复回归测试。
 
 ## 依据的调研
 
