@@ -4,6 +4,7 @@
 
 | 手册 | 解决的问题 | 先试这一步 | 最近修订 |
 |---|---|---|---|
+| [在没有源码时，让 agent 有证据地搞懂一个功能再重建](reverse-engineer-software-with-agents.md) | 当需要搞懂没有源码的应用、二进制或前端包（例如要复刻它的离线搜索）时，怎么让编码 agent 按固定流程调查、每步都给出证据和限制，而不是靠猜。 | 先在单个已提取的 JS/Electron 目录上跑一次 `npx -y rea-agents@latest analyze-javascript-application <绝对路径> --json`，不装 Hopper/Ghidra，用一次带 Evidence/limitations 的结果判断这套流程值不值得继续。 | 2026-10-07 |
 | [让 coding agent 长期在线，崩溃重启后还能接着干](build-agent-from-scratch.md) | 解决把 AI 从聊天框搬到项目里、补齐 harness 与生产分层，并让 coding agent 可持久恢复、可观测、可验证的问题。 | 先选一条最小路线：跑通 learn-claude-code 的 s01，或用 Pi Durable 的 SQLite 骨架提交一个带稳定 requestId 的任务，验证进程重启后能继续。 | 2026-10-06 |
 | [小范围试装技能包，用对照验证效果，并审计自己的 SKILL.md](build-and-install-agent-skills.md) | 解决「装了一个技能包后不确定它是否真的减少了返工，以及自己写的 SKILL.md 质量无法复核」的问题。 | 选一个非关键项目，只装一个技能包，对同一任务做有/无技能的 3 次对照；如果你已经在写自己的 SKILL.md，先跑一次 `python3 scripts/validate_skill.py --all ~/.claude/skills` 拿到基线。 | 2026-10-06 |
 | [让编码 agent 在可控环境里反复跑：工作区、项目护栏、实时观察与系统级验证](host-coding-agents.md) | 把编码 agent 从「在本机随手跑一次」变成「在可控环境里、按项目规则反复跑」，能实时看到它在读什么、写什么，需要时还能在真实（仿真）系统里执行并拿到可判定结果。 | 先在单个真实项目里落地最便宜的护栏：短 `CLAUDE.md` + allow/ask/deny 权限 + 一个 PostToolUse 格式化 hook（做法 C），用 Plan mode 跑完一次并记录手工基线。 | 2026-10-06 |
