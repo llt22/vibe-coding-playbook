@@ -1,14 +1,14 @@
-# 让编码 agent 在可控环境里反复跑：工作区、项目护栏、实时观察与系统级验证
+# 让编码 agent 在可控环境里按项目规则跑，并且拿得出证据
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：把编码 agent 从「在本机随手跑一次」变成「在可控环境里、按项目规则反复跑」，能实时看到它在读什么、写什么，需要时还能在真实（仿真）系统里执行并拿到可判定结果。
-> 先试这一步：先在单个真实项目里落地最便宜的护栏：短 `CLAUDE.md` + allow/ask/deny 权限 + 一个 PostToolUse 格式化 hook（做法 C），用 Plan mode 跑完一次并记录手工基线。
-> 最近修订：2026-10-06
+> 解决的问题：把编码 agent 从本机随手跑一次，变成在可控环境里按项目规则反复跑，并且能实时观察、在真实系统里验证、用命令证明完成。
+> 先试这一步：先用做法 C 在一个可回退的真实项目里落地短 CLAUDE.md + allow/ask/deny 权限 + 一个 PostToolUse hook，再用 Plan mode 跑一个边界清晰的小任务。
+> 最近修订：2026-10-07
 
 ## 解决什么问题
 
-本手册解决的是：把编码 agent（Claude Code / Codex CLI / OpenCode / goose / pi / agentbox 里的 agent）从「在本机随手跑一次」变成「在可控环境里、按项目规则反复跑」，并且能实时看到它在读什么、写什么，需要时还能在真实（仿真）系统里执行并拿到可判定结果。要补十一件事：工作区与文件持久化、权限与凭据边界、工具与扩展供给、项目级护栏（上下文供给 + 自动化触发）、按轮次的用量成本记录、「先只读规划、再放权编辑」的分工、「运行时/界面扩展面」的受控试点、「跨模型统一接口」——让同一套流程换供应商而不改上层、「实时观察与危险动作闸门」、「把桌面 Codex 会话接到手机做异步审批与完成通知」，以及「让 agent 在真实内核/网络的 guest 里跑命令并验证」。给出十条可照做的路径：做法 A 是在 Linux 服务器上自托管 agentbox 工作区；做法 B 是在非生产机器上装 goose，用 MCP 供给工具与权限；做法 C 是在单个真实项目里给 Claude Code 配 CLAUDE.md、allow/ask/deny 权限、hook、subagent、skill，并把主工作流固定成 Explore → Plan → Code → Verify → Commit；做法 D 是用 OpenCode 的 build/plan 双 agent 把「先只读规划、再放权编辑」固定成分工；做法 E 是在本机装 Codex CLI 并用 ChatGPT 账号登录，先跑通一次终端编码任务；做法 F 是在一次性项目里用实验开关试点 Claude Mods（function hooks），按验收矩阵检查后再决定是否留下；做法 G 是按 pi 的官方安装脚本装好 CLI，用 `/login` 接入模型，在容器边界内跑一个边界清晰的小任务，验证「同一套流程换 provider」是否成立；做法 H 是在真实仓库里装 hamzafer/claude-code-mods 的 mission-control 与观察类插件，先看清 agent 的读写与上下文水位，再决定是否加 blast-radius 这类危险命令闸门；做法 I 是在一台已运行 Codex App 的 macOS/Windows 电脑上装 Codex Mobile Bridge 桌面 App，只开局域网和账号密码，用手机扫码接入已有会话，回应待确认操作、切模型与 Skill、配 Bark/ntfy 通知，再决定是否开外网入口；做法 J 是在 Windows 或 Linux/macOS 上按 qemu-harness（qh）README 装好 Python 3.8+、QEMU、Go 1.22+，用 `qh up --kernel alpine:aarch64` → `qh exec` → `qh down` 跑通最小链路，用项目级 `qh.json` 固化配置，把自带 `skill/SKILL.md` 接给 Claude Code，让需要真实系统验证的任务在 guest 里执行。
+本手册解决的是：把编码 agent（Claude Code / Codex CLI / OpenCode / goose / pi / agentbox 里的 agent）从「在本机随手跑一次」变成「在可控环境里、按项目规则反复跑」，并且能实时看到它在读什么、写什么，需要时还能在真实（仿真）系统里执行并拿到可判定结果。要补十二件事：工作区与文件持久化、权限与凭据边界、工具与扩展供给、项目级护栏（上下文供给 + 自动化触发）、按轮次的用量成本记录、「先只读规划、再放权编辑」的分工、「运行时/界面扩展面」的受控试点、「跨模型统一接口」——让同一套流程换供应商而不改上层、「实时观察与危险动作闸门」、「把桌面 Codex 会话接到手机做异步审批与完成通知」，「让 agent 在真实内核/网络的 guest 里跑命令并验证」，以及「把边界清晰、需要独立验证的任务放到云端并行跑，并要求会话用命令证明完成」。给出十一条可照做的路径：做法 A 是在 Linux 服务器上自托管 agentbox 工作区；做法 B 是在非生产机器上装 goose，用 MCP 供给工具与权限；做法 C 是在单个真实项目里给 Claude Code 配 CLAUDE.md、allow/ask/deny 权限、hook、subagent、skill，并把主工作流固定成 Explore → Plan → Code → Verify → Commit；做法 D 是用 OpenCode 的 build/plan 双 agent 把「先只读规划、再放权编辑」固定成分工；做法 E 是在本机装 Codex CLI 并用 ChatGPT 账号登录，先跑通一次终端编码任务；做法 F 是在一次性项目里用实验开关试点 Claude Mods（function hooks），按验收矩阵检查后再决定是否留下；做法 G 是按 pi 的官方安装脚本装好 CLI，用 `/login` 接入模型，在容器边界内跑一个边界清晰的小任务，验证「同一套流程换 provider」是否成立；做法 H 是在真实仓库里装 hamzafer/claude-code-mods 的 mission-control 与观察类插件，先看清 agent 的读写与上下文水位，再决定是否加 blast-radius 这类危险命令闸门；做法 I 是在一台已运行 Codex App 的 macOS/Windows 电脑上装 Codex Mobile Bridge 桌面 App，只开局域网和账号密码，用手机扫码接入已有会话，回应待确认操作、切模型与 Skill、配 Bark/ntfy 通知，再决定是否开外网入口；做法 J 是在 Windows 或 Linux/macOS 上按 qemu-harness（qh）README 装好 Python 3.8+、QEMU、Go 1.22+，用 `qh up --kernel alpine:aarch64` → `qh exec` → `qh down` 跑通最小链路，用项目级 `qh.json` 固化配置，把自带 `skill/SKILL.md` 接给 Claude Code，让需要真实系统验证的任务在 guest 里执行；做法 K 是按 Claude Code 官方云的「五分钟起步」流程开通云端会话：连接 GitHub、在一次性 VM 里跑一个自包含工单、要求它用点名命令证明完成，再用并行 session、`--teleport`、Auto-fix 与 routines 把这套流程接进日常。
 
 ## 适用与不适用
 
@@ -29,6 +29,11 @@
 - 做 IoT / 嵌入式内核仿真、需要跨架构（aarch64 / arm32 / riscv64 / x86_64）验证的任务（做法 J）。
 - 已经用 Claude Code，想用 SKILL.md 把「驱动一个 VM 跑验证」交给 agent 自主完成的人（做法 J）。
 - 能接受 Windows 优先、Linux/macOS 也可用，且愿意先装 Python 3.8+、QEMU、Go 1.22+ 并首次联网的人（做法 J）。
+- 已经有 Pro / Max / Team / Enterprise 计划之一，想把「边界清晰、需要独立验证的任务」（原文举例：修 flaky test、更新 API 文档、把 logger 改成结构化输出）放到云端并行跑，并且要求会话用点名命令证明完成的人（做法 K）。
+- 想接受「关掉标签页后任务继续跑、之后在手机上看进度、最后在 claude.ai/code 审查 diff 并开 PR」这种异步节奏，笔记本会睡眠或断网的人（做法 K）。
+- 想在一次性 VM 里跑不完全信任的代码（贡献者 PR、新依赖安装脚本、刚 clone 的仓库），并且能接受把环境网络收窄到 None 或 Trusted 的人（做法 K）。
+- 想用时间/事件触发工作（schedule 最快每小时、对 routine endpoint 发 HTTP 调用、GitHub 事件），或把 follow-up 排队进正在运行的 session 的人（做法 K；注意 routine 是 research preview）。
+- 已经在用 Claude Code、仓库里已有 CLAUDE.md / rules / skills / agents / commands，想把这些项目规则原样带进云端会话的人（做法 K）。
 - 能给出一台非生产机器或一个可回退的 Git 分支，愿意先小范围试用再扩大的人。
 
 不适用：
@@ -58,8 +63,14 @@
 - qh 的原文只有 Alpine 内核与一段 Android GKI 的性能说明，没有 benchmark 脚本、没有对照基线、也没有第三方使用报告，适合小范围试用而非全盘采用。
 - qh 的原文没有给出按时间/事件/状态触发的持续任务调度或循环执行机制；`qh reload`、`rc.local`、`qh.init` 钩子、`qh fwd`、`-n NAME` 只能算可反复调用的执行接口，不等于主动推进。
 - 跨架构 guest 在 x86 宿主上走 TCG（偏慢但可用）；同架构宿主上才可用 `--qemu-arg "-accel whpx"` / KVM 加速。
-- 五条已有线索加 Claude Mods、pi、hamzafer/claude-code-mods、Codex Mobile Bridge、qemu-harness 都没有给出「AI 是否让结果变好了」的对照评测方法或基准数据；Claude Mods 给出了验收矩阵与成本公式，qh 给出了退出码/probe/dry-run 这类验证抓手，但都是作者提出的评估方法或可判定接口，不是独立基准。
-- 涉密或受管环境要额外做安全审查与权限约束，不能直接照搬 `curl | bash` 类安装，也不能为了跑通 Claude Mods 示例而关掉组织托管保护；pi 的 pi-telemetry / pi-share-hf 会话导出等于把工作数据上传，需先确认合规；第三方插件集合要走组织审批流程；qh 的 lab overlay 不可放到不可信网络。
+- 用 Console API key 或第三方 provider 的人不适用做法 K：原文明确云端会话不适用于这两种，它随 Pro、Max、Team、Enterprise 计划提供。
+- 没有相应计划的人不适用做法 K：云端会话没有单独云机器费用，但会话消耗计划用量；组织 owner 可能需要在 claude.ai/code 里先为组织开启云会话。
+- 不愿把代码送到 Anthropic 托管基础设施的人不适用做法 K：即使把环境网络设为 None，Claude Code 仍会向 Anthropic API 发请求，数据可能以此离开 VM；所有出站流量会经过代理并记录 hostname。
+- 需要把共享环境变量当私密通道的人不适用做法 K：环境变量对使用该环境的人可见，secrets 不应放共享变量；Pro/Max 上可用环境 API credentials 在 VM 外把 key 附加到你指定 host 的请求。
+- 把 routines / projects 当作已 GA 能力的人不适用做法 K：routines 是 research preview，projects 在 Pro/Max 上是 public beta。
+- 想靠做法 K 彻底规避合并冲突的人不适用：Claude 不会收到与 base 分支的 merge conflict 通知，需要让它 rebase；它的评论也可能触发 comment-driven automation（如 Atlantis）。
+- 五条已有线索加 Claude Mods、pi、hamzafer/claude-code-mods、Codex Mobile Bridge、qemu-harness、Claude Code 云端会话都没有给出「AI 是否让结果变好了」的对照评测方法或基准数据；Claude Mods 给出了验收矩阵与成本公式，qh 给出了退出码/probe/dry-run 这类验证抓手，云端会话给出的是「用点名命令证明完成」这类证据要求，但都是作者提出的评估方法或可判定接口，不是独立基准。
+- 涉密或受管环境要额外做安全审查与权限约束，不能直接照搬 `curl | bash` 类安装，也不能为了跑通 Claude Mods 示例而关掉组织托管保护；pi 的 pi-telemetry / pi-share-hf 会话导出等于把工作数据上传，需先确认合规；第三方插件集合要走组织审批流程；qh 的 lab overlay 不可放到不可信网络；做法 K 要走组织的套餐与 GitHub App 审批流程。
 
 ## 前置条件
 
@@ -133,9 +144,19 @@
 - 若要让 agent 自主驱动：安装器默认会把 `skill/SKILL.md` 装给 Claude Code 和 Grok（用 `-NoSkills` 可关掉）。
 - 一个非关键、可回退的环境；不要把 lab overlay 放到不可信网络。
 
+做法 K（Claude Code 云端会话）：
+- 有 Pro、Max、Team、Enterprise 计划之一，并用 claude.ai 账号登录（在 Claude Code 里跑 `/login`）。原文明确：云端会话随这四个计划提供，没有单独云机器费用，会话消耗计划用量；不适用于 Console API key 或第三方 provider。
+- 组织 owner 可能需要先在 claude.ai/code 为组织开启云会话。
+- GitHub：public repo 只需登录 GitHub；private repo 需要在拥有它的账号或组织安装 Claude GitHub App（组织通常需要 owner 批准）。Auto-fix、GitHub 触发的 routines 和 projects 也依赖该 App。
+- 走终端路径时已用 `gh` CLI，且在 Claude Code 里执行 `/web-setup`；Team/Enterprise 需要 owner 先开启 Quick setup。
+- 想让手机跟进，需要 Claude 手机应用的 Code tab 连接同一批会话。
+- 想用 routines / projects，需要能接受 research preview（routine）与 public beta（projects）。
+- 一个可回退的仓库和一条获准测试的任务；`claude --cloud` 会从 GitHub 克隆你当前分支，所以本地未 push 的 commit 要先 push。
+- 想用 `/teleport` 拉回本地收尾时：同一仓库、工作树干净（会提示 stash）、分支已 push。
+
 ## 操作步骤
 
-十条做法按环境选：要服务器、多人、持久工作区、共享目录、Git 审查、按轮用量成本记录，选做法 A；只有一台非生产机器、想要通用 agent 并愿意自己接 MCP，选做法 B；已经在单个真实项目里用 Claude Code、想把项目级规则和自动化触发固定下来，选做法 C；需要先读懂陌生代码库、要一个默认只读、bash 前询问权限的 plan 模式，选做法 D；已经用 ChatGPT 订阅、想在本机装官方 CLI 跑通一次终端编码任务，选做法 E；需要更深的运行时事件组合或受支持界面行为，且能满足一次性项目、合成数据、有回滚负责人等条件，才考虑做法 F；要在同一套流程里换模型供应商、准备把 agent 嵌进脚本或服务，并且愿意自己容器化隔离，选做法 G；已经在用 Claude Code、想先看清它在读写在跑什么、并在危险命令前设一道闸门，选做法 H；已经有 Codex App 桌面会话、想让审批和完成通知离开桌面，选做法 I；需要让 agent 在真实内核/网络的 guest 里执行命令、跑跨架构或内核/网络行为验证，选做法 J。做法 C 可以和 A 叠加：A 管服务器工作区与账号边界，C 管单个项目内的工具调用规则。做法 F 是做法 C 在 Claude Code 上的扩展面试点，不替代 Skills、MCP、经典 hook 或插件系统。做法 G 与它们不是替代关系：pi 提供的是「统一多提供商接口 + 可嵌入的 harness」，权限边界要你自己用容器补，原文明确把 OpenClaw 列为它的真实集成案例。做法 H 与做法 F 不是同一层：F 是 Anthropic 原生 function hooks 的受控试点（early access），H 是第三方插件集合，走 `claude plugin marketplace add` / `claude plugin install`，属于对已采用 Claude Code 的观察与守卫增强；两者都建立在做法 C 的项目级护栏之上，都不能替代 Skills、MCP、经典 hook。做法 I 与做法 E 也不是替代关系：E 管在本机装 Codex CLI 跑通终端任务，I 管把 Codex App 已有的桌面会话延伸到手机浏览器做异步审批与通知，模型和权限策略默认继承原会话，链路是手机 → 网关 → 原电脑（或经 SSH 到原服务器）；两者可以并存。做法 J 与 A–I 也不是同一层：A–I 管的是 agent 运行的环境、权限、护栏与观察面，J 补的是「执行目标系统」这一层——让需要真实内核/网络验证的任务在 QEMU guest 里跑；它能和做法 C 叠加（C 管项目规则与权限，J 管执行目标），也不替代 Skills、MCP、经典 hook 或容器化隔离。
+十一条做法按环境选：要服务器、多人、持久工作区、共享目录、Git 审查、按轮用量成本记录，选做法 A；只有一台非生产机器、想要通用 agent 并愿意自己接 MCP，选做法 B；已经在单个真实项目里用 Claude Code、想把项目级规则和自动化触发固定下来，选做法 C；需要先读懂陌生代码库、要一个默认只读、bash 前询问权限的 plan 模式，选做法 D；已经用 ChatGPT 订阅、想在本机装官方 CLI 跑通一次终端编码任务，选做法 E；需要更深的运行时事件组合或受支持界面行为，且能满足一次性项目、合成数据、有回滚负责人等条件，才考虑做法 F；要在同一套流程里换模型供应商、准备把 agent 嵌进脚本或服务，并且愿意自己容器化隔离，选做法 G；已经在用 Claude Code、想先看清它在读写在跑什么、并在危险命令前设一道闸门，选做法 H；已经有 Codex App 桌面会话、想让审批和完成通知离开桌面，选做法 I；需要让 agent 在真实内核/网络的 guest 里执行命令、跑跨架构或内核/网络行为验证，选做法 J；已经有 Claude Code 的 Pro/Max/Team/Enterprise 计划、想把边界清晰且需要独立验证的任务放到云端并行跑，选做法 K。做法 C 可以和 A 叠加：A 管服务器工作区与账号边界，C 管单个项目内的工具调用规则。做法 F 是做法 C 在 Claude Code 上的扩展面试点，不替代 Skills、MCP、经典 hook 或插件系统。做法 G 与它们不是替代关系：pi 提供的是「统一多提供商接口 + 可嵌入的 harness」，权限边界要你自己用容器补，原文明确把 OpenClaw 列为它的真实集成案例。做法 H 与做法 F 不是同一层：F 是 Anthropic 原生 function hooks 的受控试点（early access），H 是第三方插件集合，走 `claude plugin marketplace add` / `claude plugin install`，属于对已采用 Claude Code 的观察与守卫增强；两者都建立在做法 C 的项目级护栏之上，都不能替代 Skills、MCP、经典 hook。做法 I 与做法 E 也不是替代关系：E 管在本机装 Codex CLI 跑通终端任务，I 管把 Codex App 已有的桌面会话延伸到手机浏览器做异步审批与通知，模型和权限策略默认继承原会话，链路是手机 → 网关 → 原电脑（或经 SSH 到原服务器）；两者可以并存。做法 J 与 A–I 也不是同一层：A–I 管的是 agent 运行的环境、权限、护栏与观察面，J 补的是「执行目标系统」这一层——让需要真实内核/网络验证的任务在 QEMU guest 里跑；它能和做法 C 叠加（C 管项目规则与权限，J 管执行目标），也不替代 Skills、MCP、经典 hook 或容器化隔离。做法 K 管的是「会话跑在哪里」：每个任务分配一台全新 VM、仓库克隆到新分支、环境预装好，仓库内的 CLAUDE.md、rules、skills、agents、commands 随仓库进入云端，个人 ~/.claude 留在本地；它能和做法 C 叠加（C 管项目规则本身，K 管把这类任务放到云端并行跑），也不替代 Skills、MCP、经典 hook 或容器化隔离。
 
 ### 做法 A：在 Linux 服务器上搭自托管 agentbox 工作区
 
@@ -945,6 +966,125 @@ qh down
 
 诚实说明：原文给出的数据（`qh up` 约 2–5 秒到 agent 可应答、rootfs 打包 initramfs 约 0.3 秒、隧道约 15/75 KB/s、在 Windows 10 + QEMU 11 上测过）均为作者自述，无第三方复现；案例只有 Alpine 内核和一段 Android GKI 性能说明，没有 benchmark 脚本、没有对照基线、也没有第三方使用报告；自带 overlay 以 root、空密码启动 dropbear，README 自己标注 lab only。因此这条做法适合小范围试用（真实系统验证、跨架构验证），不适合全盘采用。与做法 C 叠加时：C 管项目级规则与权限，J 管「执行目标系统」；J 不替代 Skills、MCP、经典 hook 或容器化隔离。
 
+### 做法 K：用 Claude Code 云端会话把需要独立验证的任务放到一次性 VM 里跑
+
+Claude Code 云端会话是在 Anthropic 托管基础设施（或组织自托管环境）上运行的 Claude Code 会话。每个任务分配一台全新虚拟机，仓库克隆到新分支，环境预装好；可从 claude.ai/code、Claude 手机应用、Desktop、终端和 Slack 启动，并从浏览器、手机和 Desktop 跟进；完成后得到一个可开 PR 的分支。与本地会话的关键差异：每任务独立 VM / 独立分支 / 独立端口，不会互相改文件或抢端口；笔记本睡眠或断网后会话继续；GitHub token 不进入 VM（由代理持有），会话拿短期凭据且只能推自己的工作分支；仓库内的 CLAUDE.md、rules、skills、agents、commands 随仓库进入云端，个人 `~/.claude` 留在本地；闲置 VM 会被回收，重开得到新 VM 但恢复对话。
+
+下面每一步的命令、按钮名与配置项均来自该报告转述的原文，未在本次材料中独立验证；套餐包含关系、组织开关、routines/projects 的 preview/beta 状态都是原文自述。
+
+1. 开通并跑通第一个云端任务。前提：有 Pro/Max/Team/Enterprise 且用 claude.ai 账号登录；组织可能需要 owner 开启。原文的「Start in five minutes」是五步：
+
+1. 打开 claude.ai/code，或在 Claude Code 中运行 `/login` 并登录 claude.ai 账号。
+2. 连接 GitHub，并在仓库所属账号或组织安装 Claude GitHub App。
+3. 选择仓库和 Default 环境。
+4. 从 backlog 给 Claude 一个任务，并附上能证明完成的命令。
+5. 关掉标签页；之后从手机查看，最后在 claude.ai/code 审查 diff 并创建 pull request。
+
+```bash
+/login
+```
+
+预期结果：云端任务在一台新 VM 里从新分支开始跑，你可以离开浏览器。
+
+2. 连接 GitHub。前提：public repo 只需登录 GitHub；private repo 还需要在拥有它的账号或组织安装 Claude GitHub App；Auto-fix、GitHub 触发的 routines 和 projects 也依赖 App。三条路径按情况选：
+
+- 路径 A（推荐）：在 claude.ai/connect-github 连接 GitHub，然后在仓库所属账号或组织安装 Claude GitHub App；组织通常需要 owner 批准。
+- 路径 B（终端）：如果已用 `gh` CLI，在 Claude Code 中运行 `/web-setup`，把 gh token 发送到 Claude 账号。Team/Enterprise 需要 owner 先开启 Quick setup。
+
+```bash
+/web-setup
+```
+
+- 路径 C（跳过 GitHub 的一次性做法）：在没有 GitHub remote 或未安装 App 的仓库里运行 `claude --cloud`，Claude Code 会上传仓库 bundle；只有 GitHub 连接对该仓库有 push 权限时才能推回。
+
+```bash
+claude --cloud
+```
+
+常见故障（原文列出）：private repo 不在选择器里，通常是 App 未安装在拥有它的账号/组织，或 App 的 Repository access 未包含它；报错说必须是组织 owner 才能链接，通常是组织阻止了 membership check（待批准的 App 权限请求、IP allow list 或 SAML SSO）；SAML 跳过后组织仓库缺失，要在 GitHub 的 Single sign-on to your organizations 步骤为每个组织点 Authorize，或之后在 GitHub 设置中授权 Claude 再重连；每个云端会话都认证失败，可能是组织使用 IP allowlisting，需要让支持豁免 Anthropic 托管服务。
+
+3. 把任务写成自包含工单。前提：每个任务单独一个 session；沿文件边界切分并行任务。工单要写清：什么问题、完成定义、如何证明。原文示例提示词可直接复制：
+
+```bash
+claude --cloud "npm test fails maybe one run in four. Find the flaky test, fix the root cause in the code (not the test), and prove it by running the suite at least 30 times in a row."
+claude --cloud "docs/API.md is out of date with src/server.js. Rewrite it so every endpoint, parameter, default and response shape matches the code. Start the server and run each curl example to check it."
+claude --cloud "Make src/logger.js emit one JSON object per line, keep LOG_LEVEL, and log method, path, status and duration_ms as fields. Add a test for the logger."
+```
+
+预期结果：任务自带验收命令，会话结束时能拿出证据而不是只有总结。
+
+4. 并行清理 backlog。前提：先 `git push` 本地提交，因为 `claude --cloud` 会从 GitHub 克隆你当前分支。示例：
+
+```bash
+claude --cloud "Fix the flaky test in auth.spec.ts"
+claude --cloud "Update the API documentation"
+claude --cloud "Refactor the logger to use structured output"
+```
+
+可同时开多个 session；项目（Pro/Max public beta）可用协调会话启动并追踪云会话，按 working、waiting on you、ready for review 分组。
+
+5. 让会话自己证明修复。前提：环境里能跑测试/服务。flaky test 场景可要求跑 suite 200 次、bisect 50 个 commit 的回归、跑慢集成测试，或启动应用用 curl 打。前台命令默认 2 分钟超时（最多 10 分钟），之后在后台继续最多 30 分钟；可在环境变量里调整：
+
+```
+BASH_DEFAULT_TIMEOUT_MS
+BASH_MAX_TIMEOUT_MS
+```
+
+6. 本地计划、云端构建、终端收尾。前提：较大改动先在对答便宜的地方把方案定下来。步骤：
+
+```bash
+claude --permission-mode plan
+# ...agree on the plan, save it to docs/migration-plan.md, commit and push...
+claude --cloud "Execute the migration plan in docs/migration-plan.md"
+```
+
+云端构建时终端可做别的；完成后拉回本地手工收尾：
+
+```bash
+claude --teleport # pick a cloud session
+claude --teleport <session-id>
+```
+
+前提：同一仓库、工作树干净（会提示 stash）、分支已 push。Claude Code 内可用 `/teleport`（或 `/tp`），也可用 `/tasks` 然后 `t`。Desktop app 的 Open in 菜单可把本地会话送到云端。
+
+7. 手机查看和追问。前提：Claude 手机应用 Code tab 连接同一批会话。手机适合问那些到键盘前就忘掉的问题。原文示例：给第四个 session 问 tidepool 如何预测潮汐、在时间窗口边缘可能如何出错；它跑代码验证答案并发现真实 bug。
+
+8. 接管 CI 失败和 review 评论。前提：仓库安装 Claude GitHub App。在 claude.ai/code 的 CI bar 打开 Auto-fix；也可在终端 PR 分支运行 `/autofix-pr`，或在手机应用让 Claude watch PR，或把 PR URL 粘进 session。Claude 会推清晰修复并解释改了什么；模糊或架构问题会问你。review thread 的回复以你的 GitHub 用户名发布并标为 Claude Code。注意：Claude 不会收到与 base 分支的 merge conflict 通知，需要让它 rebase；它的评论也可能触发 comment-driven automation（如 Atlantis）。
+
+9. 用时间/事件触发工作。前提：routine（research preview）由保存的资源（prompt、repositories、connectors、environment）组成，每次 run 是一个 cloud session，由 trigger 启动。trigger 可以是 schedule（最快每小时）、对 routine endpoint 的 HTTP 调用，或 GitHub 事件（如 PR 打开、release）。可在 claude.ai/code/routines、Desktop app 或 CLI 里用 `/schedule` 创建。注意：routine 运行时没有审批提示，默认推送到 `claude/` 前缀分支。也可把 follow-up 排队进正在运行的 session：
+
+```bash
+claude -p "The integration tier is green now; rebase on main and push" --cloud <session-id>
+```
+
+还可以收藏预填 session 的 URL，例如：
+
+```
+claude.ai/code?prompt=Triage+the+newest+issues&repositories=acme-labs/tidepool
+```
+
+10. 运行不完全信任的代码。前提：贡献者 PR、新依赖安装脚本、刚 clone 的仓库等。云端 session 在一次性 VM 中运行，没有你的 SSH key、cloud CLI、浏览器配置，只有 session 级 GitHub 凭据，并可收窄网络。环境网络设为 None 最严格，或 Trusted（允许包 registry、GitHub 和主要云 SDK host）。注意：即使 None，Claude Code 仍会向 Anthropic API 发请求，数据可能以此离开 VM；session 仍可推自己的分支；所有出站流量经过代理并记录 hostname。
+
+11. 给 session 自检环境。前提：默认环境用 Trusted 网络、无变量、无 setup script，够大多数 JavaScript、Python、Go、Rust 仓库。
+   - setup script 在 Claude Code 启动前以 root 运行，可用 apt install；必须 exit 0 否则 session 不启动；应在约 5 分钟内完成以便环境缓存；之后新 session 从带工具的 snapshot 启动。改脚本或 allowed hosts 会重建缓存，约每 7 天重建。
+   - 项目级用 SessionStart hook：把 `npm install` 等放入仓库 `.claude/settings.json`，本地和云行为一致；只在云跑时检查 `CLAUDE_CODE_REMOTE`。Repository hooks 在单仓库 session 加载。
+   - 服务按 session 启动：缓存只存文件，之前运行的进程不会保留；让 Claude 跑 `service postgresql start`，或放进 SessionStart hook。
+   - 网络用能工作的最窄级别：Trusted 覆盖常见 registry；Custom 加私有 registry；Full 只在需要开放互联网时用；改动约 1 分钟到达运行中的 session。
+   - secrets 不要放共享变量：环境变量对使用该环境的人可见；Pro/Max 上环境 API credentials 可在 VM 外把 key 附加到你指定 host 的请求，key 不放在变量里。
+   - 命令写进 CLAUDE.md：个人 `~/.claude` 不到云 VM；需要知道怎么跑集成测试，仓库必须写。
+
+12. 养成降低返工的习惯。前提：按原文建议。
+   - 一个任务一个 session；小而独立的 session 更好审查、更便宜丢弃。
+   - 要求证据：点名证明完成的命令，先读 Claude 的 summary 再看 diff。
+   - `claude --cloud` 前先 push：VM 从 GitHub 克隆，未 push 的 commit 到不了。
+   - 长任务边做边 commit：闲置 VM 可能被回收。
+   - 在 diff view 审查：inline comments 会批处理进下一条消息，Create PR 可开完整 PR、draft 或 GitHub compose 页。
+   - Claude 工作时也可 steering：你发的消息会排队，也可撤回排队消息。
+   - 共享 session：Team/Enterprise 可把 session 可见性设为 Team，让 reviewer 读到改动如何产生；云端 session 的 commit 带 Claude-Session trailer 链接回 transcript。
+   - 注意限额：并行 session 并行消耗计划限额（原文此处截断）。
+
+诚实说明：本次调研正文在「五个 ses」处截断，因此并行 session 与计划限额的全部细节本手册无法给出。做法 K 的步骤、按钮名、环境变量名与故障排查均来自该报告转述的原文，未在本次材料中独立验证；原文没有给出「用了它以后结果是否更好」的对照评测或基准数据。
+
 ## 怎么判断变好了
 
 做法 A（agentbox）看成本与交付把关，不看「结果是否更好」：
@@ -1098,6 +1238,22 @@ qh down
 
 说明：qemu-harness 的原文没有任何「用了它以后 AI 的结果是否更好」的评测数据或基线对比；上面这套最小试用与对照方法沿用本手册的通用节奏（同类任务重复 3–5 次），属于作者主张而非基准数据。退出条件：如果最小链路在目标内核上跑不通（如 `agent did not respond` 且按排障仍无法解决），或该任务根本不需要真实系统环境，就停在这一步，不要为了用 VM 而用 VM。
 
+做法 K（Claude Code 云端会话）最小试用方式（先跑通一个任务，再考虑推广）：
+1. 有 Pro/Max/Team/Enterprise 计划并用 claude.ai 账号登录，连接 GitHub（public repo 只需登录；private repo 需安装 Claude GitHub App），并在 claude.ai/code 选择仓库和 Default 环境。
+2. 挑一个边界清晰、需要独立验证的任务（原文举例：修 flaky test、更新 API 文档、把 logger 改成结构化输出），按「什么问题 + 完成定义 + 如何证明」写成自包含工单，用 `claude --cloud "..."` 发起，并在工单里点名证明命令（如「把 suite 连跑 30 次」）。
+3. 关掉标签页，之后在手机或浏览器回来看进度；结束后在 diff view 逐条看改动。
+4. 同样的任务，用本地 Claude Code 会话（做法 C）再做一遍作为对照。
+5. 重复 3–5 次同类任务，看结果是否稳定。
+
+判断有没有改善的指标（本手册沿用做法 B 的节奏，原文没有给出效果数据，属作者主张）：
+- 是否拿到可判定的证据：点名的那条证明命令有没有真的跑、输出与退出码是否支持「完成」；
+- 人工介入次数与返工比例，相对本地基线的变化；
+- 从发起任务到「可审查 diff」的耗时（含你不在电脑前的时间）；
+- 并行多个 session 时的计划用量消耗（原文只说并行 session 并行消耗计划限额，正文在此截断）；
+- 是否出现需要你手动处理的 merge conflict（Claude 不会收到与 base 分支的冲突通知）。
+
+判定规则：能稳定拿到证据、返工不超过本地基线，再把更多同类任务迁到云端；否则先退回本地会话，把工单写得更自包含（问题、完成定义、证明命令三件都写清）再试。
+
 ## 常见坑
 
 - agentbox 的权限默认值：原文自述存在 bypassPermissions 默认权限、凭据可被终端用户读取、单机单进程等硬约束。账号凭据会传给容器内 CLI，有终端权限的用户可以读到。
@@ -1128,7 +1284,7 @@ qh down
 - Codex 独立安装脚本默认从 `https://releases.openai.com/codex` 下载，元数据或资源不可用时回退到 GitHub Releases；需要强制走 GitHub Releases 用 `CODEX_INSTALLER_USE_RELEASES_OPENAI_COM=false`。
 - Codex Web 是云端代理，原文没有任何关于定时、事件或状态触发的说明，不能据此做主动推进。
 - Codex 的 `curl | sh` / PowerShell `irm | iex` 同样是直接从网络下载脚本并执行；受管或涉密环境应先审阅脚本内容与来源，或改用 npm / brew / 手动下载二进制。
-- 不要把「服务器上默认放开」（agentbox 的 bypassPermissions 默认值）当成「项目内也可以不设白名单」；做法 C/D/G/H/J 的权限边界与 agentbox 的账号边界不是同一层。
+- 不要把「服务器上默认放开」（agentbox 的 bypassPermissions 默认值）当成「项目内也可以不设白名单」；做法 C/D/G/H/J/K 的权限边界与 agentbox 的账号边界不是同一层。
 - Claude Mods 源码目录明确标注接口为 early access，API 可能不通知就变；官方 9 月 9 日更新称「数周内」扩大发布，本审阅检查的 TypeScript 声明对应 Claude Code 2.1.273。
 - 不要混淆三个对象：社区仓库 `0xDarkMatter/claude-mods` 与 Anthropic 原生功能无关；第三方插件集合 `hamzafer/claude-code-mods`（做法 H）走 `claude plugin marketplace add` 安装；做法 F 说的是 Anthropic 原生 Claude Mods（function hooks）。
 - `/diff` 已是内置命令，会与你的实现争夺命令归属；「加载了一个目录」不足以证明某个 handler 真的跑了，要用测试或显式的非敏感诊断证据确认当前生效的实现。
@@ -1170,6 +1326,19 @@ qh down
 - qh 项目体量小，原文只有 Alpine 内核与一段 Android GKI 的性能说明，没有 benchmark 脚本、没有对照基线、也没有第三方使用报告；不要把它当成生产就绪的通用方案。
 - qh 的主动推进依据有限：`qh reload`、`fs/etc/qh.d/rc.local`、cmdline 的 `qh.init=/path` 钩子、`qh fwd`、`-n NAME` 只是可反复调用的执行接口，原文没有给出按时间/事件/状态触发的持续任务调度或循环执行机制。
 - 多个 qh VM 的状态存放在你运行命令的目录下的 `./.qh/<name>/`，用 `-n NAME` 区分；不要在同一目录里误用默认名，否则会互相覆盖状态。
+- 做法 K 的 `claude --cloud` 会从 GitHub 克隆你当前分支：本地未 push 的 commit 到不了云端，先 `git push` 再发起。
+- 闲置 VM 会被回收，重开得到新 VM 但恢复对话；长任务要边做边 commit，不要把成果留在未提交的工作树里。
+- secrets 不要放共享环境变量：环境变量对使用该环境的人可见；Pro/Max 上可用环境 API credentials 在 VM 外把 key 附加到你指定 host 的请求，key 不放在变量里。
+- setup script 在 Claude Code 启动前以 root 运行，必须 exit 0 否则 session 不启动；应在约 5 分钟内完成以便环境缓存；改脚本或 allowed hosts 会重建缓存，约每 7 天重建。
+- 云端环境的缓存只存文件，进程不会保留：Postgres 这类服务要按 session 启动（`service postgresql start`），或放进 SessionStart hook。
+- 网络用能工作的最窄级别，改动约 1 分钟到达运行中的 session；但即使设为 None，Claude Code 仍会向 Anthropic API 发请求，数据可能以此离开 VM；所有出站流量经过代理并记录 hostname——「网络关了」不等于「数据不出 VM」。
+- private repo 不在选择器里、组织链接报错、SAML 跳过后组织仓库缺失、每个会话都认证失败，各自有明确排查方向（App 安装范围与 Repository access、组织 membership check、逐个组织 Authorize、组织 IP allowlisting 需要支持豁免 Anthropic 托管服务）。
+- Claude 不会收到与 base 分支的 merge conflict 通知，需要让它 rebase；它的 review 评论以你的 GitHub 用户名发布并标为 Claude Code，还可能触发 comment-driven automation（如 Atlantis）。
+- routine 运行时没有审批提示，默认推送到 `claude/` 前缀分支；routine 是 research preview，schedule 最快每小时；projects 在 Pro/Max 上是 public beta。不要把它们当成已 GA 的审批链路。
+- 云端会话不适用于 Console API key 或第三方 provider；它随 Pro、Max、Team、Enterprise 计划提供，组织 owner 可能要先开启。
+- 并行 session 并行消耗计划限额（原文此处截断，完整说明本次材料没有给出）。
+- `--teleport` 拉回本地的前提是同一仓库、工作树干净（会提示 stash）、分支已 push；不满足就会失败。
+- 个人 `~/.claude` 不到云 VM：仓库里没写清楚的命令（例如怎么跑集成测试），云端会话就不知道，必须写进 CLAUDE.md。
 
 ## 证据与来源
 
@@ -1183,8 +1352,9 @@ qh down
 - 做法 H 依据调研《hamzafer/claude-code-mods》：安装命令 `claude plugin marketplace add hamzafer/claude-code-mods` / `claude plugin install mission-control@claude-code-mods`、`claude --plugin-dir mods/token-weather` 临时试用、`/mission`、`w` / `c` 快捷键、颜色语义（蓝=读、橙=写、绿=完成）、token-weather / where-am-i / next-steps / usage-meter / agent-radar / browser-lanes / replay-theater / md-preview、blast-radius 拦截 `rm -r` / force push / migration 并超时取消、glance / merge-gate / rulebook-guard / session-saver 的个人配置属性，均来自该报告转述的 README 自述。MIT 许可、CI badge、37 stars、mission-control 4x 演示图（两个子 agent + 一个 logout 功能落在四个文件上）、作者自述早期项目 cursor-commands 有 600+ stars 是可核对的「硬信息」；除此之外没有任何基准、耗时、token 节省或用户反馈数据，颜色语义的准确性、token-weather 阈值合理性、blast-radius 的拦截完整性、next-steps 建议质量均属作者主张。原文明确的前提是 Claude Code 2.1.287+（版本号本身无法从材料中验证）、Code 视图限 macOS + Chrome + 支持图片的终端；稳定性、上游升级兼容性、多插件同开的性能开销都未交代。做法 H 的最小试用与五项指标由调研报告提出，README 未给出。
 - 做法 I 依据调研《try2love/codex-mobile-bridge》：v1.3.1 桌面 App 的下载与安装步骤（Windows x64 Setup.exe / 完整 ZIP、macOS arm64 与 x64 DMG、Ubuntu .deb 实验性）、macOS 未公证提示与 `xattr -dr com.apple.quarantine` 命令、局域网网关启动、手机扫码登录（二维码 5 分钟内有效、仅一次、网关重启失效）、手机端可做的事（发消息、排队、撤回、停止、回应命令/文件/临时权限请求/提问卡片、切换模型与推理强度、选择 Skill、上传附件每消息最多 10 个且单个 1 字节至 20 MiB、总计不超过 100 MiB、计划模式/目标模式）、Bark 与 ntfy 通知配置、四种入口（临时 HTTPS · Cloudflare、自有服务器 + SSH、NAS / 已有反代、反向代理读取超时建议不少于 300 秒）、仅源码部署的命令行参数（`--lan`、`--tunnel --cloudflared`、`--origin`、`--set-password`、`--no-auth`）、安全与数据说明（密码至少 12 位、登录有效期默认 12 小时且可设 0–87600 小时、HTTP API/SSE/长轮询需登录并校验 Host 与 Origin、写操作另校验 CSRF、`.local/` 不应上传）、可直接复制给部署 Agent 的提示词，均来自该报告转述的仓库 README。来源是仓库 README，非 OpenAI 官方文档；当前 stars 为 32。作者主张包括：手机无需登录与电脑相同的 OpenAI 账号、不要求把模型 API key 放到手机、任务继续在原电脑或 SSH 服务器执行、模型请求沿用会话提供商与认证；未见独立性能数据或第三方评测。局限包括：社区项目、与 OpenAI 无隶属关系、依赖 Codex App 内部 IPC、App 更新后可能不兼容、macOS/Windows 实测范围需看 VERIFICATION.md、Linux 为实验性、无多用户角色隔离、云聊天与 SSH 文件下载未接入、复杂 MCP 表单与身份验证挑战需桌面处理、临时隧道地址会变化且无持续可用性保证、通知不承诺严格恰好一次投递。做法 I 的最小试用与指标来自该报告的验收维度（登录与访问保护、原 App 会话读取、同一会话发消息、手机回应、模型与 Skill、SSH、列表、外网、持续运行），属项目自述而非独立评测。
 - 做法 J 依据调研《b3s3da/qemu-harness》：一行安装与非交互安装参数、Linux/macOS 安装方式、`qh up --kernel alpine:aarch64` → `qh exec` → `qh down` 最小链路、`qh.json` 示例与全部 CLI 开关、overlay/pkgs/内核模块说明、常用命令表、`skill/SKILL.md` 接入 Claude Code 与 Grok、排障路径（`agent did not respond`、Git Bash 路径改写、TCG 加速）、性能说明（`qh up` 到 agent 可应答约 2–5 秒、rootfs 打包 initramfs 约 0.3 秒、无 virtio-net 的原版内核隧道约 15 KB/s 入、75 KB/s 出、在 Windows 10 + QEMU 11 上测试过），均来自该报告转述的 README 自述，属作者自述，无第三方复现。案例非常有限：只有 Alpine 内核，以及一段 Android GKI 的性能说明，没有 benchmark 脚本、没有对照基线，也没有第三方使用报告。明确的安全限制：自带 overlay 会以 root、空密码启动 dropbear，README 自己标注 lab only，不可放到不可信网络。「适合小范围试用而非全盘采用」是调研结论中的作者主张。做法 J 的最小试用与指标由调研报告提出（其验证抓手是 `qh exec` 的退出码与 `--json`、`qh probe`、`qh up --dry-run`），但原文没有任何关于「用了它以后 AI 的结果是否更好」的评测数据或基线对比。
-- 五条已有线索加 Claude Mods、pi、hamzafer/claude-code-mods、Codex Mobile Bridge、qemu-harness 都没有给出「AI 是否让结果变好了」的对照评测方法或基准数据。agentbox 的成本与用量指标属于记账维度；goose 没有任务效果指标；claude-code-pro-course 没有效果数据；OpenCode 与 Codex 的 README 也没有效果数据；Claude Mods 的验收矩阵与成本公式是作者提出的评估方法；pi 的原文同样没有效果数据，其会话导出只是留档路径；hamzafer/claude-code-mods 只有 README，没有基准、耗时、token 节省或用户反馈数据；Codex Mobile Bridge 的指标来自项目 README 自述的验收维度，没有独立性能数据或第三方评测；qemu-harness 的退出码/probe/dry-run 只是可判定接口与预检手段，没有效果评测或基线对比。做法 C、D、E、F、G、H、I、J 的「怎么判断变好了」分别沿用做法 B 或调研报告提出的最小试用方法与指标，属于作者主张。
-- 与清单的关系：agentbox 不替代 Claude Code，而是给它（以及 Codex CLI）提供自托管环境；goose 这条线索给出了可复制安装命令和通过 MCP 供给工具权限、通过定制发行版预置配置两条路径；claude-code-pro-course 给出了项目级护栏与自动化触发的可复制配置；OpenCode 补上了可复制的安装命令和 `build`/`plan` 权限分工，但 README 不含效果数据，不足以支撑 adopt，可作为把清单中 OpenCode（watch）推进到 try 的依据；Codex CLI 给出了安装与登录路径，并说明可作为 Cursor 里的智能体使用（同一层叠加），但原文只到首页，可作为对比参照，没有给出与 Cursor 的功能差异证据；Claude Mods 补上了 Claude Code 的运行时/界面扩展面、选型表、验收矩阵与成本口径，但处于 early access，适合受控试点而非直接采纳；pi 补上了「统一多提供商接口 + 可嵌入 harness」这一层，给出了安装、启动、登录、Nix 固定版本与三种容器化边界的可复制步骤，并把 OpenClaw 列为真实集成案例，但 README 是宣传 + 导览，扩展与容器化细节只给了链接，默认没有权限系统，没有效果数据，需要在容器里实测后再决定是否写进日常流程；hamzafer/claude-code-mods 补上了 Claude Code 会话内的实时观察面与危险命令闸门，给出了可复制的 marketplace 安装命令、快捷键和平台前提，足以小范围试，但材料只有 README，无实测数据，且 Code 视图限 macOS + Chrome；Codex Mobile Bridge 补上了「把 Codex App 桌面会话延伸到手机做异步审批与完成通知」这一层，给出了桌面 App 安装、局域网/临时 HTTPS/自有服务器 SSH/NAS 反代四种入口、Bark 与 ntfy 通知、命令行参数与安全说明等可照做的步骤，但材料同样只有 README，依赖 Codex App 内部 IPC，无多用户隔离，无独立评测，适合在局域网 + 账号密码下先小范围试；qemu-harness 补上了「让 agent 在真实（仿真）系统里执行并拿到可判定结果」这一层，给出了可复制的安装与最小链路命令、项目级 `qh.json`、SKILL.md 接入与排障路径，但项目体量小、自带 overlay 为 lab 用途、无评测数据，适合小范围试用；清单中相关条目是 Claude Code（tool，adopt），qh 接在它之下作为执行层补充。十条都可把评估从 watch 上调为 try，但都必须先读官方文档、审查安装脚本或社区项目源码，并做一次实际任务。
+- 做法 K 依据调研《Claude Code in the cloud: a field guide to cloud sessions》：五步起步流程、GitHub 连接的三条路径与四类常见故障排查、三条可直接复制的自包含工单提示词、并行 session 示例、`BASH_DEFAULT_TIMEOUT_MS` / `BASH_MAX_TIMEOUT_MS`、本地 plan + `claude --cloud` 执行 + `claude --teleport` 收尾、手机应用查看、Auto-fix 与 `/autofix-pr`、routine（research preview）的三种 trigger 与 `/schedule`、`claude -p "..." --cloud <session-id>` 与预填 URL、一次性 VM 与网络 None/Trusted、setup script 与 SessionStart hook、`CLAUDE_CODE_REMOTE`、服务按 session 启动、网络级别 Trusted/Custom/Full、环境 API credentials、CLAUDE.md 要写命令，以及一段降低返工的习惯清单，均来自该报告转述的原文。原文明确：云端会话随 Pro、Max、Team、Enterprise 计划提供、无单独云机器费用、组织 owner 可能需要开启、不适用于 Console API key 或第三方 provider；每任务独立 VM/分支/端口、笔记本睡眠或断网后会话继续、GitHub token 不进入 VM（由代理持有，会话拿短期凭据且只能推自己的工作分支）、仓库内 CLAUDE.md/rules/skills/agents/commands 随仓库进入云端、个人 `~/.claude` 留在本地、闲置 VM 被回收后重开得到新 VM 但恢复对话。调研结论「建议按文中步骤先开通并用它跑边界清晰、需要独立验证的任务，再决定是否推广」是作者主张；套餐包含与组织权限、routines/projects 的 preview/beta 状态均为原文自述，未在本材料中独立验证。**本次调研正文在「五个 ses」处截断**，因此「并行 session 与计划限额」的完整说明本手册无法给出。做法 K 的最小试用与指标沿用本手册通用节奏（同类任务重复 3–5 次），属作者主张；原文同样没有给出「AI 是否让结果变好了」的对照评测或基准数据。
+- 五条已有线索加 Claude Mods、pi、hamzafer/claude-code-mods、Codex Mobile Bridge、qemu-harness、Claude Code 云端会话都没有给出「AI 是否让结果变好了」的对照评测方法或基准数据。agentbox 的成本与用量指标属于记账维度；goose 没有任务效果指标；claude-code-pro-course 没有效果数据；OpenCode 与 Codex 的 README 也没有效果数据；Claude Mods 的验收矩阵与成本公式是作者提出的评估方法；pi 的原文同样没有效果数据，其会话导出只是留档路径；hamzafer/claude-code-mods 只有 README，没有基准、耗时、token 节省或用户反馈数据；Codex Mobile Bridge 的指标来自项目 README 自述的验收维度，没有独立性能数据或第三方评测；qemu-harness 的退出码/probe/dry-run 只是可判定接口与预检手段，没有效果评测或基线对比。做法 C、D、E、F、G、H、I、J、K 的「怎么判断变好了」分别沿用做法 B 或调研报告提出的最小试用方法与指标，属于作者主张。
+- 与清单的关系：agentbox 不替代 Claude Code，而是给它（以及 Codex CLI）提供自托管环境；goose 这条线索给出了可复制安装命令和通过 MCP 供给工具权限、通过定制发行版预置配置两条路径；claude-code-pro-course 给出了项目级护栏与自动化触发的可复制配置；OpenCode 补上了可复制的安装命令和 `build`/`plan` 权限分工，但 README 不含效果数据，不足以支撑 adopt，可作为把清单中 OpenCode（watch）推进到 try 的依据；Codex CLI 给出了安装与登录路径，并说明可作为 Cursor 里的智能体使用（同一层叠加），但原文只到首页，可作为对比参照，没有给出与 Cursor 的功能差异证据；Claude Mods 补上了 Claude Code 的运行时/界面扩展面、选型表、验收矩阵与成本口径，但处于 early access，适合受控试点而非直接采纳；pi 补上了「统一多提供商接口 + 可嵌入 harness」这一层，给出了安装、启动、登录、Nix 固定版本与三种容器化边界的可复制步骤，并把 OpenClaw 列为真实集成案例，但 README 是宣传 + 导览，扩展与容器化细节只给了链接，默认没有权限系统，没有效果数据，需要在容器里实测后再决定是否写进日常流程；hamzafer/claude-code-mods 补上了 Claude Code 会话内的实时观察面与危险命令闸门，给出了可复制的 marketplace 安装命令、快捷键和平台前提，足以小范围试，但材料只有 README，无实测数据，且 Code 视图限 macOS + Chrome；Codex Mobile Bridge 补上了「把 Codex App 桌面会话延伸到手机做异步审批与完成通知」这一层，给出了桌面 App 安装、局域网/临时 HTTPS/自有服务器 SSH/NAS 反代四种入口、Bark 与 ntfy 通知、命令行参数与安全说明等可照做的步骤，但材料同样只有 README，依赖 Codex App 内部 IPC，无多用户隔离，无独立评测，适合在局域网 + 账号密码下先小范围试；qemu-harness 补上了「让 agent 在真实（仿真）系统里执行并拿到可判定结果」这一层，给出了可复制的安装与最小链路命令、项目级 `qh.json`、SKILL.md 接入与排障路径，但项目体量小、自带 overlay 为 lab 用途、无评测数据，适合小范围试用；Claude Code 云端会话补上了「会话跑在哪里」这一层，给出了五步起步、GitHub 接入三条路径、自包含工单提示词、并行 session、teleport 回本地收尾、Auto-fix、routine 触发、环境与网络自检等可照做的步骤，但依赖套餐与组织权限、routines/projects 属 preview/beta、本次材料在「五个 ses」处截断，适合先跑一个边界清晰的任务再决定是否推广；清单中相关条目是 Claude Code（tool，adopt），云端会话接在它之下作为执行位置的选择。十一条都可把评估从 watch 上调为 try，但都必须先读官方文档、审查安装脚本或社区项目源码，并做一次实际任务。
 
 ## 依据的调研
 
@@ -1198,3 +1368,4 @@ qh down
 - [hamzafer/claude-code-mods](../research/radar/2026-10-04/1071-hamzafer-claude-code-mods.md)：值得一试，建议在受控项目里小范围试装 mission-control（配合 token-weather、按需 blast-radius），用实时视图观察 agent 读了哪些文件、写了什么、上下文还剩多少，并在危险命令前设一道闸；理由是 README 给出了可直接照抄的安装命令、快捷键和版本要求，属于可执行流程，但全部依据仅为该 README，无实测数据，且部分视图依赖特定 Claude Code 版本与 macOS/Chrome 环境。
 - [try2love/codex-mobile-bridge](../research/radar/2026-10-04/1187-try2love-codex-mobile-bridge.md)：值得一试，建议在单台 macOS/Windows 电脑上加装该桌面 App，先在局域网和账号密码模式下小范围试用，把已有 Codex 会话接到手机做异步审批和完成通知；原因是它给出了可照做的安装、启动、通知和部署 Agent 步骤，但依赖 Codex App 内部 IPC、属社区项目，外网暴露和安全边界需自行验收。
 - [b3s3da/qemu-harness](../research/radar/2026-10-06/1581-b3s3da-qemu-harness.md)：值得一试，先在一台 Windows 或 Linux/macOS 机器上按 README 跑通「qh up → qh exec → qh down」这条最小链路，再用自带的 skill/SKILL.md 把它接给 Claude Code，让需要真实系统验证的任务在 guest 里执行；理由是原文给出了可直接复制的安装命令、完整 CLI 用法、qh.json 配置和排障路径，能补上 agent 缺少真实内核/网络执行环境这一环，但项目体量小、自带 overlay 为 lab 用途，适合小范围试用而非全盘采用。
+- [Claude Code in the cloud: a field guide to cloud sessions](../research/radar/2026-10-07/1611-claude-code-in-the-cloud-a-field-guide-to-cloud-se.md)：值得一试，建议按文中步骤在 Claude Code 套餐中开通云端会话，先把边界清晰、需要独立验证的任务（如修 flaky test、更新 API 文档、结构化日志）以自包含工单+证明命令的方式并行跑起来，再决定是否推广；理由是原文给出了可直接复制的命令、环境配置、GitHub 接入与证据要求，但依赖套餐/组织权限且 routines/projects 等仍属 preview/beta。
