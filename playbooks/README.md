@@ -4,6 +4,7 @@
 
 | 手册 | 解决的问题 | 先试这一步 | 最近修订 |
 |---|---|---|---|
+| [让 coding agent 长期在线，崩溃重启后还能接着干](build-agent-from-scratch.md) | 解决把 AI 从聊天框搬到项目里、补齐 harness 与生产分层，并让 coding agent 可持久恢复、可观测、可验证的问题。 | 先选一条最小路线：跑通 learn-claude-code 的 s01，或用 Pi Durable 的 SQLite 骨架提交一个带稳定 requestId 的任务，验证进程重启后能继续。 | 2026-10-06 |
 | [小范围试装技能包，用对照验证效果，并审计自己的 SKILL.md](build-and-install-agent-skills.md) | 解决「装了一个技能包后不确定它是否真的减少了返工，以及自己写的 SKILL.md 质量无法复核」的问题。 | 选一个非关键项目，只装一个技能包，对同一任务做有/无技能的 3 次对照；如果你已经在写自己的 SKILL.md，先跑一次 `python3 scripts/validate_skill.py --all ~/.claude/skills` 拿到基线。 | 2026-10-06 |
 | [让编码 agent 在可控环境里反复跑：工作区、项目护栏、实时观察与系统级验证](host-coding-agents.md) | 把编码 agent 从「在本机随手跑一次」变成「在可控环境里、按项目规则反复跑」，能实时看到它在读什么、写什么，需要时还能在真实（仿真）系统里执行并拿到可判定结果。 | 先在单个真实项目里落地最便宜的护栏：短 `CLAUDE.md` + allow/ask/deny 权限 + 一个 PostToolUse 格式化 hook（做法 C），用 Plan mode 跑完一次并记录手工基线。 | 2026-10-06 |
 | [在投稿与审稿前，用 AI 找出论文里没人掌舵、没人核对的痕迹](audit-ai-generated-papers.md) | 论文由 AI 参与产出却无人负责时，如何在投稿前自查、在审稿时分诊，并让每条命中都落到可定位、可核对的对象上。 | 克隆仓库后用 ./install.sh --project 把两个 skill 装到项目内，先对自己的 2–3 篇论文跑一遍 python tools/slop_lint.py paper/ --source -o lint.md 和 paper-author-pass（audit 模式），人工复核命中。 | 2026-10-06 |
@@ -23,7 +24,6 @@
 | [让 agent 做架构清点：只要数字，不要意见](architecture-review-with-agents.md) | 把架构审查从主观评论改成可核对、可复测的计数任务，找出重复实现、重复公式和副本不一致。 | 选一个最令人痛苦的系统，在 AGENTS.md / CLAUDE.md 里写 2–3 条可计数的架构规则，让 Claude 只按这些规则清点文件数、公式副本数和不一致处数。 | 2026-10-03 |
 | [让 AI 的改动拿出证据：先建评测爬坡，再用回归闸门验收](build-and-run-evals.md) | 别再靠感觉判断改动有没有变好：文本类改动（prompt、skill、参数）用自动评测加爬坡来改，代码改动用「重置基线 + 还原测试文件 + 有新失败即判 0 + 部分得分」的回归闸门来验收。 | 挑一个能反复跑的对象（system prompt、skill、工具描述，或一处分代码改动），只做一件事：要么先跑出带置信区间的 baseline，要么先把回归守门的评分伪代码抄进现有流程，并用两个对照 patch 确认「新出现的失败」真的会让改动被判 0。 | 2026-10-03 |
 | [给 agent 补上外部平台读取能力：先预览安装，再体检守稳定性](web-access-for-agents.md) | 怎么以最小风险让已经能跑命令行的 agent 获得读网页、YouTube、RSS、GitHub、B站等外部平台的能力，并在某个渠道失效时能定位和换路。 | 先跑 `agent-reach install --env=auto --dry-run` 预览，或把「帮我安全检查并安装 Agent Reach」的安装提示词交给 Agent，再用 `agent-reach doctor` 确认每个渠道当前走哪条路。 | 2026-10-03 |
-| [让 AI 在你项目里持续干活：搭 harness、补生产分层、定位它为什么卡住](build-agent-from-scratch.md) | 解决“AI 只在聊天框里说话、自建 Agent 不可靠不可控、出了问题只能靠回放提示词猜”三件事：补齐可操作的 harness 环境、补齐生产级分层，并在慢/卡/失败时用真实 telemetry 定位。 | 先把 harness 五件套（Tools / Knowledge / Observation / Action Interfaces / Permissions）按你当前的真实任务填一遍，缺哪项补哪项，然后跑一个真实小任务看它能不能自己闭环。 | 2026-10-03 |
 | [让 agent 在可测量的窄目标上爬坡：先立基线，再锁死只能下降的基准](performance-optimization-with-agents.md) | 怎么让 agent 只在能重复测量、有正确性判据的窄目标上做优化，并用只能变好的基准和独立复现防止收益回退。 | 挑一个有明显性能痛点、能用一条命令重复启动的任务，先手工跑 2–3 次量出基线波动范围，再让 agent 在同一个测量上动手。 | 2026-10-02 |
 | [让 AI 写码时你仍然做决定：用检查点边做边学](learn-while-coding-with-agents.md) | 在 Claude Code 这类 AI 编码工具里，如何通过分段检查点保留自己的方案判断和设计决策，避免变成只看结果的旁观者。 | 在一个小项目里安装 VibeWise 并运行 /vibe-wise:learn，让 Claude 实现一个小功能，完整走一遍 Build→Design→Implementation 检查点。 | 2026-10-02 |
 | [让模型用受控语言解释内容，让读者少追问](controlled-language-explanations.md) | 当你需要别人准确读懂一段模型输出或技术解释时，如何用受控语言约束模型的写法，并用可观察的读者反馈判断有没有变好。 | 挑一份需要别人读懂的解释性文本，让模型用 `Explain <要解释的内容> in ASD-STE100.` 改写一版，先自己并排读原版和改写版。 | 2026-10-02 |
