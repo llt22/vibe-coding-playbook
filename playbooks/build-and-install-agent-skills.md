@@ -1,16 +1,16 @@
-# 让编码 agent 的技能包经得起一周对照
+# 小范围试装技能包，用对照验证效果，并审计自己的 SKILL.md
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：你已经在用编码 agent，但每次装技能包都凭安装成功就认为有效，这篇手册给出一套可照做的小范围试装、对照验证、按需沉淀技能与路由工作流的流程。
-> 先试这一步：选一个非关键项目，只装一个技能包，用同一任务做有/无技能的对照，各跑 3 次并记录返工轮数与人工纠正次数。
+> 解决的问题：解决「装了一个技能包后不确定它是否真的减少了返工，以及自己写的 SKILL.md 质量无法复核」的问题。
+> 先试这一步：选一个非关键项目，只装一个技能包，对同一任务做有/无技能的 3 次对照；如果你已经在写自己的 SKILL.md，先跑一次 `python3 scripts/validate_skill.py --all ~/.claude/skills` 拿到基线。
 > 最近修订：2026-10-06
 
 ## 解决什么问题
 
-你已经在用编码 agent，但每次都要重复描述同一套工程规范，或者不确定装一个技能包是否真的减少了返工——甚至因为一次装太多，上下文反而更乱。这篇手册给出一个可照做的流程：先小范围试装一个现成技能包，用同一任务做有/无技能的对照，确认有效后再考虑把自己的重复工作写成 `SKILL.md`，或者把一本反复查阅的技术书、一份内部文档半自动转成按需加载的技能。
+你已经在用编码 agent，但每次都要重复描述同一套工程规范，或者不确定装一个技能包是否真的减少了返工——甚至因为一次装太多，上下文反而更乱。这篇手册给出一个可照做的流程：先小范围试装一个现成技能包，用同一任务做有/无技能的对照，确认有效后再考虑把自己的重复工作写成 `SKILL.md`（并用 skill-creator-plus 审计和改进它），或者把一本反复查阅的技术书、一份内部文档半自动转成按需加载的技能。
 
-它也覆盖一批具体场景：让 agent 代理编码 CLI 跑长任务并拿硬证据验收；给 agent 补一块行业设计知识；把一句模糊想法写成可让 agent 独立跑几小时的任务书；写一个把会话状态嵌进界面的 Claude Code mod；让 agent 把一句话描述／一个代码仓库变成可交互的架构图、工作流图、时序图、数据流图、生命周期图，或者把自然语言需求与已有的 draw.io / Mermaid / Excalidraw 源文件改成自包含的 HTML+SVG 图、并让它长得像你的品牌；让 agent 检索中国金融市场数据；把移动端模拟器与真机画面接进 Codex 聊天；把多步复杂任务拆成三阶段并加门禁；把中英文学术写作去模板化改写，同时用命题级核对保住数字、引文与证据强度（做法 Y）；让路由技能自动选工作流并对 bug 交出失败→通过证据（做法 Z）；按职能只装少量 agent 角色并用真实任务与默认提示对照（做法 AA）；在 T3 Code 里用 p3-stack 按 playbook 路由，并用 worktree 与 PR 监视减少等待和冲突（做法 AB）。
+它也覆盖一批具体场景：让 agent 代理编码 CLI 跑长任务并拿硬证据验收；给 agent 补一块行业设计知识；把一句模糊想法写成可让 agent 独立跑几小时的任务书；写一个把会话状态嵌进界面的 Claude Code mod；让 agent 把一句话描述／一个代码仓库变成可交互的架构图、工作流图、时序图、数据流图、生命周期图，或者把自然语言需求与已有的 draw.io / Mermaid / Excalidraw 源文件改成自包含的 HTML+SVG 图、并让它长得像你的品牌；让 agent 检索中国金融市场数据；把移动端模拟器与真机画面接进 Codex 聊天；把多步复杂任务拆成三阶段并加门禁；把中英文学术写作去模板化改写，同时用命题级核对保住数字、引文与证据强度（做法 Y）；让路由技能自动选工作流并对 bug 交出失败→通过证据（做法 Z）；按职能只装少量 agent 角色并用真实任务与默认提示对照（做法 AA）；在 T3 Code 里用 p3-stack 按 playbook 路由，并用 worktree 与 PR 监视减少等待和冲突（做法 AB）；审计并改进自己的 `SKILL.md`，把机械问题变成可复核的检查项（做法 AC）。
 
 ## 适用与不适用
 
@@ -27,6 +27,7 @@
 - 想让 agent 自己选工作流（复现 → 调查 → 委派修复 → 重跑失败用例）并对 bug 交出失败与通过的证据（做法 Z）。
 - 想按职能给 agent 补一个专业角色（代码审查、前端、无障碍、FinOps 等），并且只装少量角色（做法 AA）。
 - 已经在 T3 Code 环境里工作，想让路由技能按 playbook 挑流程，并用 worktree、PR 监视、定时任务和线程记忆减少手工轮询与冲突（做法 AB）。
+- 已经在写自己的 `SKILL.md`，想用可逐条勾选的规则审计它、拿到基线再改，并把「技能写得好不好」变成可复核的检查项（做法 AC）。
 
 不适用：
 
@@ -37,6 +38,7 @@
 - Z 的完整工作流定义在未抓取的 `docs/reference.md` 与 `SKILL.md` 中，本次无法核对实际步骤；需要 harness 支持插件/hook，Codex 需额外信任 hook；按角色配 effort 依赖插件自带 agent 存在；skills 会把 session transcripts 等读取内容发往模型 provider。
 - AA 只给了角色目录，没给任何一个 agent 文件的内容，也没有效果证据；OpenCode 运行时约 119 个 agent 上限，超出会被静默丢弃。
 - AB 必须在 T3 Code 环境内使用；`delegate_task`、`t3_thread_launch`、`watch_pull_request`、`schedule_task`、`t3_thread_read`、`t3_thread_search`、`preview_*`、`device_*` 都只有名称和一句话用途，没有命令语法或配置样例；没有 T3 Code 就最多只能读它的 skill / playbook 设计思路，不要照搬。
+- AC 只覆盖 Claude 生态（Claude Code / claude.ai）、对象是 `SKILL.md` 形态的技能；材料只有 README，没有源码与 `references/` 正文，NM1–NM5 等关于新模型的论断仅为作者主张；validator 只能证明格式与规则合规，不能证明产出更好。
 
 ## 前置条件
 
@@ -70,10 +72,11 @@
 - Z：先装好对应 harness（Claude Code / Codex / Pi 之一）；Codex 需先通过 `/hooks` 信任路由 hook；Pi 需要 extension 提供的 subagent、question、wake-up 工具；按角色配 effort 依赖插件自带的 `pstack:effort-<level>` / `pstack:poteto-agent-<level>` agent 存在。
 - AA：本地有 git 与 bash；脚本方式需本地有仓库（原文未给 clone 命令，只说明脚本方式需本地有仓库）；app 方式需 macOS/Linux/Windows 桌面环境；已安装目标工具（如 Claude Code 且有 `~/.claude/agents/` 目录）；仓库内有 `strategy/runbooks.json` 且本地有 python3 才能按 runbook 整队安装。
 - AB：一台能跑 T3 Code 的机器；T3 Code 从 `~/.agents/skills/` 读取 skills；已装 git；有可用的 provider/model 凭据；git 的 worktree 与分支能力可用；需要浏览器与设备模拟器时，T3 Code 提供 `preview_*` / `device_*`。
+- AC：Claude Code 环境（有 `~/.claude/skills` 或项目内 `.claude/skills`）或 claude.ai 账号（validator 需开启代码执行）；本地 Python 3.8+（validator 只用标准库）；对象是已有的 `SKILL.md` 文件夹。
 
 ## 操作步骤
 
-怎么选：先做做法 A；A 里某个技能确实有效、且你有一件每周重复且规范明确的工作，再做做法 B。其余按场景选：C 多来源知识打包；D 补模型端点/权限/搜索；E 中文技术文档写作与审稿；F 单篇论文精读；G 写一个 Claude Code mod；H 用 Cline CLI 代理长任务拿硬证据验收；I 补 UI/UX 设计知识；J 出带交互的单文件 HTML 图；K 出品牌一致的静态 HTML+SVG 图；L 从大插件市场只装一个单元并按任务档位选模型；M 把书或内部文档转成按需加载技能；N 把模糊想法写成任务书并给破坏性操作加闸门；O 补 Postgres 领域知识与版本化文档检索；P 在授权安全场景按主题加载安全技能库；Q 把多步任务拆成三阶段加门禁；R 装一套小而可组合的工程技能集；S 从 google/skills 按任务只装一个；T 让 agent 检索中国金融市场数据并核对来源与时间戳；U 把移动端模拟器与真机画面接进 Codex 聊天；V 用一行 curl 装单个 Markdown 技能；W 用元技能观察你怎么用技能；X 装一套全栈开发技能包按请求自动激活；Y 把中英文学术写作去模板化改写并用命题核对保住事实；Z 用路由技能自动选工作流并对 bug 交出失败→通过证据；AA 按职能只装少量 agent 角色并用真实任务与默认提示对照；AB 在 T3 Code 里用 p3-stack 按 playbook 路由并用 worktree/PR 监视减少等待与冲突。
+怎么选：先做做法 A；A 里某个技能确实有效、且你有一件每周重复且规范明确的工作，再做做法 B。其余按场景选：C 多来源知识打包；D 补模型端点/权限/搜索；E 中文技术文档写作与审稿；F 单篇论文精读；G 写一个 Claude Code mod；H 用 Cline CLI 代理长任务拿硬证据验收；I 补 UI/UX 设计知识；J 出带交互的单文件 HTML 图；K 出品牌一致的静态 HTML+SVG 图；L 从大插件市场只装一个单元并按任务档位选模型；M 把书或内部文档转成按需加载技能；N 把模糊想法写成任务书并给破坏性操作加闸门；O 补 Postgres 领域知识与版本化文档检索；P 在授权安全场景按主题加载安全技能库；Q 把多步任务拆成三阶段加门禁；R 装一套小而可组合的工程技能集；S 从 google/skills 按任务只装一个；T 让 agent 检索中国金融市场数据并核对来源与时间戳；U 把移动端模拟器与真机画面接进 Codex 聊天；V 用一行 curl 装单个 Markdown 技能；W 用元技能观察你怎么用技能；X 装一套全栈开发技能包按请求自动激活；Y 把中英文学术写作去模板化改写并用命题核对保住事实；Z 用路由技能自动选工作流并对 bug 交出失败→通过证据；AA 按职能只装少量 agent 角色并用真实任务与默认提示对照；AB 在 T3 Code 里用 p3-stack 按 playbook 路由并用 worktree/PR 监视减少等待与冲突；AC 审计并改进自己的 SKILL.md。
 
 几组容易混的：
 
@@ -89,7 +92,8 @@
 - Z 与 A：Z 同样走插件市场安装，但核心是 `poteto-mode` 路由技能与按角色配模型/推理强度；A 是通用小范围试装流程，Z 也必须套用 A 的对照方法。
 - AA 与 X / R：AA 装的是按职能组织的 agent 角色文件（可只装一个 division 或几个 agent），X 是一个 Claude Code 全栈技能包按请求自动激活，R 是一套小而可组合的工程技能集；AA 没有自动激活机制，需在会话里显式激活角色。
 - AB 与 Z：两者都是 pstack 家族。Z 是 `pstack-claude`，把 pstack 移植到 Claude Code、Codex、Pi，核心是 `poteto-mode` 路由技能与按角色配模型/推理强度；AB 是 `p3-stack`，把同一套技能、原则和话术在 T3 Code 上重写，核心编排原语换成 `delegate_task`、`t3_thread_launch`、`watch_pull_request`、`schedule_task`、`t3_thread_read/search`、`preview_*` / `device_*`。已经在 T3 Code 里工作才选 AB；否则先用 Z 或只读 AB 的 playbook 设计。
-- E、F、G、H、I、J、K、L、M、N、O、P、Q、R、S、T、U、V、W、X、Y、Z、AA、AB 都必须套用 A 的对照方法，不要跳过验证直接纳入常规流程。
+- AC 与 B/R/W：B 是把你自己的重复工作写成 `SKILL.md`；R 是先用别人拆好的一整套技能集；W 观察你怎么用技能并产出 staged 更新；AC 不替你写新技能，也不观察你，它审计你已有的 `SKILL.md`（或新建骨架），先把机械问题变成可复核的检查项。
+- E、F、G、H、I、J、K、L、M、N、O、P、Q、R、S、T、U、V、W、X、Y、Z、AA、AB、AC 都必须套用 A 的对照方法，不要跳过验证直接纳入常规流程。
 
 ### 做法 A：先用现成技能包做小范围试装（推荐先做）
 
@@ -1260,6 +1264,69 @@ README 给出质量门禁 `skill-seekers quality output/react/ --threshold 7`，
 4. 无人值守：`schedule_task` 挂的审计/过夜任务，在没有活跃回合时是否照常执行并留下可读结果。
 5. 返工率：同一类任务相比你原来的做法，人工修正次数、返工轮次是否下降；交付证据（截图、录像、PR）是否让你少做一轮核对。只要第 2、4、5 项没有可观察的改善，就说明这套编排只是换了名字的流程包装，应降级为「只读它的 playbook 与 principle 设计」。
 
+### 做法 AC：用 skill-creator-plus 审计并改进自己的 SKILL.md（可选，按 A 的对照法验证）
+
+定位：robonuggets/skill-creator-plus 是一个免费的 Claude「技能（skill）」审计/构建/改进工具，MIT 许可，31 stars。用法是把它指向一个技能（或整个技能文件夹），它先输出 findings report：每条规则标 pass / fail / not applicable，附文件与行号的证据，以及建议的修法；在你指定要应用哪些修复之前，它不动任何文件。仓库自述共 46 条规则，按检查方式分三类：**Script**（validator 脚本判定）、**Script + read**（脚本标出候选，Claude 在上下文中确认）、**Read**（Claude 审计时判断并引用证据），另有少量标为 **Advice**。规则分族：FM/DS（frontmatter 与 description）、ST（结构与渐进披露）、CT（内容质量）、WF（工作流）、SC（脚本）、NM（适配新模型）、HK（hook）、TS（测试与评估）、LB（库级冲突）。
+
+1. 前提：Claude Code 环境（有 `~/.claude/skills` 或项目内 `.claude/skills`），或 claude.ai 账号（validator 需要打开代码执行）；本地需 Python 3.8 或更新版本，validator 只用标准库，Windows/Mac/Linux 均可。文件夹名必须是 `skill-creator-plus`。
+
+2. 安装到 Claude Code（对所有项目生效）：
+
+   ```bash
+   git clone https://github.com/robonuggets/skill-creator-plus ~/.claude/skills/skill-creator-plus
+   ```
+
+3. 或只对单个项目生效（在项目目录下执行）：
+
+   ```bash
+   git clone https://github.com/robonuggets/skill-creator-plus .claude/skills/skill-creator-plus
+   ```
+
+   Windows 上 `~/.claude` 就是用户目录下的 `.claude` 文件夹；从 GitHub 下载 ZIP 解压后复制进去也可以。
+
+4. 要在 claude.ai 上用：把 `SKILL.md`、`references/`、`scripts/`、`LICENSE` 打成 zip（`examples/` 可以不放），在 claude.ai 设置的 Skills 里上传；frontmatter 只使用 claude.ai 接受的字段；validator 需要开启代码执行。
+
+5. 用自然语言触发，三种模式：
+
+   - AUDIT：说 “Audit my deploy skill against Anthropic's rules.” / “Check every skill in ~/.claude/skills and tell me what to fix first.” → 得到一张报告：每规则一行，失败优先，修复项排好序。你挑选之前不编辑任何文件。
+   - NEW：说 “Make this a skill, we write release notes like this every Friday.” → 先给测试提示，然后生成一个能通过 validator 的新技能文件夹。
+   - REFINE：说 “The report skill keeps forgetting the date filter. Fix the skill.” → 规则围绕它的理由重写，通常比原来更短。
+
+   “Improve my skill for Opus 5.5” 会先跑 AUDIT，再按你批准的修复跑 REFINE。
+
+6. 先拿机械检查的基线，再动手改：
+
+   ```bash
+   python3 scripts/validate_skill.py path/to/my-skill              # 一个技能
+   python3 scripts/validate_skill.py --all ~/.claude/skills         # 文件夹里所有技能，输出一张表
+   python3 scripts/validate_skill.py path/to/my-skill --json       # 机器可读
+   python3 scripts/validate_skill.py path/to/my-skill --ban-em-dash # 额外标记破折号
+   ```
+
+   退出码：`0` 无 error（warning 和 note 可以存在）、`1` 发现 error、`2` 跑不起来。每条 finding 带一个规则 ID。`--all` 的汇总表形如：
+
+   ```text
+   Skill       Errors  Warnings  Notes  Rules with errors or warnings
+   ----------  ------  --------  -----  -----------------------------
+   pdf-helper       8        11      6  FM1 FM2 ST4 ST5
+   ```
+
+7. 新建技能时先出骨架：
+
+   ```bash
+   python3 scripts/init_skill.py my-new-skill --path ~/.claude/skills --refs --scripts
+   ```
+
+8. 按报告逐条修：先清 error 再管 warning（README 示例结尾即 “fix the errors first”）；每条修复都能定位到文件与行号。
+
+9. 把「每次运行都必须成立」的规则从正文挪进 hook（frontmatter 的 `hooks:`），因为正文可能被跳过或被 compaction 截断（规则 HK1）。相应地把最重要的指令放在 `SKILL.md` 最靠前的位置——Claude Code 的 compaction 只保留前 5,000 tokens（规则 ST2）。
+
+10. 验证环节要显式写出来，并优先让一个全新上下文的 Claude 当 checker，而不是让模型自审（规则 NM5）；不要要求模型在回复里写出推理过程，改要答案或对答案的简短解释（NM2）。
+
+11. 可从规则表直接照做的几条硬指标（原文列出，可原样当检查项）：description 用第三人称、不超过 1,024 字符、不含 XML 标签（DS1–DS2）；`SKILL.md` 正文少于 500 行（ST1）；引用文件只从 `SKILL.md` 往下一层（ST4）；超过 100 行的引用文件前 50 行内要有内容清单（ST5）；路径统一用正斜杠（ST7）；不写时效性信息（CT3）；不留 `TODO`/`FIXME`/空占位（CT9）；复杂任务用带 done when 行和回退行的清单（WF1）；至少 3 个评估、先建评估并留基线（TS1）。
+
+12. 按 A 的对照法验证：挑 1–2 个你已经在用的 Claude 技能，装好后跑 `python3 scripts/validate_skill.py --all ~/.claude/skills` 和 `--json` 存基线；只对其中一个技能说 Audit 并改 2–3 条，复跑同一命令；另一个技能不动作对照。再用几个真实请求试触发正确率；同一真实任务在全新会话里开/关技能跑 A/B（对应 TS2、TS3）。已知局限：材料只有 README，没有源码与 `references/` 正文，validator 是否真与 46 条规则一致无法核实；NM1–NM5 等关于新模型的论断仅为作者主张，先测再删；`--ban-em-dash` 是额外标记破折号，按需使用。
+
 ## 怎么判断变好了
 
 最小试用方式：
@@ -1288,6 +1355,7 @@ README 给出质量门禁 `skill-seekers quality output/react/ --threshold 7`，
 - 路由类（做法 Z）：装好后用 `Use poteto-mode to fix <该 bug 的现象>` 跑一个当前会失败、且你能独立复现的小 bug，记录是否先复现失败、是否用 `how`/`why` 调查、是否在跨函数边界时引入 `architect`、最终是否交付失败改通过的证据；与「同一 bug 用普通 Claude Code 会话」做对照。
 - 角色类（做法 AA）：按 division 只装少量 agent（如 code-reviewer、frontend-developer）进你在用的 Claude Code 或 Cursor，用真实任务跟默认提示做对照，记录激活命中、人工纠正次数、返工轮数。
 - T3 Code 编排类（做法 AB）：先用 `./install.sh --project /path/to/repo` 装到一个不重要仓库，跑 `/setup-p3` 检查 `p3-models.md` 映射，再用一个小 bug fix 或小 feature 走 `/p3-mode`；记录流程是否按 playbook 走完、多 worker 的 worktree/分支冲突次数、`watch_pull_request` 是否真的免轮询、`schedule_task` 是否在无人值守时跑完，以及相比原做法的返工轮数。
+- 审计类（做法 AC）：挑 1–2 个你已经在用的 Claude 技能，装好后跑 `python3 scripts/validate_skill.py --all ~/.claude/skills` 和 `--json` 存基线；只对其中一个技能说 Audit 并改 2–3 条，复跑同一命令；另一个技能不动作对照。
 
 可观察的指标：
 
@@ -1313,6 +1381,7 @@ README 给出质量门禁 `skill-seekers quality output/react/ --threshold 7`，
 - 做法 Z：是否产出可核验的失败→通过证据；是否减少人工纠正路由或流程的次数；最终 diff 的规模与新增抽象是否更小；达到通过状态所需往返轮数是否下降；试用 Codex 时 routing hook 信任后是否确实在任务开始时触发路由。
 - 做法 AA：角色激活是否命中；同一任务与默认提示相比返工轮数、人工纠正次数、首稿可用率；OpenCode 下是否因 119 上限静默丢弃 agent。
 - 做法 AB：`/p3-mode` 是否按 playbook 走完；多 worker 的 worktree/分支冲突次数；`watch_pull_request` 是否真的免轮询；`schedule_task` 是否在无人值守时跑完；同一类任务返工轮数、人工修正次数是否下降；交付证据是否让你少做一轮核对。
+- 做法 AC：validator 退出码是否从 `1` 变 `0`；该技能 error 数是否归零、warning 数是否下降（同一命令前后对比）；description 改成第三人称并写清 what + when 后触发正确率是否提高；REFINE 后 `SKILL.md` 是否更短；同一真实任务开/关技能 A/B 是否更稳定（对应 TS2）。
 
 反向指标：
 
@@ -1341,12 +1410,15 @@ README 给出质量门禁 `skill-seekers quality output/react/ --threshold 7`，
 - 做法 Z：若产出没有失败→通过证据、或 hook/agent 派发不生效，退回 study，只借鉴「路由 + 复现/调查/委派/重跑失败用例」的流程骨架。
 - 做法 AA：把角色目录当效果证据，或一次装全部 agent 导致上下文占用过高；OpenCode 装超 119 个 agent，先卸掉多余角色。
 - 做法 AB：如果 `/p3-mode` 没有真正按 playbook 推进、`watch_pull_request` 仍要轮询、`schedule_task` 在无人值守时没有产出，或 worktree/分支冲突不为 0，先降级为只读它的 playbook 与 principle 设计；没有 T3 Code 环境时不要硬装。
+- 做法 AC：把 `validate_skill.py` 的退出码 0 当成效果结论——它只证明格式与规则合规，不证明产出更好；效果要自己做 A/B。
+- 做法 AC：跳过基线直接改，先跑 `--all` 和 `--json` 存基线，再改 2–3 条并复跑对比，否则说不清哪条改动有效。
+- 做法 AC：把 NM1–NM5 等关于新模型的论断当事实——材料里只有论断和指向官方文档的链接，没有可交叉验证的细节；先测再删。
 
-注意：`doctor`、`validate`、`npm test`、`claude plugin validate`、`npx @anthropics/skills-ref validate`、`archify doctor`、`validate --json`、`python -m unittest discover -s tests` 这类检查只能证明「技能或 mod 装得上、格式合法、不带危险命令、图能通过校验、回归测试能过」，不能证明「产出更好」。效果必须自己对照。做法 Y 的 `validate_package.py`、`unittest`、`content_lock.py --strict` 同理，作者明确说它们各自只证明其覆盖范围。
+注意：`doctor`、`validate`、`npm test`、`claude plugin validate`、`npx @anthropics/skills-ref validate`、`archify doctor`、`validate --json`、`python -m unittest discover -s tests`、`validate_skill.py` 这类检查只能证明「技能或 mod 装得上、格式合法、不带危险命令、图能通过校验、回归测试能过、技能符合规则表」，不能证明「产出更好」。效果必须自己对照。做法 Y 的 `validate_package.py`、`unittest`、`content_lock.py --strict` 同理，作者明确说它们各自只证明其覆盖范围。做法 AC 的 `validate_skill.py` 只覆盖它那 46 条规则，退出码 0 不代表技能产出更好。
 
 ## 常见坑
 
-- 整体 adopt：一次装多个技能包，导致上下文过载或规则冲突。先只装一个，做法 A、H、I、J、K、L、N、Q、R、S、T、U、V、X、Y、Z、AA、AB 同理。
+- 整体 adopt：一次装多个技能包，导致上下文过载或规则冲突。先只装一个，做法 A、H、I、J、K、L、N、Q、R、S、T、U、V、X、Y、Z、AA、AB、AC 同理。
 - 一次装整个插件市场：94 个插件、202 个 agent、184 个 skill 是目录规模，不是使用建议。
 - 重复安装：同一项目里同时用项目级安装和插件市场装同一个技能包，skills 会出现两份。
 - 两条安装路径都装（做法 R）：原文明确说两个都装会让每个技能出现两份；只选一条。
@@ -1382,6 +1454,12 @@ README 给出质量门禁 `skill-seekers quality output/react/ --threshold 7`，
 - 做法 Z：Codex 不先 `/hooks` 信任 routing hook 就期待路由触发；Pi 缺少 extension 提供的 subagent / question / wake-up 工具；把仓库 stars（1345）当效果证据；忽略 skills 会把 session transcripts 等读取内容发往模型 provider。
 - 做法 AA：一次装全部 agent、把角色目录当效果证据、在 OpenCode 里装超过约 119 个 agent、把 app 的自动更新当成效果改善。
 - 做法 AB：没有 T3 Code 环境就硬装；把 `delegate_task`、`t3_thread_launch`、`watch_pull_request`、`schedule_task`、`t3_thread_read/search`、`preview_*`、`device_*` 的名字当命令语法；`install.sh` 直接全局装而不先用 `--project` 试；不跑 `/setup-p3` 就指望跨模型 panel；把 68 stars 或 README 的「verification 严格到可以放心并行」当效果证据；忽略它是 pstack 在 T3 Code 上的重写，与做法 Z 混装两套。
+- 做法 AC：把 `validate_skill.py` 的退出码 0 当成效果结论：它只证明格式与规则合规，不证明产出更好；效果要自己做 A/B。
+- 做法 AC：跳过基线直接改：先跑 `--all` 和 `--json` 存基线，再改 2–3 条并复跑对比，否则说不清哪条改动有效。
+- 做法 AC：把 NM1–NM5 等关于新模型的论断当事实：材料里只有论断和指向官方文档的链接，没有可交叉验证的细节；先测再删。
+- 做法 AC：只装 `SKILL.md` 不装 `references/` 与 `scripts/`：审计和脚手架依赖它们，缺了会降级。
+- 做法 AC：把 `--ban-em-dash` 当成必选项：它是额外标记破折号，按需使用。
+- 做法 AC：在 claude.ai 上没开代码执行就跑 validator。
 
 ## 证据与来源
 
@@ -1418,7 +1496,8 @@ README 给出质量门禁 `skill-seekers quality output/react/ --threshold 7`，
 - pstack-claude 路线（做法 Z）的全部内容——pstack 原为 Lauren Tan 写的 Cursor 插件栈、本仓库移植到 Claude Code/Codex/Pi 及其他 harness、核心入口 `poteto-mode` 路由技能、三条安装命令、`setup-pstack` / `/pstack:setup-pstack` 的用途、reasoning effort 示例 `arena runners: opus @xhigh, fable @max`、Claude Code 通过 `pstack:effort-<level>` / `pstack:poteto-agent-<level>` agent 派发、Codex 需 `/hooks` 信任、Pi 的 extension 与 `/loop`、`/skill:<name>`、poteto-mode 入门提示词、bug 流程交付「修复 + 失败与通过的证据」、playbooks 覆盖范围——均来自调研《michael-denyer/pstack-claude》，即该仓库 README。属作者主张、没有数据支撑的是：「improves agent outcomes」「keeps your code concise, simple and verified」、bug 流程产出「失败与通过证据」；本线索给到的数字只有仓库指标（1345 stars、今日 222 stars），不能作为效果证据。完整工作流定义在未抓取的 `docs/reference.md` 与 SKILL.md 中，无法核对 playbook 的实际步骤；skills 会把 session transcripts 等读取内容发往模型 provider。
 - agency-agents 路线（做法 AA）的全部内容——按 division 组织的 agent 角色目录、三层交付形态（桌面 app / 安装脚本 / 纯参考）、各工具安装命令、`--tool` / `--division` / `--agent` / `--agents-file` / `--list teams` / `--dry-run` 参数、`convert.sh` 两步流程、按 runbook 生成 team.txt 的 python 片段、OpenCode 约 119 个 agent 上限——均来自调研《msitarzewski/agency-agents》，即该仓库 README。属作者主张、没有证据的是「Production-Ready」「battle-tested workflows」「可衡量的结果」「成功指标」等；README 没有给出指标定义、评测方法或对照数据。材料在 Marketing 表格中途被截断；只给了角色目录，没给 agent 文件正文。仓库指标 star 数（157,073，今日 595）来自输入元数据而非 README 正文，且数值异常高，不宜作为质量证据引用。
 - p3-stack 路线（做法 AB）的全部内容——把 pstack 在 T3 Code 上重写、`delegate_task` 取代 Cursor 的 Task 工具、`t3_thread_launch` 绑定 worktree 与分支、`watch_pull_request` 事件唤醒、`schedule_task` 无人值守、`t3_thread_read/search` 取回线程记忆、`preview_*` / `device_*` 产出截图录像、skills 目录与 24 条 principle、`p3-mode` playbook 路由表、`git clone` + `install.sh`、`./install.sh --project /path/to/repo`、`/setup-p3` 写 `p3-models.md`、`/p3-mode`、`/p3-help`——均来自调研《uzairansaruzi/p3-stack》，即该仓库 README。属作者主张、没有数据支撑的是：「pstack 是对 AI slop code 的回应」「verification 严格到可以放心并行」「一个 worktree 一个写者由应用而非建议保证」；仓库指标 68 stars，不构成有效性证据。只有安装与入口命令可照做；`delegate_task`、`t3_thread_launch`、`watch_pull_request`、`schedule_task`、`t3_thread_read/search`、`preview_*`、`device_*` 都只有名称和一句话用途，没有命令语法、配置样例、参数格式或示例输出；`p3-models.md` 的格式也没有展示。适用条件：必须在 T3 Code 环境内使用；skills 和 24 条原则源自 poteto 的 pstack（MIT），本仓库自己声明只是「重接线」。README 未说明技能内容的完整度、维护活跃度、T3 Code 的获取门槛。
-- 文中提到的 star 数（如 anthropics/skills 179219、awesome-copilot 39,568、pro-workflow 2.9k、feiskyer/claude-code-settings 约 1.6k、zh-tech-writing 312、biomedical-paper-reader 31、cline-pilot 91、wshobson/agents 40,149、book-to-skill 33,277、khazix-skills 21,099、pg-aiguide 1853、math-modeling-skill 1848、google/skills 20653、Mobile Dev 64、agentic-dev-kit 37、one-skill-to-rule-them-all 3,115、Jeffallan/claude-skills 11725、p3-stack 68）来自 metrics，不构成有效性证据。
+- skill-creator-plus 路线（做法 AC）的全部内容——46 条规则及 Script/Script + read/Read/Advice 分类、规则族 FM/DS/ST/CT/WF/SC/NM/HK/TS/LB、三种模式 AUDIT/NEW/REFINE、五条 validator 命令与退出码 0/1/2、`--all` 汇总表格式、`init_skill.py` 脚手架命令、硬指标清单（DS1–DS2、ST1、ST4–ST5、ST7、CT3、CT9、WF1、TS1）、HK1、ST2、NM2/NM5——均来自调研《robonuggets/skill-creator-plus》，即该仓库 README（MIT，31 stars）。属作者主张、没有独立验证的是：46 条规则本身、NM1–NM5（关于 Fable 5 / Opus 5.5 / Sonnet 5.5 的论断、Claude Code compaction 只保留前 5,000 tokens、`reasoning_extraction` 拒答等）、规则于 2026-10-05 对照 Anthropic 页面检查。效果证据只有作者自己的样例技能 `examples/pdf-helper` 输出（8 errors、11 warnings、6 notes，含 FM1/ST4/ST5/DS2/NM2/HK1）。材料只有 README，没有源码、`references/` 与 `examples/` 正文，无法核实 validator 实现是否与规则一致。适用条件：Claude 生态（Claude Code / claude.ai），对象是 `SKILL.md` 形态的技能。
+- 文中提到的 star 数（如 anthropics/skills 179219、awesome-copilot 39,568、pro-workflow 2.9k、feiskyer/claude-code-settings 约 1.6k、zh-tech-writing 312、biomedical-paper-reader 31、cline-pilot 91、wshobson/agents 40,149、book-to-skill 33,277、khazix-skills 21,099、pg-aiguide 1853、math-modeling-skill 1848、google/skills 20653、Mobile Dev 64、agentic-dev-kit 37、one-skill-to-rule-them-all 3,115、Jeffallan/claude-skills 11725、p3-stack 68、skill-creator-plus 31）来自 metrics，不构成有效性证据。
 
 ## 依据的调研
 
@@ -1455,3 +1534,4 @@ README 给出质量门禁 `skill-seekers quality output/react/ --threshold 7`，
 - [michael-denyer/pstack-claude](../research/radar/2026-10-06/1417-michael-denyer-pstack-claude.md)：值得一试，可以在 Claude Code（或 Codex/Pi）上按 README 给出的两条命令安装 pstack，再用 poteto-mode 跑一个已知小 bug，验证它是否真的复现失败、委派修复并交出通过证据；理由是仓库提供了可直接复制的安装命令、路由入口和按角色配置模型/推理强度的 setup 语法，但完整工作流定义在未被抓取的 docs/reference.md 与 SKILL.md 中，需小范围试用后再固化。
 - [msitarzewski/agency-agents](../research/radar/2026-10-06/1421-msitarzewski-agency-agents.md)：值得一试，建议小范围试：按 division 只装少量 agent（如 code-reviewer、frontend-developer）进你在用的 Claude Code 或 Cursor，用真实任务跟默认提示做对照。理由是原文给出了可直接照抄的安装、筛选和激活命令，但只给了角色目录，没给任何一个 agent 文件的内容，也没有任何效果证据，值不值得用只能自己验。
 - [uzairansaruzi/p3-stack](../research/radar/2026-10-06/1491-uzairansaruzi-p3-stack.md)：值得一试，值得在 T3 Code 环境里小范围试一次：按 README 的 clone→install.sh→/setup-p3→/p3-mode 四步挂上一个真实小任务，验证它的 playbook 路由和 worktree/PR 监视机制是否真比手动流程省事；但仓库只给了安装与入口命令，编排原语只有名字没有配置细节，也没有任何效果数据，只能算“可试”而非“可采纳”。
+- [robonuggets/skill-creator-plus](../research/radar/2026-10-06/1582-robonuggets-skill-creator-plus.md)：值得一试，建议小范围试：按 README 的安装命令把它装进 Claude Code 的 skills 目录，先对现有技能跑 validate_skill.py --all 拿到基线，再按审计报告改 2–3 条并复跑对比，理由是它给了可直接执行的命令和 46 条可逐条勾选的规则，能把“技能写得好不好”变成可复核的检查项；但材料只有 README、规则和模型相关论断均为作者主张，先验证再决定是否纳入手册。

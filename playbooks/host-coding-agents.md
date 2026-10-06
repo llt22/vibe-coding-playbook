@@ -1,14 +1,14 @@
-# 让编码 agent 在可控环境里按规则跑，并把关键审批移到手机
+# 让编码 agent 在可控环境里反复跑：工作区、项目护栏、实时观察与系统级验证
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：把编码 agent 从「本机随手跑一次」变成「在可控环境里按项目规则反复跑、看得见它在读写什么」，并把「回应待确认操作」和「完成通知」延伸到手机，不必一直守着电脑。
-> 先试这一步：先选一条与你现状最接近的做法跑通最小闭环：做法 C 的短 CLAUDE.md + allow/ask/deny 白名单 + 一个 PostToolUse 格式化 hook；如果你日常在用 Codex App，紧接着按做法 I 只开局域网 + 账号密码，用手机扫码接入一条已有会话，发一条消息并回应一次待确认操作。
-> 最近修订：2026-10-04
+> 解决的问题：把编码 agent 从「在本机随手跑一次」变成「在可控环境里、按项目规则反复跑」，能实时看到它在读什么、写什么，需要时还能在真实（仿真）系统里执行并拿到可判定结果。
+> 先试这一步：先在单个真实项目里落地最便宜的护栏：短 `CLAUDE.md` + allow/ask/deny 权限 + 一个 PostToolUse 格式化 hook（做法 C），用 Plan mode 跑完一次并记录手工基线。
+> 最近修订：2026-10-06
 
 ## 解决什么问题
 
-本手册解决的是：把编码 agent（Claude Code / Codex CLI / OpenCode / goose / pi / agentbox 里的 agent）从「在本机随手跑一次」变成「在可控环境里、按项目规则反复跑」，并且能实时看到它在读什么、写什么。要补十件事：工作区与文件持久化、权限与凭据边界、工具与扩展供给、项目级护栏（上下文供给 + 自动化触发）、按轮次的用量成本记录、「先只读规划、再放权编辑」的分工、「运行时/界面扩展面」的受控试点、「跨模型统一接口」——让同一套流程换供应商而不改上层、「实时观察与危险动作闸门」，以及「把桌面 Codex 会话接到手机做异步审批与完成通知」。给出九条可照做的路径：做法 A 是在 Linux 服务器上自托管 agentbox 工作区；做法 B 是在非生产机器上装 goose，用 MCP 供给工具与权限；做法 C 是在单个真实项目里给 Claude Code 配 CLAUDE.md、allow/ask/deny 权限、hook、subagent、skill，并把主工作流固定成 Explore → Plan → Code → Verify → Commit；做法 D 是用 OpenCode 的 build/plan 双 agent 把「先只读规划、再放权编辑」固定成分工；做法 E 是在本机装 Codex CLI 并用 ChatGPT 账号登录，先跑通一次终端编码任务；做法 F 是在一次性项目里用实验开关试点 Claude Mods（function hooks），按验收矩阵检查后再决定是否留下；做法 G 是按 pi 的官方安装脚本装好 CLI，用 `/login` 接入模型，在容器边界内跑一个边界清晰的小任务，验证「同一套流程换 provider」是否成立；做法 H 是在真实仓库里装 hamzafer/claude-code-mods 的 mission-control 与观察类插件，先看清 agent 的读写与上下文水位，再决定是否加 blast-radius 这类危险命令闸门；做法 I 是在一台已运行 Codex App 的 macOS/Windows 电脑上装 Codex Mobile Bridge 桌面 App，只开局域网和账号密码，用手机扫码接入已有会话，回应待确认操作、切模型与 Skill、配 Bark/ntfy 通知，再决定是否开外网入口。
+本手册解决的是：把编码 agent（Claude Code / Codex CLI / OpenCode / goose / pi / agentbox 里的 agent）从「在本机随手跑一次」变成「在可控环境里、按项目规则反复跑」，并且能实时看到它在读什么、写什么，需要时还能在真实（仿真）系统里执行并拿到可判定结果。要补十一件事：工作区与文件持久化、权限与凭据边界、工具与扩展供给、项目级护栏（上下文供给 + 自动化触发）、按轮次的用量成本记录、「先只读规划、再放权编辑」的分工、「运行时/界面扩展面」的受控试点、「跨模型统一接口」——让同一套流程换供应商而不改上层、「实时观察与危险动作闸门」、「把桌面 Codex 会话接到手机做异步审批与完成通知」，以及「让 agent 在真实内核/网络的 guest 里跑命令并验证」。给出十条可照做的路径：做法 A 是在 Linux 服务器上自托管 agentbox 工作区；做法 B 是在非生产机器上装 goose，用 MCP 供给工具与权限；做法 C 是在单个真实项目里给 Claude Code 配 CLAUDE.md、allow/ask/deny 权限、hook、subagent、skill，并把主工作流固定成 Explore → Plan → Code → Verify → Commit；做法 D 是用 OpenCode 的 build/plan 双 agent 把「先只读规划、再放权编辑」固定成分工；做法 E 是在本机装 Codex CLI 并用 ChatGPT 账号登录，先跑通一次终端编码任务；做法 F 是在一次性项目里用实验开关试点 Claude Mods（function hooks），按验收矩阵检查后再决定是否留下；做法 G 是按 pi 的官方安装脚本装好 CLI，用 `/login` 接入模型，在容器边界内跑一个边界清晰的小任务，验证「同一套流程换 provider」是否成立；做法 H 是在真实仓库里装 hamzafer/claude-code-mods 的 mission-control 与观察类插件，先看清 agent 的读写与上下文水位，再决定是否加 blast-radius 这类危险命令闸门；做法 I 是在一台已运行 Codex App 的 macOS/Windows 电脑上装 Codex Mobile Bridge 桌面 App，只开局域网和账号密码，用手机扫码接入已有会话，回应待确认操作、切模型与 Skill、配 Bark/ntfy 通知，再决定是否开外网入口；做法 J 是在 Windows 或 Linux/macOS 上按 qemu-harness（qh）README 装好 Python 3.8+、QEMU、Go 1.22+，用 `qh up --kernel alpine:aarch64` → `qh exec` → `qh down` 跑通最小链路，用项目级 `qh.json` 固化配置，把自带 `skill/SKILL.md` 接给 Claude Code，让需要真实系统验证的任务在 guest 里执行。
 
 ## 适用与不适用
 
@@ -25,6 +25,10 @@
 - 已经在用 Codex App 桌面会话，想让「回应权限请求、回答问题卡片、看进度」离开桌面、在手机上完成，并且需要一个完成/待办通知通道的人（做法 I）。
 - 能保持一台 macOS/Windows 10/11 电脑唤醒、联网，且手机与电脑在同一局域网（或已有 cloudflared 临时 HTTPS、自有服务器 SSH、NAS/反向代理入口）的人（做法 I）。
 - 需要「手机不登录与电脑相同的 OpenAI 账号、也不把模型 API key 放到手机」这种远程审批入口的人（做法 I；这是项目设计说明，不是第三方评测结论）。
+- 需要在真实（仿真）系统里执行命令、验证内核/网络行为、跑 MQTT/HTTP 探针，并且要拿到可判定结果（stdout/stderr/exit code）的人（做法 J）。
+- 做 IoT / 嵌入式内核仿真、需要跨架构（aarch64 / arm32 / riscv64 / x86_64）验证的任务（做法 J）。
+- 已经用 Claude Code，想用 SKILL.md 把「驱动一个 VM 跑验证」交给 agent 自主完成的人（做法 J）。
+- 能接受 Windows 优先、Linux/macOS 也可用，且愿意先装 Python 3.8+、QEMU、Go 1.22+ 并首次联网的人（做法 J）。
 - 能给出一台非生产机器或一个可回退的 Git 分支，愿意先小范围试用再扩大的人。
 
 不适用：
@@ -49,8 +53,13 @@
 - 保存历史可能含上下文注入文本，手机排版不保证与桌面完全一致；临时隧道地址会变化、无持续可用性保证；通知不承诺严格恰好一次投递。
 - 外网和蜂窝网络可达性必须在真实设备上验收，只测 `127.0.0.1` 不算。
 - Codex Mobile Bridge 的效果主张（手机无需登录与电脑相同的 OpenAI 账号、不要求把模型 API key 放到手机、任务继续在原电脑或 SSH 服务器执行、模型请求沿用会话 provider 与认证）是项目设计说明，未见独立性能数据或第三方评测。
-- 五条已有线索加 Claude Mods、pi、hamzafer/claude-code-mods 都没有给出「AI 是否让结果变好了」的对照评测方法或基准数据；Claude Mods 给出了验收矩阵与成本公式，但同样是作者提出的评估方法，不是 Anthropic 的计费公式。
-- 涉密或受管环境要额外做安全审查与权限约束，不能直接照搬 `curl | bash` 类安装，也不能为了跑通 Claude Mods 示例而关掉组织托管保护；pi 的 pi-telemetry / pi-share-hf 会话导出等于把工作数据上传，需先确认合规；第三方插件集合要走组织审批流程。
+- qemu-harness（qh）项目体量小，自带 overlay 会以 root、空密码启动 dropbear，README 自己标注 lab only，不可放到不可信网络。
+- qh 需要大文件/高带宽传输的场景不适用：没有 NIC 驱动时隧道约 15 KB/s 入 guest、75 KB/s 出；大 payload 应放进 `fs/` 再 `qh reload`，不要走 `qh put`。
+- qh 的原文只有 Alpine 内核与一段 Android GKI 的性能说明，没有 benchmark 脚本、没有对照基线、也没有第三方使用报告，适合小范围试用而非全盘采用。
+- qh 的原文没有给出按时间/事件/状态触发的持续任务调度或循环执行机制；`qh reload`、`rc.local`、`qh.init` 钩子、`qh fwd`、`-n NAME` 只能算可反复调用的执行接口，不等于主动推进。
+- 跨架构 guest 在 x86 宿主上走 TCG（偏慢但可用）；同架构宿主上才可用 `--qemu-arg "-accel whpx"` / KVM 加速。
+- 五条已有线索加 Claude Mods、pi、hamzafer/claude-code-mods、Codex Mobile Bridge、qemu-harness 都没有给出「AI 是否让结果变好了」的对照评测方法或基准数据；Claude Mods 给出了验收矩阵与成本公式，qh 给出了退出码/probe/dry-run 这类验证抓手，但都是作者提出的评估方法或可判定接口，不是独立基准。
+- 涉密或受管环境要额外做安全审查与权限约束，不能直接照搬 `curl | bash` 类安装，也不能为了跑通 Claude Mods 示例而关掉组织托管保护；pi 的 pi-telemetry / pi-share-hf 会话导出等于把工作数据上传，需先确认合规；第三方插件集合要走组织审批流程；qh 的 lab overlay 不可放到不可信网络。
 
 ## 前置条件
 
@@ -116,9 +125,17 @@
 - 若要手机通知：iPhone 装 Bark（服务地址 + Device Key）；Android 装 ntfy（服务地址 + 完整主题名，公共匿名主题 Token 留空），并允许系统通知、锁屏显示和后台运行。
 - 一条获准测试的已有 Codex 会话，以及一个非关键、可回退的仓库。
 
+做法 J（qemu-harness）：
+- Python >= 3.8；QEMU（`qemu-system-<arch>` 在 PATH，或位于 `C:\Program Files\qemu`）；Go >= 1.22（供 `qh setup` 用）；首次运行需要联网。
+- Windows 优先（原文称在 Windows 10 + QEMU 11 上测过）；Linux/macOS 也可用；宿主机侧纯 Python 标准库，Go 仅用于交叉编译 guest agent。
+- 一个 kernel（`alpine:<arch>` 预设或自己的 Image）；可选 dtb / mem / cmdline / machine / cpu。
+- 一个 `fs` overlay 目录，用来放固件、配置、服务；需要时放完整内核模块树或散放的 `*.ko` + `modules.order`。
+- 若要让 agent 自主驱动：安装器默认会把 `skill/SKILL.md` 装给 Claude Code 和 Grok（用 `-NoSkills` 可关掉）。
+- 一个非关键、可回退的环境；不要把 lab overlay 放到不可信网络。
+
 ## 操作步骤
 
-九条做法按环境选：要服务器、多人、持久工作区、共享目录、Git 审查、按轮用量成本记录，选做法 A；只有一台非生产机器、想要通用 agent 并愿意自己接 MCP，选做法 B；已经在单个真实项目里用 Claude Code、想把项目级规则和自动化触发固定下来，选做法 C；需要先读懂陌生代码库、要一个默认只读、bash 前询问权限的 plan 模式，选做法 D；已经用 ChatGPT 订阅、想在本机装官方 CLI 跑通一次终端编码任务，选做法 E；需要更深的运行时事件组合或受支持界面行为，且能满足一次性项目、合成数据、有回滚负责人等条件，才考虑做法 F；要在同一套流程里换模型供应商、准备把 agent 嵌进脚本或服务，并且愿意自己容器化隔离，选做法 G；已经在用 Claude Code、想先看清它在读写在跑什么、并在危险命令前设一道闸门，选做法 H；已经有 Codex App 桌面会话、想让审批和完成通知离开桌面，选做法 I。做法 C 可以和 A 叠加：A 管服务器工作区与账号边界，C 管单个项目内的工具调用规则。做法 F 是做法 C 在 Claude Code 上的扩展面试点，不替代 Skills、MCP、经典 hook 或插件系统。做法 G 与它们不是替代关系：pi 提供的是「统一多提供商接口 + 可嵌入的 harness」，权限边界要你自己用容器补，原文明确把 OpenClaw 列为它的真实集成案例。做法 H 与做法 F 不是同一层：F 是 Anthropic 原生 function hooks 的受控试点（early access），H 是第三方插件集合，走 `claude plugin marketplace add` / `claude plugin install`，属于对已采用 Claude Code 的观察与守卫增强；两者都建立在做法 C 的项目级护栏之上，都不能替代 Skills、MCP、经典 hook。做法 I 与做法 E 也不是替代关系：E 管在本机装 Codex CLI 跑通终端任务，I 管把 Codex App 已有的桌面会话延伸到手机浏览器做异步审批与通知，模型和权限策略默认继承原会话，链路是手机 → 网关 → 原电脑（或经 SSH 到原服务器）；两者可以并存。
+十条做法按环境选：要服务器、多人、持久工作区、共享目录、Git 审查、按轮用量成本记录，选做法 A；只有一台非生产机器、想要通用 agent 并愿意自己接 MCP，选做法 B；已经在单个真实项目里用 Claude Code、想把项目级规则和自动化触发固定下来，选做法 C；需要先读懂陌生代码库、要一个默认只读、bash 前询问权限的 plan 模式，选做法 D；已经用 ChatGPT 订阅、想在本机装官方 CLI 跑通一次终端编码任务，选做法 E；需要更深的运行时事件组合或受支持界面行为，且能满足一次性项目、合成数据、有回滚负责人等条件，才考虑做法 F；要在同一套流程里换模型供应商、准备把 agent 嵌进脚本或服务，并且愿意自己容器化隔离，选做法 G；已经在用 Claude Code、想先看清它在读写在跑什么、并在危险命令前设一道闸门，选做法 H；已经有 Codex App 桌面会话、想让审批和完成通知离开桌面，选做法 I；需要让 agent 在真实内核/网络的 guest 里执行命令、跑跨架构或内核/网络行为验证，选做法 J。做法 C 可以和 A 叠加：A 管服务器工作区与账号边界，C 管单个项目内的工具调用规则。做法 F 是做法 C 在 Claude Code 上的扩展面试点，不替代 Skills、MCP、经典 hook 或插件系统。做法 G 与它们不是替代关系：pi 提供的是「统一多提供商接口 + 可嵌入的 harness」，权限边界要你自己用容器补，原文明确把 OpenClaw 列为它的真实集成案例。做法 H 与做法 F 不是同一层：F 是 Anthropic 原生 function hooks 的受控试点（early access），H 是第三方插件集合，走 `claude plugin marketplace add` / `claude plugin install`，属于对已采用 Claude Code 的观察与守卫增强；两者都建立在做法 C 的项目级护栏之上，都不能替代 Skills、MCP、经典 hook。做法 I 与做法 E 也不是替代关系：E 管在本机装 Codex CLI 跑通终端任务，I 管把 Codex App 已有的桌面会话延伸到手机浏览器做异步审批与通知，模型和权限策略默认继承原会话，链路是手机 → 网关 → 原电脑（或经 SSH 到原服务器）；两者可以并存。做法 J 与 A–I 也不是同一层：A–I 管的是 agent 运行的环境、权限、护栏与观察面，J 补的是「执行目标系统」这一层——让需要真实内核/网络验证的任务在 QEMU guest 里跑；它能和做法 C 叠加（C 管项目规则与权限，J 管执行目标），也不替代 Skills、MCP、经典 hook 或容器化隔离。
 
 ### 做法 A：在 Linux 服务器上搭自托管 agentbox 工作区
 
@@ -842,6 +859,92 @@ python3 -B "$PWD/run.py" --lan --no-auth
 
 诚实说明：README 给出的是 v1.3.1 的下载与安装步骤、四种入口的配置方式、通知配置、命令行参数与验证记录入口，没有给出独立性能数据或第三方评测；「手机无需登录与电脑相同的 OpenAI 账号」「不要求把模型 API key 放到手机」「任务继续在原电脑或 SSH 服务器执行」「模型请求沿用会话提供商与认证」均为项目设计说明。部署完成不等于可用：必须按下面的最小试用逐项实测。
 
+### 做法 J：用 qemu-harness 让需要真实系统验证的任务在 QEMU guest 里跑
+
+来源是 `b3s3da/qemu-harness`（qh）。它是一个面向 AI agent（也面向人）的 QEMU 封装：几秒内启动一个裸内核镜像或现成的 Alpine 镜像，通过客户机内的 bridge agent（作者描述为「类似 qemu-guest-agent，但很小且与内核无关」）在 guest 里执行命令，`qh exec` 把 stdout/stderr/exit code 以 JSON 返回。它对没有 virtio-net 的原版内核也能用：agent 把以太网帧通过串口通道隧道进 QEMU 的 user-mode 网络。自带 `skill/SKILL.md`，让 Claude Code / Grok / 其他 SKILL.md-aware 的 agent 知道怎么驱动它。注意：下面每一步的命令、参数、性能数字都来自该仓库 README，属作者自述，未有第三方复现。
+
+前提（README 明确列出）：Python >= 3.8；QEMU（`qemu-system-<arch>` 在 PATH，或位于 `C:\Program Files\qemu`）；Go >= 1.22（供 `qh setup` 用）；首次运行需要联网。
+
+1. Windows 一行安装。
+
+```powershell
+irm https://raw.githubusercontent.com/b3s3da/qemu-harness/main/install.ps1 | iex
+```
+
+预期结果：harness 下载到 `~\tools\qemu-harness`，安装器通过 winget 询问安装 Python / QEMU / Go，构建 guest agent，把 `qh` 加进 PATH，并为 Claude Code 和 Grok 安装 agent skill。注意原文自己指出：把脚本直接 pipe 给 `iex` 是无审查执行的；若想先读再跑，就 clone 仓库（或只下载 `install.ps1`），阅读后执行 `.\install.ps1`。安装器是幂等的，重跑会原地升级并保留 `cache/`。
+
+2. 非交互安装，或一次装全部架构并做烟雾测试。
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/b3s3da/qemu-harness/main/install.ps1))) -Yes -Arch all -Smoke
+```
+
+可选参数：`-Yes`（从不询问）、`-Arch all`、`-Dir`、`-NoDeps`、`-NoPath`、`-NoSkills`、`-Smoke`。
+
+3. Linux / macOS：
+
+```bash
+git clone https://github.com/b3s3da/qemu-harness && ./install.sh
+```
+
+（需要 Python 3、`qemu-system-*`、Go。）
+
+4. 新开一个终端让 PATH 生效，然后在任意项目目录里创建 lab 并跑最小链路。
+
+```powershell
+mkdir lab ; cd lab
+qh up --kernel alpine:aarch64          # or --kernel path\to\Image
+qh exec 'uname -a; ip -4 -o a show eth0'
+qh down
+```
+
+预期结果：`qh up` 构建 initramfs、启动 VM 并等待 agent（原文自述 2–5 秒到 agent 可应答）；`qh exec` 在 guest 内执行命令，退出码会传播，加 `--json` 时返回结构化 stdout/stderr/exit code；`qh down` 停止 VM。状态存放在你运行命令的目录下的 `./.qh/<name>/`，多个 VM 用 `-n NAME` 区分。
+
+5. 用项目级 `qh.json` 固化配置（README 示例，找不到时回落到 `qh.example.json`）。
+
+```json
+{ "kernel": "alpine:aarch64", "mem": "512M", "smp": 2, "fs": ["fs"], "pkgs": ["dropbear", "mosquitto"], "fwd": ["2222:22"] }
+```
+
+每个键都有对应 CLI 开关：`--arch --kernel --initrd --bios --machine --cpu --mem --smp --dtb --disk --append --net --fs --pkg --fwd --chan --nic --bus --chan-tty --qemu-arg`；`kernel` 也可写成 `alpine:<arch>[:virt|lts]`。
+
+6. 定制 guest（让镜像里有你要的东西）。
+
+- Overlay：`fs` 里列出的目录下的内容会覆盖 Alpine rootfs（后者胜出），用来放固件、配置、服务；可执行位会被推断（`#!`、ELF、`bin/`、`sbin/`）。`fs/etc/qh.d/rc.local` 在 VM 被宣告 ready 之前运行；cmdline 上的 `qh.init=/path` 会运行一个钩子。
+- 包：`pkgs` 里的名字按 Alpine 索引解析（含依赖）并在宿主机上解包，不需要 `apk`。
+- 内核模块：放完整模块树（`lib/modules/<ver>/modules.dep` + 未压缩 `.ko`）由 init 执行 `modprobe` virtio/tun/9p；散放的 `*.ko` + `modules.order` 走 `insmod`。
+- 自带的 overlay 会启动 dropbear（root、空密码，原文明确标注 lab only）、mosquitto 和 httpd。
+
+7. 常用命令（全部支持 `--json`）。
+
+| 命令 | 作用 |
+|---|---|
+| `qh setup [--arch A\|all]` | 拉取 Alpine minirootfs、构建 guest agent（缓存在 `cache/<arch>`） |
+| `qh up [--kernel K] [-n NAME]` | 构建 initramfs、启动、等待 agent |
+| `qh exec [--json] [--timeout N] [--bg] CMD…` | 在 guest 内执行；退出码会传播；支持 `--cwd`、`-e K=V`、`--stdin`、`--argv` |
+| `qh put SRC DST` / `qh get SRC DST` | 拷贝文件或目录（线上用 zlib；文件要小，见性能） |
+| `qh reload [任意 VM 选项]` | 重建 rootfs 并复用同样的端口重启；kernel/dtb/mem/cmdline 可改 |
+| `qh fwd HOST:GUEST` | 运行时新增 host→guest TCP 转发（`0` = 自动选空闲宿主端口） |
+| `qh logs [-f] [--tail N]` / `qh console --send CMD` | 串口控制台日志 / 与之对话 |
+| `qh probe [--kernel K]` | 探测内核支持什么、qh 会选哪种传输方式 |
+| `qh dtb -o m.dtb` | 导出 QEMU 生成的设备树（packed），用 `dtc` 改后再用 `--dtb` 喂回 |
+| `qh kernel fetch ARCH [virt\|lts]` | 下载 Alpine 内核 + virtio/tun/9p 模块 |
+| `qh up --dry-run` | 打印确切的 QEMU 命令行 |
+| `qh ls` / `down` / `rm` / `qmp CMD` | 生命周期管理与原始 QMP |
+
+8. 让 agent 来用。安装器默认把 `skill/SKILL.md` 装给 Claude Code 和 Grok（用 `-NoSkills` 可关掉）；此后由 SKILL.md-aware 的 agent 自行调 `qh up` / `qh exec` / `qh put` 等命令完成任务。预期结果：agent 能在需要真实系统验证的任务里自行起 VM、执行命令并读回退出码，而不是只在宿主机上猜。
+
+9. 排障（README 的 Troubleshooting）。
+
+- `agent did not respond`：先 `qh logs --tail 80`，再 `qh probe`。若内核既没有 virtio-console 也没有 8250-PCI，需要 `--chan serial --chan-tty /dev/ttyXX`，或 `--initrd X --no-wait` + `qh console`。
+- Git Bash 会把 `/tmp/x` 这类参数改写成 Windows 路径——设 `MSYS_NO_PATHCONV=1`。
+- 不弹控制台窗口：QEMU 和 daemon 以 `CREATE_NO_WINDOW` 启动。
+- aarch64/arm/riscv64 在 x86 宿主上走 TCG（偏慢但可用）；同架构宿主上可用 `--qemu-arg "-accel whpx"` / KVM。
+
+10. 性能前提（决定你该怎么用它）：有 virtio-net 时网络是正常速度；在没有 NIC 驱动、virtio 为模块的原版 Android GKI 镜像上，隧道约 15 KB/s 入 guest、75 KB/s 出——够跑脚本、MQTT、HTTP 探针，大 payload 应放进 `fs/` 再 `qh reload`。
+
+诚实说明：原文给出的数据（`qh up` 约 2–5 秒到 agent 可应答、rootfs 打包 initramfs 约 0.3 秒、隧道约 15/75 KB/s、在 Windows 10 + QEMU 11 上测过）均为作者自述，无第三方复现；案例只有 Alpine 内核和一段 Android GKI 性能说明，没有 benchmark 脚本、没有对照基线、也没有第三方使用报告；自带 overlay 以 root、空密码启动 dropbear，README 自己标注 lab only。因此这条做法适合小范围试用（真实系统验证、跨架构验证），不适合全盘采用。与做法 C 叠加时：C 管项目级规则与权限，J 管「执行目标系统」；J 不替代 Skills、MCP、经典 hook 或容器化隔离。
+
 ## 怎么判断变好了
 
 做法 A（agentbox）看成本与交付把关，不看「结果是否更好」：
@@ -980,6 +1083,21 @@ python3 -B "$PWD/run.py" --lan --no-auth
 
 退出与扩展条件：一旦出现 IPC 不兼容、外网暴露风险或无法稳定保持运行，回退到只用桌面 Codex。要做外网，必须用真实手机蜂窝网络访问 HTTPS 地址并确认长轮询有更新，只测 `127.0.0.1` 不算通过。
 
+做法 J（qemu-harness）最小试用方式：
+1. 在一台非关键机器上装好 Python 3.8+、QEMU、Go 1.22+，按上文任一安装方式安装 qh。
+2. 在任意项目目录跑 `qh up --kernel alpine:aarch64` → `qh exec 'uname -a; ip -4 -o a show eth0'` → `qh down`，先确认最小链路可用。
+3. 挑一个「需要真实内核/网络行为验证」的小任务（例如跨架构跑一段脚本、起一个 MQTT/HTTP 探针、验证某内核选项），先用你现有工具做一遍作为基线，再交给 agent + qh 的 skill 跑。
+4. 用 `qh probe` 预检内核支持与传输选择，用 `qh up --dry-run` 核对实际 QEMU 命令行，用 `qh exec --json` 的退出码作为自动判定成败的抓手。
+
+判断有没有改善的指标（原文没有基线，需自建对照）：
+- 任务是否能在 guest 里跑完并返回可判定结果（stdout/stderr/exit code）；
+- 相比「只在宿主机上猜/人工手动搭环境」，从开始到拿到可判定结果的耗时；
+- 需要人工介入（改内核参数、换传输方式、调 overlay）的次数；
+- 跨架构任务是否一次跑通；TCG 下的耗时是否可接受；
+- 若把大 payload 走隧道导致失败，说明用法不匹配——应放进 `fs/` 再 `qh reload`。
+
+说明：qemu-harness 的原文没有任何「用了它以后 AI 的结果是否更好」的评测数据或基线对比；上面这套最小试用与对照方法沿用本手册的通用节奏（同类任务重复 3–5 次），属于作者主张而非基准数据。退出条件：如果最小链路在目标内核上跑不通（如 `agent did not respond` 且按排障仍无法解决），或该任务根本不需要真实系统环境，就停在这一步，不要为了用 VM 而用 VM。
+
 ## 常见坑
 
 - agentbox 的权限默认值：原文自述存在 bypassPermissions 默认权限、凭据可被终端用户读取、单机单进程等硬约束。账号凭据会传给容器内 CLI，有终端权限的用户可以读到。
@@ -1010,7 +1128,7 @@ python3 -B "$PWD/run.py" --lan --no-auth
 - Codex 独立安装脚本默认从 `https://releases.openai.com/codex` 下载，元数据或资源不可用时回退到 GitHub Releases；需要强制走 GitHub Releases 用 `CODEX_INSTALLER_USE_RELEASES_OPENAI_COM=false`。
 - Codex Web 是云端代理，原文没有任何关于定时、事件或状态触发的说明，不能据此做主动推进。
 - Codex 的 `curl | sh` / PowerShell `irm | iex` 同样是直接从网络下载脚本并执行；受管或涉密环境应先审阅脚本内容与来源，或改用 npm / brew / 手动下载二进制。
-- 不要把「服务器上默认放开」（agentbox 的 bypassPermissions 默认值）当成「项目内也可以不设白名单」；做法 C/D/G/H 的权限边界与 agentbox 的账号边界不是同一层。
+- 不要把「服务器上默认放开」（agentbox 的 bypassPermissions 默认值）当成「项目内也可以不设白名单」；做法 C/D/G/H/J 的权限边界与 agentbox 的账号边界不是同一层。
 - Claude Mods 源码目录明确标注接口为 early access，API 可能不通知就变；官方 9 月 9 日更新称「数周内」扩大发布，本审阅检查的 TypeScript 声明对应 Claude Code 2.1.273。
 - 不要混淆三个对象：社区仓库 `0xDarkMatter/claude-mods` 与 Anthropic 原生功能无关；第三方插件集合 `hamzafer/claude-code-mods`（做法 H）走 `claude plugin marketplace add` 安装；做法 F 说的是 Anthropic 原生 Claude Mods（function hooks）。
 - `/diff` 已是内置命令，会与你的实现争夺命令归属；「加载了一个目录」不足以证明某个 handler 真的跑了，要用测试或显式的非敏感诊断证据确认当前生效的实现。
@@ -1043,6 +1161,15 @@ python3 -B "$PWD/run.py" --lan --no-auth
 - 通知不承诺严格恰好一次投递；验收要看「手机实际收到」，并观察是否重复轰炸。
 - 保存历史可能含上下文注入文本，手机排版也不保证与桌面完全一致；不要把手机端看到的内容当作唯一事实来源。
 - 无多用户角色隔离，不应共享账号；Linux 为实验性，macOS/Windows 的实测范围需看该仓库的 VERIFICATION.md。
+- qh 自带 overlay 会以 root、空密码启动 dropbear，README 自己标注 lab only——不可放到不可信网络。
+- qh 的隧道带宽低：没有 NIC 驱动的原版内核约 15 KB/s 入 guest、75 KB/s 出；大 payload 应放进 `fs/` 再 `qh reload`，不要走 `qh put`。
+- Git Bash 会把 `/tmp/x` 这类参数改写成 Windows 路径——跑 qh 时设 `MSYS_NO_PATHCONV=1`。
+- qh 报 `agent did not respond` 时先 `qh logs --tail 80`，再 `qh probe`；若内核既没有 virtio-console 也没有 8250-PCI，需要 `--chan serial --chan-tty /dev/ttyXX`，或 `--initrd X --no-wait` + `qh console`。
+- qh 的跨架构 guest 在 x86 宿主上走 TCG，偏慢但可用；同架构宿主上可用 `--qemu-arg "-accel whpx"` / KVM；不要把一个架构上跑通的参数直接套到另一个架构。
+- qh 的 `install.ps1` 直接 pipe 给 `iex` 是无审查执行；受管或涉密环境应先 clone 或只下载脚本阅读后再执行，或自行核对安装器行为。安装器是幂等的，重跑会原地升级并保留 `cache/`。
+- qh 项目体量小，原文只有 Alpine 内核与一段 Android GKI 的性能说明，没有 benchmark 脚本、没有对照基线、也没有第三方使用报告；不要把它当成生产就绪的通用方案。
+- qh 的主动推进依据有限：`qh reload`、`fs/etc/qh.d/rc.local`、cmdline 的 `qh.init=/path` 钩子、`qh fwd`、`-n NAME` 只是可反复调用的执行接口，原文没有给出按时间/事件/状态触发的持续任务调度或循环执行机制。
+- 多个 qh VM 的状态存放在你运行命令的目录下的 `./.qh/<name>/`，用 `-n NAME` 区分；不要在同一目录里误用默认名，否则会互相覆盖状态。
 
 ## 证据与来源
 
@@ -1055,8 +1182,9 @@ python3 -B "$PWD/run.py" --lan --no-auth
 - 做法 G 依据调研《earendil-works/pi》：安装命令（`pi.dev` 安装脚本、Windows PowerShell、npm 安装）、Node.js 22.19+ 前提、`pi update`、启动与 `/login`、Nix 运行与固定版本命令及平台支持、各包列表与职责、三种容器化模式、源码开发与独立二进制构建命令、供应链加固机制、`pi-telemetry` 与 `badlogic/pi-share-hf`、OpenClaw 集成案例，均来自该报告转述的项目原文。其中 stars 111397 来自给定 metrics；「minimal, extensible」「adapt Pi to your workflows, not the other way around」、公开真实会话数据比玩具 benchmark 更能改进 agent、「ships with powerful defaults」为作者主张；extensions、skills、prompt templates、themes、packages、containerization、usage、cli、rpc、sdk 在原文里只是链接，正文没有内容；原文没有效果数据、案例细节、对比测试、性能或质量数字；主动推进只有基础设施线索，没有时间/事件/状态触发的配置或步骤。做法 G 的最小试用方式与对照指标由调研报告提出，原文没有基线或阈值。
 - 做法 H 依据调研《hamzafer/claude-code-mods》：安装命令 `claude plugin marketplace add hamzafer/claude-code-mods` / `claude plugin install mission-control@claude-code-mods`、`claude --plugin-dir mods/token-weather` 临时试用、`/mission`、`w` / `c` 快捷键、颜色语义（蓝=读、橙=写、绿=完成）、token-weather / where-am-i / next-steps / usage-meter / agent-radar / browser-lanes / replay-theater / md-preview、blast-radius 拦截 `rm -r` / force push / migration 并超时取消、glance / merge-gate / rulebook-guard / session-saver 的个人配置属性，均来自该报告转述的 README 自述。MIT 许可、CI badge、37 stars、mission-control 4x 演示图（两个子 agent + 一个 logout 功能落在四个文件上）、作者自述早期项目 cursor-commands 有 600+ stars 是可核对的「硬信息」；除此之外没有任何基准、耗时、token 节省或用户反馈数据，颜色语义的准确性、token-weather 阈值合理性、blast-radius 的拦截完整性、next-steps 建议质量均属作者主张。原文明确的前提是 Claude Code 2.1.287+（版本号本身无法从材料中验证）、Code 视图限 macOS + Chrome + 支持图片的终端；稳定性、上游升级兼容性、多插件同开的性能开销都未交代。做法 H 的最小试用与五项指标由调研报告提出，README 未给出。
 - 做法 I 依据调研《try2love/codex-mobile-bridge》：v1.3.1 桌面 App 的下载与安装步骤（Windows x64 Setup.exe / 完整 ZIP、macOS arm64 与 x64 DMG、Ubuntu .deb 实验性）、macOS 未公证提示与 `xattr -dr com.apple.quarantine` 命令、局域网网关启动、手机扫码登录（二维码 5 分钟内有效、仅一次、网关重启失效）、手机端可做的事（发消息、排队、撤回、停止、回应命令/文件/临时权限请求/提问卡片、切换模型与推理强度、选择 Skill、上传附件每消息最多 10 个且单个 1 字节至 20 MiB、总计不超过 100 MiB、计划模式/目标模式）、Bark 与 ntfy 通知配置、四种入口（临时 HTTPS · Cloudflare、自有服务器 + SSH、NAS / 已有反代、反向代理读取超时建议不少于 300 秒）、仅源码部署的命令行参数（`--lan`、`--tunnel --cloudflared`、`--origin`、`--set-password`、`--no-auth`）、安全与数据说明（密码至少 12 位、登录有效期默认 12 小时且可设 0–87600 小时、HTTP API/SSE/长轮询需登录并校验 Host 与 Origin、写操作另校验 CSRF、`.local/` 不应上传）、可直接复制给部署 Agent 的提示词，均来自该报告转述的仓库 README。来源是仓库 README，非 OpenAI 官方文档；当前 stars 为 32。作者主张包括：手机无需登录与电脑相同的 OpenAI 账号、不要求把模型 API key 放到手机、任务继续在原电脑或 SSH 服务器执行、模型请求沿用会话提供商与认证；未见独立性能数据或第三方评测。局限包括：社区项目、与 OpenAI 无隶属关系、依赖 Codex App 内部 IPC、App 更新后可能不兼容、macOS/Windows 实测范围需看 VERIFICATION.md、Linux 为实验性、无多用户角色隔离、云聊天与 SSH 文件下载未接入、复杂 MCP 表单与身份验证挑战需桌面处理、临时隧道地址会变化且无持续可用性保证、通知不承诺严格恰好一次投递。做法 I 的最小试用与指标来自该报告的验收维度（登录与访问保护、原 App 会话读取、同一会话发消息、手机回应、模型与 Skill、SSH、列表、外网、持续运行），属项目自述而非独立评测。
-- 五条已有线索加 Claude Mods、pi、hamzafer/claude-code-mods、Codex Mobile Bridge 都没有给出「AI 是否让结果变好了」的对照评测方法或基准数据。agentbox 的成本与用量指标属于记账维度；goose 没有任务效果指标；claude-code-pro-course 没有效果数据；OpenCode 与 Codex 的 README 也没有效果数据；Claude Mods 的验收矩阵与成本公式是作者提出的评估方法；pi 的原文同样没有效果数据，其会话导出只是留档路径；hamzafer/claude-code-mods 只有 README，没有基准、耗时、token 节省或用户反馈数据；Codex Mobile Bridge 的指标来自项目 README 自述的验收维度，没有独立性能数据或第三方评测。做法 C、D、E、F、G、H、I 的「怎么判断变好了」分别沿用做法 B 或调研报告提出的最小试用方法与指标，属于作者主张。
-- 与清单的关系：agentbox 不替代 Claude Code，而是给它（以及 Codex CLI）提供自托管环境；goose 这条线索给出了可复制安装命令和通过 MCP 供给工具权限、通过定制发行版预置配置两条路径；claude-code-pro-course 给出了项目级护栏与自动化触发的可复制配置；OpenCode 补上了可复制的安装命令和 `build`/`plan` 权限分工，但 README 不含效果数据，不足以支撑 adopt，可作为把清单中 OpenCode（watch）推进到 try 的依据；Codex CLI 给出了安装与登录路径，并说明可作为 Cursor 里的智能体使用（同一层叠加），但原文只到首页，可作为对比参照，没有给出与 Cursor 的功能差异证据；Claude Mods 补上了 Claude Code 的运行时/界面扩展面、选型表、验收矩阵与成本口径，但处于 early access，适合受控试点而非直接采纳；pi 补上了「统一多提供商接口 + 可嵌入 harness」这一层，给出了安装、启动、登录、Nix 固定版本与三种容器化边界的可复制步骤，并把 OpenClaw 列为真实集成案例，但 README 是宣传 + 导览，扩展与容器化细节只给了链接，默认没有权限系统，没有效果数据，需要在容器里实测后再决定是否写进日常流程；hamzafer/claude-code-mods 补上了 Claude Code 会话内的实时观察面与危险命令闸门，给出了可复制的 marketplace 安装命令、快捷键和平台前提，足以小范围试，但材料只有 README，无实测数据，且 Code 视图限 macOS + Chrome；Codex Mobile Bridge 补上了「把 Codex App 桌面会话延伸到手机做异步审批与完成通知」这一层，给出了桌面 App 安装、局域网/临时 HTTPS/自有服务器 SSH/NAS 反代四种入口、Bark 与 ntfy 通知、命令行参数与安全说明等可照做的步骤，但材料同样只有 README，依赖 Codex App 内部 IPC，无多用户隔离，无独立评测，适合在局域网 + 账号密码下先小范围试。九条都可把评估从 watch 上调为 try，但都必须先读官方文档、审查安装脚本或社区项目源码，并做一次实际任务。
+- 做法 J 依据调研《b3s3da/qemu-harness》：一行安装与非交互安装参数、Linux/macOS 安装方式、`qh up --kernel alpine:aarch64` → `qh exec` → `qh down` 最小链路、`qh.json` 示例与全部 CLI 开关、overlay/pkgs/内核模块说明、常用命令表、`skill/SKILL.md` 接入 Claude Code 与 Grok、排障路径（`agent did not respond`、Git Bash 路径改写、TCG 加速）、性能说明（`qh up` 到 agent 可应答约 2–5 秒、rootfs 打包 initramfs 约 0.3 秒、无 virtio-net 的原版内核隧道约 15 KB/s 入、75 KB/s 出、在 Windows 10 + QEMU 11 上测试过），均来自该报告转述的 README 自述，属作者自述，无第三方复现。案例非常有限：只有 Alpine 内核，以及一段 Android GKI 的性能说明，没有 benchmark 脚本、没有对照基线，也没有第三方使用报告。明确的安全限制：自带 overlay 会以 root、空密码启动 dropbear，README 自己标注 lab only，不可放到不可信网络。「适合小范围试用而非全盘采用」是调研结论中的作者主张。做法 J 的最小试用与指标由调研报告提出（其验证抓手是 `qh exec` 的退出码与 `--json`、`qh probe`、`qh up --dry-run`），但原文没有任何关于「用了它以后 AI 的结果是否更好」的评测数据或基线对比。
+- 五条已有线索加 Claude Mods、pi、hamzafer/claude-code-mods、Codex Mobile Bridge、qemu-harness 都没有给出「AI 是否让结果变好了」的对照评测方法或基准数据。agentbox 的成本与用量指标属于记账维度；goose 没有任务效果指标；claude-code-pro-course 没有效果数据；OpenCode 与 Codex 的 README 也没有效果数据；Claude Mods 的验收矩阵与成本公式是作者提出的评估方法；pi 的原文同样没有效果数据，其会话导出只是留档路径；hamzafer/claude-code-mods 只有 README，没有基准、耗时、token 节省或用户反馈数据；Codex Mobile Bridge 的指标来自项目 README 自述的验收维度，没有独立性能数据或第三方评测；qemu-harness 的退出码/probe/dry-run 只是可判定接口与预检手段，没有效果评测或基线对比。做法 C、D、E、F、G、H、I、J 的「怎么判断变好了」分别沿用做法 B 或调研报告提出的最小试用方法与指标，属于作者主张。
+- 与清单的关系：agentbox 不替代 Claude Code，而是给它（以及 Codex CLI）提供自托管环境；goose 这条线索给出了可复制安装命令和通过 MCP 供给工具权限、通过定制发行版预置配置两条路径；claude-code-pro-course 给出了项目级护栏与自动化触发的可复制配置；OpenCode 补上了可复制的安装命令和 `build`/`plan` 权限分工，但 README 不含效果数据，不足以支撑 adopt，可作为把清单中 OpenCode（watch）推进到 try 的依据；Codex CLI 给出了安装与登录路径，并说明可作为 Cursor 里的智能体使用（同一层叠加），但原文只到首页，可作为对比参照，没有给出与 Cursor 的功能差异证据；Claude Mods 补上了 Claude Code 的运行时/界面扩展面、选型表、验收矩阵与成本口径，但处于 early access，适合受控试点而非直接采纳；pi 补上了「统一多提供商接口 + 可嵌入 harness」这一层，给出了安装、启动、登录、Nix 固定版本与三种容器化边界的可复制步骤，并把 OpenClaw 列为真实集成案例，但 README 是宣传 + 导览，扩展与容器化细节只给了链接，默认没有权限系统，没有效果数据，需要在容器里实测后再决定是否写进日常流程；hamzafer/claude-code-mods 补上了 Claude Code 会话内的实时观察面与危险命令闸门，给出了可复制的 marketplace 安装命令、快捷键和平台前提，足以小范围试，但材料只有 README，无实测数据，且 Code 视图限 macOS + Chrome；Codex Mobile Bridge 补上了「把 Codex App 桌面会话延伸到手机做异步审批与完成通知」这一层，给出了桌面 App 安装、局域网/临时 HTTPS/自有服务器 SSH/NAS 反代四种入口、Bark 与 ntfy 通知、命令行参数与安全说明等可照做的步骤，但材料同样只有 README，依赖 Codex App 内部 IPC，无多用户隔离，无独立评测，适合在局域网 + 账号密码下先小范围试；qemu-harness 补上了「让 agent 在真实（仿真）系统里执行并拿到可判定结果」这一层，给出了可复制的安装与最小链路命令、项目级 `qh.json`、SKILL.md 接入与排障路径，但项目体量小、自带 overlay 为 lab 用途、无评测数据，适合小范围试用；清单中相关条目是 Claude Code（tool，adopt），qh 接在它之下作为执行层补充。十条都可把评估从 watch 上调为 try，但都必须先读官方文档、审查安装脚本或社区项目源码，并做一次实际任务。
 
 ## 依据的调研
 
@@ -1069,3 +1197,4 @@ python3 -B "$PWD/run.py" --lan --no-auth
 - [earendil-works/pi](../research/radar/2026-10-03/518-earendil-works-pi.md)：值得一试，建议小范围试：按 README 的安装脚本装好 pi，在单个有版本控制的项目目录里用 /login 接入模型跑一个边界清晰的小任务（优先在容器里跑），验证它作为「统一模型接口 + 编码 agent」能否承载可复用的协作工作流；理由是原文给出了安装、启动、登录、容器化三类能直接照做的步骤，但扩展、技能、提示词模板等定制细节全在外链文档里，只有实测才能判断值不值得写进手册。
 - [hamzafer/claude-code-mods](../research/radar/2026-10-04/1071-hamzafer-claude-code-mods.md)：值得一试，建议在受控项目里小范围试装 mission-control（配合 token-weather、按需 blast-radius），用实时视图观察 agent 读了哪些文件、写了什么、上下文还剩多少，并在危险命令前设一道闸；理由是 README 给出了可直接照抄的安装命令、快捷键和版本要求，属于可执行流程，但全部依据仅为该 README，无实测数据，且部分视图依赖特定 Claude Code 版本与 macOS/Chrome 环境。
 - [try2love/codex-mobile-bridge](../research/radar/2026-10-04/1187-try2love-codex-mobile-bridge.md)：值得一试，建议在单台 macOS/Windows 电脑上加装该桌面 App，先在局域网和账号密码模式下小范围试用，把已有 Codex 会话接到手机做异步审批和完成通知；原因是它给出了可照做的安装、启动、通知和部署 Agent 步骤，但依赖 Codex App 内部 IPC、属社区项目，外网暴露和安全边界需自行验收。
+- [b3s3da/qemu-harness](../research/radar/2026-10-06/1581-b3s3da-qemu-harness.md)：值得一试，先在一台 Windows 或 Linux/macOS 机器上按 README 跑通「qh up → qh exec → qh down」这条最小链路，再用自带的 skill/SKILL.md 把它接给 Claude Code，让需要真实系统验证的任务在 guest 里执行；理由是原文给出了可直接复制的安装命令、完整 CLI 用法、qh.json 配置和排障路径，能补上 agent 缺少真实内核/网络执行环境这一环，但项目体量小、自带 overlay 为 lab 用途，适合小范围试用而非全盘采用。
