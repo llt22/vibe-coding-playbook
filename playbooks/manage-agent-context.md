@@ -1,10 +1,10 @@
-# 让编码 agent 少烧上下文，并在你离开时自动写下交接文档
+# 把编码 agent 的上下文管起来：挡住工具输出、审掉旧指令、重组 AGENTS.md
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：编码 agent 在长会话里因工具输出、重复指令、上下文压缩和空闲后冷缓存重读而浪费 token 并丢失状态；本手册给出把工具输出挡在上下文外、持久记忆、磁盘计划和自动交接等可验证做法。
-> 先试这一步：先用 /context 看清 token 去向，再挑一个最痛的点只加一个做法小范围试；如果痛点是长会话离开后重读太贵，先试做法 Q 的空闲自动交接。
-> 最近修订：2026-10-05
+> 解决的问题：编码 agent 的工具输出、常驻指令文件、重复规则和会话交接在持续吃掉上下文与配额，而这些做法的效果大多只有作者自述，必须用任务侧指标自己验证。
+> 先试这一步：挑一个 AGENTS.md 已经比较长的仓库，先把当前文件提交到分支并备份，再原样粘贴那条重组提示词让 agent 产出单个 PR——先不合并，只做前后对比。
+> 最近修订：2026-10-07
 
 ## 解决什么问题
 
@@ -22,7 +22,9 @@
 
 新增一类浪费发生在「你离开会话之后」：Claude Code 把会话上下文放在提示缓存里，最后一次请求后一小时过期。一小时内发起的 turn 以很低的输入价格读回整段对话；超过一小时后，下一个 turn 要按全价重读全部内容，长会话下又慢又贵。有一份材料给出了 obie/auto-handoff 这个 Claude Code 插件：在你离开后、缓存失效前自动跑一次交接命令，把当前工作状态写成一个文件，供新会话恢复；默认空闲 50 分钟触发，写 `docs/handoffs/<timestamp>-<slug>.md`，内容覆盖 goal、status、decisions、dead ends、files、verification commands、next steps、open questions，不提交。
 
-本手册把对应这几类浪费的做法合在一起：把工具输出挡在上下文窗口之外（Context Mode、headroom）、把「读很多、只判断一点」的略读外包给小模型（Quicksilver）、用持久记忆保住跨会话状态（claude-mem、mem0、cognee）、把执行计划写到磁盘并靠 hook 重注入（planning-with-files）、把团队 trace 固化成可复用技能（hivemind）、用录屏口述补上下文和反馈（blurt）、把 agent 规则集中成一份共享 AGENTS.MD 软链给同机多个工具共读（做法 L）、定期审查 CLAUDE.md / skills 里的过时指令（做法 M）、先给上下文预算做一次审计再逐项砍浪费（做法 N）、把长会话的自动交接与沉淀交给工具（做法 O、做法 P），以及在你离开会话后自动落盘交接文档（做法 Q）。核心要求是：不只看节省比例，要用任务侧指标验证结果有没有变好。
+新增一类浪费发生在 AGENTS.md 这个常驻文件本身：空操作指令（说了等于没说的规则）、一次性细则和真正的项目约定全堆在同一份文件里，每条消息都被重发，agent 还要在噪声里找规则。有一份材料给出了一条可复制的提示词：让 agent 提出一系列重组方案——移除空操作、改用渐进式披露、把细则搬到 CODING_STANDARDS.md；把这项工作交给三个一个比一个激进的子代理，最终只产出一个 PR 供人挑选。原文只有提示词正文，没有说明 `/writing-for-agents` 是什么，也没有重组前后的对比结果。
+
+本手册把对应这几类浪费的做法合在一起：把工具输出挡在上下文窗口之外（Context Mode、headroom）、把「读很多、只判断一点」的略读外包给小模型（Quicksilver）、用持久记忆保住跨会话状态（claude-mem、mem0、cognee）、把执行计划写到磁盘并靠 hook 重注入（planning-with-files）、把团队 trace 固化成可复用技能（hivemind）、用录屏口述补上下文和反馈（blurt）、把 agent 规则集中成一份共享 AGENTS.MD 软链给同机多个工具共读（做法 L）、定期审查 CLAUDE.md / skills 里的过时指令（做法 M）、先给上下文预算做一次审计再逐项砍浪费（做法 N）、把长会话的自动交接与沉淀交给工具（做法 O、做法 P）、在你离开会话后自动落盘交接文档（做法 Q），以及用一条提示词把 AGENTS.md 本身重组干净（做法 R）。核心要求是：不只看节省比例，要用任务侧指标验证结果有没有变好。
 
 ## 适用与不适用
 
@@ -41,6 +43,7 @@
 - 你在 1M 上下文模型 + Claude 订阅（1 小时 prompt cache）上跑很长的 Claude Code 主会话，经常手动 /clear 再重述上下文，或者同一条纠正要重复交代。
 - 你在 Claude Code 里跑长会话，经常撞上下文上限，想用一份结构固定、可编辑、落盘的交接简报替换内置 auto-compact，并且愿意接受一个 0.8.x 的早期 mod。
 - 你在 Claude Code 里跑长会话，经常离开去做别的事，回来发现缓存已失效、重读又慢又贵，希望在离开后、缓存失效前自动把工作状态落成一份交接文档。
+- 你的项目里已经有一份体量不小的 AGENTS.md，你想把空操作删掉、把细则从常驻上下文里移出去，让规则结构更清晰，并且你用的编程智能体支持子代理、也能创建 PR。
 - 你愿意装 MCP server / 插件 / hook / 本地代理 / skill / mod，并接受一次小范围试用。
 
 不适用：
@@ -72,6 +75,11 @@
 - 你的工作目录不是 git 仓库，或者你不允许插件运行 `git status`：做法 Q 的默认交接 skill 依赖 `date` 和 `git status`。
 - 你无法为自定义交接命令预批准工具，也不能把会话放在允许写入的权限模式下：做法 Q 无人值守时一旦调用未预批准的工具，这个 turn 会卡在权限提示上直到你回来。
 - 你只想让交接文件自动提交：做法 Q 默认只写 `docs/handoffs/<timestamp>-<slug>.md`，不做任何提交。
+- 你的项目很小，或者根本没有 AGENTS.md：做法 R 没有可重组的对象。
+- 你用的智能体不支持子代理、也不能创建 PR：做法 R 的流程跑不起来。
+- 你指望原文告诉你三个子代理是并行还是串行、什么叫「更激进」：原文都没有说明，需要自己在执行时补充或观察。
+- 你找不到 `/writing-for-agents` 这个命令，也不清楚它是什么：原文没有说明它的来源和安装方式，只能退而把提示词原文直接粘给智能体。
+- 你要求做法 R 有现成效果证据：原文只给了互动量（1835 赞、102 转发、92 回复），没有重组前后的文件对比，也没有说明重组后智能体表现是否提升；「移除空操作」「使用渐进式披露」「将指令移至 CODING_STANDARDS.md」三条也没有判断标准，什么算空操作、哪些指令该搬走都要自己定义。
 
 ## 前置条件
 
@@ -84,6 +92,7 @@
 - 做法 O 额外需要：带 function hooks（mods）的 Claude Code build（作者在 2.1.287 上开发测试）；目标场景是 1M 上下文模型 + 1 小时 prompt cache 的订阅用户；能把 mod 克隆到本地并以 `--plugin-dir` 加载，或能改 `~/.claude/settings.json` 的 `env`。
 - 做法 P 额外需要：带 mods（function-hook plugins）的 Claude Code 构建；能 clone 仓库并以 `--plugin-dir` 加载，或能改 `~/.claude/settings.json` 的 env；`~/.claude/state` 与 `~/.claude/auto-handoff/` 可写；可选 Tailscale（跨设备看简报页）、jq（状态栏链接脚本）、终端超链接支持（`FORCE_HYPERLINK=1`）。
 - 做法 Q 额外需要：已安装并运行 Claude Code（原文在 Claude Code 2.1.289 上开发测试）；能安装插件并在下次会话启动时加载；工作目录是有 git 仓库的目录（默认交接 skill 会运行 `date` 和 `git status`）；能写入 `docs/handoffs/`；若自定义交接命令，必须给它 `allowed-tools` 预批准它会调用的工具，或把会话放在允许写入的权限模式下；该插件基于 early access 的 function hooks 插件 API，可能在版本间变化。
+- 做法 R 额外需要：仓库里已有一个（作者描述为“一团乱麻”）的 AGENTS.md；准备一个可读写的 CODING_STANDARDS.md 作为细则落点；使用支持子代理、且能创建 PR 的编程智能体（如 Claude Code 一类），并已配置可用的 `/writing-for-agents` 命令或技能——原文没有说明这个命令的来源和安装方式，若没有它，可直接把提示词原文粘贴给智能体。另外原文没有定义「更激进」指什么，也没有说明三个子代理是并行还是串行，执行时需要自己补充或观察。
 - 各自的凭据与许可：
   - Quicksilver：到 console.typesafe.ai 申请一个 Jev key。内容会被发送到 TypeSafe 的 API，所以不要拿它处理不能给第三方的数据。
   - claude-mem：标准安装会要求浏览器登录（邮箱 magic link，无需信用卡）；不想要账号交互就显式传 --provider、设 CLAUDE_MEM_ONLINE_OPTIN=false，或在 CI / 非交互 shell 里运行。
@@ -117,6 +126,7 @@
 - 长会话经常撞上下文上限、每次都要手动 /clear 再重述 → 做法 O（ctx-handoff mod，先只跑 `/handoff dry` 看一次交接成本）。这条只作用于主会话，且作者自标 experimental，先小范围试。
 - 长会话经常撞上下文上限、你想用一份可编辑、可落盘的交接简报替换内置 auto-compact → 做法 P（claude-auto-handoff，先用 `AUTO_HANDOFF_TOKENS=60000` 跑一次交接）。做法 P 与做法 O 同属「阈值自动交接」，同一条会话里二选一，不要叠加。
 - 长会话经常离开去做别的事，回来发现缓存已失效、重读又慢又贵，希望离开后自动落盘交接文档 → 做法 Q（obie/auto-handoff，先用默认 `minutes`=50 在一个有 git 仓库的真实长任务里试一次）。做法 Q 是「空闲到点就自动交接」，与做法 O、P 的「阈值触发」不同；材料没有说明三者能否共用，同一条会话先只加一个。
+- 主要痛点是 AGENTS.md 自己一团乱麻：空操作、一次性细则和真正的约定堆在一起 → 做法 R（一条可复制的提示词 + 三个递进激进的子代理 + 单个 PR）。先把当前文件备份到分支，只产 PR、先不合并。
 
 这些做法可以叠加，但一次只加一个，否则分不清是哪个起了作用。
 
@@ -711,7 +721,7 @@ hivemind codex uninstall
 
 ### 做法 N：先审计上下文预算，再一次只改一项
 
-适用形态：你在用 Claude Code，配置了 CLAUDE.md，接了至少一个 MCP 服务器，并且感觉用量/配额提前耗尽。这条材料只有一条推文，原文在 `/mcp` 处被截断，全文没有任何数字或对比实验，按 study / 小范围试对待，不要当 adopt。它不用装任何新工具，成本最低，适合在 A–Q 之前先做一遍。
+适用形态：你在用 Claude Code，配置了 CLAUDE.md，接了至少一个 MCP 服务器，并且感觉用量/配额提前耗尽。这条材料只有一条推文，原文在 `/mcp` 处被截断，全文没有任何数字或对比实验，按 study / 小范围试对待，不要当 adopt。它不用装任何新工具，成本最低，适合在 A–R 之前先做一遍。
 
 1. 前提确认：Claude Code 可用；有较长的 CLAUDE.md；接入了多个 MCP 服务器而其中多数用不到；对用量/配额敏感。如果 CLAUDE.md 很短、也不接 MCP，这条几乎没有可操作空间。
 
@@ -933,6 +943,33 @@ hivemind codex uninstall
 
 9. 与做法 O、做法 P 的关系：三者都在做自动交接，但触发条件不同——做法 O 是「上下文到阈值触发 + 空闲缓存保活 + distill」，做法 P 是「上下文到阈值触发、明确替换内置 auto-compact」，做法 Q 是「空闲到点触发、写交接文档到 docs/handoffs/」。材料没有说明三者能否共用；同一条会话先只加一个，不要叠加。
 
+### 做法 R：用一条提示词重组 AGENTS.md（移除空操作、渐进式披露、细则搬走，单个 PR 定取舍）
+
+适用形态：项目里的 AGENTS.md 已经是一团乱麻——空操作指令、一次性细则和真正的项目约定堆在同一份文件里，每条消息都被重发，agent 还要在噪声里找规则。这条做法让智能体提出一系列重组方案，并把工作交给三个一个比一个激进的子代理，最终只产出一个 PR 供人挑选。原文只有提示词正文，没有说明 `/writing-for-agents` 具体是什么（自定义命令、技能还是插件），也没有前后对比结果，按 study / 小范围试对待。
+
+1. 前提：仓库里已有一个（作者描述为“一团乱麻”）的 AGENTS.md；准备一个可读写的 CODING_STANDARDS.md 作为细则的落点；使用支持子代理、且能创建 PR 的编程智能体（如 Claude Code 一类），并已配置可用的 `/writing-for-agents` 命令或技能。若没有这个命令，可直接把下面的提示词原文粘贴给智能体。
+
+2. 在项目根目录启动智能体，发送以下提示词（原文照抄，未做改写）：
+```
+/writing-for-agents 我的 AGENTS.md 简直一团乱麻，提出一系列重组方案，这些方案要：
+
+- 移除空操作
+- 使用渐进式披露
+- 将指令移至 CODING_STANDARDS.md
+
+将你的工作应用到三个子代理上，每个子代理都比前一个更激进。创建一个单一的 PR。
+
+AGENTS.md
+```
+
+3. 让智能体按提示词自行派生三个子代理执行重组，第三个比第二个、第二个比第一个更激进，最终汇总为一个 PR。**注意**：原文没有说明三个子代理是并行还是串行，也没有定义“更激进”具体指什么，这一步需要自己在执行时向智能体补充或观察其做法。
+
+4. 人工审查这个唯一 PR：对比三种子代理方案的差异，决定采纳哪一版或如何合并，再合并到主干。先备份、只产 PR、暂不合并，也是可以的最小用法。
+
+5. 判断「更激进」这一步有没有产生信息量：如果三份方案几乎一样，说明「逐步更激进」这个设计没有起作用，需要重新设计提示，而不是直接采纳其中一版。
+
+6. 与做法 L、做法 M 的分工：做法 L 是把一份共享 AGENTS.MD 软链给多个工具共读（分发问题）；做法 R 是重组 AGENTS.md 本身的结构（空操作、披露层次、细则放哪里）；做法 M 是审查 CLAUDE.md / skills 里的旧提示习惯是否还适用（内容问题）。三者可以组合，本手册建议的顺序是：先集中（L）、再重组结构（R）、再逐条审内容（M）。这条顺序是本手册的建议，不是材料给出的。
+
 ### 核心用法：用代码思考（Think in Code）
 
 不管用哪种做法，关键动作是：让模型写脚本做分析，只 console.log() 结果，而不是把 50 个文件读进上下文再数函数。示例：
@@ -966,6 +1003,7 @@ ctx_execute("javascript", `
 - 做法 O：`/handoff` 一次显示上下文用量、阈值、刷新与 distill 状态、待处理的 away handoff、交接失败原因、非法 JSONL 样本与原因；distill 有变更时 toast 显示变更条目数和写入的每个 notes 文件全路径；`claude plugin test` 94/94 通过（覆盖 JSONL 校验与拒绝样本、跨项目移动、fork 超时、暂扣消息去重与附件、密钥不外泄等）。交接成本本身也能量：`/handoff dry` 会显示这次交接的成本。
 - 做法 P：面板的 `✓ handed off · 162k → 45k` 前后 token 对比与 `open brief` 链接；`~/.claude/state/auto-handoff/auto-handoff.log` 记录全部动作、失败与 facts-only 回退；每份简报在 `~/.claude/state/auto-handoff/pages/` 有页面，同一轮交接按顺序互链。0.8.3 起简报必须写入真实数字（交接时 token、阈值及其来源、会话起始大小、无人输入时已运行几次交接），否则写 "unknown"；0.8.4 起不在 Handoff Numbers 里的 token 数字被标记 `[unverified: not in Handoff Numbers]` 并记日志。作者自测：阈值设 80k 时的一次运行，mod 在阈值处拒绝一次读取、写简报、清空，新会话约 7 秒后回到工作、处于 31k（附 demo.gif / demo.mp4）。
 - 做法 Q：原文没有给出任何量化指标或对照实验，只主张长会话下重读「又慢又贵」。可自行观察：是否按预期只触发一次、且未在你离开期间被额外 turn 打断或反复触发；交接文件是否生成在 `docs/handoffs/` 下并覆盖 goal、status、decisions、dead ends、files、verification commands、next steps、open questions；新会话只读 handoff 能否接着干；交接 turn 的成本与新会话从冷缓存重读全部对话的成本对比（前者应为一次缓存读）；失败信号包括权限提示卡住、计时器因退出 Claude Code 而未触发、休眠迟到被跳过导致你回来时没有交接文件。
+- 做法 R：`AGENTS.md` 的体积变化（行数 / 字符数在重组后下降多少）；被删除或被合并的空操作条目数量（人工确认其中有多少是真正的冗余）；三个子代理方案的差异度——如果三份方案几乎一样，「逐步更激进」这个设计就没有产生信息量，说明该步骤需要重新设计提示。这条原文没有给任何工具读数或回执，唯一的人工关口就是「创建一个单一的 PR」。
 
 任务侧指标：
 
@@ -994,6 +1032,8 @@ ctx_execute("javascript", `
 - 简报事实准确率（做法 P）：files/commits/issues 等代码提取段是否与实际一致；Haiku 写的 token 数字是否被标 `[unverified: not in Handoff Numbers]`。
 - 新会话恢复时间与手动补充次数（做法 Q）：只读 `docs/handoffs/` 下生成的交接文件，看能否在不重新浏览整段对话的情况下接着干；你手动补充说明的次数应下降。
 - 交接 turn 成本对比（做法 Q）：交接本身也是一个 turn，其中每个模型请求都付出一次对整段对话的缓存读，并让缓存再热一小时；把它与「什么都不做、一小时后冷缓存全价重读」的成本对比。
+- 渐进式披露是否真的生效（做法 R）：重组后执行一个典型任务，观察智能体是否只在需要时才去读 `CODING_STANDARDS.md`，而不是每次全量加载。
+- 指令遵循率的前后对比（做法 R）：挑 3–5 个原本写在 `AGENTS.md`、现在被移到 `CODING_STANDARDS.md` 的规则，用同一个任务分别在重组前、重组后的配置下各跑一次，看智能体是否仍然遵守；如果规则被移走后智能体开始违反，说明「激进」过度。
 
 最小试用方式：
 
@@ -1012,6 +1052,7 @@ ctx_execute("javascript", `
 13. 做法 O：按 README Quick start 在**单个 Claude Code 会话**里小范围试——clone 后以 `--plugin-dir` 加载、跑 `/handoff` 验证状态，先用 `/handoff dry` 观察一次交接成本，再在长任务上启用自动交接与 distill。先确认 `/handoff` 自检能看到上下文用量与阈值，再看自动交接后新会话是否接上了上一段的进度。
 14. 做法 P：clone 后以 `claude --plugin-dir ~/claude-auto-handoff` 在一个**不那么关键**的长会话里启动；设 `AUTO_HANDOFF_TOKENS=60000` 降低阈值，省去填满 160k 的等待；正常干活直到面板出现，观察四步（写简报 → 清空 → 起新会话 → 新会话恢复）；打开 `~/.claude/state/auto-handoff/<session-id>.md` 逐条核对工作进展、决策、待验证假设、死路、最后请求及 Status、下一步；查 `~/.claude/state/auto-handoff/auto-handoff.log` 有无失败与 facts-only 回退；觉得结构不合适就改 `~/.claude/auto-handoff/brief.md`（不加 files/commits 段）和 `instructions.md`，再跑第二次比较。
 15. 做法 Q：在一个真实的、有 git 仓库的长任务会话里安装插件，先用默认配置（`minutes`=50）。若不想等 50 分钟，可临时把 `minutes` 调小（原文未给出安全的短值，需你自己权衡；注意默认值是为匹配一小时缓存设计的）。做一段有明确目标和未完事项的工作，然后离开/停止交互，等待触发。检查 `docs/handoffs/` 下是否生成了 `<timestamp>-<slug>.md`，以及是否覆盖 goal、status、decisions、dead ends、files、verification commands、next steps、open questions。开一个新会话，只读这份 handoff，看能否在不重新浏览整段对话的情况下接着干。
+16. 做法 R：挑一个 `AGENTS.md` 已经比较长的仓库，先把当前文件提交到分支并备份，然后按上面第 2 步发送那条提示词，让智能体产出那个单一 PR；先不合并，只做前后对比，记录体积变化、空操作条目数、三个子代理方案的差异度，再用 3–5 个规则做重组前后的遵循率对照。
 
 试多久：
 
@@ -1028,6 +1069,7 @@ ctx_execute("javascript", `
 - 做法 O：至少覆盖一次自动交接触发，以及一次空闲 55 分钟后的刷新（或 away handoff）流程。作者自标 experimental，先只在一个会话、一个项目上试，确认交接后能接上、distill 写出的 memory / rule 确实有用，再考虑常驻。
 - 做法 P：原文没有给建议时长，只给了一次 80k 阈值的运行案例。先按 `AUTO_HANDOFF_TOKENS=60000` 在单个会话、单个项目上跑一次完整交接，核对简报与日志；确认新会话能接上、简报事实没写错，再考虑调回 `threshold` 让它在真实长会话里常驻。
 - 做法 Q：原文没有给出时长或量化目标。先在一个有 git 仓库的真实长任务里跑一次完整交接，核对 `docs/handoffs/` 下的文件是否覆盖 goal、status、decisions、dead ends、files、verification commands、next steps、open questions；再开新会话只读 handoff，看能否接着干。确认后再考虑常驻，并注意 5 分钟缓存场景要调小 `minutes`。
+- 做法 R：原文没有给时长，也没有给改善数据。判定标准只有一条组合：文件更短、被移走的规则在实测任务中仍被遵守、并且人工审查认为可读性提升，才算这一步有效；如果规则被移走后智能体开始违反，说明「激进」过度，应退回更保守的那一版方案。
 
 ## 常见坑
 
@@ -1186,9 +1228,19 @@ obie/auto-handoff（做法 Q，空闲自动落盘交接）：
 - 触发与取消规则要记住：空闲计时从主对话 turn 结束开始，任何新 turn 重置；subagent 结束不影响；每次离开只交接一次；`/clear` 取消待执行；休眠迟到则跳过（因为那时执行要付全价）。
 - 与做法 O、做法 P 同属自动交接，触发条件不同；材料没有说明能否共用，同一条会话先只加一个，不要叠加。
 
+用一条提示词重组 AGENTS.md（做法 R）：
+
+- 来源是单条推文，只有提示词正文，没有配套说明：`/writing-for-agents` 是什么（自定义命令、技能还是插件）、怎么安装，原文都没有交代；没有这个命令时只能把提示词直接粘给智能体。
+- 原文没有给出重组前后的 AGENTS.md 对比，没有说明重组后文件长什么样，也没有说明重组是否真的提升了智能体表现。
+- 「移除空操作」「使用渐进式披露」「将指令移至 CODING_STANDARDS.md」三条是作者的主张，原文没有给出判断标准：什么算空操作、渐进式披露写成什么形式、哪些指令该被搬走，都需要自己定义。
+- 原文只提供「创建一个单一的 PR」这一道人工审查关口，没有给出任何验证指标；1835 赞、102 转发、92 回复只反映传播度，不是效果证据。
+- 三个子代理是并行还是串行、什么叫「更激进」，原文都没有说明，需要自己在执行时补充或观察；如果三份方案几乎一样，说明这一步没有产生信息量。
+- 规则被移走后智能体可能开始违反——文件变短不等于变好，「激进」过度时应退回更保守的那一版方案。
+- 适用条件：项目已有体量不小的 AGENTS.md，且所用智能体支持子代理和创建 PR；对小型项目或没有 AGENTS.md 的项目不适用。
+
 ## 证据与来源
 
-本手册合并了十五份材料：mksglu/context-mode、UditAkhourii/quicksilver、AGIHunt/blurt、thedotmack/claude-mem、headroomlabs-ai/headroom、mem0ai/mem0、topoteretes/cognee、OthmanAdi/planning-with-files、activeloopai/hivemind、cablate/ctx-handoff-mod、alexknowshtml/claude-auto-handoff、obie/auto-handoff，一条转述 Peter Steinberger（OpenClaw 作者）开源其个人 agent 配置的推文（@oliviscusAI）、一条关于 CLAUDE.md / prompt-audit 的推文（@RoundtableSpace），以及一条关于「CLAUDE.md 正在吞噬你的令牌限制」的推文（@thegreatest_sv）。以下逐条标注依据和性质。
+本手册合并了十六份材料：mksglu/context-mode、UditAkhourii/quicksilver、AGIHunt/blurt、thedotmack/claude-mem、headroomlabs-ai/headroom、mem0ai/mem0、topoteretes/cognee、OthmanAdi/planning-with-files、activeloopai/hivemind、cablate/ctx-handoff-mod、alexknowshtml/claude-auto-handoff、obie/auto-handoff，一条转述 Peter Steinberger（OpenClaw 作者）开源其个人 agent 配置的推文（@oliviscusAI）、一条关于 CLAUDE.md / prompt-audit 的推文（@RoundtableSpace）、一条关于「CLAUDE.md 正在吞噬你的令牌限制」的推文（@thegreatest_sv），以及一条关于用提示词重组 AGENTS.md 的推文（@mattpocockuk）。以下逐条标注依据和性质。
 
 Context Mode（来自 README 与调研报告）：
 
@@ -1305,6 +1357,16 @@ obie/auto-handoff（来自 obie/auto-handoff README 调研）：
 - 本手册为这条材料补的最小试用方式（有 git 仓库的长任务、默认 50 分钟或临时调小 `minutes`、检查 `docs/handoffs/`、开新会话只读 handoff 续接）、判定指标（只触发一次、新会话恢复时间与手动补充次数、交接 turn 成本对比、交接文档可用性、失败信号），是基于原文机制推导出的验证方式，不是原文给出的内容——原文没有给出任何量化指标或对照实验。
 - 与做法 O、做法 P 的关系：三者都在做自动交接，但触发条件不同；材料没有说明能否共用；本手册建议同一条会话先只加一个。
 
+用一条提示词重组 AGENTS.md（来自 @mattpocockuk 的推文）：
+
+- 有依据的只有提示词模板本身：`/writing-for-agents` + 「移除空操作」「使用渐进式披露」「将指令移至 CODING_STANDARDS.md」+ 「将你的工作应用到三个子代理上，每个子代理都比前一个更激进。创建一个单一的 PR。」+ 「AGENTS.md」这几句来自原文，本手册原样照抄，未做改写。
+- 原文没有说明 `/writing-for-agents` 具体是什么（自定义命令、技能还是插件），也没有给出前后对比结果；三个子代理是并行还是串行、「更激进」指什么，原文均未定义，原文极短，只是一条提示词模板，没有配套说明。
+- 给出的数据：只有互动量 1835 赞、102 转发、92 回复，这是传播度，不是效果证据。
+- 只是作者主张的：「移除空操作」「使用渐进式披露」「将指令移至 CODING_STANDARDS.md」三条本身没有判断标准，也没有证据说明重组后智能体表现变好；原文没有给出重组前后的 AGENTS.md 对比，也没说明重组后文件长什么样。
+- 本手册为这条材料补的最小试用方式（先提交到分支并备份、只产 PR 不合并）、判定指标（体积变化、空操作条数、渐进式披露是否生效、3–5 条被移走规则的遵循率、三份方案差异度）与「激进过度就退回保守版」的判断，都是基于原文主张推导出的验证方式，不是原文给出的内容——原文没有给出任何验证指标或改善数据。
+- 与做法 L、做法 M 的关系：做法 L 是分发（把一份共享 AGENTS.MD 软链给多个工具），做法 R 是重组结构（空操作、披露层次、细则放哪里），做法 M 是审内容（旧提示习惯是否还适用）；本手册建议的组合顺序是先集中、再重组、再逐条审，这是本手册的建议，不是材料给出的。
+- 适用条件：项目已有体量不小的 AGENTS.md，且所用智能体支持子代理和创建 PR；对小型项目或没有 AGENTS.md 的项目不适用。
+
 ## 依据的调研
 
 - [mksglu/context-mode](../research/radar/2026-10-01/68-mksglu-context-mode.md)：值得一试，建议先在 Claude Code（或 Cursor）上做小范围试用：用 MCP-only 方式跑一个真实编码任务，对照 ctx_stats 的上下文节省与实际任务结果，再决定是否推广到团队。理由是它直指“工具输出塞满上下文 + 会话压缩后失忆”这两个具体痛点，安装与回退成本低；但 README 的 98% 节省数字、100x 说法和企业 logo 墙均为自述，缺少第三方验证，且 ELv2 许可对商用有限制。
@@ -1322,3 +1384,4 @@ obie/auto-handoff（来自 obie/auto-handoff README 调研）：
 - [cablate/ctx-handoff-mod](../research/radar/2026-10-04/1185-cablate-ctx-handoff-mod.md)：值得一试，可以直接照 README 的 Quick start 在单个 Claude Code 会话里小范围试：clone 后以 --plugin-dir 加载、跑 /handoff 验证状态，先用 /handoff dry 观察交接成本，再在长任务上启用自动交接与 distill。理由是原文给出了可复制的安装/配置/命令与明确的触发条件，但作者自己标注为 experimental、依赖早期 function-hooks API，且空闲缓存刷新等关键行为尚未实测，所以只建议试不建议直接采用。
 - [alexknowshtml/claude-auto-handoff](../research/radar/2026-10-05/1225-alexknowshtml-claude-auto-handoff.md)：值得一试，建议小范围试：先按 README 的安装步骤在支持 mods 的 Claude Code 构建上装好，用 AUTO_HANDOFF_TOKENS=60000 在一个长会话里跑一次交接，检查生成的简报是否准确、新会话能否续接；理由是它给出了完整可照做的安装、配置与模板改法，但依赖尚未普及的 mods 构建、版本仅 0.8.x 且只有作者自测数据，不足以直接 adopt。
 - [obie/auto-handoff](../research/radar/2026-10-05/1315-obie-auto-handoff.md)：值得一试，可以在 Claude Code 长会话里小范围试装 auto-handoff，用默认 50 分钟空闲触发 `/auto-handoff:handoff` 把工作状态落成 `docs/handoffs/` 下的交接文件，让新会话能续接；它装法、配置、行为边界都写得很具体，但依赖早期访问的 hooks API、只有作者主张的成本收益，且无法识别会话用的是哪种缓存，所以先试不直接采用。
+- [@mattpocockuk: 今天的提示：](../research/radar/2026-10-07/1734-item.md)：值得一试，可以直接把这条提示词抄进支持子代理的编程智能体，用自己的 AGENTS.md 跑一次重组，并用单个 PR 做人工取舍；它给出了可复制的提示文本和多子代理、单 PR 的具体流程，但原文没有任何效果证据，只能小范围试。
