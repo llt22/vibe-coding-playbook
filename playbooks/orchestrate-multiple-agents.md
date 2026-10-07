@@ -1,14 +1,14 @@
-# 让多个 AI 子代理竞争、互评，并通过验证门再交付
+# 让并行的编码 agent 先过验证，再让你一眼看到谁在等你
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：单个 AI 回答、单条串行的 agent 会话交付的往往是你没验证过的结果；这篇手册把「不满意就重问一次」升级成可执行流程——多策略并行竞争、角色化流水线、每个 agent 独立 worktree 与项目记忆、提交前互评，以及必须通过你自己的验证命令才能合入。
-> 先试这一步：挑一个你确实不满意、且能写清验收标准的真实任务，先用做法 A 的 `--quick` 跑一次，并把被拒的旧答案作为 baseline 传进去。
-> 最近修订：2026-10-04
+> 解决的问题：当多个编码 agent 并行工作时，如何用可验证的合入门槛、可提交的项目记忆和通知驱动的注意力路由，避免漏掉等待输入、误合未验证改动和重复踩坑。
+> 先试这一步：先从一个已有测试的仓库开始：把任务写成自包含文件、设好验证命令，并只开两个并行 agent；macOS 上可同时装好 cmux hooks，用通知环和 ⌘⇧U 验证「谁在等我」是否真能一键跳到。
+> 最近修订：2026-10-08
 
 ## 解决什么问题
 
-单个 AI 回答、单条串行的 agent 会话，交付的往往是你没有验证过的结果：看起来合理，但可能漏了你真正在意的约束。这篇手册把「不满意就重问一次」升级成一套可执行的流程——把同一个任务交给多个子代理用不同策略并行求解、互相对抗、由独立裁判按公开标准打分淘汰；把有固定分工的多步任务（先搜集资料、再扩写成文）固化成角色化 Crew 流水线，产物落盘成文件；代码类任务则必须通过你自己的验证命令才能合入，再进一步可以把整条链固化成 GitHub 上的 issue → PR → 浏览器实测 → 合并。同时给出成本预估、可观察指标，以及「什么时候不值得这么做」的判断线。新增的做法 H 把「隔离、记忆、评审」三件事落成可手工照做的流程：每个 agent 一个 git worktree、项目记忆写成 conventions.md/plan.md/dead-ends.md、第二个 agent 在提交前读 diff 做同行评审；Offrun 是这套流程在 macOS 上的一种现成实现。
+单个 AI 回答、单条串行的 agent 会话，交付的往往是你没有验证过的结果：看起来合理，但可能漏了你真正在意的约束。这篇手册把「不满意就重问一次」升级成一套可执行的流程——把同一个任务交给多个子代理用不同策略并行求解、互相对抗、由独立裁判按公开标准打分淘汰；把有固定分工的多步任务（先搜集资料、再扩写成文）固化成角色化 Crew 流水线，产物落盘成文件；代码类任务则必须通过你自己的验证命令才能合入，再进一步可以把整条链固化成 GitHub 上的 issue → PR → 浏览器实测 → 合并。同时给出成本预估、可观察指标，以及「什么时候不值得这么做」的判断线。新增的做法 H 把「隔离、记忆、评审」三件事落成可手工照做的流程：每个 agent 一个 git worktree、项目记忆写成 conventions.md/plan.md/dead-ends.md、第二个 agent 在提交前读 diff 做同行评审；Offrun 是这套流程在 macOS 上的一种现成实现。新增的做法 I 解决另一个并行 agent 的常见瓶颈：注意力。多个终端型 agent 跑起来后，真正的浪费常常不是模型慢，而是「哪个 agent 在等我」不可见。cmux 把等待输入变成蓝色通知环、侧栏徽标、通知面板和 ⌘⇧U 跳转，让「谁在等我」成为可路由的信号；但 cmux 作者明确说它是 primitive，不是 solution，不替代验证、记忆和评审。
 
 ## 适用与不适用
 
@@ -23,6 +23,9 @@
 - 有一个低风险、已有测试基础、且托管在 GitHub 上的小仓库，想验证「issue → PR → 浏览器实测 → 合并」这条自动链路到底能拦住多少问题（做法 G）。
 - 你想在一个已有 git 的仓库里，用轻量方式隔离多个 agent（每个一个 worktree），并把项目记忆写成可提交的纯文件，让第二个 agent 在提交前读 diff 评审（做法 H）。
 - 你有一台 Apple Silicon Mac（M1+）、macOS 14 Sonoma 或更高，想用 Offrun 把这套流程跑起来；或者你不在这个环境，但愿意手工照做同样的三条流程。
+- 新增：你在 macOS 上并行跑多个终端型 coding agent，需要一眼看出谁在等你，并可跳到具体 pane（做法 I）。
+- 新增：你想在远程机器上跑 agent、本地驱动（cmux ssh），或让 agent 用内置可编程浏览器自验证 web 改动（做法 I）。
+- 新增：你希望 Claude Code teammate/subagent 以原生分屏出现，而不是隐藏后台进程（做法 I）。
 
 **不适用**
 
@@ -40,6 +43,11 @@
 - 想靠 Offrun 的「免费无限」「无服务器」「不经手密钥」等厂商声明作为选型依据：原文未给审计或第三方说明。
 - 需要跨 Mac 通知或本地听写：这些只在 Offrun/macOS 生态成立。
 - 希望评审后自动合并：做法 H 默认「Nothing merges on its own」，发现落到 chat 里由你判断；这与做法 B/G 的自动合入闸门不同。
+- 新增：不是 macOS；或不想用 GUI 终端：cmux 仅支持 macOS，且是 GUI 终端。
+- 新增：agent CLI 不在 PATH 上却想用 hooks 自动恢复；README 要求装 hooks 前 agent binary 在 PATH。
+- 新增：把 cmux 当完整解决方案；它不规定工作流，也不负责合入闸门。
+- 新增：需要本机进程活过 logout、重启、关机或断电；本机 local-tmux 不行，要换 ssh-tmux、mosh-tmux 或持久云 VM。
+- 新增：没有第三方性能与收益数据，不宜作为通用默认方案直接采用。
 
 ## 前置条件
 
@@ -49,9 +57,10 @@
 - 做法 C（openrig）：Node.js 22 或 24 + tmux，仅 macOS / Linux；启动会写入 provider hooks 和 workspace trust 设置，动手前先备份相关文件。
 - 做法 D（oh-my-openagent）：一台可弃用的机器或容器（安装脚本是 `curl | bash`）；一个自己的小项目目录；至少一家模型订阅或 API key。
 - 做法 E（deer-flow）：git、Docker Desktop/Engine、Docker Compose v2.24+（用 `docker compose version` 自检）；仓库自身要求 Python 3.12+ / Node.js 22+。
-- 做法 F（crewAI）：Python >= 3.10 且 < 3.14；命令行操作与基本 Python 编辑能力；用 uv 管理依赖；一个模型提供商的 API key（默认走 OpenAI API）；若任务要用网页搜索工具，另需 Serper.dev 的 key。Windows 上若遇 `chroma-hnswlib` 构建错误，需先装 Visual Studio Build Tools 并勾选 *Desktop development with C++*。
+- 做法 F（crewAI）：Python >= 3.10 且 < 3.14；命令行操作与基本 Python 编辑能力；用 uv 管理依赖；一个模型提供商的 API key（默认走 OpenAI API）；若任务要用网页搜索工具，另需 Serper.dev 的 key。Windows 上若遇 `chroma-hnswlib` 构建错误，需先装 Visual Studio Build Tools 并勾选 Desktop development with C++。
 - 做法 G（cubefarm）：Node.js 22 或更新版本；`git`；已登录的 GitHub CLI（`gh auth login`）；一个编码 agent 的订阅（cubefarm 自带 Claude Code 作为默认 agent，CEO 也跑它，无需另行安装，登录一次即可；你本机已装并登录的 Codex 或 OpenCode 也可以被选中）；Google Chrome（QA agent 要在浏览器里测你的应用）；项目必须托管在 GitHub 上；办公室数据在 `~/.cubefarm`（设置、仓库克隆、每个 agent 一份独立工作副本），可用 `SWARM_HOME` 换目录。
 - 做法 H（Offrun 或手工照做）：项目在 git 下（worktree 依赖 git）；至少一个你已在用的 agent CLI 和账号，有第二个账号更好（用于限额切换）。若用 Offrun 本身：Apple Silicon Mac（M1 或更新）、macOS 14 Sonoma 或更高；下载 Offrun 拖进 Applications；在 Settings → Agents 添加账号。若手工照做：任意支持 git 的环境，能创建 worktree 的 git 版本，agent CLI 能在指定目录运行。
+- 新增：做法 I（cmux）仅支持 macOS，会读取你已有的 Ghostty 配置 `~/.config/ghostty/config`。推荐 DMG 安装，也可 Homebrew。若要用 agent hooks 的自动恢复，必须先装好对应 agent CLI，且其 binary 在 PATH 上。README 列出的受支持恢复集成包括：Claude Code、Codex、Grok、OpenCode、Pi、Amp、Cursor CLI、Gemini、Rovo Dev、Copilot、CodeBuddy、Factory、Qoder。Claude Code 由 cmux 的 Claude wrapper 处理，需在 Settings 中开启 Claude 集成。要远程跑 agent 需可 SSH 的远程主机。自定义 resume 绑定若要自动执行，必须先批准签名命令前缀；token、password、secret、API key 等敏感环境键在存储绑定前会被丢弃。
 
 ## 操作步骤
 
@@ -67,12 +76,11 @@
 | 有固定的多步分工（研究 → 成文），愿意写 Python / 改 JSONC | 做法 F |
 | 有 GitHub 上的低风险小仓库，想验证 issue → PR → 浏览器实测 → 合并 这条链 | 做法 G |
 | 想在一个已有 git 的仓库里轻量隔离多个 agent、把项目记忆落成文件、提交前互评 | 做法 H |
+| macOS 上并行跑多个终端型 coding agent，想一眼看到谁在等我 | 做法 I |
 
 ### 做法 A：把不满意的回答送进锦标赛（arena-skill）
 
-1. 安装，三选一。
-
-直接把下面内容粘给 Claude：
+1. 安装，三选一。直接粘给 Claude：
 
 ```
 https://github.com/Jakeschincariol/arena-skill
@@ -104,7 +112,7 @@ cp -r arena-skill/skills/arena ~/.claude/skills/
 python3 skills/arena/bracket.py plan --agents 100
 ```
 
-已知的赛程与开销（来自仓库）：100 个 agent = 7 轮 / 595 次子代理调用 / 70 个 wave；64 = 6 轮 / 379 / 49；32 = 5 轮 / 187 / 28；16（`--quick`）= 4 轮 / 91 / 16；8 = 3 轮 / 43 / 10。若带了要击败的旧答案，再加 1 次调用。作者建议：日常用 `--quick` 或 `--agents 16`，真重要的答案才上 100。
+已知赛程与开销：100 个 agent = 7 轮 / 595 次子代理调用 / 70 个 wave；64 = 6 轮 / 379 / 49；32 = 5 轮 / 187 / 28；16（`--quick`）= 4 轮 / 91 / 16；8 = 3 轮 / 43 / 10。若带了要击败的旧答案，再加 1 次调用。作者建议：日常用 `--quick` 或 `--agents 16`，真重要的答案才上 100。
 
 4. 把任务写具体，并检查任务文件。`.arena/<run>/task.md` 是这 100 个 agent 唯一知道的东西；任何要求没写进去，它们都会漏。
 
@@ -134,7 +142,7 @@ python3 bracket.py next
 python3 bracket.py prompts attack
 python3 bracket.py pairings
 python3 bracket.py collect
-python3 bracket.py record r3-m07 a042 --reason "..."
+python3 bracket.py record r3-m07 a042 --reason '...'
 python3 bracket.py advance
 python3 bracket.py status
 python3 bracket.py winner
@@ -162,7 +170,7 @@ curl -fsSL https://raw.githubusercontent.com/matank001/clodfarm/main/scripts/ins
 
 启动后打开登录流程：出现一个 URL，在任意设备上批准后把 code 粘回。UI 在 `http://localhost:8080`。
 
-2. （替代方式）裸 Docker 启动：
+2. 替代方式，裸 Docker 启动：
 
 ```bash
 docker run -d --name clodfarm --restart unless-stopped \
@@ -179,7 +187,7 @@ docker exec -it clodfarm clodfarm login
 
 ```bash
 FARM_REPO_URL=<你的仓库地址>
-FARM_VERIFY_CMD="pytest -q"
+FARM_VERIFY_CMD='pytest -q'
 ```
 
 预期结果：farm 克隆该仓库，每个子代理的成果只有在你的测试通过时才落到 `main`；失败输出会回注给该子代理续跑。
@@ -187,13 +195,13 @@ FARM_VERIFY_CMD="pytest -q"
 5. 派任务（命令行与 agent 内部用的是同一个命令）：
 
 ```bash
-docker exec clodfarm clodfarm spawn "Add CSV export" --prompt "Add CSV export to the report page, with tests."
+docker exec clodfarm clodfarm spawn 'Add CSV export' --prompt 'Add CSV export to the report page, with tests.'
 docker exec clodfarm clodfarm status
 ```
 
 `--on NAME` 可把子代理钉在指定 Claude 的账户上；不指定时由 budget governor 决定谁能跑。
 
-6. 从手机下指令：Claude app → Code → `[clodfarm] clodfarm`，直接说 "add CSV export to the report page"、"have gil's Claude review it"、"every morning at 9, triage new issues"。
+6. 从手机下指令：Claude app → Code → `[clodfarm] clodfarm`，直接说 add CSV export to the report page、have gil's Claude review it、every morning at 9, triage new issues。
 
 7. 从笔记本上的 Claude Code 接进来（远程 MCP，OAuth 2.1 + PKCE）：
 
@@ -201,7 +209,7 @@ docker exec clodfarm clodfarm status
 claude mcp add --transport http --scope user farm http://localhost:8080/mcp
 ```
 
-然后在 Claude Code 里跑 `/mcp` 登录，就能问 "what's the farm doing?"；断开用 `clodfarm disconnect`。
+然后在 Claude Code 里跑 `/mcp` 登录，就能问 what's the farm doing?；断开用 `clodfarm disconnect`。
 
 8. 定时任务（cron / 固定间隔 / 一次性；每个 box 都会检查，触发时原子领取，只跑一次）：
 
@@ -238,7 +246,7 @@ clodfarm budget
 
 ### 做法 C：多 harness、多座位的统一编排与恢复（openrig）
 
-1. 先备份并检查前置条件（原文要求先读「What OpenRig changes on your machine」一节并备份相关文件）：
+1. 先备份并检查前置条件（原文要求先读 What OpenRig changes on your machine 一节并备份相关文件）：
 
 ```bash
 tmux -V
@@ -267,16 +275,16 @@ rig setup --dry-run
 
 三套用同样的 owner/checker 角色和任务；启动前应显示所选 runtime、配置的模型和命令，并确认账号支持该模型。
 
-4. 一次性权限选择：启动前 agent 会问一次是否允许它无重复授权地运行 OpenRig 命令（Yes — recommended / No — keep prompts）。原文明确：这不是全局 YOLO，也不是允许 agent 自己发明工作；作用域默认是 personal project scope。撤销方式是对 agent 说："Undo the OpenRig command allowances added by this setup"。
+4. 一次性权限选择：启动前 agent 会问一次是否允许它无重复授权地运行 OpenRig 命令（Yes — recommended / No — keep prompts）。原文明确：这不是全局 YOLO，也不是允许 agent 自己发明工作；作用域默认是 personal project scope。撤销方式是对 agent 说：Undo the OpenRig command allowances added by this setup。
 
 5. 在一个仓库里启动两座位 starter：
 
 ```bash
 cd /path/to/your/repository
 starter=first-project  # or first-project-claude or first-project-mixed
-rig specs preview "$starter" --kind rig
-rig up "$starter" --cwd . --plan
-rig up "$starter" --cwd .
+rig specs preview '$starter' --kind rig
+rig up '$starter' --cwd . --plan
+rig up '$starter' --cwd .
 rig tui --shared
 ```
 
@@ -285,7 +293,7 @@ rig tui --shared
 6. 下发任务前先做就绪检查：
 
 ```bash
-rig ps --nodes --rig "$starter"
+rig ps --nodes --rig '$starter'
 ```
 
 在分派工作前解决任何认证、信任或权限提示。
@@ -293,8 +301,8 @@ rig ps --nodes --rig "$starter"
 7. 给 owner 一个有界结果：
 
 ```bash
-rig send "dev-owner@$starter" 'Implement <one useful change>. Track the task in the queue and return its ID. Keep it local, verify the behavior, ask dev-check in this rig to check the exact candidate, and record the result and how I can try it.'
-rig queue list --destination "dev-owner@$starter" --limit 1000
+rig send dev-owner@$starter 'Implement <one useful change>. Track the task in the queue and return its ID. Keep it local, verify the behavior, ask dev-check in this rig to check the exact candidate, and record the result and how I can try it.'
+rig queue list --destination dev-owner@$starter --limit 1000
 ```
 
 关键提醒：发送消息本身不会创建队列项，是 owner 记录任务。然后读最终产物和针对「确切候选」的复核，再回到同一个 owner 做下一处改动。
@@ -352,7 +360,7 @@ omo doctor
 
 ### 做法 E：搭长时程子代理底座（deer-flow）
 
-先说清限制：本次抓到的原文在 "Option 2: Local Development" 的 "Prerequisit" 处被截断，skills、sub-agents、scheduled tasks、memory 等小节只有标题、没有正文。下面只写能照做的安装与配置部分。
+先说清限制：本次抓到的原文在 Option 2: Local Development 的 Prerequisit 处被截断，skills、sub-agents、scheduled tasks、memory 等小节只有标题、没有正文。下面只写能照做的安装与配置部分。
 
 1. 最快路径：把下面这句话原样交给编码助手：
 
@@ -414,9 +422,7 @@ make support-bundle
 python3 --version
 ```
 
-2. 安装 uv（CrewAI 用它管理依赖）。
-
-macOS/Linux：
+2. 安装 uv（CrewAI 用它管理依赖）。macOS/Linux：
 
 ```shell
 curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -431,7 +437,7 @@ wget -qO- https://astral.sh/uv/install.sh | sh
 Windows：
 
 ```shell
-powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+powershell -ExecutionPolicy ByPass -c 'irm https://astral.sh/uv/install.ps1 | iex'
 ```
 
 3. 安装 CrewAI CLI 并验证：
@@ -446,7 +452,7 @@ uv tool install crewai
 uv tool update-shell
 ```
 
-Windows 上若遇 `chroma-hnswlib==0.7.6` 构建错误（`fatal error C1083: Cannot open include file: 'float.h'`），需安装 Visual Studio Build Tools 并勾选 *Desktop development with C++*。验证：
+Windows 上若遇 `chroma-hnswlib==0.7.6` 构建错误（`fatal error C1083: Cannot open include file: 'float.h'`），需安装 Visual Studio Build Tools 并勾选 Desktop development with C++。验证：
 
 ```shell
 uv tool list
@@ -488,69 +494,11 @@ my_project/
 crewai create crew <project_name> --classic
 ```
 
-5. 定义智能体：编辑 `agents/*.jsonc`，写清 role / goal / backstory / llm / tools / settings。第一个角色：
+5. 定义智能体：编辑 `agents/*.jsonc`，写清 role / goal / backstory / llm / tools / settings。第一个角色可写成研究员：role 带 `{topic}`，goal 是 Uncover cutting-edge developments in `{topic}`，llm 用 `openai/gpt-4o`，tools 加 `SerperDevTool`，settings 开 verbose。第二个角色可写成报告分析员：goal 是 Create detailed reports based on `{topic}` data analysis and research findings，llm 用 `openai/gpt-4o`，settings 开 verbose。
 
-```jsonc
-{
-  "role": "{topic} Senior Data Researcher",
-  "goal": "Uncover cutting-edge developments in {topic}",
-  "backstory": "You're a seasoned researcher who finds relevant information and presents it clearly.",
-  "llm": "openai/gpt-4o",
-  "tools": ["SerperDevTool"],
-  "settings": {
-    "verbose": true
-  }
-}
-```
+6. 定义任务与流程：编辑 `crew.jsonc`。`{placeholder}` 占位符可用在 agent 与 task 文本里，缺值会在 `crewai run` 时被 CLI 提示补全。关键字段：`context` 把上游任务结果喂给下游；`output_file` 指定落盘路径；`markdown: true` 输出 Markdown；`process` 可换成 hierarchical——框架会自动加一个 manager 来规划、委派并验证结果。另有 `tools/` 下的自定义工具（以 `custom:<name>` 引用）、`knowledge/` 知识文件、`skills/` 技能文件。
 
-第二个角色：
-
-```jsonc
-{
-  "role": "{topic} Reporting Analyst",
-  "goal": "Create detailed reports based on {topic} data analysis and research findings",
-  "backstory": "You're a meticulous analyst who turns complex data into clear, concise reports.",
-  "llm": "openai/gpt-4o",
-  "settings": {
-    "verbose": true
-  }
-}
-```
-
-6. 定义任务与流程：编辑 `crew.jsonc`。`{placeholder}` 占位符可用在 agent 与 task 文本里，缺值会在 `crewai run` 时被 CLI 提示补全。
-
-```jsonc
-{
-  "name": "Latest AI Development",
-  "agents": ["researcher", "reporting_analyst"],
-  "tasks": [
-    {
-      "name": "research_task",
-      "description": "Conduct thorough research about {topic}. Find recent, relevant information.",
-      "expected_output": "A list with 10 bullet points of the most relevant information about {topic}.",
-      "agent": "researcher"
-    },
-    {
-      "name": "reporting_task",
-      "description": "Review the research and expand each topic into a full section for a report.",
-      "expected_output": "A markdown report with the main topics, each with a full section of information. No fenced code blocks around the whole document.",
-      "agent": "reporting_analyst",
-      "context": ["research_task"],
-      "output_file": "output/report.md",
-      "markdown": true
-    }
-  ],
-  "process": "sequential",
-  "verbose": true,
-  "inputs": {
-    "topic": "AI Agents"
-  }
-}
-```
-
-关键字段：`context` 把上游任务结果喂给下游；`output_file` 指定落盘路径；`markdown: true` 输出 Markdown；`process` 可换成 hierarchical——框架会自动加一个 manager 来规划、委派并验证结果。另有 `tools/` 下的自定义工具（以 "custom:<name>" 引用）、`knowledge/` 知识文件、`skills/` 技能文件。
-
-7. 配密钥：在 `.env` 里填模型提供商的 API key；若用网页搜索工具，填 Serper.dev 的 key。
+7. 配密钥：在 `.env` 里填模型提供商的 API key；若用网页搜索工具，填 Serper.dev 的 key：
 
 ```
 SERPER_API_KEY=YOUR_KEY_HERE
@@ -565,49 +513,7 @@ crewai run
 
 需要额外包用 `uv add <package-name>`。预期：控制台打印执行过程，项目根目录生成 `output/report.md`。模型默认走 OpenAI API，也可按官方 LLM connections 文档接本地模型（Ollama、LM Studio）。
 
-9. 需要精确控制时，把 Crew 包进 Flow 做事件驱动编排：
-
-```python
-from crewai.flow.flow import Flow, listen, start, router, or_
-from crewai import Crew, Agent, Task, Process
-from pydantic import BaseModel
-
-class MarketState(BaseModel):
-    sentiment: str = "neutral"
-    confidence: float = 0.0
-    recommendations: list = []
-
-class AdvancedAnalysisFlow(Flow[MarketState]):
-    @start()
-    def fetch_market_data(self):
-        self.state.sentiment = "analyzing"
-        return {"sector": "tech", "timeframe": "1W"}
-
-    @listen(fetch_market_data)
-    def analyze_with_crew(self, market_data):
-        analyst = Agent(role="Senior Market Analyst",
-                        goal="Conduct deep market analysis with expert insight",
-                        backstory="You're a veteran analyst known for identifying subtle market patterns")
-        researcher = Agent(role="Data Researcher",
-                           goal="Gather and validate supporting market data",
-                           backstory="You excel at finding and correlating multiple data sources")
-        # ... 定义 Task 与 Crew(process=Process.sequential) 后 kickoff
-
-    @router(analyze_with_crew)
-    def determine_next_steps(self):
-        if self.state.confidence > 0.8:
-            return "high_confidence"
-        elif self.state.confidence > 0.5:
-            return "medium_confidence"
-        return "low_confidence"
-
-    @listen(or_("medium_confidence", "low_confidence"))
-    def request_additional_analysis(self):
-        self.state.recommendations.append("Gather more data")
-        return "Additional analysis required"
-```
-
-组合逻辑：`or_` 任一条件满足就触发，`and_` 全部满足才触发，可与 `@start`、`@listen`、`@router` 搭配。
+9. 需要精确控制时，把 Crew 包进 Flow 做事件驱动编排。组合逻辑：`or_` 任一条件满足就触发，`and_` 全部满足才触发，可与 `@start`、`@listen`、`@router` 搭配。
 
 10. 让 AI 编码助手按 CrewAI 规范写代码（减少瞎猜 API）。Claude Code：
 
@@ -689,7 +595,7 @@ npm install -g cubefarm
 cubefarm
 ```
 
-安全边界（照做时须知）：agent 在你机器上、以你自己的编码 agent 方式工作，沿用你的 skills、MCP servers 和 settings，各自在仓库的独立副本里；它们不能 push 到主分支，也不能合并——合并由办公室在 QA 之后执行。
+安全边界：agent 在你机器上、以你自己的编码 agent 方式工作，沿用你的 skills、MCP servers 和 settings，各自在仓库的独立副本里；它们不能 push 到主分支，也不能合并——合并由办公室在 QA 之后执行。
 
 界面操作键：`W A S D`/方向键走动，`Shift` 跑，鼠标环视（需先点击画面），`E` 使用当前看着的东西（工位/白板/电梯/经理电脑），`P` 手机，`H` 帮助，`Esc` 松开鼠标或关闭面板。
 
@@ -718,28 +624,128 @@ dead-ends.md     # 试过、失败、记下来
 
 agent 在每次会话开始时读这些上下文，在工作中写回。原文的意图是：第四个会话知道第一个会话已经试过什么。手工照做时，把这些文件提交进仓库，并在每次任务开始时在 prompt 里要求 agent 先读它们、结束时把失败尝试写回 dead-ends.md。预期结果：第二个同类会话不再重复解释约定、不再重复踩 dead-ends 里已有的坑。
 
-4. 让第二个 agent 做提交前评审：挑一个 reviewer，它的发现在工作还没提交时就直接落到 chat 里；你可以让它按意见改，改动落到你的消息框里由你读。原文强调 "Nothing merges on its own"。示例输出（原文给的形态）：
+4. 让第二个 agent 做提交前评审：挑一个 reviewer，它的发现在工作还没提交时就直接落到 chat 里；你可以让它按意见改，改动落到你的消息框里由你读。原文强调 Nothing merges on its own。示例输出（原文给的形态）：Review by Codex · changes requested；Warning in src/retry.js:2；The 30 second cap is longer than the gateway's 25 second timeout, so the last retry is cut off。预期结果：评审抓的是跨文件约束（如上限与上游超时不一致），而不是格式挑刺。手工照做时，在提交前把 diff 交给另一个 agent，让它只找会改的实质问题。
 
-```
-Review by Codex · changes requested
-1. Warning in src/retry.js:2
-   The 30 second cap is longer than the gateway's 25 second timeout,
-   so the last retry is cut off.
-```
-
-预期结果：评审抓的是跨文件约束（如上限与上游超时不一致），而不是格式挑刺。手工照做时，在提交前把 diff 交给另一个 agent，让它只找会改的实质问题。
-
-5. 撞限额时切换登录：给不同 agent 指向不同登录；某个登录到限额后，Offrun 把 chat 移到还有余量的登录并告知；你重发消息，新登录接续整段对话；没有可用登录时它提议换另一个 agent。原文示例文案："Claude Code resets 3am. Codex can pick up this chat. It gets the whole conversation." 预期结果：等待限额的时间下降，对话不丢。
+5. 撞限额时切换登录：给不同 agent 指向不同登录；某个登录到限额后，Offrun 把 chat 移到还有余量的登录并告知；你重发消息，新登录接续整段对话；没有可用登录时它提议换另一个 agent。原文示例文案：Claude Code resets 3am. Codex can pick up this chat. It gets the whole conversation. 预期结果：等待限额的时间下降，对话不丢。
 
 6. 按需要切换模式：Build —— 做出改动并运行以证明它能工作；Planner —— 只想出做法并写下来，不改任何文件。任意 chat 可随时切换。手工照做：需要「证明能跑通」时要求 agent 运行测试/命令；只需要方案时明确说「只写方案，不改文件」。
 
-7. 开通知（Offrun）：Offrun 监听 Mac 上任何位置的编码 agent，包括它没启动的终端里的；agent 完成或停下来提问时通知你。原文示例："Codex needs your approval — Run npm install in billing-svc" "Claude is waiting — Shall I push the tag for 2.4.0?"
+7. 开通知（Offrun）：Offrun 监听 Mac 上任何位置的编码 agent，包括它没启动的终端里的；agent 完成或停下来提问时通知你。原文示例：Codex needs your approval — Run npm install in billing-svc；Claude is waiting — Shall I push the tag for 2.4.0?。
 
 8. 在 chat 旁边读产出：改动文件、带行号的 diff、渲染后的 markdown 和表格、图片、PDF，还有一个小浏览器。
 
 9. 本地听写（可选，Offrun）：按住键说话，本机转写，按你代码的拼写纠正术语；可以针对词条加 voice sample（示例：mac book→MacBook、jason→JSON、retry backoff helper→retryBackoffHelper、Kubernetes）。原文称转写完全在本机、不录音不上传。
 
 10. 数据边界（原文有一张明示表）：留在本机的是听写和项目文件；memory、chats、worktrees 在项目文件夹里；离开本机的是 agent 提示词和代码，直接发往你自己的 Anthropic / OpenAI / Google / xAI 账号；Offrun 服务器不在路径中。
+
+### 做法 I：用 cmux 把并行 agent 的等待变成可路由通知（macOS）
+
+把这条路径当作「注意力路由」的候选：它给的是终端、浏览器、通知、workspace、分屏、tab 和 CLI；作者明确说 cmux is a primitive, not a solution。它不替代验证、记忆和评审，只解决「哪个 agent 在等我」。
+
+1. 安装。推荐 DMG：从 releases 页下载 `cmux-macos.dmg`，拖入 Applications，之后靠 Sparkle 自动更新，只需下载一次。或用 Homebrew：
+
+```bash
+brew tap manaflow-ai/cmux
+brew install --cask cmux
+brew upgrade --cask cmux
+```
+
+预期结果：macOS 原生终端可用，读取你已有的 Ghostty 配置（主题、字体、颜色、cursor）。首次启动 macOS 可能提示「来自已验证开发者」，点 Open 继续。想同时保留稳定版、另测每日构建，可下载 NIGHTLY（独立 bundle ID，可与稳定版并存，有自己的 Sparkle 更新源）。
+
+2. 接入 agent hooks（前提：agent CLI 已装且 binary 在 PATH 上）：
+
+```bash
+cmux hooks setup
+cmux hooks setup codex
+cmux hooks setup --agent opencode
+```
+
+预期结果：`cmux hooks setup` 会自动装它能找到的受支持 agent，并对跳过的 agent 打印摘要。Claude Code 由 cmux 的 Claude wrapper 处理（需在 Settings 中开启 Claude 集成）。
+
+3. 把「agent 在等我」变成可见信号。两条路径任选：自动：任何发 OSC 9/99/777 转义序列的进程都会触发 pane 蓝环、侧栏未读徽标、通知弹窗和 macOS 桌面通知；手动/钩子：用 `cmux notify` 接进 agent hooks。配套快捷键：
+
+| 快捷键 | 动作 |
+|---|---|
+| ⌘⇧U | 跳到最新未读 |
+| ⌘I | 打开通知面板 |
+| ⌥⌘U | 切换当前项未读状态 |
+| ⌃⌘U | 把当前项标为最旧未读并跳到下一个最新未读 |
+| 默认未绑定 | 全部标已读 / 全部清除，需在 Settings 或 cmux.json 中配 |
+
+4. 一键跑 Claude Code teammate 模式：
+
+```bash
+cmux claude-teams
+```
+
+预期结果：teammate 以原生分屏形式出现，带侧栏元数据和通知，不需要 tmux。
+
+5. 远程机器上跑 agent、本地驱动：
+
+```bash
+cmux ssh user@remote
+cmux ssh user@remote --command 'omp investigate auth'
+```
+
+要点：`--command` 只在第一个远程终端的第一个终端里运行一次；浏览器 pane 走远程网络，所以 localhost 直接可用；把图片拖进远程会话会通过 scp 上传。
+
+6. 关掉「重开时自动跑 agent 恢复命令」（保留布局恢复）。配置 `~/.config/cmux/cmux.json`：
+
+```json
+{
+  "terminal": {
+    "autoResumeAgentSessions": false
+  }
+}
+```
+
+或关闭 Settings > Terminal > Resume Agent Sessions on Reopen。注意：这只关掉自动恢复命令；cmux 仍会恢复布局、工作目录、scrollback 和浏览器历史。
+
+7. 手动恢复上一次会话：File > Reopen Previous Session、⌘⇧O，或：
+
+```bash
+cmux restore-session
+```
+
+8. 跨安装迁移（stable / nightly / rc / staging / debug）：
+
+```bash
+cmux restore-session --from nightly
+cmux restore-session --export ~/session.json
+cmux restore-session --export ~/session.json --force
+cmux restore-session --from ~/session.json
+```
+
+行为差异（照做前必须理解）：`--from <channel>` 按「你自己会话」同等信任恢复，包括自动 agent 恢复；`--from <path>` 视为不可信，只恢复布局、工作目录、文本 scrollback 和 http(s) 浏览器 tab，文件里任何东西都不会自动运行；内置 agent（Claude Code、Codex、Amp 等）用 cmux 依据 agent 种类 + session id 自己拼出的命令恢复，忽略文件里存的启动参数，且要求工作目录已存在；自定义 agent 恢复命令、resume 绑定、tmux 启动命令只保留供手动恢复；会被丢弃：scrollback 里的终端控制序列（剪贴板、通知、链接、标题）、草稿附件、非 http(s) 页面与 profile、SSH/云连接、workspace 环境变量；更新版本写的快照（较新 session 格式）会被拒绝并报错。
+
+9. 给任意工具绑定自定义「恢复命令」（适用于自带持久状态、不需要 cmux 猜的工具，如 tmux 会话、自定义 agent CLI）：
+
+```bash
+cmux surface resume set --kind tmux --checkpoint work --shell 'tmux attach -t work'
+cmux surface resume show --json
+cmux surface resume clear --checkpoint work
+```
+
+信任规则：绑定附着在具体 cmux surface 上；公开 CLI 或 socket 创建的绑定只会被存储、供检视与手动恢复，除非你批准一个签名命令前缀才自动恢复；批准的前缀还会绑定工作目录与精确环境值（若存在）；可在 Settings > Terminal > Resume Commands 审阅或修改；cmux 只自动运行它标记为可信的绑定（如活进程探测到的 tmux 绑定，或用户批准的前缀）；token、password、secret、API key 等敏感环境键在存储绑定前会被丢弃。
+
+10. 让 agent 活过 cmux 退出/崩溃/更新：
+
+```bash
+cmux local-tmux
+cmux local-zellij
+```
+
+边界：本机 tmux server 活不过 logout、重启、关机或断电；需要「这台 Mac 离线时进程仍在」时，改用 `cmux ssh-tmux`、`cmux mosh-tmux` 或持久云 VM。
+
+11. 大仓库 / 托管 Mac 上的进程 churn 缓解：如果 shell watcher 抖动或托管 Mac 进程审计量过大，使用 README 点名的缓解开关：
+
+```
+CMUX_NO_GIT_WATCH=1
+```
+
+代价是 Git/PR 更新会受影响（细节在 `docs/shell-integration.md`）。
+
+12. 其他可配置项（README 提及但细节在外链文档）：自定义命令可在 `cmux.json` 里定义项目专属动作，从命令面板启动；浏览器导入可从 Chrome、Firefox、Arc 等 20+ 浏览器导入 cookie、历史、会话，让浏览器 pane 开局就是已登录态；浏览器自动化给 agent 用（snapshot 可访问性树、取元素 ref、点击、填表、求值 JS、读 console/network）；外观见 `docs/customizing-appearance.md`，配置为 `~/.config/cmux/cmux.json`；Skills 可复用 agent 工作流，公开集合在 `cmux-skills` 仓库。
 
 ### 通用收尾：不管走哪条路径
 
@@ -749,19 +755,21 @@ Review by Codex · changes requested
 - 多步流水线一定要求产物落盘（如 `output_file`），否则你无法核对，也无法复用。
 - 带自动合并能力的链路（如做法 G 的 auto-merge），先用人工确认跑过 3–5 个真实 issue，再考虑对低风险改动打开。
 - 做法 H 的同行评审不要只看风格；让它明确读 diff 找跨文件约束冲突，并把结论落到 chat 里由你判断，不要自动合并。
+- 做法 I 的通知环只负责把「谁在等我」变得可见；看到通知后仍要回到验证、记忆和评审，不要让通知替代合入门槛。
 
 ## 怎么判断变好了
 
 **可观察的指标**
 
-- 做法 A：最后那次与旧答案的**盲评比分**（技能会直接报，包括旧答案赢的情况）；冠军「扛过的攻击」里有多少条 FATAL / MAJOR 指向你原本没写进要求、但确实在意的缺口；你实际是否采用了它的输出（采用 / 部分采用 / 弃用）以及用了多少修改；实际 token 开销 vs `bracket.py plan --quick` 的预估（91 次调用）；代码类任务另加客观项——应用 diff 后测试 / lint 是否通过。
+- 做法 A：最后那次与旧答案的盲评比分（技能会直接报，包括旧答案赢的情况）；冠军「扛过的攻击」里有多少条 FATAL / MAJOR 指向你原本没写进要求、但确实在意的缺口；你实际是否采用了它的输出（采用 / 部分采用 / 弃用）以及用了多少修改；实际 token 开销 vs `bracket.py plan --quick` 的预估（91 次调用）；代码类任务另加客观项——应用 diff 后测试 / lint 是否通过。
 - 做法 B：合入 `main` 前的测试通过率；`FARM_VERIFY_CMD` 失败回注后子代理是否收敛；`clodfarm agents` / `budget` 显示的用量是否被节流在 5 小时窗口 85%、周窗口 80% 以内（不烧穿配额）。
 - 做法 C：手动切换终端和人工传话的次数是否真的下降；`rig ps --nodes` 是否还有未解决的认证、信任或权限提示；恢复后逐节点报告的 resumed / fresh / failed 是否符合预期。
 - 做法 D：同一任务三轮对照（普通 prompt / 加 `ulw` / 加 `mass ulw`），每轮从同一个干净分支或干净工作区开始，记录返工次数与人工介入次数。注意这三轮本身才是证据，README 的好评不是。
 - 做法 E：`make doctor` 是否能无阻断跑完；能否跑通一个最小任务（受限于原文截断，skills / sub-agents / scheduled tasks 的用法需自行查仓库文档）。
 - 做法 F：`output/report.md` 是否真的落盘、内容能不能直接用（采用 / 部分采用 / 弃用）；下游任务拿到的到底是不是上游的结果（`context` 是否真的接上了）；需要你手动返工几轮；`{placeholder}` 是否按预期被注入。
-- 做法 G：QA 报告的**真阳性率**（它标出的问题里，多少经人工复核确认是真问题）；QA 通过的 PR 中人工复核后确实可用的比例（漏检率）；同一类 issue 从开单到合并的周期时间 vs 你自己动手的基线；每个 issue 消耗的订阅用量；每个 PR 你要动手改多少、终端里介入多少次；开启 auto-merge 后是否出现被合入但需要回滚的改动。
+- 做法 G：QA 报告的真阳性率（它标出的问题里，多少经人工复核确认是真问题）；QA 通过的 PR 中人工复核后确实可用的比例（漏检率）；同一类 issue 从开单到合并的周期时间 vs 你自己动手的基线；每个 issue 消耗的订阅用量；每个 PR 你要动手改多少、终端里介入多少次；开启 auto-merge 后是否出现被合入但需要回滚的改动。
 - 做法 H：并行任务时文件互相覆盖/冲突的次数（期望 0）；第二个同类会话的返工量——是否还要重复解释约定、是否重复踩 dead-ends 里已有的坑；同行评审提出的问题里，你判断有效（会改）的比例，以及误报率；撞到用量限额导致的等待时间是否下降（切登录后能否无缝继续）。
+- 新增做法 I：从 agent 等待输入到人响应的时间；漏掉通知导致 agent 空转的时长；手动在终端里寻找 pane 的次数；通知环、侧栏未读徽标、通知面板是否能可靠触发；⌘⇧U 跳转是否真的减少切换成本；恢复会话后布局、工作目录、scrollback 和浏览器历史是否保留；`cmux hooks setup` 后受支持 agent 是否能按预期恢复；跨安装迁移时 `--from <channel>` 与 `--from <path>` 的信任差异是否符合预期；本机 `local-tmux` 撑不过 logout/重启/关机/断电这一边界是否被团队知道。
 
 **最小试用**
 
@@ -773,6 +781,7 @@ Review by Codex · changes requested
 - 做法 F：把手头一个「多步资料整理 → 成文」的活改写成 researcher + reporting_analyst 两个角色的 Crew，`crewai install` → `crewai run`，只看一件事：`output/report.md` 能不能直接用、你要改多少。
 - 做法 G：`npx cubefarm doctor` 确认环境齐全 → `npx cubefarm --demo` 走一遍界面 → 选一个低风险、已有测试基础的小仓库接入，把 session limit 设为 1–2 → 先关闭 auto-merge，人工确认每一份 QA 报告和 PR 差异，跑 3–5 个真实 issue。
 - 做法 H：半天到一天，一个仓库。装好 Offrun（或手工照做），接两个你已有的 agent 账号（至少 Claude Code 加另一个），挑一个有 git、且有能跑的测试的 repo。别一次全上，只试两件事：隔离（同一 repo 同时开两个任务——一个重构、一个修 bug，确认两个 worktree 不互相改文件，各自分支能分别合并）；记忆（手工建 conventions.md / plan.md / dead-ends.md，把仓库约定和不许再试的死路写进去，开第二个会话时确认 agent 是否真读了，以及失败尝试是否被写回 dead-ends.md）。再试同行评审：让另一个 agent 在提交前读 diff，重点看它能不能抓到跨文件的数值/契约冲突（如上限与上游超时不一致这类）。
+- 新增做法 I：在 macOS 上装好 cmux，跑 `cmux hooks setup`，开 2–3 个终端型 agent（例如一个 Claude Code、一个 Codex），用 `cmux notify` 或让 agent hooks 触发通知，试 ⌘⇧U、⌘I 和通知面板；只在一两个真实任务上试半天到一天，观察「谁在等我」是否真的更快被处理。
 
 **试多久、什么时候升级**
 
@@ -781,6 +790,7 @@ Review by Codex · changes requested
 - 做法 F 同样没有对比数据：先固定成一条流水线，连跑 2–3 次同类任务，如果每次都要大改 `output/report.md`（或流水线本身），说明这类活还不适合固化角色分工，先退回单 agent 手改；只有当产出基本可用、你只需要做少量编辑时，才值得把它变成常用链路。
 - 做法 G 同样没有量化数据：以 3–5 个真实 issue 为最小样本；若 QA 真阳性率接近零，或人工介入次数没有下降，说明当前形态的价值主要在演示而非产出，应考虑退回不用（或只当演示看）。熟悉后再对低风险改动尝试 auto-merge，并保留人工抽查。
 - 做法 H 只在一个 repo、一两个任务上观察两周再决定是否推广；记忆是纯文件、chat 和 worktree 都在项目文件夹里，退回现有流程没有迁移成本。若同行评审有效比例低或误报高，先调整 reviewer 的 prompt 或换模型，再决定是否保留。
+- 新增做法 I 没有第三方性能与收益数据：先在 1–2 个 agent、半天到一天内试用；若通知可靠、漏掉等待的时间下降、恢复会话不丢布局，再扩大 agent 数。若通知常漏、恢复信任规则让你不确定、或本机 tmux 生命周期边界不满足，就不要把它作为默认方案。
 
 ## 常见坑
 
@@ -852,27 +862,43 @@ Review by Codex · changes requested
 - 「免费无限、无服务器、不经手密钥」是厂商声明，原文未给审计或第三方说明。
 - 「50 runs in a row」「41 of 50 → 50 of 50」是页面演示，不是可复现评测；无版本号、无发布日志、无第三方用户案例。
 - 项目必须在 git 下；worktree 依赖 git。
-- 同行评审的发现是落到 chat 里由你判断（"Nothing merges on its own"），不要让它自动合并；这与做法 B/G 的自动合入闸门不同，做法 H 默认不自动合并。
+- 同行评审的发现是落到 chat 里由你判断（Nothing merges on its own），不要让它自动合并；这与做法 B/G 的自动合入闸门不同，做法 H 默认不自动合并。
 - 记忆文件要靠 agent 每次会话去读；如果它没读或没写回，记忆就是空的。需要在 prompt 里明确要求，并抽查 dead-ends.md 是否真的被追加。
 - 限额切换需要你手动重发消息；不是自动推进。
-- 材料质量：抓取到的文本夹有站点源码注释（编码声明位置、tab 标题长度取舍、以及 "demo 账号是编造的、别在页面上放真实地址或登录名" 的开发备注），页面示例里的 sam@studio.dev / sam@acme.co 是占位账号；不要把它们当步骤。
+- 材料质量：抓取到的文本夹有站点源码注释（编码声明位置、tab 标题长度取舍、以及 demo 账号是编造的、别在页面上放真实地址或登录名的开发备注），页面示例里的 sam@studio.dev / sam@acme.co 是占位账号；不要把它们当步骤。
+
+**新增做法 I（cmux）**
+
+- 仅支持 macOS；这是硬门槛。
+- 装 hooks 前 agent CLI 必须在 PATH 上，否则自动恢复不可用。
+- 自动恢复 agent 命令有风险；可配置 `terminal.autoResumeAgentSessions: false` 或关 Settings > Terminal > Resume Agent Sessions on Reopen。注意这只关自动恢复命令，布局、工作目录、scrollback 和浏览器历史仍会恢复。
+- `--from <channel>` 按同等信任恢复，包括自动 agent 恢复；`--from <path>` 视为不可信，只恢复布局、工作目录、文本 scrollback 和 http(s) 浏览器 tab，文件里任何东西都不会自动运行。
+- 会被丢弃：scrollback 里的终端控制序列（剪贴板、通知、链接、标题）、草稿附件、非 http(s) 页面与 profile、SSH/云连接、workspace 环境变量；更新版本写的较新 session 格式快照会被拒绝并报错。
+- 自定义 resume 绑定要自动执行，必须先批准签名命令前缀；批准的前缀还会绑定工作目录与精确环境值；敏感环境键在存储绑定前会被丢弃。
+- 本机 `cmux local-tmux` 活不过 logout、重启、关机或断电；需要离线仍跑时换 `cmux ssh-tmux`、`cmux mosh-tmux` 或持久云 VM。
+- `CMUX_NO_GIT_WATCH=1` 可缓解大仓库/托管 Mac 的进程 churn，但代价是 Git/PR 更新受影响。
+- 调研材料在配置面处被截断，其他配置细节在外链文档；不要照不完整片段猜。
+- 通知驱动的注意力路由能改善并行效率，目前只是作者主张；没有第三方性能与收益数据，不宜作为通用默认方案直接采用。
+- 与做法 H 的差异：cmux 管终端、通知、浏览器，不自动合并；H 管记忆、评审、账号切换，默认不自动合并。与做法 B 的差异：cmux 是本地终端可见化/隔离，不是容器克隆仓库 + 测试闸门。
 
 **通用**
 
 - 别把「工具很多」当成改善证据；没有验证命令或盲评对比，只是把不确定性放大了。
 - 让 agent 自己声明「完成」不算完成；先把完成定义写成可执行检查。
 - 多步流水线不做落盘校验（只看聊天里的输出），事后无法复盘是哪一步坏了。
+- 并行 agent 的通知很多时，先保证「谁在等我」可路由，再谈扩并发；否则只是把等待堆到更多 pane 里。
 
 ## 证据与来源
 
-- **做法 A** 依据调研《Jakeschincariol/arena-skill》。可核对的内容：成本表（100/64/32/16/8 对应的轮数、子 agent 调用数、wave 数）、`bracket.py plan` 输出的赛程表（100→50→25→13→7→4→2→1，总计 595 次调用 / 70 个 wave）、2160 张卡（15 推理模式 × 12 工作流 × 12 策略）、发牌保证（无两张相同卡；至多 144 个 agent 时没有两个 agent 共享三部分中的两部分）、rubric 权重、默认并发 10、覆盖完整锦标赛的单元测试、仓库 117 stars。属于作者主张、没有数据支撑的部分：淘汰赛能产出「更强答案」、「100 versions fight to the death」的质量提升幅度，README 没有给出任何质量对比数据或案例结果。
-- **做法 B** 依据调研《matank001/clodfarm》。可核对的内容：一行安装脚本、裸 Docker 与 compose 启动命令、四种登录方式、环境变量默认值（`FARM_MAX_WORKERS=3`、`FARM_WEEKLY_TARGET=0.80`、`FARM_FIVE_HOUR_CEILING=0.85`、`FARM_USAGE_REFRESH=300` 等）、多机部署与 `clodfarm budget` 的用法、apps-role 的围栏规则。原文未给出效果量化数据；「并行 + 测试闸门更高效」属于方案设计，不是实测结论。
-- **做法 C** 依据调研《mvschwarz/openrig》。可核对的内容：Node.js 22/24 与 tmux 要求、仅 macOS/Linux、npm 包名 `@openrig/cli`、三套 starter 与各自模型、`rig ps` / `rig send` / `rig queue` 等命令、0.6.0 的 Node 20 迁移说明。原文明确工具仍处早期版本且没有任何量化效果数据；「减少手动切换终端和人工传话成本」是调研给出的待验证假设。
-- **做法 D** 依据调研《code-yeongyu/oh-my-openagent》。可核对的内容：安装脚本与渠道参数、包名 `omo-ai`、配置路径与「就近优先」、关键字 `ultrawork` / `ulw` / `mass ulw`、`omo setup` / `omo doctor` / `omo update`、stars ≈ 69701、许可证徽章 SUL-1.0。属于作者主张的部分：「研究一万个来源」「一小时干完 Claude Code 七天的活」等，全部来自 README 自述或用户好评，没有基准、数据集或对照实验。
-- **做法 E** 依据调研《bytedance/deer-flow》。可核对的内容：`make setup` / `make doctor` / `make support-bundle` / `make docker-start` 等命令、模型配置 YAML 示例、CLI 后备 provider 的凭证来源、部署规格起点表、ACP agent 配置与 `auto_approve_permissions` 规则、MIT 协议、Python 3.12+ / Node.js 22+、83290 stars。重要限制：原文在「Option 2: Local Development」的 Prerequisit 处被截断，skills、sub-agents、scheduled tasks、memory 等小节只有标题、没有正文，因此本手册只写安装与配置，不写这些能力的具体用法。
-- **做法 F** 依据调研《crewAIInc/crewAI》。可核对的内容：MIT 许可、Python >=3.10 且 <3.14、uv 各平台安装命令、`uv tool install crewai` / `uv tool update-shell` / `uv tool list` / `uv tool install crewai --upgrade`、`crewai create crew` 生成的目录结构（`agents/*.jsonc` + `crew.jsonc`）与 `--classic` 旧式结构、researcher 与 reporting_analyst 两个 `agents/*.jsonc` 示例、`crew.jsonc` 里 `context` / `output_file` / `markdown` / `process: sequential|hierarchical` / `{placeholder}` 的用法、`crewai install` / `crewai run` / `uv add`、Flow 的 `@start` / `@listen` / `@router` 与 `or_` / `and_` 组合、`/plugin marketplace add crewAIInc/skills` 与 `npx skills add crewaiinc/skills`、四个 skill（getting-started / design-agent / design-task / ask-docs）的分工、Windows 上 `chroma-hnswlib==0.7.6` 的构建错误与 Visual Studio Build Tools 解决办法。属于作者主张、没有数据支撑的部分：多智能体角色分工能提升「多步资料整理 → 成文」的产出质量，README 没有给出基准、数据集或对照实验。重要限制：原文在 examples 与 FAQ 后半段被截断，第 11 步「关掉默认遥测」只有标题、没有命令，因此本手册不写它的具体做法。
-- **做法 G** 依据调研《leonvanzyl/cubefarm》。可核对的内容：可执行命令（`npx cubefarm`、`npx cubefarm login`、`npx cubefarm doctor`、`--demo`、`--port`、`--no-open`、`npx cubefarm@latest`、`npm install -g cubefarm`）、前提清单（Node 22+、git、已登录的 `gh`、一个编码 agent 订阅、Chrome）、五步上手流程、界面操作键、用 session limit 控制并发、数据目录 `~/.cubefarm` 与 `SWARM_HOME`、安全模型要点（agent 各持独立仓库副本、不能 push 主分支、不能合并，由办公室在 QA 后合并）、QA 在真实浏览器里审查并发布带截图的报告、合并门禁为「QA 通过且 GitHub checks 全绿」、白板 Kanban 覆盖从 backlog 到 merged。属于作者主张、没有数据支撑的部分：办公室「看起来在工作」、CEO 会写出 QA 检查清单、QA 报告能起到把关作用、auto-merge 安全——没有成功率、误合并率、成本或周期时间的数字，唯一的量化指标是 53 stars。重要限制：本次输入只有 README，它指向的 `docs/how-it-works.md`（issue 生命周期、QA、auto-merge、模型与用量、安全模型）与 `CONTRIBUTING.md` 均未包含在材料中，因此 QA 具体如何测、auto-merge 的判定细节、模型与额度策略都无法核实。适用条件：项目必须已在 GitHub 上；必须持有编码 agent 的付费订阅且所有 agent 共享同一份用量限额；QA 依赖 Chrome，对非 Web 类项目的 QA 能力 README 未说明；游戏化 3D 界面长期使用是否顺手未验证。
-- **做法 H** 依据调研《Show HN: Offrun – manage every coding agent from one workspace》。可核对的内容：安装流程（下载、拖进 Applications、Settings → Agents 添加账号）、每个 agent 一个 git worktree、三个记忆文件名（conventions.md / plan.md / dead-ends.md）与读写时机、同行评审的示例输出、限额切换的提示文案、数据边界表、50 次运行的对照表、Build/Planner 两种模式、通知与听写的描述。属于作者主张、没有外部验证的部分：「50 runs in a row」「41 of 50 → 50 of 50」、免费无限/无服务器/不经手密钥、办公室「看起来在工作」等；无版本号、无发布日志、无第三方用户案例，HN 上 51 分、23 条评论的讨论内容不在给定材料里。适用条件：Apple Silicon（M1+）、macOS 14 Sonoma 或更高、至少一个已在用的 agent CLI；Pi 与 OpenCode 尚未支持。重要限制：原文是产品页面，本手册只采用其中可迁移的三条流程（worktree、记忆文件、提交前互评），Offrun 本身作为其中一种实现方式；跨 Mac 通知、本地听写等只在 macOS 生态成立。
+- **做法 A** 依据调研《Jakeschincariol/arena-skill》。可核对：成本表（100/64/32/16/8 对应的轮数、子 agent 调用数、wave 数）、`bracket.py plan` 输出的赛程表（100→50→25→13→7→4→2→1，总计 595 次调用 / 70 个 wave）、2160 张卡、发牌保证、rubric 权重、默认并发 10、覆盖完整锦标赛的单元测试、仓库 117 stars。属于作者主张：淘汰赛能产出「更强答案」、质量提升幅度，README 没有给出质量对比数据或案例结果。
+- **做法 B** 依据调研《matank001/clodfarm》。可核对：一行安装脚本、裸 Docker 与 compose 启动命令、四种登录方式、环境变量默认值、多机部署与 `clodfarm budget`、apps-role 围栏规则。原文未给出效果量化数据；「并行 + 测试闸门更高效」属于方案设计，不是实测结论。
+- **做法 C** 依据调研《mvschwarz/openrig》。可核对：Node.js 22/24 与 tmux 要求、仅 macOS/Linux、npm 包名 `@openrig/cli`、三套 starter 与模型、`rig ps` / `rig send` / `rig queue` 等命令、0.6.0 的 Node 20 迁移说明。原文明确工具仍处早期版本且没有任何量化效果数据；「减少手动切换终端和人工传话成本」是待验证假设。
+- **做法 D** 依据调研《code-yeongyu/oh-my-openagent》。可核对：安装脚本与渠道参数、包名 `omo-ai`、配置路径与「就近优先」、关键字 `ultrawork` / `ulw` / `mass ulw`、`omo setup` / `omo doctor` / `omo update`、stars ≈ 69701、许可证徽章 SUL-1.0。属于作者主张：「研究一万个来源」「一小时干完 Claude Code 七天的活」等来自 README 自述或用户好评，没有基准、数据集或对照实验。
+- **做法 E** 依据调研《bytedance/deer-flow》。可核对：`make setup` / `make doctor` / `make support-bundle` / `make docker-start` 等命令、模型配置 YAML 示例、CLI 后备 provider 的凭证来源、部署规格起点表、ACP agent 配置与 `auto_approve_permissions` 规则、MIT 协议、Python 3.12+ / Node.js 22+、83290 stars。重要限制：原文在 Option 2: Local Development 的 Prerequisit 处被截断，skills、sub-agents、scheduled tasks、memory 等小节只有标题、没有正文，因此本手册只写安装与配置。
+- **做法 F** 依据调研《crewAIInc/crewAI》。可核对：MIT 许可、Python >=3.10 且 <3.14、uv 各平台安装命令、`uv tool install crewai` / `uv tool update-shell` / `uv tool list` / `uv tool install crewai --upgrade`、`crewai create crew` 生成的目录结构与 `--classic` 旧式结构、两个 `agents/*.jsonc` 示例、`crew.jsonc` 里 `context` / `output_file` / `markdown` / `process: sequential|hierarchical` / `{placeholder}` 的用法、`crewai install` / `crewai run` / `uv add`、Flow 的 `@start` / `@listen` / `@router` 与 `or_` / `and_` 组合、CrewAI skills 的安装命令与四个 skill 分工、Windows 上 `chroma-hnswlib==0.7.6` 的构建错误与 Visual Studio Build Tools 解决办法。属于作者主张：多智能体角色分工能提升「多步资料整理 → 成文」的产出质量，README 没有给出基准、数据集或对照实验。重要限制：原文在 examples 与 FAQ 后半段被截断，第 11 步「关掉默认遥测」只有标题、没有命令。
+- **做法 G** 依据调研《leonvanzyl/cubefarm》。可核对：可执行命令（`npx cubefarm`、`npx cubefarm login`、`npx cubefarm doctor`、`--demo`、`--port`、`--no-open`、`npx cubefarm@latest`、`npm install -g cubefarm`）、前提清单、五步上手流程、界面操作键、用 session limit 控制并发、数据目录 `~/.cubefarm` 与 `SWARM_HOME`、安全模型要点、QA 在真实浏览器里审查并发布带截图报告、合并门禁为「QA 通过且 GitHub checks 全绿」、白板 Kanban 覆盖从 backlog 到 merged。属于作者主张：办公室「看起来在工作」、CEO 会写出 QA 检查清单、QA 报告能起到把关作用、auto-merge 安全——没有成功率、误合并率、成本或周期时间的数字，唯一量化指标是 53 stars。重要限制：本次输入只有 README，它指向的 `docs/how-it-works.md` 与 `CONTRIBUTING.md` 均未包含在材料中，因此 QA 具体如何测、auto-merge 判定细节、模型与额度策略都无法核实。
+- **做法 H** 依据调研《Show HN: Offrun – manage every coding agent from one workspace》。可核对：安装流程、每个 agent 一个 git worktree、三个记忆文件名与读写时机、同行评审示例输出、限额切换提示文案、数据边界表、50 次运行的对照表、Build/Planner 两种模式、通知与听写的描述。属于作者主张、没有外部验证：「50 runs in a row」「41 of 50 → 50 of 50」、免费无限/无服务器/不经手密钥等；无版本号、无发布日志、无第三方用户案例，HN 上 51 分、23 条评论的讨论内容不在给定材料里。适用条件：Apple Silicon（M1+）、macOS 14 Sonoma 或更高、至少一个已在用的 agent CLI；Pi 与 OpenCode 尚未支持。重要限制：原文是产品页面，本手册只采用其中可迁移的三条流程（worktree、记忆文件、提交前互评），Offrun 本身作为其中一种实现方式。
+- **新增做法 I** 依据调研《manaflow-ai/cmux》。可核对：仅 macOS、基于 Ghostty 渲染引擎、DMG 与 Homebrew 安装、`cmux hooks setup` 及其受支持 agent 列表、OSC 9/99/777 与 `cmux notify` 通知路径、快捷键表、`cmux claude-teams`、`cmux ssh` 与 `--command` 行为、`autoResumeAgentSessions` 配置、`cmux restore-session` 的 `--from <channel>` 与 `--from <path>` 信任差异、`cmux surface resume set/show/clear` 信任规则、`cmux local-tmux` / `cmux local-zellij` 生命周期边界、`CMUX_NO_GIT_WATCH=1`、浏览器导入/自动化、Skills 仓库等。属于作者主张：通知驱动的注意力路由能改善并行 agent 工作流，但没有第三方性能与收益数据。重要限制：调研材料在配置面 `~/.config/c...` 处被截断，其他配置细节在外链文档；因此本手册只写能照做的安装、hooks、通知、恢复与生命周期部分，不补写未给出的配置项。
 
 ## 依据的调研
 
@@ -884,3 +910,4 @@ Review by Codex · changes requested
 - [crewAIInc/crewAI](../research/radar/2026-10-02/549-crewaiinc-crewai.md)：值得一试，建议小范围试：照着 README 的 "uv 安装 → crewai create crew → 改 agents/*.jsonc 与 crew.jsonc → crewai install/run" 链路，先把手头一个"多步资料整理→成文"的工作改成 researcher + reporting_analyst 两个角色的 Crew，并把产物落盘到 output/ 文件；因为原文给出了完整可复制的命令、目录结构和配置示例，可照做，但它本质是需要写代码、配环境的开发框架，效果只有作者主张、没有对比数据，先试一步再决定是否推广。
 - [leonvanzyl/cubefarm](../research/radar/2026-10-02/725-leonvanzyl-cubefarm.md)：值得一试，用 npx cubefarm 在低风险仓库上小范围试跑 issue→PR→QA→合并 这条自动链路，重点验证 QA 环节的真实拦截能力；因为它把多 agent 分工、浏览器实测和 auto-merge 门禁写成了可执行流程，但只有 README 级证据（53 stars、无基准与案例数据），不足以直接采用。
 - [Show HN: Offrun – manage every coding agent from one workspace](../research/radar/2026-10-04/1066-show-hn-offrun-manage-every-coding-agent-from-one-.md)：值得一试，先在单个有 git 的仓库上小范围试三条可迁移流程——每个 agent 一个 worktree、项目记忆落成 conventions.md/plan.md/dead-ends.md、第二个 agent 在提交前读 diff 做评审——再决定是否长期用 Offrun 本身；理由是这几条流程具体、可照做且不依赖工具存活，而 Offrun 自身的收益（限额自动切换、全 Mac 通知、免费无限）目前只有厂�自述，且限定 Apple Silicon Mac。
+- [manaflow-ai/cmux](../research/radar/2026-10-08/1856-manaflow-ai-cmux.md)：值得一试，macOS 上并行跑多个终端型 coding agent 的人，可以照 README 的安装与 hooks 步骤小范围试一套「通知驱动的注意力路由」工作流：装 cmux、跑 `cmux hooks setup`、用 workspace 分屏跑 agent、靠通知环和 ⌘⇧U 跳转；理由是多 agent 并行时「哪个在等我」是可复制的痛点，而这份 README 给出了具体命令与配置键，但它只支持 macOS、性能与收益均无第三方数据，因此不宜作为通用默认方案直接采用。
