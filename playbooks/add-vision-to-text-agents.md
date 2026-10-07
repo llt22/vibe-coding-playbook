@@ -1,19 +1,20 @@
-# 让看不到图的模型和编码 agent 拿到结构化屏幕证据
+# 把屏幕上的视觉信息变成 agent 能用的证据
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：当模型没有视觉通道、或编码 agent 定位不到模拟器上那个 UI 问题所在时，把屏幕上的视觉信息转成结构化证据（图片 → 全文转录/版面区域/实体；模拟器界面 → 元素信息/截图/源码文件行号）再交给它。
-> 先试这一步：先在一台机器上装 ModLens 并跑健康检查（modlens doctor），拿三张真实图片——UI 截图、带数字的图表、含文字的照片——逐一粘贴提问并人工核对关键数字与文字。
-> 最近修订：2026-10-07
+> 解决的问题：工作流里的视觉信息经常卡在人看得到、模型或编码 agent 吃不到，本篇把图片、模拟器 UI 缺陷和长按反馈转成结构化证据，交给 text-only 模型或编码 agent。
+> 先试这一步：如果你已经在 iOS 模拟器上用 Claude Code，先在 FixKit 自带 Tally 示例上跑通“长按 → 一句话 → agent 改代码”闭环；否则按痛点选路线 A（图片）或路线 B（模拟器批注）。
+> 最近修订：2026-10-08
 
 ## 解决什么问题
 
-工作流里的视觉信息经常卡在同一个地方：屏幕上看得到，模型吃不到。两种典型情形：
+工作流里的视觉信息经常卡在同一个地方：屏幕上看得到，模型吃不到。三种典型情形：
 
 - 情形一：手上有图片（UI 截图、带数字的图表、幻灯片、推文截图），但模型没有视觉通道——原生 text-only 的 DeepSeek、GLM、MiMo Pro，或 Claude Code 里跑的纯文本配置。现在的替代做法是人先把图 OCR 或口述成文字，再喂给模型。
 - 情形二：在 iOS 模拟器上走查 UI，看到哪里不对，却只能用自然语言描述，编码 agent 得自己猜是哪个文件、哪一行。
+- 情形三：在 iOS / React Native 模拟器里长按出问题的界面元素，用一句话说哪里不对，希望报告自动落到项目里正在运行的 Claude Code（或 Codex）会话中，附带元素定位、截图和你的原话；agent 改代码并重启应用，横幅跟着走 queued → fixing → rebuilding → live。
 
-本篇解决的是：把屏幕上的视觉信息转成结构化证据再交出去——图片走「全文转录 + 按阅读顺序的版面区域 + 实体与关系列表」，模拟器界面走「元素 accessibility 树信息 + 所在屏幕 + 可用于搜索源码的字符串 + 两张截图（整屏带红框、框选区特写）」。前者交给原来的 text-only 模型作答，且不改动 harness 配置（无 hook、无 wrapper、无本地代理守护进程，卸载就是删一个文件夹）；后者交给编码 agent 去定位文件与代码行。
+本篇解决的是：把屏幕上的视觉信息转成结构化证据再交出去——图片走「全文转录 + 按阅读顺序的版面区域 + 实体与关系列表」；模拟器界面走「元素 accessibility 树信息 + 所在屏幕 + 可用于搜索源码的字符串 + 两张截图（整屏带红框、框选区特写）」；FixKit 走「长按元素 + 一句话 + accessibility tree / UIKit 属性名 / RN source map + 截图 + 原话」。前两条路线不改动 harness 配置（ModLens 无 hook、无 wrapper、无本地代理守护进程，卸载就是删一个文件夹）；FixKit 走插件/hooks，报告写进 `.fixkit/`，由会话内接收器消费。
 
 ## 适用与不适用
 
@@ -31,11 +32,19 @@
 - 客户端支持 MCP（Claude Code、Codex、Cursor 有现成插件路径），或至少能把批注 Markdown 粘进去。
 - 你想让 agent 直接定位到文件与代码行，而不是自己读一堆截图描述。
 
+路线 C（FixKit 长按反馈 → Claude Code/Codex）
+
+- iOS / React Native 应用的模拟器 UI 缺陷，适合按钮位置偏移、圆角不一致、文案被截断、分类颜色不对这类一行级问题。
+- 已在用 Claude Code 2.1.287+ 或 Codex CLI 0.159+，Node.js 18.2+。
+- Xcode 与 iOS 17+ 模拟器；React Native 路线额外需要 React Native 0.80+（React 19.1，新架构）。
+- 想要「长按 → 说哪里不对 → agent 改代码并重启 → 横幅跟状态」的闭环。
+
 **不适用**
 
 - 已经在用原生多模态模型的场景装 ModLens 没有收益；插件只在「元数据明确确认是 text-only」时才接管，未确认的一律不碰，原生视觉模型保持自己的粘贴路径。
 - 不是 iOS、不是 Apple Silicon、Xcode 版本不满足的，路线 B 用不了：它依赖 Xcode 的私有框架，只支持单一开发环境，项目仅 34 stars，不适合直接定为团队标准流程。
-- 不要指望任何一条路线主动推进。ModLens 原文没有给出任何基于时间、事件或状态的持续触发机制，唯一沾边的是会话内「同一张图粘贴一次、后续追问不用再粘」以及引擎自动 failover；SimAgentation 是你在 Design Mode 里提了批注它才动。
+- FixKit 只在 iOS 模拟器工作，不覆盖 Android、原生 Modal、原生呈现的页面、嵌套 `<FixKitHost>`；版本 0.1.0，适用面窄。
+- 不要指望任何一条路线主动推进。ModLens 原文没有给出任何基于时间、事件或状态的持续触发机制，唯一沾边的是会话内「同一张图粘贴一次、后续追问不用再粘」以及引擎自动 failover；SimAgentation 是你在 Design Mode 里提了批注它才动；FixKit 触发方式是用户长按（0.5 秒，与应用自身手势并行）。
 
 **风险与局限**
 
@@ -46,6 +55,8 @@
 - ModLens 原文里出现的模型名和版本可能已过时，落地前需自行核实引擎当前是否可用。
 - SimAgentation 原生侧使用 Xcode 的私有框架 CoreSimulator、SimulatorKit、AccessibilityPlatformTranslation，Xcode 新版可能使其失效直到项目跟进。
 - SimAgentation 的 channel 模式是 Claude Code research preview，未被 Anthropic 加入 allowlist 前必须带 flag 并在启动时确认，不带 flag 推送会被丢弃（工具本身仍照常可用）。
+- FixKit 版本 0.1.0，只支持 iOS 模拟器，适用面窄；Claude Code 需放开 `Read(./.fixkit/**)` 权限；Codex 需信任 hooks 并在首轮前发一条消息。
+- FixKit 的 AXe 决定能否判断触点落在哪个元素；XcodeBuildMCP 决定能否一次调用完成重建重启；RN 需要 Metro 常驻。
 
 ## 前置条件
 
@@ -67,9 +78,17 @@
 - 从源码构建还需要 Node 和 pnpm。
 - 一个支持 stdio MCP 的客户端；channel 模式需要 claude.ai 登录或 Console API key。
 
+**路线 C（FixKit）**
+
+- Claude Code 2.1.287+ 与 Node.js 18.2+（走 Codex 则需 Codex CLI 0.159+）。
+- Xcode 与 iOS 17+ 模拟器（明确只在模拟器里工作）。
+- AXe：`brew install cameroncooke/axe/axe`（用来看触点落在哪个元素上）。没装也能收到报告，但只有截图和触点坐标。
+- 推荐装 XcodeBuildMCP，让 Claude 一次调用完成重建与重启。
+- React Native 路线额外需要 React Native 0.80+（React 19.1，新架构）。
+
 ## 操作步骤
 
-先选路线：你要解决的是「模型看不到粘贴进来的图片」，走路线 A；你要解决的是「模拟器上的 UI 问题说不清楚、agent 定位不到代码」，走路线 B。两条路线互不冲突，可以都装。
+先选路线：你要解决的是「模型看不到粘贴进来的图片」，走路线 A；你要解决的是「模拟器上的 UI 问题说不清楚、agent 定位不到代码」，走路线 B；你要的是在模拟器里长按元素写一句话、报告自动落进 Claude Code/Codex 会话并让 agent 改代码，走路线 C。三条路线互不冲突，可以都装。
 
 ### 路线 A：把粘贴的图片变成结构化文字证据（ModLens）
 
@@ -326,6 +345,151 @@ let card = TicketCardView(show: show).simTag()   // TicketCardView, from TicketV
 
 预期：接了 SDK 后父级来自真实 view/layer 树而非像素，背景与页面差异极小也能选中；每条批注还会带 bundle ID、`Source` 行（文件与行号）、所属 view controller、以及框选区周围 app 自定义的 view 类。批注时按 `S` 或点 **SDK** 可与纯像素兜底结果对比。
 
+### 路线 C：在模拟器里长按出问题的元素，让 agent 直接改（FixKit）
+
+16. 安装接收端（Claude Code）。前提：已装 Claude Code 2.1.287+。
+
+```bash
+claude plugin marketplace add ostiums/fixkit
+claude plugin install fixkit@fixkit
+```
+
+装完每个 Claude Code 会话都会加载它，会话打开期间在 `127.0.0.1:4747` 跑接收器。
+
+17. 加包。
+
+Xcode：File › Add Package Dependencies › `https://github.com/ostiums/fixkit`；或写进 `Package.swift`：
+
+```swift
+.package(url: "https://github.com/ostiums/fixkit", from: "0.1.0")
+```
+
+React Native 应用改装 npm 包（见第 21 步）。
+
+18. 在应用里加一行。
+
+SwiftUI，加在根视图上：
+
+```swift
+import FixKit
+
+WindowGroup {
+    ContentView()
+        .fixKitHost()
+}
+```
+
+UIKit，在主 window 可见后加一次：
+
+```swift
+import FixKit
+
+window.makeKeyAndVisible()
+window.fixKitHost()
+```
+
+19. 跑起来。
+
+1. 把 `.fixkit/` 加进 `.gitignore`（报告写在这里）。
+2. 在项目的 Claude Code settings 里允许它读截图，免确认：
+
+   ```json
+   { "permissions": { "allow": ["Read(./.fixkit/**)"] } }
+   ```
+
+3. 在模拟器上跑 debug build，并在项目根目录启动 `claude`。
+4. 长按一个元素、输入哪里不对、按 Return。
+
+终端宽度 ≥144 列时自动开 Fix queue 面板，窄了用 `/fix-queue` 打开；Claude 忙时报告排在队列里。
+
+20. 可选：让报告指向更精确的代码。
+
+不标记也能用：接收器读模拟器的 accessibility tree，报出指下的元素和旁边文案，agent 拿这些字符串去源码里搜。
+
+```
+[fix r1] StaticText "+€4,650.00" near "Northwind GmbH", "Salary, September" · Activity screen · .fixkit/reports/r1.png
+```
+
+SwiftUI 加 `.fixable` 会连元素名、文件、行号一起发过来：
+
+```swift
+VStack(alignment: .leading) {
+    Text(card.number)
+        .fixable("card.number")
+    Text(card.holderName)
+        .fixable("card.holderName")
+}
+.fixable("home.walletCard")
+```
+
+```
+[fix r2] card.holderName · Features/Home/WalletCardView.swift:7 · StaticText "Alex Morgan" · .fixkit/reports/r2.png
+```
+
+规则：最内层标记生效（长按持卡人名报 `card.holderName`，卡片其他位置报 `home.walletCard`）；标记要放在代码该改的那个 view 上（改文案或颜色标 `Text`，改间距或布局标容器）；名字随你起，也可以带数据 `.fixable("transaction.amount.\(merchant)")`；`.fixScreen("Home")` 给每份报告标屏，TabView 里用 `.fixScreen(selectedTab.rawValue)` 保持同步。
+
+UIKit 不用标记，按保存该 view 的属性名报，例如 `[fix r1] ProfileViewController.nameLabel · UILabel "Alex Morgan"`；outlet、`lazy var`、数组下标（`buttons[2]`）都能找到，最近的 owner 优先，要精确到行才加 `.fixable("checkout.pay")`。
+
+21. 可选：React Native。
+
+```bash
+npm install --save-dev fixkit
+```
+
+```tsx
+import { FixKitHost } from 'fixkit'
+
+export default function App() {
+  return (
+    <FixKitHost>
+      <RootNavigator />
+    </FixKitHost>
+  )
+}
+```
+
+运行方式按项目类型选：Expo 无自己的原生代码 `npx expo start --ios`；Expo 有 development build 先 `npx expo run:ios`，之后 `npx expo start --ios`；React Native CLI `npx react-native run-ios`。要点：在含应用 `package.json` 的目录里启动 `claude` 或 `codex`（插件据此判断是 RN 项目、`.fixkit/` 也放这里）；保持 Metro 常驻（Fast Refresh 把改动直接上屏，接收器从 Metro 提供的 source map 读源码行）；改 native 代码或 native 配置时由 agent 跑项目自己的命令，不需要 XcodeBuildMCP；Release bundle 里 Metro 会连同 `__DEV__` 一起丢掉。报告形如 `[fix r1] WalletCard › Text · src/WalletCard.tsx:11 · used at App.tsx:15`。
+
+22. 可选：在自带示例上先验证。
+
+```bash
+./scripts/reset-demo.sh          # puts the bugs back, builds, installs and launches Tally
+claude --plugin-dir ./mod        # the mod from this checkout
+```
+
+四个种子 bug 与说法：Home 的 Send 按钮说 `button is shifted`；Home 的 Top up 按钮说 `corners don't match the others`；Home 或 Cards 的持卡人名说 `name is cut off`；Home 或 Activity 里绿色分类的金额（如工资）说 `income should be green`。四个 bug 都是一行的小错，从 git tag `demo-start` 恢复；默认用 iPhone 18 Pro 模拟器，可用 `SIMULATOR` 换。
+
+23. 可选：Codex 路线。
+
+```bash
+codex plugin marketplace add ostiums/fixkit
+codex plugin add fixkit@fixkit
+```
+
+1. `.fixkit/` 加进 `.gitignore`。
+2. 项目根目录启动 `codex`，首次启动它会要求 review hooks，在那里（或之后在 `/hooks`）信任；不信任 hooks 不运行。
+3. 第一次长按之前先给会话发一条消息（hooks 从第一轮起跑，接收器随该轮启动）；想直接以长按开始就 `codex "FixKit"`；恢复的会话同理，接收器随下一条消息启动。
+4. 跑 debug build，长按、输入、Return。
+
+限制：需要 Codex 默认的共享 app-server（`codex --no-daemon` 自己起 server，`codex queue` 够不到）；只在有 Xcode 工程、`Package.swift` 或 RN `package.json` 的目录（向上到 git root）里生效；Codex 没有插件 UI，进度看应用横幅，接收器日志在 `$TMPDIR/fixkit-codex.log`；会话关闭后报告留在队列里等恢复。
+
+24. 可选：录屏时用脚本喂报告。
+
+```bash
+xcrun simctl spawn booted defaults write <bundle id> FixKitDirector -bool YES
+```
+
+然后从 `http://127.0.0.1:4748/next` 逐步返回 JSON（每次一个对象，没有了返回 204）：
+
+```json
+{"press": "card.holderName", "text": "The name is cut off"}
+{"at": [321, 686], "text": "Income should be green"}
+{"scroll": 260}
+{"defaults": {"selectedTab": "Activity"}}
+```
+
+`press` 会在 `.fixable` 元素或坐标点上打开 composer、输入文本并发送；`defaults` 存的值为应用下次启动准备。
+
 ## 怎么判断变好了
 
 **最小试用（路线 A，约 15 分钟，先在一台机器上做）**
@@ -341,17 +505,26 @@ let card = TicketCardView(show: show).simTag()   // TicketCardView, from TicketV
 
 在 Apple Silicon Mac + Xcode 26 的项目上小范围试：先让编码智能体按 SETUP.md 装好，用 Design Mode 对运行中的模拟器提一批真实 UI 批注，经 MCP 交给 Claude Code，看它能否不经人工补充就定位到正确文件与代码行。
 
+**最小试用（路线 C，先在自带 Tally 示例上做）**
+
+1. 在仓库目录执行 `./scripts/reset-demo.sh`，再执行 `claude --plugin-dir ./mod`。
+2. 对四个种子 bug 各长按一次，输入对应说法：`button is shifted`、`corners don't match the others`、`name is cut off`、`income should be green`。
+3. 看 agent 是否按报告改代码并重启，横幅是否从 `queued` 推进到 `fixing`、`rebuilding`、`live`。
+4. 用于自己项目前，先检查报告行 `[fix rn]` 是否指对元素/文件/行；不标记时看字符串能否搜到源码；加 `.fixable`/`.fixScreen` 后看是否带文件与行号；UIKit 看属性名；RN 看 Metro source map 给出的 JSX 行号与使用处。
+
 **可观察的指标**
 
-- 定位准确率（路线 B）：agent 能否不经人工补充就找到正确的文件与代码行。没接 SDK 时它只能靠批注里的字符串搜索源码；接了 SDK 后应能直接拿到文件与行号。
+- 定位准确率（路线 B / C）：agent 能否不经人工补充就找到正确的文件与代码行。路线 B 没接 SDK 时只能靠批注里的字符串搜索源码；接了 SDK 后应能直接拿到文件与行号。路线 C 不标记时靠 accessibility tree 和旁边文案搜索源码，加 `.fixable`/`.fixScreen` 后应带文件与行号。
+- 报告状态（路线 C）：横幅是否走完 `queued → fixing → rebuilding → live`；`live` 的判定是「agent 处理该报告期间应用重新启动过」。
 - 读取延迟（路线 A）：与作者声称的 5-10 秒（API）/ 15-45 秒（CLI）区间比较，是否可接受。
 - 准确率（路线 A）：关键数字和文字的逐项正确率，对比「人读完口述给模型」这条基线。
 - 无回退率（路线 A）：`meta.attempts` 长度为 1 的比例，以及 `meta.warnings` 里出现配额复用告警的频率——回退是否在被记录。原文称 `meta.attempts` 记录每次尝试，使回退从不静默。
-- 交互成本：从「截图 / 提批注」到「模型或 agent 答出内容」需要几步人工操作；对比「手动 OCR 再贴文字」或「口述 UI 问题」的步骤数。
+- 交互成本：从「截图 / 提批注 / 长按」到「模型或 agent 答出内容」需要几步人工操作；对比「手动 OCR 再贴文字」或「口述 UI 问题」的步骤数。
 - 可逆性（路线 A）：卸载后 harness 是否确实恢复原状。
 - 仲裁是否正常（路线 B，多会话时）：同一条批注是否只有最先 acknowledge 的会话接管，其余是否被告知让开。
+- 队列与恢复（路线 C）：agent 忙时报告是否排队；会话关闭后报告是否留在队列里等恢复。
 
-**试多久、什么时候升级**：两篇原文都没有给出时长门槛。ModLens 那篇给的判断标准是——上面几项都过得去、且确实替代了「手工把图片转成文字再喂给模型」这条现有工序，才考虑把它从 try 提升为写进手册的 adopt。路线 B 同理：先在一台 Apple Silicon Mac + Xcode 26 上小范围验证，看它能否稳定定位到文件与代码行，再决定是否推广；考虑到它依赖 Xcode 私有框架、只支持单一开发环境、项目仅 34 stars，不建议直接定为团队标准流程。
+**试多久、什么时候升级**：三篇原文都没有给出时长门槛。ModLens 那篇给的判断标准是——上面几项都过得去、且确实替代了「手工把图片转成文字再喂给模型」这条现有工序，才考虑把它从 try 提升为写进手册的 adopt。路线 B 同理：先在一台 Apple Silicon Mac + Xcode 26 上小范围验证，看它能否稳定定位到文件与代码行，再决定是否推广；考虑到它依赖 Xcode 私有框架、只支持单一开发环境、项目仅 34 stars，不建议直接定为团队标准流程。路线 C 的调研结论是「值得小范围试」：先在仓库自带的 Tally 示例上跑通，再用于自己项目的模拟器 UI 缺陷；但版本 0.1.0、只支持 iOS 模拟器，适用面窄，也不建议直接定为团队标准流程。
 
 ## 常见坑
 
@@ -362,33 +535,43 @@ let card = TicketCardView(show: show).simTag()   // TicketCardView, from TicketV
 - ModLens 项目单人维护、不接受 PR，长期可持续性未知。
 - 图片内容按不可信输入处理（docs/security.md），远程 URL 抓取行为需要核对。
 - 本次输入里读不到 cli.md、output-schema.md、security.md、harness-setup.md，细节准确性无法判断。
-- 不要期待持续触发：ModLens 原文没有基于时间、事件或状态的持续触发机制；SimAgentation 也只在你提批注时才产生内容。
+- 不要期待持续触发：ModLens 原文没有基于时间、事件或状态的持续触发机制；SimAgentation 也只在你提批注时才产生内容；FixKit 触发方式是用户长按（0.5 秒，与应用自身手势并行）。
 - SimAgentation 依赖 Xcode 私有框架（CoreSimulator、SimulatorKit、AccessibilityPlatformTranslation），Xcode 升级可能让它失效直到项目跟进。
 - 不满足 Apple Silicon + Xcode 26（iPhone Duo 要 27.1）就别指望路线 B；它只支持这一套开发环境。
 - channel 模式不带 `--dangerously-load-development-channels` 时推送会被静默丢弃——工具还在，但批注不会自动落进会话；多会话同时在线时先 acknowledge 的接管，其余会话要让开。
 - 没接 SDK 时 agent 只能靠批注里的字符串搜源码，命中率取决于字符串是否唯一；对结果有怀疑时按 `S` 对比 SDK 视图树与像素兜底。
 - 批注默认存在临时目录（`SIM_AGENTATION_HOME`），能跨 host 重启保留但不跨 Mac 重启——重启前记得导出或复制 Markdown。
+- FixKit 没放开 `Read(./.fixkit/**)` 权限时，Claude Code 每读一次截图都要确认。
+- Codex 路线不信任 hooks 就不运行；第一次长按之前必须先给会话发一条消息，否则接收器还没起来。
+- FixKit 没装 AXe 也能收到报告，但只有截图和触点坐标，判断触点落在哪个元素上会弱。
+- FixKit 没装 XcodeBuildMCP，重建与重启不能一次调用完成；RN 的 JS 改动靠 Fast Refresh，不需要重建，但 Metro 必须常驻。
+- FixKit 只在 iOS 模拟器工作，不覆盖 Android、原生 Modal、原生呈现的页面、嵌套 `<FixKitHost>`；版本 0.1.0，适用面窄。
+- FixKit 录屏脚本要写 `FixKitDirector` defaults 并从 `http://127.0.0.1:4748/next` 喂 JSON；没有更多对象返回 204。
 
 ## 证据与来源
 
-路线 A 的全部内容来自调研报告《liustack/modlens》，路线 B 的全部内容来自调研报告《lcandy2/sim-agentation》。
+路线 A 的全部内容来自调研报告《liustack/modlens》，路线 B 的全部内容来自调研报告《lcandy2/sim-agentation》，路线 C 的全部内容来自调研报告《ostiums/fixkit》。
 
 **可核对的事实（有原文、命令或仓库数据支撑）**
 
 - 路线 A：仓库 4101 stars；npm 包 `@liustack/modlens` 版本号 3.26.5；MIT 许可；完整的安装命令、配置命令、provider 对照表、CLI 复用对照表；五组「未剪辑」演示截图（dsh 内粘贴、Codex 桌面读推文截图、三图批量、128 模型散点图、Claude Code 终端读幻灯片）。
 - 路线 B：README 给出了可照抄的安装命令、MCP 接入命令、SDK 代码片段和配置项；项目 34 stars；原生侧使用 Xcode 私有框架；只支持单一开发环境（这几条同时构成「不适合直接定为团队标准流程」这一判断的依据，该判断出自调研者而非原文）。
+- 路线 C：README 给出了 Quick start 四步接入（marketplace 装 mod、加 Swift/npm 包、根视图加 `.fixKitHost()`、放开读 `.fixkit/` 权限）；仓库自带 Tally 示例和四个种子 bug；报告落盘 `.fixkit/`，接收器在 `127.0.0.1:4747`；状态机 `queued → fixing → rebuilding → live`；版本 0.1.0，只支持 iOS 模拟器。
 
 **只是作者主张、没有支撑的部分**
 
 - 路线 A：「市场上最轻的接法」「最强大的 dsh 视觉插件」「验证过真机」等定性说法；每次读取 5-10 秒 / 15-45 秒 / 20-45 秒的耗时数字；「读取的是证据而非想象」；对模型家族（GLM-5.3、DeepSeek-V4、MiMo Pro）的现状描述。这些都没有基准测试、没有错误率、没有第三方复现。
 - 路线 B：自称是「iOS 版的 Agentation」；其余描述基本对应 README 里的功能与命令，未见独立复现或性能数据。
+- 路线 C：调研结论认为「值得小范围试」，理由是原文给出了完整可照做的命令、配置和失败/限制条件，且把「界面看着不对」变成 agent 可执行任务；但版本 0.1.0、只支持 iOS 模拟器，适用面窄。未见独立复现或性能数据。
 
 **基本无依据的部分**
 
 - 路线 A 的「主动推进」：原文没有给出任何基于时间、事件或状态的持续触发机制。
 - 路线 B 的长期可用性：依赖 Xcode 私有框架这一点原文已明确风险，但何时会失效、项目是否会跟进，没有任何承诺或时间表。
+- 路线 C 的长期可用性与推广价值：原文没有给出时长门槛；只支持 iOS 模拟器，版本 0.1.0，不宜直接定为团队标准流程。
 
 ## 依据的调研
 
 - [liustack/modlens](../research/radar/2026-10-02/591-liustack-modlens.md)：值得一试，给纯文本模型（尤其已 adopt 的 Claude Code、try 的 DeepSeek 这类无视觉通道）装上 ModLens，按 README 的一条命令安装、配一个免费 Gemini key 或复用本机已登录的 CLI，就能把粘贴的截图/图表转成结构化文字证据再回答，值得在一台机器上小范围试；但全部效果只有作者自证的演示，没有基准数据，先小范围验证再决定是否写进手册。
 - [lcandy2/sim-agentation](../research/radar/2026-10-07/1616-lcandy2-sim-agentation.md)：值得一试，在 Apple Silicon Mac + Xcode 26 的 iOS 项目上小范围试：先让编码智能体按 SETUP.md 装好，用 Design Mode 对运行中的模拟器提一批真实 UI 批注，经 MCP 交给 Claude Code，看它能否不经人工补充就定位到正确文件与代码行。README 给出了可照抄的安装命令、MCP 接入命令、SDK 代码片段和配置项，但依赖 Xcode 私有框架、只支持单一开发环境、项目仅 34 stars，不适合直接定为团队标准流程。
+- [ostiums/fixkit](../research/radar/2026-10-08/1928-ostiums-fixkit.md)：值得一试，值得小范围试：按 README 的 Quick start 四步接入（marketplace 装 mod、加 Swift/npm 包、根视图加一行 .fixKitHost()、放开读 .fixkit/ 权限），先在仓库自带的 Tally 示例上跑通再用于自己项目的模拟器 UI 缺陷；理由是原文给出了完整可照做的命令、配置和失败/限制条件，而且它把「界面看着不对」这类难描述的反馈直接变成 agent 可执行任务，但版本 0.1.0、只支持 iOS 模拟器，适用面窄。

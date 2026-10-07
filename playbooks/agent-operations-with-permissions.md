@@ -1,14 +1,14 @@
-# 让有写权限的 AI 先出草案、过审批、留还原点
+# 给 AI 放开执行、读写和网络权限前，先把沙箱与门控搭好
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：当 AI 从只读审计走向能改账户、改代码、调外部服务时，用默认只读、草案门控、按任务授权、延后批量审批和核准前还原点，把「答案不准」挡在「账户/仓库被动了」之前。
-> 先试这一步：先在最不重要的一个小仓库上跑通 ai-meeting-room 的「Claude 只读规划 → Codex 列工作卡 → 逐张核准（自动存 git 还原点）→ Codex 在 workspace-write 下执行 → Claude 复审」闭环；若管的是付费媒体账户，则先跑一遍 `/ads setup → /ads audit → /ads report → /ads next` 只读审计。
+> 解决的问题：当 AI 能直接改付费媒体账户、调用外部服务或写本地代码时，如何用只读审计、按任务授权、逐张工作卡核准、沙箱与还原点，把风险夹在可审批、可回滚、可审计的范围内。
+> 先试这一步：先挑一个只读场景跑一遍：比如在 Claude Code 里对一个广告平台执行 `/ads setup` → `/ads audit` → `/ads report` → `/ads next`，确认结论带日期证据与显式置信度，再决定要不要放开写权限。
 > 最近修订：2026-10-08
 
 ## 解决什么问题
 
-付费媒体账户、外部服务账号、本地代码仓库都是真金白银或真实代码的操作面。AI 在只读状态下做审计、计划、创意、报告没问题；一旦它能直接改账户、调用外部服务或写代码，风险就从「答案不准」升级成「账户/仓库被动了」。这篇手册给三件事：一是默认只读、产出带证据的结论，账户变更先出草案再逐条过门控（以 AgriciDaniel/claude-ads 作为可照搬的落地模板）；二是把权限模型换成更省人的一种——不再预先给 AI 挂上所有服务、也不卡在第一步等人点确认，而是默认零权限、按当次任务只引入单个具体资源，有副作用的动作先在本地模拟结果让 agent 继续推进，人稍后一次性批量批准或逐条批准（以 Cloudflare OS 的 Gatekeeper 作为可本地体验的实现）；三是在本地代码仓库里用两个 CLI 分工——Claude 只读规划与复审，Codex 只在你逐张核准工作卡后于 `--sandbox workspace-write` 下写卡上明列的文件，核准前自动存 git 还原点，越界就停下并还原（以 sojei1989/ai-meeting-room 作为可照做的本机流程）。
+付费媒体账户、外部服务账号、本地代码仓库都是真金白银或真实代码的操作面。AI 在只读状态下做审计、计划、创意、报告没问题；一旦它能直接改账户、调用外部服务或写代码，风险就从「答案不准」升级成「账户/仓库被动了」。这篇手册给四件事：一是默认只读、产出带证据的结论，账户变更先出草案再逐条过门控（以 AgriciDaniel/claude-ads 作为可照搬的落地模板）；二是把权限模型换成更省人的一种——不再预先给 AI 挂上所有服务、也不卡在第一步等人点确认，而是默认零权限、按当次任务只引入单个具体资源，有副作用的动作先在本地模拟结果让 agent 继续推进，人稍后一次性批量批准或逐条批准（以 Cloudflare OS 的 Gatekeeper 作为可本地体验的实现）；三是在本地代码仓库里用两个 CLI 分工——Claude 只读规划与复审，Codex 只在你逐张核准工作卡后于 `--sandbox workspace-write` 下写卡上明列的文件，核准前自动存 git 还原点，越界就停下并还原（以 sojei1989/ai-meeting-room 作为可照做的本机流程）；四是做一次底层沙箱的可行性验证——在 Apple silicon Mac 上用 Strands Box 把执行、读写、网络能力放开给 agent，用默认拒绝的 Dogwood 语义策略在 agent 进程之外判定 allow/deny，凭证由网关注入而不交给 agent，决策写 OTLP JSON 记录供事后审计（以 strands-agents/box 作为 Preview 阶段的试装来源）。
 
 ## 适用与不适用
 
@@ -22,6 +22,8 @@
 - 你还想把这套权限与审批模式移植到通用 agent 工作流（GitHub repo、Google Doc、Slack 等外部服务）：Cloudflare OS 的 Gatekeeper 是可直接本地体验的来源。
 - 你有 macOS、Node.js 20 以上、Git，并且已经用自己账号登录了 `claude` 与 `codex` 指令；想用本机网页界面跑双 AI 协作。
 - 你能接受 ai-meeting-room 的现状：只支持 macOS、界面繁体中文、目前只有 Claude（规划）+ Codex（执行）两位成员，Gemini CLI 等是后续方向。
+- 你有 Apple silicon Mac、macOS 15 或更高、Homebrew 安装的 Node.js 22.21 或更高、能访问 `us-west-2` 上 Amazon Bedrock 的 Claude Opus 5；想验证「默认拒绝 + 语义策略 + 凭证注入 + 决策记录」这套 agent 沙箱设计。
+- 你能接受 Strands Box 的现状：README 标注 Preview，当前只支持 macOS Apple silicon 上的本地执行，仓库 63 stars；策略与配置的具体写法全在外链 `docs/` 里，本次材料只给了安装和构建命令。
 
 **不适用：**
 
@@ -35,6 +37,9 @@
 - 想让会议室被路由器转发或公开反向代理访问：原文明确不要，也不要把监听位址改成 `0.0.0.0`。
 - 需要 AI 直接产图：ai-meeting-room 里 Claude 和 Codex 都不产图，需要素材时改成开「等你交件」卡由人交付。
 - 需要量化效果数据来决定是否采用：ai-meeting-room 原文没有 benchmark、用户案例或量化结果。
+- 非 Apple silicon Mac、macOS 低于 15、Node.js 低于 22.21（且不是 Homebrew 安装），或无法访问 `us-west-2` 的 Bedrock Claude Opus 5。这些条件下无法照做 Strands Box。
+- 想把 Strands Box 当生产标准或完整教程。它仍是 Preview；`box.toml` 的字段写法和 `policy.dw` 的规则示例都没有给出，getting-started、security、policy、architecture 全在外链文档里。
+- 想让 `box.toml` 里的直接文件系统授权也产生 Dogwood 决策。直接授权由 OS 强制执行，不产生单条 Dogwood 决策；要让策略管到文件操作，必须走解释器，并把这些文件排除在直接授权之外。
 
 ## 前置条件
 
@@ -51,10 +56,14 @@
 - 想跑 ai-meeting-room：macOS；Node.js 20 以上；Git；已用自己账号登录的 `claude` 与 `codex` 指令。
 - 首次启动 ai-meeting-room 的设定精灵会问三件事：项目放在哪个文件夹、要不要开手机入口（可留空）、会议室的登录密码。
 - ai-meeting-room 可选输入：`.secrets/telegram-token.txt` 与 `.secrets/telegram-chat-id.txt`（Telegram 推播）；`.secrets/gemini-api-key.txt`（白话解释用 Gemini）；需要图片素材时按卡片规格交件。
+- 想试 Strands Box：Apple silicon Mac；macOS 15 或更高；Homebrew 安装的 Node.js 22.21 或更高；能访问 `us-west-2` 上 Amazon Bedrock 的 Claude Opus 5。
+- Strands Box 的下载脚本会校验 release checksum，把二进制解包到 `./box-core`，不改 `PATH`，也不动系统目录；`./box-core/box --version` 可自检。
+- Strands Box 从源码构建：Cargo workspace，`rust-toolchain.toml` 固定编译器，首次构建时由 rustup 安装；构建产物按 `./target/release/strands-box` 运行，helper 二进制要放在同一目录。
+- Strands Box 的写策略细节需要读 `docs/user/getting-started.md`、`docs/user/security.md`、`docs/user/policy.md`；本次材料未包含这些外链文档内容。
 
 ## 操作步骤
 
-下面分成三套做法。做法 A 是付费媒体账户的具体落地：默认只读，写操作逐条同步过门控。做法 B 是可迁移的权限与审批模式：默认零权限，按任务只引入单个资源，有副作用的动作延后批量审批。做法 C 是本地代码仓库的双 AI 协作：Claude 只读规划与复审，Codex 只在你逐张核准工作卡后于沙箱内执行，核准前自动存 git 还原点。三者不冲突，可以叠加——用 A 的审计与门控管账户，用 B 的授权与审批节奏减少人的同步盯守，用 C 的沙箱与还原点夹住代码写入。
+下面分成四套做法。做法 A 是付费媒体账户的具体落地：默认只读，写操作逐条同步过门控。做法 B 是可迁移的权限与审批模式：默认零权限，按任务只引入单个资源，有副作用的动作延后批量审批。做法 C 是本地代码仓库的双 AI 协作：Claude 只读规划与复审，Codex 只在你逐张核准工作卡后于沙箱内执行，核准前自动存 git 还原点。做法 D 是底层沙箱的可行性验证：在 Apple silicon Mac 上用 Strands Box 把执行、读写和网络能力放开给 agent，用默认拒绝的 Dogwood 语义策略在 agent 进程之外判定 allow/deny，凭证由网关注入，决策写 OTLP JSON。D 与 A/B/C 不冲突，但成熟度最低，先当可行性验证。
 
 ### 做法 A：付费媒体账户（claude-ads）——默认只读、写操作逐条过门控
 
@@ -402,17 +411,89 @@ node --test test/*.test.js
 node scripts/build-release.mjs --platform mac --out dist/ai-meeting-room-mac.zip
 ```
 
-**怎么选（做法 A / 做法 B / 做法 C）：**
+### 做法 D：Strands Box——用默认拒绝策略把执行、读写、网络能力放开（Preview，先做可行性验证）
+
+**24. 确认前提（不满足就退回借鉴设计）**
+
+前提：Apple silicon Mac；macOS 15 或更高；Homebrew 安装的 Node.js 22.21 或更高；能访问 `us-west-2` 上 Amazon Bedrock 的 Claude Opus 5。预期结果：全部满足才继续；拿不到 Apple silicon 机器或 Bedrock 模型访问时，不要强行套用，退回借鉴「默认拒绝、凭证注入、决策记录」三件事。
+
+**25. 下载并验证可执行文件**
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/strands-agents/box/main/download.sh | sh
+./box-core/box --version
+```
+
+前提：能访问 `raw.githubusercontent.com`。下载脚本会校验 release checksum，把二进制解包到 `./box-core`，不改 `PATH`，也不动系统目录。预期结果：`./box-core/box --version` 能输出版本。保持下载下来的二进制都放在同一个 `./box-core` 目录里。
+
+**26. （替代路线）从源码构建**
+
+```sh
+git clone https://github.com/strands-agents/box.git
+cd box
+cargo build --release -p strands-box -p strands-box-containment
+```
+
+预期结果：构建产物按 `./target/release/strands-box` 运行，helper 二进制要放在同一目录。这是 Cargo workspace，`rust-toolchain.toml` 固定编译器，首次构建时由 rustup 安装。常用任务走 `just`：
+
+```sh
+just build         # the CLI, the alias image, and the containment trampoline
+just test          # workspace tests
+just check         # pre-push gate: fmt-check + clippy + test
+just test-all      # workspace tests and box example checks
+```
+
+完整测试套件是 `cargo test --workspace --all-features`；要加 `--all-features` 才会跑 `box_shell` 和 `box_credentials` 两套测试，它们依赖 `test-support` feature。
+
+**27. 按 getting-started 指南写出最小 `box.toml` 和 `policy.dw`，启动 box**
+
+按 `docs/user/getting-started.md` 的 getting-started 指南用 Box 跑 Strands CLI，写 `box.toml` 和 `policy.dw`，然后启动 box。注意：该指南本身是外链文档，本次材料没有给出其内容；也没有给出这两个文件的字段或示例内容。预期结果：能按指南启动 box 并跑通 Strands CLI。
+
+**28. 分清两个文件的分工**
+
+`box.toml` 改 agent 的运行环境和直接访问授权；`policy.dw` 改 Box 经由解释器和网关检查的操作规则。前提：先读 `docs/user/getting-started.md`、`docs/user/security.md`、`docs/user/policy.md`。预期结果：改权限时知道改哪个文件；不会把直接授权误当成策略决策。
+
+**29. 需要写策略时，把策略编写 skill 交给你的编码 agent**
+
+```text
+https://raw.githubusercontent.com/strands-agents/box/main/.agents/skills/authoring-box-policy/SKILL.md
+```
+
+预期结果：让编码 agent 帮你处理 Dogwood 语法和 Box 支持的动作。注意：原文没有给出策略示例，skill 内容也不在本次材料内。
+
+**30. 记住边界**
+
+`box.toml` 里的直接文件系统授权由 OS 强制执行，不产生单条 Dogwood 决策；要让策略管到文件操作，必须走解释器，并把这些文件排除在直接授权之外。细节见 `docs/user/security.md` 和 `docs/user/policy.md`。预期结果：你能判断哪些操作会出现在决策记录里、哪些不会。
+
+**31. 跑示例**
+
+`examples/strands-box/strands-sdk-agent/` 是一个小 agent，三个工具都走 Shell；`examples/README.md` 是示例索引，含依赖和运行说明。预期结果：示例能跑通，作为最小验证。
+
+**32. 需要 agent 调外部 API 时，把凭证配在网关上**
+
+把凭证配在网关上（API 凭证或 AWS SigV4 签名），不要给 agent 本体。预期结果：经网关签名的请求成功，但 agent 侧拿不到底层 secret（原文是设计声明，需要自行验证）。
+
+**33. 需要审计时去读决策记录**
+
+默认 `<box_dir>/private/telemetry/records.jsonl`，OTLP JSON 格式。预期结果：每次受检查操作都有记录；把记录条数与 agent 实际发起的调用对照，看是否有漏记。
+
+**34. （可复现的验证）复现 README 举的时序场景**
+
+一次经 Shell 或 Python 的文件读之后，网关随后拒绝一个出站 HTTP 请求。预期结果：行为与描述一致则时序规则生效；不一致就不要按「可照做」写入你的标准流程。
+
+**怎么选（做法 A / 做法 B / 做法 C / 做法 D）：**
 
 - 账户写操作、不可逆或 blast radius 大的动作：走做法 A 第 6 步，逐条同步确认。六项门控是硬约束，缺 ceilings 即禁止写入，v2 不支持永久删除。
 - 可模拟、可回滚、需要连续推进的动作：走做法 B 第 13 步，先本地模拟让 agent 排队推进，人离线，回来批量批准。
 - 本地代码仓库的改动：走做法 C。它把「谁能写、写哪些文件、核准前存还原点、越界就还原」夹住；Claude 全程只读规划与复审，Codex 只在核准后 `workspace-write` 执行工作卡明列的文件。比 A 更省去逐条 diff 门控的配置，比 B 多了 git 还原点；但只支持 macOS、界面繁体中文、当前只有 Claude+Codex 两位成员。
-- 只读审计与报告：两者都不触碰目标，直接按做法 A 第 2–4 步做；想验证权限链路，再用做法 B 第 10–13 步本地跑一遍，或用做法 C 第 16–18 步在小仓库上跑一轮。
-- 差异要认清：做法 A 是「人看过 diff 才放行」的同步审批；做法 B 是「先给 agent 模拟结果、人稍后批量裁决」的异步审批；做法 C 是「逐张工作卡同步核准 + 核准前 git 还原点 + 沙箱执行」的同步审批，但把回滚做成一键，并用风险分级减少逐条 diff 的负担。原文对异步审批只给主张，没有效果数据；ai-meeting-room 也没有量化效果数据。
+- 想验证「默认拒绝 + 语义策略 + 凭证注入 + 决策记录」这条通用设计，且手上有 Apple silicon Mac：走做法 D，但只当可行性验证，不当生产标准。D 比 B/C 更底层：在 agent 进程之外判定 allow/deny，凭证不交给 agent，决策写 OTLP JSON；但 Preview、只支持 macOS Apple silicon、配置写法在外链文档，原文只提供安装和构建命令。
+- 拿不到 Apple silicon 机器或 Bedrock 模型访问时，不要强行套用，退回借鉴设计：默认拒绝、凭证注入、决策记录三件事本身是通用的。
+- 只读审计与报告：两者都不触碰目标，直接按做法 A 第 2–4 步做；想验证权限链路，再用做法 B 第 10–13 步本地跑一遍，或用做法 C 第 16–18 步在小仓库上跑一轮，或用做法 D 第 24–31 步做一次沙箱可行性验证。
+- 差异要认清：做法 A 是「人看过 diff 才放行」的同步审批；做法 B 是「先给 agent 模拟结果、人稍后批量裁决」的异步审批；做法 C 是「逐张工作卡同步核准 + 核准前 git 还原点 + 沙箱执行」的同步审批；做法 D 是「操作系统隔离 + Dogwood 语义策略默认拒绝 + 凭证注入 + OTLP 决策记录」的底层沙箱。原文对异步审批只给主张，没有效果数据；ai-meeting-room 也没有量化效果数据；Strands Box 同样没有效果指标或前后对照数据。
 
 ## 怎么判断变好了
 
-三份材料都没有给准确率、节省工时、误报/漏报率这类结果数据，所以只能看过程信号：
+四份材料都没有给准确率、节省工时、误报/漏报率这类结果数据，所以只能看过程信号：
 
 claude-ads 侧：
 
@@ -440,9 +521,18 @@ ai-meeting-room 侧：
 - 唯读讨论失败是否自动换模型重试一次；会改档的工单是否不自动重跑、提示人按「重试」。
 - 程序侧 `node --test test/*.test.js` 是否通过；环境检查是否显示 `claude` 和 `codex` 版本号。
 
-**最小试用方式：** claude-ads 侧全程只读、不触碰账户，只挑一个广告平台，依次跑 `/ads setup` → `/ads audit` → `/ads report` → `/ads next`，看它能不能给出带证据和置信度的 findings，以及 next 指出的阻塞项是否合理。Cloudflare OS 侧：装好 pnpm → `pnpm run-local` → 打开 http://localhost:8787 → 跑「做 slides」和「建协作白板应用」两条提示词 → 再配置一个真实资源（GitHub repo 或 Google Doc 选一个），走完「引入资源 → agent 请求权限 → 审批队列 → 批量批准」的完整链路。ai-meeting-room 侧：在一个无关紧要的小仓库上，下载解压 → 双击 `start.command` → 完成设定精灵 → 浏览器打开 `http://127.0.0.1:4477` → 用白话提一个小改动 → 等 Claude 规划、Codex 列卡 → 逐张核准（注意先存还原点）→ 看 Codex 是否只写列出的文件 → 按「回到执行前」验证回滚 → 结束并产出决议。
+Strands Box 侧：
 
-**试多久：** claude-ads 的材料在「怎么试」一节被截断，没有给出建议时长。Cloudflare OS 原文建议最小试用控制在半天内。ai-meeting-room 原文没有给出建议时长；建议至少跑通一轮完整会议，并故意制造一次越界或失败，看还原与重试行为是否符合预期。合起来的建议：单平台只读一轮，加半天本地权限链路验证，再决定要不要扩到更多平台或更多服务。调研结论本身的建议是「小范围试而非全面采用」。
+- 拒绝有效性：让 agent 访问未授权路径或发未 `permit` 的请求，确认被实际拒绝（不是靠提示词约束）。
+- 记录完整性：`<box_dir>/private/telemetry/records.jsonl` 中对每次受检查操作都有 OTLP JSON 记录；把记录条数与 agent 实际发起的调用对照，看是否有漏记，尤其确认直接授权的文件操作确实不出现在 Dogwood 决策里。
+- 凭证不外泄：确认 agent 侧拿不到底层 secret，同时经网关签名的请求仍然成功。
+- 时序规则生效：复现 README 举的场景——一次文件读之后，网关拒绝后续出站 HTTP——看是否与描述一致。
+- 工作方式改善：挑一件原本因风险不做、需要人工逐步审批的 agent 任务，交给 Box 后比较是否能无人值守完成；出问题时能否从决策记录定位到是被哪条规则拒绝。
+- 以上任一条在本机无法复现，就不宜按「可照做」写入手册，只保留其沙箱设计思路。
+
+**最小试用方式：** claude-ads 侧全程只读、不触碰账户，只挑一个广告平台，依次跑 `/ads setup` → `/ads audit` → `/ads report` → `/ads next`，看它能不能给出带证据和置信度的 findings，以及 next 指出的阻塞项是否合理。Cloudflare OS 侧：装好 pnpm → `pnpm run-local` → 打开 http://localhost:8787 → 跑「做 slides」和「建协作白板应用」两条提示词 → 再配置一个真实资源（GitHub repo 或 Google Doc 选一个），走完「引入资源 → agent 请求权限 → 审批队列 → 批量批准」的完整链路。ai-meeting-room 侧：在一个无关紧要的小仓库上，下载解压 → 双击 `start.command` → 完成设定精灵 → 浏览器打开 `http://127.0.0.1:4477` → 用白话提一个小改动 → 等 Claude 规划、Codex 列卡 → 逐张核准（注意先存还原点）→ 看 Codex 是否只写列出的文件 → 按「回到执行前」验证回滚 → 结束并产出决议。Strands Box 侧：在一台满足前提的 Apple silicon Mac 上执行下载与 `--version`，确认二进制可运行；按 `docs/user/getting-started.md` 写出最小 `box.toml` 和 `policy.dw`，启动 box，跑 `examples/strands-box/strands-sdk-agent/` 示例；只做一件事：把示例 agent 的一次操作从「直接授权」改成「经解释器 + 策略检查」，体会边界差别。
+
+**试多久：** claude-ads 的材料在「怎么试」一节被截断，没有给出建议时长。Cloudflare OS 原文建议最小试用控制在半天内。ai-meeting-room 原文没有给出建议时长；建议至少跑通一轮完整会议，并故意制造一次越界或失败，看还原与重试行为是否符合预期。Strands Box 原文没有给建议时长；先做一次可行性验证，不要直接进生产。合起来的建议：单平台只读一轮，加半天本地权限链路验证，再决定要不要扩到更多平台或更多服务。调研结论本身的建议是「小范围试而非全面采用」。
 
 ## 常见坑
 
@@ -473,33 +563,44 @@ ai-meeting-room 侧：
 - 把唯读失败和写工单失败一视同仁。唯读讨论会自动换模型重试一次；会改档的工单不会自动重跑，改成提示你按「重试」。
 - 把会议室的 git 锁当作死局。还原点建不起来、说 .git 被锁住时，在项目资料夹执行 `rm -f .git/*.lock .git/objects/maintenance.lock` 再按一次核准。
 - 以为 ai-meeting-room 有量化效果数据。原文没有 benchmark、用户案例或量化结果；先在小仓库验证。
+- 把 Strands Box 当生产标准。README 明确标注 Preview，当前只支持 macOS Apple silicon 上的本地执行；仓库 63 stars 只说明热度。
+- 非 Apple silicon 或不满足前提还硬套。前置是 Apple silicon Mac、macOS 15+、Homebrew Node.js 22.21+、`us-west-2` Bedrock Claude Opus 5。
+- 以为直接文件系统授权会产生 Dogwood 决策。`box.toml` 里的直接文件系统授权由 OS 执行，不产生单条 Dogwood 决策；要让策略管到文件操作，必须走解释器，并把这些文件排除在直接授权之外。
+- 以为原文给了 `box.toml` / `policy.dw` 的字段或示例。没有；getting-started、security、policy、architecture 全在外链 `docs/` 里，本次材料未包含。
+- 把默认拒绝、permit 覆盖、forbid 优先、文件读影响后续 HTTP 放行当已验证。原文只有文字描述，没有附测试、日志或案例数据。
+- 以为凭证注入已验证 agent 拿不到 secret。这是设计声明，没有给出验证方式；需要自己按「凭证不外泄」指标试。
+- 忘了把 helper 二进制放在同一目录。下载路线是 `./box-core`；源码构建路线是 `./target/release/strands-box` 与 helper 同目录。
 
 ## 证据与来源
 
-**依据三份材料：** AgriciDaniel/claude-ads 仓库 README 首页（版本号 v2.0.2）；cloudflare/cloudflare-os 仓库 README（当前是 v2，基于 v1 经验重写，定位 early access）；sojei1989/ai-meeting-room 仓库 README（Apache License 2.0，macOS 本机开源应用，作者自述是平面设计师、不写程序、工具是他自己每天在用的）。
+**依据四份材料：** AgriciDaniel/claude-ads 仓库 README 首页（版本号 v2.0.2）；cloudflare/cloudflare-os 仓库 README（当前是 v2，基于 v1 经验重写，定位 early access）；sojei1989/ai-meeting-room 仓库 README（Apache License 2.0，macOS 本机开源应用，作者自述是平面设计师、不写程序、工具是他自己每天在用的）；strands-agents/box 仓库 README（自述 Preview，当前只支持 macOS Apple silicon 本地执行，63 stars）。
 
 **可以直接照抄的部分：**
 
 - claude-ads：插件与脚本安装命令、`install.sh` / `install.ps1` / `uninstall.sh` 用法、完整命令表、12 平台清单、写操作六条门控、评分阈值（80%/60%）、release 四条硬规则、开发与校验命令；贡献者表列出带 issue/PR 编号的社区反馈（如 #65、#53、#17/#18、#56、#57、#61、#66 等），说明有真实使用与缺陷修复痕迹。
 - Cloudflare OS：`pnpm run-local`、http://localhost:8787、五条官方提示词、11 个 gatekeeper 包路径清单、`pnpm dev-server` / `pnpm dev-client` 与 http://localhost:3000、部署入口与部署模板仓库、自建服务器部署标注 COMING SOON、OS 概念映射表（kernel=`packages/workshop-backend`、device drivers=`packages/gatekeeper-*`、shell=`packages/workshop-frontend`、processes=gadgets、executables=blueprints、ACLs=shared permissions）。
 - ai-meeting-room：安装步骤（`start.command`、`npm start`、`http://127.0.0.1:4477`）、沙箱参数（`--sandbox read-only` / `--sandbox workspace-write`）、档案路径（`.secrets/passcode.txt`、`.secrets/telegram-token.txt`、`.secrets/telegram-chat-id.txt`、`.secrets/gemini-api-key.txt`、`public/assets/sfx/yes-my-lord.mp3`、`meetings/`）、风险分级、核准与还原规则、模型发现与费用护栏、白话解释降级链、测试命令 `node --test test/*.test.js`、打包命令 `node scripts/build-release.mjs --platform mac --out dist/ai-meeting-room-mac.zip`。
+- Strands Box：下载脚本与 `./box-core/box --version`；Cargo workspace 构建命令、`just` 四个任务、`cargo test --workspace --all-features` 与 `test-support` 的关系；两个配置文件名与分工；策略 skill URL；决策记录默认路径；示例目录路径；架构描述（Dogwood Local Engine 与执法组件跑在 agent 沙箱之外的独立进程里）。
 
 **只是作者主张、没有佐证的部分：**
 
 - claude-ads README 全部为仓库自述。没有任何第三方评测、审计准确率、节省工时、误报/漏报率等结果数据；安全门控和 release 规则是作者设定的规则，未附验证结果；「确定性评分 / 确定性报告」也是自述，无对照数据。贡献者一节自己也声明「部分提案被独立实现或取代，署名不代表每个补丁都被合并」。
 - Cloudflare OS：同等模型下该平台编码 agent 更快更好更省 token；沙箱让「slide 应用有安全漏洞泄露你的 slides 给攻击者」不可能发生；Blueprint 模式代表云软件传统作法的转变；传统操作系统「应当」对 AI agent 特殊对待。这些都无数据或第三方验证。仓库指标 10473 stars（当日 +84）只说明热度。
 - ai-meeting-room：原文是 README 级别的作者自述系统设计与操作流程，没有 benchmark、用户案例或量化结果；可核对的事实性材料包括安装步骤、沙箱参数、档案路径、风险分级、核准与还原规则、模型发现与费用护栏、白话解释降级链、测试与打包命令，但「改善了多少」没有数据。
+- Strands Box：`box.toml` 的字段写法和 `policy.dw` 的规则示例都没有给出，getting-started、security、policy、architecture 全在外链 `docs/` 里；「默认拒绝」「permit 覆盖、forbid 优先」「文件读会影响后续 HTTP 放行」都是文字描述，没有附测试、日志或案例数据；「凭证注入让 agent 拿不到 secret」是设计声明，没有给出验证方式；没有效果指标或前后对照数据。63 stars 只说明热度。
 
 **材料本身的局限：**
 
 - claude-ads：输入只有仓库 README 首页，不含各 skill 的实际提示词内容、`scoring.py` 实现、capability manifest 明细，因此无法核验评分与门控是否如其所述，也无法确认各平台适配是实测通过还是仅有 fixture；「怎么试、怎么验证」一节在材料中被截断，完整试用步骤无法从材料中得到。
 - Cloudflare OS：没有给出任何一条 gatekeeper 的具体 OAuth 配置步骤（只有链接），且原文承认服务商有意不简化 OAuth 申请；自建服务器部署文档标注 COMING SOON；Gatekeeper 服务独立部署「细节尚未确定」，目前只能与 OS 实例一起部署；没有任何任务完成质量、耗时、成本的对照数据；原文也没有给出定时、事件或状态触发的自动推进机制。
 - ai-meeting-room：只支持 macOS；界面是繁体中文；目前只有 Claude（规划）+ Codex（执行）两位成员，Gemini CLI 等是后续方向；原文没有给出「改善了多少」的量化数据。
+- Strands Box：非 Apple silicon 或不满足模型访问条件的环境无法照做；Preview 阶段接口和文档可能变动；策略与配置的具体写法全在外链文档里，原文只提供安装和构建命令。
 
-**与已有工具做法的关系：** claude-ads 把 Claude Code 作为规范运行时，安装直接走 Claude Code 插件市场（`/plugin marketplace add`、`/plugin install`），本身是 Agent Skills 形态的实例（`ads/SKILL.md` 契约、`ads/`、`skills/`、`agents/` 目录结构，独立安装与插件命名空间 `/ads` 对 `/claude-ads:ads` 加载同一契约）；Cursor、goose 在原文里只列为 watch，仅说明可消费同一批 skill 文件。Cloudflare OS 的 Gatekeeper 原文自称「增强版 MCP server」，与「预先挂上所有 MCP server 让服务全程在场」相对；它也能跑在开源 `workerd` 上、不必绑定 Cloudflare 云，但这一点同样只有原文自述。ai-meeting-room 可以看作 Claude Code 的一种落地用法：让 Claude Code 只做只读的规划与复审，执行交给另一个 CLI（Codex），并用核准卡 + git 还原点把写权限夹住；它没有替代 Claude Code，而是补上了「谁执行、谁核准、怎么回滚、模型换代怎么办」这几层。
+**与已有工具做法的关系：** claude-ads 把 Claude Code 作为规范运行时，安装直接走 Claude Code 插件市场（`/plugin marketplace add`、`/plugin install`），本身是 Agent Skills 形态的实例（`ads/SKILL.md` 契约、`ads/`、`skills/`、`agents/` 目录结构，独立安装与插件命名空间 `/ads` 对 `/claude-ads:ads` 加载同一契约）；Cursor、goose 在原文里只列为 watch，仅说明可消费同一批 skill 文件。Cloudflare OS 的 Gatekeeper 原文自称「增强版 MCP server」，与「预先挂上所有 MCP server 让服务全程在场」相对；它也能跑在开源 `workerd` 上、不必绑定 Cloudflare 云，但这一点同样只有原文自述。ai-meeting-room 可以看作 Claude Code 的一种落地用法：让 Claude Code 只做只读的规划与复审，执行交给另一个 CLI（Codex），并用核准卡 + git 还原点把写权限夹住；它没有替代 Claude Code，而是补上了「谁执行、谁核准、怎么回滚、模型换代怎么办」这几层。Strands Box 在本次清单中没有相关条目。它是 harness-agnostic 的沙箱引擎，把操作系统隔离和 Dogwood 语义策略结合，默认拒绝，凭证由网关注入，决策写 OTLP JSON；适合作为做法 B/C 更底层的补充验证，但仍是 Preview。
 
 ## 依据的调研
 
 - [AgriciDaniel/claude-ads](../research/radar/2026-10-01/580-agricidaniel-claude-ads.md)：值得一试，可按 README 原样安装 Claude Code 插件，先在一个广告平台上跑只读审计（/ads setup → /ads audit → /ads report → /ads next），把它当作「AI 操作 + 权限门控 + 确定性验证」的落地模板照搬；理由是原文给出了可直接复制的安装命令、完整命令表、评分阈值和写操作六道门控，但适用面限于付费媒体、效果只有仓库自述，因此建议小范围试而非全面采用。
 - [cloudflare/cloudflare-os](../research/radar/2026-10-04/1062-cloudflare-cloudflare-os.md)：值得一试，先在本地跑 `pnpm run-local` 体验，重点把 Gatekeeper 的「按任务引入资源 + 有副作用动作延后批量审批」这套权限流程抄到自己的 agent 工作里，不要照搬整套平台；理由是它仍是 early access、自部署文档未完成，但权限与审批的具体做法可立即小范围验证。
 - [sojei1989/ai-meeting-room](../research/radar/2026-10-08/1867-sojei1989-ai-meeting-room.md)：值得一试，建议小范围试装这套「只读规划 + 核准后写入 + 核准前 git 还原点」的双 AI 协作流程，因为它把权限边界、风险分级和回滚都做成了可直接照做的配置；但它是作者个人项目、只支持 macOS、界面仅繁体中文，且没有效果数据，所以先在一个无关紧要的小仓库上验证再决定是否长期用。
+- [strands-agents/box](../research/radar/2026-10-08/1929-strands-agents-box.md)：值得一试，可在 Apple silicon Mac 上小范围试：按 README 给的下载/构建命令装起 Strands Box，用 box.toml 控直接访问、policy.dw 写默认拒绝策略，安全地把执行、读写和网络能力放开给 agent；但它自述仍是 Preview、只支持 macOS Apple silicon，策略与配置的具体写法全在外链文档里，原文只提供了安装和构建命令，所以先当可行性验证而非标准做法。
