@@ -1,16 +1,16 @@
-# 小范围试装技能包，用对照验证效果，并审计自己的 SKILL.md
+# 让 agent 把结论、方案对比与流程解释渲染成一页可离线打开的 HTML
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：解决「装了一个技能包后不确定它是否真的减少了返工，以及自己写的 SKILL.md 质量无法复核」的问题。
-> 先试这一步：选一个非关键项目，只装一个技能包，对同一任务做有/无技能的 3 次对照；如果你已经在写自己的 SKILL.md，先跑一次 `python3 scripts/validate_skill.py --all ~/.claude/skills` 拿到基线。
-> 最近修订：2026-10-06
+> 解决的问题：同一类需要图和表才能讲清的结论，每次让 agent 手写 HTML 又慢又不稳；这篇手册给出一条分工明确的流程——模型只写 Markdown 草稿、CLI 负责布局与绘图，并说明怎么装、怎么开 always-on、怎么用有/无对照验证它真的省 token。
+> 先试这一步：先在一个能执行 shell 的 agent（如 Claude Code）上装 answer-me-with-html，用两三个复杂问题对比「直接让模型写 HTML」与「模型写 Markdown 草稿 + CLI 渲染」的输出 token、耗时和页面可读性，再决定是否开 always-on。
+> 最近修订：2026-10-08
 
 ## 解决什么问题
 
 你已经在用编码 agent，但每次都要重复描述同一套工程规范，或者不确定装一个技能包是否真的减少了返工——甚至因为一次装太多，上下文反而更乱。这篇手册给出一个可照做的流程：先小范围试装一个现成技能包，用同一任务做有/无技能的对照，确认有效后再考虑把自己的重复工作写成 `SKILL.md`（并用 skill-creator-plus 审计和改进它），或者把一本反复查阅的技术书、一份内部文档半自动转成按需加载的技能。
 
-它也覆盖一批具体场景：让 agent 代理编码 CLI 跑长任务并拿硬证据验收；给 agent 补一块行业设计知识；把一句模糊想法写成可让 agent 独立跑几小时的任务书；写一个把会话状态嵌进界面的 Claude Code mod；让 agent 把一句话描述／一个代码仓库变成可交互的架构图、工作流图、时序图、数据流图、生命周期图，或者把自然语言需求与已有的 draw.io / Mermaid / Excalidraw 源文件改成自包含的 HTML+SVG 图、并让它长得像你的品牌；让 agent 检索中国金融市场数据；把移动端模拟器与真机画面接进 Codex 聊天；把多步复杂任务拆成三阶段并加门禁；把中英文学术写作去模板化改写，同时用命题级核对保住数字、引文与证据强度（做法 Y）；让路由技能自动选工作流并对 bug 交出失败→通过证据（做法 Z）；按职能只装少量 agent 角色并用真实任务与默认提示对照（做法 AA）；在 T3 Code 里用 p3-stack 按 playbook 路由，并用 worktree 与 PR 监视减少等待和冲突（做法 AB）；审计并改进自己的 `SKILL.md`，把机械问题变成可复核的检查项（做法 AC）。
+它也覆盖一批具体场景：让 agent 代理编码 CLI 跑长任务并拿硬证据验收；给 agent 补一块行业设计知识；把一句模糊想法写成可让 agent 独立跑几小时的任务书；写一个把会话状态嵌进界面的 Claude Code mod；让 agent 把一句话描述／一个代码仓库变成可交互的架构图、工作流图、时序图、数据流图、生命周期图，或者把自然语言需求与已有的 draw.io / Mermaid / Excalidraw 源文件改成自包含的 HTML+SVG 图、并让它长得像你的品牌；让 agent 检索中国金融市场数据；把移动端模拟器与真机画面接进 Codex 聊天；把多步复杂任务拆成三阶段并加门禁；把中英文学术写作去模板化改写，同时用命题级核对保住数字、引文与证据强度（做法 Y）；让路由技能自动选工作流并对 bug 交出失败→通过证据（做法 Z）；按职能只装少量 agent 角色并用真实任务与默认提示对照（做法 AA）；在 T3 Code 里用 p3-stack 按 playbook 路由，并用 worktree 与 PR 监视减少等待和冲突（做法 AB）；审计并改进自己的 `SKILL.md`，把机械问题变成可复核的检查项（做法 AC）；让 agent 把结论、方案对比、多步流程、仓库模块、逐句批注、时间线和一段历史渲染成一页可离线打开的单文件 HTML——模型只写 Markdown 草稿，CLI 负责布局与绘图，可开 always-on 让每条有结论的回复都附一页（做法 AD）。
 
 ## 适用与不适用
 
@@ -28,6 +28,7 @@
 - 想按职能给 agent 补一个专业角色（代码审查、前端、无障碍、FinOps 等），并且只装少量角色（做法 AA）。
 - 已经在 T3 Code 环境里工作，想让路由技能按 playbook 挑流程，并用 worktree、PR 监视、定时任务和线程记忆减少手工轮询与冲突（做法 AB）。
 - 已经在写自己的 `SKILL.md`，想用可逐条勾选的规则审计它、拿到基线再改，并把「技能写得好不好」变成可复核的检查项（做法 AC）。
+- 经常需要把结论、方案对比、多步流程、仓库结构、逐句批注、时间线或一段历史讲成一页带图表的说明，而不是一段长文本；希望模型只写内容、布局交给工具（做法 AD）。
 
 不适用：
 
@@ -39,6 +40,7 @@
 - AA 只给了角色目录，没给任何一个 agent 文件的内容，也没有效果证据；OpenCode 运行时约 119 个 agent 上限，超出会被静默丢弃。
 - AB 必须在 T3 Code 环境内使用；`delegate_task`、`t3_thread_launch`、`watch_pull_request`、`schedule_task`、`t3_thread_read`、`t3_thread_search`、`preview_*`、`device_*` 都只有名称和一句话用途，没有命令语法或配置样例；没有 T3 Code 就最多只能读它的 skill / playbook 设计思路，不要照搬。
 - AC 只覆盖 Claude 生态（Claude Code / claude.ai）、对象是 `SKILL.md` 形态的技能；材料只有 README，没有源码与 `references/` 正文，NM1–NM5 等关于新模型的论断仅为作者主张；validator 只能证明格式与规则合规，不能证明产出更好。
+- AD 需要 agent 能执行 shell 命令、Node.js 20 或更新版本；一句话问题、纯命令输出和明确要纯文本的请求不会出页面；Claude Code 在 plan mode 下不生成页面；更新是手动的，不会自动升级；效果证据主要来自作者自测的 9 个页面样本与作者给出的 token 比例，属作者口径。
 
 ## 前置条件
 
@@ -73,10 +75,11 @@
 - AA：本地有 git 与 bash；脚本方式需本地有仓库（原文未给 clone 命令，只说明脚本方式需本地有仓库）；app 方式需 macOS/Linux/Windows 桌面环境；已安装目标工具（如 Claude Code 且有 `~/.claude/agents/` 目录）；仓库内有 `strategy/runbooks.json` 且本地有 python3 才能按 runbook 整队安装。
 - AB：一台能跑 T3 Code 的机器；T3 Code 从 `~/.agents/skills/` 读取 skills；已装 git；有可用的 provider/model 凭据；git 的 worktree 与分支能力可用；需要浏览器与设备模拟器时，T3 Code 提供 `preview_*` / `device_*`。
 - AC：Claude Code 环境（有 `~/.claude/skills` 或项目内 `.claude/skills`）或 claude.ai 账号（validator 需开启代码执行）；本地 Python 3.8+（validator 只用标准库）；对象是已有的 `SKILL.md` 文件夹。
+- AD：Node.js ≥ 20（不需要 `npm install`，CLI 已捆绑在 skill 里）；agent 能执行 shell 命令；想开 always-on 需要能写 `~/.claude/CLAUDE.md` 或 `AGENTS.md` 之类规则文件；想自己复现基准需要能 clone 仓库并跑 `npm install`。
 
 ## 操作步骤
 
-怎么选：先做做法 A；A 里某个技能确实有效、且你有一件每周重复且规范明确的工作，再做做法 B。其余按场景选：C 多来源知识打包；D 补模型端点/权限/搜索；E 中文技术文档写作与审稿；F 单篇论文精读；G 写一个 Claude Code mod；H 用 Cline CLI 代理长任务拿硬证据验收；I 补 UI/UX 设计知识；J 出带交互的单文件 HTML 图；K 出品牌一致的静态 HTML+SVG 图；L 从大插件市场只装一个单元并按任务档位选模型；M 把书或内部文档转成按需加载技能；N 把模糊想法写成任务书并给破坏性操作加闸门；O 补 Postgres 领域知识与版本化文档检索；P 在授权安全场景按主题加载安全技能库；Q 把多步任务拆成三阶段加门禁；R 装一套小而可组合的工程技能集；S 从 google/skills 按任务只装一个；T 让 agent 检索中国金融市场数据并核对来源与时间戳；U 把移动端模拟器与真机画面接进 Codex 聊天；V 用一行 curl 装单个 Markdown 技能；W 用元技能观察你怎么用技能；X 装一套全栈开发技能包按请求自动激活；Y 把中英文学术写作去模板化改写并用命题核对保住事实；Z 用路由技能自动选工作流并对 bug 交出失败→通过证据；AA 按职能只装少量 agent 角色并用真实任务与默认提示对照；AB 在 T3 Code 里用 p3-stack 按 playbook 路由并用 worktree/PR 监视减少等待与冲突；AC 审计并改进自己的 SKILL.md。
+怎么选：先做做法 A；A 里某个技能确实有效、且你有一件每周重复且规范明确的工作，再做做法 B。其余按场景选：C 多来源知识打包；D 补模型端点/权限/搜索；E 中文技术文档写作与审稿；F 单篇论文精读；G 写一个 Claude Code mod；H 用 Cline CLI 代理长任务拿硬证据验收；I 补 UI/UX 设计知识；J 出带交互的单文件 HTML 图；K 出品牌一致的静态 HTML+SVG 图；L 从大插件市场只装一个单元并按任务档位选模型；M 把书或内部文档转成按需加载技能；N 把模糊想法写成任务书并给破坏性操作加闸门；O 补 Postgres 领域知识与版本化文档检索；P 在授权安全场景按主题加载安全技能库；Q 把多步任务拆成三阶段加门禁；R 装一套小而可组合的工程技能集；S 从 google/skills 按任务只装一个；T 让 agent 检索中国金融市场数据并核对来源与时间戳；U 把移动端模拟器与真机画面接进 Codex 聊天；V 用一行 curl 装单个 Markdown 技能；W 用元技能观察你怎么用技能；X 装一套全栈开发技能包按请求自动激活；Y 把中英文学术写作去模板化改写并用命题核对保住事实；Z 用路由技能自动选工作流并对 bug 交出失败→通过证据；AA 按职能只装少量 agent 角色并用真实任务与默认提示对照；AB 在 T3 Code 里用 p3-stack 按 playbook 路由并用 worktree/PR 监视减少等待与冲突；AC 审计并改进自己的 SKILL.md；AD 让 agent 把结论、方案对比与流程解释渲染成一页可离线打开的 HTML。
 
 几组容易混的：
 
@@ -93,7 +96,9 @@
 - AA 与 X / R：AA 装的是按职能组织的 agent 角色文件（可只装一个 division 或几个 agent），X 是一个 Claude Code 全栈技能包按请求自动激活，R 是一套小而可组合的工程技能集；AA 没有自动激活机制，需在会话里显式激活角色。
 - AB 与 Z：两者都是 pstack 家族。Z 是 `pstack-claude`，把 pstack 移植到 Claude Code、Codex、Pi，核心是 `poteto-mode` 路由技能与按角色配模型/推理强度；AB 是 `p3-stack`，把同一套技能、原则和话术在 T3 Code 上重写，核心编排原语换成 `delegate_task`、`t3_thread_launch`、`watch_pull_request`、`schedule_task`、`t3_thread_read/search`、`preview_*` / `device_*`。已经在 T3 Code 里工作才选 AB；否则先用 Z 或只读 AB 的 playbook 设计。
 - AC 与 B/R/W：B 是把你自己的重复工作写成 `SKILL.md`；R 是先用别人拆好的一整套技能集；W 观察你怎么用技能并产出 staged 更新；AC 不替你写新技能，也不观察你，它审计你已有的 `SKILL.md`（或新建骨架），先把机械问题变成可复核的检查项。
-- E、F、G、H、I、J、K、L、M、N、O、P、Q、R、S、T、U、V、W、X、Y、Z、AA、AB、AC 都必须套用 A 的对照方法，不要跳过验证直接纳入常规流程。
+- AD 与 J / K：J 出带 JavaScript 交互的架构图，K 默认出无 JS、依赖品牌 style-guide 的静态 HTML+SVG 图；AD 出的是「一页结论／解释／对比」的单文件 HTML，模型只写 Markdown 草稿、CLI 负责布局与绘图，还可以开 always-on 让每条带结论的回复都附一页。要交互图选 J，要品牌一致性和静态可交付选 K，要每次讲清楚一个结论就附一页选 AD。
+- AD 与 V：V 用一行 curl 装单个纯 Markdown 技能，不装仓库；AD 装的是一个带 CLI 的 skill，装完还要按需把 always-on 规则写进 rules 文件，并验证它的出页判断、token 与耗时。
+- E、F、G、H、I、J、K、L、M、N、O、P、Q、R、S、T、U、V、W、X、Y、Z、AA、AB、AC、AD 都必须套用 A 的对照方法，不要跳过验证直接纳入常规流程。
 
 ### 做法 A：先用现成技能包做小范围试装（推荐先做）
 
@@ -1327,6 +1332,139 @@ README 给出质量门禁 `skill-seekers quality output/react/ --threshold 7`，
 
 12. 按 A 的对照法验证：挑 1–2 个你已经在用的 Claude 技能，装好后跑 `python3 scripts/validate_skill.py --all ~/.claude/skills` 和 `--json` 存基线；只对其中一个技能说 Audit 并改 2–3 条，复跑同一命令；另一个技能不动作对照。再用几个真实请求试触发正确率；同一真实任务在全新会话里开/关技能跑 A/B（对应 TS2、TS3）。已知局限：材料只有 README，没有源码与 `references/` 正文，validator 是否真与 46 条规则一致无法核实；NM1–NM5 等关于新模型的论断仅为作者主张，先测再删；`--ban-em-dash` 是额外标记破折号，按需使用。
 
+### 做法 AD：让 agent 把结论、方案对比与流程解释渲染成一页可离线打开的 HTML（可选，按 A 的对照法验证）
+
+定位：QingYunA/answer-me-with-html 是一个 agent skill：安装后按平常方式提问，agent 只写一份简短的 Markdown 草稿，交给 skill 自带的 CLI（`am`）渲染成一页单文件、可离线打开的 HTML。README 称约 50 ms 后得到页面。核心分工是**模型写内容（Markdown），CLI 负责布局、配色、绘图**。README 给出的比例是：手写 HTML 时模型写的 token 里约 47% 是 SVG 坐标与路径、15% 是 CSS、17% 是 HTML 标签、21% 才是文本；用这个 skill 后模型只写那 21% 对应的 Markdown 草稿。支持通过安装器接入 70+ 种 agent，README 明确列出 Claude Code、Codex、Cursor、OpenCode、Pi。页面保存在 `~/.answer-me-with-html/pages/`，每页内嵌生成它的 Markdown，右上角按钮可切换主题/明暗、填写回复、复制源 Markdown。
+
+1. 前提：装 Node.js 20 或更新版本。不需要 `npm install`，CLI 已捆绑在 skill 里。agent 需要能执行 shell 命令。
+
+2. 让 agent 自己装（README 推荐）：把下面这段原样贴进 Claude Code / Codex / Cursor / OpenCode 或其他 agent。
+
+   ```
+   Install Answer me with HTML: read https://raw.githubusercontent.com/QingYunA/answer-me-with-html/main/INSTALL.md and follow it.
+   ```
+
+   按 README 描述，`INSTALL.md` 是写给 agent 看的：在 Claude Code 里装插件、在其他 agent 里装 skill，保留已有安装，不向你提问，最后用 TCP 三次握手页面自检并只给一份报告。如果你的 agent 打不开链接，用：
+
+   ```bash
+   npx -y skills add QingYunA/answer-me-with-html -g -y -a <your agent name>
+   ```
+
+   （Claude Code 用 `-a claude-code`。）
+
+3. 或走 Claude Code 插件：在 Claude Code 内运行。
+
+   ```
+   /plugin marketplace add QingYunA/answer-me-with-html
+   /plugin install answer-me-with-html@answer-me-with-html
+   ```
+
+4. 或一条命令装：
+
+   ```bash
+   npx skills add QingYunA/answer-me-with-html
+   ```
+
+   它会问装进哪些 agent（安装器 vercel-labs/skills 支持 70+ agent）。
+
+5. 或手动装：把 `skills/answer-me-with-html` 目录拷进你的 agent skill 目录。Claude Code 的写法：
+
+   ```bash
+   git clone --depth 1 https://github.com/QingYunA/answer-me-with-html.git /tmp/answer-me-with-html
+   cp -R /tmp/answer-me-with-html/skills/answer-me-with-html ~/.claude/skills/answer-me-with-html
+   ```
+
+   其他 agent 的 skill 目录：Codex `~/.codex/skills/`、Cursor `~/.cursor/skills/`、OpenCode `~/.config/opencode/skill/`。
+
+6. 验证安装：用 TCP 三次握手的问题问一次，README 说 `INSTALL.md` 本身就以这个页面作为自检结果。
+
+7. 使用：装完不用额外设置，照常提问即可。README 给的示例：
+
+   ```
+   > Explain the TCP three-way handshake
+   > Map out how the modules in this repo fit together
+   > Redis or Memcached for our cache?
+   ```
+
+   agent 自己判断值不值得出页面：相关概念、多步流程、多方案对比才出；也可以用一句话触发：“explain it in HTML”。一句话问题（例如“怎么用 `ls` 显示隐藏文件”）不会出页面。
+
+8. 开启 always-on（README 推荐，默认关闭）：把下面这段贴给 agent，让它把规则写进 rules 文件（如 `~/.claude/CLAUDE.md` 或 `AGENTS.md`）。
+
+   ```
+   Turn on always-on mode for Answer me with HTML: add a global rule — "[answer-me-with-html always-on] Whenever a reply gives a conclusion, summary, plan, comparison, review or explanation, even a short one, also make a page with the answer-me-with-html skill (2 to 4 panels for routine answers), render it with --no-open before you write the reply, and end the reply with a file:// link to the page. Skip casual chat, one- or two-sentence replies with no conclusion, pure command output, and requests for plain text."
+   ```
+
+   规则生效后每次给出结论/总结/计划/对比/评审/解释都会附一页（常规回答 2–4 个面板），页面不自动弹开、不打断；闲聊、无结论的一两句话、纯命令输出、明确要纯文本的仍照旧。README 另注：Claude Code 在 plan mode 下不生成页面。
+
+9. 改配置：不用手改配置文件，用 slash command 或 `am`。
+
+   | 位置 | 方式 |
+   | :--- | :--- |
+   | Claude Code（插件安装） | `/answer-me-with-html:config` 交互改；`/answer-me-with-html:config open off` 直接改 |
+   | 任意 agent | `/answer-me-with-html config open off`，或直接说“stop opening the browser” |
+   | 终端 | `am config` 查看，`am config set open off` 修改，`am config reset` 还原 |
+
+   可配置项：`open`、`theme`、`mode`（light/dark）、`style`（写作检查）、`update_check`、`voice`（视频旁白）。
+
+10. 写草稿（了解格式即可，通常由 agent 自动写）：模型写的就是这种结构，frontmatter + fenced 图形块，坐标由 CLI 用 dagre 计算、按标签宽度排布。
+
+    ````markdown
+    ---
+    title: TCP three-way handshake
+    ---
+    ## A Three-way handshake {span=2}
+    ```sequence num
+    Client -> Server: SYN, seq=x
+    Server -> Client: SYN+ACK, seq=y, ack=x+1
+    Client -> Server: ACK, ack=y+1
+    note Client, Server: ESTABLISHED
+    ```
+
+    ## C State changes {span=2}
+    ```flow LR
+    (CLOSED) -> LISTEN: passive open
+    LISTEN -> SYN_RCVD: get SYN / send SYN+ACK
+    SYN_RCVD -> *ESTABLISHED: get ACK
+    ```
+    ````
+
+    组件用法可查 `am help <component>`。完整语法（frontmatter、`span`、`rows`、raw `html`/`svg` 块、不走 agent 直接调 CLI）在 `docs/reference.md`。
+
+11. 按信息形状选组件（README 给的选择表）：`flow` 架构/调用链/判断分支；`sequence` 多方随时间往返的消息；`tree` 目录/模块/分类；`timeline` 历史/版本/阶段；`limits` 某值对上限；`annot` 逐句批注；`kv` 元数据、图签栏；`callout` 结论/提示/警告；`ask` 在页面上做的决定（agent 的建议预选中）；代码块可 `src=` `lines=` 引用你文件里的真实代码；表格中写 `ok` / `no` / `warn` 会渲染成 ✓ ✗ !。
+
+12. 打开严格写作检查（可选）：默认只警告。改为拒收不合格草稿：`/answer-me-with-html:config style strict`，或在单个草稿里写 `style:`。检查项为机器可判的部分：句长、用词、被动语态、常见中文错别字与含糊词（规则改编自 ASD-STE100）。
+
+13. 更新与清理：更新是手动的，agent 每周查一次 GitHub 版本号并告知；更新时说“update answer-me-with-html”。页面会堆在 `~/.answer-me-with-html/`，说“clean up the pages”，agent 删前会先问；也可用 `am clean`。
+
+14. 要解释视频（可选）：说“make a 3b1b-style video on the TCP handshake”。草稿与页面同款，外加每拍一行旁白：
+
+    ````markdown
+    ## Both sides wait
+    ```sequence
+    Client -> Server: SYN
+    Server -> Client: SYN-ACK
+    ```
+    > The client sends a SYN to ask for a connection.
+    > The [Server] answers with a SYN-ACK.
+    ````
+
+    `am video` 生成播放页：图随旁白逐步构建，镜头跟随方括号里的节点，语音内嵌、可离线播放；加 `--mp4` 导出视频文件。README 明确：agent 只在你要求时才做视频。
+
+15. 自己复现基准（可选）：仓库带基准脚本。
+
+    ```bash
+    git clone https://github.com/QingYunA/answer-me-with-html.git && cd answer-me-with-html
+    npm install
+    node bench/corpus.mjs   # README 称每次给出同样的数字
+    npm test                # 跑测试
+    AM_E2E=1 npm test       # 额外跑端到端视频测试（系统 TTS、Chrome、ffmpeg）
+    npm run smoke:install   # 真实安装并校验插件清单（需要网络）
+    npm run build           # 改 src/ 后重建 skills/answer-me-with-html/scripts/am.mjs
+    npm run snapshot        # 与 origin/main 比对渲染出的 HTML
+    ```
+
+    已知局限：约 50 ms 的渲染时间、手写 HTML 的 token 比例与「用 skill 后只写 21%」都来自作者自测的 9 个页面样本，属作者口径；本次材料在「协作方式」处被截断，`docs/reference.md` 的完整语法与不走 agent 直接调 CLI 的用法未提供。
+
 ## 怎么判断变好了
 
 最小试用方式：
@@ -1356,6 +1494,7 @@ README 给出质量门禁 `skill-seekers quality output/react/ --threshold 7`，
 - 角色类（做法 AA）：按 division 只装少量 agent（如 code-reviewer、frontend-developer）进你在用的 Claude Code 或 Cursor，用真实任务跟默认提示做对照，记录激活命中、人工纠正次数、返工轮数。
 - T3 Code 编排类（做法 AB）：先用 `./install.sh --project /path/to/repo` 装到一个不重要仓库，跑 `/setup-p3` 检查 `p3-models.md` 映射，再用一个小 bug fix 或小 feature 走 `/p3-mode`；记录流程是否按 playbook 走完、多 worker 的 worktree/分支冲突次数、`watch_pull_request` 是否真的免轮询、`schedule_task` 是否在无人值守时跑完，以及相比原做法的返工轮数。
 - 审计类（做法 AC）：挑 1–2 个你已经在用的 Claude 技能，装好后跑 `python3 scripts/validate_skill.py --all ~/.claude/skills` 和 `--json` 存基线；只对其中一个技能说 Audit 并改 2–3 条，复跑同一命令；另一个技能不动作对照。
+- 结论页类（做法 AD）：在能执行 shell 的 agent 上装好，先用两三个复杂问题（概念解释、仓库模块梳理、技术选型）对比「直接让模型写 HTML」与「模型写 Markdown 草稿 + CLI 渲染」的输出 token、耗时和页面可读性；再挑一个真实的多步流程或选型问题，看它是否按规则出页、是否不打断回复；最后再考虑开 always-on。
 
 可观察的指标：
 
@@ -1382,6 +1521,7 @@ README 给出质量门禁 `skill-seekers quality output/react/ --threshold 7`，
 - 做法 AA：角色激活是否命中；同一任务与默认提示相比返工轮数、人工纠正次数、首稿可用率；OpenCode 下是否因 119 上限静默丢弃 agent。
 - 做法 AB：`/p3-mode` 是否按 playbook 走完；多 worker 的 worktree/分支冲突次数；`watch_pull_request` 是否真的免轮询；`schedule_task` 是否在无人值守时跑完；同一类任务返工轮数、人工修正次数是否下降；交付证据是否让你少做一轮核对。
 - 做法 AC：validator 退出码是否从 `1` 变 `0`；该技能 error 数是否归零、warning 数是否下降（同一命令前后对比）；description 改成第三人称并写清 what + when 后触发正确率是否提高；REFINE 后 `SKILL.md` 是否更短；同一真实任务开/关技能 A/B 是否更稳定（对应 TS2）。
+- 做法 AD：同一问题的输出 token 与耗时（对照直接让模型写 HTML）；页面是否单文件、可离线打开；agent 是否只在相关概念/多步流程/多方案对比时出页；always-on 后常规回答是否稳定在 2–4 个面板、页面不自动弹开、回复末尾有 `file://` 链接；闲聊、纯命令输出、明确要纯文本的请求是否仍照旧不出页；`node bench/corpus.mjs` 在你机器上给出的数字是否与 README 一致。
 
 反向指标：
 
@@ -1413,12 +1553,14 @@ README 给出质量门禁 `skill-seekers quality output/react/ --threshold 7`，
 - 做法 AC：把 `validate_skill.py` 的退出码 0 当成效果结论——它只证明格式与规则合规，不证明产出更好；效果要自己做 A/B。
 - 做法 AC：跳过基线直接改，先跑 `--all` 和 `--json` 存基线，再改 2–3 条并复跑对比，否则说不清哪条改动有效。
 - 做法 AC：把 NM1–NM5 等关于新模型的论断当事实——材料里只有论断和指向官方文档的链接，没有可交叉验证的细节；先测再删。
+- 做法 AD：开了 always-on 但每句话都出页、或页面对结论没有增量，先按规则里跳过的情形（闲聊、无结论的一两句话、纯命令输出、纯文本请求）收紧，不要继续加提示。
+- 做法 AD：把 README 的 token 比例（47% SVG、15% CSS、17% HTML、21% 文本）当成本项目的实测收益，先自己跑 `node bench/corpus.mjs`，再做一轮有/无对照。
 
-注意：`doctor`、`validate`、`npm test`、`claude plugin validate`、`npx @anthropics/skills-ref validate`、`archify doctor`、`validate --json`、`python -m unittest discover -s tests`、`validate_skill.py` 这类检查只能证明「技能或 mod 装得上、格式合法、不带危险命令、图能通过校验、回归测试能过、技能符合规则表」，不能证明「产出更好」。效果必须自己对照。做法 Y 的 `validate_package.py`、`unittest`、`content_lock.py --strict` 同理，作者明确说它们各自只证明其覆盖范围。做法 AC 的 `validate_skill.py` 只覆盖它那 46 条规则，退出码 0 不代表技能产出更好。
+注意：`doctor`、`validate`、`npm test`、`claude plugin validate`、`npx @anthropics/skills-ref validate`、`archify doctor`、`validate --json`、`python -m unittest discover -s tests`、`validate_skill.py` 这类检查只能证明「技能或 mod 装得上、格式合法、不带危险命令、图能通过校验、回归测试能过、技能符合规则表」，不能证明「产出更好」。效果必须自己对照。做法 Y 的 `validate_package.py`、`unittest`、`content_lock.py --strict` 同理，作者明确说它们各自只证明其覆盖范围。做法 AC 的 `validate_skill.py` 只覆盖它那 46 条规则，退出码 0 不代表技能产出更好。做法 AD 的 `INSTALL.md` 自检页面只证明装上了，不证明它的出页判断和省 token 在本项目成立。
 
 ## 常见坑
 
-- 整体 adopt：一次装多个技能包，导致上下文过载或规则冲突。先只装一个，做法 A、H、I、J、K、L、N、Q、R、S、T、U、V、X、Y、Z、AA、AB、AC 同理。
+- 整体 adopt：一次装多个技能包，导致上下文过载或规则冲突。先只装一个，做法 A、H、I、J、K、L、N、Q、R、S、T、U、V、X、Y、Z、AA、AB、AC、AD 同理。
 - 一次装整个插件市场：94 个插件、202 个 agent、184 个 skill 是目录规模，不是使用建议。
 - 重复安装：同一项目里同时用项目级安装和插件市场装同一个技能包，skills 会出现两份。
 - 两条安装路径都装（做法 R）：原文明确说两个都装会让每个技能出现两份；只选一条。
@@ -1460,6 +1602,11 @@ README 给出质量门禁 `skill-seekers quality output/react/ --threshold 7`，
 - 做法 AC：只装 `SKILL.md` 不装 `references/` 与 `scripts/`：审计和脚手架依赖它们，缺了会降级。
 - 做法 AC：把 `--ban-em-dash` 当成必选项：它是额外标记破折号，按需使用。
 - 做法 AC：在 claude.ai 上没开代码执行就跑 validator。
+- 做法 AD：把 README 的 token 比例当成本项目的实测收益——它来自作者自测的 9 个页面样本；先自己跑 `node bench/corpus.mjs`，再做一轮有/无对照。
+- 做法 AD：开了 always-on 却不写跳过规则，导致闲聊、纯命令输出、一两句无结论的回复也出页，反而打断工作；按 README 给出的规则原文补齐跳过情形。
+- 做法 AD：以为装完会自动更新、以为 Claude Code plan mode 下也会出页面；更新是手动的，要主动说“update answer-me-with-html”。
+- 做法 AD：手改配置文件去调 `open` / `theme` / `mode` / `style`；用 `/answer-me-with-html:config ...` 或 `am config set ...`，改前先 `am config` 看当前值。
+- 做法 AD：不满足 Node.js 20+、或在不允许执行 shell 的宿主上硬装；`INSTALL.md` 自检通过只能说明装得上，出页判断和省 token 要自己对照。
 
 ## 证据与来源
 
@@ -1497,6 +1644,7 @@ README 给出质量门禁 `skill-seekers quality output/react/ --threshold 7`，
 - agency-agents 路线（做法 AA）的全部内容——按 division 组织的 agent 角色目录、三层交付形态（桌面 app / 安装脚本 / 纯参考）、各工具安装命令、`--tool` / `--division` / `--agent` / `--agents-file` / `--list teams` / `--dry-run` 参数、`convert.sh` 两步流程、按 runbook 生成 team.txt 的 python 片段、OpenCode 约 119 个 agent 上限——均来自调研《msitarzewski/agency-agents》，即该仓库 README。属作者主张、没有证据的是「Production-Ready」「battle-tested workflows」「可衡量的结果」「成功指标」等；README 没有给出指标定义、评测方法或对照数据。材料在 Marketing 表格中途被截断；只给了角色目录，没给 agent 文件正文。仓库指标 star 数（157,073，今日 595）来自输入元数据而非 README 正文，且数值异常高，不宜作为质量证据引用。
 - p3-stack 路线（做法 AB）的全部内容——把 pstack 在 T3 Code 上重写、`delegate_task` 取代 Cursor 的 Task 工具、`t3_thread_launch` 绑定 worktree 与分支、`watch_pull_request` 事件唤醒、`schedule_task` 无人值守、`t3_thread_read/search` 取回线程记忆、`preview_*` / `device_*` 产出截图录像、skills 目录与 24 条 principle、`p3-mode` playbook 路由表、`git clone` + `install.sh`、`./install.sh --project /path/to/repo`、`/setup-p3` 写 `p3-models.md`、`/p3-mode`、`/p3-help`——均来自调研《uzairansaruzi/p3-stack》，即该仓库 README。属作者主张、没有数据支撑的是：「pstack 是对 AI slop code 的回应」「verification 严格到可以放心并行」「一个 worktree 一个写者由应用而非建议保证」；仓库指标 68 stars，不构成有效性证据。只有安装与入口命令可照做；`delegate_task`、`t3_thread_launch`、`watch_pull_request`、`schedule_task`、`t3_thread_read/search`、`preview_*`、`device_*` 都只有名称和一句话用途，没有命令语法、配置样例、参数格式或示例输出；`p3-models.md` 的格式也没有展示。适用条件：必须在 T3 Code 环境内使用；skills 和 24 条原则源自 poteto 的 pstack（MIT），本仓库自己声明只是「重接线」。README 未说明技能内容的完整度、维护活跃度、T3 Code 的获取门槛。
 - skill-creator-plus 路线（做法 AC）的全部内容——46 条规则及 Script/Script + read/Read/Advice 分类、规则族 FM/DS/ST/CT/WF/SC/NM/HK/TS/LB、三种模式 AUDIT/NEW/REFINE、五条 validator 命令与退出码 0/1/2、`--all` 汇总表格式、`init_skill.py` 脚手架命令、硬指标清单（DS1–DS2、ST1、ST4–ST5、ST7、CT3、CT9、WF1、TS1）、HK1、ST2、NM2/NM5——均来自调研《robonuggets/skill-creator-plus》，即该仓库 README（MIT，31 stars）。属作者主张、没有独立验证的是：46 条规则本身、NM1–NM5（关于 Fable 5 / Opus 5.5 / Sonnet 5.5 的论断、Claude Code compaction 只保留前 5,000 tokens、`reasoning_extraction` 拒答等）、规则于 2026-10-05 对照 Anthropic 页面检查。效果证据只有作者自己的样例技能 `examples/pdf-helper` 输出（8 errors、11 warnings、6 notes，含 FM1/ST4/ST5/DS2/NM2/HK1）。材料只有 README，没有源码、`references/` 与 `examples/` 正文，无法核实 validator 实现是否与规则一致。适用条件：Claude 生态（Claude Code / claude.ai），对象是 `SKILL.md` 形态的技能。
+- 结论页路线（做法 AD）的全部内容——模型只写 Markdown 草稿、CLI（`am`）负责布局/配色/绘图、约 50 ms 后得到页面、token 比例 47% SVG / 15% CSS / 17% HTML / 21% 文本、支持 70+ agent 并明确列出 Claude Code/Codex/Cursor/OpenCode/Pi、页面存放 `~/.answer-me-with-html/pages/`、四种安装方式（贴 `INSTALL.md`、Claude Code 插件、`npx skills add`、手动 clone + cp）、各 agent 的 skill 目录、安装自检用 TCP 三次握手问题、使用示例与出页面的判断规则、always-on 规则原文与跳过情形、Claude Code plan mode 不生成页面、`/answer-me-with-html:config` 与 `am config` 的配置项（`open` / `theme` / `mode` / `style` / `update_check` / `voice`）、草稿语法示例（frontmatter + `sequence` / `flow` 围栏块、`span`、`note`）、组件选择表（`flow` / `sequence` / `tree` / `timeline` / `limits` / `annot` / `kv` / `callout` / `ask`、代码块 `src=` `lines=`、表格 `ok` / `no` / `warn`）、严格写作检查（规则改编自 ASD-STE100）、更新与 `am clean`、解释视频（`am video`、`--mp4`、旁白语法）、基准与测试命令（`node bench/corpus.mjs`、`npm test`、`AM_E2E=1 npm test`、`npm run smoke:install`、`npm run build`、`npm run snapshot`）——均来自调研《QingYunA/answer-me-with-html》，即该仓库 README。属作者主张、没有独立验证的是：约 50 ms 的渲染时间、手写 HTML 的 token 比例与「用 skill 后只写 21%」的结论；本次调研的结论明确说证据主要来自作者自测的 9 个页面样本。本次材料在「协作方式」处被截断，`docs/reference.md` 的完整语法与不走 agent 直接调 CLI 的用法未提供。
 - 文中提到的 star 数（如 anthropics/skills 179219、awesome-copilot 39,568、pro-workflow 2.9k、feiskyer/claude-code-settings 约 1.6k、zh-tech-writing 312、biomedical-paper-reader 31、cline-pilot 91、wshobson/agents 40,149、book-to-skill 33,277、khazix-skills 21,099、pg-aiguide 1853、math-modeling-skill 1848、google/skills 20653、Mobile Dev 64、agentic-dev-kit 37、one-skill-to-rule-them-all 3,115、Jeffallan/claude-skills 11725、p3-stack 68、skill-creator-plus 31）来自 metrics，不构成有效性证据。
 
 ## 依据的调研
@@ -1535,3 +1683,4 @@ README 给出质量门禁 `skill-seekers quality output/react/ --threshold 7`，
 - [msitarzewski/agency-agents](../research/radar/2026-10-06/1421-msitarzewski-agency-agents.md)：值得一试，建议小范围试：按 division 只装少量 agent（如 code-reviewer、frontend-developer）进你在用的 Claude Code 或 Cursor，用真实任务跟默认提示做对照。理由是原文给出了可直接照抄的安装、筛选和激活命令，但只给了角色目录，没给任何一个 agent 文件的内容，也没有任何效果证据，值不值得用只能自己验。
 - [uzairansaruzi/p3-stack](../research/radar/2026-10-06/1491-uzairansaruzi-p3-stack.md)：值得一试，值得在 T3 Code 环境里小范围试一次：按 README 的 clone→install.sh→/setup-p3→/p3-mode 四步挂上一个真实小任务，验证它的 playbook 路由和 worktree/PR 监视机制是否真比手动流程省事；但仓库只给了安装与入口命令，编排原语只有名字没有配置细节，也没有任何效果数据，只能算“可试”而非“可采纳”。
 - [robonuggets/skill-creator-plus](../research/radar/2026-10-06/1582-robonuggets-skill-creator-plus.md)：值得一试，建议小范围试：按 README 的安装命令把它装进 Claude Code 的 skills 目录，先对现有技能跑 validate_skill.py --all 拿到基线，再按审计报告改 2–3 条并复跑对比，理由是它给了可直接执行的命令和 46 条可逐条勾选的规则，能把“技能写得好不好”变成可复核的检查项；但材料只有 README、规则和模型相关论断均为作者主张，先验证再决定是否纳入手册。
+- [QingYunA/answer-me-with-html](../research/radar/2026-10-08/2001-qingyuna-answer-me-with-html.md)：值得一试，先在一个能执行 shell 的 agent（如 Claude Code）上装这个 skill 并开启 always-on，用两三个复杂问题对比“直接让模型写 HTML”与“模型写 Markdown 草稿 + CLI 渲染”的输出 token、耗时和页面可读性，再决定是否写进手册。理由是它把“模型只写内容、CLI 负责布局”这条分工约定固化成了可复制的安装命令、配置命令和一条可直接粘贴的规则提示词，并附了可复现的 token 基准，但证据主要来自作者自测的 9 个页面样本。
