@@ -1,14 +1,14 @@
-# 让并行的编码 agent 先过验证，再让你一眼看到谁在等你
+# 让 AI 交付先过验证再算完成：多策略竞争、独立评审、合入闸门
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：当多个编码 agent 并行工作时，如何用可验证的合入门槛、可提交的项目记忆和通知驱动的注意力路由，避免漏掉等待输入、误合未验证改动和重复踩坑。
-> 先试这一步：先从一个已有测试的仓库开始：把任务写成自包含文件、设好验证命令，并只开两个并行 agent；macOS 上可同时装好 cmux hooks，用通知环和 ⌘⇧U 验证「谁在等我」是否真能一键跳到。
+> 解决的问题：单个 AI 回答或多 agent 流水线交付的结果往往没有经过独立验证；这篇手册给出一套可照做的流程，把「完成」定义成可执行的检查、独立评审和合入闸门。
+> 先试这一步：挑一个你确实不满意的真实任务：先跑一次 `pullboard tour` 看清「提交—驳回—修复—复验—合并」的节奏，或在 arena-skill 里跑 `/arena --quick --seed 7 <把任务写具体>` 并把被拒的旧答案当 baseline 比一次。
 > 最近修订：2026-10-08
 
 ## 解决什么问题
 
-单个 AI 回答、单条串行的 agent 会话，交付的往往是你没有验证过的结果：看起来合理，但可能漏了你真正在意的约束。这篇手册把「不满意就重问一次」升级成一套可执行的流程——把同一个任务交给多个子代理用不同策略并行求解、互相对抗、由独立裁判按公开标准打分淘汰；把有固定分工的多步任务（先搜集资料、再扩写成文）固化成角色化 Crew 流水线，产物落盘成文件；代码类任务则必须通过你自己的验证命令才能合入，再进一步可以把整条链固化成 GitHub 上的 issue → PR → 浏览器实测 → 合并。同时给出成本预估、可观察指标，以及「什么时候不值得这么做」的判断线。新增的做法 H 把「隔离、记忆、评审」三件事落成可手工照做的流程：每个 agent 一个 git worktree、项目记忆写成 conventions.md/plan.md/dead-ends.md、第二个 agent 在提交前读 diff 做同行评审；Offrun 是这套流程在 macOS 上的一种现成实现。新增的做法 I 解决另一个并行 agent 的常见瓶颈：注意力。多个终端型 agent 跑起来后，真正的浪费常常不是模型慢，而是「哪个 agent 在等我」不可见。cmux 把等待输入变成蓝色通知环、侧栏徽标、通知面板和 ⌘⇧U 跳转，让「谁在等我」成为可路由的信号；但 cmux 作者明确说它是 primitive，不是 solution，不替代验证、记忆和评审。
+单个 AI 回答、单条串行的 agent 会话，交付的往往是你没有验证过的结果：看起来合理，但可能漏了你真正在意的约束。这篇手册把「不满意就重问一次」升级成一套可执行的流程——把同一个任务交给多个子代理用不同策略并行求解、互相对抗、由独立裁判按公开标准打分淘汰；把有固定分工的多步任务（先搜集资料、再扩写成文）固化成角色化 Crew 流水线，产物落盘成文件；代码类任务则必须通过你自己的验证命令才能合入，再进一步可以把整条链固化成 GitHub 上的 issue → PR → 浏览器实测 → 合并。同时给出成本预估、可观察指标，以及「什么时候不值得这么做」的判断线。新增的做法 H 把「隔离、记忆、评审」三件事落成可手工照做的流程：每个 agent 一个 git worktree、项目记忆写成 conventions.md/plan.md/dead-ends.md、第二个 agent 在提交前读 diff 做同行评审；Offrun 是这套流程在 macOS 上的一种现成实现。新增的做法 I 解决另一个并行 agent 的常见瓶颈：注意力。多个终端型 agent 跑起来后，真正的浪费常常不是模型慢，而是「哪个 agent 在等我」不可见。cmux 把等待输入变成蓝色通知环、侧栏徽标、通知面板和 ⌘⇧U 跳转，让「谁在等我」成为可路由的信号；但 cmux 作者明确说它是 primitive，不是 solution，不替代验证、记忆和评审。新增的做法 J 把「第二个智能体在同一 commit 上验证通过才算完成」做成可强制执行的状态机：SPEC.md 一行一行批准、每条 lane 一个 worktree、提交必须过 gate、验证必须由没参与构建的另一个 agent 在确切 commit 上做、给出 receipt 才合并；Pullboard 是本机运行、存在你 git 仓库里的看板实现，不调用模型。
 
 ## 适用与不适用
 
@@ -23,9 +23,12 @@
 - 有一个低风险、已有测试基础、且托管在 GitHub 上的小仓库，想验证「issue → PR → 浏览器实测 → 合并」这条自动链路到底能拦住多少问题（做法 G）。
 - 你想在一个已有 git 的仓库里，用轻量方式隔离多个 agent（每个一个 worktree），并把项目记忆写成可提交的纯文件，让第二个 agent 在提交前读 diff 评审（做法 H）。
 - 你有一台 Apple Silicon Mac（M1+）、macOS 14 Sonoma 或更高，想用 Offrun 把这套流程跑起来；或者你不在这个环境，但愿意手工照做同样的三条流程。
-- 新增：你在 macOS 上并行跑多个终端型 coding agent，需要一眼看出谁在等你，并可跳到具体 pane（做法 I）。
-- 新增：你想在远程机器上跑 agent、本地驱动（cmux ssh），或让 agent 用内置可编程浏览器自验证 web 改动（做法 I）。
-- 新增：你希望 Claude Code teammate/subagent 以原生分屏出现，而不是隐藏后台进程（做法 I）。
+- 你在 macOS 上并行跑多个终端型 coding agent，需要一眼看出谁在等你，并可跳到具体 pane（做法 I）。
+- 你想在远程机器上跑 agent、本地驱动（cmux ssh），或让 agent 用内置可编程浏览器自验证 web 改动（做法 I）。
+- 你希望 Claude Code teammate/subagent 以原生分屏出现，而不是隐藏后台进程（做法 I）。
+- 新增：你想让「另一个智能体在同一 commit 上验证通过才算完成」成为硬约束，而不是靠你口头要求（做法 J）。
+- 新增：你愿意把需求写成一行一行可验收的 SPEC.md，并接受「未经第二 agent 验证不算完成」（做法 J）。
+- 新增：单人或多 agent 在 git 仓库内做长期构建，希望用看板看到每条目的 claim / submit / verdict 和驳回理由（做法 J）。
 
 **不适用**
 
@@ -43,11 +46,15 @@
 - 想靠 Offrun 的「免费无限」「无服务器」「不经手密钥」等厂商声明作为选型依据：原文未给审计或第三方说明。
 - 需要跨 Mac 通知或本地听写：这些只在 Offrun/macOS 生态成立。
 - 希望评审后自动合并：做法 H 默认「Nothing merges on its own」，发现落到 chat 里由你判断；这与做法 B/G 的自动合入闸门不同。
-- 新增：不是 macOS；或不想用 GUI 终端：cmux 仅支持 macOS，且是 GUI 终端。
-- 新增：agent CLI 不在 PATH 上却想用 hooks 自动恢复；README 要求装 hooks 前 agent binary 在 PATH。
-- 新增：把 cmux 当完整解决方案；它不规定工作流，也不负责合入闸门。
-- 新增：需要本机进程活过 logout、重启、关机或断电；本机 local-tmux 不行，要换 ssh-tmux、mosh-tmux 或持久云 VM。
-- 新增：没有第三方性能与收益数据，不宜作为通用默认方案直接采用。
+- 不是 macOS；或不想用 GUI 终端：cmux 仅支持 macOS，且是 GUI 终端（做法 I）。
+- agent CLI 不在 PATH 上却想用 hooks 自动恢复；README 要求装 hooks 前 agent binary 在 PATH（做法 I）。
+- 把 cmux 当完整解决方案；它不规定工作流，也不负责合入闸门（做法 I）。
+- 需要本机进程活过 logout、重启、关机或断电；本机 local-tmux 不行，要换 ssh-tmux、mosh-tmux 或持久云 VM（做法 I）。
+- 没有第三方性能与收益数据，不宜作为通用默认方案直接采用（做法 I）。
+- 新增：你想把 worktree 隔离当作安全边界：原文明确说 worktree 身份只在一台机器上有意义，不是安全边界（做法 J）。
+- 新增：你的环境是原生 Windows：Pullboard 的 CI 只在 Linux 和 macOS 上跑，Windows 未测试（做法 J）。
+- 新增：你需要现成的手机/远程看板：relay 和 Pullboard View 里的 roadmap 仍是 planned（做法 J）。
+- 新增：你不愿意写 SPEC.md，也不想设一条 gate 命令：没有 gate 就没有提交前的门槛，也没有 verifier 可以依据的验收标准（做法 J）。
 
 ## 前置条件
 
@@ -60,7 +67,8 @@
 - 做法 F（crewAI）：Python >= 3.10 且 < 3.14；命令行操作与基本 Python 编辑能力；用 uv 管理依赖；一个模型提供商的 API key（默认走 OpenAI API）；若任务要用网页搜索工具，另需 Serper.dev 的 key。Windows 上若遇 `chroma-hnswlib` 构建错误，需先装 Visual Studio Build Tools 并勾选 Desktop development with C++。
 - 做法 G（cubefarm）：Node.js 22 或更新版本；`git`；已登录的 GitHub CLI（`gh auth login`）；一个编码 agent 的订阅（cubefarm 自带 Claude Code 作为默认 agent，CEO 也跑它，无需另行安装，登录一次即可；你本机已装并登录的 Codex 或 OpenCode 也可以被选中）；Google Chrome（QA agent 要在浏览器里测你的应用）；项目必须托管在 GitHub 上；办公室数据在 `~/.cubefarm`（设置、仓库克隆、每个 agent 一份独立工作副本），可用 `SWARM_HOME` 换目录。
 - 做法 H（Offrun 或手工照做）：项目在 git 下（worktree 依赖 git）；至少一个你已在用的 agent CLI 和账号，有第二个账号更好（用于限额切换）。若用 Offrun 本身：Apple Silicon Mac（M1 或更新）、macOS 14 Sonoma 或更高；下载 Offrun 拖进 Applications；在 Settings → Agents 添加账号。若手工照做：任意支持 git 的环境，能创建 worktree 的 git 版本，agent CLI 能在指定目录运行。
-- 新增：做法 I（cmux）仅支持 macOS，会读取你已有的 Ghostty 配置 `~/.config/ghostty/config`。推荐 DMG 安装，也可 Homebrew。若要用 agent hooks 的自动恢复，必须先装好对应 agent CLI，且其 binary 在 PATH 上。README 列出的受支持恢复集成包括：Claude Code、Codex、Grok、OpenCode、Pi、Amp、Cursor CLI、Gemini、Rovo Dev、Copilot、CodeBuddy、Factory、Qoder。Claude Code 由 cmux 的 Claude wrapper 处理，需在 Settings 中开启 Claude 集成。要远程跑 agent 需可 SSH 的远程主机。自定义 resume 绑定若要自动执行，必须先批准签名命令前缀；token、password、secret、API key 等敏感环境键在存储绑定前会被丢弃。
+- 做法 I（cmux）仅支持 macOS，会读取你已有的 Ghostty 配置 `~/.config/ghostty/config`。推荐 DMG 安装，也可 Homebrew。若要用 agent hooks 的自动恢复，必须先装好对应 agent CLI，且其 binary 在 PATH 上。README 列出的受支持恢复集成包括：Claude Code、Codex、Grok、OpenCode、Pi、Amp、Cursor CLI、Gemini、Rovo Dev、Copilot、CodeBuddy、Factory、Qoder。Claude Code 由 cmux 的 Claude wrapper 处理，需在 Settings 中开启 Claude 集成。要远程跑 agent 需可 SSH 的远程主机。自定义 resume 绑定若要自动执行，必须先批准签名命令前缀；token、password、secret、API key 等敏感环境键在存储绑定前会被丢弃。
+- 新增做法 J（pullboard）：本机有 git 和 Node 22.13 或更新版本（README 原文："You need git and Node 22.13 or newer"）；在一个 git 仓库内操作；MIT 许可；本机运行、无账号、无依赖、不调用模型。要真正跑起来还需要三样你自己提供的东西：`SPEC.md` 里已批准的需求行、`PRACTICE.md` 里的 doctrine、`pullboard.json` 里的 gate 命令与每条 lane 的 `owns` / `specs` 授权。
 
 ## 操作步骤
 
@@ -77,6 +85,7 @@
 | 有 GitHub 上的低风险小仓库，想验证 issue → PR → 浏览器实测 → 合并 这条链 | 做法 G |
 | 想在一个已有 git 的仓库里轻量隔离多个 agent、把项目记忆落成文件、提交前互评 | 做法 H |
 | macOS 上并行跑多个终端型 coding agent，想一眼看到谁在等我 | 做法 I |
+| 想让「另一个 agent 在同一 commit 上验证通过才算完成」变成硬约束：SPEC 行 + gate + lane 隔离 | 做法 J |
 
 ### 做法 A：把不满意的回答送进锦标赛（arena-skill）
 
@@ -747,6 +756,111 @@ CMUX_NO_GIT_WATCH=1
 
 12. 其他可配置项（README 提及但细节在外链文档）：自定义命令可在 `cmux.json` 里定义项目专属动作，从命令面板启动；浏览器导入可从 Chrome、Firefox、Arc 等 20+ 浏览器导入 cookie、历史、会话，让浏览器 pane 开局就是已登录态；浏览器自动化给 agent 用（snapshot 可访问性树、取元素 ref、点击、填表、求值 JS、读 console/network）；外观见 `docs/customizing-appearance.md`，配置为 `~/.config/cmux/cmux.json`；Skills 可复用 agent 工作流，公开集合在 `cmux-skills` 仓库。
 
+### 做法 J：把「另一个 agent 在同一 commit 上验证通过才算完成」做成状态机（pullboard）
+
+把这条路径当作可试验证收益的候选：它把「第二个智能体验证通过才算完成」做成了可强制执行的状态机，并给出了可直接复制的命令与配置（MIT、本地运行、不调用模型），但项目很小（41 stars）、Windows 未测试、部分功能仍在 planned，适合先在小范围试。
+
+1. 先看一遍闭环（在一次性/临时仓库上跑）。前提：本机有 git 和 Node 22.13 或更新版本。
+
+```sh
+npm i -g pullboard
+pullboard tour
+```
+
+预期结果：tour 里你会批准一条规则（空名字按 "world" 问候）：coordinator 建条目 → builder 构建 → verifier 试空名字并驳回 → builder 修复并加测试 → verifier 故意破坏修复、看到测试失败、然后接受 → coordinator 带 receipt 合并。
+
+2. 在自己的仓库初始化。`init` 会写入 spec、doctrine、agent 指令，并安装 hooks 和看板。
+
+```sh
+pullboard init
+git add -A && git commit -m "chore(repo): set up pullboard"
+```
+
+预期结果：提交它写出来的文件后，在该目录打开一个 Claude Code 会话并说明要构建什么；这个 agent 就成为 coordinator（与你一起定 spec、规划 lanes 和 items、每条 lane 跑一个 builder，另跑一个没参与构建的 verifier，只合并已验证的工作）。
+
+3. 写 `SPEC.md`，一行一个需求，格式固定：
+
+```
+- <id> [<status>, <priority>] <what must be true> | gate: <what proves it>
+```
+
+例：
+
+```markdown
+- G1 [approved, must] A shopper can pay by card in one step. | gate: test/checkout.test.js
+- G2 [draft, aim] Saved carts follow a shopper across devices. | serves: G1
+```
+
+要点：id 是「段字母 + 数字」；行在你批准前是 draft，只有 approved 的行算数；agent 认领该工作时这一行的验收标准会被冻结（frozen）。
+
+4. 配置 gate 和 lanes（`pullboard.json`）。gate 是任何能证明你代码的命令，在每次 submit 和 push 前运行；每条 lane 拥有若干路径和 spec 段，提交超出自己 lane 的路径会被拒绝。
+
+```json
+{
+  "gate": "npm test",
+  "lanes": {
+    "web": { "owns": ["apps/web/"], "specs": ["G"] },
+    "review": { "owns": [] }
+  }
+}
+```
+
+按技术栈选 gate（可用 `&&` 串起来，如 `ruff check . && pytest`）：
+
+| 技术栈 | Gate |
+| --- | --- |
+| JavaScript, TypeScript | `npm test` |
+| Python | `pytest` |
+| Go | `go test ./...` |
+| Rust | `cargo test` |
+| Java | `mvn test` 或 `gradle test` |
+| Ruby | `bundle exec rspec` |
+| C#, .NET | `dotnet test` |
+
+5. 手工走一遍（不依赖 agent，coordinator 做的每一步你都能自己做）。先建条目：
+
+```sh
+pullboard add web "Checkout" --specs G1 --criterion "card payment takes one step"
+```
+
+6. builder 侧认领并提交。前提：每条 lane 一个 worktree。
+
+```sh
+pullboard worktree web
+cd ../myapp-web-1
+pullboard next
+pullboard submit 1
+```
+
+预期结果：builder 认领条目、提交时在 commit message 里引用需求行（如 `feat(web): pay by card [G1]`），并在 gate 绿的情况下提交。
+
+7. verifier 侧验证。必须是另一个 agent，且它没有构建过这个条目；它 checkout 到那个确切的 commit。
+
+```sh
+pullboard worktree review
+cd ../myapp-review-1
+pullboard next --verify
+pullboard verify 1 accept --note "paid in one step; without the fix the test fails"
+```
+
+接受时要给证据（「没有这个修复测试就会失败」），驳回要给理由。
+
+8. 看板查看与人机接口。
+
+```sh
+pullboard view
+```
+
+预期结果："Needs you" 只显示只有你能做的决定（上升上来的决策、待批准的行、被 hold 的 lane）；Timeline 显示每个条目的 claim / submit / verdict 和驳回理由；Actions 可加条目、回答决策、shout 到某条 lane、hold 一条 lane；它跑在 local API v1 上，你自己的脚本也能用；`view --export` 写出静态可回放快照。
+
+9. 与 agent 协作的常用命令：`pullboard worktree`（建 lane worktree 并打印给子 agent 的首条指令）、`pullboard resume`（agent 重启后回到它的 claim、消息和下一步）、`pullboard next`（认领下一个空闲条目，绝不抢别人已持有的）、`pullboard run`（让更轻的模型无人值守构建简单条目）、`pullboard prompt <role>`。Claude Code 会获得 skills；Codex 及其他 agent 读 `AGENTS.md` 或 `pullboard prompt <role>`。
+
+10. 建议的协作方式（README 写成 recommended best practice）：只和一个 agent（你的 coordinator）深度工作，由它把工作扇出到各 lane 并写下你的偏好，这样你不需要解释两次；始终让一个 agent 领导其他 agent。
+
+11. doctrine 与数据位置：doctrine 写在 `PRACTICE.md`（「我们怎么构建」，例："We do not store credit cards."），每个 repo 从 Pullboard 标准 doctrine 开始，可以追加、覆盖或拒绝任何一条；机器能检查的由 hooks 强制。`SPEC.md`、`PRACTICE.md`、`pullboard.json`、`AGENTS.md` 和 git hooks 在主检出里；看板是放在 `.git` 里的一个 SQLite 文件，被所有 worktree 共享、从不提交；已提交的工作在 git 里 pin 住；`pullboard export` 备份整个看板。
+
+12. 条目状态机（决定「什么时候算完成」）：每条从 open 开始 → 被认领则 claimed（agent 沉默则重新 open）→ 提交后 submitted → verifier 接受变 verified，驳回则回到 open；只有 coordinator 能 withdraw；声明（`src/machine.js`）不允许的动作看板会拒绝。
+
 ### 通用收尾：不管走哪条路径
 
 - 开始前先固定「完成」的定义（哪条测试通过、谁来复核、在哪里看结果），不要只依赖 agent 的自证。
@@ -756,6 +870,7 @@ CMUX_NO_GIT_WATCH=1
 - 带自动合并能力的链路（如做法 G 的 auto-merge），先用人工确认跑过 3–5 个真实 issue，再考虑对低风险改动打开。
 - 做法 H 的同行评审不要只看风格；让它明确读 diff 找跨文件约束冲突，并把结论落到 chat 里由你判断，不要自动合并。
 - 做法 I 的通知环只负责把「谁在等我」变得可见；看到通知后仍要回到验证、记忆和评审，不要让通知替代合入门槛。
+- 做法 J 的 verifier 必须是没参与构建该条目的另一个 agent，并在确切 commit 上给出证据；worktree 身份不是安全边界，不要拿它当权限隔离。
 
 ## 怎么判断变好了
 
@@ -769,7 +884,8 @@ CMUX_NO_GIT_WATCH=1
 - 做法 F：`output/report.md` 是否真的落盘、内容能不能直接用（采用 / 部分采用 / 弃用）；下游任务拿到的到底是不是上游的结果（`context` 是否真的接上了）；需要你手动返工几轮；`{placeholder}` 是否按预期被注入。
 - 做法 G：QA 报告的真阳性率（它标出的问题里，多少经人工复核确认是真问题）；QA 通过的 PR 中人工复核后确实可用的比例（漏检率）；同一类 issue 从开单到合并的周期时间 vs 你自己动手的基线；每个 issue 消耗的订阅用量；每个 PR 你要动手改多少、终端里介入多少次；开启 auto-merge 后是否出现被合入但需要回滚的改动。
 - 做法 H：并行任务时文件互相覆盖/冲突的次数（期望 0）；第二个同类会话的返工量——是否还要重复解释约定、是否重复踩 dead-ends 里已有的坑；同行评审提出的问题里，你判断有效（会改）的比例，以及误报率；撞到用量限额导致的等待时间是否下降（切登录后能否无缝继续）。
-- 新增做法 I：从 agent 等待输入到人响应的时间；漏掉通知导致 agent 空转的时长；手动在终端里寻找 pane 的次数；通知环、侧栏未读徽标、通知面板是否能可靠触发；⌘⇧U 跳转是否真的减少切换成本；恢复会话后布局、工作目录、scrollback 和浏览器历史是否保留；`cmux hooks setup` 后受支持 agent 是否能按预期恢复；跨安装迁移时 `--from <channel>` 与 `--from <path>` 的信任差异是否符合预期；本机 `local-tmux` 撑不过 logout/重启/关机/断电这一边界是否被团队知道。
+- 做法 I：从 agent 等待输入到人响应的时间；漏掉通知导致 agent 空转的时长；手动在终端里寻找 pane 的次数；通知环、侧栏未读徽标、通知面板是否能可靠触发；⌘⇧U 跳转是否真的减少切换成本；恢复会话后布局、工作目录、scrollback 和浏览器历史是否保留；`cmux hooks setup` 后受支持 agent 是否能按预期恢复；跨安装迁移时 `--from <channel>` 与 `--from <path>` 的信任差异是否符合预期；本机 `local-tmux` 撑不过 logout/重启/关机/断电这一边界是否被团队知道。
+- 新增做法 J：每条条目是否都有 gate 绿 + verifier 的 accept/reject receipt；你仓库里的返工比例（原文称自家开发 Pullboard 时 "nearly one in three items goes back"）是多少；Timeline 里每条目的 claim / submit / verdict 是否完整；越界提交是否被 lane 的 `owns` 授权拒绝；"Needs you" 里出现的是不是只有你能做的决定；verifier 抓到的驳回理由里有多少是你事后确认有效的问题。
 
 **最小试用**
 
@@ -781,7 +897,8 @@ CMUX_NO_GIT_WATCH=1
 - 做法 F：把手头一个「多步资料整理 → 成文」的活改写成 researcher + reporting_analyst 两个角色的 Crew，`crewai install` → `crewai run`，只看一件事：`output/report.md` 能不能直接用、你要改多少。
 - 做法 G：`npx cubefarm doctor` 确认环境齐全 → `npx cubefarm --demo` 走一遍界面 → 选一个低风险、已有测试基础的小仓库接入，把 session limit 设为 1–2 → 先关闭 auto-merge，人工确认每一份 QA 报告和 PR 差异，跑 3–5 个真实 issue。
 - 做法 H：半天到一天，一个仓库。装好 Offrun（或手工照做），接两个你已有的 agent 账号（至少 Claude Code 加另一个），挑一个有 git、且有能跑的测试的 repo。别一次全上，只试两件事：隔离（同一 repo 同时开两个任务——一个重构、一个修 bug，确认两个 worktree 不互相改文件，各自分支能分别合并）；记忆（手工建 conventions.md / plan.md / dead-ends.md，把仓库约定和不许再试的死路写进去，开第二个会话时确认 agent 是否真读了，以及失败尝试是否被写回 dead-ends.md）。再试同行评审：让另一个 agent 在提交前读 diff，重点看它能不能抓到跨文件的数值/契约冲突（如上限与上游超时不一致这类）。
-- 新增做法 I：在 macOS 上装好 cmux，跑 `cmux hooks setup`，开 2–3 个终端型 agent（例如一个 Claude Code、一个 Codex），用 `cmux notify` 或让 agent hooks 触发通知，试 ⌘⇧U、⌘I 和通知面板；只在一两个真实任务上试半天到一天，观察「谁在等我」是否真的更快被处理。
+- 做法 I：在 macOS 上装好 cmux，跑 `cmux hooks setup`，开 2–3 个终端型 agent（例如一个 Claude Code、一个 Codex），用 `cmux notify` 或让 agent hooks 触发通知，试 ⌘⇧U、⌘I 和通知面板；只在一两个真实任务上试半天到一天，观察「谁在等我」是否真的更快被处理。
+- 新增做法 J（半天内可完成）：先在一次性仓库跑 `npm i -g pullboard && pullboard tour`，确认你理解「提交—驳回—修复—复验—合并」的节奏；再选一个真实小仓库，`pullboard init` 并提交它写出的文件，只写 1–3 行 approved 的 SPEC.md，设一个真实的 gate（如 `pytest` 或 `npm test`），配 1 条 builder lane + 1 条 review lane；然后用 2–3 个小条目走完整流程：`add` → builder `worktree/next/submit` → 另一个 agent `next --verify` → `verify ... accept/reject`。
 
 **试多久、什么时候升级**
 
@@ -790,7 +907,8 @@ CMUX_NO_GIT_WATCH=1
 - 做法 F 同样没有对比数据：先固定成一条流水线，连跑 2–3 次同类任务，如果每次都要大改 `output/report.md`（或流水线本身），说明这类活还不适合固化角色分工，先退回单 agent 手改；只有当产出基本可用、你只需要做少量编辑时，才值得把它变成常用链路。
 - 做法 G 同样没有量化数据：以 3–5 个真实 issue 为最小样本；若 QA 真阳性率接近零，或人工介入次数没有下降，说明当前形态的价值主要在演示而非产出，应考虑退回不用（或只当演示看）。熟悉后再对低风险改动尝试 auto-merge，并保留人工抽查。
 - 做法 H 只在一个 repo、一两个任务上观察两周再决定是否推广；记忆是纯文件、chat 和 worktree 都在项目文件夹里，退回现有流程没有迁移成本。若同行评审有效比例低或误报高，先调整 reviewer 的 prompt 或换模型，再决定是否保留。
-- 新增做法 I 没有第三方性能与收益数据：先在 1–2 个 agent、半天到一天内试用；若通知可靠、漏掉等待的时间下降、恢复会话不丢布局，再扩大 agent 数。若通知常漏、恢复信任规则让你不确定、或本机 tmux 生命周期边界不满足，就不要把它作为默认方案。
+- 做法 I 没有第三方性能与收益数据：先在 1–2 个 agent、半天到一天内试用；若通知可靠、漏掉等待的时间下降、恢复会话不丢布局，再扩大 agent 数。若通知常漏、恢复信任规则让你不确定、或本机 tmux 生命周期边界不满足，就不要把它作为默认方案。
+- 新增做法 J 只有 41 stars 和作者自述的返工比例：先在 2–3 个小条目上跑完整闭环，再决定是否固化成日常流程；如果 verifier 抓不到问题、或每个 PR 你仍要人工兜底，说明当前形态还没带来净收益。
 
 ## 常见坑
 
@@ -867,7 +985,7 @@ CMUX_NO_GIT_WATCH=1
 - 限额切换需要你手动重发消息；不是自动推进。
 - 材料质量：抓取到的文本夹有站点源码注释（编码声明位置、tab 标题长度取舍、以及 demo 账号是编造的、别在页面上放真实地址或登录名的开发备注），页面示例里的 sam@studio.dev / sam@acme.co 是占位账号；不要把它们当步骤。
 
-**新增做法 I（cmux）**
+**做法 I（cmux）**
 
 - 仅支持 macOS；这是硬门槛。
 - 装 hooks 前 agent CLI 必须在 PATH 上，否则自动恢复不可用。
@@ -880,6 +998,18 @@ CMUX_NO_GIT_WATCH=1
 - 调研材料在配置面处被截断，其他配置细节在外链文档；不要照不完整片段猜。
 - 通知驱动的注意力路由能改善并行效率，目前只是作者主张；没有第三方性能与收益数据，不宜作为通用默认方案直接采用。
 - 与做法 H 的差异：cmux 管终端、通知、浏览器，不自动合并；H 管记忆、评审、账号切换，默认不自动合并。与做法 B 的差异：cmux 是本地终端可见化/隔离，不是容器克隆仓库 + 测试闸门。
+
+**新增做法 J（pullboard）**
+
+- 项目很小（41 stars），部分功能仍是 planned：relay（在手机/其他机器上看板）和 Pullboard View 里的 roadmap 还没有。
+- Windows 未测试：CI 只在 Linux 和 macOS 上跑。
+- worktree 身份只在一台机器上有意义，不是安全边界；不要拿它当权限隔离。
+- 可以用 `--no-verify` 跳过 hook，靠 pre-push gate 和 verifier 兜底；不要把 hook 当成唯一防线。
+- 没有设 gate 就没有 submit/push 前的门槛；gate 是「任何能证明你代码的命令」，要选你真正会跑的那条。
+- verifier 必须是没参与构建该条目的另一个 agent，否则「验证」退化成自证。
+- 接受要给证据、驳回要给理由，否则 receipt 只是形式；tour 示范的验证强度是「故意破坏修复、看到测试失败」后才接受。
+- SPEC 行在你批准前是 draft，只有 approved 的行算数；含糊的需求行会得到含糊的验收。
+- 「nearly one in three items goes back」是作者对自己开发 Pullboard 时的描述，不是可复现的第三方基准。
 
 **通用**
 
@@ -898,7 +1028,8 @@ CMUX_NO_GIT_WATCH=1
 - **做法 F** 依据调研《crewAIInc/crewAI》。可核对：MIT 许可、Python >=3.10 且 <3.14、uv 各平台安装命令、`uv tool install crewai` / `uv tool update-shell` / `uv tool list` / `uv tool install crewai --upgrade`、`crewai create crew` 生成的目录结构与 `--classic` 旧式结构、两个 `agents/*.jsonc` 示例、`crew.jsonc` 里 `context` / `output_file` / `markdown` / `process: sequential|hierarchical` / `{placeholder}` 的用法、`crewai install` / `crewai run` / `uv add`、Flow 的 `@start` / `@listen` / `@router` 与 `or_` / `and_` 组合、CrewAI skills 的安装命令与四个 skill 分工、Windows 上 `chroma-hnswlib==0.7.6` 的构建错误与 Visual Studio Build Tools 解决办法。属于作者主张：多智能体角色分工能提升「多步资料整理 → 成文」的产出质量，README 没有给出基准、数据集或对照实验。重要限制：原文在 examples 与 FAQ 后半段被截断，第 11 步「关掉默认遥测」只有标题、没有命令。
 - **做法 G** 依据调研《leonvanzyl/cubefarm》。可核对：可执行命令（`npx cubefarm`、`npx cubefarm login`、`npx cubefarm doctor`、`--demo`、`--port`、`--no-open`、`npx cubefarm@latest`、`npm install -g cubefarm`）、前提清单、五步上手流程、界面操作键、用 session limit 控制并发、数据目录 `~/.cubefarm` 与 `SWARM_HOME`、安全模型要点、QA 在真实浏览器里审查并发布带截图报告、合并门禁为「QA 通过且 GitHub checks 全绿」、白板 Kanban 覆盖从 backlog 到 merged。属于作者主张：办公室「看起来在工作」、CEO 会写出 QA 检查清单、QA 报告能起到把关作用、auto-merge 安全——没有成功率、误合并率、成本或周期时间的数字，唯一量化指标是 53 stars。重要限制：本次输入只有 README，它指向的 `docs/how-it-works.md` 与 `CONTRIBUTING.md` 均未包含在材料中，因此 QA 具体如何测、auto-merge 判定细节、模型与额度策略都无法核实。
 - **做法 H** 依据调研《Show HN: Offrun – manage every coding agent from one workspace》。可核对：安装流程、每个 agent 一个 git worktree、三个记忆文件名与读写时机、同行评审示例输出、限额切换提示文案、数据边界表、50 次运行的对照表、Build/Planner 两种模式、通知与听写的描述。属于作者主张、没有外部验证：「50 runs in a row」「41 of 50 → 50 of 50」、免费无限/无服务器/不经手密钥等；无版本号、无发布日志、无第三方用户案例，HN 上 51 分、23 条评论的讨论内容不在给定材料里。适用条件：Apple Silicon（M1+）、macOS 14 Sonoma 或更高、至少一个已在用的 agent CLI；Pi 与 OpenCode 尚未支持。重要限制：原文是产品页面，本手册只采用其中可迁移的三条流程（worktree、记忆文件、提交前互评），Offrun 本身作为其中一种实现方式。
-- **新增做法 I** 依据调研《manaflow-ai/cmux》。可核对：仅 macOS、基于 Ghostty 渲染引擎、DMG 与 Homebrew 安装、`cmux hooks setup` 及其受支持 agent 列表、OSC 9/99/777 与 `cmux notify` 通知路径、快捷键表、`cmux claude-teams`、`cmux ssh` 与 `--command` 行为、`autoResumeAgentSessions` 配置、`cmux restore-session` 的 `--from <channel>` 与 `--from <path>` 信任差异、`cmux surface resume set/show/clear` 信任规则、`cmux local-tmux` / `cmux local-zellij` 生命周期边界、`CMUX_NO_GIT_WATCH=1`、浏览器导入/自动化、Skills 仓库等。属于作者主张：通知驱动的注意力路由能改善并行 agent 工作流，但没有第三方性能与收益数据。重要限制：调研材料在配置面 `~/.config/c...` 处被截断，其他配置细节在外链文档；因此本手册只写能照做的安装、hooks、通知、恢复与生命周期部分，不补写未给出的配置项。
+- **做法 I** 依据调研《manaflow-ai/cmux》。可核对：仅 macOS、基于 Ghostty 渲染引擎、DMG 与 Homebrew 安装、`cmux hooks setup` 及其受支持 agent 列表、OSC 9/99/777 与 `cmux notify` 通知路径、快捷键表、`cmux claude-teams`、`cmux ssh` 与 `--command` 行为、`autoResumeAgentSessions` 配置、`cmux restore-session` 的 `--from <channel>` 与 `--from <path>` 信任差异、`cmux surface resume set/show/clear` 信任规则、`cmux local-tmux` / `cmux local-zellij` 生命周期边界、`CMUX_NO_GIT_WATCH=1`、浏览器导入/自动化、Skills 仓库等。属于作者主张：通知驱动的注意力路由能改善并行 agent 工作流，但没有第三方性能与收益数据。重要限制：调研材料在配置面 `~/.config/c...` 处被截断，其他配置细节在外链文档；因此本手册只写能照做的安装、hooks、通知、恢复与生命周期部分，不补写未给出的配置项。
+- **新增做法 J** 依据调研《pullboard-dev/pullboard》。可核对：完整 CLI 命令、`SPEC.md` 格式、`pullboard.json` 配置与各栈 gate 表、tour 的端到端示例（含故意破坏修复再看测试失败）、一个真实的 reject/accept receipt 样例、条目状态机（open → claimed → submitted → verified / 回 open）、`PRACTICE.md` doctrine、看板是放在 `.git` 里的一个 SQLite 文件、Node 22.13+、MIT 许可、41 stars。属于作者主张：这套方法论「更好」、返工比例可复现、多 agent 更连贯；「nearly one in three items goes back」是作者对自己开发 Pullboard 时的描述，不是可复现的第三方基准。原文自己声明的局限：worktree 身份只在一台机器上有意义、不是安全边界；可用 `--no-verify` 跳过 hook（靠 pre-push gate 和 verifier 兜底）；CI 只在 Linux 和 macOS 上跑，Windows 未测试；relay 和 Pullboard View 里的 roadmap 仍是 planned。
 
 ## 依据的调研
 
@@ -911,3 +1042,4 @@ CMUX_NO_GIT_WATCH=1
 - [leonvanzyl/cubefarm](../research/radar/2026-10-02/725-leonvanzyl-cubefarm.md)：值得一试，用 npx cubefarm 在低风险仓库上小范围试跑 issue→PR→QA→合并 这条自动链路，重点验证 QA 环节的真实拦截能力；因为它把多 agent 分工、浏览器实测和 auto-merge 门禁写成了可执行流程，但只有 README 级证据（53 stars、无基准与案例数据），不足以直接采用。
 - [Show HN: Offrun – manage every coding agent from one workspace](../research/radar/2026-10-04/1066-show-hn-offrun-manage-every-coding-agent-from-one-.md)：值得一试，先在单个有 git 的仓库上小范围试三条可迁移流程——每个 agent 一个 worktree、项目记忆落成 conventions.md/plan.md/dead-ends.md、第二个 agent 在提交前读 diff 做评审——再决定是否长期用 Offrun 本身；理由是这几条流程具体、可照做且不依赖工具存活，而 Offrun 自身的收益（限额自动切换、全 Mac 通知、免费无限）目前只有厂�自述，且限定 Apple Silicon Mac。
 - [manaflow-ai/cmux](../research/radar/2026-10-08/1856-manaflow-ai-cmux.md)：值得一试，macOS 上并行跑多个终端型 coding agent 的人，可以照 README 的安装与 hooks 步骤小范围试一套「通知驱动的注意力路由」工作流：装 cmux、跑 `cmux hooks setup`、用 workspace 分屏跑 agent、靠通知环和 ⌘⇧U 跳转；理由是多 agent 并行时「哪个在等我」是可复制的痛点，而这份 README 给出了具体命令与配置键，但它只支持 macOS、性能与收益均无第三方数据，因此不宜作为通用默认方案直接采用。
+- [pullboard-dev/pullboard](../research/radar/2026-10-08/2038-pullboard-dev-pullboard.md)：值得一试，建议在小范围试：先用 `pullboard tour` 看一遍闭环，再在一个真实小仓库里把「SPEC 行 → gate → 另一个智能体在同一 commit 上验证」跑通，然后决定是否固化成日常流程；理由是它把「第二个智能体验证通过才算完成」做成了可强制执行的状态机，并给出了可直接复制的命令与配置（MIT、本地运行、不调用模型），但项目很小（41 stars）、Windows 未测试、部分功能仍在 planned，适合先试验证收益。
