@@ -1,16 +1,18 @@
-# 让 agent 把结论、方案对比与流程解释渲染成一页可离线打开的 HTML
+# 先小范围验证技能，再把有效的 SKILL.md 校验、打包、分发到多端
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：同一类需要图和表才能讲清的结论，每次让 agent 手写 HTML 又慢又不稳；这篇手册给出一条分工明确的流程——模型只写 Markdown 草稿、CLI 负责布局与绘图，并说明怎么装、怎么开 always-on、怎么用有/无对照验证它真的省 token。
-> 先试这一步：先在一个能执行 shell 的 agent（如 Claude Code）上装 answer-me-with-html，用两三个复杂问题对比「直接让模型写 HTML」与「模型写 Markdown 草稿 + CLI 渲染」的输出 token、耗时和页面可读性，再决定是否开 always-on。
-> 最近修订：2026-10-08
+> 解决的问题：解决如何判断一个技能包是否真的有效，以及把自己验证过的重复工作写成 SKILL.md 后怎样校验、打包并分发到多个 agent 的问题。
+> 先试这一步：先按做法 A 在同一任务上做有/无技能对照；如果已有自己的 SKILL.md，再照做法 AE 跑 `python3 scripts/check_skills.py` 和 `claude plugin validate . --strict`，通过后用 `./scripts/release.sh` 发布。
+> 最近修订：2026-10-09
 
 ## 解决什么问题
 
 你已经在用编码 agent，但每次都要重复描述同一套工程规范，或者不确定装一个技能包是否真的减少了返工——甚至因为一次装太多，上下文反而更乱。这篇手册给出一个可照做的流程：先小范围试装一个现成技能包，用同一任务做有/无技能的对照，确认有效后再考虑把自己的重复工作写成 `SKILL.md`（并用 skill-creator-plus 审计和改进它），或者把一本反复查阅的技术书、一份内部文档半自动转成按需加载的技能。
 
 它也覆盖一批具体场景：让 agent 代理编码 CLI 跑长任务并拿硬证据验收；给 agent 补一块行业设计知识；把一句模糊想法写成可让 agent 独立跑几小时的任务书；写一个把会话状态嵌进界面的 Claude Code mod；让 agent 把一句话描述／一个代码仓库变成可交互的架构图、工作流图、时序图、数据流图、生命周期图，或者把自然语言需求与已有的 draw.io / Mermaid / Excalidraw 源文件改成自包含的 HTML+SVG 图、并让它长得像你的品牌；让 agent 检索中国金融市场数据；把移动端模拟器与真机画面接进 Codex 聊天；把多步复杂任务拆成三阶段并加门禁；把中英文学术写作去模板化改写，同时用命题级核对保住数字、引文与证据强度（做法 Y）；让路由技能自动选工作流并对 bug 交出失败→通过证据（做法 Z）；按职能只装少量 agent 角色并用真实任务与默认提示对照（做法 AA）；在 T3 Code 里用 p3-stack 按 playbook 路由，并用 worktree 与 PR 监视减少等待和冲突（做法 AB）；审计并改进自己的 `SKILL.md`，把机械问题变成可复核的检查项（做法 AC）；让 agent 把结论、方案对比、多步流程、仓库模块、逐句批注、时间线和一段历史渲染成一页可离线打开的单文件 HTML——模型只写 Markdown 草稿，CLI 负责布局与绘图，可开 always-on 让每条有结论的回复都附一页（做法 AD）。
+
+新增做法 AE：当你已经把自己的重复工作写成 `SKILL.md`，用 ishuagrawal/skills 提供的 `check_skills.py`、`package_skills.sh`、`release.sh` 做规范校验、打包和发布，再通过插件市场或 `npx skills` 分发到多个 agent；claude.ai 与 Claude API 走 zip 上传。
 
 ## 适用与不适用
 
@@ -29,6 +31,7 @@
 - 已经在 T3 Code 环境里工作，想让路由技能按 playbook 挑流程，并用 worktree、PR 监视、定时任务和线程记忆减少手工轮询与冲突（做法 AB）。
 - 已经在写自己的 `SKILL.md`，想用可逐条勾选的规则审计它、拿到基线再改，并把「技能写得好不好」变成可复核的检查项（做法 AC）。
 - 经常需要把结论、方案对比、多步流程、仓库结构、逐句批注、时间线或一段历史讲成一页带图表的说明，而不是一段长文本；希望模型只写内容、布局交给工具（做法 AD）。
+- 已经写出自己的 `SKILL.md`，想校验它是否符合 Agent Skills 规范、打包成 zip、发布到插件市场，并让第二个环境不用手动拷贝就能装上（做法 AE）。
 
 不适用：
 
@@ -41,6 +44,7 @@
 - AB 必须在 T3 Code 环境内使用；`delegate_task`、`t3_thread_launch`、`watch_pull_request`、`schedule_task`、`t3_thread_read`、`t3_thread_search`、`preview_*`、`device_*` 都只有名称和一句话用途，没有命令语法或配置样例；没有 T3 Code 就最多只能读它的 skill / playbook 设计思路，不要照搬。
 - AC 只覆盖 Claude 生态（Claude Code / claude.ai）、对象是 `SKILL.md` 形态的技能；材料只有 README，没有源码与 `references/` 正文，NM1–NM5 等关于新模型的论断仅为作者主张；validator 只能证明格式与规则合规，不能证明产出更好。
 - AD 需要 agent 能执行 shell 命令、Node.js 20 或更新版本；一句话问题、纯命令输出和明确要纯文本的请求不会出页面；Claude Code 在 plan mode 下不生成页面；更新是手动的，不会自动升级；效果证据主要来自作者自测的 9 个页面样本与作者给出的 token 比例，属作者口径。
+- AE：它的 `video-by-reference` 技能 `SKILL.md` 正文未抓到，无法判断实际流程与成片质量；仓库只有 1 个技能、33 stars、单一作者，成熟度低；claude.ai 和 API 沙箱没有网络、可能缺 Chrome 或 ffmpeg，能读技能但可能渲染不出视频；README 没有效果数据或使用案例，只有工程侧校验。
 
 ## 前置条件
 
@@ -52,7 +56,7 @@
 - 走 MCP 时，配置文件里写绝对路径。
 - 安装第三方技能前，先通读它的 `SKILL.md`，并跑运行时的 doctor/audit 工具。
 
-各做法额外前置：
+各做法额外前置（与上一版一致）：
 
 - A：无额外。B：一件每周重复、有明文规范的工作。C：`pip install skill-seekers`。
 - D：你的提供商端点（`ANTHROPIC_BASE_URL`）与 key，以及你网关实际提供的模型名。
@@ -72,14 +76,15 @@
 - X：已安装并使用 Claude Code；第 6 步的项目管理工作流额外要求配置 Atlassian MCP server 并具备 Jira / Confluence 使用权。
 - Y：Python 3.10+ 与标准库（用于 `validate_package.py` / `content_lock.py`）；PDF 文本抽取需 Poppler `pdftotext`；平台能加载完整 Skill 文件夹并保持 `SKILL.md`、`references/`、可选 `scripts/` 的相对位置；仅文本平台要同时提供 `references/` 等参考文件；准备术语表与作者写作样本；DOCX 抽取不能保留所有样式、批注、修订记录、脚注或文本框，可编辑 Word 交付需要相应文档工具。
 - Z：先装好对应 harness（Claude Code / Codex / Pi 之一）；Codex 需先通过 `/hooks` 信任路由 hook；Pi 需要 extension 提供的 subagent、question、wake-up 工具；按角色配 effort 依赖插件自带的 `pstack:effort-<level>` / `pstack:poteto-agent-<level>` agent 存在。
-- AA：本地有 git 与 bash；脚本方式需本地有仓库（原文未给 clone 命令，只说明脚本方式需本地有仓库）；app 方式需 macOS/Linux/Windows 桌面环境；已安装目标工具（如 Claude Code 且有 `~/.claude/agents/` 目录）；仓库内有 `strategy/runbooks.json` 且本地有 python3 才能按 runbook 整队安装。
+- AA：本地有 git 与 bash；脚本方式需本地有仓库；app 方式需 macOS/Linux/Windows 桌面环境；已安装目标工具（如 Claude Code 且有 `~/.claude/agents/` 目录）；仓库内有 `strategy/runbooks.json` 且本地有 python3 才能按 runbook 整队安装。
 - AB：一台能跑 T3 Code 的机器；T3 Code 从 `~/.agents/skills/` 读取 skills；已装 git；有可用的 provider/model 凭据；git 的 worktree 与分支能力可用；需要浏览器与设备模拟器时，T3 Code 提供 `preview_*` / `device_*`。
 - AC：Claude Code 环境（有 `~/.claude/skills` 或项目内 `.claude/skills`）或 claude.ai 账号（validator 需开启代码执行）；本地 Python 3.8+（validator 只用标准库）；对象是已有的 `SKILL.md` 文件夹。
 - AD：Node.js ≥ 20（不需要 `npm install`，CLI 已捆绑在 skill 里）；agent 能执行 shell 命令；想开 always-on 需要能写 `~/.claude/CLAUDE.md` 或 `AGENTS.md` 之类规则文件；想自己复现基准需要能 clone 仓库并跑 `npm install`。
+- AE：用现成技能需要 Claude Code 或支持 Agent Skills 的 agent；用这套流程分发自己的技能，只需 Claude Code + Python 3。发布需要 git 与 push 权限。claude.ai 上传需要 Pro/Max/Team/Enterprise 计划并开启 code execution；API 侧用 Skills API（`/v1/skills`）配合 code-execution 工具。想试 `video-by-reference`，本地需 Node.js 22+、`ffmpeg` 和 `ffprobe` 在 `PATH` 上、Python 3 带 `numpy`、一个 headless Chromium（首选 Playwright 的 `chrome-headless-shell`，Google Chrome 也可以）。
 
 ## 操作步骤
 
-怎么选：先做做法 A；A 里某个技能确实有效、且你有一件每周重复且规范明确的工作，再做做法 B。其余按场景选：C 多来源知识打包；D 补模型端点/权限/搜索；E 中文技术文档写作与审稿；F 单篇论文精读；G 写一个 Claude Code mod；H 用 Cline CLI 代理长任务拿硬证据验收；I 补 UI/UX 设计知识；J 出带交互的单文件 HTML 图；K 出品牌一致的静态 HTML+SVG 图；L 从大插件市场只装一个单元并按任务档位选模型；M 把书或内部文档转成按需加载技能；N 把模糊想法写成任务书并给破坏性操作加闸门；O 补 Postgres 领域知识与版本化文档检索；P 在授权安全场景按主题加载安全技能库；Q 把多步任务拆成三阶段加门禁；R 装一套小而可组合的工程技能集；S 从 google/skills 按任务只装一个；T 让 agent 检索中国金融市场数据并核对来源与时间戳；U 把移动端模拟器与真机画面接进 Codex 聊天；V 用一行 curl 装单个 Markdown 技能；W 用元技能观察你怎么用技能；X 装一套全栈开发技能包按请求自动激活；Y 把中英文学术写作去模板化改写并用命题核对保住事实；Z 用路由技能自动选工作流并对 bug 交出失败→通过证据；AA 按职能只装少量 agent 角色并用真实任务与默认提示对照；AB 在 T3 Code 里用 p3-stack 按 playbook 路由并用 worktree/PR 监视减少等待与冲突；AC 审计并改进自己的 SKILL.md；AD 让 agent 把结论、方案对比与流程解释渲染成一页可离线打开的 HTML。
+怎么选：先做做法 A；A 里某个技能确实有效、且你有一件每周重复且规范明确的工作，再做做法 B。其余按场景选：C 多来源知识打包；D 补模型端点/权限/搜索；E 中文技术文档写作与审稿；F 单篇论文精读；G 写一个 Claude Code mod；H 用 Cline CLI 代理长任务拿硬证据验收；I 补 UI/UX 设计知识；J 出带交互的单文件 HTML 图；K 出品牌一致的静态 HTML+SVG 图；L 从大插件市场只装一个单元并按任务档位选模型；M 把书或内部文档转成按需加载技能；N 把模糊想法写成任务书并给破坏性操作加闸门；O 补 Postgres 领域知识与版本化文档检索；P 在授权安全场景按主题加载安全技能库；Q 把多步任务拆成三阶段加门禁；R 装一套小而可组合的工程技能集；S 从 google/skills 按任务只装一个；T 让 agent 检索中国金融市场数据并核对来源与时间戳；U 把移动端模拟器与真机画面接进 Codex 聊天；V 用一行 curl 装单个 Markdown 技能；W 用元技能观察你怎么用技能；X 装一套全栈开发技能包按请求自动激活；Y 把中英文学术写作去模板化改写并用命题核对保住事实；Z 用路由技能自动选工作流并对 bug 交出失败→通过证据；AA 按职能只装少量 agent 角色并用真实任务与默认提示对照；AB 在 T3 Code 里用 p3-stack 按 playbook 路由并用 worktree/PR 监视减少等待和冲突；AC 审计并改进自己的 SKILL.md；AD 让 agent 把结论、方案对比与流程解释渲染成一页可离线打开的 HTML；AE 把自己的 SKILL.md 校验、打包并分发到多端。
 
 几组容易混的：
 
@@ -98,1372 +103,225 @@
 - AC 与 B/R/W：B 是把你自己的重复工作写成 `SKILL.md`；R 是先用别人拆好的一整套技能集；W 观察你怎么用技能并产出 staged 更新；AC 不替你写新技能，也不观察你，它审计你已有的 `SKILL.md`（或新建骨架），先把机械问题变成可复核的检查项。
 - AD 与 J / K：J 出带 JavaScript 交互的架构图，K 默认出无 JS、依赖品牌 style-guide 的静态 HTML+SVG 图；AD 出的是「一页结论／解释／对比」的单文件 HTML，模型只写 Markdown 草稿、CLI 负责布局与绘图，还可以开 always-on 让每条带结论的回复都附一页。要交互图选 J，要品牌一致性和静态可交付选 K，要每次讲清楚一个结论就附一页选 AD。
 - AD 与 V：V 用一行 curl 装单个纯 Markdown 技能，不装仓库；AD 装的是一个带 CLI 的 skill，装完还要按需把 always-on 规则写进 rules 文件，并验证它的出页判断、token 与耗时。
-- E、F、G、H、I、J、K、L、M、N、O、P、Q、R、S、T、U、V、W、X、Y、Z、AA、AB、AC、AD 都必须套用 A 的对照方法，不要跳过验证直接纳入常规流程。
+- AE 与 B / AC：B 是把自己的重复工作写成 `SKILL.md`；AC 是审计并改进已有 `SKILL.md`；AE 接在 B/AC 后面，负责规范校验、打包、发布和跨 agent 分发。只写不发布，用 B；只审计不改分发，用 AC；要让同一份技能在第二个环境不用手动拷贝就能装好，用 AE。
+- E、F、G、H、I、J、K、L、M、N、O、P、Q、R、S、T、U、V、W、X、Y、Z、AA、AB、AC、AD、AE 都必须套用 A 的对照方法，不要跳过验证直接纳入常规流程。
 
 ### 做法 A：先用现成技能包做小范围试装（推荐先做）
 
 1. 选定一个非关键项目和一类重复任务。
-
 2. 只选一个技能包、只装一个。可选来源（八选一）：
 
-   - 官方示例技能（Claude Code）：
+   - 官方示例技能（Claude Code）：`/plugin marketplace add anthropics/skills`，`/plugin install example-skills@anthropic-agent-skills`。
+   - 中文编码工作流（Claude Code）：`claude plugin marketplace add jnMetaCode/superpowers-zh`，`claude plugin install superpowers-zh@superpowers-zh`。
+   - 自我纠正记忆与知识平面（Claude Code）：`/plugin marketplace add rohitg00/pro-workflow`，`/plugin install pro-workflow@pro-workflow`。
+   - 配置集合：技能 + 子代理 + settings 模板（Claude Code）：`/plugin marketplace add feiskyer/claude-code-settings`，`/plugin install claude-code-settings`；等价命令行与只挑 1–2 个技能的 npx 方式：`claude plugin marketplace add feiskyer/claude-code-settings`、`claude plugin install claude-code-settings@claude-code-settings`、`npx -y skills add -l feiskyer/claude-code-settings`、`npx -y skills add feiskyer/claude-code-settings`。通过 Plugin 安装的技能需要重启会话才能加载；`npx skills add` 装到的版本可能滞后于仓库最新。
+   - 中文技术文档写作（做法 E）：`npx skills add leter/zh-tech-writing -g`，或手动 clone + cp。
+   - 生物医学论文精读（做法 F）：`git clone https://github.com/Gaoyuan-0423/biomedical-paper-reader.git`，再放入 `~/.codex/skills/`。
+   - Google 产品与技术技能（做法 S）：`npx skills add google/skills`，或按 harness 用 `claude plugin marketplace add google/skills`、`codex plugin marketplace add google/skills`、`agy plugin install https://github.com/google/skills/<plugin-path>`。只选一个与当前任务最接近的技能。
+   - 中国金融数据（做法 T）：`npx --yes skills@latest add clawyi-com/china-market-data -g`。
 
-     ```text
-     /plugin marketplace add anthropics/skills
-     /plugin install example-skills@anthropic-agent-skills
-     ```
-
-   - 中文编码工作流（Claude Code）：
-
-     ```text
-     claude plugin marketplace add jnMetaCode/superpowers-zh
-     claude plugin install superpowers-zh@superpowers-zh
-     ```
-
-   - 自我纠正记忆与知识平面（Claude Code）：
-
-     ```text
-     /plugin marketplace add rohitg00/pro-workflow
-     /plugin install pro-workflow@pro-workflow
-     ```
-
-   - 配置集合：技能 + 子代理 + settings 模板（Claude Code）：
-
-     ```text
-     /plugin marketplace add feiskyer/claude-code-settings
-     /plugin install claude-code-settings
-     ```
-
-     等价的命令行方式与只挑 1–2 个技能的 npx 方式：
-
-     ```sh
-     claude plugin marketplace add feiskyer/claude-code-settings
-     claude plugin install claude-code-settings@claude-code-settings
-     npx -y skills add -l feiskyer/claude-code-settings
-     npx -y skills add feiskyer/claude-code-settings
-     ```
-
-     注意：通过 Plugin 安装的技能需要重启会话才能加载；`npx skills add` 装到的版本可能滞后于仓库最新。
-
-   - 中文技术文档写作（做法 E）：
-
-     ```bash
-     npx skills add leter/zh-tech-writing -g
-     ```
-
-     手动安装：
-
-     ```bash
-     git clone https://github.com/leter/zh-tech-writing.git
-     cp -r zh-tech-writing/skills/zh-tech-writing ~/.claude/skills/
-     ```
-
-   - 生物医学论文精读（做法 F）：
-
-     ```bash
-     git clone https://github.com/Gaoyuan-0423/biomedical-paper-reader.git
-     mkdir -p ~/.codex/skills
-     git clone https://github.com/Gaoyuan-0423/biomedical-paper-reader.git ~/.codex/skills/biomedical-paper-reader
-     ```
-
-   - Google 产品与技术技能（做法 S）：
-
-     ```bash
-     npx skills add google/skills
-     claude plugin marketplace add google/skills
-     claude plugin install <plugin>@google-plugins
-     codex plugin marketplace add google/skills
-     agy plugin install https://github.com/google/skills/<plugin-path>
-     ```
-
-     只选一个与当前任务最接近的技能，如 BigQuery 优化或 gcloud CLI；使用前进入对应 skill 目录确认权限与配置。
-
-   - 中国金融数据（做法 T）：
-
-     ```bash
-     npx --yes skills@latest add clawyi-com/china-market-data -g
-     ```
-
-   预期：插件安装成功，或只装上了你点名的技能。同一项目里不要同时用项目级安装和插件市场安装同一个技能包。
-
-3. 验证安装。新开一个会话：
-
-   ```text
-   /plugin list
-   What skills do you have access to?
-   ```
-
-   如果用的是 genspark-claw，先体检再看清单：
-
-   ```bash
-   npx genspark-claw doctor
-   npx genspark-claw list
-   ```
-
-4. 跑通一个最小动作，只选一个你当前最痛的任务。
-
-   - 官方示例技能：`Use the PDF skill to extract the form fields from path/to/some-file.pdf`
-   - superpowers-zh：让它先问清需求再写计划，例如「给用户模块加个批量导出功能」。
-   - pro-workflow：先跑 `/doctor` 和 `/wrap-up`。
-   - feiskyer/claude-code-settings：挑一个技能，比如 `/handoff [下一次会话的重点方向]`；或让 codex-skill 做一次对抗式审查（触发词含 `codex`、`use gpt`、`full-auto`、`adversarial review`、`用codex`、`第二意见`）。
-   - leter/zh-tech-writing：先只审不改，`/zh-tech-writing 检查 docs/api.md，只列问题，不要改`。
-   - biomedical-paper-reader：拿一篇自己已经读过、心里有底的论文试跑。
-   - google/skills：只选一个与当前任务最接近的技能，在隔离环境或测试项目跑一个具体任务。
-   - china-market-data：安装初始化后问「贵州茅台现在的价格、PE、PB、市值和换手率」，检查是否包含数据来源、行情时间、抓取时间，以及是否区分缺失值与 0。
-
+3. 验证安装。新开一个会话：`/plugin list`，`What skills do you have access to?`。如果用的是 genspark-claw，先跑 `npx genspark-claw doctor` 和 `npx genspark-claw list`。
+4. 跑通一个最小动作，只选一个你当前最痛的任务。官方示例技能可要求提取 PDF 表单字段；superpowers-zh 让它先问清需求再写计划；pro-workflow 先跑 `/doctor` 和 `/wrap-up`；feiskyer/claude-code-settings 挑一个技能，如 `/handoff [下一次会话重点]` 或让 codex-skill 做对抗式审查；leter/zh-tech-writing 先只审不改；biomedical-paper-reader 拿已读过的论文试跑；google/skills 在隔离环境跑一个具体任务；china-market-data 问贵州茅台的价格、PE、PB、市值和换手率，检查数据来源、行情时间、抓取时间与缺失值。
 5. 做对照。同一任务、同一输入，分别在没有技能和有技能的条件下各跑 3 次，记录差异。试一周，或至少 5 个同类任务。
-
-6. （可选）只照抄一个工作流形态，别整套搬：deep-research 的目录契约（`.research/<name>/` 下 `prompts/`、`child_outputs/`、`logs/`、`raw/`、`final_report.md`）；handoff 把对话压成交接文档输出到 `$TMPDIR/handoff-YYYY-MM-DD-HHMM.md` 并自动脱敏；codex-skill 把编码/评审交给 Codex 非交互执行、只呈现不改码；github-review-pr 的 findings 必须附 `file:line` 与原文引用。
+6. （可选）只照抄一个工作流形态，别整套搬：deep-research 的目录契约；handoff 把对话压成交接文档并自动脱敏；codex-skill 把编码/评审交给 Codex 非交互执行、只呈现不改码；github-review-pr 的 findings 必须附 `file:line` 与原文引用。
 
 ### 做法 B：把自己的重复工作写成 SKILL.md（验证有效后再做）
 
 1. 选一件你每周都在重复、且有明文规范的工作。
-
-2. 建一个自包含文件夹，放 `SKILL.md`，照官方模板：
-
-   ```markdown
-   ---
-   name: my-skill-name
-   description: A clear description of what this skill does and when to use it
-   ---
-
-   # My Skill Name
-
-   [Add your instructions here that Claude will follow when this skill is active]
-
-   ## Examples
-   - Example usage 1
-   - Example usage 2
-
-   ## Guidelines
-   - Guideline 1
-   - Guideline 2
-   ```
-
-   关键：`description` 必须同时写清「做什么」和「什么时候用」。
-
+2. 建一个自包含文件夹，放 `SKILL.md`，照官方模板。关键：`description` 必须同时写清「做什么」和「什么时候用」。
 3. 拆分结构：主 `SKILL.md` 只放流程与核心规则，细粒度规范拆到 `references/` 按需加载，确定性修正交给外部 CLI 工具。
-
-4. 校验技能：
-
-   ```bash
-   npx genspark-claw validate ./my-skills/
-   ```
-
-5. 安装到目标 host：
-
-   ```bash
-   npx genspark-claw install all --target claude
-   ```
-
-   或直接放到 `~/.claude/skills/`。
-
+4. 校验技能：`npx genspark-claw validate ./my-skills/`。
+5. 安装到目标 host：`npx genspark-claw install all --target claude`，或直接放到 `~/.claude/skills/`。
 6. 验证技能可复现：换一个新会话，或让一位不了解背景的同事只凭 `description` 触发该技能。
-
-7. 没有自动触发时逐项排查：路径必须是 `~/.claude/skills/<name>/SKILL.md`（注意大小写）；Plugin 安装的技能需重启会话；检查是否双层嵌套；直接问 `What skills do you have access to?`；`disable-model-invocation: true` 的技能须用 `/skill-name` 手动调用。
+7. 没有自动触发时逐项排查：路径必须是 `~/.claude/skills/<name>/SKILL.md`；Plugin 安装的技能需重启会话；检查是否双层嵌套；直接问 `What skills do you have access to?`；`disable-model-invocation: true` 的技能须用 `/skill-name` 手动调用。
 
 ### 做法 C：多来源知识打包（可选）
 
-```bash
-pip install skill-seekers
-skill-seekers create https://docs.djangoproject.com/
-skill-seekers package output/django --target claude
-skill-seekers install-agent output/react/ --agent cursor
-```
-
-README 给出质量门禁 `skill-seekers quality output/react/ --threshold 7`，但没有与人工基线的对照实验，多数效果数字是作者主张。
+`pip install skill-seekers`；`skill-seekers create https://docs.djangoproject.com/`；`skill-seekers package output/django --target claude`；`skill-seekers install-agent output/react/ --agent cursor`。README 给出质量门禁 `skill-seekers quality output/react/ --threshold 7`，但没有与人工基线的对照实验，多数效果数字是作者主张。
 
 ### 做法 D：用配置模板补齐模型端点、工具权限与搜索能力（可选）
 
-1. 只有你有自建网关、或想用已有订阅走非官方 API 时才做。`settings.json` 不通过 Plugin 配置，必须手动设置。
-
-2. 把 `ANTHROPIC_BASE_URL` 和 `ANTHROPIC_API_KEY` 指向你的提供商端点（作者模板默认 copilot-gateway `http://localhost:4141`）。
-
-3. 替换模型名，换成你网关实际提供的：
-
-   ```text
-   ANTHROPIC_DEFAULT_SONNET_MODEL: claude-sonnet-5
-   ANTHROPIC_DEFAULT_OPUS_MODEL: claude-opus-5
-   ANTHROPIC_DEFAULT_HAIKU_MODEL: claude-haiku-4-5
-   ```
-
-4. 权限确认：模板 `defaultMode` 为 `acceptEdits`；想完全跳过确认可改 `bypassPermissions`，但 README 明确提示先了解安全风险。
-
-5. VSCode 扩展（Claude Code 2.0+）在 VSCode `settings.json` 里配置环境变量：
-
-   ```json
-   {
-     "claude-code.environmentVariables": [
-       { "name": "ANTHROPIC_BASE_URL", "value": "http://localhost:4000" },
-       { "name": "ANTHROPIC_AUTH_TOKEN", "value": "sk-dummy" },
-       { "name": "ANTHROPIC_MODEL", "value": "opusplan" },
-       { "name": "ANTHROPIC_DEFAULT_SONNET_MODEL", "value": "claude-sonnet-5" },
-       { "name": "ANTHROPIC_DEFAULT_OPUS_MODEL", "value": "claude-opus-5" },
-       { "name": "ANTHROPIC_DEFAULT_HAIKU_MODEL", "value": "gpt-5-mini" },
-       { "name": "DISABLE_TELEMETRY", "value": "1" }
-     ]
-   }
-   ```
-
-   同时需要 `~/.claude/config.json` 的内容来跳过 claude.ai 登录。
-
-6. 解决「API Key 缺失或无效」：在 `~/.claude.json` 里把 key 加入已批准列表：
-
-   ```json
-   {
-     "customApiKeyResponses": {
-       "approved": ["sk-dummy"],
-       "rejected": []
-     }
-   }
-   ```
-
-7. 一键更新已装插件：
-
-   ```sh
-   bash ~/.claude/scripts/update-cc-plugins.sh
-   ```
-
-8. 非官方 API 环境补网页搜索：WebSearch 仅限官方 API 环境，其它环境要用 MCP 补（README 列了 Tavily MCP、Brave MCP、Firecrawl MCP、DuckDuckGo Search MCP 四个，只给链接）。
-
-9. 可选的零额外成本路径（已有 GitHub Copilot 订阅）：
-
-   ```sh
-   mv ~/.claude ~/.claude.bak
-   git clone https://github.com/feiskyer/claude-code-settings.git ~/.claude
-   npx copilot-gateway@latest start --proxy-env
-   ```
+只有你有自建网关、或想用已有订阅走非官方 API 时才做。`settings.json` 不通过 Plugin 配置，必须手动设置。把 `ANTHROPIC_BASE_URL` 和 `ANTHROPIC_API_KEY` 指向你的提供商端点，替换模型名为你网关实际提供的。权限确认：模板 `defaultMode` 为 `acceptEdits`；想完全跳过确认可改 `bypassPermissions`，但先了解安全风险。VSCode 扩展在 VSCode `settings.json` 里配置环境变量。解决 API Key 缺失或无效：在 `~/.claude.json` 里把 key 加入已批准列表。一键更新已装插件：`bash ~/.claude/scripts/update-cc-plugins.sh`。非官方 API 环境补网页搜索：用 MCP 补 Tavily / Brave / Firecrawl / DuckDuckGo Search MCP。可选的零额外成本路径：已有 GitHub Copilot 订阅时，`mv ~/.claude ~/.claude.bak`，`git clone https://github.com/feiskyer/claude-code-settings.git ~/.claude`，`npx copilot-gateway@latest start --proxy-env`。
 
 ### 做法 E：中文技术文档写作与审稿（按 A 的对照法验证）
 
-1. 装 skill（二选一）：
-
-   ```bash
-   npx skills add leter/zh-tech-writing -g
-   ```
-
-   或手动拷贝：
-
-   ```bash
-   git clone https://github.com/leter/zh-tech-writing.git
-   cp -r zh-tech-writing/skills/zh-tech-writing ~/.claude/skills/
-   ```
-
-2. （推荐）装 autocorrect：
-
-   ```bash
-   brew install autocorrect
-   # 或从 Releases 页面下载二进制文件
-   # 或 cargo install autocorrect
-   autocorrect -V
-   ```
-
-3. 第一次只审不改：
-
-   ```text
-   /zh-tech-writing 检查 docs/api.md，只列问题，不要改
-   ```
-
-   不明确说「只列问题」，它会直接改文件。
-
-4. 再让它改一版：
-
-   ```text
-   /zh-tech-writing 改一下 docs/api.md
-   ```
-
-   逐条 diff 审阅，重点看有没有「删了空话却没补事实」。
-
-5. 按内置五步流程验收：确定读者与读完能做成什么；按规则写；用 AI 腔清单逐条检查；运行 `autocorrect --fix`；手动检查引号、省略号和破折号。
-
-6. 核心规则：句子逗号隔开的每一截尽量在 20 字以内；多用肯定句和主动语态；直接用动词；语气像给同事讲清楚一件事；每段第一句说重点；标题不跳级；少用四级标题；加粗和列表不滥用。AI 腔清单包括开场和结尾套话、「不是 A，而是 B」句式、硬凑三个排比、宣传腔形容词、黑话、破折号和翻译腔。事实必须来自你的项目。
-
-7. 按需读 references：数字与标点读 `references/typography.md`；产品手册读 `references/manual-structure.md`。
+装 skill：`npx skills add leter/zh-tech-writing -g`，或 clone + cp 到 `~/.claude/skills/`。推荐装 autocorrect：`brew install autocorrect` 或从 Releases 下载、`cargo install autocorrect`，用 `autocorrect -V` 验证。第一次只审不改：`/zh-tech-writing 检查 docs/api.md，只列问题，不要改`。不明确说「只列问题」，它会直接改文件。再让它改一版并逐条 diff 审阅。按内置五步流程验收。核心规则：句子逗号隔开的每一截尽量在 20 字以内；多用肯定句和主动语态；直接用动词；每段第一句说重点；标题不跳级；少用四级标题；加粗和列表不滥用。AI 腔清单包括开场和结尾套话、「不是 A，而是 B」句式、硬凑三个排比、宣传腔形容词、黑话、破折号和翻译腔。事实必须来自你的项目。按需读 `references/typography.md` 和 `references/manual-structure.md`。
 
 ### 做法 F：单篇论文精读（按 A 的对照法验证）
 
-1. 获取技能文件：
-
-   ```bash
-   git clone https://github.com/Gaoyuan-0423/biomedical-paper-reader.git
-   ```
-
-2. 指定入口：
-
-   ```text
-   请使用 ./biomedical-paper-reader/SKILL.md 阅读这份 PDF，生成中文精读报告。
-   使用 $biomedical-paper-reader 解析这篇论文：<DOI、链接或附件>。
-   ```
-
-3. 补充材料默认只用本地已有文件；不要把「附件缺失」当成「作者未做验证」。
-
-4. 直接复用可读的 PDF 提取结果，不再优先使用 MarkItDown；原 PDF 留作数字与图像核查。
-
-5. 每张主图先概览，必要面板再放大；完整阅读图注，关注核心结论、必要对照、阴性结果及图文冲突。
-
-6. 按默认七段顺序读报告：①开篇导读 ②文章信息 ③研究概述 ④全文逻辑路线图 ⑤逐图 / 逐结果精读 ⑥研究总结与课题借鉴 ⑦数据与复现入口。
-
-7. 检查判定纪律：是否区分独立个体数与细胞/切片数、观察与因果、作者解释与新增假设；是否把未实际执行的代码和数据误标为已复现。
+`git clone https://github.com/Gaoyuan-0423/biomedical-paper-reader.git`。指定入口：`请使用 ./biomedical-paper-reader/SKILL.md 阅读这份 PDF，生成中文精读报告。` 或 `使用 $biomedical-paper-reader 解析这篇论文：<DOI、链接或附件>。` 补充材料默认只用本地已有文件；直接复用可读的 PDF 提取结果；每张主图先概览，必要面板再放大；完整阅读图注。按默认七段顺序读报告。检查判定纪律：是否区分独立个体数与细胞/切片数、观察与因果、作者解释与新增假设；是否把未实际执行的代码和数据误标为已复现。
 
 ### 做法 G：自己写一个 Claude Code mod，把会话信息嵌进界面（可选）
 
-1. 确认版本：
-
-   ```shell
-   claude --version   # 需要 2.1.287 或更高
-   ```
-
-2. 选一个「信息看不见」的痛点，例如上下文占用、危险命令拦截、改动回放。
-
-3. 二选一建 mod。做法 G-1（最快）：让 Claude 自己写，粘贴 shortcut 提示词，只描述你想看到什么（例如 token-weather 的天气图标、百分比、最近 12 回合折线、本回合增量）。做法 G-2（想自己看懂）：手工建目录：
-
-   ```text
-   token-weather/
-   ├── .claude-plugin/
-   │   ├── plugin.json
-   │   └── types/ (written by Claude Code when it loads the mod)
-   ├── hooks/
-   │   ├── hooks.json
-   │   └── token-weather.mjs
-   ├── types/
-   │   └── index.d.ts
-   └── tests/
-       └── token-weather.test.ts
-   ```
-
-   `hooks/hooks.json` 只指一个模块：
-
-   ```json
-   {
-     "modules": ["./token-weather.mjs"]
-   }
-   ```
-
-4. 先画点东西，prompt 正上方那条带叫 `AbovePrompt`：
-
-   ```javascript
-   export function register(on) {
-     on("ui.render", { component: "AbovePrompt" }, ($, e, next) => {
-       const { Box, Text } = $.ui.resolve(e);
-       return Box({ paddingX: 1, children: [Text({ color: "yellow", bold: true, children: "☀ Clear skies" })] });
-     });
-   }
-   ```
-
-   ```shell
-   claude --plugin-dir ./token-weather
-   ```
-
-5. 读真实数字：`$.session.usage()` 返回 `context.tokens`、`context.window`、`context.percent`。历史必须放 `$.state`，模块级变量在 hot reload 时会重置。
-
-6. 在 `types/index.d.ts` 里声明 `PluginState`，否则 `claude plugin validate` 会报错。
-
-7. 原文 Step 4 的完整模块在本次材料里被截断，需打开原文补全后再复制。
-
-8. 要长期用，就把文件夹复制出去按普通插件安装；安装任何来源不明的 mod 前先确认信任来源。
+确认版本：`claude --version` 需要 2.1.287 或更高。选一个「信息看不见」的痛点。二选一建 mod：G-1 让 Claude 自己写，粘贴 shortcut 提示词；G-2 手工建目录，`hooks/hooks.json` 只指一个模块。先画点东西，prompt 正上方那条带叫 `AbovePrompt`。读真实数字：`$.session.usage()` 返回 `context.tokens`、`context.window`、`context.percent`。历史必须放 `$.state`，模块级变量在 hot reload 时会重置。在 `types/index.d.ts` 里声明 `PluginState`。原文 Step 4 的完整模块在本次材料里被截断，需打开原文补全后再复制。要长期用，就把文件夹复制出去按普通插件安装；安装任何来源不明的 mod 前先确认信任来源。
 
 ### 做法 H：让 agent 代理 Cline CLI 跑长任务，并用硬证据验收（可选）
 
-1. 安装：
-
-   ```bash
-   npx skills add https://github.com/gongdear/cline-pilot
-   mkdir -p ~/.hermes/skills && cp -r cline-pilot ~/.hermes/skills/
-   ```
-
-2. 完成首次本地配置，写入 `references/local-config.md`（私有、被 git 忽略）。
-
-3. 过冷启动门禁：在任何 memory bank 启用之前，先把 `assets/global-memory-bank-prompt.md` 逐字放到位。
-
-4. 选冷启动路径：还没有代码，规则由 agent 逐维度询问你后组装；遗留代码，规则基于对代码的扫描落地。
-
-5. 两阶段模型策略：初始化用强的长上下文（付费）模型；稳态切到小的本地模型。同一断言连续失败 3 次，把那一批次升级回更强模型。
-
-6. 派发编码任务：技能激活、挑选合适模式、注入提示词（固定首行 `active memory bank`）、后台运行。
-
-7. 监控进度：
-
-   ```bash
-   python3 scripts/session_report.py 15 /path/to/repo
-   ```
-
-   示例参数 `15`、`5` 的含义原文未说明，照抄前先确认。
-
-8. 验收后再报完成：走 6 项验收清单；证据优先于自我报告——完成由 git status、测试报告数字、非空产物证明。
-
-9. 维护学习闭环：每次纠正/决策记入 `decision-log.md`（按项目标签类）→ 累计 ≥2 个一致样本 → 蒸馏进 `SKILL.md` 的偏好段。
-
-10. 硬约束动作先问用户：push、删除、写数据库、花钱、改全局配置。
-
-11. 自检命令：
-
-    ```bash
-    npx @anthropics/skills-ref validate .
-    python3 -m py_compile scripts/session_report.py
-    python3 scripts/session_report.py 5 /path/to/repo
-    ```
+安装：`npx skills add https://github.com/gongdear/cline-pilot`，`mkdir -p ~/.hermes/skills && cp -r cline-pilot ~/.hermes/skills/`。完成首次本地配置，写入 `references/local-config.md`。过冷启动门禁：先把 `assets/global-memory-bank-prompt.md` 逐字放到位。选冷启动路径。两阶段模型策略：初始化用强的长上下文模型；稳态切到小的本地模型；同一断言连续失败 3 次，把那一批次升级回更强模型。派发编码任务：技能激活、挑选合适模式、注入提示词（固定首行 `active memory bank`）、后台运行。监控进度：`python3 scripts/session_report.py 15 /path/to/repo`。验收后再报完成：走 6 项验收清单；证据优先于自我报告——完成由 git status、测试报告数字、非空产物证明。维护学习闭环：每次纠正/决策记入 `decision-log.md`，累计 ≥2 个一致样本后蒸馏进 `SKILL.md` 的偏好段。硬约束动作先问用户：push、删除、写数据库、花钱、改全局配置。自检命令：`npx @anthropics/skills-ref validate .`、`python3 -m py_compile scripts/session_report.py`、`python3 scripts/session_report.py 5 /path/to/repo`。
 
 ### 做法 I：给 agent 补一块 UI/UX 设计知识（可选）
 
-1. 需要 Node/npm 与 Python 3.x。README 明确要求安装步骤由「人」执行，agent 不应自行在你的机器上安装软件。
-
-2. 全局安装 CLI（包名与命令名不同；旧的 `uipro-cli` 已过期）：
-
-   ```bash
-   npm install -g ui-ux-pro-max-cli
-   ```
-
-3. 进项目并装到你的 agent，先 dry-run：
-
-   ```bash
-   cd /path/to/your/project
-   uipro init --dry-run
-   uipro init --ai claude
-   uipro init --ai cursor
-   uipro init --ai copilot
-   uipro init --ai opencode
-   uipro init --ai zcode
-   uipro init --ai universal
-   uipro init --ai all
-   ```
-
-   Claude Code 也可走插件市场：
-
-   ```text
-   /plugin marketplace add nextlevelbuilder/ui-ux-pro-max-skill
-   /plugin install ui-ux-pro-max@ui-ux-pro-max-skill
-   ```
-
-4. 日常直接用自然语言提 UI/UX 请求；想要特定技术栈就在 prompt 里点名。
-
-5. 直接用设计系统生成器与单域检索：
-
-   ```bash
-   python3 .claude/skills/ui-ux-pro-max/scripts/search.py "beauty spa wellness" --design-system -p "Serenity Spa"
-   python3 .claude/skills/ui-ux-pro-max/scripts/search.py "fintech banking" --design-system -f markdown
-   python3 .claude/skills/ui-ux-pro-max/scripts/search.py "glassmorphism" --domain style
-   python3 .claude/skills/ui-ux-pro-max/scripts/search.py "elegant serif" --domain typography
-   python3 .claude/skills/ui-ux-pro-max/scripts/search.py "dashboard" --domain chart
-   python3 .claude/skills/ui-ux-pro-max/scripts/search.py "error summary validation" --domain ux
-   python3 .claude/skills/ui-ux-pro-max/scripts/search.py "form validation" --stack react
-   ```
-
-6. 落盘成文件（Master + Overrides 模式）：
-
-   ```bash
-   python3 .claude/skills/ui-ux-pro-max/scripts/search.py "SaaS dashboard" --design-system --persist -p "MyApp"
-   python3 .claude/skills/ui-ux-pro-max/scripts/search.py "SaaS dashboard" --design-system --persist -p "MyApp" --page "dashboard"
-   ```
-
-   页面文件存在时覆盖 Master，不存在时只用 Master。
-
-7. 交付前逐条对检查清单：不用 emoji 当图标；所有可点击元素 cursor-pointer；浅色模式文字对比度 ≥ 4.5:1；键盘导航焦点可见；尊重 prefers-reduced-motion；文本/徽标不裁切；375px、768px、1024px、1440px 响应式。
+需要 Node/npm 与 Python 3.x。安装步骤由人执行，agent 不应自行安装软件。全局安装 CLI：`npm install -g ui-ux-pro-max-cli`。进项目并装到你的 agent，先 dry-run：`uipro init --dry-run`，再按 `--ai claude` / `cursor` / `copilot` / `opencode` / `zcode` / `universal` / `all` 安装。Claude Code 也可走插件市场。日常直接用自然语言提 UI/UX 请求；想要特定技术栈就在 prompt 里点名。直接用设计系统生成器与单域检索：`python3 .claude/skills/ui-ux-pro-max/scripts/search.py "beauty spa wellness" --design-system -p "Serenity Spa"` 等。落盘成文件：`--design-system --persist -p "MyApp"`，页面文件存在时覆盖 Master，不存在时只用 Master。交付前逐条对检查清单：不用 emoji 当图标；所有可点击元素 cursor-pointer；浅色模式文字对比度 ≥ 4.5:1；键盘导航焦点可见；尊重 prefers-reduced-motion；文本/徽标不裁切；375px、768px、1024px、1440px 响应式。
 
 ### 做法 J：让 agent 从一句话或一个仓库产出可交互的架构图（可选）
 
-1. 安装 skill：
-
-   ```bash
-   npx skills add tt-a1i/archify -g
-   npx -y skills add tt-a1i/archify --skill archify --agent cursor --global --copy --yes
-   npx skills use tt-a1i/archify@archify --agent codex
-   ```
-
-2. 从描述出图：
-
-   ```text
-   Use Archify to diagram a web request: Browser calls the API,
-   the API checks Redis, and a cache miss queries PostgreSQL and fills the cache.
-   ```
-
-3. 从仓库出图（要源码证据）：
-
-   ```text
-   Analyze this repository, then use archify to create a high-level runtime architecture diagram.
-   Show 8–12 core components, one primary path, external dependencies, and trust boundaries.
-   Put supporting detail in cards instead of adding more edges.
-   ```
-
-4. 选对图型并跑完整命令链：
-
-   ```bash
-   node archify/bin/archify.mjs guide "Show an API request with Redis cache miss"
-   cd archify
-   node bin/archify.mjs doctor
-   node bin/archify.mjs validate workflow examples/agent-tool-call.workflow.json --quality showcase --json
-   node bin/archify.mjs deliver workflow examples/agent-tool-call.workflow.json /tmp/workflow.html --quality showcase --open --json
-   ```
-
-5. 失败时按 `diagnostics[]` 的 `supportedFixes` 修，不要盲重试，且限制在两轮修正之内。
-
-6. 改架构前做差异评审：
-
-   ```bash
-   node archify/bin/archify.mjs compare architecture base.json head.json architecture-delta.html --json
-   ```
-
-   它只给 Before / Delta / After 的机器收据，不推断影响、风险或可合并性。
+安装 skill：`npx skills add tt-a1i/archify -g`。从描述出图或从仓库出图。选对图型并跑完整命令链：`node archify/bin/archify.mjs guide ...`，`node bin/archify.mjs doctor`，`node bin/archify.mjs validate workflow ... --quality showcase --json`，`node bin/archify.mjs deliver workflow ... /tmp/workflow.html --quality showcase --open --json`。失败时按 `diagnostics[]` 的 `supportedFixes` 修，不要盲重试，且限制在两轮修正之内。改架构前做差异评审：`node archify/bin/archify.mjs compare architecture base.json head.json architecture-delta.html --json`。它只给 Before / Delta / After 的机器收据，不推断影响、风险或可合并性。
 
 ### 做法 K：把自然语言需求或已有图源改成自包含的 HTML+SVG 图（可选）
 
-1. 按你的宿主各取一条安装命令（原文照抄）：
-
-   ```text
-   /plugin marketplace add cathrynlavery/diagram-design
-   /plugin install diagram-design@diagram-design
-   ```
-
-   ```bash
-   codex plugin marketplace add cathrynlavery/diagram-design
-   codex plugin add diagram-design@diagram-design
-   copilot plugin marketplace add cathrynlavery/diagram-design
-   copilot plugin install diagram-design@diagram-design
-   droid plugin marketplace add https://github.com/cathrynlavery/diagram-design
-   droid plugin install diagram-design@diagram-design --scope user
-   pi install https://github.com/cathrynlavery/diagram-design
-   ```
-
-   Claude Code 装完要手动打开自动更新：`/plugin` → Marketplaces → diagram-design → Enable auto-update，提示时 `/reload-plugins`。
-
-2. 做品牌 onboarding（约 60 秒）：
-
-   ```text
-   onboard diagram-design to https://yoursite.com
-   ```
-
-   抓首页 → 提取主色板与字体栈 → 映射到语义角色 `paper / ink / muted / accent / link` → 展示 proposed diff → 你回 `yes, apply it` → 写入 `references/style-guide.md`；写 token 前校验 `ink` 在 `paper` 上的 WCAG AA 对比度。
-
-3. 多客户用命名 profile 隔离，在项目里放内容为 `profile: <slug>` 的 `.diagram-design` 标记文件。
-
-4. 生成第一张图，或从模板起步：
-
-   ```bash
-   cp skills/diagram-design/assets/template.html my-diagram.html
-   cp skills/diagram-design/assets/template-full.html my-diagram.html
-   cp skills/diagram-design/assets/template-motion.html my-diagram.html
-   open skills/diagram-design/assets/index.html
-   ```
-
-5. 重绘已有图：
-
-   ```text
-   /diagram-design:import-drawio platform.drawio
-   /diagram-design:import-drawio platform.drawio --size=slide-16x
-   ```
-
-   本次材料在导入这一节被截断，导出与后续步骤缺，先打开仓库 README 确认。
+按你的宿主各取一条安装命令。Claude Code 装完要手动打开自动更新。做品牌 onboarding：`onboard diagram-design to https://yoursite.com`。多客户用命名 profile 隔离，在项目里放内容为 `profile: <slug>` 的 `.diagram-design` 标记文件。生成第一张图或从模板起步；重绘已有图用 `/diagram-design:import-drawio platform.drawio`。本次材料在导入这一节被截断，导出与后续步骤缺，先打开仓库 README 确认。
 
 ### 做法 L：从大插件市场只装一个单元，并按任务档位选模型（可选）
 
-1. Claude Code 安装：
-
-   ```bash
-   /plugin marketplace add wshobson/agents
-   /plugin install python-development
-   ```
-
-2. 只装技能：
-
-   ```bash
-   gh skill install wshobson/agents
-   gh skill install wshobson/agents python-testing-patterns --agent claude-code
-   npx skills add wshobson/agents --skill python-testing-patterns
-   ```
-
-3. 其它 harness（Antigravity / OpenCode / Pi 需要 git + make）：
-
-   ```bash
-   npx codex-marketplace add wshobson/agents
-   gh repo clone wshobson/agents ~/agents && cd ~/agents
-   make generate HARNESS=antigravity && make install-antigravity
-   make install-opencode
-   make generate HARNESS=pi && make install-pi
-   ```
-
-4. 按任务层级选模型：Tier 0 Fable 5（长周期自主工作，需 opt-in）；Tier 1 Opus（架构、安全、评审）；Tier 2 inherit（后端、前端、AI/ML）；Tier 3 Sonnet（文档、测试、调试）；Tier 4 Haiku（快速操作、SEO、部署、内容）。
-
-5. 对单个 skill 打分：
-
-   ```bash
-   uv run plugin-eval score path/to/skill --depth quick
-   uv run plugin-eval certify path/to/skill
-   ```
-
-   把它的输出当筛子，不是结论。
+Claude Code 安装：`/plugin marketplace add wshobson/agents`，`/plugin install python-development`。只装技能：`gh skill install wshobson/agents` 或 `npx skills add wshobson/agents --skill python-testing-patterns`。其它 harness 用 git + make。按任务层级选模型：Tier 0 Fable 5；Tier 1 Opus；Tier 2 inherit；Tier 3 Sonnet；Tier 4 Haiku。对单个 skill 打分：`uv run plugin-eval score path/to/skill --depth quick`，`uv run plugin-eval certify path/to/skill`。把它的输出当筛子，不是结论。
 
 ### 做法 M：把一本反复查阅的书或一份内部文档变成按需加载的技能（可选）
 
-1. 安装：
-
-   ```bash
-   npx skills add virgiliojr94/book-to-skill
-   git clone https://github.com/virgiliojr94/book-to-skill.git ~/.claude/skills/book-to-skill
-   ```
-
-   各宿主技能目录：Copilot CLI `~/.copilot/skills/`；Amp / 跨代理 `~/.agents/skills/`；Hermes `${HERMES_HOME:-$HOME/.hermes}/skills/<category>/`；OpenClaw `${OPENCLAW_STATE_DIR:-$HOME/.openclaw}/skills/`；OpenCode `~/.agents/skills/`。
-
-2. 检查抽取依赖：
-
-   ```bash
-   python3 scripts/extract.py --check
-   ```
-
-3. 按书型安装 PDF 抽取器：文本为主用 `pdftotext` (poppler) 或回退 `pypdf` / `pdfminer.six`；技术类（代码、表格、公式）用 `docling`（约 1.5 秒/页）。扫描版 PDF 必须先 OCR：
-
-   ```bash
-   ocrmypdf input.pdf output.pdf
-   ```
-
-4. 运行转换：
-
-   ```text
-   /book-to-skill <path|folder|glob> [skill-name]
-   ```
-
-   转换前会问这本书是 technical 还是 text-heavy。生成物固定五类：`SKILL.md`（~4,000 tokens）、`chapters/ch01-*.md`、`glossary.md`、`patterns.md`、`cheatsheet.md`。
-
-5. 使用与校验：
-
-   ```text
-   /your-book-slug replication
-   ```
-
-   ```bash
-   tools/validate_skill.py --lens claude|copilot|amp|hermes|opencode
-   ```
-
-   合规：不得再分发第三方版权作品的生成 skill。
+安装：`npx skills add virgiliojr94/book-to-skill`，或 clone 到 `~/.claude/skills/book-to-skill`。检查抽取依赖：`python3 scripts/extract.py --check`。按书型安装 PDF 抽取器：文本为主用 `pdftotext` 或回退 `pypdf` / `pdfminer.six`；技术类用 `docling`；扫描版先 `ocrmypdf input.pdf output.pdf`。运行转换：`/book-to-skill <path|folder|glob> [skill-name]`。生成物固定五类。使用与校验：`/your-book-slug replication`；`tools/validate_skill.py --lens claude|copilot|amp|hermes|opencode`。合规：不得再分发第三方版权作品的生成 skill。
 
 ### 做法 N：把模糊想法写成可独立跑的任务书，并给破坏性操作加三色闸门（可选）
 
-1. 安装：
-
-   ```text
-   帮我安装这个 skill：https://github.com/KKKKhazix/khazix-skills/tree/main/leader
-   ```
-
-2. 降级方案：把对应目录的 `SKILL.md` 全文下载当项目规则文件，或贴进对话让 Agent 照着执行——「效果一致」是作者主张。
-
-3. 用 leader 写目标。触发词：`帮我给 agent 写个目标`、`帮我详细拆一下这个目标`、`写个 goal 提示词`、`让 agent 自己跑这个项目`。它先实测调研，问你最多 5 个必须你拍板的问题，写出纯 Markdown 任务书。
-
-4. 按「目标七问」检查（外加第零问）：1 目的；2 完成态；3 证据；4 反作弊；5 地界；6 取舍；7 未知。第零问：海图是自己实测的还是听来的。任何一条没答案，不要丢进目标模式跑长程。
-
-5. 用 storage-analyzer 清磁盘。触发词：`帮我看看存储`、`C 盘满了`、`清理一下磁盘`、`看下电脑空间`、`storage analysis`。安全规则：绿灯可一键清；黄灯只给「在访达打开」和「移废纸篓」；红灯只解释，最多「打开文件夹」，永不给删除按钮；全程只读扫描，删除必须浏览器点按钮 + 弹框二次确认；本地服务跑 127.0.0.1 + 随机端口 + token。
-
-6. 用 neat-freak 收尾：`/neat`、`跑一下洁癖`、`把文档和记忆整理一下`、`新人接手，帮我做个 clean handoff`。它对齐项目根 `CLAUDE.md / AGENTS.md`、`docs/` 和 README、Agent 记忆系统；绝不擅自删东西。
+安装 leader。降级方案：把 `SKILL.md` 全文当项目规则文件，或贴进对话。用 leader 写目标。按「目标七问」检查（外加第零问）：目的、完成态、证据、反作弊、地界、取舍、未知。任何一条没答案，不要丢进目标模式跑长程。用 storage-analyzer 清磁盘，遵守绿灯/黄灯/红灯规则。用 neat-freak 收尾：`/neat` 等；它绝不擅自删东西。
 
 ### 做法 O：给 agent 补一块 Postgres 领域知识与版本化文档检索（可选）
 
-1. 装技能：
-
-   ```bash
-   npx skills add timescale/pg-aiguide --skill postgres
-   npx skills add timescale/pg-aiguide --skill schema-exploration
-   ```
-
-2. 接入公共 MCP 端点 `https://mcp.tigerdata.com/docs`，按环境配置（Claude Code 插件 `claude plugin marketplace add timescale/pg-aiguide` + `claude plugin install pg@aiguide`；Codex `codex mcp add --url "https://mcp.tigerdata.com/docs" pg-aiguide`；Cursor 写 `.cursor/mcp.json`；Windsurf 的字段名是 `serverUrl`）。
-
-3. 用具体任务触发，或用 README 演示的 A/B 法自测（原文提示词原样复制）：
-
-   ```text
-   Please describe the schema you would create for an e-commerce website two times, first with the tiger mcp server disabled, then with the tiger mcp server enabled. For each time, write the schema to its own file in the current working directory. Then compare the two files and let me know which approach generated the better schema, using both qualitative and quantitative reasons. For this example, only use standard Postgres.
-   ```
-
-   单次 A/B 受随机性影响大，重复 3 次以上或换 2–3 个任务再下结论。
+装技能：`npx skills add timescale/pg-aiguide --skill postgres`，`npx skills add timescale/pg-aiguide --skill schema-exploration`。接入公共 MCP 端点 `https://mcp.tigerdata.com/docs`。用具体任务触发，或用 README 的 A/B 法自测。单次 A/B 受随机性影响大，重复 3 次以上或换 2–3 个任务再下结论。
 
 ### 做法 P：在已获授权的漏洞挖掘场景按主题自动加载安全技能库（可选）
 
-1. 只对自有或书面授权资产使用。插件安装：
-
-   ```text
-   /plugin marketplace add elementalsouls/Claude-BugHunter
-   /plugin install claude-bughunter@elementalsouls
-   ```
-
-   插件路径不含 `hunt` engagement 脚手架；`cbh` CLI 需另行 pipx 安装。
-
-2. 拷贝安装（想要脚手架时）：
-
-   ```bash
-   git clone https://github.com/elementalsouls/Claude-BugHunter.git
-   cd Claude-BugHunter
-   bash scripts/install.sh
-   bash scripts/install.sh --all --burp-mcp
-   pipx install git+https://github.com/elementalsouls/Claude-BugHunter
-   ```
-
-3. 用 `/hunt` 开 engagement；日常用自然语言描述目标，技能按主题自动加载。
-
-4. 提交前必须过 `triage-validation` 的 7-Question Gate——Q3 问资产是否在 scope 内，Q2 问是否在项目认可的 impact 列表内。证据按 `evidence-hygiene` 脱敏。
+只对自有或书面授权资产使用。插件安装：`/plugin marketplace add elementalsouls/Claude-BugHunter`，`/plugin install claude-bughunter@elementalsouls`。拷贝安装想要脚手架时用。用 `/hunt` 开 engagement；日常用自然语言描述目标。提交前必须过 `triage-validation` 的 7-Question Gate；证据按 `evidence-hygiene` 脱敏。
 
 ### 做法 Q：把复杂分析任务拆成「分析 → 实现 → 交付」三阶段，用阶段内只读门禁卡住返工（可选）
 
-1. 安装（二选一）：
-
-   ```bash
-   git clone https://github.com/XiaoMaColtAI/math-modeling-skill.git
-   npx skills add https://github.com/xiaomacoltai/math-modeling-skill --skill math-modeling
-   ```
-
-2. 先约定目录契约：`SKILL_ROOT` 只读；`PROJECT_ROOT` 可写；题目与附件只读。产物结构包括 `data/`、`题目分析报告.md`、`术语表格.md`、代码、`results/`（含 `复现清单.json`）、`figures/`（三类各至少 3 张候选图 + 至少 1 幅总体建模流程图）、`完整论文.docx`。
-
-3. 先用单阶段提示词做最便宜的对照：
-
-   ```text
-   只做建模分析，输出题目分析报告和术语表格。
-   ```
-
-4. 按门禁顺序推进，不要攒到最后才质检。阶段与门禁：① 建模手 → `题目分析报告.md`、`术语表格.md`，门禁 `M1`；② 编程手 → 代码、结果表格、候选图、`results/复现清单.json`，门禁 `P1`（最小可运行结果）、`P2`；③ 论文手 → 至少 8 幅正式图、`完整论文.docx`，门禁 `W1`（证据大纲）、`W2`。`P1` 必须在全量计算和正式出图之前执行；`W1` 必须在长篇正文和双格式排版之前执行。
-
-5. 阶段反馈回路：任一独立门禁返回 `FAIL`，由原阶段执行者按证据修正并重新派发复验，主 Agent 不得自行覆盖失败结论；修正后从被阻断阶段继续，不重复已通过的阶段。
-
-6. 跑双引擎文献检索与回归验证：
-
-   ```bash
-   python tools/paper_search/scripts/hybrid_scholar.py --query "robust optimization vehicle routing" --limit 10 --json
-   python -m unittest discover -s tests -v
-   python tools/docx/scripts/self_check.py
-   ```
+安装：`git clone https://github.com/XiaoMaColtAI/math-modeling-skill.git` 或 `npx skills add ...`。先约定目录契约：`SKILL_ROOT` 只读；`PROJECT_ROOT` 可写；题目与附件只读。先用单阶段提示词做最便宜的对照。按门禁顺序推进：建模手 → `题目分析报告.md`、`术语表格.md`，门禁 `M1`；编程手 → 代码、结果表格、候选图、`results/复现清单.json`，门禁 `P1`、`P2`；论文手 → 至少 8 幅正式图、`完整论文.docx`，门禁 `W1`、`W2`。`P1` 必须在全量计算和正式出图之前执行；`W1` 必须在长篇正文和双格式排版之前执行。阶段反馈回路：任一独立门禁返回 `FAIL`，由原阶段执行者按证据修正并重新派发复验。
 
 ### 做法 R：装一套小而可组合的工程技能集，把「动手前对齐」和可复用纪律固化下来（可选）
 
-两条设计经验：用户调用型只有你手输 `/xxx` 才触发，职责是编排；模型调用型可由 agent 在任务匹配时自动调用，承载可复用纪律。用户调用型可以调用模型调用型，不能调用另一个用户调用型。四个失败模式对应四组手段：没做我要的 → 动手前拷问对齐；太啰嗦 → 建共享术语表 `GLOSSARY.md`；代码跑不起来 → 补反馈回路；造出一坨泥 → 每天投资设计。
-
-1. 安装，两条路线只选一条：
-
-   ```bash
-   claude plugins install mattpocock-skills
-   ```
-
-   或：
-
-   ```bash
-   npx skills@latest add mattpocock/skills
-   ```
-
-   安装器会让你选择要装哪些技能、装到哪些编码 agent 上；`setup-matt-pocock-skills` 必须被选中。
-
-2. 每个仓库跑一次配置：
-
-   ```text
-   /setup-matt-pocock-skills
-   ```
-
-   它会被问三件事：用哪个 issue tracker；triage 打什么标签；生成的文档存到哪里。要在用其他工程类技能之前跑。
-
-3. 每次想改动前先对齐：非代码用 `/grill-me`；代码用 `/grill-with-docs`（会内联更新 `GLOSSARY.md` 和 ADR）。
-
-4. 建反馈回路：`/tdd`（红-绿-重构，一次一个垂直切片）、`/diagnosing-bugs`（先建出能对当前 bug 变红的反馈回路 → 最小化 → 提假设 → 插桩 → 修 → 回归测试）。
-
-5. 管设计：`/to-spec`（写规格前先问你会动哪些模块）→ `/to-tickets` → `/implement` 或 `/implement-spec` → `/code-review`（按 Standards 和 Spec 两轴审 diff）；`/improve-codebase-architecture` 每隔几天跑一次，是勘察不是抢救。
+两条设计经验：用户调用型只有你手输 `/xxx` 才触发，职责是编排；模型调用型可由 agent 在任务匹配时自动调用，承载可复用纪律。四个失败模式对应四组手段。安装两条路线只选一条：`claude plugins install mattpocock-skills` 或 `npx skills@latest add mattpocock/skills`。每个仓库跑一次配置：`/setup-matt-pocock-skills`。每次想改动前先对齐：非代码用 `/grill-me`；代码用 `/grill-with-docs`。建反馈回路：`/tdd`、`/diagnosing-bugs`。管设计：`/to-spec` → `/to-tickets` → `/implement` 或 `/implement-spec` → `/code-review`；`/improve-codebase-architecture` 每隔几天跑一次。
 
 ### 做法 S：从 google/skills 按任务只装一个 Google 相关技能（可选）
 
-1. 选一个与当前任务最接近的技能（gcloud CLI、BigQuery 优化、GKE 故障排查、IAM 策略管理等），不要一次装全部。
-
-2. 安装（按 harness 选一条）：
-
-   ```bash
-   npx skills add google/skills
-   claude plugin marketplace add google/skills
-   claude plugin install <plugin>@google-plugins
-   codex plugin marketplace add google/skills
-   agy plugin install https://github.com/google/skills/<plugin-path>
-   ```
-
-3. 使用前进入对应 skill 目录确认权限与配置。Google Cloud 技能通常依赖账号、项目、认证和 IAM 权限，可能计费。
-
-4. 在隔离环境或测试项目中跑一个具体任务，记录是否减少查文档或手写命令的时间、命令/配置正确率、需要人工纠正次数、权限申请次数。
+选一个与当前任务最接近的技能，不要一次装全部。安装按 harness 选一条。使用前进入对应 skill 目录确认权限与配置。Google Cloud 技能通常依赖账号、项目、认证和 IAM 权限，可能计费。在隔离环境或测试项目中跑一个具体任务，记录是否减少查文档或手写命令的时间、命令/配置正确率、需要人工纠正次数、权限申请次数。
 
 ### 做法 T：让 agent 检索中国金融市场数据，并核对来源与时间戳（可选）
 
-1. 安装 Skill（交互式全局安装）：
-
-   ```bash
-   npx --yes skills@latest add clawyi-com/china-market-data -g
-   npx --yes skills@latest add clawyi-com/china-market-data -g -y --agent cursor
-   npx --yes skills@latest add clawyi-com/china-market-data --list
-   ```
-
-2. 安装 Python 依赖（初始化脚本会在技能目录内创建 `.venv`）：
-
-   ```bash
-   SKILL_DIR="$HOME/.agents/skills/china-market-data"
-   python3 "$SKILL_DIR/tools/setup_env.py"
-   ```
-
-   Windows PowerShell：
-
-   ```powershell
-   $SkillDir = "$env:USERPROFILE\.agents\skills\china-market-data"
-   py -3 "$SkillDir\tools\setup_env.py"
-   ```
-
-   更新技能会整体替换目录、删掉 `.venv`，更新后需再运行一次 `setup_env.py`。
-
-3. 可选把虚拟环境放在技能目录外：
-
-   ```bash
-   python3 <技能目录>/tools/setup_env.py --venv ~/.venvs/china-market-data
-   ~/.venvs/china-market-data/bin/python <技能目录>/scripts/run.py --check
-   ```
-
-4. 直接向 AI 助手提问，例如「贵州茅台现在的价格、PE、PB、市值和换手率」「拉宁德时代近一年前复权日 K 线」「今天涨停池、连板梯队和炸板率怎么样」。只讨论概念或投资观点、不需要实际取数时，技能不会被加载。
-
-5. 也可直接运行 CLI（在技能根目录运行）：
-
-   ```bash
-   python3 scripts/tencent_quote.py sh000001 sz000001 510300 --output quotes.json
-   python3 scripts/run.py ths_hot_reason.py --output hot.json
-   python3 scripts/run.py eastmoney_signals.py board-quotes --board-type concept --period 5d --top-n 20 --output boards.json
-   ```
-
-   默认板块接口失败后可显式尝试 `--source dataapi`；它仍属于东财，不是独立供应商。大部分 CLI 把完整返回结构写入 JSON，终端只给预览。
+安装 Skill：`npx --yes skills@latest add clawyi-com/china-market-data -g`。安装 Python 依赖：`python3 "$SKILL_DIR/tools/setup_env.py"`。更新技能会整体替换目录、删掉 `.venv`，更新后需再运行一次 `setup_env.py`。可选把虚拟环境放在技能目录外。直接向 AI 助手提问，例如贵州茅台的价格、PE、PB、市值和换手率。只讨论概念或投资观点时技能不会被加载。也可直接运行 CLI。默认板块接口失败后可显式尝试 `--source dataapi`；它仍属于东财，不是独立供应商。
 
 ### 做法 U：把移动端模拟器与真机画面接进 Codex 聊天，用日志和性能面板验收（可选）
 
-1. 前提：Codex desktop + Apple Silicon Mac；该仓库当前为 private，安装需要 GitHub 读权限且本机 Git 认证可用。
-
-2. 安装预构建插件：
-
-   ```sh
-   codex plugin marketplace add https://github.com/callstackincubator/codex-mobile-dev-plugin.git --ref release/latest
-   codex plugin add mobile-dev@mobile-dev
-   ```
-
-   安装后新开一个 chat。更新用 `codex plugin marketplace upgrade mobile-dev`。
-
-3. 按平台准备工具：iOS 模拟器需 Xcode 26+；物理 iPhone/iPad 需 Xcode 27+、Developer Mode、HEVC WebCodecs；Android 需 SDK platform-tools 与 emulator、H.264 WebCodecs；Metro 日志需已运行的 Metro server；物理 iOS 的 CPU/内存需 iOS 17.4+、development-signed 带 `get-task-allow`、developer disk image 已挂载、Xcode/LLDB detached；Display FPS 需要 Android 12+ 或 iOS 17.4+ 真机，iOS 模拟器不支持。
-
-4. 从 Codex 侧边栏打开 Mobile Dev，选设备，让 Codex 干活：
-
-   ```text
-   Build and run my Expo app in the simulator beside this chat.
-   Read the app logs and help me fix this error.
-   Record CPU and memory for 30 seconds while I scroll checkout.
-   Compare these two performance recordings.
-   ```
-
-5. 用面板做检查：Logs / Performance / Screenshot / Select。物理 iOS 只支持点击和拖拽。
-
-6. 按需关闭遥测（插件向 Sentry 上报插件错误、崩溃和聚合性能指标；App 日志、截图、输入内容、工具载荷、设备性能录制被排除）：
-
-   ```sh
-   MOBILE_DEV_TELEMETRY=off
-   ```
+前提：Codex desktop + Apple Silicon Mac；仓库为 private，需要 GitHub 读权限。安装预构建插件。按平台准备工具。从 Codex 侧边栏打开 Mobile Dev，选设备，让 Codex 干活。用面板做检查：Logs / Performance / Screenshot / Select。按需关闭遥测：`MOBILE_DEV_TELEMETRY=off`。
 
 ### 做法 V：用一行 curl 把单个 Markdown 技能装进 Claude Code，并验证它按 description 自动加载（可选）
 
-1. 项目级安装单个技能：
-
-   ```bash
-   mkdir -p .claude/skills/explain && curl -fsSL https://raw.githubusercontent.com/ARYANK-08/agentic-dev-kit/main/skills/explain/SKILL.md -o .claude/skills/explain/SKILL.md
-   ```
-
-2. 想对本人所有项目生效，把 `.claude/skills/explain` 换成 `~/.claude/skills/explain`。
-
-3. 走 clone 路线时用 cp 复制：
-
-   ```bash
-   mkdir -p .claude/skills
-   cp -r path/to/agentic-dev-kit/skills/<name> .claude/skills/
-   cp -r path/to/agentic-dev-kit/skills/<name> ~/.claude/skills/
-   ```
-
-4. 重启 Claude Code，提一个「解释这段代码」类型的请求，观察是否自动加载；若没触发，再显式点名该技能——显式能触发而自动不能，说明是 `description` 没匹配上。
-
-5. 推广前必做：打开 `.claude/skills/explain/SKILL.md` 读实际提示词，判断是否值得沉淀成本团队的写法。
+项目级安装单个技能：`mkdir -p .claude/skills/explain && curl -fsSL ... -o .claude/skills/explain/SKILL.md`。想对本人所有项目生效，替换为 `~/.claude/skills/explain`。走 clone 路线时用 cp 复制。重启 Claude Code，提一个解释类请求，观察是否自动加载；若没触发，再显式点名该技能。推广前必做：打开 `.claude/skills/explain/SKILL.md` 读实际提示词。
 
 ### 做法 W：让一个元技能观察你怎么用技能，把重复摩擦沉淀成技能改动（可选）
 
-1. 取文件：`SKILL.md`、`references/`、`scripts/` 三部分必须放在一起；只装 `SKILL.md` 也能跑但会降级。
-
-2. 安装：
-
-   ```bash
-   npx skills add rebelytics/one-skill-to-rule-them-all --skill task-observer
-   ```
-
-   Claude 应用在 Settings → Customize 上传 `.skill` 包；Claude Code 把文件夹放到 `.claude/skills/task-observer/`。
-
-3. 激活（最容易漏）：把 `references/environments.md` 的激活指令加进 `CLAUDE.md`（或平台等价文件），或安装 session-start hook。仅靠 `description` 匹配会严重欠触发。
-
-4. 在新会话里验证它真的会被调用（在第一次工具调用之前）。
-
-5. 观察日志落在 `[你的共享文件夹]/skill-observations/observation-log/`，建议的技能更新落在 `[你的共享文件夹]/skill-updates/`。几轮真实工作后 `observation-log/` 还不存在，说明激活从未发生。
-
-6. 每次会话结束问一句：
-
-   ```text
-   Any observations logged?
-   ```
-
-7. 安排定期复核会话（作者排期是周一、周三、周五早上）；交互式复核里你逐条批准，定期复核只应用「不需要你决策」的观察到 staged 副本；在你安装更新包之前，任何改动都不会上线。
-
-8. 平台差异：Cowork（含 Dispatch）和桌面版 Claude Code 是完整体验；Claude.ai web、桌面/手机 Claude Chat 没有文件系统访问，走 handoff doc 模式。
+取文件：`SKILL.md`、`references/`、`scripts/` 三部分必须放在一起。安装：`npx skills add rebelytics/one-skill-to-rule-them-all --skill task-observer`。激活最容易漏：把 `references/environments.md` 的激活指令加进 `CLAUDE.md`，或安装 session-start hook。在新会话里验证它真的会被调用。观察日志落在共享文件夹的 `skill-observations/observation-log/`，建议更新落在 `skill-updates/`。每次会话结束问一句：`Any observations logged?`。安排定期复核会话。平台差异：Cowork 和桌面版 Claude Code 是完整体验；Claude.ai web、桌面/手机 Claude Chat 没有文件系统访问，走 handoff doc 模式。
 
 ### 做法 X：装一套全栈开发技能包，按请求自动激活并让复杂任务按技能链跑（可选）
 
-1. 添加插件市场：
-
-   ```bash
-   /plugin marketplace add jeffallan/claude-skills
-   ```
-
-2. 安装技能包：
-
-   ```bash
-   /plugin install fullstack-dev-skills@fullstack-dev-skills
-   ```
-
-3. 用自然语言触发单个技能（请求里要带具体框架/技术名和具体任务）：
-
-   ```bash
-   # Backend Development
-   "Implement JWT authentication in my NestJS API"
-   → Activates: NestJS Expert → Loads: references/authentication.md
-
-   # Frontend Development
-   "Build a React component with Server Components"
-   → Activates: React Expert → Loads: references/server-components.md
-   ```
-
-4. 用多技能工作流链处理复杂任务：Feature Development: Feature Forge → Architecture Designer → Fullstack Guardian → Test Master → DevOps Engineer；Bug Investigation: Debugging Wizard → Framework Expert → Test Master → Code Reviewer；Security Hardening: Secure Code Guardian → Security Reviewer → Test Master。
-
-5. 用 `/common-ground` 暴露并校验 Claude 对项目的隐藏假设。
-
-6. （可选）启用项目管理工作流：9 个 workflow 命令与 Jira / Confluence 集成，前提是配置好 Atlassian MCP server；按描述由人手动调用，原文没有自动触发机制。
+添加插件市场：`/plugin marketplace add jeffallan/claude-skills`。安装技能包：`/plugin install fullstack-dev-skills@fullstack-dev-skills`。用自然语言触发单个技能（请求里要带具体框架/技术名和具体任务）。用多技能工作流链处理复杂任务。用 `/common-ground` 暴露并校验 Claude 对项目的隐藏假设。可选启用项目管理工作流，前提是配置好 Atlassian MCP server。
 
 ### 做法 Y：把中英文学术写作去模板化改写，并用命题核对保住事实（可选，按 A 的对照法验证）
 
-定位：heise3/academic-deai（v3.1.0，MIT）是一个「模型中立」的 Agent Skill，用于中英文学术编辑：减少空泛开头、重复收尾、机械段落等模板化文风，同时核对并保留事实、数字、引文、术语、证据强度与作者语气。可用于论文校对、语言润色、学术翻译和授权范围内的结构修订。README 声称支持 Codex、Claude Code、Cursor、Gemini CLI、OpenCode 等能加载 Agent Skills 的平台；但作者说明格式兼容性按官方文档核对，实际编辑验证只在本地 Codex 会话中完成。
-
-1. 确认平台支持与安装位置。README 给出的路径示例：
-
-   | 平台 | 完整 Skill 的安装位置示例 |
-   |---|---|
-   | Codex | `~/.agents/skills/academic-deai/` |
-   | Claude Code | `~/.claude/skills/academic-deai/` |
-   | Cursor | `.cursor/skills/academic-deai/` |
-   | Gemini CLI | `.gemini/skills/academic-deai/` |
-   | OpenCode | `.opencode/skills/academic-deai/` |
-
-   前提：平台需支持 Agent Skills，或至少能加载编辑指令与相关资源；仅能读取文本指令的平台必须同时提供 `references/` 等参考文件，不能假定具备脚本或文件编辑能力。
-
-2. 安装（README 给的 Codex 新安装示例，目标目录尚不存在时使用）。复制完整文件夹，保持 `SKILL.md`、`references/` 和可选 `scripts/` 的相对位置：
-
-   ```sh
-   git clone https://github.com/heise3/academic-deai.git
-   mkdir -p ~/.agents/skills
-   cp -R academic-deai ~/.agents/skills/academic-deai
-   ```
-
-3. 升级时先备份已有目录，再整体替换，避免合并遗留文件（README 明确提示）。
-
-4. 调用 Skill。显式语法各平台不同；已加载时先用自然语言指定任务。可直接复制的中文提示词：
-
-   ```text
-   用 Academic DeAI 润色下面的中文讨论部分。
-   减少模板化表达，保留数字、引文、术语和证据强度。
-   不要添加新事实，只返回修改后的正文。
-   ```
-
-   英文翻译场景提示词：
-
-   ```text
-   Use Academic DeAI to translate this manuscript into English.
-   Use the terminology list and my writing sample below.
-   Preserve substantive claims, citations, section structure, and the requested minimum length.
-   Return only the revised text.
-   ```
-
-   Codex 可显式使用 `$academic-deai`；其他平台按其 Skill 加载与调用方式执行。校对、语言润色、翻译和结构修订的修改深度由用户指定。
-
-5. 按 README 的编辑规则执行，规则本身可当作验收清单：先看段落功能和证据连接，再处理孤立词语；套话和重复结构需要结合上下文判断；真实比较、负结果、必要总结、合理被动语态和规范术语可以保留；作者样本只用来指导表达习惯，不提供新稿的事实或观点；按任务加载参考和核查工具，不强制固定轮次或额外报告；比较改变的命题：主体、对象、方向、时间、条件和引文支持位置。
-
-6. 可选文本核查工具（需 Python 3.10+ 与标准库）：
-
-   ```sh
-   PYTHONDONTWRITEBYTECODE=1 python3 scripts/validate_package.py .
-   PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
-   python3 scripts/content_lock.py original.md revised.md --strict
-   ```
-
-7. 抽取格式的前提：PDF 文本抽取还需 Poppler `pdftotext`；DOCX 正文抽取不能保留所有样式、批注、修订记录、脚注或文本框，可编辑 Word 交付需要相应文档工具。
-
-8. README 明确说明：无需安装 Humanizer，也不自动串联其他编辑器；结构编辑思路参考 Humanizer 3.1.0。
-
-9. 按 A 的对照法验证：用一段自己真实的中文讨论段落（含数字、引文编号、置信区间或不确定性表述），另存为 `original.md`；装好 Skill 后用中文提示词跑一轮，输出另存为 `revised.md`；运行 `python3 scripts/content_lock.py original.md revised.md --strict`，人工逐条核对被标记的命题差异。有条件时做一次不使用 Skill 的同提示词对照，以及一次人工盲评（原文没有提供这两类数据，需自建）。预期：你能说清哪些模板化表达被删掉、哪些数字与引文被保住；说不清就不要保留。
+定位：heise3/academic-deai（v3.1.0，MIT）是模型中立 Agent Skill，用于中英文学术编辑。确认平台支持与安装位置。安装：`git clone https://github.com/heise3/academic-deai.git`，`mkdir -p ~/.agents/skills`，`cp -R academic-deai ~/.agents/skills/academic-deai`。升级时先备份已有目录，再整体替换。调用 Skill，用中文或英文提示词。按编辑规则执行。可选文本核查工具：`python3 scripts/validate_package.py .`、`python3 -m unittest discover -s tests -v`、`python3 scripts/content_lock.py original.md revised.md --strict`。PDF 抽取需 Poppler `pdftotext`；DOCX 正文抽取不能保留所有样式。按 A 的对照法验证。
 
 ### 做法 Z：让路由技能自动选择工作流，并对 bug 交出「失败→通过」证据（可选，按 A 的对照法验证）
 
-定位：michael-denyer/pstack-claude 把 Lauren Tan 写的 Cursor 插件栈 pstack 移植到 Claude Code、Codex、Pi 及其他 agent harness，核心入口是一个名为 `poteto-mode` 的路由技能：你只告诉它目标，它自行调用合适的工作流，目标是让代码保持精简、简单且经过验证。另有独立插件 agent-formal-verify 处理测试触达不到的并发 bug 与不变量，方式是 TLA+ 模型检查与 Lean 证明。完整工作流定义在未抓取的 `docs/reference.md` 与 `SKILL.md` 中。
-
-1. 前提：先装好对应 harness（Claude Code / Codex / Pi 之一）。
-
-2. 在 Claude Code 内安装：
-
-   ```text
-   /plugin marketplace add michael-denyer/pstack-claude
-   /plugin install pstack@pstack-claude
-   ```
-
-3. 或在终端用 Codex 安装：
-
-   ```shell
-   codex plugin marketplace add michael-denyer/pstack-claude
-   codex plugin add pstack@pstack-claude
-   ```
-
-4. 或在终端用 Pi 安装：
-
-   ```shell
-   pi install git:github.com/michael-denyer/pstack-claude
-   ```
-
-   Pi 下该包会加载 skills 与 pstack Pi extension，后者提供 skills 所需的 subagent、question、wake-up 工具，并加入 `/loop` 和路由指令；用 `/skill:<name>` 调用具体技能。
-
-5. 配置角色模型与推理强度：运行 `setup-pstack`（Claude Code 中用 `/pstack:setup-pstack`）。可改模型默认值、按角色设定 reasoning effort、或关闭自动路由。README 给的写法示例是 `arena runners: opus @xhigh, fable @max`；Claude Code 通过插件提供的 `pstack:effort-<level>` 或 `pstack:poteto-agent-<level>` agent 派发；未指定 level 的角色沿用当前 session 的 effort，除非配置表的 `default effort` 行另有指定。
-
-6. 处理 hook 信任：插件会在 Claude Code 和 Codex 上安装 routing hook；Codex 需要先通过 `/hooks` 信任它才会运行。
-
-7. 其他 harness：Prime Agent、OpenCode、Gemini CLI，或任意 harness 的 skills-only 安装，参见 `docs/reference.md#shared-skills-installation`（本次未抓到正文）。
-
-8. 使用示例（原文给的入门提示）：
-
-   ```text
-   Use poteto-mode to fix the search filter resetting when I change pages.
-   ```
-
-   对 bug，它会复现失败，用 `how` 和 `why` 调查，委派修复，再重跑失败用例；若修复跨越函数边界，会在实现前引入 `architect`。你拿到修复，以及失败与通过的证据。
-
-9. 选 playbook：poteto-mode 的 playbooks 覆盖规划、功能开发、重构、性能问题、调查、原型、PR 维护、发布，以及较长周期项目（见 `plugins/pstack/skills/poteto-mode/SKILL.md#playbooks`）。
-
-10. 已知局限：完整工作流定义在未抓取的 `docs/reference.md` 与 `SKILL.md` 中；仓库指标 1345 stars 不能作为效果证据；skills 会把 session transcripts 等读取内容发往模型 provider，涉及隐私与合规时先确认。MIT 许可。
+定位：michael-denyer/pstack-claude 把 pstack 移植到 Claude Code、Codex、Pi，核心入口是 `poteto-mode` 路由技能。前提：先装好对应 harness。安装命令。配置角色模型与推理强度：运行 `setup-pstack`。处理 hook 信任：Codex 需要先通过 `/hooks` 信任。使用示例：`Use poteto-mode to fix the search filter resetting when I change pages.` 对 bug，它会复现失败，用 `how` 和 `why` 调查，委派修复，再重跑失败用例；若修复跨越函数边界，会在实现前引入 `architect`。你拿到修复，以及失败与通过的证据。选 playbook。已知局限。
 
 ### 做法 AA：按职能只装少量 agent 角色，用真实任务和默认提示对照（可选，按 A 的对照法验证）
 
-定位：msitarzewski/agency-agents 是一个按职能组织的「AI 专业角色」Markdown 集合。每个 agent 是一个文件，原文声明其结构为：身份与性格、核心使命与工作流、带代码示例的技术交付出物、成功指标与沟通风格。角色按 division 分组（材料中可见 Engineering、Design、Paid Media、Sales、Marketing 等），每个角色给两列信息：专长与何时使用。交付形态有三层：原生桌面 app、一套 `scripts/` 安装脚本、纯参考模式。原文还提到 `strategy/runbooks.json` 里的 runbook 有 roster（一组 agent 组成的团队），可整队安装。
-
-1. 前提：本地有 git 与 bash；脚本方式需本地有仓库（原文未给 clone 命令，只说明脚本方式需本地有仓库）；app 方式需 macOS/Linux/Windows 桌面环境。
-
-2. 最省事：装桌面 app，一键写入你已在用的工具：
-
-   ```bash
-   brew install --cask msitarzewski/agency-agents/agency-agents
-   ```
-
-   或从 releases 页面下载：`https://github.com/msitarzewski/agency-agents-app/releases/latest`。app 会自动更新，省掉后续所有脚本步骤。
-
-3. 用脚本装进 Claude Code（前提：已安装 Claude Code，且本机存在 `~/.claude/agents/` 目录）：
-
-   ```bash
-   # 一次装全部 agent 到 Claude Code 目录
-   ./scripts/install.sh --tool claude-code
-
-   # 或只手动复制一个 division
-   cp engineering/*.md ~/.claude/agents/
-   ```
-
-4. 在会话里激活某个角色（前提：第 3 步已把对应 agent 文件放进工具目录）：
-
-   ```text
-   Hey Claude, activate Frontend Developer mode and help me build a React component
-   ```
-
-5. 装到 Claude Code 以外的工具（前提：目标工具已安装；`convert.sh` 在仓库内执行）：
-
-   ```bash
-   # Step 1 -- generate integration files for all supported tools
-   ./scripts/convert.sh
-
-   # Step 2 -- install interactively (auto-detects what you have installed)
-   ./scripts/install.sh
-   ```
-
-   也可以直接指定工具：
-
-   ```bash
-   ./scripts/install.sh --tool antigravity
-   ./scripts/install.sh --tool gemini-cli
-   ./scripts/install.sh --tool opencode
-   ./scripts/install.sh --tool copilot
-   ./scripts/install.sh --tool openclaw
-   ./scripts/install.sh --tool cursor
-   ./scripts/install.sh --tool aider
-   ./scripts/install.sh --tool windsurf
-   ./scripts/install.sh --tool kimi
-   ./scripts/install.sh --tool codex
-   ./scripts/install.sh --tool osaurus
-   ./scripts/install.sh --tool hermes
-   ./scripts/install.sh --tool vibe
-   ./scripts/install.sh --tool dsh
-   ```
-
-6. 只装需要的团队，先看再装：
-
-   ```bash
-   ./scripts/install.sh                                    # interactive wizard: pick tools + teams
-   ./scripts/install.sh --tool claude-code --division engineering,security
-   ./scripts/install.sh --tool cursor --agent frontend-developer,ui-designer
-   ./scripts/install.sh --list teams                       # see every team + agent count
-   ./scripts/install.sh --tool opencode --division engineering --dry-run
-   ```
-
-   说明（原文）：`--agent` / `--agents-file` 接受 agent 的 slug、显示名，或去掉 `.md` 的文件名，也就是 runbook roster 使用的 id。
-
-7. 按 runbook 的名单整队安装（前提：仓库内有 `strategy/runbooks.json`，本地有 python3）：
-
-   ```bash
-   python3 -c 'import json, sys
-   for r in json.load(open("strategy/runbooks.json"))["runbooks"]:
-       if r["slug"] == sys.argv[1]: [print(a) for g in r["roster"] for a in g["agents"]]' startup-mvp > team.txt
-   ./scripts/install.sh --tool claude-code --agents-file team.txt
-   ```
-
-8. OpenCode 用户注意：运行时上限约 119 个 agent，超出会被静默丢弃；用 `--division` 装子集保持在限制内。
-
-9. 不想装，就当参考用：每个 agent 文件含身份/性格、使命与工作流、带代码示例的交付物、成功指标与沟通风格，可浏览后复制/改编你需要的那些。
-
-10. 已知局限：只给了角色目录，没给任何一个 agent 文件的内容，也没有效果证据；「Production-Ready」「battle-tested workflows」等属宣传语；README 没有给出指标定义、评测方法或对照数据；材料在 Marketing 表格中途被截断。
+定位：msitarzewski/agency-agents 是按职能组织的 AI 专业角色 Markdown 集合。前提。最省事：装桌面 app。用脚本装进 Claude Code。在会话里激活某个角色。装到 Claude Code 以外的工具。只装需要的团队，先看再装。按 runbook 的名单整队安装。OpenCode 用户注意：运行时上限约 119 个 agent，超出会被静默丢弃。不想装，就当参考用。已知局限。
 
 ### 做法 AB：在 T3 Code 里用 p3-stack 按 playbook 路由，并用 worktree/PR 监视减少等待与冲突（可选，按 A 的对照法验证）
 
-定位：uzairansaruzi/p3-stack 是把 pstack（poteto 在 Cursor 插件生态里的技能集合）在 T3 Code 上重写的版本。同一套技能、原则和话术，编排机制换成 T3 Code 的原语：`delegate_task` 子代理取代 Cursor 的 Task 工具；`t3_thread_launch` 把一个 worker 绑到它自己的 worktree 和分支；`watch_pull_request` 在检查跑完、有人评论或分支冲突时唤醒线程；`schedule_task` 在没有活跃回合时也能跑审计和过夜节奏；`t3_thread_read` / `t3_thread_search` 取代去挖 Cursor 的 transcript 文件；`preview_*` 浏览器工具和 `device_*` 模拟器取代外部控制类技能，截图和录像落回线程里。仓库附带 skills 目录、24 条 principle 技能，以及 `p3-mode` 的 playbook 路由表。
-
-前提：需要一台能跑 T3 Code 的机器（它从 `~/.agents/skills/` 读取 skills），已装 git。以下命令均出自 README。
-
-1. 克隆并全局安装：
-
-   ```bash
-   git clone https://github.com/uzairansaruzi/p3-stack.git
-   cd p3-stack
-   ./install.sh
-   ```
-
-   `install.sh` 会把每个 `skills/*` 目录链接进 `~/.agents/skills/`。预期：技能目录里出现 p3-stack 的 skills 链接。
-
-2. 如果只想装到某个项目而不是全局（前提：目标 repo 路径存在）：
-
-   ```bash
-   ./install.sh --project /path/to/repo
-   ```
-
-   这会装到该项目的 `.agents/skills/`。预期：只在该项目内可见，不污染全局。
-
-3. 初始化角色→模型的映射：运行 `/setup-p3`。它会读 `orchestrator_capabilities`，写出 `p3-models.md`，把每个角色（code、judgment、review 面板）映射到你实际拥有的 provider 和 model。这是后面跨模型 panel 能跑起来的前提。预期：打开 `p3-models.md` 能看到 code / judgment / review 三类角色都映射到了你确实有的模型；如果为空或映射到不存在的模型，先修这一步。
-
-4. 正式干活时用 `/p3-mode`。它读请求、挑一个 playbook，并按步骤在需要时调用其它 skill。需要严谨流程的任务都从这里进。预期：它先说明选了哪个 playbook，再按 playbook 步骤推进，而不是直接开始改代码。
-
-5. 卡住或不确定该用哪个 skill 时，问 `/p3-help`。预期：得到当前可用 skill 与 playbook 的说明。
-
-6. 机制层面的用法（README 只给了名称和一句话用途，没有给命令语法或配置样例，需要自己到仓库/运行环境里确认）：用 `delegate_task` 派子代理组成跨模型 panel；用 `t3_thread_launch` 给 worker 分配独立 worktree 与分支；用 `watch_pull_request` 替代轮询等待 PR 状态；用 `schedule_task` 挂定时审计和过夜任务；用 `preview_*` / `device_*` 产出截图和录像作为交付证据；用 `t3_thread_read` / `t3_thread_search` 取回线程记忆。如果这些原语在运行环境里找不到对应命令或参数，先不要继续，说明宿主版本或安装不完整。
-
-7. 按 A 的对照法验证：不要一上来就全局 `install.sh`，先用 `./install.sh --project /path/to/repo` 装到一个不重要的真实仓库；跑 `/setup-p3` 看它生成的 `p3-models.md` 是否把 code / judgment / review 角色映射到了你确实有的模型；然后拿一个真实的小任务（一个 bug fix 或一个 feature，规模控制在一次能看完的范围）走 `/p3-mode`，观察它是否按 playbook 走完。没有 T3 Code 环境就无法验证，此时最多只能读它的 skill / playbook 设计思路，不要照搬。
-
-### 做法 AB 的验收重点
-
-1. 流程完整度：`/p3-mode` 是否真的按所选 playbook 的步骤推进，而不是跳过步骤或空转。
-2. 并行安全性：同时开多个 worker 时，worktree / 分支冲突次数是否为 0（原文声称由应用强制单写者）。
-3. 等待成本：用 `watch_pull_request` 后，是否真的不再需要轮询，事件唤醒的延迟能否接受。
-4. 无人值守：`schedule_task` 挂的审计/过夜任务，在没有活跃回合时是否照常执行并留下可读结果。
-5. 返工率：同一类任务相比你原来的做法，人工修正次数、返工轮次是否下降；交付证据（截图、录像、PR）是否让你少做一轮核对。只要第 2、4、5 项没有可观察的改善，就说明这套编排只是换了名字的流程包装，应降级为「只读它的 playbook 与 principle 设计」。
+定位：uzairansaruzi/p3-stack 是把 pstack 在 T3 Code 上重写的版本。前提：需要一台能跑 T3 Code 的机器，已装 git。克隆并全局安装：`git clone https://github.com/uzairansaruzi/p3-stack.git`，`cd p3-stack`，`./install.sh`。如果只想装到某个项目：`./install.sh --project /path/to/repo`。初始化角色→模型的映射：运行 `/setup-p3`。正式干活时用 `/p3-mode`。卡住或不确定该用哪个 skill 时，问 `/p3-help`。机制层面的用法：`delegate_task`、`t3_thread_launch`、`watch_pull_request`、`schedule_task`、`preview_*` / `device_*`、`t3_thread_read` / `t3_thread_search`。按 A 的对照法验证。验收重点：流程完整度、并行安全性、等待成本、无人值守、返工率。
 
 ### 做法 AC：用 skill-creator-plus 审计并改进自己的 SKILL.md（可选，按 A 的对照法验证）
 
-定位：robonuggets/skill-creator-plus 是一个免费的 Claude「技能（skill）」审计/构建/改进工具，MIT 许可，31 stars。用法是把它指向一个技能（或整个技能文件夹），它先输出 findings report：每条规则标 pass / fail / not applicable，附文件与行号的证据，以及建议的修法；在你指定要应用哪些修复之前，它不动任何文件。仓库自述共 46 条规则，按检查方式分三类：**Script**（validator 脚本判定）、**Script + read**（脚本标出候选，Claude 在上下文中确认）、**Read**（Claude 审计时判断并引用证据），另有少量标为 **Advice**。规则分族：FM/DS（frontmatter 与 description）、ST（结构与渐进披露）、CT（内容质量）、WF（工作流）、SC（脚本）、NM（适配新模型）、HK（hook）、TS（测试与评估）、LB（库级冲突）。
-
-1. 前提：Claude Code 环境（有 `~/.claude/skills` 或项目内 `.claude/skills`），或 claude.ai 账号（validator 需要打开代码执行）；本地需 Python 3.8 或更新版本，validator 只用标准库，Windows/Mac/Linux 均可。文件夹名必须是 `skill-creator-plus`。
-
-2. 安装到 Claude Code（对所有项目生效）：
-
-   ```bash
-   git clone https://github.com/robonuggets/skill-creator-plus ~/.claude/skills/skill-creator-plus
-   ```
-
-3. 或只对单个项目生效（在项目目录下执行）：
-
-   ```bash
-   git clone https://github.com/robonuggets/skill-creator-plus .claude/skills/skill-creator-plus
-   ```
-
-   Windows 上 `~/.claude` 就是用户目录下的 `.claude` 文件夹；从 GitHub 下载 ZIP 解压后复制进去也可以。
-
-4. 要在 claude.ai 上用：把 `SKILL.md`、`references/`、`scripts/`、`LICENSE` 打成 zip（`examples/` 可以不放），在 claude.ai 设置的 Skills 里上传；frontmatter 只使用 claude.ai 接受的字段；validator 需要开启代码执行。
-
-5. 用自然语言触发，三种模式：
-
-   - AUDIT：说 “Audit my deploy skill against Anthropic's rules.” / “Check every skill in ~/.claude/skills and tell me what to fix first.” → 得到一张报告：每规则一行，失败优先，修复项排好序。你挑选之前不编辑任何文件。
-   - NEW：说 “Make this a skill, we write release notes like this every Friday.” → 先给测试提示，然后生成一个能通过 validator 的新技能文件夹。
-   - REFINE：说 “The report skill keeps forgetting the date filter. Fix the skill.” → 规则围绕它的理由重写，通常比原来更短。
-
-   “Improve my skill for Opus 5.5” 会先跑 AUDIT，再按你批准的修复跑 REFINE。
-
-6. 先拿机械检查的基线，再动手改：
-
-   ```bash
-   python3 scripts/validate_skill.py path/to/my-skill              # 一个技能
-   python3 scripts/validate_skill.py --all ~/.claude/skills         # 文件夹里所有技能，输出一张表
-   python3 scripts/validate_skill.py path/to/my-skill --json       # 机器可读
-   python3 scripts/validate_skill.py path/to/my-skill --ban-em-dash # 额外标记破折号
-   ```
-
-   退出码：`0` 无 error（warning 和 note 可以存在）、`1` 发现 error、`2` 跑不起来。每条 finding 带一个规则 ID。`--all` 的汇总表形如：
-
-   ```text
-   Skill       Errors  Warnings  Notes  Rules with errors or warnings
-   ----------  ------  --------  -----  -----------------------------
-   pdf-helper       8        11      6  FM1 FM2 ST4 ST5
-   ```
-
-7. 新建技能时先出骨架：
-
-   ```bash
-   python3 scripts/init_skill.py my-new-skill --path ~/.claude/skills --refs --scripts
-   ```
-
-8. 按报告逐条修：先清 error 再管 warning（README 示例结尾即 “fix the errors first”）；每条修复都能定位到文件与行号。
-
-9. 把「每次运行都必须成立」的规则从正文挪进 hook（frontmatter 的 `hooks:`），因为正文可能被跳过或被 compaction 截断（规则 HK1）。相应地把最重要的指令放在 `SKILL.md` 最靠前的位置——Claude Code 的 compaction 只保留前 5,000 tokens（规则 ST2）。
-
-10. 验证环节要显式写出来，并优先让一个全新上下文的 Claude 当 checker，而不是让模型自审（规则 NM5）；不要要求模型在回复里写出推理过程，改要答案或对答案的简短解释（NM2）。
-
-11. 可从规则表直接照做的几条硬指标（原文列出，可原样当检查项）：description 用第三人称、不超过 1,024 字符、不含 XML 标签（DS1–DS2）；`SKILL.md` 正文少于 500 行（ST1）；引用文件只从 `SKILL.md` 往下一层（ST4）；超过 100 行的引用文件前 50 行内要有内容清单（ST5）；路径统一用正斜杠（ST7）；不写时效性信息（CT3）；不留 `TODO`/`FIXME`/空占位（CT9）；复杂任务用带 done when 行和回退行的清单（WF1）；至少 3 个评估、先建评估并留基线（TS1）。
-
-12. 按 A 的对照法验证：挑 1–2 个你已经在用的 Claude 技能，装好后跑 `python3 scripts/validate_skill.py --all ~/.claude/skills` 和 `--json` 存基线；只对其中一个技能说 Audit 并改 2–3 条，复跑同一命令；另一个技能不动作对照。再用几个真实请求试触发正确率；同一真实任务在全新会话里开/关技能跑 A/B（对应 TS2、TS3）。已知局限：材料只有 README，没有源码与 `references/` 正文，validator 是否真与 46 条规则一致无法核实；NM1–NM5 等关于新模型的论断仅为作者主张，先测再删；`--ban-em-dash` 是额外标记破折号，按需使用。
+定位：robonuggets/skill-creator-plus 是一个免费的 Claude 技能审计/构建/改进工具。用法是把它指向一个技能，先输出 findings report；在你指定要应用哪些修复之前，它不动任何文件。前提：Claude Code 环境或 claude.ai 账号；本地需 Python 3.8+。安装到 Claude Code：`git clone https://github.com/robonuggets/skill-creator-plus ~/.claude/skills/skill-creator-plus`。或只对单个项目生效。要在 claude.ai 上用：把 `SKILL.md`、`references/`、`scripts/`、`LICENSE` 打成 zip，在 claude.ai 设置的 Skills 里上传。用自然语言触发，三种模式：AUDIT、NEW、REFINE。先拿机械检查的基线，再动手改。新建技能时先出骨架。按报告逐条修。把「每次运行都必须成立」的规则从正文挪进 hook。验证环节要显式写出来。可从规则表直接照做的几条硬指标。按 A 的对照法验证。已知局限。
 
 ### 做法 AD：让 agent 把结论、方案对比与流程解释渲染成一页可离线打开的 HTML（可选，按 A 的对照法验证）
 
-定位：QingYunA/answer-me-with-html 是一个 agent skill：安装后按平常方式提问，agent 只写一份简短的 Markdown 草稿，交给 skill 自带的 CLI（`am`）渲染成一页单文件、可离线打开的 HTML。README 称约 50 ms 后得到页面。核心分工是**模型写内容（Markdown），CLI 负责布局、配色、绘图**。README 给出的比例是：手写 HTML 时模型写的 token 里约 47% 是 SVG 坐标与路径、15% 是 CSS、17% 是 HTML 标签、21% 才是文本；用这个 skill 后模型只写那 21% 对应的 Markdown 草稿。支持通过安装器接入 70+ 种 agent，README 明确列出 Claude Code、Codex、Cursor、OpenCode、Pi。页面保存在 `~/.answer-me-with-html/pages/`，每页内嵌生成它的 Markdown，右上角按钮可切换主题/明暗、填写回复、复制源 Markdown。
+定位：QingYunA/answer-me-with-html 是一个 agent skill。前提：装 Node.js 20 或更新版本，不需要 `npm install`，CLI 已捆绑在 skill 里。让 agent 自己装：把 `Install Answer me with HTML: read https://raw.githubusercontent.com/QingYunA/answer-me-with-html/main/INSTALL.md and follow it.` 原样贴进 agent。或走 Claude Code 插件、`npx skills add`、手动 clone + cp。验证安装：用 TCP 三次握手的问题问一次。使用：装完不用额外设置，照常提问即可。开启 always-on：把规则原文贴给 agent，让它写进 rules 文件。改配置：用 slash command 或 `am`。写草稿。按信息形状选组件。打开严格写作检查。更新与清理。要解释视频。自己复现基准。已知局限。
 
-1. 前提：装 Node.js 20 或更新版本。不需要 `npm install`，CLI 已捆绑在 skill 里。agent 需要能执行 shell 命令。
+### 做法 AE：把自己的 SKILL.md 校验、打包并分发到多端（可选，按 A 的对照法验证）
 
-2. 让 agent 自己装（README 推荐）：把下面这段原样贴进 Claude Code / Codex / Cursor / OpenCode 或其他 agent。
+定位：`ishuagrawal/skills` 是一个开源的 Agent Skills 集合（MIT，33 stars），同时把自己做成 Claude Code 插件市场（marketplace 名 `ishuagrawal`，插件名 `skills`，版本号在 `.claude-plugin/plugin.json`）。每个技能 = 一个文件夹，含 `SKILL.md` 加它需要的 `scripts/`、`references/`、`assets/`。声称兼容 Claude Code 以及任何支持开放 Agent Skills 格式的 agent。仓库目前只有 1 个技能 `video-by-reference`，但更可迁移的是它的维护工具链：`scripts/check_skills.py` 校验每个 `SKILL.md` 是否符合规范；`scripts/package_skills.sh` 打 `dist/<skill>.zip` 供 claude.ai / API 上传；`scripts/release.sh` bump 版本、校验、commit、tag、push；`.github/workflows/` 每次 push 校验，打 tag 时给 release 附 zip。
 
-   ```
-   Install Answer me with HTML: read https://raw.githubusercontent.com/QingYunA/answer-me-with-html/main/INSTALL.md and follow it.
-   ```
+做法 AE-1：安装现成技能（如果你只是想试它）。
 
-   按 README 描述，`INSTALL.md` 是写给 agent 看的：在 Claude Code 里装插件、在其他 agent 里装 skill，保留已有安装，不向你提问，最后用 TCP 三次握手页面自检并只给一份报告。如果你的 agent 打不开链接，用：
+1. Claude Code（推荐路径）。前提：已安装 Claude Code。在会话内执行：
 
-   ```bash
-   npx -y skills add QingYunA/answer-me-with-html -g -y -a <your agent name>
-   ```
+```text
+/plugin marketplace add ishuagrawal/skills
+/plugin install skills@ishuagrawal
+/reload-plugins
+```
 
-   （Claude Code 用 `-a claude-code`。）
+或从 shell：
 
-3. 或走 Claude Code 插件：在 Claude Code 内运行。
+```bash
+claude plugin marketplace add ishuagrawal/skills
+```
 
-   ```
-   /plugin marketplace add QingYunA/answer-me-with-html
-   /plugin install answer-me-with-html@answer-me-with-html
-   ```
+```bash
+claude plugin install skills@ishuagrawal --scope user
+```
 
-4. 或一条命令装：
+装好后 Claude 会在你的请求匹配到技能时自动选用；也可以直接调用，例如 `/skills:video-by-reference`。
 
-   ```bash
-   npx skills add QingYunA/answer-me-with-html
-   ```
+2. 其他 agent（Cursor、Codex、OpenCode、Gemini CLI 等）。前提：能用 `npx`，走第三方 vercel-labs 的 skills CLI：
 
-   它会问装进哪些 agent（安装器 vercel-labs/skills 支持 70+ agent）。
+```bash
+npx skills add ishuagrawal/skills
+```
 
-5. 或手动装：把 `skills/answer-me-with-html` 目录拷进你的 agent skill 目录。Claude Code 的写法：
+加 `--skill video-by-reference` 只装单个技能；加 `-a claude-code`（或其它 agent 名）指定目标；加 `-g` 装到用户级而不是当前项目。
 
-   ```bash
-   git clone --depth 1 https://github.com/QingYunA/answer-me-with-html.git /tmp/answer-me-with-html
-   cp -R /tmp/answer-me-with-html/skills/answer-me-with-html ~/.claude/skills/answer-me-with-html
-   ```
+3. claude.ai 与 Claude API。前提：claude.ai 需要 Pro/Max/Team/Enterprise 计划并开启 code execution。从 latest release 下载技能的 zip（例如 `video-by-reference.zip`），claude.ai 里打开 Settings，找到 Skills 区域上传；API 侧用同一个 zip 通过 Skills API（`/v1/skills`）上传，配合 code-execution 工具使用。更新＝下载新 zip 重新上传。
 
-   其他 agent 的 skill 目录：Codex `~/.codex/skills/`、Cursor `~/.cursor/skills/`、OpenCode `~/.config/opencode/skill/`。
+4. 手动安装。把 `skills/<name>/` 拷到 `~/.claude/skills/`（所有项目生效）或 `.claude/skills/`（单个项目）。
 
-6. 验证安装：用 TCP 三次握手的问题问一次，README 说 `INSTALL.md` 本身就以这个页面作为自检结果。
+5. 更新。Claude Code 里运行 `/plugin marketplace update ishuagrawal`，然后 `/reload-plugins`；也可以开自动更新：打开 `/plugin` → Marketplaces → 选 ishuagrawal → Enable auto-update（第三方 marketplace 默认关闭）。用 `npx skills` 装的则跑：
 
-7. 使用：装完不用额外设置，照常提问即可。README 给的示例：
+```bash
+npx skills update
+```
 
-   ```
-   > Explain the TCP three-way handshake
-   > Map out how the modules in this repo fit together
-   > Redis or Memcached for our cache?
-   ```
+6. 如果你要试 `video-by-reference`，先确认本地满足：Node.js 22+、`ffmpeg` 和 `ffprobe` 在 `PATH` 上、Python 3 带 `numpy`、一个 headless Chromium（首选 Playwright 的 `chrome-headless-shell`，Google Chrome 也可以）。它最适合在 Claude Code 或其他本地 agent 里跑；claude.ai 和 API 沙箱没有网络访问、也可能缺 Chrome 或 ffmpeg，所以能读这个技能但可能渲染不出来。
 
-   agent 自己判断值不值得出页面：相关概念、多步流程、多方案对比才出；也可以用一句话触发：“explain it in HTML”。一句话问题（例如“怎么用 `ls` 显示隐藏文件”）不会出页面。
+做法 AE-2：用这套流程分发你自己的技能（材料里更可迁移的部分）。
 
-8. 开启 always-on（README 推荐，默认关闭）：把下面这段贴给 agent，让它把规则写进 rules 文件（如 `~/.claude/CLAUDE.md` 或 `AGENTS.md`）。
+1. 新建 `skills/<name>/SKILL.md`。前提：frontmatter 的 `name` 必须和文件夹名一致（只允许小写字母、数字、连字符）；`description` 最多 1024 字符；frontmatter 只保留 `name`、`description`、`license`、`compatibility`、`metadata`、`allowed-tools`——这样同一份文件也能上传到 claude.ai 和 API。
 
-   ```
-   Turn on always-on mode for Answer me with HTML: add a global rule — "[answer-me-with-html always-on] Whenever a reply gives a conclusion, summary, plan, comparison, review or explanation, even a short one, also make a page with the answer-me-with-html skill (2 to 4 panels for routine answers), render it with --no-open before you write the reply, and end the reply with a file:// link to the page. Skip casual chat, one- or two-sentence replies with no conclusion, pure command output, and requests for plain text."
-   ```
+2. 在 README 的技能表格里加一行。
 
-   规则生效后每次给出结论/总结/计划/对比/评审/解释都会附一页（常规回答 2–4 个面板），页面不自动弹开、不打断；闲聊、无结论的一两句话、纯命令输出、明确要纯文本的仍照旧。README 另注：Claude Code 在 plan mode 下不生成页面。
+3. 校验：
 
-9. 改配置：不用手改配置文件，用 slash command 或 `am`。
+```bash
+python3 scripts/check_skills.py
+```
 
-   | 位置 | 方式 |
-   | :--- | :--- |
-   | Claude Code（插件安装） | `/answer-me-with-html:config` 交互改；`/answer-me-with-html:config open off` 直接改 |
-   | 任意 agent | `/answer-me-with-html config open off`，或直接说“stop opening the browser” |
-   | 终端 | `am config` 查看，`am config set open off` 修改，`am config reset` 还原 |
+```bash
+claude plugin validate . --strict
+```
 
-   可配置项：`open`、`theme`、`mode`（light/dark）、`style`（写作检查）、`update_check`、`voice`（视频旁白）。
+4. 发布：
 
-10. 写草稿（了解格式即可，通常由 agent 自动写）：模型写的就是这种结构，frontmatter + fenced 图形块，坐标由 CLI 用 dagre 计算、按标签宽度排布。
+```bash
+./scripts/release.sh 1.1.0
+```
 
-    ````markdown
-    ---
-    title: TCP three-way handshake
-    ---
-    ## A Three-way handshake {span=2}
-    ```sequence num
-    Client -> Server: SYN, seq=x
-    Server -> Client: SYN+ACK, seq=y, ack=x+1
-    Client -> Server: ACK, ack=y+1
-    note Client, Server: ESTABLISHED
-    ```
+该脚本会 bump `.claude-plugin/plugin.json` 里的 `version`、校验、commit、打 tag `v1.1.0` 并 push；tag 会触发 GitHub release，给每个技能附上新的 zip。版本用 semver：修 bug 用 patch，新增技能或功能用 minor，破坏性变更用 major。注意：Claude Code 只在 `version` 字符串变化时才把一次 push 当成新版本，所以务必通过脚本发布。
 
-    ## C State changes {span=2}
-    ```flow LR
-    (CLOSED) -> LISTEN: passive open
-    LISTEN -> SYN_RCVD: get SYN / send SYN+ACK
-    SYN_RCVD -> *ESTABLISHED: get ACK
-    ```
-    ````
+5. 打包给 claude.ai / API 上传时，用 `scripts/package_skills.sh` 生成 `dist/<skill>.zip`，不要手动压整个仓库。
 
-    组件用法可查 `am help <component>`。完整语法（frontmatter、`span`、`rows`、raw `html`/`svg` 块、不走 agent 直接调 CLI）在 `docs/reference.md`。
+6. 到第二个环境验证「写一次、多端可用」：在另一台机器或另一个 agent 上运行 `npx skills add <你的仓库>`，或走 Claude Code 插件市场添加与安装；claude.ai 侧下载新 zip 重新上传。预期：不用手动拷 `~/.claude/skills/` 就能装上。
 
-11. 按信息形状选组件（README 给的选择表）：`flow` 架构/调用链/判断分支；`sequence` 多方随时间往返的消息；`tree` 目录/模块/分类；`timeline` 历史/版本/阶段；`limits` 某值对上限；`annot` 逐句批注；`kv` 元数据、图签栏；`callout` 结论/提示/警告；`ask` 在页面上做的决定（agent 的建议预选中）；代码块可 `src=` `lines=` 引用你文件里的真实代码；表格中写 `ok` / `no` / `warn` 会渲染成 ✓ ✗ !。
-
-12. 打开严格写作检查（可选）：默认只警告。改为拒收不合格草稿：`/answer-me-with-html:config style strict`，或在单个草稿里写 `style:`。检查项为机器可判的部分：句长、用词、被动语态、常见中文错别字与含糊词（规则改编自 ASD-STE100）。
-
-13. 更新与清理：更新是手动的，agent 每周查一次 GitHub 版本号并告知；更新时说“update answer-me-with-html”。页面会堆在 `~/.answer-me-with-html/`，说“clean up the pages”，agent 删前会先问；也可用 `am clean`。
-
-14. 要解释视频（可选）：说“make a 3b1b-style video on the TCP handshake”。草稿与页面同款，外加每拍一行旁白：
-
-    ````markdown
-    ## Both sides wait
-    ```sequence
-    Client -> Server: SYN
-    Server -> Client: SYN-ACK
-    ```
-    > The client sends a SYN to ask for a connection.
-    > The [Server] answers with a SYN-ACK.
-    ````
-
-    `am video` 生成播放页：图随旁白逐步构建，镜头跟随方括号里的节点，语音内嵌、可离线播放；加 `--mp4` 导出视频文件。README 明确：agent 只在你要求时才做视频。
-
-15. 自己复现基准（可选）：仓库带基准脚本。
-
-    ```bash
-    git clone https://github.com/QingYunA/answer-me-with-html.git && cd answer-me-with-html
-    npm install
-    node bench/corpus.mjs   # README 称每次给出同样的数字
-    npm test                # 跑测试
-    AM_E2E=1 npm test       # 额外跑端到端视频测试（系统 TTS、Chrome、ffmpeg）
-    npm run smoke:install   # 真实安装并校验插件清单（需要网络）
-    npm run build           # 改 src/ 后重建 skills/answer-me-with-html/scripts/am.mjs
-    npm run snapshot        # 与 origin/main 比对渲染出的 HTML
-    ```
-
-    已知局限：约 50 ms 的渲染时间、手写 HTML 的 token 比例与「用 skill 后只写 21%」都来自作者自测的 9 个页面样本，属作者口径；本次材料在「协作方式」处被截断，`docs/reference.md` 的完整语法与不走 agent 直接调 CLI 的用法未提供。
+7. 更新链路：改一版后用 `/plugin marketplace update ishuagrawal` + `/reload-plugins` 或 `npx skills update` 拿新版本，用来验证「只有 `version` 变化才算新版本」这条说法。
 
 ## 怎么判断变好了
 
@@ -1489,12 +347,13 @@ README 给出质量门禁 `skill-seekers quality output/react/ --threshold 7`，
 - Markdown 技能类（做法 V）：装入 `explain`，重启后提一个解释类请求，观察是否按 `description` 自动加载；再打开文件读实际提示词。
 - 元技能类（做法 W）：选一个会连续用几天的项目，装好并在 `CLAUDE.md` 加激活指令，正常干活 3–5 个会话，再安排一次复核会话；先过生效验证，再看产出。
 - 全栈技能包类（做法 X）：选一个单点任务和一个链式任务，各先在不装插件的普通 Claude Code 做一次、再装插件做一次；记录激活命中/未命中次数、加载的 reference 是否相关、返工轮次与整链耗时。
-- 学术写作类（做法 Y）：用一段自己真实的中文讨论段落（含数字、引文编号、置信区间或不确定性表述），另存为 `original.md`；按第 2 步装好后用中文提示词跑一轮，输出另存为 `revised.md`；运行 `python3 scripts/content_lock.py original.md revised.md --strict`，人工逐条核对被标记的命题差异（主体、对象、方向、时间、条件、引文支持位置）；有条件时做一次不使用 Skill 的同提示词对照，以及一次人工盲评（原文没有提供这两类数据，需自建）。
+- 学术写作类（做法 Y）：用一段自己真实的中文讨论段落（含数字、引文编号、置信区间或不确定性表述），另存为 `original.md`；装好后用中文提示词跑一轮，输出另存为 `revised.md`；运行 `python3 scripts/content_lock.py original.md revised.md --strict`，人工逐条核对被标记的命题差异；有条件时做一次不使用 Skill 的同提示词对照，以及一次人工盲评。
 - 路由类（做法 Z）：装好后用 `Use poteto-mode to fix <该 bug 的现象>` 跑一个当前会失败、且你能独立复现的小 bug，记录是否先复现失败、是否用 `how`/`why` 调查、是否在跨函数边界时引入 `architect`、最终是否交付失败改通过的证据；与「同一 bug 用普通 Claude Code 会话」做对照。
 - 角色类（做法 AA）：按 division 只装少量 agent（如 code-reviewer、frontend-developer）进你在用的 Claude Code 或 Cursor，用真实任务跟默认提示做对照，记录激活命中、人工纠正次数、返工轮数。
 - T3 Code 编排类（做法 AB）：先用 `./install.sh --project /path/to/repo` 装到一个不重要仓库，跑 `/setup-p3` 检查 `p3-models.md` 映射，再用一个小 bug fix 或小 feature 走 `/p3-mode`；记录流程是否按 playbook 走完、多 worker 的 worktree/分支冲突次数、`watch_pull_request` 是否真的免轮询、`schedule_task` 是否在无人值守时跑完，以及相比原做法的返工轮数。
 - 审计类（做法 AC）：挑 1–2 个你已经在用的 Claude 技能，装好后跑 `python3 scripts/validate_skill.py --all ~/.claude/skills` 和 `--json` 存基线；只对其中一个技能说 Audit 并改 2–3 条，复跑同一命令；另一个技能不动作对照。
 - 结论页类（做法 AD）：在能执行 shell 的 agent 上装好，先用两三个复杂问题（概念解释、仓库模块梳理、技术选型）对比「直接让模型写 HTML」与「模型写 Markdown 草稿 + CLI 渲染」的输出 token、耗时和页面可读性；再挑一个真实的多步流程或选型问题，看它是否按规则出页、是否不打断回复；最后再考虑开 always-on。
+- 分发类（做法 AE）：路径 A 用现成技能，在本地 Claude Code 里执行 `npx skills add ishuagrawal/skills --skill video-by-reference` 或走插件市场命令，然后拿一段短视频跑一次，看成片是否可用。路径 B 更推荐：照做法 AE-2 建一个自己的 `skills/<name>/SKILL.md`，跑 `python3 scripts/check_skills.py` 和 `claude plugin validate . --strict`，通过后 `./scripts/release.sh 0.1.0`，再到另一台机器上 `npx skills add <你的仓库>` 装上，验证「写一次、多端可用」。
 
 可观察的指标：
 
@@ -1516,12 +375,13 @@ README 给出质量门禁 `skill-seekers quality output/react/ --threshold 7`，
 - 做法 V：是否被自动触发（不显式调用也能加载）；产出是否符合 `description` 描述的形态；同类请求重复多次是否稳定；相比不用技能时自己写的提示词长度是否明显缩短。
 - 做法 W：观察条数、被接受并装入的技能改动数、新建技能候选数；同一个坑是否还在多个项目里被反复写进 project memory。
 - 做法 X：激活是否命中（被激活的技能是否是你预期的那个、加载的 reference 是否相关）；返工轮次；交付物质量；流程链收益；`/common-ground` 暴露出的、你确实没交代且会影响结果的假设数。
-- 做法 Y：模板化表达减少——空泛开头、重复收尾、机械段落的数量是否下降；事实与证据不变——数字、引文编号、置信区间、不确定性表述、术语是否原样保留，`content_lock.py --strict` 是否无未解释的命题变化；无新造事实；作者声音保留——与作者样本/术语表的一致性是否提高；交付质量——修订稿是否仍满足章节结构、篇幅下限等硬性要求。
+- 做法 Y：模板化表达减少；事实与证据不变；无新造事实；作者声音保留；交付质量。
 - 做法 Z：是否产出可核验的失败→通过证据；是否减少人工纠正路由或流程的次数；最终 diff 的规模与新增抽象是否更小；达到通过状态所需往返轮数是否下降；试用 Codex 时 routing hook 信任后是否确实在任务开始时触发路由。
 - 做法 AA：角色激活是否命中；同一任务与默认提示相比返工轮数、人工纠正次数、首稿可用率；OpenCode 下是否因 119 上限静默丢弃 agent。
 - 做法 AB：`/p3-mode` 是否按 playbook 走完；多 worker 的 worktree/分支冲突次数；`watch_pull_request` 是否真的免轮询；`schedule_task` 是否在无人值守时跑完；同一类任务返工轮数、人工修正次数是否下降；交付证据是否让你少做一轮核对。
-- 做法 AC：validator 退出码是否从 `1` 变 `0`；该技能 error 数是否归零、warning 数是否下降（同一命令前后对比）；description 改成第三人称并写清 what + when 后触发正确率是否提高；REFINE 后 `SKILL.md` 是否更短；同一真实任务开/关技能 A/B 是否更稳定（对应 TS2）。
-- 做法 AD：同一问题的输出 token 与耗时（对照直接让模型写 HTML）；页面是否单文件、可离线打开；agent 是否只在相关概念/多步流程/多方案对比时出页；always-on 后常规回答是否稳定在 2–4 个面板、页面不自动弹开、回复末尾有 `file://` 链接；闲聊、纯命令输出、明确要纯文本的请求是否仍照旧不出页；`node bench/corpus.mjs` 在你机器上给出的数字是否与 README 一致。
+- 做法 AC：validator 退出码是否从 `1` 变 `0`；该技能 error 数是否归零、warning 数是否下降；description 改成第三人称并写清 what + when 后触发正确率是否提高；REFINE 后 `SKILL.md` 是否更短；同一真实任务开/关技能 A/B 是否更稳定。
+- 做法 AD：同一问题的输出 token 与耗时；页面是否单文件、可离线打开；agent 是否只在相关概念/多步流程/多方案对比时出页；always-on 后常规回答是否稳定在 2–4 个面板、页面不自动弹开、回复末尾有 `file://` 链接；闲聊、纯命令输出、明确要纯文本的请求是否仍照旧不出页；`node bench/corpus.mjs` 在你机器上给出的数字是否与 README 一致。
+- 做法 AE：安装成功率——分别在 Claude Code、另一个 agent、claude.ai 上各试一次；校验结果——`check_skills.py` 与 `claude plugin validate . --strict` 是否 0 错误通过；分发效率——同一技能在第二个环境能否不手动拷贝就装好，比手动拷 `~/.claude/skills/` 省多少步骤；任务收益——用你的技能完成一次真实任务，对比手动完成的时间与返工次数；更新链路——改一版后用 `/plugin marketplace update ishuagrawal` + `/reload-plugins` 是否能拿到新版本，用来验证「只有 `version` 变化才算新版本」这条说法。
 
 反向指标：
 
@@ -1543,9 +403,9 @@ README 给出质量门禁 `skill-seekers quality output/react/ --threshold 7`，
 - 装了 `explain` 每次都要显式点名才触发，先改 `description` 或改用法。
 - 装完 task-observer 跑了几个会话、`skill-observations/observation-log/` 仍不存在，先补激活指令或 session-start hook。
 - 做法 X 里技能没被激活，先检查请求是不是没带具体框架/技术名和具体任务；激活命中率低或返工没下降，按取舍规则降级为 study。
-- 做法 Y：如果命题方向被改（例如把「未下降」强化成「保持不变」）却没被 `content_lock.py --strict` 拦下，不要直接采用修订稿，先逐条人工核对。
+- 做法 Y：如果命题方向被改却没被 `content_lock.py --strict` 拦下，不要直接采用修订稿，先逐条人工核对。
 - 做法 Y：如果它添加了原稿没有的事实或观点，按提示词里「不要添加新事实」的核对项回退。
-- 做法 Y：如果 DOCX 交付后样式、批注、修订记录、脚注或文本框丢了，先换文档工具走可编辑 Word 流程，不要把抽取结果当最终交付。
+- 做法 Y：如果 DOCX 交付后样式、批注、修订记录、脚注或文本框丢了，先换文档工具走可编辑 Word 流程。
 - 做法 Y：如果期待它有盲评、模型间对照或检测器分数——作者自己声明没有，先自建基线和盲评再判断。
 - 做法 Z：若产出没有失败→通过证据、或 hook/agent 派发不生效，退回 study，只借鉴「路由 + 复现/调查/委派/重跑失败用例」的流程骨架。
 - 做法 AA：把角色目录当效果证据，或一次装全部 agent 导致上下文占用过高；OpenCode 装超 119 个 agent，先卸掉多余角色。
@@ -1553,14 +413,18 @@ README 给出质量门禁 `skill-seekers quality output/react/ --threshold 7`，
 - 做法 AC：把 `validate_skill.py` 的退出码 0 当成效果结论——它只证明格式与规则合规，不证明产出更好；效果要自己做 A/B。
 - 做法 AC：跳过基线直接改，先跑 `--all` 和 `--json` 存基线，再改 2–3 条并复跑对比，否则说不清哪条改动有效。
 - 做法 AC：把 NM1–NM5 等关于新模型的论断当事实——材料里只有论断和指向官方文档的链接，没有可交叉验证的细节；先测再删。
-- 做法 AD：开了 always-on 但每句话都出页、或页面对结论没有增量，先按规则里跳过的情形（闲聊、无结论的一两句话、纯命令输出、纯文本请求）收紧，不要继续加提示。
-- 做法 AD：把 README 的 token 比例（47% SVG、15% CSS、17% HTML、21% 文本）当成本项目的实测收益，先自己跑 `node bench/corpus.mjs`，再做一轮有/无对照。
+- 做法 AD：开了 always-on 但每句话都出页、或页面对结论没有增量，先按规则里跳过的情形收紧，不要继续加提示。
+- 做法 AD：把 README 的 token 比例当成本项目的实测收益，先自己跑 `node bench/corpus.mjs`，再做一轮有/无对照。
+- 做法 AE：把 `check_skills.py` 或 `claude plugin validate . --strict` 的 0 错误当成效果结论——它们只证明格式与规范合规，不证明技能产出更好；效果仍要自己做 A/B。
+- 做法 AE：不用 `./scripts/release.sh` 发布，只手动改文件或打 tag，导致 `version` 字符串没变，Claude Code 不把这次 push 当成新版本。
+- 做法 AE：把 `video-by-reference` 当已验证的成片能力——本次只抓到 README，`SKILL.md` 正文未抓到，仓库只有 1 个技能、33 stars，先只当线索。
+- 做法 AE：在 claude.ai 或 API 沙箱里指望 `video-by-reference` 渲染出视频——它们没有网络访问、可能缺 Chrome 或 ffmpeg，能读技能但可能渲染不出来。
 
-注意：`doctor`、`validate`、`npm test`、`claude plugin validate`、`npx @anthropics/skills-ref validate`、`archify doctor`、`validate --json`、`python -m unittest discover -s tests`、`validate_skill.py` 这类检查只能证明「技能或 mod 装得上、格式合法、不带危险命令、图能通过校验、回归测试能过、技能符合规则表」，不能证明「产出更好」。效果必须自己对照。做法 Y 的 `validate_package.py`、`unittest`、`content_lock.py --strict` 同理，作者明确说它们各自只证明其覆盖范围。做法 AC 的 `validate_skill.py` 只覆盖它那 46 条规则，退出码 0 不代表技能产出更好。做法 AD 的 `INSTALL.md` 自检页面只证明装上了，不证明它的出页判断和省 token 在本项目成立。
+注意：`doctor`、`validate`、`npm test`、`claude plugin validate`、`npx @anthropics/skills-ref validate`、`archify doctor`、`validate --json`、`python -m unittest discover -s tests`、`validate_skill.py` 这类检查只能证明「技能或 mod 装得上、格式合法、不带危险命令、图能通过校验、回归测试能过、技能符合规则表」，不能证明「产出更好」。效果必须自己对照。做法 Y 的 `validate_package.py`、`unittest`、`content_lock.py --strict` 同理，作者明确说它们各自只证明其覆盖范围。做法 AC 的 `validate_skill.py` 只覆盖它那 46 条规则，退出码 0 不代表技能产出更好。做法 AD 的 `INSTALL.md` 自检页面只证明装上了，不证明它的出页判断和省 token 在本项目成立。做法 AE 的 `check_skills.py` 与 `claude plugin validate . --strict` 只证明规范与格式，不证明视频成片或任何任务产出更好。
 
 ## 常见坑
 
-- 整体 adopt：一次装多个技能包，导致上下文过载或规则冲突。先只装一个，做法 A、H、I、J、K、L、N、Q、R、S、T、U、V、X、Y、Z、AA、AB、AC、AD 同理。
+- 整体 adopt：一次装多个技能包，导致上下文过载或规则冲突。先只装一个，做法 A、H、I、J、K、L、N、Q、R、S、T、U、V、X、Y、Z、AA、AB、AC、AD、AE 同理。
 - 一次装整个插件市场：94 个插件、202 个 agent、184 个 skill 是目录规模，不是使用建议。
 - 重复安装：同一项目里同时用项目级安装和插件市场装同一个技能包，skills 会出现两份。
 - 两条安装路径都装（做法 R）：原文明确说两个都装会让每个技能出现两份；只选一条。
@@ -1587,8 +451,8 @@ README 给出质量门禁 `skill-seekers quality output/react/ --threshold 7`，
 - 只安装不激活、在安装的那个会话里验证、把缺失的观察日志当成技能质量差、只装 `SKILL.md`、自己动手改已安装的技能去「接上」观察结果、指望它在技能很少时也划算（做法 W）。
 - 请求里不带具体框架和具体任务、把仓库徽章的 CI 状态或 11725 stars 当效果证据、期待 README 给出自动激活的准确率、不问清每个技能还需要什么、没配 Atlassian MCP server 就跑第 6 步、以为工作流会自动推进（做法 X）。
 - 把作者自制的合成案例当效果证据（做法 Y）：四组案例是「刻意加入模板化表达的合成演示」，研究、数据、引文编号、投稿改动均为虚构，不能证明一般写作质量提升。
-- 把 `content_lock.py` 的通过当「所有含义都不变」（做法 Y）：作者声明这些检查各自只证明其覆盖范围，不能证明所有含义不变或检测器分数。
-- 在非 Codex 平台直接照搬调用语法（做法 Y）：README 的兼容性按官方文档核对，实际编辑验证只在本地 Codex 会话完成；非 Codex 平台的安装与调用细节在未提供的 `docs/agent-platforms.md` 里。
+- 把 `content_lock.py` 的通过当「所有含义都不变」（做法 Y）：作者声明这些检查各自只证明其覆盖范围。
+- 在非 Codex 平台直接照搬调用语法（做法 Y）：README 的兼容性按官方文档核对，实际编辑验证只在本地 Codex 会话完成。
 - 只装 `SKILL.md` 不装 `references/`（做法 Y）：仅文本平台必须同时提供参考文件，否则规则会缺上下文。
 - 用 DOCX 抽取结果当可编辑 Word 交付（做法 Y）：抽取不保留所有样式、批注、修订记录、脚注或文本框。
 - 从 PDF 抽取正文却不装 Poppler（做法 Y）：需要 `pdftotext`。
@@ -1607,6 +471,14 @@ README 给出质量门禁 `skill-seekers quality output/react/ --threshold 7`，
 - 做法 AD：以为装完会自动更新、以为 Claude Code plan mode 下也会出页面；更新是手动的，要主动说“update answer-me-with-html”。
 - 做法 AD：手改配置文件去调 `open` / `theme` / `mode` / `style`；用 `/answer-me-with-html:config ...` 或 `am config set ...`，改前先 `am config` 看当前值。
 - 做法 AD：不满足 Node.js 20+、或在不允许执行 shell 的宿主上硬装；`INSTALL.md` 自检通过只能说明装得上，出页判断和省 token 要自己对照。
+- 做法 AE：把 `check_skills.py` 或 `claude plugin validate . --strict` 的 0 错误当成效果结论——它们只证明规范与格式合规，不证明技能产出更好。
+- 做法 AE：frontmatter 写多余字段，导致同一份 `SKILL.md` 不能上传到 claude.ai 和 API；只保留 `name`、`description`、`license`、`compatibility`、`metadata`、`allowed-tools`。
+- 做法 AE：`name` 与文件夹名不一致，或用了大写字母、下划线、空格；只允许小写字母、数字、连字符。
+- 做法 AE：`description` 超过 1024 字符，或只写「做什么」没写「什么时候用」。
+- 做法 AE：不用 `./scripts/release.sh` 发布，导致 `.claude-plugin/plugin.json` 的 `version` 没变，Claude Code 不把这次 push 当新版本。
+- 做法 AE：把整仓库手动压成 zip 上传 claude.ai/API；应当用 `scripts/package_skills.sh` 生成 `dist/<skill>.zip`。
+- 做法 AE：在 claude.ai 或 API 沙箱里期待 `video-by-reference` 渲染视频；沙箱没有网络、可能缺 Chrome 或 ffmpeg。
+- 做法 AE：把 `video-by-reference` 当已验证的能力；本次只抓到 README，`SKILL.md` 正文未抓到，仓库 33 stars、1 个技能、单一作者。
 
 ## 证据与来源
 
@@ -1623,13 +495,13 @@ README 给出质量门禁 `skill-seekers quality output/react/ --threshold 7`，
 - 中文技术文档路线的安装命令、autocorrect 的三种安装方式与 `autocorrect -V` 验证、三个调用提示词示例、五步写作流程、四类核心规则要点、14 条 AI 腔清单的类别说明，均来自 leter/zh-tech-writing 的 README。规则来源为阮一峰《中文技术文档的写作规范》（public domain），另参考华为《产品手册中文写作规范》、LeanCloud《文档风格指南》、《中文文案排版指北》、Google Developer Documentation Style Guide、GB/T 15835-2011。其中「效果」一节是单个作者挑选的示例，属主张不是评测结果。
 - 论文精读路线的全部内容均来自 Gaoyuan-0423/biomedical-paper-reader 的 README（v0.1.2，MIT）；精读质量本身、「不依赖固定 MCP、第三方 skill、Python 库或付费服务」的依赖声明均属作者主张。
 - cline-pilot 路线的全部内容均来自调研《gongdear/cline-pilot》（MIT，91 stars）；两阶段策略「在生产 Java 后端上验证过」是作者自述；`session_report.py` 的参数含义原文未说明。该项目与 Cline 强绑定。
-- ui-ux-pro-max 路线的全部内容均来自调研《nextlevelbuilder/ui-ux-pro-max-skill》，即该仓库 README。能力数字（192 条行业推理规则、79 种风格其中 50 种 active、192 套配色、74 组字体搭配、25 种图表类型、22 个技术栈指南、119 条 UX 指南）全部为作者自述；演示素材被作者自己标注为非本 skill 产物。
+- ui-ux-pro-max 路线的全部内容均来自调研《nextlevelbuilder/ui-ux-pro-max-skill》，即该仓库 README。能力数字全部为作者自述；演示素材被作者自己标注为非本 skill 产物。
 - archify 路线的全部内容均来自调研《tt-a1i/archify》，即该仓库 README（MIT，稳定版 v3.0.1）。它把 `validate --json` / `deliver --json` 的稳定规则码、`diagnostics[]`、两轮修正上限、原子替换交付写进了 README，是本手册里验收信号最具体的一条；但 star 数、Trending 排名、社区案例全部是创作者口径。本次调研在「与已有做法的关系」一节讲 OpenCode 时被截断。
 - diagram-design 路线的全部内容均来自调研《cathrynlavery/diagram-design》，即该仓库 README。图型覆盖数量、版式语法数量、三种静态变体的可用性都是作者口径；本次调研在「重绘已有图（导入）」处被截断，导出与后续步骤缺失。
 - wshobson/agents 路线的全部内容均来自调研《wshobson/agents》，即该仓库 README。94 插件 / 202 agent / 184 skill / 105 command / 16 orchestrator、40,149 stars 都是作者与指标口径；plugin-eval 的 LLM judge 与 Monte Carlo 层作者自己标注 experimental；GitHub Copilot 这条路径仓库仍声明支持并生成 `.copilot/`，但材料里的清单已判为 drop，两者存在差异。
 - book-to-skill 路线的全部内容均来自调研《virgiliojr94/book-to-skill》，即该仓库 README。24×–51× 的 token 节省、Steps 0–10 的完整生成流程都在未提供的 `docs/` 里，属作者主张；输出质量没有第三方验证数据。
 - khazix-skills 路线的全部内容均来自调研《KKKKhazix/khazix-skills》，即该仓库 README。本次只拿到 README，六个技能的 `SKILL.md` 正文均未提供；「效果一致」「确实省事」均为作者自述。
-- pg-aiguide 路线的全部内容均来自调研《timescale/pg-aiguide》，即该仓库 README（Apache 2.0，1853 stars）。效果数据只有厂商自己的一次 e-commerce schema 演示（约束多 4 倍、索引多 55%、采用 PG17 推荐模式），没有任务集、多次重复、第三方复核，也没说明「更好」的判定细则；README 未说明公共 MCP 服务的可用性保证、速率限制与数据隐私。
+- pg-aiguide 路线的全部内容均来自调研《timescale/pg-aiguide》，即该仓库 README（Apache 2.0，1853 stars）。效果数据只有厂商自己的一次 e-commerce schema 演示，没有任务集、多次重复、第三方复核，也没说明「更好」的判定细则；README 未说明公共 MCP 服务的可用性保证、速率限制与数据隐私。
 - Claude-BugHunter 路线的全部内容均来自调研《elementalsouls/Claude-BugHunter》，即该仓库 README。83 个技能、15 个命令、681 条披露报告模式都是作者口径；README 没有给改善幅度数据；示例 transcript 被作者自己标注为非真实录制；README 列了 5 个阶段名却称 6 阶段。
 - math-modeling-skill 路线的全部内容均来自调研《XiaoMaColtAI/math-modeling-skill》，即该仓库 README（版本 1.3.0，1848 stars）。「CUMCM 默认约 15000 字词单位、约 20 页」README 自己注明是非官方要求；「每道子问题最多使用两个独立模型体系」「至少 8 幅正式图」是作者设定的质量基线；全文没有任何「用了它之后结果变好多少」的评测数据。本次材料只有 README，角色规范与门禁判定标准在 `SKILL.md`、`references/roles/*/SKILL.md` 等子文件中。
 - mattpocock/skills 路线的全部内容均来自调研《mattpocock/skills》，即该仓库 README。各 `SKILL.md` 的实际提示词内容不在材料里，效果表述全部是作者主张，原文没有给任何指标定义、基线或对照数据；原生 Codex 插件在路线图上，属未实现项。
@@ -1639,13 +511,14 @@ README 给出质量门禁 `skill-seekers quality output/react/ --threshold 7`，
 - agentic-dev-kit 路线（做法 V）的全部内容均来自调研《ARYANK-08/agentic-dev-kit》，即该仓库 README。技能表当前只列出 `explain` 一个技能，且没有展示任何一个 `SKILL.md` 的实际内容，所以「参考其提示与上下文组织方式」在现有材料里没有落地证据。仓库 37 stars，不构成有效性证据。
 - task-observer 路线（做法 W）的全部内容均来自调研《rebelytics/one-skill-to-rule-them-all》，即该仓库 README。作者自述在其 81 个技能中记下 1,600+ 条观察、「大部分被转成了技能改进」；skills.sh 报告 9,000+ 次安装（作者注明是下界）。材料只到 README 一层，`SKILL.md`、`references/`、`scripts/` 的内容都未提供，观察质量与误报率无法判断。
 - Jeffallan/claude-skills 路线（做法 X）的全部内容均来自调研《Jeffallan/claude-skills》，即该仓库 README。67 个技能、12 个类别、371 个参考文件、9 个工作流命令，版本 0.4.18，MIT 协议，11725 stars。自动激活的实际准确率、误激活率无数据；9 个 workflow 命令的实际效果无数据；仓库徽章里的 CI 状态与技能是否改善使用者的工作结果无关。本次输入只有 README，没有 `SKILL.md`、`references` 内容、`QUICKSTART` 或其他文档的正文。
-- academic-deai 路线（做法 Y）的全部内容——用途（论文校对、语言润色、学术翻译、授权范围内结构修订）、各平台安装路径表、clone + `cp -R` 安装命令、升级先备份再整体替换、中英文提示词原文、编辑规则清单、`validate_package.py` / `unittest` / `content_lock.py --strict` 三条验证命令、PDF 需 Poppler、DOCX 抽取的保留范围限制、无需 Humanizer 与不自动串联其他编辑器、结构编辑思路参考 Humanizer 3.1.0——均来自调研《heise3/academic-deai》，即该仓库 README（v3.1.0，MIT）。属作者主张、没有独立验证的是：模型中立、跨平台可用、效果随模型不同；非 Codex 平台的兼容性按官方文档核对，实际编辑只在本地 Codex 会话验证。效果证据只有作者自制的四组合成案例（中文研究短文、English abstract and discussion、技术综述、审稿回复），其研究、数据、引文编号、投稿改动均为虚构；四例用 3.0.0 执行，3.1.0 保留原稿与修订稿并更新展示与平台说明；两个编辑回合读取 Skill 后修订，另一个模型回合提取并核对 41 条原稿命题。作者自述没有独立人工盲评、模型间对照或检测器分数，并声明案例「展示本次修改，不证明一般写作质量提升或其他工具的排名」。局限：需要支持 Agent Skills 的平台或能加载完整参考文本的环境；DOCX 交付能力受限；PDF 抽取需额外安装 Poppler；本次输入只到 README 一层，非 Codex 平台的安装与调用细节在未提供的 `docs/agent-platforms.md` 中。
-- pstack-claude 路线（做法 Z）的全部内容——pstack 原为 Lauren Tan 写的 Cursor 插件栈、本仓库移植到 Claude Code/Codex/Pi 及其他 harness、核心入口 `poteto-mode` 路由技能、三条安装命令、`setup-pstack` / `/pstack:setup-pstack` 的用途、reasoning effort 示例 `arena runners: opus @xhigh, fable @max`、Claude Code 通过 `pstack:effort-<level>` / `pstack:poteto-agent-<level>` agent 派发、Codex 需 `/hooks` 信任、Pi 的 extension 与 `/loop`、`/skill:<name>`、poteto-mode 入门提示词、bug 流程交付「修复 + 失败与通过的证据」、playbooks 覆盖范围——均来自调研《michael-denyer/pstack-claude》，即该仓库 README。属作者主张、没有数据支撑的是：「improves agent outcomes」「keeps your code concise, simple and verified」、bug 流程产出「失败与通过证据」；本线索给到的数字只有仓库指标（1345 stars、今日 222 stars），不能作为效果证据。完整工作流定义在未抓取的 `docs/reference.md` 与 SKILL.md 中，无法核对 playbook 的实际步骤；skills 会把 session transcripts 等读取内容发往模型 provider。
-- agency-agents 路线（做法 AA）的全部内容——按 division 组织的 agent 角色目录、三层交付形态（桌面 app / 安装脚本 / 纯参考）、各工具安装命令、`--tool` / `--division` / `--agent` / `--agents-file` / `--list teams` / `--dry-run` 参数、`convert.sh` 两步流程、按 runbook 生成 team.txt 的 python 片段、OpenCode 约 119 个 agent 上限——均来自调研《msitarzewski/agency-agents》，即该仓库 README。属作者主张、没有证据的是「Production-Ready」「battle-tested workflows」「可衡量的结果」「成功指标」等；README 没有给出指标定义、评测方法或对照数据。材料在 Marketing 表格中途被截断；只给了角色目录，没给 agent 文件正文。仓库指标 star 数（157,073，今日 595）来自输入元数据而非 README 正文，且数值异常高，不宜作为质量证据引用。
-- p3-stack 路线（做法 AB）的全部内容——把 pstack 在 T3 Code 上重写、`delegate_task` 取代 Cursor 的 Task 工具、`t3_thread_launch` 绑定 worktree 与分支、`watch_pull_request` 事件唤醒、`schedule_task` 无人值守、`t3_thread_read/search` 取回线程记忆、`preview_*` / `device_*` 产出截图录像、skills 目录与 24 条 principle、`p3-mode` playbook 路由表、`git clone` + `install.sh`、`./install.sh --project /path/to/repo`、`/setup-p3` 写 `p3-models.md`、`/p3-mode`、`/p3-help`——均来自调研《uzairansaruzi/p3-stack》，即该仓库 README。属作者主张、没有数据支撑的是：「pstack 是对 AI slop code 的回应」「verification 严格到可以放心并行」「一个 worktree 一个写者由应用而非建议保证」；仓库指标 68 stars，不构成有效性证据。只有安装与入口命令可照做；`delegate_task`、`t3_thread_launch`、`watch_pull_request`、`schedule_task`、`t3_thread_read/search`、`preview_*`、`device_*` 都只有名称和一句话用途，没有命令语法、配置样例、参数格式或示例输出；`p3-models.md` 的格式也没有展示。适用条件：必须在 T3 Code 环境内使用；skills 和 24 条原则源自 poteto 的 pstack（MIT），本仓库自己声明只是「重接线」。README 未说明技能内容的完整度、维护活跃度、T3 Code 的获取门槛。
-- skill-creator-plus 路线（做法 AC）的全部内容——46 条规则及 Script/Script + read/Read/Advice 分类、规则族 FM/DS/ST/CT/WF/SC/NM/HK/TS/LB、三种模式 AUDIT/NEW/REFINE、五条 validator 命令与退出码 0/1/2、`--all` 汇总表格式、`init_skill.py` 脚手架命令、硬指标清单（DS1–DS2、ST1、ST4–ST5、ST7、CT3、CT9、WF1、TS1）、HK1、ST2、NM2/NM5——均来自调研《robonuggets/skill-creator-plus》，即该仓库 README（MIT，31 stars）。属作者主张、没有独立验证的是：46 条规则本身、NM1–NM5（关于 Fable 5 / Opus 5.5 / Sonnet 5.5 的论断、Claude Code compaction 只保留前 5,000 tokens、`reasoning_extraction` 拒答等）、规则于 2026-10-05 对照 Anthropic 页面检查。效果证据只有作者自己的样例技能 `examples/pdf-helper` 输出（8 errors、11 warnings、6 notes，含 FM1/ST4/ST5/DS2/NM2/HK1）。材料只有 README，没有源码、`references/` 与 `examples/` 正文，无法核实 validator 实现是否与规则一致。适用条件：Claude 生态（Claude Code / claude.ai），对象是 `SKILL.md` 形态的技能。
-- 结论页路线（做法 AD）的全部内容——模型只写 Markdown 草稿、CLI（`am`）负责布局/配色/绘图、约 50 ms 后得到页面、token 比例 47% SVG / 15% CSS / 17% HTML / 21% 文本、支持 70+ agent 并明确列出 Claude Code/Codex/Cursor/OpenCode/Pi、页面存放 `~/.answer-me-with-html/pages/`、四种安装方式（贴 `INSTALL.md`、Claude Code 插件、`npx skills add`、手动 clone + cp）、各 agent 的 skill 目录、安装自检用 TCP 三次握手问题、使用示例与出页面的判断规则、always-on 规则原文与跳过情形、Claude Code plan mode 不生成页面、`/answer-me-with-html:config` 与 `am config` 的配置项（`open` / `theme` / `mode` / `style` / `update_check` / `voice`）、草稿语法示例（frontmatter + `sequence` / `flow` 围栏块、`span`、`note`）、组件选择表（`flow` / `sequence` / `tree` / `timeline` / `limits` / `annot` / `kv` / `callout` / `ask`、代码块 `src=` `lines=`、表格 `ok` / `no` / `warn`）、严格写作检查（规则改编自 ASD-STE100）、更新与 `am clean`、解释视频（`am video`、`--mp4`、旁白语法）、基准与测试命令（`node bench/corpus.mjs`、`npm test`、`AM_E2E=1 npm test`、`npm run smoke:install`、`npm run build`、`npm run snapshot`）——均来自调研《QingYunA/answer-me-with-html》，即该仓库 README。属作者主张、没有独立验证的是：约 50 ms 的渲染时间、手写 HTML 的 token 比例与「用 skill 后只写 21%」的结论；本次调研的结论明确说证据主要来自作者自测的 9 个页面样本。本次材料在「协作方式」处被截断，`docs/reference.md` 的完整语法与不走 agent 直接调 CLI 的用法未提供。
-- 文中提到的 star 数（如 anthropics/skills 179219、awesome-copilot 39,568、pro-workflow 2.9k、feiskyer/claude-code-settings 约 1.6k、zh-tech-writing 312、biomedical-paper-reader 31、cline-pilot 91、wshobson/agents 40,149、book-to-skill 33,277、khazix-skills 21,099、pg-aiguide 1853、math-modeling-skill 1848、google/skills 20653、Mobile Dev 64、agentic-dev-kit 37、one-skill-to-rule-them-all 3,115、Jeffallan/claude-skills 11725、p3-stack 68、skill-creator-plus 31）来自 metrics，不构成有效性证据。
+- academic-deai 路线（做法 Y）的全部内容——用途、各平台安装路径表、clone + `cp -R` 安装命令、升级先备份再整体替换、中英文提示词原文、编辑规则清单、`validate_package.py` / `unittest` / `content_lock.py --strict` 三条验证命令、PDF 需 Poppler、DOCX 抽取的保留范围限制、无需 Humanizer 与不自动串联其他编辑器、结构编辑思路参考 Humanizer 3.1.0——均来自调研《heise3/academic-deai》，即该仓库 README（v3.1.0，MIT）。属作者主张、没有独立验证的是：模型中立、跨平台可用、效果随模型不同；非 Codex 平台的兼容性按官方文档核对，实际编辑只在本地 Codex 会话验证。效果证据只有作者自制的四组合成案例。
+- pstack-claude 路线（做法 Z）的全部内容——pstack 原为 Lauren Tan 写的 Cursor 插件栈、本仓库移植到 Claude Code/Codex/Pi 及其他 harness、核心入口 `poteto-mode` 路由技能、三条安装命令、`setup-pstack` / `/pstack:setup-pstack` 的用途、reasoning effort 示例、Claude Code 通过 `pstack:effort-<level>` / `pstack:poteto-agent-<level>` agent 派发、Codex 需 `/hooks` 信任、Pi 的 extension 与 `/loop`、`/skill:<name>`、poteto-mode 入门提示词、bug 流程交付「修复 + 失败与通过的证据」、playbooks 覆盖范围——均来自调研《michael-denyer/pstack-claude》，即该仓库 README。属作者主张、没有数据支撑的是：「improves agent outcomes」「keeps your code concise, simple and verified」、bug 流程产出「失败与通过证据」；本线索给到的数字只有仓库指标（1345 stars、今日 222 stars），不能作为效果证据。完整工作流定义在未抓取的 `docs/reference.md` 与 SKILL.md 中。
+- agency-agents 路线（做法 AA）的全部内容——按 division 组织的 agent 角色目录、三层交付形态、各工具安装命令、`--tool` / `--division` / `--agent` / `--agents-file` / `--list teams` / `--dry-run` 参数、`convert.sh` 两步流程、按 runbook 生成 team.txt 的 python 片段、OpenCode 约 119 个 agent 上限——均来自调研《msitarzewski/agency-agents》，即该仓库 README。属作者主张、没有证据的是「Production-Ready」「battle-tested workflows」「可衡量的结果」「成功指标」等；README 没有给出指标定义、评测方法或对照数据。材料在 Marketing 表格中途被截断；只给了角色目录，没给 agent 文件正文。
+- p3-stack 路线（做法 AB）的全部内容——把 pstack 在 T3 Code 上重写、`delegate_task` 取代 Cursor 的 Task 工具、`t3_thread_launch` 绑定 worktree 与分支、`watch_pull_request` 事件唤醒、`schedule_task` 无人值守、`t3_thread_read/search` 取回线程记忆、`preview_*` / `device_*` 产出截图录像、skills 目录与 24 条 principle、`p3-mode` playbook 路由表、`git clone` + `install.sh`、`./install.sh --project /path/to/repo`、`/setup-p3` 写 `p3-models.md`、`/p3-mode`、`/p3-help`——均来自调研《uzairansaruzi/p3-stack》，即该仓库 README。属作者主张、没有数据支撑的是：「pstack 是对 AI slop code 的回应」「verification 严格到可以放心并行」「一个 worktree 一个写者由应用而非建议保证」；仓库指标 68 stars，不构成有效性证据。只有安装与入口命令可照做；`delegate_task`、`t3_thread_launch`、`watch_pull_request`、`schedule_task`、`t3_thread_read/search`、`preview_*`、`device_*` 都只有名称和一句话用途，没有命令语法、配置样例、参数格式或示例输出；`p3-models.md` 的格式也没有展示。适用条件：必须在 T3 Code 环境内使用。
+- skill-creator-plus 路线（做法 AC）的全部内容——46 条规则及 Script/Script + read/Read/Advice 分类、规则族 FM/DS/ST/CT/WF/SC/NM/HK/TS/LB、三种模式 AUDIT/NEW/REFINE、五条 validator 命令与退出码 0/1/2、`--all` 汇总表格式、`init_skill.py` 脚手架命令、硬指标清单（DS1–DS2、ST1、ST4–ST5、ST7、CT3、CT9、WF1、TS1）、HK1、ST2、NM2/NM5——均来自调研《robonuggets/skill-creator-plus》，即该仓库 README（MIT，31 stars）。属作者主张、没有独立验证的是：46 条规则本身、NM1–NM5、规则于 2026-10-05 对照 Anthropic 页面检查。效果证据只有作者自己的样例技能 `examples/pdf-helper` 输出。材料只有 README，没有源码、`references/` 与 `examples/` 正文，无法核实 validator 实现是否与规则一致。
+- 结论页路线（做法 AD）的全部内容——模型只写 Markdown 草稿、CLI（`am`）负责布局/配色/绘图、约 50 ms 后得到页面、token 比例 47% SVG / 15% CSS / 17% HTML / 21% 文本、支持 70+ agent 并明确列出 Claude Code/Codex/Cursor/OpenCode/Pi、页面存放 `~/.answer-me-with-html/pages/`、四种安装方式、各 agent 的 skill 目录、安装自检用 TCP 三次握手问题、使用示例与出页面的判断规则、always-on 规则原文与跳过情形、Claude Code plan mode 不生成页面、`/answer-me-with-html:config` 与 `am config` 的配置项、草稿语法示例、组件选择表、严格写作检查、更新与 `am clean`、解释视频、基准与测试命令——均来自调研《QingYunA/answer-me-with-html》，即该仓库 README。属作者主张、没有独立验证的是：约 50 ms 的渲染时间、手写 HTML 的 token 比例与「用 skill 后只写 21%」的结论；本次调研的结论明确说证据主要来自作者自测的 9 个页面样本。本次材料在「协作方式」处被截断，`docs/reference.md` 的完整语法与不走 agent 直接调 CLI 的用法未提供。
+- ishuagrawal/skills 路线（做法 AE）的全部内容——开源 Agent Skills 集合（MIT，33 stars）、同时做成 Claude Code 插件市场（marketplace 名 `ishuagrawal`，插件名 `skills`，版本号在 `.claude-plugin/plugin.json`）、每个技能 = 文件夹含 `SKILL.md` 加 `scripts/`/`references/`/`assets/`、声称兼容 Claude Code 与任何支持开放 Agent Skills 格式的 agent、目前只有 1 个技能 `video-by-reference`、维护工具链 `scripts/check_skills.py` / `scripts/package_skills.sh` / `scripts/release.sh` / `.github/workflows/`、Claude Code 与其他 agent 的安装与更新命令、claude.ai 与 API 上传 zip 的路径、手动安装位置、`video-by-reference` 的依赖清单（Node.js 22+、ffmpeg/ffprobe、Python 3 + numpy、headless Chromium）、frontmatter 白名单（`name`、`description`、`license`、`compatibility`、`metadata`、`allowed-tools`）、`description` 最多 1024 字符、`name` 与文件夹名一致且只允许小写字母/数字/连字符、semver 与「只有 `version` 变化才算新版本」——均来自调研《ishuagrawal/skills》，即该仓库 README。属作者主张、没有测试数据或案例支撑的是：「Claude 会在请求匹配时自动选用技能」、其他 agent「任何支持开放 Agent Skills 格式的 agent 都能用」、claude.ai/API 沙箱无法渲染。主要局限：本次只抓到 README，`video-by-reference` 的 `SKILL.md` 正文没有抓到，无法提炼它的具体流程或提示词，也无法验证它是否真能产出可用成片；仓库 33 stars、1 个技能、单一作者，成熟度低；README 里没有任何效果数据或使用案例。
+- 文中提到的 star 数（如 anthropics/skills 179219、awesome-copilot 39,568、pro-workflow 2.9k、feiskyer/claude-code-settings 约 1.6k、zh-tech-writing 312、biomedical-paper-reader 31、cline-pilot 91、wshobson/agents 40,149、book-to-skill 33,277、khazix-skills 21,099、pg-aiguide 1853、math-modeling-skill 1848、google/skills 20653、Mobile Dev 64、agentic-dev-kit 37、one-skill-to-rule-them-all 3,115、Jeffallan/claude-skills 11725、p3-stack 68、skill-creator-plus 31、ishuagrawal/skills 33）来自 metrics，不构成有效性证据。
 
 ## 依据的调研
 
@@ -1684,3 +557,4 @@ README 给出质量门禁 `skill-seekers quality output/react/ --threshold 7`，
 - [uzairansaruzi/p3-stack](../research/radar/2026-10-06/1491-uzairansaruzi-p3-stack.md)：值得一试，值得在 T3 Code 环境里小范围试一次：按 README 的 clone→install.sh→/setup-p3→/p3-mode 四步挂上一个真实小任务，验证它的 playbook 路由和 worktree/PR 监视机制是否真比手动流程省事；但仓库只给了安装与入口命令，编排原语只有名字没有配置细节，也没有任何效果数据，只能算“可试”而非“可采纳”。
 - [robonuggets/skill-creator-plus](../research/radar/2026-10-06/1582-robonuggets-skill-creator-plus.md)：值得一试，建议小范围试：按 README 的安装命令把它装进 Claude Code 的 skills 目录，先对现有技能跑 validate_skill.py --all 拿到基线，再按审计报告改 2–3 条并复跑对比，理由是它给了可直接执行的命令和 46 条可逐条勾选的规则，能把“技能写得好不好”变成可复核的检查项；但材料只有 README、规则和模型相关论断均为作者主张，先验证再决定是否纳入手册。
 - [QingYunA/answer-me-with-html](../research/radar/2026-10-08/2001-qingyuna-answer-me-with-html.md)：值得一试，先在一个能执行 shell 的 agent（如 Claude Code）上装这个 skill 并开启 always-on，用两三个复杂问题对比“直接让模型写 HTML”与“模型写 Markdown 草稿 + CLI 渲染”的输出 token、耗时和页面可读性，再决定是否写进手册。理由是它把“模型只写内容、CLI 负责布局”这条分工约定固化成了可复制的安装命令、配置命令和一条可直接粘贴的规则提示词，并附了可复现的 token 基准，但证据主要来自作者自测的 9 个页面样本。
+- [ishuagrawal/skills](../research/radar/2026-10-09/2192-ishuagrawal-skills.md)：值得一试，建议小范围试：把它的「写 SKILL.md → check_skills.py / claude plugin validate --strict → release.sh 打包发布 → 插件市场或 npx skills 分发」这套技能生产与分发流程照抄用来做自己的技能；自带的 video-by-reference 因 SKILL.md 正文未抓到、仓库仅 33 stars 且只有一个技能，只当线索看。理由是安装、校验、发布命令都是可直接复制的具体步骤，而技能本身的内容与效果在材料里没有依据。

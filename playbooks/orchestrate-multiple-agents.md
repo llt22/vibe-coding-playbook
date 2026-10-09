@@ -1,14 +1,14 @@
-# 让 AI 交付先过验证再算完成：多策略竞争、独立评审、合入闸门
+# 让编码 agent 在宣布完成前拿出证据：并行、隔离与验证关卡
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：单个 AI 回答或多 agent 流水线交付的结果往往没有经过独立验证；这篇手册给出一套可照做的流程，把「完成」定义成可执行的检查、独立评审和合入闸门。
-> 先试这一步：挑一个你确实不满意的真实任务：先跑一次 `pullboard tour` 看清「提交—驳回—修复—复验—合并」的节奏，或在 arena-skill 里跑 `/arena --quick --seed 7 <把任务写具体>` 并把被拒的旧答案当 baseline 比一次。
-> 最近修订：2026-10-08
+> 解决的问题：多个 agent 并行、多个项目同时推进之后，真正缺的不是更多工具，而是「谁在等我、卡在哪一步、有没有被独立验证过」——这篇手册给出一批可照做的流程，把这些变成可执行的关卡和可见的状态。
+> 先试这一步：先挑一个已有测试的小仓库，把「完成」定义写成一条你能手动跑通的验证命令，再决定用哪条做法把它挂到 agent 提交之前。
+> 最近修订：2026-10-09
 
 ## 解决什么问题
 
-单个 AI 回答、单条串行的 agent 会话，交付的往往是你没有验证过的结果：看起来合理，但可能漏了你真正在意的约束。这篇手册把「不满意就重问一次」升级成一套可执行的流程——把同一个任务交给多个子代理用不同策略并行求解、互相对抗、由独立裁判按公开标准打分淘汰；把有固定分工的多步任务（先搜集资料、再扩写成文）固化成角色化 Crew 流水线，产物落盘成文件；代码类任务则必须通过你自己的验证命令才能合入，再进一步可以把整条链固化成 GitHub 上的 issue → PR → 浏览器实测 → 合并。同时给出成本预估、可观察指标，以及「什么时候不值得这么做」的判断线。新增的做法 H 把「隔离、记忆、评审」三件事落成可手工照做的流程：每个 agent 一个 git worktree、项目记忆写成 conventions.md/plan.md/dead-ends.md、第二个 agent 在提交前读 diff 做同行评审；Offrun 是这套流程在 macOS 上的一种现成实现。新增的做法 I 解决另一个并行 agent 的常见瓶颈：注意力。多个终端型 agent 跑起来后，真正的浪费常常不是模型慢，而是「哪个 agent 在等我」不可见。cmux 把等待输入变成蓝色通知环、侧栏徽标、通知面板和 ⌘⇧U 跳转，让「谁在等我」成为可路由的信号；但 cmux 作者明确说它是 primitive，不是 solution，不替代验证、记忆和评审。新增的做法 J 把「第二个智能体在同一 commit 上验证通过才算完成」做成可强制执行的状态机：SPEC.md 一行一行批准、每条 lane 一个 worktree、提交必须过 gate、验证必须由没参与构建的另一个 agent 在确切 commit 上做、给出 receipt 才合并；Pullboard 是本机运行、存在你 git 仓库里的看板实现，不调用模型。
+单个 AI 回答、单条串行的 agent 会话，交付的往往是你没有验证过的结果：看起来合理，但可能漏了你真正在意的约束。这篇手册把「不满意就重问一次」升级成一套可执行的流程——把同一个任务交给多个子代理用不同策略并行求解、互相对抗、由独立裁判按公开标准打分淘汰；把有固定分工的多步任务（先搜集资料、再扩写成文）固化成角色化 Crew 流水线，产物落盘成文件；代码类任务则必须通过你自己的验证命令才能合入，再进一步可以把整条链固化成 GitHub 上的 issue → PR → 浏览器实测 → 合并。同时给出成本预估、可观察指标，以及「什么时候不值得这么做」的判断线。新增的做法 H 把「隔离、记忆、评审」三件事落成可手工照做的流程：每个 agent 一个 git worktree、项目记忆写成 conventions.md/plan.md/dead-ends.md、第二个 agent 在提交前读 diff 做同行评审；Offrun 是这套流程在 macOS 上的一种现成实现。新增的做法 I 解决另一个并行 agent 的常见瓶颈：注意力。多个终端型 agent 跑起来后，真正的浪费常常不是模型慢，而是「哪个 agent 在等我」不可见。cmux 把等待输入变成蓝色通知环、侧栏徽标、通知面板和 ⌘⇧U 跳转，让「谁在等我」成为可路由的信号；但 cmux 作者明确说它是 primitive，不是 solution，不替代验证、记忆和评审。新增的做法 J 把「第二个智能体在同一 commit 上验证通过才算完成」做成可强制执行的状态机：SPEC.md 一行一行批准、每条 lane 一个 worktree、提交必须过 gate、验证必须由没参与构建的另一个 agent 在确切 commit 上做、给出 receipt 才合并；Pullboard 是本机运行、存在你 git 仓库里的看板实现，不调用模型。新增的做法 K 把镜头再拉远一层：不再只管一个仓库、一个任务，而是把多个已注册项目的状态、六步流水线（spec → build → sync → verify → review → release）、Git 摘要与 PR/CI 收进一块本地控制台面板——一个控制台会话承担跨项目的规格、监督与评审关卡，你只做决策和最终发布审批；项目状态（● 待决策、◆ 待评审、▶ 运行中、↻ 待同步、○ 空闲）来自项目里的 STATUS 卡，关卡字段没清空就阻止继续；默认执行者是 Claude Code 原生后台 agent（不需要 Codex 账号），也可按项目切到 Codex 或标成 manual 只做交接不派工；刷新只查本地文件和 CLI、不请求模型，只有提交决策草稿时才花 Claude 额度。
 
 ## 适用与不适用
 
@@ -29,6 +29,10 @@
 - 新增：你想让「另一个智能体在同一 commit 上验证通过才算完成」成为硬约束，而不是靠你口头要求（做法 J）。
 - 新增：你愿意把需求写成一行一行可验收的 SPEC.md，并接受「未经第二 agent 验证不算完成」（做法 J）。
 - 新增：单人或多 agent 在 git 仓库内做长期构建，希望用看板看到每条目的 claim / submit / verdict 和驳回理由（做法 J）。
+- 新增：你同时照看多个项目、每个项目里都有 agent 在跑，想在一屏里看到「谁在等我做决策 / 等我评审 / 正在跑 / 待同步」（做法 K）。
+- 新增：你的环境是 Windows 或 macOS，Claude Code 2.1.289 或更高且支持 mod，并且你接受自建「项目注册表 + STATUS 卡」这两样约定（做法 K）。
+- 新增：你想按项目切换执行者——默认用 Claude Code 原生后台 agent，Claude 额度紧张时把个别项目切到 Codex，或标成 manual 只做交接不派工（做法 K）。
+- 新增：你希望不可撤销命令（rm -r、force push、git reset --hard、DROP TABLE 等）在执行前被问一次，并让同一参数同一错误的工具调用不再试第三次（做法 K）。
 
 **不适用**
 
@@ -55,6 +59,12 @@
 - 新增：你的环境是原生 Windows：Pullboard 的 CI 只在 Linux 和 macOS 上跑，Windows 未测试（做法 J）。
 - 新增：你需要现成的手机/远程看板：relay 和 Pullboard View 里的 roadmap 仍是 planned（做法 J）。
 - 新增：你不愿意写 SPEC.md，也不想设一条 gate 命令：没有 gate 就没有提交前的门槛，也没有 verifier 可以依据的验收标准（做法 J）。
+- 新增：不想维护项目注册表和每个项目的 STATUS 卡：面板的状态、同步与关卡都建立在这两样自建约定上（做法 K）。
+- 新增：Claude Code 版本低于 2.1.289 或不支持 mod：插件装不上（做法 K）。
+- 新增：原生 Linux：材料只给了 Windows 与 macOS 两个前提（做法 K）。
+- 新增：希望面板替你执行发布或正式环境变更：原文明确面板自身不执行发布（做法 K）。
+- 新增：指望面板刷新时调用模型来给出真实状态：刷新只查本地文件和 CLI、不请求模型（做法 K）。
+- 新增：想把它当成熟方案直接全量采用：仓库仅 53 stars、版本 0.15.x，UI 当前是繁体中文，且强依赖特定 Claude Code 版本与自建的注册表/状态卡约定（做法 K）。
 
 ## 前置条件
 
@@ -68,7 +78,8 @@
 - 做法 G（cubefarm）：Node.js 22 或更新版本；`git`；已登录的 GitHub CLI（`gh auth login`）；一个编码 agent 的订阅（cubefarm 自带 Claude Code 作为默认 agent，CEO 也跑它，无需另行安装，登录一次即可；你本机已装并登录的 Codex 或 OpenCode 也可以被选中）；Google Chrome（QA agent 要在浏览器里测你的应用）；项目必须托管在 GitHub 上；办公室数据在 `~/.cubefarm`（设置、仓库克隆、每个 agent 一份独立工作副本），可用 `SWARM_HOME` 换目录。
 - 做法 H（Offrun 或手工照做）：项目在 git 下（worktree 依赖 git）；至少一个你已在用的 agent CLI 和账号，有第二个账号更好（用于限额切换）。若用 Offrun 本身：Apple Silicon Mac（M1 或更新）、macOS 14 Sonoma 或更高；下载 Offrun 拖进 Applications；在 Settings → Agents 添加账号。若手工照做：任意支持 git 的环境，能创建 worktree 的 git 版本，agent CLI 能在指定目录运行。
 - 做法 I（cmux）仅支持 macOS，会读取你已有的 Ghostty 配置 `~/.config/ghostty/config`。推荐 DMG 安装，也可 Homebrew。若要用 agent hooks 的自动恢复，必须先装好对应 agent CLI，且其 binary 在 PATH 上。README 列出的受支持恢复集成包括：Claude Code、Codex、Grok、OpenCode、Pi、Amp、Cursor CLI、Gemini、Rovo Dev、Copilot、CodeBuddy、Factory、Qoder。Claude Code 由 cmux 的 Claude wrapper 处理，需在 Settings 中开启 Claude 集成。要远程跑 agent 需可 SSH 的远程主机。自定义 resume 绑定若要自动执行，必须先批准签名命令前缀；token、password、secret、API key 等敏感环境键在存储绑定前会被丢弃。
-- 新增做法 J（pullboard）：本机有 git 和 Node 22.13 或更新版本（README 原文："You need git and Node 22.13 or newer"）；在一个 git 仓库内操作；MIT 许可；本机运行、无账号、无依赖、不调用模型。要真正跑起来还需要三样你自己提供的东西：`SPEC.md` 里已批准的需求行、`PRACTICE.md` 里的 doctrine、`pullboard.json` 里的 gate 命令与每条 lane 的 `owns` / `specs` 授权。
+- 做法 J（pullboard）：本机有 git 和 Node 22.13 或更新版本（README 原文："You need git and Node 22.13 or newer"）；在一个 git 仓库内操作；MIT 许可；本机运行、无账号、无依赖、不调用模型。要真正跑起来还需要三样你自己提供的东西：`SPEC.md` 里已批准的需求行、`PRACTICE.md` 里的 doctrine、`pullboard.json` 里的 gate 命令与每条 lane 的 `owns` / `specs` 授权。
+- 新增做法 K（claude-console）：Windows 或 macOS；Claude Code 2.1.289 或更高且支持 mod；每个要纳入面板的项目在注册表里有一项、并有一个 STATUS 文件。若要用 Codex 执行者，还需要 Node.js、Codex Companion 和一个 Codex 账号（Windows 探测需要 PowerShell 和 Codex 桌面应用，macOS 需要 PATH 上有 `codex` CLI）。
 
 ## 操作步骤
 
@@ -86,6 +97,7 @@
 | 想在一个已有 git 的仓库里轻量隔离多个 agent、把项目记忆落成文件、提交前互评 | 做法 H |
 | macOS 上并行跑多个终端型 coding agent，想一眼看到谁在等我 | 做法 I |
 | 想让「另一个 agent 在同一 commit 上验证通过才算完成」变成硬约束：SPEC 行 + gate + lane 隔离 | 做法 J |
+| 同时照看多个项目的 agent，想在一屏里看到状态、决策与评审关卡 | 做法 K |
 
 ### 做法 A：把不满意的回答送进锦标赛（arena-skill）
 
@@ -861,6 +873,117 @@ pullboard view
 
 12. 条目状态机（决定「什么时候算完成」）：每条从 open 开始 → 被认领则 claimed（agent 沉默则重新 open）→ 提交后 submitted → verifier 接受变 verified，驳回则回到 open；只有 coordinator 能 withdraw；声明（`src/machine.js`）不允许的动作看板会拒绝。
 
+### 做法 K：把多项目的派工、状态与评审关卡收进一个控制台（claude-console）
+
+把这条路径当作待验证的候选：安装命令、配置键表、`dispatch.json` 结构与状态卡格式都可直接照做，但仓库仅 53 stars、版本 0.15.x，且强依赖特定 Claude Code 版本和你自己维护的注册表/STATUS 卡约定，适合先挑一两个可回滚的项目试。
+
+前提：Windows 或 macOS；Claude Code 2.1.289 或更高且支持 mod；每个项目在注册表里有一项、并有一个 STATUS 文件。若要用 Codex 执行者，还需要 Node.js、Codex Companion 和一个 Codex 账号（Windows 探测需要 PowerShell 和 Codex 桌面应用，macOS 需要 PATH 上有 `codex` CLI）。
+
+1. 安装（在 Claude Code 里执行；在本地 checkout 里安装则把第一行换成 `claude plugin marketplace add .`）：
+
+```powershell
+claude plugin marketplace add SaM-runtime/claude-console
+claude plugin install console-status@claude-console
+```
+
+2. 先只看不接：任意 Claude Code 会话里运行 `/console demo` 看整块面板（不需要 registry），`/console refresh` 回到真实状态。
+
+3. 配置插件。前提：先决定 `registryPath` 指向放项目注册表的 Markdown 文件（默认 `~/.claude/handoffs/projects-scope.md`）。值是单行字符串，未指定的保持原值，改完运行 `/reload-plugins` 或另开一个 Claude Code 会话：
+
+```powershell
+@'
+{
+  "registryPath": "C:\\Projects\\console\\projects-scope.md",
+  "dispatchSettingsPath": "~/.claude/handoffs/dispatch.json",
+  "claudeSessionsPath": "~/.claude/handoffs/claude-sessions.json",
+  "executor": "claude",
+  "codexFallback": "ask",
+  "codexMinQuotaPercent": "10",
+  "gitProbe": "on",
+  "commandGuard": "ask",
+  "loopGuard": "on",
+  "autoSync": "on",
+  "suggestNext": "on",
+  "activation": "auto",
+  "projectMode": "auto"
+}
+'@ | claude plugin configure console-status@claude-console --values-stdin
+```
+
+预期结果：这些键被写进插件配置；未指定的项保持原值。其余可配置项（默认值）：`dispatchSettingsPath`、`claudeSessionsPath`、`executor=claude`、`defaultModel`/`defaultEffort` 空、`companionScript` 空（空或失效路径会自动解析到最新安装的 Codex 插件）、`companionStateDir`（系统 Temp 的 codex-companion）、`companionStateRoots`（插件 data 优先，其次旧 Temp）、`modelsCachePath=~/.codex/models_cache.json`、`codexFallback=ask`、`codexMinQuotaPercent=10`、`cacheHint=on`、`cacheTtl=auto`、`cacheWritePrice` 空。
+
+4. 建注册表与 STATUS 卡。注册表是「名字 → STATUS 文件」的 Markdown 映射，可带一列 Executor（`claude`/`codex`/`manual`/留空）；仓库给了 `workflow/projects-scope.example.md` 作例子。每个 STATUS 文件里只有一个机器可读块，用 `<!-- CARD -->` 和 `<!-- /CARD -->` 包住、不超过十行，解析器识别模板里的繁体键：`更新`、`狀態`、`驗證`、`等使用者`、`下一步`、`關卡`。`關卡` 写 `無`、`spec：…`、`review：…` 或 `release：…`；未知的非空关卡文本也会阻止继续。Git 项目里可以放在 `.console/STATUS.md`，并在该项目的 `.git/info/exclude` 里排除，保持本地。
+
+5. 设派工（全局 + 每项目）。文件是 `~/.claude/handoffs/dispatch.json`：
+
+```json
+{
+  "executor": "claude", "model": "", "effort": "",
+  "projects": {
+    "D:/Projects/api": { "executor": "codex", "model": "", "effort": "high" },
+    "D:/Projects/legacy-portal": { "executor": "manual" }
+  }
+}
+```
+
+执行者解析顺序：面板覆盖（`projects["<root>"]`，Windows 盘符与 UNC 路径大小写不敏感）> 注册表 Executor 列 > 全局 `executor`。model 与 effort 同链条解析，但「执行者与全局不同的项目不继承全局 model/effort」。`manual` 表示面板永不派工：同步与继续按钮隐藏，卡片显示交接说明，但 CARD、验证、决策和关卡仍可用。0.1 版没有 `projects` 的平铺文件继续可用；`dispatch.json` 缺失时只读相邻的旧 `codex-dispatch.json`，写入一律进 `dispatch.json`。
+
+6. 给同步配便宜模型（同步只写 CARD 和历史）：
+
+```json
+{
+  "executor": "claude", "model": "opus", "effort": "high",
+  "sync": { "claude": { "model": "haiku" }, "codex": { "model": "luna", "effort": "low" }, "session": "fresh" },
+  "projects": { "D:/Work/Beta": { "sync": { "session": "resume" } } }
+}
+```
+
+模型名是自由文本，写你账号有的即可；空字段回落到普通派工的模型/effort，项目级 `sync` 覆盖全局。`session: fresh` 会开一个小会话，只读 STATUS.md、`git log`/`git status` 和执行者摘要，并被告知只写这些看到的内容；Claude 侧配了自己的同步模型时默认走 `fresh`，Codex 保持 `resume`。用了独立同步模型时界面会写明，例如 `（用 haiku・新 session）`。
+
+7. 日常操作：右键或按 `m`（光标所在行）打开动作菜单，Esc 关闭。动作键：`v` 验证、`s` 同步 STATUS、`c` 继续下一步（仍需六秒内第二次按键）、`r` 回覆执行者、`d` 做決定、`g` 关卡评审/终审、`o` 打开 STATUS.md、`p` 打开 PR。菜单开着时数字键按顺序回答待决事项（先按 `2` 再按 `1` 会读作 `1B 2-1`），Backspace 撤销上一个选择；`✎ 填入決策` 把已选答案填进输入框，Enter 发送。
+
+8. 回覆停下提问的执行者：菜单里选 `↩ 回覆執行者`，输入框会被填成 `/console reply <project> `，写上答复按 Enter，控制台用你的话作提示继续那个会话（不必 attach）。仍在等权限批准（`等待批准`）的执行者需要 attach 处理。
+
+9. 命令速查：
+
+```text
+/console executor
+/console executor claude
+/console model
+/console model <name>
+/console effort <level>
+/console sync-model [claude|codex] <name>
+/console sync-effort [claude|codex] <level>
+/console sync-session fresh|resume
+/console project executor|model|effort <value|inherit> <project name>
+/console project
+/console update
+```
+
+`/console model ""` 或 `/console effort ""` 恢复所选执行者的默认。Claude 侧模型按钮给别名 `fable`/`opus`/`sonnet`/`haiku`，effort 选项 `low`/`medium`/`high`/`xhigh`/`max`；置空则交给 Claude Code 决定。设置只影响下一次派工，正在跑的任务保持它请求的值。
+
+10. 让手动派工的会话也遵守同一份设置，把下面这段贴进用户 `CLAUDE.md`：
+
+```markdown
+## Dispatch settings
+Before dispatching to any executor, read ~/.claude/handoffs/dispatch.json
+(if it is missing, read ~/.claude/handoffs/codex-dispatch.json; never write it).
+- Global: "executor" (claude | codex), "model", "effort".
+- Per project: "projects"["<project root>"] may set "executor"
+  (claude | codex | manual), "model", "effort". Match the root case-insensitively
+  on Windows. Precedence: projects entry > registry Executor column > global.
+- Pass each nonempty model/effort as one --model / --effort argument; omit empty ones.
+- "manual" means: never dispatch that project; prepare a handoff for the user instead.
+```
+
+11. 护栏：`commandGuard: ask`（默认）时不可撤销命令（`rm -r`、force push、`git reset --hard`、`DROP TABLE` 等）先问；`deny` 直接拒绝；`off` 关闭。`loopGuard` 默认 on：同一参数同一错误的工具调用失败两次后，模型被告知不要试第三次。
+
+12. 控制台只在你要的地方生效：`activation: auto`（默认）下只有你运行过 `/console` 的会话（以及它 resume 后）运行控制台，其他会话只拿到命令护栏；在已注册项目目录里开的会话自动切到项目模式（`projectMode: auto`）。
+
+13. 升级：页脚显示已装版本，有新版本时按 `⬆ 更新` 或运行 `/console update`。逐版本变更见仓库 `CHANGELOG.md`。
+
+**Git/PR/CI（可选，`gitProbe` 默认 on）**：每次刷新在每个项目根跑 `git status --porcelain=v2 --branch --show-stash`（带 `--no-optional-locks`，不抢执行者需要的 index 锁）；装了 `gh` 并登录时，`gh pr view` 读当前分支 PR 与检查，每五分钟一次、检查还在跑时每分钟一次、强制刷新或分支变化时也读。设 `gitProbe: git` 跳过 GitHub，设 `off` 两者都跳过。冲突（`✕衝突n`）、CI 失败（`CI✕n`，状态带变红）、未提交（`●n`）、未推送（`↑n`）、落后上游（`↓n`）显示在 Git 列；`▸ 檔案`（菜单里 `f`）按 `git status` 的分组展开文件列表，每组最多 12 个。`提交` 字段显示最近三到五条提交；最后一次 `git fetch` 超过一天会提示 ahead/behind 可能过期。
+
 ### 通用收尾：不管走哪条路径
 
 - 开始前先固定「完成」的定义（哪条测试通过、谁来复核、在哪里看结果），不要只依赖 agent 的自证。
@@ -871,6 +994,7 @@ pullboard view
 - 做法 H 的同行评审不要只看风格；让它明确读 diff 找跨文件约束冲突，并把结论落到 chat 里由你判断，不要自动合并。
 - 做法 I 的通知环只负责把「谁在等我」变得可见；看到通知后仍要回到验证、记忆和评审，不要让通知替代合入门槛。
 - 做法 J 的 verifier 必须是没参与构建该条目的另一个 agent，并在确切 commit 上给出证据；worktree 身份不是安全边界，不要拿它当权限隔离。
+- 做法 K 的看板状态来自你自己维护的注册表与 STATUS 卡；刷新只查本地文件和 CLI、不请求模型，卡上写错了它不会替你纠正。
 
 ## 怎么判断变好了
 
@@ -885,7 +1009,8 @@ pullboard view
 - 做法 G：QA 报告的真阳性率（它标出的问题里，多少经人工复核确认是真问题）；QA 通过的 PR 中人工复核后确实可用的比例（漏检率）；同一类 issue 从开单到合并的周期时间 vs 你自己动手的基线；每个 issue 消耗的订阅用量；每个 PR 你要动手改多少、终端里介入多少次；开启 auto-merge 后是否出现被合入但需要回滚的改动。
 - 做法 H：并行任务时文件互相覆盖/冲突的次数（期望 0）；第二个同类会话的返工量——是否还要重复解释约定、是否重复踩 dead-ends 里已有的坑；同行评审提出的问题里，你判断有效（会改）的比例，以及误报率；撞到用量限额导致的等待时间是否下降（切登录后能否无缝继续）。
 - 做法 I：从 agent 等待输入到人响应的时间；漏掉通知导致 agent 空转的时长；手动在终端里寻找 pane 的次数；通知环、侧栏未读徽标、通知面板是否能可靠触发；⌘⇧U 跳转是否真的减少切换成本；恢复会话后布局、工作目录、scrollback 和浏览器历史是否保留；`cmux hooks setup` 后受支持 agent 是否能按预期恢复；跨安装迁移时 `--from <channel>` 与 `--from <path>` 的信任差异是否符合预期；本机 `local-tmux` 撑不过 logout/重启/关机/断电这一边界是否被团队知道。
-- 新增做法 J：每条条目是否都有 gate 绿 + verifier 的 accept/reject receipt；你仓库里的返工比例（原文称自家开发 Pullboard 时 "nearly one in three items goes back"）是多少；Timeline 里每条目的 claim / submit / verdict 是否完整；越界提交是否被 lane 的 `owns` 授权拒绝；"Needs you" 里出现的是不是只有你能做的决定；verifier 抓到的驳回理由里有多少是你事后确认有效的问题。
+- 做法 J：每条条目是否都有 gate 绿 + verifier 的 accept/reject receipt；你仓库里的返工比例（原文称自家开发 Pullboard 时 "nearly one in three items goes back"）是多少；Timeline 里每条目的 claim / submit / verdict 是否完整；越界提交是否被 lane 的 `owns` 授权拒绝；"Needs you" 里出现的是不是只有你能做的决定；verifier 抓到的驳回理由里有多少是你事后确认有效的问题。
+- 新增做法 K：面板上「● 待决策」「◆ 待评审」的条目从出现到你处理完的时间；你实际同时盯的窗口/终端数 vs 只看面板；autoSync 写回 CARD 后你是否还需要手工记状态；`關卡` 是否真的拦住了没清空的条目；Git 列里的冲突/CI 失败/未提交/未推送/落后上游是否比你手工发现得更早；刷新时是否产生模型调用（原文称刷新只查本地文件和 CLI）；被 `commandGuard` 拦下的不可撤销命令次数、`loopGuard` 阻止重复失败调用的次数。注意「减少盯盘」目前只是作者主张，要你自己前后对照。
 
 **最小试用**
 
@@ -898,7 +1023,8 @@ pullboard view
 - 做法 G：`npx cubefarm doctor` 确认环境齐全 → `npx cubefarm --demo` 走一遍界面 → 选一个低风险、已有测试基础的小仓库接入，把 session limit 设为 1–2 → 先关闭 auto-merge，人工确认每一份 QA 报告和 PR 差异，跑 3–5 个真实 issue。
 - 做法 H：半天到一天，一个仓库。装好 Offrun（或手工照做），接两个你已有的 agent 账号（至少 Claude Code 加另一个），挑一个有 git、且有能跑的测试的 repo。别一次全上，只试两件事：隔离（同一 repo 同时开两个任务——一个重构、一个修 bug，确认两个 worktree 不互相改文件，各自分支能分别合并）；记忆（手工建 conventions.md / plan.md / dead-ends.md，把仓库约定和不许再试的死路写进去，开第二个会话时确认 agent 是否真读了，以及失败尝试是否被写回 dead-ends.md）。再试同行评审：让另一个 agent 在提交前读 diff，重点看它能不能抓到跨文件的数值/契约冲突（如上限与上游超时不一致这类）。
 - 做法 I：在 macOS 上装好 cmux，跑 `cmux hooks setup`，开 2–3 个终端型 agent（例如一个 Claude Code、一个 Codex），用 `cmux notify` 或让 agent hooks 触发通知，试 ⌘⇧U、⌘I 和通知面板；只在一两个真实任务上试半天到一天，观察「谁在等我」是否真的更快被处理。
-- 新增做法 J（半天内可完成）：先在一次性仓库跑 `npm i -g pullboard && pullboard tour`，确认你理解「提交—驳回—修复—复验—合并」的节奏；再选一个真实小仓库，`pullboard init` 并提交它写出的文件，只写 1–3 行 approved 的 SPEC.md，设一个真实的 gate（如 `pytest` 或 `npm test`），配 1 条 builder lane + 1 条 review lane；然后用 2–3 个小条目走完整流程：`add` → builder `worktree/next/submit` → 另一个 agent `next --verify` → `verify ... accept/reject`。
+- 做法 J（半天内可完成）：先在一次性仓库跑 `npm i -g pullboard && pullboard tour`，确认你理解「提交—驳回—修复—复验—合并」的节奏；再选一个真实小仓库，`pullboard init` 并提交它写出的文件，只写 1–3 行 approved 的 SPEC.md，设一个真实的 gate（如 `pytest` 或 `npm test`），配 1 条 builder lane + 1 条 review lane；然后用 2–3 个小条目走完整流程：`add` → builder `worktree/next/submit` → 另一个 agent `next --verify` → `verify ... accept/reject`。
+- 新增做法 K（半天内可完成）：按 README 两条命令装好插件 → `/console demo` 看整块面板（不需要 registry）→ `/console refresh` 回到真实状态 → 挑一两个可回滚的项目，照 `workflow/projects-scope.example.md` 建注册表，并在项目里写一个用 `<!-- CARD -->` / `<!-- /CARD -->` 包住的 STATUS 块（Git 项目可放 `.console/STATUS.md` 并在 `.git/info/exclude` 里排除）→ 用 `dispatch.json` 给其中一个项目指定执行者（可先试 `manual`，或把它切到 Codex）→ 走一遍「派工 → 执行者完成 → autoSync 写回 CARD → 关卡评审」，看这条闭环是否真的减少了你的盯盘。
 
 **试多久、什么时候升级**
 
@@ -908,7 +1034,8 @@ pullboard view
 - 做法 G 同样没有量化数据：以 3–5 个真实 issue 为最小样本；若 QA 真阳性率接近零，或人工介入次数没有下降，说明当前形态的价值主要在演示而非产出，应考虑退回不用（或只当演示看）。熟悉后再对低风险改动尝试 auto-merge，并保留人工抽查。
 - 做法 H 只在一个 repo、一两个任务上观察两周再决定是否推广；记忆是纯文件、chat 和 worktree 都在项目文件夹里，退回现有流程没有迁移成本。若同行评审有效比例低或误报高，先调整 reviewer 的 prompt 或换模型，再决定是否保留。
 - 做法 I 没有第三方性能与收益数据：先在 1–2 个 agent、半天到一天内试用；若通知可靠、漏掉等待的时间下降、恢复会话不丢布局，再扩大 agent 数。若通知常漏、恢复信任规则让你不确定、或本机 tmux 生命周期边界不满足，就不要把它作为默认方案。
-- 新增做法 J 只有 41 stars 和作者自述的返工比例：先在 2–3 个小条目上跑完整闭环，再决定是否固化成日常流程；如果 verifier 抓不到问题、或每个 PR 你仍要人工兜底，说明当前形态还没带来净收益。
+- 做法 J 只有 41 stars 和作者自述的返工比例：先在 2–3 个小条目上跑完整闭环，再决定是否固化成日常流程；如果 verifier 抓不到问题、或每个 PR 你仍要人工兜底，说明当前形态还没带来净收益。
+- 新增做法 K 只有 53 stars 和 0.15.x 的版本号：先在一两个可回滚的项目上跑一到两周，确认「派工 → 执行者完成 → autoSync 写回 CARD → 关卡评审」这条闭环真能减少人工盯盘；如果 STATUS 卡总得你手工维护、关卡拦不住东西、或配置/版本一变就装不上，就退回你现在的看板方式。
 
 ## 常见坑
 
@@ -999,7 +1126,7 @@ pullboard view
 - 通知驱动的注意力路由能改善并行效率，目前只是作者主张；没有第三方性能与收益数据，不宜作为通用默认方案直接采用。
 - 与做法 H 的差异：cmux 管终端、通知、浏览器，不自动合并；H 管记忆、评审、账号切换，默认不自动合并。与做法 B 的差异：cmux 是本地终端可见化/隔离，不是容器克隆仓库 + 测试闸门。
 
-**新增做法 J（pullboard）**
+**做法 J（pullboard）**
 
 - 项目很小（41 stars），部分功能仍是 planned：relay（在手机/其他机器上看板）和 Pullboard View 里的 roadmap 还没有。
 - Windows 未测试：CI 只在 Linux 和 macOS 上跑。
@@ -1011,12 +1138,32 @@ pullboard view
 - SPEC 行在你批准前是 draft，只有 approved 的行算数；含糊的需求行会得到含糊的验收。
 - 「nearly one in three items goes back」是作者对自己开发 Pullboard 时的描述，不是可复现的第三方基准。
 
+**新增做法 K（claude-console）**
+
+- 强依赖环境与版本：Claude Code 2.1.289 或更高且支持 mod；材料只给了 Windows 与 macOS 两个前提。
+- 状态和关卡都建立在你自建的两样约定上：项目注册表（`registryPath`，默认 `~/.claude/handoffs/projects-scope.md`）和每个项目里的 STATUS 卡；不维护它们，面板就是空的。
+- STATUS 卡是机器可读块，必须用 `<!-- CARD -->` / `<!-- /CARD -->` 包住且不超过十行，解析器识别的是模板里的繁体键：`更新`、`狀態`、`驗證`、`等使用者`、`下一步`、`關卡`；写错键名或写超长会解析不到。
+- `關卡` 里除了 `無`、`spec：…`、`review：…`、`release：…`，未知的非空关卡文本也会阻止继续——这是有意为之，但容易被误读成「面板卡住了」。
+- `dispatch.json` 缺失时只读相邻的旧 `codex-dispatch.json`，写入一律进 `dispatch.json`；0.1 版没有 `projects` 的平铺文件继续可用，升级时要留意这份遗留。
+- 执行者解析顺序是 面板覆盖 > 注册表 Executor 列 > 全局 `executor`；而且「执行者与全局不同的项目不继承全局 model/effort」，容易造成某个项目的模型/effort 跟你预期不一致。
+- `manual` 不是「什么都不显示」：同步与继续按钮隐藏、卡片显示交接说明，但 CARD、验证、决策和关卡仍可用。
+- 设置只影响下一次派工，正在跑的任务保持它请求的值——改完模型/effort 别以为在跑的任务会跟着变。
+- 配置改完要 `/reload-plugins` 或另开一个 Claude Code 会话才生效。
+- 仍在等权限批准（`等待批准`）的执行者需要 attach 处理；`/console reply` 只能回停下提问的执行者，不能代替权限批准。
+- `commandGuard: ask` 只拦不可撤销命令，`off` 就完全关掉；`loopGuard` 也只是「告诉模型不要试第三次」，不是硬禁止。
+- `activation: auto` 下只有你运行过 `/console` 的会话（及它 resume 后）运行控制台，其他会话只拿到命令护栏；在已注册项目目录里开的会话会自动切到项目模式（`projectMode: auto`）。别以为它全局生效。
+- 刷新只查本地文件和 CLI、不请求模型，只有提交决策草稿时才花 Claude 额度；所以面板的正确性完全取决于你的文件写得对不对，别把它当免费的全量状态来源。
+- `gitProbe` 默认 on：每个项目根每次刷新跑一次 `git status --porcelain=v2 --branch --show-stash`（带 `--no-optional-locks`），装了 `gh` 并登录时会读 PR 与检查；设 `git` 跳过 GitHub，设 `off` 两者都跳过。最后一次 `git fetch` 超过一天会提示 ahead/behind 可能过期。
+- 成熟度不足：仓库仅 53 stars、版本 0.15.x、UI 当前是繁体中文，且强依赖特定 Claude Code 版本与自建注册表/状态卡约定；升级靠页脚 `⬆ 更新` 或 `/console update`，逐版本变更看仓库 `CHANGELOG.md`。
+- 材料在「对应的研究问题」小节处被截断，除这里列出的配置键与命令外，不要照片段猜其他能力。
+
 **通用**
 
 - 别把「工具很多」当成改善证据；没有验证命令或盲评对比，只是把不确定性放大了。
 - 让 agent 自己声明「完成」不算完成；先把完成定义写成可执行检查。
 - 多步流水线不做落盘校验（只看聊天里的输出），事后无法复盘是哪一步坏了。
 - 并行 agent 的通知很多时，先保证「谁在等我」可路由，再谈扩并发；否则只是把等待堆到更多 pane 里。
+- 用面板/看板时，先确认它的状态来源是你或 agent 真的写下来的文件，而不是它自己猜的；做法 K 的刷新只查本地文件和 CLI、不请求模型，卡上写错它不会替你纠正。
 
 ## 证据与来源
 
@@ -1029,7 +1176,8 @@ pullboard view
 - **做法 G** 依据调研《leonvanzyl/cubefarm》。可核对：可执行命令（`npx cubefarm`、`npx cubefarm login`、`npx cubefarm doctor`、`--demo`、`--port`、`--no-open`、`npx cubefarm@latest`、`npm install -g cubefarm`）、前提清单、五步上手流程、界面操作键、用 session limit 控制并发、数据目录 `~/.cubefarm` 与 `SWARM_HOME`、安全模型要点、QA 在真实浏览器里审查并发布带截图报告、合并门禁为「QA 通过且 GitHub checks 全绿」、白板 Kanban 覆盖从 backlog 到 merged。属于作者主张：办公室「看起来在工作」、CEO 会写出 QA 检查清单、QA 报告能起到把关作用、auto-merge 安全——没有成功率、误合并率、成本或周期时间的数字，唯一量化指标是 53 stars。重要限制：本次输入只有 README，它指向的 `docs/how-it-works.md` 与 `CONTRIBUTING.md` 均未包含在材料中，因此 QA 具体如何测、auto-merge 判定细节、模型与额度策略都无法核实。
 - **做法 H** 依据调研《Show HN: Offrun – manage every coding agent from one workspace》。可核对：安装流程、每个 agent 一个 git worktree、三个记忆文件名与读写时机、同行评审示例输出、限额切换提示文案、数据边界表、50 次运行的对照表、Build/Planner 两种模式、通知与听写的描述。属于作者主张、没有外部验证：「50 runs in a row」「41 of 50 → 50 of 50」、免费无限/无服务器/不经手密钥等；无版本号、无发布日志、无第三方用户案例，HN 上 51 分、23 条评论的讨论内容不在给定材料里。适用条件：Apple Silicon（M1+）、macOS 14 Sonoma 或更高、至少一个已在用的 agent CLI；Pi 与 OpenCode 尚未支持。重要限制：原文是产品页面，本手册只采用其中可迁移的三条流程（worktree、记忆文件、提交前互评），Offrun 本身作为其中一种实现方式。
 - **做法 I** 依据调研《manaflow-ai/cmux》。可核对：仅 macOS、基于 Ghostty 渲染引擎、DMG 与 Homebrew 安装、`cmux hooks setup` 及其受支持 agent 列表、OSC 9/99/777 与 `cmux notify` 通知路径、快捷键表、`cmux claude-teams`、`cmux ssh` 与 `--command` 行为、`autoResumeAgentSessions` 配置、`cmux restore-session` 的 `--from <channel>` 与 `--from <path>` 信任差异、`cmux surface resume set/show/clear` 信任规则、`cmux local-tmux` / `cmux local-zellij` 生命周期边界、`CMUX_NO_GIT_WATCH=1`、浏览器导入/自动化、Skills 仓库等。属于作者主张：通知驱动的注意力路由能改善并行 agent 工作流，但没有第三方性能与收益数据。重要限制：调研材料在配置面 `~/.config/c...` 处被截断，其他配置细节在外链文档；因此本手册只写能照做的安装、hooks、通知、恢复与生命周期部分，不补写未给出的配置项。
-- **新增做法 J** 依据调研《pullboard-dev/pullboard》。可核对：完整 CLI 命令、`SPEC.md` 格式、`pullboard.json` 配置与各栈 gate 表、tour 的端到端示例（含故意破坏修复再看测试失败）、一个真实的 reject/accept receipt 样例、条目状态机（open → claimed → submitted → verified / 回 open）、`PRACTICE.md` doctrine、看板是放在 `.git` 里的一个 SQLite 文件、Node 22.13+、MIT 许可、41 stars。属于作者主张：这套方法论「更好」、返工比例可复现、多 agent 更连贯；「nearly one in three items goes back」是作者对自己开发 Pullboard 时的描述，不是可复现的第三方基准。原文自己声明的局限：worktree 身份只在一台机器上有意义、不是安全边界；可用 `--no-verify` 跳过 hook（靠 pre-push gate 和 verifier 兜底）；CI 只在 Linux 和 macOS 上跑，Windows 未测试；relay 和 Pullboard View 里的 roadmap 仍是 planned。
+- **做法 J** 依据调研《pullboard-dev/pullboard》。可核对：完整 CLI 命令、`SPEC.md` 格式、`pullboard.json` 配置与各栈 gate 表、tour 的端到端示例（含故意破坏修复再看测试失败）、一个真实的 reject/accept receipt 样例、条目状态机（open → claimed → submitted → verified / 回 open）、`PRACTICE.md` doctrine、看板是放在 `.git` 里的一个 SQLite 文件、Node 22.13+、MIT 许可、41 stars。属于作者主张：这套方法论「更好」、返工比例可复现、多 agent 更连贯；「nearly one in three items goes back」是作者对自己开发 Pullboard 时的描述，不是可复现的第三方基准。原文自己声明的局限：worktree 身份只在一台机器上有意义、不是安全边界；可用 `--no-verify` 跳过 hook（靠 pre-push gate 和 verifier 兜底）；CI 只在 Linux 和 macOS 上跑，Windows 未测试；relay 和 Pullboard View 里的 roadmap 仍是 planned。
+- **新增做法 K** 依据调研《SaM-runtime/claude-console》。可核对：两条安装命令、`/console demo` 与 `/console refresh`、插件配置的 `--values-stdin` 写法与全部配置键及默认值、注册表 + STATUS 卡格式（`<!-- CARD -->` / `<!-- /CARD -->`、十行上限、繁体键名、`關卡` 的四种取值）、`dispatch.json` 结构与执行者解析顺序（面板覆盖 > 注册表 Executor 列 > 全局）、`sync` 的模型/session 覆盖规则、动作键与数字键回答待决事项、`/console reply`、命令速查表、`commandGuard` / `loopGuard` / `activation` / `projectMode` 的取值与默认、Git/PR/CI 探测行为与 `gitProbe` 三档、`/console update`。属于作者主张：「一个控制台会话承担跨项目规格、监督与评审关卡」「刷新只查本地文件和 CLI、不请求模型」「减少盯盘」等来自原文自述，没有第三方基准或对照实验。原文自己声明的局限与材料限制：仓库仅 53 stars、版本 0.15.x、UI 为繁体中文、强依赖特定 Claude Code 版本与自建的注册表/STATUS 卡约定；材料在「对应的研究问题」小节处被截断，本手册只写能照做的安装、配置、派工、状态卡、动作与护栏部分。
 
 ## 依据的调研
 
@@ -1043,3 +1191,4 @@ pullboard view
 - [Show HN: Offrun – manage every coding agent from one workspace](../research/radar/2026-10-04/1066-show-hn-offrun-manage-every-coding-agent-from-one-.md)：值得一试，先在单个有 git 的仓库上小范围试三条可迁移流程——每个 agent 一个 worktree、项目记忆落成 conventions.md/plan.md/dead-ends.md、第二个 agent 在提交前读 diff 做评审——再决定是否长期用 Offrun 本身；理由是这几条流程具体、可照做且不依赖工具存活，而 Offrun 自身的收益（限额自动切换、全 Mac 通知、免费无限）目前只有厂�自述，且限定 Apple Silicon Mac。
 - [manaflow-ai/cmux](../research/radar/2026-10-08/1856-manaflow-ai-cmux.md)：值得一试，macOS 上并行跑多个终端型 coding agent 的人，可以照 README 的安装与 hooks 步骤小范围试一套「通知驱动的注意力路由」工作流：装 cmux、跑 `cmux hooks setup`、用 workspace 分屏跑 agent、靠通知环和 ⌘⇧U 跳转；理由是多 agent 并行时「哪个在等我」是可复制的痛点，而这份 README 给出了具体命令与配置键，但它只支持 macOS、性能与收益均无第三方数据，因此不宜作为通用默认方案直接采用。
 - [pullboard-dev/pullboard](../research/radar/2026-10-08/2038-pullboard-dev-pullboard.md)：值得一试，建议在小范围试：先用 `pullboard tour` 看一遍闭环，再在一个真实小仓库里把「SPEC 行 → gate → 另一个智能体在同一 commit 上验证」跑通，然后决定是否固化成日常流程；理由是它把「第二个智能体验证通过才算完成」做成了可强制执行的状态机，并给出了可直接复制的命令与配置（MIT、本地运行、不调用模型），但项目很小（41 stars）、Windows 未测试、部分功能仍在 planned，适合先试验证收益。
+- [SaM-runtime/claude-console](../research/radar/2026-10-09/2187-sam-runtime-claude-console.md)：值得一试，建议小范围试：先按 README 的两条命令装好插件、用 /console demo 跑通面板，再挑一两个可回滚的项目接入 registry + STATUS 卡，验证「派工 → 执行者完成 → autoSync 写回 CARD → 关卡评审」这条闭环是否真的减少了人工盯盘；理由是它给出了可直接照做的安装命令、配置键表、dispatch.json 结构、动作快捷键和状态卡格式，但仓库仅 53 stars、版本 0.15.x、强依赖特定 Claude Code 版本与自建的注册表/状态卡约定，成熟度还不够直接全量采用。
