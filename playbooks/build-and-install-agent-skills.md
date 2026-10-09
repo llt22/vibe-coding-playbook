@@ -1,10 +1,10 @@
-# 先小范围验证技能，再把有效的 SKILL.md 校验、打包、分发到多端
+# 先小范围试装一个技能包，用同一任务对照验证它是否真的减少返工
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：解决如何判断一个技能包是否真的有效，以及把自己验证过的重复工作写成 SKILL.md 后怎样校验、打包并分发到多个 agent 的问题。
-> 先试这一步：先按做法 A 在同一任务上做有/无技能对照；如果已有自己的 SKILL.md，再照做法 AE 跑 `python3 scripts/check_skills.py` 和 `claude plugin validate . --strict`，通过后用 `./scripts/release.sh` 发布。
-> 最近修订：2026-10-09
+> 解决的问题：你已经在用编码 agent，但不确定装一个技能包（或自己写的 SKILL.md、领域技能）是否真的减少了返工——这篇手册给出从试装、对照验证到自建、审计与分发的完整流程，并反复提醒哪些检查只能证明「装得上、格式合法」，不能证明产出更好。
+> 先试这一步：选一个非关键项目和一类你反复要做的任务，只装一个技能包（例如 SwiftUI 项目装 `npx skills add https://github.com/twostraws/swiftui-agent-skill --skill swiftui-pro`，或从做法 A 的清单里另选一个），同一任务在有/无技能的条件下各跑 3 次，记录返工轮数与人工修改次数。
+> 最近修订：2026-10-10
 
 ## 解决什么问题
 
@@ -14,13 +14,15 @@
 
 新增做法 AE：当你已经把自己的重复工作写成 `SKILL.md`，用 ishuagrawal/skills 提供的 `check_skills.py`、`package_skills.sh`、`release.sh` 做规范校验、打包和发布，再通过插件市场或 `npx skills` 分发到多个 agent；claude.ai 与 Claude API 走 zip 上传。
 
+新增做法 AF：当你做 SwiftUI / Apple 平台开发，希望 agent 写出的代码更现代、更少无障碍与性能问题时，装 twostraws/SwiftUI-Agent-Skill 的 `swiftui-pro`，用 `/swiftui-pro`、`$swiftui-pro` 或自然语言按需触发整体或部分审查。它更可迁移的不是 SwiftUI 检查项本身，而是「领域技能包 + 按需触发 + 只写 LLM 边界知识」这个模式——同一套做法可以搬到别的领域技能上。
+
 ## 适用与不适用
 
 适用：
 
 - 你已经在用 Claude Code、Codex CLI、Cursor、Gemini CLI 或类似编码 agent，有一类反复出现、有明确规范的任务（需求澄清、写计划、TDD、代码审查、完成前验证、文档生成、会话交接等）。
 - 愿意在一个非关键项目上做一周对照，而不是安装成功就认为改善。
-- 需要给 agent 补一块领域知识：UI/UX 设计（做法 I）、Postgres（O）、Google 产品与技术（S）、中国金融市场数据（T）、移动端模拟器与真机观测（U）、中英文学术写作（Y）。
+- 需要给 agent 补一块领域知识：UI/UX 设计（做法 I）、Postgres（O）、Google 产品与技术（S）、中国金融市场数据（T）、移动端模拟器与真机观测（U）、中英文学术写作（Y）、SwiftUI / Apple 平台开发（做法 AF）。
 - 需要把文档站点、仓库、PDF、技术书或内部 `docs/` 变成按需加载的技能（做法 C、M）。
 - 有一类多步、有明确交付物的复杂任务，希望分阶段推进、每阶段独立质检（做法 N、Q）。
 - 反复写或审中文技术文档（做法 E），或反复改写中英文学术写作并要核对命题（做法 Y）。
@@ -32,19 +34,21 @@
 - 已经在写自己的 `SKILL.md`，想用可逐条勾选的规则审计它、拿到基线再改，并把「技能写得好不好」变成可复核的检查项（做法 AC）。
 - 经常需要把结论、方案对比、多步流程、仓库结构、逐句批注、时间线或一段历史讲成一页带图表的说明，而不是一段长文本；希望模型只写内容、布局交给工具（做法 AD）。
 - 已经写出自己的 `SKILL.md`，想校验它是否符合 Agent Skills 规范、打包成 zip、发布到插件市场，并让第二个环境不用手动拷贝就能装上（做法 AE）。
+- 做 SwiftUI / iOS 开发，希望 agent 在写或审代码时自动带上现代 API、无障碍、性能与状态管理这几块常识，并且可以只审其中一项（做法 AF）。
 
 不适用：
 
 - 没有明确重复任务，只想「装个工具看看」；不愿做对照验证，只凭安装成功就认为改善。
 - 直接在生产关键项目上全量安装；一次装完整个插件市场。
 - 只看 stars、README 徽章或 CI 状态就决定采用。
-- 各做法自己的边界见对应小节（例如：E 只针对中文技术文档；F 只针对生物医学论文；M 不适用于无合法访问权的书或打算再分发第三方版权书生成的 skill；O 只在 Postgres / TimescaleDB / PostGIS 任务上有用；P 只对自有或书面授权资产；Q 的领域内容不通用；T 不支持直接驱动交易或投顾建议；U 需要 Apple Silicon Mac + Codex desktop + 私有仓库访问权；X 面向全栈开发，非开发类工作基本用不上；Y 需要能加载完整 Skill 文件夹的环境，且 DOCX 抽取保留不了复杂样式、批注、修订记录、脚注与文本框）。
+- 各做法自己的边界见对应小节（例如：E 只针对中文技术文档；F 只针对生物医学论文；M 不适用于无合法访问权的书或打算再分发第三方版权书生成的 skill；O 只在 Postgres / TimescaleDB / PostGIS 任务上有用；P 只对自有或书面授权资产；Q 的领域内容不通用；T 不支持直接驱动交易或投顾建议；U 需要 Apple Silicon Mac + Codex desktop + 私有仓库访问权；X 面向全栈开发，非开发类工作基本用不上；Y 需要能加载完整 Skill 文件夹的环境，且 DOCX 抽取保留不了复杂样式、批注、修订记录、脚注与文本框；AF 只覆盖 SwiftUI / Apple 平台开发，README 面向 iOS 26+ 与 Swift 6.4+，其他领域不能照搬它的检查内容）。
 - Z 的完整工作流定义在未抓取的 `docs/reference.md` 与 `SKILL.md` 中，本次无法核对实际步骤；需要 harness 支持插件/hook，Codex 需额外信任 hook；按角色配 effort 依赖插件自带 agent 存在；skills 会把 session transcripts 等读取内容发往模型 provider。
 - AA 只给了角色目录，没给任何一个 agent 文件的内容，也没有效果证据；OpenCode 运行时约 119 个 agent 上限，超出会被静默丢弃。
 - AB 必须在 T3 Code 环境内使用；`delegate_task`、`t3_thread_launch`、`watch_pull_request`、`schedule_task`、`t3_thread_read`、`t3_thread_search`、`preview_*`、`device_*` 都只有名称和一句话用途，没有命令语法或配置样例；没有 T3 Code 就最多只能读它的 skill / playbook 设计思路，不要照搬。
 - AC 只覆盖 Claude 生态（Claude Code / claude.ai）、对象是 `SKILL.md` 形态的技能；材料只有 README，没有源码与 `references/` 正文，NM1–NM5 等关于新模型的论断仅为作者主张；validator 只能证明格式与规则合规，不能证明产出更好。
 - AD 需要 agent 能执行 shell 命令、Node.js 20 或更新版本；一句话问题、纯命令输出和明确要纯文本的请求不会出页面；Claude Code 在 plan mode 下不生成页面；更新是手动的，不会自动升级；效果证据主要来自作者自测的 9 个页面样本与作者给出的 token 比例，属作者口径。
 - AE：它的 `video-by-reference` 技能 `SKILL.md` 正文未抓到，无法判断实际流程与成片质量；仓库只有 1 个技能、33 stars、单一作者，成熟度低；claude.ai 和 API 沙箱没有网络、可能缺 Chrome 或 ffmpeg，能读技能但可能渲染不出视频；README 没有效果数据或使用案例，只有工程侧校验。
+- AF：材料只有 README，没有基准测试、对照实验或具体项目效果数据；「built on thousands of hours」「targeting the mistakes LLMs actually make」以及按钮对 VoiceOver 不可见、常用弃用 API、性能反模式等都是作者经验或主张，不是可量化证据；`SKILL.md` 的具体检查规则本次未读到，也未实际验证安装与运行效果；它只在 SwiftUI / Apple 平台开发上有用。
 
 ## 前置条件
 
@@ -81,10 +85,11 @@
 - AC：Claude Code 环境（有 `~/.claude/skills` 或项目内 `.claude/skills`）或 claude.ai 账号（validator 需开启代码执行）；本地 Python 3.8+（validator 只用标准库）；对象是已有的 `SKILL.md` 文件夹。
 - AD：Node.js ≥ 20（不需要 `npm install`，CLI 已捆绑在 skill 里）；agent 能执行 shell 命令；想开 always-on 需要能写 `~/.claude/CLAUDE.md` 或 `AGENTS.md` 之类规则文件；想自己复现基准需要能 clone 仓库并跑 `npm install`。
 - AE：用现成技能需要 Claude Code 或支持 Agent Skills 的 agent；用这套流程分发自己的技能，只需 Claude Code + Python 3。发布需要 git 与 push 权限。claude.ai 上传需要 Pro/Max/Team/Enterprise 计划并开启 code execution；API 侧用 Skills API（`/v1/skills`）配合 code-execution 工具。想试 `video-by-reference`，本地需 Node.js 22+、`ffmpeg` 和 `ffprobe` 在 `PATH` 上、Python 3 带 `numpy`、一个 headless Chromium（首选 Playwright 的 `chrome-headless-shell`，Google Chrome 也可以）。
+- AF：用支持 Agent Skills 的编程助手（Claude Code、Codex、Gemini、Cursor 等）；安装需要 Node/npx，或用 Claude Code 插件市场；目标是 SwiftUI / Apple 平台项目，README 标注面向 iOS 26+ 与 Swift 6.4+；想自己写同类领域技能，需要遵守它的贡献指南与 Code of Conduct。
 
 ## 操作步骤
 
-怎么选：先做做法 A；A 里某个技能确实有效、且你有一件每周重复且规范明确的工作，再做做法 B。其余按场景选：C 多来源知识打包；D 补模型端点/权限/搜索；E 中文技术文档写作与审稿；F 单篇论文精读；G 写一个 Claude Code mod；H 用 Cline CLI 代理长任务拿硬证据验收；I 补 UI/UX 设计知识；J 出带交互的单文件 HTML 图；K 出品牌一致的静态 HTML+SVG 图；L 从大插件市场只装一个单元并按任务档位选模型；M 把书或内部文档转成按需加载技能；N 把模糊想法写成任务书并给破坏性操作加闸门；O 补 Postgres 领域知识与版本化文档检索；P 在授权安全场景按主题加载安全技能库；Q 把多步任务拆成三阶段加门禁；R 装一套小而可组合的工程技能集；S 从 google/skills 按任务只装一个；T 让 agent 检索中国金融市场数据并核对来源与时间戳；U 把移动端模拟器与真机画面接进 Codex 聊天；V 用一行 curl 装单个 Markdown 技能；W 用元技能观察你怎么用技能；X 装一套全栈开发技能包按请求自动激活；Y 把中英文学术写作去模板化改写并用命题核对保住事实；Z 用路由技能自动选工作流并对 bug 交出失败→通过证据；AA 按职能只装少量 agent 角色并用真实任务与默认提示对照；AB 在 T3 Code 里用 p3-stack 按 playbook 路由并用 worktree/PR 监视减少等待和冲突；AC 审计并改进自己的 SKILL.md；AD 让 agent 把结论、方案对比与流程解释渲染成一页可离线打开的 HTML；AE 把自己的 SKILL.md 校验、打包并分发到多端。
+怎么选：先做做法 A；A 里某个技能确实有效、且你有一件每周重复且规范明确的工作，再做做法 B。其余按场景选：C 多来源知识打包；D 补模型端点/权限/搜索；E 中文技术文档写作与审稿；F 单篇论文精读；G 写一个 Claude Code mod；H 用 Cline CLI 代理长任务拿硬证据验收；I 补 UI/UX 设计知识；J 出带交互的单文件 HTML 图；K 出品牌一致的静态 HTML+SVG 图；L 从大插件市场只装一个单元并按任务档位选模型；M 把书或内部文档转成按需加载技能；N 把模糊想法写成任务书并给破坏性操作加闸门；O 补 Postgres 领域知识与版本化文档检索；P 在授权安全场景按主题加载安全技能库；Q 把多步任务拆成三阶段加门禁；R 装一套小而可组合的工程技能集；S 从 google/skills 按任务只装一个；T 让 agent 检索中国金融市场数据并核对来源与时间戳；U 把移动端模拟器与真机画面接进 Codex 聊天；V 用一行 curl 装单个 Markdown 技能；W 用元技能观察你怎么用技能；X 装一套全栈开发技能包按请求自动激活；Y 把中英文学术写作去模板化改写并用命题核对保住事实；Z 用路由技能自动选工作流并对 bug 交出失败→通过证据；AA 按职能只装少量 agent 角色并用真实任务与默认提示对照；AB 在 T3 Code 里用 p3-stack 按 playbook 路由并用 worktree/PR 监视减少等待和冲突；AC 审计并改进自己的 SKILL.md；AD 让 agent 把结论、方案对比与流程解释渲染成一页可离线打开的 HTML；AE 把自己的 SKILL.md 校验、打包并分发到多端；AF 给 agent 补一块 SwiftUI 领域知识并按需触发审查。
 
 几组容易混的：
 
@@ -104,7 +109,8 @@
 - AD 与 J / K：J 出带 JavaScript 交互的架构图，K 默认出无 JS、依赖品牌 style-guide 的静态 HTML+SVG 图；AD 出的是「一页结论／解释／对比」的单文件 HTML，模型只写 Markdown 草稿、CLI 负责布局与绘图，还可以开 always-on 让每条带结论的回复都附一页。要交互图选 J，要品牌一致性和静态可交付选 K，要每次讲清楚一个结论就附一页选 AD。
 - AD 与 V：V 用一行 curl 装单个纯 Markdown 技能，不装仓库；AD 装的是一个带 CLI 的 skill，装完还要按需把 always-on 规则写进 rules 文件，并验证它的出页判断、token 与耗时。
 - AE 与 B / AC：B 是把自己的重复工作写成 `SKILL.md`；AC 是审计并改进已有 `SKILL.md`；AE 接在 B/AC 后面，负责规范校验、打包、发布和跨 agent 分发。只写不发布，用 B；只审计不改分发，用 AC；要让同一份技能在第二个环境不用手动拷贝就能装好，用 AE。
-- E、F、G、H、I、J、K、L、M、N、O、P、Q、R、S、T、U、V、W、X、Y、Z、AA、AB、AC、AD、AE 都必须套用 A 的对照方法，不要跳过验证直接纳入常规流程。
+- AF 与 I / E / Y / S / O / T：都是给 agent 补一块领域知识——I 补 UI/UX 设计，E 补中文技术文档写作，Y 补中英文学术写作去模板化，S 补 Google 产品与技术，O 补 Postgres，T 补中国金融数据，AF 补 SwiftUI / Apple 平台开发。区别是 AF 的安装与触发路径写得最完整（npx 与插件市场两条安装路径，`/swiftui-pro` / `$swiftui-pro` / 自然语言三种触发，可以限定只审某一方面），但只覆盖 SwiftUI，其他领域不能照搬它的检查内容，只能借鉴「领域技能包 + 按需触发 + 只写 LLM 边界知识」这个模式。
+- E、F、G、H、I、J、K、L、M、N、O、P、Q、R、S、T、U、V、W、X、Y、Z、AA、AB、AC、AD、AE、AF 都必须套用 A 的对照方法，不要跳过验证直接纳入常规流程。
 
 ### 做法 A：先用现成技能包做小范围试装（推荐先做）
 
@@ -323,6 +329,73 @@ claude plugin validate . --strict
 
 7. 更新链路：改一版后用 `/plugin marketplace update ishuagrawal` + `/reload-plugins` 或 `npx skills update` 拿新版本，用来验证「只有 `version` 变化才算新版本」这条说法。
 
+### 做法 AF：给 agent 补一块 SwiftUI 领域知识，按需触发审查（可选，按 A 的对照法验证）
+
+定位：twostraws/SwiftUI-Agent-Skill（技能名 SwiftUI Pro，MIT，5300 stars）是一个 Agent Skill，作用是让 Claude Code、Codex、Gemini、Cursor 等把 SwiftUI 写得「更聪明、更简单、更现代」，覆盖面包括 API 用法、设计、性能、无障碍、导航、布局、动画、状态管理、VoiceOver、弃用 API。README 还列了 SwiftData Pro、Swift Concurrency Pro、Swift Testing Pro 等同类技能。它更适合当「领域技能包 + 按需触发 + 只补 LLM 边界知识」这个模式的样板——其他领域不能照搬它的检查内容，但可以照搬做法。
+
+1. 前提：你用的是支持 Agent Skills 的编程助手（Claude Code、Codex、Gemini、Cursor 等），且目标项目是 SwiftUI / Apple 平台开发（README 面向 iOS 26+、Swift 6.4+）；安装需要 Node/npx，或用 Claude Code 插件市场。
+
+2. 安装（二选一）。
+
+npx：
+
+```bash
+npx skills add https://github.com/twostraws/swiftui-agent-skill --skill swiftui-pro
+```
+
+报 `npx: command not found`：
+
+```bash
+brew install node
+```
+
+brew 也失败就先装 Homebrew。
+
+Claude Code 插件市场：
+
+```text
+/plugin marketplace add twostraws/SwiftUI-Agent-Skill
+/plugin install swiftui-pro@swiftui-agent-skill
+```
+
+也可以 clone 整个仓库自行安装。安装时按提示选择：要装给哪些 agent、只对当前项目还是所有项目可用。
+
+3. 触发。Claude Code：
+
+```text
+/swiftui-pro
+```
+
+Codex：
+
+```text
+$swiftui-pro
+```
+
+限定只审一部分：
+
+```text
+/swiftui-pro Check for deprecated API
+```
+
+```text
+$swiftui-pro Focus on accessibility
+```
+
+自然语言：
+
+```text
+Use the SwiftUI Pro skill to look for performance problems in this project.
+```
+
+预期结果：agent 按该技能内置的规则做整体或部分审查，并给出可执行的修改建议，而不是泛泛回答。
+
+4. 做对照（这一步不能省，走做法 A 的流程）。选一个已有 SwiftUI 项目或小 demo，包含导航、布局、动画、状态管理、VoiceOver/无障碍、可能弃用的 API。先不用技能，让同一个 agent 审查同一段代码（例如「找出这个 SwiftUI 文件的问题并给修改建议」），记录问题列表；再用技能审查同一段代码，记录问题列表。人工判断新增发现里哪些是真实问题（弃用 API、VoiceOver 标签缺失、性能反模式、状态管理问题），哪些是误报。采纳修复后重新编译、跑测试，观察编译器警告、无障碍检查与代码复杂度是否变化。
+
+5. 想写自己领域的技能时，照它的贡献指南来：Markdown 保持简洁，`SKILL.md` 有 token 成本，尊重用户的 token 预算；不重复 LLM 已经知道的内容，只写边界情况、意外情况、软弃用这类模型容易搞错的地方；贡献前读 Code of Conduct；所有工作用 MIT 许可。
+
+已知局限：效果证据只有作者经验，以及「built on thousands of hours」「targeting the mistakes LLMs actually make」这类说法，README 没有基准测试、对照实验或具体项目效果数据；本次材料只到 README，没读到 `SKILL.md` 的具体检查规则，也没实际验证安装与运行；只适用于 SwiftUI / Apple 平台开发。
+
 ## 怎么判断变好了
 
 最小试用方式：
@@ -354,6 +427,7 @@ claude plugin validate . --strict
 - 审计类（做法 AC）：挑 1–2 个你已经在用的 Claude 技能，装好后跑 `python3 scripts/validate_skill.py --all ~/.claude/skills` 和 `--json` 存基线；只对其中一个技能说 Audit 并改 2–3 条，复跑同一命令；另一个技能不动作对照。
 - 结论页类（做法 AD）：在能执行 shell 的 agent 上装好，先用两三个复杂问题（概念解释、仓库模块梳理、技术选型）对比「直接让模型写 HTML」与「模型写 Markdown 草稿 + CLI 渲染」的输出 token、耗时和页面可读性；再挑一个真实的多步流程或选型问题，看它是否按规则出页、是否不打断回复；最后再考虑开 always-on。
 - 分发类（做法 AE）：路径 A 用现成技能，在本地 Claude Code 里执行 `npx skills add ishuagrawal/skills --skill video-by-reference` 或走插件市场命令，然后拿一段短视频跑一次，看成片是否可用。路径 B 更推荐：照做法 AE-2 建一个自己的 `skills/<name>/SKILL.md`，跑 `python3 scripts/check_skills.py` 和 `claude plugin validate . --strict`，通过后 `./scripts/release.sh 0.1.0`，再到另一台机器上 `npx skills add <你的仓库>` 装上，验证「写一次、多端可用」。
+- SwiftUI 领域技能类（做法 AF）：选一个已有 SwiftUI 项目或小 demo（含导航、布局、动画、状态管理、VoiceOver/无障碍、可能弃用的 API）。先不用技能，让同一个 agent 审查同一段代码并记录问题列表；再用 `/swiftui-pro`（Codex 用 `$swiftui-pro`）审查同一段代码，记录问题列表；也可以用 `/swiftui-pro Check for deprecated API` 或 `$swiftui-pro Focus on accessibility` 只审一项做对照。人工分类新增发现：真实问题 vs 误报。采纳修复后重新编译、跑测试，看编译器警告与无障碍检查是否改善。
 
 可观察的指标：
 
@@ -382,6 +456,7 @@ claude plugin validate . --strict
 - 做法 AC：validator 退出码是否从 `1` 变 `0`；该技能 error 数是否归零、warning 数是否下降；description 改成第三人称并写清 what + when 后触发正确率是否提高；REFINE 后 `SKILL.md` 是否更短；同一真实任务开/关技能 A/B 是否更稳定。
 - 做法 AD：同一问题的输出 token 与耗时；页面是否单文件、可离线打开；agent 是否只在相关概念/多步流程/多方案对比时出页；always-on 后常规回答是否稳定在 2–4 个面板、页面不自动弹开、回复末尾有 `file://` 链接；闲聊、纯命令输出、明确要纯文本的请求是否仍照旧不出页；`node bench/corpus.mjs` 在你机器上给出的数字是否与 README 一致。
 - 做法 AE：安装成功率——分别在 Claude Code、另一个 agent、claude.ai 上各试一次；校验结果——`check_skills.py` 与 `claude plugin validate . --strict` 是否 0 错误通过；分发效率——同一技能在第二个环境能否不手动拷贝就装好，比手动拷 `~/.claude/skills/` 省多少步骤；任务收益——用你的技能完成一次真实任务，对比手动完成的时间与返工次数；更新链路——改一版后用 `/plugin marketplace update ishuagrawal` + `/reload-plugins` 是否能拿到新版本，用来验证「只有 `version` 变化才算新版本」这条说法。
+- 做法 AF：弃用 API 检出数量与修复数量；VoiceOver / 无障碍问题检出数量；性能反模式检出数量；人工确认的有效问题占比与误报率；修复后编译通过率、测试通过率、代码复杂度或行数变化；审查耗时与 token 消耗是否可接受；在 Claude Code、Codex、Cursor 中触发是否都可用（跨工具一致性）。
 
 反向指标：
 
@@ -419,12 +494,17 @@ claude plugin validate . --strict
 - 做法 AE：不用 `./scripts/release.sh` 发布，只手动改文件或打 tag，导致 `version` 字符串没变，Claude Code 不把这次 push 当成新版本。
 - 做法 AE：把 `video-by-reference` 当已验证的成片能力——本次只抓到 README，`SKILL.md` 正文未抓到，仓库只有 1 个技能、33 stars，先只当线索。
 - 做法 AE：在 claude.ai 或 API 沙箱里指望 `video-by-reference` 渲染出视频——它们没有网络访问、可能缺 Chrome 或 ffmpeg，能读技能但可能渲染不出来。
+- 做法 AF：把「5300 stars」或「built on thousands of hours」当效果证据——README 没有基准测试、对照实验或项目效果数据，效果要自己按 A 的对照法测。
+- 做法 AF：不做基线就直接 `/swiftui-pro` 审一遍，然后把所有新增发现都当真实问题——必须和「不用技能」的问题列表对比，并人工区分真实问题与误报。
+- 做法 AF：修完不重新编译、不跑测试，只看建议读起来对不对；至少要观察编译器警告、测试与无障碍检查是否真的改善。
+- 做法 AF：把它的 SwiftUI 检查项搬到别的领域——其他领域只能借鉴「领域技能包 + 按需触发 + 只写边界知识」这个模式，README 本身也没给 `SKILL.md` 正文供核对。
+- 做法 AF：在自己写领域技能时把 LLM 已知的东西整段抄进去——`SKILL.md` 有 token 成本，只该补边界情况、意外情况和软弃用。
 
-注意：`doctor`、`validate`、`npm test`、`claude plugin validate`、`npx @anthropics/skills-ref validate`、`archify doctor`、`validate --json`、`python -m unittest discover -s tests`、`validate_skill.py` 这类检查只能证明「技能或 mod 装得上、格式合法、不带危险命令、图能通过校验、回归测试能过、技能符合规则表」，不能证明「产出更好」。效果必须自己对照。做法 Y 的 `validate_package.py`、`unittest`、`content_lock.py --strict` 同理，作者明确说它们各自只证明其覆盖范围。做法 AC 的 `validate_skill.py` 只覆盖它那 46 条规则，退出码 0 不代表技能产出更好。做法 AD 的 `INSTALL.md` 自检页面只证明装上了，不证明它的出页判断和省 token 在本项目成立。做法 AE 的 `check_skills.py` 与 `claude plugin validate . --strict` 只证明规范与格式，不证明视频成片或任何任务产出更好。
+注意：`doctor`、`validate`、`npm test`、`claude plugin validate`、`npx @anthropics/skills-ref validate`、`archify doctor`、`validate --json`、`python -m unittest discover -s tests`、`validate_skill.py` 这类检查只能证明「技能或 mod 装得上、格式合法、不带危险命令、图能通过校验、回归测试能过、技能符合规则表」，不能证明「产出更好」。效果必须自己对照。做法 Y 的 `validate_package.py`、`unittest`、`content_lock.py --strict` 同理，作者明确说它们各自只证明其覆盖范围。做法 AC 的 `validate_skill.py` 只覆盖它那 46 条规则，退出码 0 不代表技能产出更好。做法 AD 的 `INSTALL.md` 自检页面只证明装上了，不证明它的出页判断和省 token 在本项目成立。做法 AE 的 `check_skills.py` 与 `claude plugin validate . --strict` 只证明规范与格式，不证明视频成片或任何任务产出更好。做法 AF 没有配套的校验命令，它只能靠重新编译、跑测试、无障碍检查与人工判断误报来验收。
 
 ## 常见坑
 
-- 整体 adopt：一次装多个技能包，导致上下文过载或规则冲突。先只装一个，做法 A、H、I、J、K、L、N、Q、R、S、T、U、V、X、Y、Z、AA、AB、AC、AD、AE 同理。
+- 整体 adopt：一次装多个技能包，导致上下文过载或规则冲突。先只装一个，做法 A、H、I、J、K、L、N、Q、R、S、T、U、V、X、Y、Z、AA、AB、AC、AD、AE、AF 同理。
 - 一次装整个插件市场：94 个插件、202 个 agent、184 个 skill 是目录规模，不是使用建议。
 - 重复安装：同一项目里同时用项目级安装和插件市场装同一个技能包，skills 会出现两份。
 - 两条安装路径都装（做法 R）：原文明确说两个都装会让每个技能出现两份；只选一条。
@@ -479,6 +559,12 @@ claude plugin validate . --strict
 - 做法 AE：把整仓库手动压成 zip 上传 claude.ai/API；应当用 `scripts/package_skills.sh` 生成 `dist/<skill>.zip`。
 - 做法 AE：在 claude.ai 或 API 沙箱里期待 `video-by-reference` 渲染视频；沙箱没有网络、可能缺 Chrome 或 ffmpeg。
 - 做法 AE：把 `video-by-reference` 当已验证的能力；本次只抓到 README，`SKILL.md` 正文未抓到，仓库 33 stars、1 个技能、单一作者。
+- 做法 AF：把 5300 stars、今日新增 88 或「built on thousands of hours」当效果证据；README 没有基准测试、对照实验或项目效果数据，仓库指标只说明关注度。
+- 做法 AF：不做基线直接审一遍就把新增发现全当真实问题；必须先不用技能审一次留基线，再人工区分真实问题与误报。
+- 做法 AF：修完不重新编译、不跑测试；验收要看编译器警告、测试通过率、无障碍检查与代码复杂度是否变化。
+- 做法 AF：把它的 SwiftUI 检查规则搬到别的领域；其他领域只能借鉴「领域技能包 + 按需触发 + 只写边界知识」的模式。
+- 做法 AF：自己写领域技能时整段重复 LLM 已知内容；`SKILL.md` 有 token 成本，只写边界情况、意外情况与软弃用这类容易搞错的地方。
+- 做法 AF：在缺少 Node/npx 又没装插件市场的环境里硬装；先解决 `npx: command not found`（`brew install node`）或用 `/plugin marketplace add` 路径。
 
 ## 证据与来源
 
@@ -518,7 +604,8 @@ claude plugin validate . --strict
 - skill-creator-plus 路线（做法 AC）的全部内容——46 条规则及 Script/Script + read/Read/Advice 分类、规则族 FM/DS/ST/CT/WF/SC/NM/HK/TS/LB、三种模式 AUDIT/NEW/REFINE、五条 validator 命令与退出码 0/1/2、`--all` 汇总表格式、`init_skill.py` 脚手架命令、硬指标清单（DS1–DS2、ST1、ST4–ST5、ST7、CT3、CT9、WF1、TS1）、HK1、ST2、NM2/NM5——均来自调研《robonuggets/skill-creator-plus》，即该仓库 README（MIT，31 stars）。属作者主张、没有独立验证的是：46 条规则本身、NM1–NM5、规则于 2026-10-05 对照 Anthropic 页面检查。效果证据只有作者自己的样例技能 `examples/pdf-helper` 输出。材料只有 README，没有源码、`references/` 与 `examples/` 正文，无法核实 validator 实现是否与规则一致。
 - 结论页路线（做法 AD）的全部内容——模型只写 Markdown 草稿、CLI（`am`）负责布局/配色/绘图、约 50 ms 后得到页面、token 比例 47% SVG / 15% CSS / 17% HTML / 21% 文本、支持 70+ agent 并明确列出 Claude Code/Codex/Cursor/OpenCode/Pi、页面存放 `~/.answer-me-with-html/pages/`、四种安装方式、各 agent 的 skill 目录、安装自检用 TCP 三次握手问题、使用示例与出页面的判断规则、always-on 规则原文与跳过情形、Claude Code plan mode 不生成页面、`/answer-me-with-html:config` 与 `am config` 的配置项、草稿语法示例、组件选择表、严格写作检查、更新与 `am clean`、解释视频、基准与测试命令——均来自调研《QingYunA/answer-me-with-html》，即该仓库 README。属作者主张、没有独立验证的是：约 50 ms 的渲染时间、手写 HTML 的 token 比例与「用 skill 后只写 21%」的结论；本次调研的结论明确说证据主要来自作者自测的 9 个页面样本。本次材料在「协作方式」处被截断，`docs/reference.md` 的完整语法与不走 agent 直接调 CLI 的用法未提供。
 - ishuagrawal/skills 路线（做法 AE）的全部内容——开源 Agent Skills 集合（MIT，33 stars）、同时做成 Claude Code 插件市场（marketplace 名 `ishuagrawal`，插件名 `skills`，版本号在 `.claude-plugin/plugin.json`）、每个技能 = 文件夹含 `SKILL.md` 加 `scripts/`/`references/`/`assets/`、声称兼容 Claude Code 与任何支持开放 Agent Skills 格式的 agent、目前只有 1 个技能 `video-by-reference`、维护工具链 `scripts/check_skills.py` / `scripts/package_skills.sh` / `scripts/release.sh` / `.github/workflows/`、Claude Code 与其他 agent 的安装与更新命令、claude.ai 与 API 上传 zip 的路径、手动安装位置、`video-by-reference` 的依赖清单（Node.js 22+、ffmpeg/ffprobe、Python 3 + numpy、headless Chromium）、frontmatter 白名单（`name`、`description`、`license`、`compatibility`、`metadata`、`allowed-tools`）、`description` 最多 1024 字符、`name` 与文件夹名一致且只允许小写字母/数字/连字符、semver 与「只有 `version` 变化才算新版本」——均来自调研《ishuagrawal/skills》，即该仓库 README。属作者主张、没有测试数据或案例支撑的是：「Claude 会在请求匹配时自动选用技能」、其他 agent「任何支持开放 Agent Skills 格式的 agent 都能用」、claude.ai/API 沙箱无法渲染。主要局限：本次只抓到 README，`video-by-reference` 的 `SKILL.md` 正文没有抓到，无法提炼它的具体流程或提示词，也无法验证它是否真能产出可用成片；仓库 33 stars、1 个技能、单一作者，成熟度低；README 里没有任何效果数据或使用案例。
-- 文中提到的 star 数（如 anthropics/skills 179219、awesome-copilot 39,568、pro-workflow 2.9k、feiskyer/claude-code-settings 约 1.6k、zh-tech-writing 312、biomedical-paper-reader 31、cline-pilot 91、wshobson/agents 40,149、book-to-skill 33,277、khazix-skills 21,099、pg-aiguide 1853、math-modeling-skill 1848、google/skills 20653、Mobile Dev 64、agentic-dev-kit 37、one-skill-to-rule-them-all 3,115、Jeffallan/claude-skills 11725、p3-stack 68、skill-creator-plus 31、ishuagrawal/skills 33）来自 metrics，不构成有效性证据。
+- SwiftUI Pro 路线（做法 AF）的全部内容——SwiftUI 领域技能、覆盖 API 用法/设计/性能/无障碍/导航/布局/动画/状态管理/VoiceOver/弃用 API、Agent Skills 格式并兼容 Claude Code / Codex / Gemini / Cursor、`npx skills add https://github.com/twostraws/swiftui-agent-skill --skill swiftui-pro` 安装、`brew install node` 补救、Claude Code 插件市场两条命令、`/swiftui-pro` 与 `$swiftui-pro` 与自然语言三种触发、`/swiftui-pro Check for deprecated API` 与 `$swiftui-pro Focus on accessibility` 这种部分审查用法、SwiftData Pro / Swift Concurrency Pro / Swift Testing Pro 等同类技能、贡献指南里「尊重 token 预算、不重复 LLM 已知内容、聚焦边界情况/意外情况/软弃用、MIT、Code of Conduct」这几条编写原则——均来自调研《twostraws/SwiftUI-Agent-Skill》，即该仓库 README。属作者经验或主张、没有量化证据的是：「built on thousands of hours」「targeting the mistakes LLMs actually make」、LLM 常犯按钮对 VoiceOver 不可见 / 常用弃用 API / 写出意外性能问题、以及各审查规则本身的效果。主要局限：只有 README，没有基准测试、对照实验或具体项目效果数据；`SKILL.md` 的具体检查规则未读到，安装与运行效果未实测；适用范围限于 SwiftUI / Apple 平台开发，README 面向 iOS 26+ 与 Swift 6.4+；仓库指标 5300 stars、今日新增 88，不构成有效性证据。
+- 文中提到的 star 数（如 anthropics/skills 179219、awesome-copilot 39,568、pro-workflow 2.9k、feiskyer/claude-code-settings 约 1.6k、zh-tech-writing 312、biomedical-paper-reader 31、cline-pilot 91、wshobson/agents 40,149、book-to-skill 33,277、khazix-skills 21,099、pg-aiguide 1853、math-modeling-skill 1848、google/skills 20653、Mobile Dev 64、agentic-dev-kit 37、one-skill-to-rule-them-all 3,115、Jeffallan/claude-skills 11725、p3-stack 68、skill-creator-plus 31、ishuagrawal/skills 33、SwiftUI-Agent-Skill 5300）来自 metrics，不构成有效性证据。
 
 ## 依据的调研
 
@@ -558,3 +645,4 @@ claude plugin validate . --strict
 - [robonuggets/skill-creator-plus](../research/radar/2026-10-06/1582-robonuggets-skill-creator-plus.md)：值得一试，建议小范围试：按 README 的安装命令把它装进 Claude Code 的 skills 目录，先对现有技能跑 validate_skill.py --all 拿到基线，再按审计报告改 2–3 条并复跑对比，理由是它给了可直接执行的命令和 46 条可逐条勾选的规则，能把“技能写得好不好”变成可复核的检查项；但材料只有 README、规则和模型相关论断均为作者主张，先验证再决定是否纳入手册。
 - [QingYunA/answer-me-with-html](../research/radar/2026-10-08/2001-qingyuna-answer-me-with-html.md)：值得一试，先在一个能执行 shell 的 agent（如 Claude Code）上装这个 skill 并开启 always-on，用两三个复杂问题对比“直接让模型写 HTML”与“模型写 Markdown 草稿 + CLI 渲染”的输出 token、耗时和页面可读性，再决定是否写进手册。理由是它把“模型只写内容、CLI 负责布局”这条分工约定固化成了可复制的安装命令、配置命令和一条可直接粘贴的规则提示词，并附了可复现的 token 基准，但证据主要来自作者自测的 9 个页面样本。
 - [ishuagrawal/skills](../research/radar/2026-10-09/2192-ishuagrawal-skills.md)：值得一试，建议小范围试：把它的「写 SKILL.md → check_skills.py / claude plugin validate --strict → release.sh 打包发布 → 插件市场或 npx skills 分发」这套技能生产与分发流程照抄用来做自己的技能；自带的 video-by-reference 因 SKILL.md 正文未抓到、仓库仅 33 stars 且只有一个技能，只当线索看。理由是安装、校验、发布命令都是可直接复制的具体步骤，而技能本身的内容与效果在材料里没有依据。
+- [twostraws/SwiftUI-Agent-Skill](../research/radar/2026-10-10/2269-twostraws-swiftui-agent-skill.md)：值得一试，如果你用 Claude Code、Codex、Cursor 等做 SwiftUI 开发，按 README 的 npx 或插件市场步骤安装 swiftui-pro，并在写/审 SwiftUI 代码时显式触发；更一般地，可借鉴其“领域技能包 + 按需触发 + 只写 LLM 边界知识”的模式为其他工作补上下文。理由是安装与触发步骤明确、可直接照做，但效果证据主要是作者经验，且适用范围限于 SwiftUI。
