@@ -1,14 +1,14 @@
-# 让 AI 动手之前先过权限门控：账户、外部服务、代码仓库与本机执行
+# 让 AI 在触碰账户、代码和执行环境前守住权限边界
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：AI 做只读审计、计划、草案没问题，但一旦它能改广告账户、调外部服务、写代码仓库，或在你的 Windows 本机执行命令，就需要先有默认只读、按任务授权、审批与回滚这四层约束；这篇手册给可照做的四套做法，再加一套跨机器执行的边界收紧做法。
-> 先试这一步：先在只读状态下跑一轮：挑一个广告平台依次执行 `/ads setup` → `/ads audit` → `/ads report` → `/ads next`，确认它给出的 findings 带日期证据和显式置信度，再决定要不要往写操作走。
-> 最近修订：2026-10-08
+> 解决的问题：AI 一旦能直接改账户、写代码或执行命令，风险就从答案不准升级成资产被动；这篇手册给出六种可照做的权限边界做法，从只读审计、按任务授权、双 CLI 分工、底层沙箱到跨机器执行和模型生成代码的沙箱执行。
+> 先试这一步：如果你管付费媒体账户，先装 claude-ads 跑 `/ads setup` 和 `/ads audit`，看它能不能给出带日期证据和显式置信度的只读结论。
+> 最近修订：2026-10-09
 
 ## 解决什么问题
 
-付费媒体账户、外部服务账号、本地代码仓库都是真金白银或真实代码的操作面。AI 在只读状态下做审计、计划、创意、报告没问题；一旦它能直接改账户、调用外部服务或写代码，风险就从「答案不准」升级成「账户/仓库被动了」。这篇手册给五件事：一是默认只读、产出带证据的结论，账户变更先出草案再逐条过门控（以 AgriciDaniel/claude-ads 作为可照搬的落地模板）；二是把权限模型换成更省人的一种——不再预先给 AI 挂上所有服务、也不卡在第一步等人点确认，而是默认零权限、按当次任务只引入单个具体资源，有副作用的动作先在本地模拟结果让 agent 继续推进，人稍后一次性批量批准或逐条批准（以 Cloudflare OS 的 Gatekeeper 作为可本地体验的实现）；三是在本地代码仓库里用两个 CLI 分工——Claude 只读规划与复审，Codex 只在你逐张核准工作卡后于 `--sandbox workspace-write` 下写卡上明列的文件，核准前自动存 git 还原点，越界就停下并还原（以 sojei1989/ai-meeting-room 作为可照做的本机流程）；四是做一次底层沙箱的可行性验证——在 Apple silicon Mac 上用 Strands Box 把执行、读写、网络能力放开给 agent，用默认拒绝的 Dogwood 语义策略在 agent 进程之外判定 allow/deny，凭证由网关注入而不交给 agent，决策写 OTLP JSON 记录供事后审计（以 strands-agents/box 作为 Preview 阶段的试装来源）；五是当会话必须放在云端、项目与工具链必须留在 Windows 本机时，把「在哪执行」这一环拆开——服务器上的官方 Claude Code 通过一条加密反向 SSH 隧道在你电脑上读写文件、执行命令，边界靠端口最小放行、凭据当密码管、审批沿用 Claude Code 自身机制来夹住（以 sun168567/cc-desk-tunnel 作为一个只宜自用、小范围试的拓扑）。
+付费媒体账户、外部服务账号、本地代码仓库都是真金白银或真实代码的操作面。AI 在只读状态下做审计、计划、创意、报告没问题；一旦它能直接改账户、调用外部服务或写代码，风险就从「答案不准」升级成「账户/仓库被动了」。这篇手册给六件事：一是默认只读、产出带证据的结论，账户变更先出草案再逐条过门控（以 AgriciDaniel/claude-ads 作为可照搬的落地模板）；二是把权限模型换成更省人的一种——不再预先给 AI 挂上所有服务、也不卡在第一步等人点确认，而是默认零权限、按当次任务只引入单个具体资源，有副作用的动作先在本地模拟结果让 agent 继续推进，人稍后一次性批量批准或逐条批准（以 Cloudflare OS 的 Gatekeeper 作为可本地体验的实现）；三是在本地代码仓库里用两个 CLI 分工——Claude 只读规划与复审，Codex 只在你逐张核准工作卡后于 `--sandbox workspace-write` 下写卡上明列的文件，核准前自动存 git 还原点，越界就停下并还原（以 sojei1989/ai-meeting-room 作为可照做的本机流程）；四是做一次底层沙箱的可行性验证——在 Apple silicon Mac 上用 Strands Box 把执行、读写、网络能力放开给 agent，用默认拒绝的 Dogwood 语义策略在 agent 进程之外判定 allow/deny，凭证由网关注入而不交给 agent，决策写 OTLP JSON 记录供事后审计（以 strands-agents/box 作为 Preview 阶段的试装来源）；五是当会话必须放在云端、项目与工具链必须留在 Windows 本机时，把「在哪执行」这一环拆开——服务器上的官方 Claude Code 通过一条加密反向 SSH 隧道在你电脑上读写文件、执行命令，边界靠端口最小放行、凭据当密码管、审批沿用 Claude Code 自身机制来夹住（以 sun168567/cc-desk-tunnel 作为一个只宜自用、小范围试的拓扑）；六是把模型生成的代码放进沙箱执行并回收结果——在你的应用里嵌入 MXC SDK，以 egress 默认 deny + 超时启动容器，先验证越权用例确实被拦（以 Microsoft MXC 作为可试装的沙箱化代码执行系统）。
 
 ## 适用与不适用
 
@@ -29,6 +29,9 @@
 - 你能接受单用户自用：一个服务对应一个使用者、同一时间一台在线 Windows 设备，没有多用户、权限分级或租户隔离。
 - 你想用时间触发的定时任务让工作持续推进：到点向指定会话或新会话发送预设提示词，也可以直接让 Claude 帮你设置。
 - 你能接受文档目前只有中文。
+- 你需要把执行能力嵌入自己的应用，运行不可信代码（model output、plugins、tools），并且愿意按平台挑后端、调策略；平台是 Windows / Linux / macOS；用 Node SDK 时在 Linux 或 macOS 上试最省事（原文推荐的最小试用环境）。
+- 你能接受 MXC 的现状：README 属项目一手文档，没有性能数字、对比基准或落地案例；完整策略 JSON 示例、接入 agent 主循环的做法、各后端实际隔离强度对比未给出；部分后端标注 experimental。
+- 你只想先做可行性验证：跑通「生成代码 → 隔离执行 → 回结果」的循环，先验证越权用例被拦。
 
 **不适用：**
 
@@ -54,6 +57,11 @@
 - 服务器所在地不在 Anthropic 支持的国家和地区：服务器所在地即使用地点；条款限制第三方产品提供 Claude.ai 登录或代为使用订阅额度，技术上能用不代表获得许可，拿不准时改用 API key。
 - 想要有代码签名的安装包：安装包没有代码签名。
 - 想靠文档配置定时任务：README 未给出具体提示词模板或配置字段，需在客户端里实际操作确认。
+- 只是偶尔跑一段生成代码：用现成容器/沙箱可能更省事（此句为推论，非原文主张）。
+- 需要完整的策略 JSON 示例或现成的 agent 主循环接入方案：原文未给出，需按 README 指向的 `docs/backends/`、`docs/api-reference/`、`schemas/stable/` 继续查证。
+- 想用 `--audit` 来给不可信代码补权限：原文字面警告 `--audit` 会关闭被分析工作负载的全部沙箱安全，绝不能用于不可信代码；给不可信代码补权限应走 `docs/logging-access-denied.md` 的 deny-and-record 流程。
+- 想依赖 experimental 后端（`windows_sandbox`、`microvm`、`hyperlight`）作为稳定生产：原文标注为 experimental。
+- 源码构建环境不满足：Rust 1.93（由 `src/rust-toolchain.toml` 固定）、Node.js 24 或更高版本。
 
 ## 前置条件
 
@@ -81,10 +89,16 @@
 - Claude 账号登录走官方 `claude auth` 流程，登录凭据只保存在服务器上；不想用订阅登录时可改用 API key，在数据目录的 `config/provider.json` 中配置。
 - 从源码构建 cc-desk-tunnel 需要 Git、Node.js 24 与 npm；Windows 上使用 PowerShell 7。
 - cc-desk-tunnel 需要填入的三项连接信息来自你自己登录服务器看到的安装汇总，不要采用别人转发的证书指纹。
+- MXC Node SDK 安装：`@microsoft/mxc-sdk`（npm，包内含原生运行时资产），适用于 Linux/macOS 的最小试用。
+- MXC 也可用 Rust：`mxc-sdk`（crates.io）；或 .NET：`Microsoft.Mxc.Sdk`（NuGet）。
+- MXC 按平台选择后端：Linux x64/ARM64 默认 `bubblewrap`（其他：`lxc`、`microvm`、`hyperlight`）；macOS ARM64/x64 默认 `seatbelt`；Windows 11 x64/ARM64 默认 `processcontainer`（其他：`windows_sandbox`*、`wslc`、`microvm`*、`hyperlight`*、`isolation_session`）。带 * 的后端为 experimental。
+- MXC 源码构建前置：Rust（由 `src/rust-toolchain.toml` 固定为 1.93）、Node.js 24 或更高版本与 npm、所选后端要求的平台工具链与前置条件。
+- MXC 诊断：原生 executor 默认把 stdin/stdout/stderr 留给工作负载，MXC 自身的诊断要显式用 `--debug` 打开。
+- MXC 审计模式：仅受支持的 Windows 版本；原文字面警告会关闭沙箱安全。
 
 ## 操作步骤
 
-下面分成五套做法。做法 A 是付费媒体账户的具体落地：默认只读，写操作逐条同步过门控。做法 B 是可迁移的权限与审批模式：默认零权限，按任务只引入单个资源，有副作用的动作延后批量审批。做法 C 是本地代码仓库的双 AI 协作：Claude 只读规划与复审，Codex 只在你逐张核准工作卡后于沙箱内执行，核准前自动存 git 还原点。做法 D 是底层沙箱的可行性验证：在 Apple silicon Mac 上用 Strands Box 把执行、读写和网络能力放开给 agent，用默认拒绝的 Dogwood 语义策略在 agent 进程之外判定 allow/deny，凭证由网关注入，决策写 OTLP JSON。做法 E 是跨机器执行的位置边界：官方 Claude Code 会话跑在你自己控制的 Linux 服务器上，通过加密反向 SSH 隧道在 Windows 本机读写文件、执行命令，边界靠端口最小放行与凭据管理夹住。E 与 A/B/C/D 不冲突，但它不是沙箱，只宜自用、小范围试。
+下面分成六套做法。做法 A 是付费媒体账户的具体落地：默认只读，写操作逐条同步过门控。做法 B 是可迁移的权限与审批模式：默认零权限，按任务只引入单个资源，有副作用的动作延后批量审批。做法 C 是本地代码仓库的双 AI 协作：Claude 只读规划与复审，Codex 只在你逐张核准工作卡后于沙箱内执行，核准前自动存 git 还原点。做法 D 是底层沙箱的可行性验证：在 Apple silicon Mac 上用 Strands Box 把执行、读写和网络能力放开给 agent，用默认拒绝的 Dogwood 语义策略在 agent 进程之外判定 allow/deny，凭证由网关注入，决策写 OTLP JSON。做法 E 是跨机器执行的位置边界：官方 Claude Code 会话跑在你自己控制的 Linux 服务器上，通过加密反向 SSH 隧道在 Windows 本机读写文件、执行命令，边界靠端口最小放行与凭据管理夹住。做法 F 是模型生成代码的沙箱执行：在你的应用里嵌入 MXC SDK，以 egress 默认 deny + 超时启动容器，跑通「生成代码 → 隔离执行 → 回结果」的循环，先验证越权用例被拦。E 与 A/B/C/D/F 不冲突，但它不是沙箱，只宜自用、小范围试。F 与 D 不冲突：D 是 agent 沙箱（macOS Apple silicon + Dogwood 语义策略），F 是代码执行沙箱（跨平台 + 多后端 + SDK 嵌入应用）。
 
 ### 做法 A：付费媒体账户（claude-ads）——默认只读、写操作逐条过门控
 
@@ -594,20 +608,110 @@ npm run package:server    # 生成服务端程序包，传到服务器后运行�
 
 预期结果：本机能观察到命令确实在本机执行；断开后本机不残留常驻服务。
 
-**怎么选（做法 A / 做法 B / 做法 C / 做法 D / 做法 E）：**
+### 做法 F：MXC——把模型生成的代码放进沙箱执行并回收结果
+
+**45. 按语言安装 SDK（前提：不需要 clone 仓库，按语言用包管理器装）**
+
+- Node（Linux/macOS 最小试用推荐）：`@microsoft/mxc-sdk`（npm，包内含原生运行时资产）。
+- Rust：`https://crates.io/crates/mxc-sdk`（该 crate 会把 MXC SDK、引擎和所选后端一并编译进调用方应用）。
+- .NET：`https://www.nuget.org/packages/Microsoft.Mxc.Sdk`（包内含原生运行时资产）。
+
+预期结果：SDK 依赖装进你的应用，可以发起容器请求。
+
+**46. 在应用里发起一次受控执行（原样摘自 README 的 Node 片段）**
+
+```typescript
+import { spawn, type ContainerRequest } from '@microsoft/mxc-sdk/v1';
+
+const request: ContainerRequest = {
+  command: 'node -e "console.log(\'hello from container\')"',
+  network: { egress: { default: 'deny' } },
+  timeoutMs: 30_000,
+};
+
+const child = await spawn(request);
+```
+
+请求至少要给 `command`；`network`、`timeoutMs` 是示例中出现的字段。更完整的可运行样例见仓库 `samples/run-with-io-stdio-streaming/`，API 参考见 `docs/api-reference/`。
+
+预期结果：模型生成的代码在沙箱容器里执行，stdout 可回收；出站默认 deny，超时 30 秒。
+
+**47. 对照运行平台选择后端**
+
+| Runtime platform | Default backend | Other backends | Minimum host OS |
+|---|---|---|---|
+| Windows 11 x64 / ARM64 | `processcontainer` | `windows_sandbox`\*, `wslc`, `microvm`\*, `hyperlight`\*, `isolation_session` | [Windows OS-version support](docs/backends/process-container/os-version-support.md)|
+| Linux x64 / ARM64 | `bubblewrap` | `lxc`, `microvm`, `hyperlight` | - |
+| macOS ARM64 / x64 | `seatbelt` | - | - |
+
+带 \* 的后端为 experimental。各后端的前置条件与行为见 `docs/backends/`。
+
+预期结果：你知道自己平台上默认走哪个后端，以及哪些后端只是 experimental。
+
+**48. 跑三组用例验证隔离有效性（最小试用）**
+
+在 Linux 或 macOS 上用 Node SDK：
+
+1. 安装 `@microsoft/mxc-sdk`，照第 46 步的 Node 片段写脚本：`command` 换成一端模型生成的短脚本，保留 `network: { egress: { default: 'deny' } }` 与有限 `timeoutMs`（示例为 30_000）。
+2. 跑三组用例：
+   - (a) 只读写允许目录的脚本——应成功并回收 stdout；
+   - (b) 尝试写被拒路径的脚本——应失败；
+   - (c) 尝试出网的脚本——应失败。
+3. 对 (b)(c) 的失败用 `wxc-exec.exe --debug config.json` 打开诊断，确认是策略拒绝而非环境没搭好；若要给可信工具补权限，走 `docs/logging-access-denied.md` 的 deny-and-record，不要用 `--audit`。
+
+预期结果：越权用例被拦，合法用例成功，诊断能区分策略拒绝与环境问题。
+
+**49.（替代路线）用平台专用 executor 二进制测试**
+
+平台专用 executor 二进制（如 `wxc-exec.exe`）接受 `schemas/stable/` 定义的稳定 schema 的 JSON 容器创建请求，用于测试，或 SDK 无法嵌入应用时。
+
+预期结果：不写 SDK 也能按同一份 schema 发起容器请求。
+
+**50.（仅在开发 MXC 时）源码构建**
+
+前提：仅在开发 MXC、修改原生运行时、或想用独立 executor 二进制而非打包 SDK 时。构建前置条件：Rust（由 `src/rust-toolchain.toml` 固定为 1.93）、Node.js 24 或更高版本与 npm、所选后端要求的平台工具链与前置条件。
+
+```bash
+build.bat --all             # Windows: Release build for current architecture
+```
+
+```bash
+./build.sh --all            # Linux: Release build
+```
+
+```bash
+./build-mac.sh --all        # macOS: Release build for native architecture
+```
+
+预期结果：得到 Release 构建产物。
+
+**51. 需要持久隔离环境时用状态感知生命周期**
+
+provision → start → execute → stop → deprovision（概述见 `docs/container-lifecycle.md`），SDK 提供一次性与状态感知两类 API。
+
+预期结果：容器可跨多次执行保持状态，而不是每次重新起。
+
+**52. 遥测默认关闭，想开需同时满足条件**
+
+需同时满足运行级 opt-in、Windows 用户明示同意、管理策略允许、应用在容器请求中启用遥测选项；管理员只能阻止、不能代用户同意；非 Windows 平台为 no-op，本地开源构建不向 Microsoft 发送。
+
+预期结果：你明确知道遥测何时会开、何时不会。
+
+**怎么选（做法 A / 做法 B / 做法 C / 做法 D / 做法 E / 做法 F）：**
 
 - 账户写操作、不可逆或 blast radius 大的动作：走做法 A 第 6 步，逐条同步确认。六项门控是硬约束，缺 ceilings 即禁止写入，v2 不支持永久删除。
 - 可模拟、可回滚、需要连续推进的动作：走做法 B 第 13 步，先本地模拟让 agent 排队推进，人离线，回来批量批准。
 - 本地代码仓库的改动：走做法 C。它把「谁能写、写哪些文件、核准前存还原点、越界就还原」夹住；Claude 全程只读规划与复审，Codex 只在核准后 `workspace-write` 执行工作卡明列的文件。比 A 更省去逐条 diff 门控的配置，比 B 多了 git 还原点；但只支持 macOS、界面繁体中文、当前只有 Claude+Codex 两位成员。
 - 想验证「默认拒绝 + 语义策略 + 凭证注入 + 决策记录」这条通用设计，且手上有 Apple silicon Mac：走做法 D，但只当可行性验证，不当生产标准。D 比 B/C 更底层：在 agent 进程之外判定 allow/deny，凭证不交给 agent，决策写 OTLP JSON；但 Preview、只支持 macOS Apple silicon、配置写法在外链文档，原文只提供安装和构建命令。
-- 会话必须在云上、项目与工具链必须在 Windows 本机：走做法 E。它改变的是 Claude Code 的执行位置边界，会话在云服务器、命令落到本机 Windows 执行，复用官方 Claude Code 的审批与上下文管理；但**它不是沙箱**，只有隧道 + 端口最小放行 + 凭据管理三层，服务凭据等同于完全控制权，且只宜单用户自用。要真正的隔离，用做法 D 的设计思路；要在本机做可回滚的代码改动，用做法 C。
+- 想把模型生成的代码放进沙箱执行并回收结果，且平台是 Linux/macOS（或 Windows），愿意按平台挑后端、调策略：走做法 F，先做最小试用验证越权用例被拦。它比做法 D 更偏向“嵌入你的应用”的 SDK 形态，跨平台且后端可选；但原文未给出完整策略 JSON 示例与接入 agent 主循环的做法，只到 try 级。与做法 D 的差别：D 是 Strands Box（macOS Apple silicon、Dogwood 语义策略、agent 沙箱），F 是 MXC（跨平台、多后端、SDK 依赖，编译进你的应用）。两者都还在 Preview/验证阶段，不要直接当生产标准。
+- 会话必须在云上、项目与工具链必须在 Windows 本机：走做法 E。它改变的是 Claude Code 的执行位置边界，会话在云服务器、命令落到本机 Windows 执行，复用官方 Claude Code 的审批与上下文管理；但**它不是沙箱**，只有隧道 + 端口最小放行 + 凭据管理三层，服务凭据等同于完全控制权，且只宜单用户自用。要真正的隔离，用做法 D 的设计思路；要在本机做可回滚的代码改动，用做法 C；要把模型生成代码放进沙箱执行，用做法 F。
 - 拿不到 Apple silicon 机器或 Bedrock 模型访问时，不要强行套用，退回借鉴设计：默认拒绝、凭证注入、决策记录三件事本身是通用的。
-- 只读审计与报告：两者都不触碰目标，直接按做法 A 第 2–4 步做；想验证权限链路，再用做法 B 第 10–13 步本地跑一遍，或用做法 C 第 16–18 步在小仓库上跑一轮，或用做法 D 第 24–31 步做一次沙箱可行性验证，或用做法 E 第 35–44 步在非关键项目上跑一次跨机器执行。
-- 差异要认清：做法 A 是「人看过 diff 才放行」的同步审批；做法 B 是「先给 agent 模拟结果、人稍后批量裁决」的异步审批；做法 C 是「逐张工作卡同步核准 + 核准前 git 还原点 + 沙箱执行」的同步审批；做法 D 是「操作系统隔离 + Dogwood 语义策略默认拒绝 + 凭证注入 + OTLP 决策记录」的底层沙箱；做法 E 是「云端会话 + 反向 SSH 隧道落到本机执行 + 端口最小放行」，没有沙箱层，审批沿用 Claude Code 自身机制。原文对异步审批只给主张，没有效果数据；ai-meeting-room 也没有量化效果数据；Strands Box 同样没有效果指标或前后对照数据；cc-desk-tunnel 的 README 也只提供用量侧的额度、重置时间和调用统计。
+- 只读审计与报告：两者都不触碰目标，直接按做法 A 第 2–4 步做；想验证权限链路，再用做法 B 第 10–13 步本地跑一遍，或用做法 C 第 16–18 步在小仓库上跑一轮，或用做法 D 第 24–31 步做一次沙箱可行性验证，或用做法 E 第 35–44 步在非关键项目上跑一次跨机器执行，或用做法 F 第 45–48 步跑一次模型生成代码的沙箱执行。
+- 差异要认清：做法 A 是「人看过 diff 才放行」的同步审批；做法 B 是「先给 agent 模拟结果、人稍后批量裁决」的异步审批；做法 C 是「逐张工作卡同步核准 + 核准前 git 还原点 + 沙箱执行」的同步审批；做法 D 是「操作系统隔离 + Dogwood 语义策略默认拒绝 + 凭证注入 + OTLP 决策记录」的底层沙箱；做法 E 是「云端会话 + 反向 SSH 隧道落到本机执行 + 端口最小放行」，没有沙箱层，审批沿用 Claude Code 自身机制；做法 F 是「SDK 嵌入应用 + 多后端容器隔离 + egress 默认 deny + 超时」的代码执行沙箱。原文对异步审批只给主张，没有效果数据；ai-meeting-room 也没有量化效果数据；Strands Box 同样没有效果指标或前后对照数据；cc-desk-tunnel 的 README 也只提供用量侧的额度、重置时间和调用统计；MXC 原文没有给出性能数字、对比基准或落地案例。
 
 ## 怎么判断变好了
 
-五份材料都没有给准确率、节省工时、误报/漏报率这类结果数据，所以只能看过程信号：
+六份材料都没有给准确率、节省工时、误报/漏报率这类结果数据，所以只能看过程信号：
 
 claude-ads 侧：
 
@@ -654,9 +758,16 @@ cc-desk-tunnel 侧：
 - 数据外流是否知情：你清楚会话记录和 Claude 登录凭据留在服务器上、备份文件同样含密，并且确认服务器所在地在 Anthropic 支持的国家和地区。
 - 材料没有给出「工作效果是否改善」的指标、基准或对比数据；用量侧只能看客户端的额度、重置时间和调用统计。
 
-**最小试用方式：** claude-ads 侧全程只读、不触碰账户，只挑一个广告平台，依次跑 `/ads setup` → `/ads audit` → `/ads report` → `/ads next`，看它能不能给出带证据和置信度的 findings，以及 next 指出的阻塞项是否合理。Cloudflare OS 侧：装好 pnpm → `pnpm run-local` → 打开 http://localhost:8787 → 跑「做 slides」和「建协作白板应用」两条提示词 → 再配置一个真实资源（GitHub repo 或 Google Doc 选一个），走完「引入资源 → agent 请求权限 → 审批队列 → 批量批准」的完整链路。ai-meeting-room 侧：在一个无关紧要的小仓库上，下载解压 → 双击 `start.command` → 完成设定精灵 → 浏览器打开 `http://127.0.0.1:4477` → 用白话提一个小改动 → 等 Claude 规划、Codex 列卡 → 逐张核准（注意先存还原点）→ 看 Codex 是否只写列出的文件 → 按「回到执行前」验证回滚 → 结束并产出决议。Strands Box 侧：在一台满足前提的 Apple silicon Mac 上执行下载与 `--version`，确认二进制可运行；按 `docs/user/getting-started.md` 写出最小 `box.toml` 和 `policy.dw`，启动 box，跑 `examples/strands-box/strands-sdk-agent/` 示例；只做一件事：把示例 agent 的一次操作从「直接授权」改成「经解释器 + 策略检查」，体会边界差别。cc-desk-tunnel 侧：限定在两台机器、一个非关键项目——云厂商安全组里只允许自己的出口 IP 访问 8787 和 7000，服务器上跑一次安装脚本（凭据只进密码管理器），Windows 上装客户端填入三项信息并连接，登录 Claude，只添加一个不重要的测试项目目录，让 Claude 读取一个本机文件并汇报内容、再在本机执行一条无害命令（例如查看目录、跑一次项目单元测试），试完断开连接并确认本机无常驻服务、SSH 监听已停止。
+MXC 侧：
 
-**试多久：** claude-ads 的材料在「怎么试」一节被截断，没有给出建议时长。Cloudflare OS 原文建议最小试用控制在半天内。ai-meeting-room 原文没有给出建议时长；建议至少跑通一轮完整会议，并故意制造一次越界或失败，看还原与重试行为是否符合预期。Strands Box 原文没有给建议时长；先做一次可行性验证，不要直接进生产。cc-desk-tunnel 原文也没有给建议时长；材料里那段「怎么试、怎么验证」在「判断有没有改善的指标」处被截断，建议按第 44 步限定一次会话、试完即断开。合起来的建议：单平台只读一轮，加半天本地权限链路验证，再决定要不要扩到更多平台、更多服务或跨机器执行。调研结论本身的建议是「小范围试而非全面采用」；cc-desk-tunnel 的结论同样是「在一台自己可控的云主机 + 一台 Windows 上小范围试」。
+- 隔离有效性：越权用例（写系统路径、联网、读敏感文件）被拦比例，目标 100%；同时记录合法用例被误拦的比例与策略返工次数。
+- 可用性：合法工作负载首次运行成功率、修策略后成功率、单次执行延迟与资源占用（与直接在宿主执行对比）。
+- 集成效果：接进「生成代码 → 隔离执行 → 回结果」的循环后，任务端到端成功率、超时/拒绝后的重试次数、人工介入次数（对照不隔离或人工审查的基线）。
+- 原文没有给出「是否改善了业务结果」的指标。
+
+**最小试用方式：** claude-ads 侧全程只读、不触碰账户，只挑一个广告平台，依次跑 `/ads setup` → `/ads audit` → `/ads report` → `/ads next`，看它能不能给出带证据和置信度的 findings，以及 next 指出的阻塞项是否合理。Cloudflare OS 侧：装好 pnpm → `pnpm run-local` → 打开 http://localhost:8787 → 跑「做 slides」和「建协作白板应用」两条提示词 → 再配置一个真实资源（GitHub repo 或 Google Doc 选一个），走完「引入资源 → agent 请求权限 → 审批队列 → 批量批准」的完整链路。ai-meeting-room 侧：在一个无关紧要的小仓库上，下载解压 → 双击 `start.command` → 完成设定精灵 → 浏览器打开 `http://127.0.0.1:4477` → 用白话提一个小改动 → 等 Claude 规划、Codex 列卡 → 逐张核准（注意先存还原点）→ 看 Codex 是否只写列出的文件 → 按「回到执行前」验证回滚 → 结束并产出决议。Strands Box 侧：在一台满足前提的 Apple silicon Mac 上执行下载与 `--version`，确认二进制可运行；按 `docs/user/getting-started.md` 写出最小 `box.toml` 和 `policy.dw`，启动 box，跑 `examples/strands-box/strands-sdk-agent/` 示例；只做一件事：把示例 agent 的一次操作从「直接授权」改成「经解释器 + 策略检查」，体会边界差别。cc-desk-tunnel 侧：限定在两台机器、一个非关键项目——云厂商安全组里只允许自己的出口 IP 访问 8787 和 7000，服务器上跑一次安装脚本（凭据只进密码管理器），Windows 上装客户端填入三项信息并连接，登录 Claude，只添加一个不重要的测试项目目录，让 Claude 读取一个本机文件并汇报内容、再在本机执行一条无害命令（例如查看目录、跑一次项目单元测试），试完断开连接并确认本机无常驻服务、SSH 监听已停止。MXC 侧：Linux 或 macOS + Node SDK，安装 `@microsoft/mxc-sdk`，照 README 的 Node 片段写脚本，跑三组用例（允许目录读写、被拒路径写入、出网），用 `wxc-exec.exe --debug config.json` 诊断失败原因。
+
+**试多久：** claude-ads 的材料在「怎么试」一节被截断，没有给出建议时长。Cloudflare OS 原文建议最小试用控制在半天内。ai-meeting-room 原文没有给出建议时长；建议至少跑通一轮完整会议，并故意制造一次越界或失败，看还原与重试行为是否符合预期。Strands Box 原文没有给建议时长；先做一次可行性验证，不要直接进生产。cc-desk-tunnel 原文也没有给建议时长；材料里那段「怎么试、怎么验证」在「判断有没有改善的指标」处被截断，建议按第 44 步限定一次会话、试完即断开。MXC 原文没有给建议时长；先做一次可行性验证（跑通三组用例），不要直接进生产。合起来的建议：单平台只读一轮，加半天本地权限链路验证，再决定要不要扩到更多平台、更多服务或跨机器执行。调研结论本身的建议是「小范围试而非全面采用」；cc-desk-tunnel 的结论同样是「在一台自己可控的云主机 + 一台 Windows 上小范围试」；MXC 的结论同样是「小范围试」——在 Linux/macOS 上用 Node SDK 按 README 的片段以 egress 默认 deny + 超时启动容器，跑一段模型生成代码并回收 stdout，先验证越权用例确实被拦。
 
 ## 常见坑
 
@@ -707,10 +818,18 @@ cc-desk-tunnel 侧：
 - 证书指纹从别人转发的消息里拿。自签证书时，指纹应来自你自己登录服务器看到的安装汇总。
 - 忘记数据会离开本机。Claude 读取的文件片段和命令输出会经服务器发往模型服务；服务器上保存会话记录和 Claude 登录凭据，备份文件同样含这些秘密。
 - 以为定时任务有文档化的提示词模板或配置字段。README 未给出，需在客户端里实际操作确认。
+- 把 `--audit` 用于不可信代码。原文字面警告：`--audit` 会关闭被分析工作负载的全部沙箱安全，绝不能用于不可信代码；给不可信代码补权限应走 `docs/logging-access-denied.md` 的 deny-and-record 流程。
+- 以为原文给了完整策略 JSON 示例。没有；需按 README 指向的 `docs/backends/`、`docs/api-reference/`、`schemas/stable/` 继续查证。
+- 以为原文给了把 MXC 接进 agent 主循环的做法（超时后如何处理、结果回收格式、重试）。没有；需自行查证或实现。
+- 把 experimental 后端当稳定生产。`windows_sandbox`、`microvm`、`hyperlight` 原文标注为 experimental。
+- 忘了原生 executor 默认把 stdin/stdout/stderr 留给工作负载。MXC 自身的诊断要显式用 `--debug` 打开。
+- 源码构建环境不对。Rust 由 `src/rust-toolchain.toml` 固定为 1.93；Node.js 24 或更高版本与 npm；所选后端要求的平台工具链与前置条件。
+- 遥测想开就开。需同时满足运行级 opt-in、Windows 用户明示同意、管理策略允许、应用在容器请求中启用遥测选项；管理员只能阻止、不能代用户同意；非 Windows 平台为 no-op。
+- 把「跨平台」「后端清单」「遥测默认关闭」当已验证。这些均为项目自述，无第三方验证数据。
 
 ## 证据与来源
 
-**依据五份材料：** AgriciDaniel/claude-ads 仓库 README 首页（版本号 v2.0.2）；cloudflare/cloudflare-os 仓库 README（当前是 v2，基于 v1 经验重写，定位 early access）；sojei1989/ai-meeting-room 仓库 README（Apache License 2.0，macOS 本机开源应用，作者自述是平面设计师、不写程序、工具是他自己每天在用的）；strands-agents/box 仓库 README（自述 Preview，当前只支持 macOS Apple silicon 本地执行，63 stars）；sun168567/cc-desk-tunnel 仓库 README（Apache-2.0，约 39 stars，公开客户端、服务端和构建部署脚本，自述主要由 AI 编写、个人维护、没有经过专业的安全审计，与 Anthropic 无隶属或合作关系）。
+**依据六份材料：** AgriciDaniel/claude-ads 仓库 README 首页（版本号 v2.0.2）；cloudflare/cloudflare-os 仓库 README（当前是 v2，基于 v1 经验重写，定位 early access）；sojei1989/ai-meeting-room 仓库 README（Apache License 2.0，macOS 本机开源应用，作者自述是平面设计师、不写程序、工具是他自己每天在用的）；strands-agents/box 仓库 README（自述 Preview，当前只支持 macOS Apple silicon 本地执行，63 stars）；sun168567/cc-desk-tunnel 仓库 README（Apache-2.0，约 39 stars，公开客户端、服务端和构建部署脚本，自述主要由 AI 编写、个人维护、没有经过专业的安全审计，与 Anthropic 无隶属或合作关系）；Microsoft MXC 仓库 README（source_note 为「依据仓库 README」，属项目一手文档）。
 
 **可以直接照抄的部分：**
 
@@ -719,6 +838,7 @@ cc-desk-tunnel 侧：
 - ai-meeting-room：安装步骤（`start.command`、`npm start`、`http://127.0.0.1:4477`）、沙箱参数（`--sandbox read-only` / `--sandbox workspace-write`）、档案路径（`.secrets/passcode.txt`、`.secrets/telegram-token.txt`、`.secrets/telegram-chat-id.txt`、`.secrets/gemini-api-key.txt`、`public/assets/sfx/yes-my-lord.mp3`、`meetings/`）、风险分级、核准与还原规则、模型发现与费用护栏、白话解释降级链、测试命令 `node --test test/*.test.js`、打包命令 `node scripts/build-release.mjs --platform mac --out dist/ai-meeting-room-mac.zip`。
 - Strands Box：下载脚本与 `./box-core/box --version`；Cargo workspace 构建命令、`just` 四个任务、`cargo test --workspace --all-features` 与 `test-support` 的关系；两个配置文件名与分工；策略 skill URL；决策记录默认路径；示例目录路径；架构描述（Dogwood Local Engine 与执法组件跑在 agent 沙箱之外的独立进程里）。
 - cc-desk-tunnel：服务端部署命令 `sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/sun168567/cc-desk-tunnel/main/deploy/install.sh)"`；安装脚本会做的四件事；默认放行端口 8787 与 7000；三行端口与放行/保护方式对照表；作者给出的「必须知道的四件事」；杀毒软件与 SmartScreen 处理建议（含 `SHA256SUMS` 核对）；源码构建与本地开发命令（`npm ci`、`npm run dev`、`npm test`、`npm run package:windows`、`npm run package:server`）；仓库结构（`apps/desktop/`、`apps/server/`、`packages/protocol/`、`deploy/`、`scripts/`、`docs/`）；`manage.sh token` 更换凭据；`config/provider.json` 配 API key；证书指纹来源要求。
+- MXC：安装包管理器（`@microsoft/mxc-sdk`、`mxc-sdk`、`Microsoft.Mxc.Sdk`）；Node 片段（`spawn`、`ContainerRequest`、`network: { egress: { default: 'deny' } }`、`timeoutMs: 30_000`）；诊断命令 `wxc-exec.exe --debug config.json`；审计命令 `wxc-exec.exe --audit policy.json` 及原文字面警告；后端表；源码构建命令（`build.bat --all`、`./build.sh --all`、`./build-mac.sh --all`）；遥测默认关闭的条件。
 
 **只是作者主张、没有佐证的部分：**
 
@@ -727,6 +847,7 @@ cc-desk-tunnel 侧：
 - ai-meeting-room：原文是 README 级别的作者自述系统设计与操作流程，没有 benchmark、用户案例或量化结果；可核对的事实性材料包括安装步骤、沙箱参数、档案路径、风险分级、核准与还原规则、模型发现与费用护栏、白话解释降级链、测试与打包命令，但「改善了多少」没有数据。
 - Strands Box：`box.toml` 的字段写法和 `policy.dw` 的规则示例都没有给出，getting-started、security、policy、architecture 全在外链 `docs/` 里；「默认拒绝」「permit 覆盖、forbid 优先」「文件读会影响后续 HTTP 放行」都是文字描述，没有附测试、日志或案例数据；「凭证注入让 agent 拿不到 secret」是设计声明，没有给出验证方式；没有效果指标或前后对照数据。63 stars 只说明热度。
 - cc-desk-tunnel：「服务器不需要高配，2 核 1 GB 入门机型就能运行」是作者陈述，无实测数据；「本机桌面应用的输入、滚动和复制比远程桌面/SSH 终端更好」「多项目多会话更好管理」是作者对体验的判断，无对比数据；「不改官方本体、不做对抗」是自我描述，未附审计报告；README 只提供用量侧的额度、重置时间和调用统计，没有任何「工作效果是否改善」的指标、基准或对比数据。约 39 stars 只说明热度。
+- MXC：「跨平台」「后端清单」「遥测默认关闭」等均为项目自述，无第三方验证数据；原文未给性能数字、对比基准或落地案例。
 
 **材料本身的局限：**
 
@@ -735,8 +856,9 @@ cc-desk-tunnel 侧：
 - ai-meeting-room：只支持 macOS；界面是繁体中文；目前只有 Claude（规划）+ Codex（执行）两位成员，Gemini CLI 等是后续方向；原文没有给出「改善了多少」的量化数据。
 - Strands Box：非 Apple silicon 或不满足模型访问条件的环境无法照做；Preview 阶段接口和文档可能变动；策略与配置的具体写法全在外链文档里，原文只提供安装和构建命令。
 - cc-desk-tunnel：只有仓库 README 一份材料，且「怎么试、怎么验证」一节在「判断有没有改善的指标」处被截断，完整试用步骤无法从材料中得到；文档目前只有中文；不是沙箱；服务凭据等同于完全控制权；数据会离开本机；单用户自用、没有多用户、权限分级或租户隔离；账号合规需自行确认；frpc/frps 容易被杀毒软件和云厂商安全组件告警；部署依赖 Docker，镜像在服务器上从源码构建；脚本不代装系统软件、不改防火墙/nginx/SSH 配置，这些都需你自己完成。
+- MXC：完整策略 JSON 示例、把 MXC 接进 agent 主循环（超时后如何处理、结果回收格式、重试）的做法、各后端实际隔离强度对比未给出；需按 README 指向的 `docs/backends/`、`docs/api-reference/`、`schemas/stable/` 继续查证；`windows_sandbox`、`microvm`、`hyperlight` 标注为 experimental；`--audit` 会关闭被分析工作负载的全部沙箱安全，绝不能用于不可信代码；审计模式仅在部分 Windows 版本可用；源码构建要求 Rust 1.93（由 `src/rust-toolchain.toml` 固定）、Node.js 24+。
 
-**与已有工具做法的关系：** claude-ads 把 Claude Code 作为规范运行时，安装直接走 Claude Code 插件市场（`/plugin marketplace add`、`/plugin install`），本身是 Agent Skills 形态的实例（`ads/SKILL.md` 契约、`ads/`、`skills/`、`agents/` 目录结构，独立安装与插件命名空间 `/ads` 对 `/claude-ads:ads` 加载同一契约）；Cursor、goose 在原文里只列为 watch，仅说明可消费同一批 skill 文件。Cloudflare OS 的 Gatekeeper 原文自称「增强版 MCP server」，与「预先挂上所有 MCP server 让服务全程在场」相对；它也能跑在开源 `workerd` 上、不必绑定 Cloudflare 云，但这一点同样只有原文自述。ai-meeting-room 可以看作 Claude Code 的一种落地用法：让 Claude Code 只做只读的规划与复审，执行交给另一个 CLI（Codex），并用核准卡 + git 还原点把写权限夹住；它没有替代 Claude Code，而是补上了「谁执行、谁核准、怎么回滚、模型换代怎么办」这几层。Strands Box 在本次清单中没有相关条目。它是 harness-agnostic 的沙箱引擎，把操作系统隔离和 Dogwood 语义策略结合，默认拒绝，凭证由网关注入，决策写 OTLP JSON；适合作为做法 B/C 更底层的补充验证，但仍是 Preview。cc-desk-tunnel 与 Claude Code 的关系很直接：它不修改 Claude Code 本体，是官方 Claude Code 与官方 Agent SDK 之上的一层胶水，官方 CLI 与 Agent SDK 仍由官方渠道安装、按 Anthropic 条款使用；它改变的是 Claude Code 的执行位置边界——会话在云端服务器、命令落到本机 Windows 执行，从而复用已有的 Claude Code 采用方式（审批、上下文管理、会话记忆都不变），只把「在哪里执行」这一环拆开。换句话说，它是 Claude Code 的一个部署拓扑扩展，而不是替代品；与做法 C 的差别是 C 用两个 CLI + 工作卡 + git 还原点把写权限夹住，E 只有一个 CLI，靠隧道 + 端口最小放行 + 凭据管理；与做法 D 的差别是 D 有操作系统隔离与语义策略默认拒绝，E 明确不是沙箱。
+**与已有工具做法的关系：** claude-ads 把 Claude Code 作为规范运行时，安装直接走 Claude Code 插件市场（`/plugin marketplace add`、`/plugin install`），本身是 Agent Skills 形态的实例（`ads/SKILL.md` 契约、`ads/`、`skills/`、`agents/` 目录结构，独立安装与插件命名空间 `/ads` 对 `/claude-ads:ads` 加载同一契约）；Cursor、goose 在原文里只列为 watch，仅说明可消费同一批 skill 文件。Cloudflare OS 的 Gatekeeper 原文自称「增强版 MCP server」，与「预先挂上所有 MCP server 让服务全程在场」相对；它也能跑在开源 `workerd` 上、不必绑定 Cloudflare 云，但这一点同样只有原文自述。ai-meeting-room 可以看作 Claude Code 的一种落地用法：让 Claude Code 只做只读的规划与复审，执行交给另一个 CLI（Codex），并用核准卡 + git 还原点把写权限夹住；它没有替代 Claude Code，而是补上了「谁执行、谁核准、怎么回滚、模型换代怎么办」这几层。Strands Box 是 harness-agnostic 的沙箱引擎，把操作系统隔离和 Dogwood 语义策略结合，默认拒绝，凭证由网关注入，决策写 OTLP JSON；适合作为做法 B/C 更底层的补充验证，但仍是 Preview。MXC 在本次清单中没有相关条目。它是 harness-agnostic 的沙箱化代码执行系统，把多种隔离后端统一在同一个 containment 模型与带类型的 SDK 之后；适合作为做法 D 更偏“嵌入应用”的补充验证，但原文未给出接入 agent 主循环的做法，且仍是 try 级。cc-desk-tunnel 与 Claude Code 的关系很直接：它不修改 Claude Code 本体，是官方 Claude Code 与官方 Agent SDK 之上的一层胶水，官方 CLI 与 Agent SDK 仍由官方渠道安装、按 Anthropic 条款使用；它改变的是 Claude Code 的执行位置边界——会话在云端服务器、命令落到本机 Windows 执行，从而复用已有的 Claude Code 采用方式（审批、上下文管理、会话记忆都不变），只把「在哪里执行」这一环拆开。换句话说，它是 Claude Code 的一个部署拓扑扩展，而不是替代品；与做法 C 的差别是 C 用两个 CLI + 工作卡 + git 还原点把写权限夹住，E 只有一个 CLI，靠隧道 + 端口最小放行 + 凭据管理；与做法 D 的差别是 D 有操作系统隔离与语义策略默认拒绝，E 明确不是沙箱；与做法 F 的差别是 F 是代码执行沙箱（SDK 嵌入应用、多后端容器隔离），E 是跨机器执行拓扑（没有沙箱层）。
 
 ## 依据的调研
 
@@ -745,3 +867,4 @@ cc-desk-tunnel 侧：
 - [sojei1989/ai-meeting-room](../research/radar/2026-10-08/1867-sojei1989-ai-meeting-room.md)：值得一试，建议小范围试装这套「只读规划 + 核准后写入 + 核准前 git 还原点」的双 AI 协作流程，因为它把权限边界、风险分级和回滚都做成了可直接照做的配置；但它是作者个人项目、只支持 macOS、界面仅繁体中文，且没有效果数据，所以先在一个无关紧要的小仓库上验证再决定是否长期用。
 - [strands-agents/box](../research/radar/2026-10-08/1929-strands-agents-box.md)：值得一试，可在 Apple silicon Mac 上小范围试：按 README 给的下载/构建命令装起 Strands Box，用 box.toml 控直接访问、policy.dw 写默认拒绝策略，安全地把执行、读写和网络能力放开给 agent；但它自述仍是 Preview、只支持 macOS Apple silicon，策略与配置的具体写法全在外链文档里，原文只提供了安装和构建命令，所以先当可行性验证而非标准做法。
 - [sun168567/cc-desk-tunnel](../research/radar/2026-10-08/1977-sun168567-cc-desk-tunnel.md)：值得一试，如果你的日常开发环境在 Windows 本机、又想让云端 Claude Code 直接在本机读写文件并执行命令，可以照 README 的部署流程在一台自己可控的云主机 + 一台 Windows 上小范围试；但它是个人维护、主要由 AI 编写、未经安全审计的工具，等于把本机的任意命令执行权交给服务器，只能自用、且必须先读安全须知并收紧端口与来源。
+- [MXC - a sandboxed code execution system](../research/radar/2026-10-09/2229-mxc-a-sandboxed-code-execution-system.md)：值得一试，建议小范围试：在 Linux/macOS 上用 Node SDK 按 README 的片段以 egress 默认 deny + 超时启动容器，跑一段模型生成代码并回收 stdout，先验证越权用例确实被拦。理由是原文给出了可安装的 SDK、可复制的调用片段和 --debug/--audit 诊断命令，但完整策略 JSON 与接入 agent 主循环的做法未给出，故只到 try。
