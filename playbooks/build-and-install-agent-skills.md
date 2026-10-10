@@ -1,18 +1,20 @@
-# 给 agent 装技能前，先用一个任务做对照验证
+# 给 agent 装技能：先小范围试装与对照，再固化自己的 SKILL.md
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：这篇手册解决：给 agent 加技能、角色、工作流或做开放式研究时，如何先小范围试装、做对照并用硬证据判断是否真的变好，而不是装完就以为变好。
-> 先试这一步：挑一个非关键项目和一类重复任务，只装一个技能，用同一任务分别在没有技能和有技能下各跑 3 次，记录人工修改次数与返工轮数。
+> 解决的问题：已经在用 agent，但装技能全凭感觉、装完不知道有没有变好，重复劳动也没沉淀成可复用的 SKILL.md——这篇手册给出一条从试装、对照验证到自建与分发技能的完整流程。
+> 先试这一步：挑一个非关键项目和一类重复任务，只装一个技能包，用同一任务在无技能和有技能下各跑 3 次做对照。
 > 最近修订：2026-10-10
 
 ## 解决什么问题
 
 你已经在用编码 agent、写作 agent 或通用 agent，但每次都要重复描述同一套规范，或者不确定装一个技能包是否真的减少了返工——甚至因为一次装太多，上下文反而更乱。这篇手册给出一个可照做的流程：先小范围试装一个现成技能包，用同一任务做有/无技能的对照，确认有效后再考虑把自己的重复工作写成 `SKILL.md`，或者把一本反复查阅的技术书、一份内部文档半自动转成按需加载的技能。
 
-它也覆盖一批具体场景：让 agent 代理编码 CLI 跑长任务并拿硬证据验收；给 agent 补一块行业设计知识；把一句模糊想法写成可让 agent 独立跑几小时的任务书；写一个把会话状态嵌进界面的 Claude Code mod；让 agent 把一句话描述／一个代码仓库变成可交互的架构图、工作流图、时序图、数据流图、生命周期图；让 agent 检索中国金融市场数据；把移动端模拟器与真机画面接进 Codex 聊天；把多步复杂任务拆成三阶段并加门禁；把中英文学术写作去模板化改写并用命题级核对保住数字、引文与证据强度；让路由技能自动选工作流并对 bug 交出失败→通过证据；按职能只装少量 agent 角色并用真实任务与默认提示对照；在 T3 Code 里用 p3-stack 按 playbook 路由并用 worktree 与 PR 监视减少等待和冲突；审计并改进自己的 `SKILL.md`；让 agent 把结论、方案对比、多步流程、仓库模块、逐句批注、时间线和一段历史渲染成一页可离线打开的单文件 HTML；把自己的 `SKILL.md` 校验、打包并分发到多端；给 agent 补一块 SwiftUI 领域知识并按需触发审查；给工作写作去 AI 腔并保住事实与承诺强度。
+它也覆盖一批具体场景：让 agent 代理编码 CLI 跑长任务并拿硬证据验收；给 agent 补一块行业设计知识；把一句模糊想法写成可让 agent 独立跑几小时的任务书；写一个把会话状态嵌进界面的 Claude Code mod；让 agent 把一句话描述／一个代码仓库变成可交互的架构图、工作流图、时序图、数据流图、生命周期图；让 agent 检索中国金融市场数据；把移动端模拟器与真机画面接进 Codex 聊天；把多步复杂任务拆成三阶段并加门禁；把中英文学术写作去模板化改写并用命题级核对保住数字、引文与证据强度；让路由技能自动选工作流并对 bug 交出失败→通过证据；按职能只装少量 agent 角色并用真实任务与默认提示对照；在 T3 Code 里用 p3-stack 按 playbook 路由并用 worktree 与 PR 监视减少等待和冲突；审计并改进自己的 `SKILL.md`；让 agent 把结论、方案对比、多步流程、仓库模块、逐句批注、时间线和一段历史渲染成一页可离线打开的单文件 HTML；把自己的 `SKILL.md` 校验、打包并分发到多端；给 agent 补一块 SwiftUI 领域知识并按需触发审查；给工作写作去 AI 腔并保住事实与承诺强度；把产品经理的重复流程（发现、策略、PRD、路线图、发布、增长、指标）交给 agent 跑成命令链。
 
 新增做法 AH：当你面对开放式研究问题（数学、理论科学、算法，或任何“目标是弄清什么是仍然未知的”场景），用 `nasqret/labyrinth-exploration` 把研究计划当作迷宫探索。agent 维护一张精确地图，标出已探明、已封死、还开着的门与黑暗区域；每个论断带 T1–T6 证据层级；低于 T3 不作事实引用；来自 agent 或外部模型的结果先过独立裁判；dashboard 把 frontier 状态和已解决比例显示出来。
+
+新增做法 AI：当你有一类产品经理式的重复工作（一个想法要拆假设、一个功能要写 PRD、一个版本要定指标、要规划发布），可以从 `phuryn/pm-skills` 只装 1–2 个 PM 插件，用 `/discover`、`/write-prd`、`/north-star`、`/plan-launch` 这类命令把流程跑成结构化产物，再按做法 A 的对照法验证它是否比让模型自由发挥更有用。
 
 ## 适用与不适用
 
@@ -34,13 +36,14 @@
 - 做 SwiftUI / iOS 开发，希望 agent 写或审代码时自动带上现代 API、无障碍、性能与状态管理常识。
 - 工作写作需要去 AI 腔，又不能让承诺、条件、道歉语气被改写掉。
 - 做开放式研究，有边界清楚、能判定对错的小型开放问题，愿意让 agent 维护地图、证据分级并接受独立裁判。
+- 做产品管理工作：有一句真实想法要拆成假设与实验、要写 PRD、要定北极星指标、要规划一次发布，且你用的 agent 能装插件或能拷 skills 目录。
 
 不适用：
 
 - 没有明确重复任务，只想“装个工具看看”；不愿做对照验证，只凭安装成功就认为改善。
 - 直接在生产关键项目上全量安装；一次装完整个插件市场。
 - 只看 stars、README 徽章或 CI 状态就决定采用。
-- 各做法自己的边界见对应小节。例如：E 只针对中文技术文档；F 只针对生物医学论文；M 不适用于无合法访问权的书或打算再分发第三方版权书生成的 skill；O 只在 Postgres / TimescaleDB / PostGIS 任务上有用；P 只对自有或书面授权资产；Q 的领域内容不通用；T 不支持直接驱动交易或投顾建议；U 需要 Apple Silicon Mac + Codex desktop + 私有仓库访问权；X 面向全栈开发；Y 需要能加载完整 Skill 文件夹的环境，且 DOCX 抽取保留不了复杂样式、批注、修订记录、脚注与文本框；AF 只覆盖 SwiftUI / Apple 平台开发；AG 的材料没有覆盖合同或其他法律文件，也不承诺通过 AI 检测器，且 Interview mode 里的作者是模拟的；AH 主要面向数学/理论科学/算法类开放式研究，能否迁移到日常工程、运营类工作没有证据，且缺 subagent 委派时结果只能停在 under review。
+- 各做法自己的边界见对应小节。例如：E 只针对中文技术文档；F 只针对生物医学论文；M 不适用于无合法访问权的书或打算再分发第三方版权书生成的 skill；O 只在 Postgres / TimescaleDB / PostGIS 任务上有用；P 只对自有或书面授权资产；Q 的领域内容不通用；T 不支持直接驱动交易或投顾建议；U 需要 Apple Silicon Mac + Codex desktop + 私有仓库访问权；X 面向全栈开发；Y 需要能加载完整 Skill 文件夹的环境，且 DOCX 抽取保留不了复杂样式、批注、修订记录、脚注与文本框；AF 只覆盖 SwiftUI / Apple 平台开发；AG 的材料没有覆盖合同或其他法律文件，也不承诺通过 AI 检测器，且 Interview mode 里的作者是模拟的；AH 主要面向数学/理论科学/算法类开放式研究，能否迁移到日常工程、运营类工作没有证据，且缺 subagent 委派时结果只能停在 under review；AI 的材料只有 README，没有 skill 正文和任何效果数据，不足以直接采用；Codex 上 `/slash` 命令装得上但跑不起来；Gemini CLI / OpenCode / Cursor / Kiro 只能拿 skills，没有命令。
 
 ## 前置条件
 
@@ -56,11 +59,11 @@
 
 - A：无额外。B：一件每周重复、有明文规范的工作。C：`pip install skill-seekers`。
 - D：你的提供商端点与 key，以及你网关实际提供的模型名。
-- E：可用的 `npx` 或 `git`；可选装 autocorrect。F：宿主能读 PDF/图像。G：Claude Code 2.1.287 或更高。H：Cline CLI；Python 3；支持 Agent Skills 规范的宿主。I：Node/npm 装 CLI；本机 Python 3.x。J：本地 Node 环境。K：一个受支持的 Agent Skills 宿主。L：Claude Code 或 `gh`/可用 `npx`。M：本机 Python 并能安装抽取器。N：支持 Agent Skills 的 Agent；git、`CLAUDE.md`/`AGENTS.md`、`docs/`。O：本机 `npx`；目标 agent 支持 Agent Skills 或 MCP。P：已装 Claude Code；只对自有或书面授权资产使用。Q：支持本地 Skills 的宿主；可写的 `PROJECT_ROOT` 与只读的 `SKILL_ROOT` 分开。R：支持 agent skills 的编码 agent。S：Node.js/npx；Google Cloud 账号、项目和权限。T：Node.js 22.20+ / npm；Python 3.9+。U：Codex desktop + Apple Silicon Mac；Xcode 26+ 与 simulator runtime。V：本机已安装 Claude Code。W：Node.js；`SKILL.md`、`references/`、`scripts/` 三部分放在一起。X：已安装并使用 Claude Code。Y：Python 3.10+；PDF 文本抽取需 Poppler。Z：先装好对应 harness；Codex 需先通过 `/hooks` 信任路由 hook。AA：本地有 git 与 bash。AB：一台能跑 T3 Code 的机器。AC：Claude Code 环境或 claude.ai 账号；本地 Python 3.8+。AD：Node.js ≥ 20；agent 能执行 shell 命令。AE：用现成技能需要 Claude Code 或支持 Agent Skills 的 agent；用这套流程分发自己的技能，只需 Claude Code + Python 3。AF：用支持 Agent Skills 的编程助手；安装需要 Node/npx，或用 Claude Code 插件市场。AG：一个能加载 skills 的 agent（Claude Code、Codex 或其他）；要处理的文本；最好有作者自己的笔记、语音转写或自写粗稿；跑 `check.py` 需要 Python 和能执行代码的 agent 环境。AH：装有 Codex 或 Claude Code；Python 3.9 或更新；一个浏览器；可选获授权的 Slurm 集群、LaTeX、私有 dashboard 目的地。
+- E：可用的 `npx` 或 `git`；可选装 autocorrect。F：宿主能读 PDF/图像。G：Claude Code 2.1.287 或更高。H：Cline CLI；Python 3；支持 Agent Skills 规范的宿主。I：Node/npm 装 CLI；本机 Python 3.x。J：本地 Node 环境。K：一个受支持的 Agent Skills 宿主。L：Claude Code 或 `gh`/可用 `npx`。M：本机 Python 并能安装抽取器。N：支持 Agent Skills 的 Agent；git、`CLAUDE.md`/`AGENTS.md`、`docs/`。O：本机 `npx`；目标 agent 支持 Agent Skills 或 MCP。P：已装 Claude Code；只对自有或书面授权资产使用。Q：支持本地 Skills 的宿主；可写的 `PROJECT_ROOT` 与只读的 `SKILL_ROOT` 分开。R：支持 agent skills 的编码 agent。S：Node.js/npx；Google Cloud 账号、项目和权限。T：Node.js 22.20+ / npm；Python 3.9+。U：Codex desktop + Apple Silicon Mac；Xcode 26+ 与 simulator runtime。V：本机已安装 Claude Code。W：Node.js；`SKILL.md`、`references/`、`scripts/` 三部分放在一起。X：已安装并使用 Claude Code。Y：Python 3.10+；PDF 文本抽取需 Poppler。Z：先装好对应 harness；Codex 需先通过 `/hooks` 信任路由 hook。AA：本地有 git 与 bash。AB：一台能跑 T3 Code 的机器。AC：Claude Code 环境或 claude.ai 账号；本地 Python 3.8+。AD：Node.js ≥ 20；agent 能执行 shell 命令。AE：用现成技能需要 Claude Code 或支持 Agent Skills 的 agent；用这套流程分发自己的技能，只需 Claude Code + Python 3。AF：用支持 Agent Skills 的编程助手；安装需要 Node/npx，或用 Claude Code 插件市场。AG：一个能加载 skills 的 agent（Claude Code、Codex 或其他）；要处理的文本；最好有作者自己的笔记、语音转写或自写粗稿；跑 `check.py` 需要 Python 和能执行代码的 agent 环境。AH：装有 Codex 或 Claude Code；Python 3.9 或更新；一个浏览器；可选获授权的 Slurm 集群、LaTeX、私有 dashboard 目的地。AI：能访问 GitHub；Cowork 路线需要桌面端 Claude；Claude Code / Codex 路线需要先装好对应 CLI 并登录；其它助手路线只需对目标 skills 目录有写权限。
 
 ## 操作步骤
 
-怎么选：先做做法 A；A 里某个技能确实有效、且你有一件每周重复且规范明确的工作，再做做法 B。其余按场景选：C 多来源知识打包；D 补模型端点/权限/搜索；E 中文技术文档写作与审稿；F 单篇论文精读；G 写一个 Claude Code mod；H 用 Cline CLI 代理长任务拿硬证据验收；I 补 UI/UX 设计知识；J 出带交互的单文件 HTML 图；K 出品牌一致的静态 HTML+SVG 图；L 从大插件市场只装一个单元并按任务档位选模型；M 把书或内部文档转成按需加载技能；N 把模糊想法写成任务书并给破坏性操作加闸门；O 补 Postgres 领域知识与版本化文档检索；P 在授权安全场景按主题加载安全技能库；Q 把多步任务拆成三阶段加门禁；R 装一套小而可组合的工程技能集；S 从 google/skills 按任务只装一个；T 让 agent 检索中国金融市场数据并核对来源与时间戳；U 把移动端模拟器与真机画面接进 Codex 聊天；V 用一行 curl 装单个 Markdown 技能；W 用元技能观察你怎么用技能；X 装一套全栈开发技能包按请求自动激活；Y 把中英文学术写作去模板化改写并用命题核对保住事实；Z 用路由技能自动选工作流并对 bug 交出失败→通过证据；AA 按职能只装少量 agent 角色并用真实任务与默认提示对照；AB 在 T3 Code 里用 p3-stack 按 playbook 路由并用 worktree/PR 监视减少等待和冲突；AC 审计并改进自己的 SKILL.md；AD 让 agent 把结论、方案对比与流程解释渲染成一页可离线打开的 HTML；AE 把自己的 SKILL.md 校验、打包并分发到多端；AF 给 agent 补一块 SwiftUI 领域知识并按需触发审查；AG 给工作写作去 AI 腔并保住事实与承诺强度；AH 把开放式研究做成迷宫地图、证据分级与独立裁判循环。
+怎么选：先做做法 A；A 里某个技能确实有效、且你有一件每周重复且规范明确的工作，再做做法 B。其余按场景选：C 多来源知识打包；D 补模型端点/权限/搜索；E 中文技术文档写作与审稿；F 单篇论文精读；G 写一个 Claude Code mod；H 用 Cline CLI 代理长任务拿硬证据验收；I 补 UI/UX 设计知识；J 出带交互的单文件 HTML 图；K 出品牌一致的静态 HTML+SVG 图；L 从大插件市场只装一个单元并按任务档位选模型；M 把书或内部文档转成按需加载技能；N 把模糊想法写成任务书并给破坏性操作加闸门；O 补 Postgres 领域知识与版本化文档检索；P 在授权安全场景按主题加载安全技能库；Q 把多步任务拆成三阶段加门禁；R 装一套小而可组合的工程技能集；S 从 google/skills 按任务只装一个；T 让 agent 检索中国金融市场数据并核对来源与时间戳；U 把移动端模拟器与真机画面接进 Codex 聊天；V 用一行 curl 装单个 Markdown 技能；W 用元技能观察你怎么用技能；X 装一套全栈开发技能包按请求自动激活；Y 把中英文学术写作去模板化改写并用命题核对保住事实；Z 用路由技能自动选工作流并对 bug 交出失败→通过证据；AA 按职能只装少量 agent 角色并用真实任务与默认提示对照；AB 在 T3 Code 里用 p3-stack 按 playbook 路由并用 worktree/PR 监视减少等待和冲突；AC 审计并改进自己的 SKILL.md；AD 让 agent 把结论、方案对比与流程解释渲染成一页可离线打开的 HTML；AE 把自己的 SKILL.md 校验、打包并分发到多端；AF 给 agent 补一块 SwiftUI 领域知识并按需触发审查；AG 给工作写作去 AI 腔并保住事实与承诺强度；AH 把开放式研究做成迷宫地图、证据分级与独立裁判循环；AI 装 1–2 个 PM 插件并用 `/discover` 跑一个真实想法。
 
 几组容易混的：
 
@@ -81,7 +84,10 @@
 - AE 与 B / AC：B 写技能；AC 审计技能；AE 校验、打包、发布和跨 agent 分发。
 - AF 与 I / E / Y / S / O / T / AG：都是给 agent 补一块领域知识。AF 是 SwiftUI；AG 是工作写作去 AI 腔并保住事实与承诺强度。
 - AH 与 A：AH 也是一个可装成 skill 的流程，同样建议先小范围试；但它的效果验证更依赖 T1–T6 证据分级、frontier 已解决比例、独立裁判逐条修正，不能只跑通示例就推广。
-- E、F、G、H、I、J、K、L、M、N、O、P、Q、R、S、T、U、V、W、X、Y、Z、AA、AB、AC、AD、AE、AF、AG、AH 都必须套用 A 的对照方法，不要跳过验证直接纳入常规流程。
+- AI 与 A：都是先小范围试装一个技能来源。区别在粒度：A 的默认是「只装一个技能包」，AI 的 README 建议「装整个插件而不是挑单个 skill」，理由是一个工作流通常依赖同一插件里一起发布的多个 skill（例如 `/discover` 串起四个 skill）。两条同时遵守的做法是：A 管「只引入一个新来源」，AI 管「在这个来源内部装一个插件」——仍然只装 1 个插件做对照，不要一次装 9 个。
+- AI 与 L / X：都是插件市场。L 是 wshobson/agents，可按任务只装一个单元；X 是全栈技能包按请求自动激活；AI 是按 PM 领域划分的 9 个插件，核心是命令链。
+- AI 与 C：C 是把外部文档打包成技能；AI 是现成的 PM 流程插件，不打包你自己的文档。
+- E、F、G、H、I、J、K、L、M、N、O、P、Q、R、S、T、U、V、W、X、Y、Z、AA、AB、AC、AD、AE、AF、AG、AH、AI 都必须套用 A 的对照方法，不要跳过验证直接纳入常规流程。
 
 ### 做法 A：先用现成技能包做小范围试装（推荐先做）
 
@@ -402,6 +408,136 @@ agent 读 skill 后会在你的仓库里建立 `labyrinth/`，之后按下面的
 
 11. 隐私与维护：dashboard 和笔记通常含未发表结果，skill 把它们留在本地，或私下发布到获授权的目的地；未经你同意，绝不把未发表结果放进任何公开物（帖子、图、共享 skill）。更新方式是 `git pull`。自测可跑 `python3 -m unittest discover -s tests -v`。
 
+### 做法 AI：按 PM 工作流只装 1–2 个 pm-skills 插件，用 /discover 跑一个真实想法（新增，按 A 的对照法验证）
+
+定位：`phuryn/pm-skills`（PM Skills Marketplace，MIT 许可，README 显示 26,862 stars）是一个面向产品经理的 AI 插件市场。按 README 的说法，它由 9 个插件、69 个 skills、42 条链式命令组成，覆盖从发现、策略、执行、上市、增长到「交付 AI 写的代码」的全流程，主要面向 Claude Code 和 Claude Cowork，skills 兼容其它 AI 助手。
+
+三层概念（README 定义）：
+
+- Skills：市场的构建块。每个 skill 提供某个 PM 任务的领域知识、分析框架或引导式工作流；有些是可复用的底座，被多个命令共用。相关时自动加载，不需要显式调用；如需强制加载可用 `/plugin-name:skill-name` 或 `/skill-name`。
+- Commands：用户用 `/command-name` 触发的端到端流程，内部串联一个或多个 skill。README 举例：`/discover` 串联 brainstorm-ideas → identify-assumptions → prioritize-assumptions → brainstorm-experiments。
+- Plugins：把相关 skills 和 commands 打包成可安装单元，每个插件对应一个 PM 领域。装整个市场即一次拿到 9 个插件。命令之间设计成可以相互衔接，每条命令跑完会提示相关的下一条命令。
+
+9 个插件与规模（README 明细合计 69 skills / 42 commands，与标题数字一致）：
+
+| 插件 | 领域 | skills | commands |
+|---|---|---|---|
+| pm-product-discovery | 构思、实验、假设、OST、访谈 | 13 | 5 |
+| pm-product-strategy | 愿景、商业模式、定价、竞争格局 | 12 | 5 |
+| pm-execution | PRD、OKR、路线图、sprint、retro、发布说明、干系人 | 16 | 11 |
+| pm-market-research | 画像、分群、旅程图、市场规模、竞品 | 7 | 3 |
+| pm-data-analytics | SQL、同期群、A/B 测试 | 3 | 3 |
+| pm-go-to-market | 滩头市场、ICP、信息、增长循环、战卡 | 6 | 3 |
+| pm-marketing-growth | 营销点子、定位、价值主张、命名、北极星 | 5 | 2 |
+| pm-toolkit | 简历、NDA、隐私政策、校对 | 4 | 5 |
+| pm-ai-shipping | 给 AI 写的代码补文档、查文档与实现的偏差、测试覆盖、静态安全/性能审计 | 3（正文实际列 2 个） | 5 |
+
+1. 前提。能访问 GitHub；Cowork 路线需要桌面端 Claude；Claude Code / Codex 路线需要先装好对应 CLI 并登录；其它助手路线只需对目标 skills 目录有写权限。
+
+2. 选入口。非开发者用 Cowork（README 推荐）；开发者用 Claude Code CLI；OpenAI 侧用 Codex CLI；Gemini CLI / OpenCode / Cursor / Kiro 只能拿 skills，没有 slash 命令。
+
+3. 装（Cowork，推荐非开发者）：打开左下角 Customize → 进入 Browse plugins → Personal → + → 选择 Add marketplace from GitHub → 输入 `phuryn/pm-skills`。9 个插件会自动全部安装，commands（`/discover`、`/strategy` 等）和 skills 都有。
+
+4. 装（Claude Code CLI）：
+
+```bash
+# Step 1: Add the marketplace
+claude plugin marketplace add phuryn/pm-skills
+
+# Step 2: Install individual plugins
+claude plugin install pm-toolkit@pm-skills
+claude plugin install pm-product-strategy@pm-skills
+claude plugin install pm-product-discovery@pm-skills
+claude plugin install pm-market-research@pm-skills
+claude plugin install pm-data-analytics@pm-skills
+claude plugin install pm-marketing-growth@pm-skills
+claude plugin install pm-go-to-market@pm-skills
+claude plugin install pm-execution@pm-skills
+claude plugin install pm-ai-shipping@pm-skills
+```
+
+注意：第 2 步里只挑你要用的 1–2 个执行，不要照着把 9 行全跑一遍——那是「装整个市场」的做法，跟本手册做法 A 冲突。
+
+5. 装（Codex CLI）。README 称 Codex 读同一份 plugin marketplace 文件，可直接原生安装，无需转换或拷贝文件：
+
+```bash
+# Step 1: Add the marketplace
+codex plugin marketplace add phuryn/pm-skills
+
+# Step 2: Install the plugins you want
+codex plugin add pm-product-discovery@pm-skills
+```
+
+两点差异要注意：README 建议装整个插件而不是挑单个 skill，因为一个工作流通常依赖同一插件里一起发布的多个 skill；在 Codex 上 `/slash` 命令装得上但跑不起来（Codex 插件不暴露 commands），要跑工作流就用自然语言把步骤描述出来，例如：
+
+```text
+Run product discovery on *[your idea]*: brainstorm options, map assumptions, prioritize the risky ones, then design experiments — pause between each step.
+```
+
+如果想让 Codex 也拿到引导式工作流，README 给的临时办法是让 Codex 把命令文件改写成 skill：
+
+```text
+Read the command files in the pm-execution plugin and create equivalent Codex skills for the workflows I use most often.
+```
+
+README 明确说这是「尽力而为、模型驱动」的转换，部分 Claude 专有命令语法无法翻译。
+
+6. 装（其它助手，仅 skills）：把 `skills/*/SKILL.md` 目录拷到对应位置，README 声称这些文件遵循通用 skill 格式。
+
+```bash
+# Example: copy all skills for OpenCode (project-level)
+for plugin in pm-*/; do
+  mkdir -p .opencode/skills/
+  cp -r "$plugin/skills/"* .opencode/skills/ 2>/dev/null
+done
+
+# Example: copy all skills for Gemini CLI (global)
+for plugin in pm-*/; do
+  cp -r "$plugin/skills/"* ~/.gemini/skills/ 2>/dev/null
+done
+```
+
+| 工具 | 用法 | 可用范围 |
+|------|------|------|
+| Gemini CLI | 拷 skill 目录到 `.gemini/skills/` | 仅 skills |
+| OpenCode | 拷到 `.opencode/skills/` | 仅 skills |
+| Cursor | 拷到 `.cursor/skills/` | 仅 skills |
+| Kiro | 拷到 `.kiro/skills/` | 仅 skills |
+
+7. 按 PM 工作流的入口选起始命令（README 的 Start Here 对照表）：新想法 → `/discover`；需要策略清晰度 → `/strategy`；写 PRD → `/write-prd`；规划发布 → `/plan-launch`；定义指标 → `/north-star`。跑完任何命令后跟着它的提示走，进入下一条命令。
+
+8. 做对照（这一步才是本手册要求的关键）。同一句想法，先在没装任何插件的会话里让模型自由发挥一次，再装 1 个插件（建议 `pm-product-discovery`）跑一次 `/discover <你的真实想法>`，比较两次输出：第一次是不是一段泛泛的、读起来不错但落不了地的文本；第二次是不是产出了显式的假设清单、优先级和实验设计。同一想法至少跑 3 次，或换 2–3 个想法。
+
+9. 需要压过模型通用知识时强制加载某个 skill：用 `/plugin-name:skill-name` 或 `/skill-name`（Claude 会自动补前缀）。
+
+10. 可直接照抄的示例提示词（README 原文，用于快速验证安装是否生效）：
+
+```text
+/discover AI-powered meeting summarizer for remote teams
+/write-prd Smart notification system that reduces alert fatigue
+/write-query Show me monthly active users by country for Q4 2025 (BigQuery)
+/ship-check the payments service
+What are the riskiest assumptions for our AI writing assistant idea?
+/analyze-test Here are the results from our checkout flow A/B test [attach CSV]
+```
+
+11. Windows 上 Cowork 不稳定时的绕过方案（原文照抄，README 称能解决 90% 的问题；剩下 10% 手动打开 services.msc 启动 "Claude" 服务）：
+
+```powershell
+$action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-WindowStyle Hidden -Command `"if ((Get-Service CoworkVMService).Status -ne 'Running') { Start-Service CoworkVMService }`""
+
+$trigger = New-ScheduledTaskTrigger -RepetitionInterval (New-TimeSpan -Minutes 1) -Once -At (Get-Date)
+
+$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+
+Register-ScheduledTask -TaskName "CoworkVMServiceMonitor" `
+  -Action $action `
+  -Trigger $trigger `
+  -Settings $settings `
+  -RunLevel Highest `
+  -User "SYSTEM"
+```
+
 ## 怎么判断变好了
 
 最小试用方式：
@@ -436,6 +572,7 @@ agent 读 skill 后会在你的仓库里建立 `labyrinth/`，之后按下面的
 - SwiftUI 领域技能类（做法 AF）：选一个已有 SwiftUI 项目或小 demo。先不用技能，让同一个 agent 审查同一段代码并记录问题列表；再用 `/swiftui-pro`（Codex 用 `$swiftui-pro`）审查同一段代码，记录问题列表；也可以用 `/swiftui-pro Check for deprecated API` 或 `$swiftui-pro Focus on accessibility` 只审一项做对照。
 - 工作写作类（做法 AG）：挑 3–5 篇手头真实的 AI 起草文本（例如一封销售邮件、一条客服回复、一篇内部通知），保留原始 AI 草稿。每篇做两个版本。A 版：直接对同一个模型说「改写得更像人写的」。B 版：装好 work-humanizer 后按第 2 步调用；如果能拿到自己的笔记或转写，就按第 3 步一起给；草稿信息明显不全的，按第 4 步走 interview 路径。A、B 两版都跑一遍 `python skills/work-humanizer/check.py`，记录机械项通过情况。让 2–3 位同事盲看，问和原文同样的两个问题：哪个更像熟练的人写的（把原始 AI 草稿混进候选里），哪个你会真的发出去（把原始 AI 草稿当作「作者本意」展示给他）。逐条比对 A、B 相对原稿删了什么、改了什么、加了什么，重点看承诺、条件、道歉语气有没有被改动。
 - 开放式研究类（做法 AH）：先按第 2 步安装，从自己的研究项目目录按第 3 步启动，用 `$labyrinth-exploration` 或 `/labyrinth-exploration` 触发一次，确认 skill 被识别；跑通 triangle-counts 示例；再选一个自己领域里边界清楚、能判定对错的小型开放问题，走 2–3 轮完整循环，观察地图是否更新、被反驳的论断是否变成死胡同并附教训、独立裁判是否给出可套用的修正、frontier 已解决比例是否变化。
+- PM 工作流类（做法 AI）：只装 1–2 个插件（推荐先 `pm-product-discovery`）。选一句你手头真实的产品想法，先在没装插件的会话里让模型自由发挥一次，保存输出；再跑 `/discover <你的真实想法>`；再跑一次 `/write-prd <同一想法>`，看它会不会按 README 说的提示你进入下一条命令。同一想法至少跑 3 次，或换 2–3 个想法。
 
 可观察的指标：
 
@@ -467,6 +604,7 @@ agent 读 skill 后会在你的仓库里建立 `labyrinth/`，之后按下面的
 - 做法 AF：弃用 API 检出数量与修复数量；VoiceOver / 无障碍问题检出数量；性能反模式检出数量；人工确认的有效问题占比与误报率；修复后编译通过率、测试通过率、代码复杂度或行数变化。
 - 做法 AG：「愿意发出」的选择比例——对照原文，work-humanizer 48% 对单行提示 1%，如果 B 版明显高于 A 版，说明有效。每篇的意义改动条数——对照原文约 1.5 处/篇（18 处 / 12 篇），blader/humanizer 约 2.75 处/篇（33 处 / 12 篇）。编造事实数——原文在五个测试集共 56 篇改写文本中 work-humanizer 没有编造事实。机械项——`check.py` 的检查项通过情况。承诺与条件强度——逐条看有没有把「知悉」升格成「道歉」、给 offer 附加条件、把责任推给客户。
 - 做法 AH：tier 计数是否随会话变化；低于 T3 的论断是否没有被当成事实引用；frontier map 对每个尺寸把每个可取值分类为 realized / impossible / conditional / conjecturally impossible / unknown 后，已解决比例是否随时间变化；独立裁判是否逐条裁定并给出可套用的修正；被反驳的论断是否变成死胡同加一行教训；campaign 里每条猜想是否至少试了五个视角。
+- 做法 AI：同一想法的两次输出对比——未装插件版是不是泛泛文本，`/discover` 版是否给出显式的假设清单、优先级和实验设计；命令跑完是否提示了相关的下一条命令；需要时强制加载 `/plugin-name:skill-name` 是否命中；同一想法重复 3 次或换 2–3 个想法后结论是否稳定。
 
 反向指标：
 
@@ -508,8 +646,13 @@ agent 读 skill 后会在你的仓库里建立 `labyrinth/`，之后按下面的
 - 做法 AG：直接重写一份信息不全的 AI 草稿，却不走 Interview mode；原文的判断标准是：如果这篇草稿能被任何拿到同一句话要求的人写出来，编辑救不了它。
 - 做法 AG：把 Interview mode 里模拟作者的流程当成真人场景已测；原文自陈这是局限。
 - 做法 AH：把 T4、T5、T6 的直觉或猜测当成事实引用；把 dashboard 里的 tier 计数当成效果结论；把跑通 triangle-counts 示例当成研究质量提升；未发表结果未经同意就公开；在缺 subagent 委派能力的环境里硬跑 campaign。
+- 做法 AI：把 26,862 stars 或 README 的 9 插件 / 69 skills / 42 commands 当效果证据——它们只说明仓库规模与关注度。
+- 做法 AI：照着安装清单把 9 个插件一次全装，然后没跑过任何一条命令；先只装 1 个并跑 `/discover`。
+- 做法 AI：在 Codex 上装完就等 `/discover` 自己跑起来——Codex 插件不暴露 commands，要么用自然语言描述流程，要么让它先把命令文件改写成 skill。
+- 做法 AI：在 OpenCode / Cursor / Gemini CLI / Kiro 上期待 slash 命令，这几条路线只能拿 skills。
+- 做法 AI：把 README 的 Windows「解决 90% 问题」当已验证结论；那只是作者口径。
 
-注意：`doctor`、`validate`、`npm test`、`claude plugin validate`、`npx @anthropics/skills-ref validate`、`archify doctor`、`validate --json`、`python -m unittest discover -s tests`、`validate_skill.py`、`check.py` 这类检查只能证明「技能或 mod 装得上、格式合法、不带危险命令、图能通过校验、回归测试能过、技能符合规则表」，不能证明「产出更好」。效果必须自己对照。做法 Y 的 `validate_package.py`、`unittest`、`content_lock.py --strict` 同理。做法 AC 的 `validate_skill.py` 只覆盖它那 46 条规则。做法 AE 的 `check_skills.py` 与 `claude plugin validate . --strict` 只证明规范与格式。做法 AG 的 `check.py` 只检查机械项（破折号、分号、AI 常用词、填充式过渡、停顿指路句、句长区间），不检查承诺强度、事实是否被改动，也不检查人类读者是否愿意发出。做法 AH 的 `lab.py check`、`python3 -m unittest discover -s tests -v` 只证明环境和示例跑得通，不证明研究结论更好。
+注意：`doctor`、`validate`、`npm test`、`claude plugin validate`、`npx @anthropics/skills-ref validate`、`archify doctor`、`validate --json`、`python -m unittest discover -s tests`、`validate_skill.py`、`check.py` 这类检查只能证明「技能或 mod 装得上、格式合法、不带危险命令、图能通过校验、回归测试能过、技能符合规则表」，不能证明「产出更好」。效果必须自己对照。做法 Y 的 `validate_package.py`、`unittest`、`content_lock.py --strict` 同理。做法 AC 的 `validate_skill.py` 只覆盖它那 46 条规则。做法 AE 的 `check_skills.py` 与 `claude plugin validate . --strict` 只证明规范与格式。做法 AG 的 `check.py` 只检查机械项（破折号、分号、AI 常用词、填充式过渡、停顿指路句、句长区间），不检查承诺强度、事实是否被改动，也不检查人类读者是否愿意发出。做法 AH 的 `lab.py check`、`python3 -m unittest discover -s tests -v` 只证明环境和示例跑得通，不证明研究结论更好。做法 AI 的安装成功、插件列表里能看到 9 个插件同理——只证明装上了，不证明 PM 流程产出更好。
 
 ## 常见坑
 
@@ -563,6 +706,12 @@ agent 读 skill 后会在你的仓库里建立 `labyrinth/`，之后按下面的
 - 做法 AH：把未发表结果直接公开或放进共享 skill；dashboard 和笔记通常含未发表结果，未经同意不能公开。
 - 做法 AH：把示例依赖浏览器从 CDN 加载 d3 和字体当成离线可复现条件。
 - 做法 AH：缺 subagent 委派能力时，仍把结果从 under review 改成已验证。
+- 做法 AI：把 26,862 stars 或「9 插件 / 69 skills / 42 commands」当效果证据；它们只说明仓库规模与关注度。
+- 做法 AI：照着安装清单把 9 个插件一次全跑一遍——README 说「装整个插件」，指的是在一个 PM 领域内装插件而不是抠出单个 skill，不是一次装 9 个。
+- 做法 AI：在 Codex 上装完 slash 命令却一直等它触发；README 自己承认 Codex 插件不暴露 commands，要用自然语言描述流程或让它改写为 skill。
+- 做法 AI：在 Codex 上把「让 Codex 把命令文件改写成 skill」当成等价移植；README 说这是尽力而为、模型驱动，部分 Claude 专有语法翻译不了。
+- 做法 AI：把 README 的 Windows PowerShell 监视任务当成官方修复；它只是作者给的绕过方案，声称解决 90% 的问题。
+- 做法 AI：没跑过任何一条命令就判断「这个市场没用」；至少用一句真实想法跑一次 `/discover` 再下结论。
 
 ## 证据与来源
 
@@ -605,6 +754,7 @@ agent 读 skill 后会在你的仓库里建立 `labyrinth/`，之后按下面的
 - SwiftUI Pro 路线的全部内容均来自调研《twostraws/SwiftUI-Agent-Skill》，即该仓库 README。属作者经验或主张、没有量化证据的是：「built on thousands of hours」「targeting the mistakes LLMs actually make」、各审查规则本身的效果。主要局限：只有 README，没有基准测试、对照实验或具体项目效果数据；`SKILL.md` 的具体检查规则未读到；适用范围限于 SwiftUI / Apple 平台开发。
 - work-humanizer 路线的全部内容均来自调研《phuryn/work-humanizer》，即该仓库 README 与作者自测证据。原文给出的数据与案例：12 篇新的 AI 写作文本，每个工具在同一模型上改写，由来自不同公司的四个 AI 模型盲评，每一处意义改动都与原文核对；评委「会发出去」的选择率：work-humanizer 48%，blader/humanizer 20%，单行提示 1%，Emulate-1 0%；意义改动：12 篇里 work-humanizer 18 处，blader/humanizer 33 处，单行提示 42 处，Emulate-1 120 处；在五个测试集共 56 篇改写文本中 work-humanizer 没有编造事实；单行提示在「更像人写」这一项上以 90% 胜过 AI 初稿、work-humanizer 为 75%，但它改写自由、会加作者没说过的东西；Pangram：work-humanizer、blader/humanizer 和单行提示的重写版都仍被判定为 AI（2–4% human）；给作者本人的笔记时，work-humanizer 的版本在 4 篇里 4 篇 Pangram 得 100% human；只有 work-humanizer 会向你索要缺失的信息：16 篇里它在 9 篇上发问，用掉了作者 39 条事实，编造 0 条，评委愿意发出的比例 69%（blader/humanizer 22%）。属作者主张：「保住每一条事实、承诺和限定条件的强度」是设计目标与自测结论，不是独立第三方验证过的性质；「拒绝造假」是技能文本里的约束声明，原文没有给出对抗性测试结果；Interview mode 里「作者」是模拟的，由 AI 按一份作者已知事实清单代为回答——真人场景未测。原文自陈的局限：样本小（scoreboard 12 篇，全部集合 56 篇，notes 结果 4 篇）；文本类型只有销售、营销、客服、产品和内部写作，没有合同或其他法律文件；评委是 AI 不是人，且评委之间对「human」是什么有分歧；每篇每工具只有一个样本；Pangram 只测了一个版本、一天；interview mode 里的是模拟作者；测试由开发该 skill 的人设计。适用条件：工作场景的对外/对内文本重写；有作者自己的素材（笔记、转写、自写粗稿）时收益最大；不要指望它把文本变成能通过 AI 检测；不要把结论外推到合同类法律文件、外推到「AI 评委同意就等于人类读者同意」。
 - labyrinth-exploration 路线的全部内容均来自调研《nasqret/labyrinth-exploration》，即该仓库 README。原文给出的证据：仓库带一个可运行的公开示例（n 顶点图的三角形计数），README 给出完整可复制命令，并称「数秒构建、只需 Python 3」；有 `tests/`（引擎测试和 skill 内部一致性测试）以及 `tests.yml` 的 GitHub Actions 徽章；方法自述开发于 2026 年 9–10 月的一个纯数学研究计划，并把该计划的 lessons 收进 skill；仓库有 30 stars；MIT 许可。只是作者主张、没有量化支撑的部分：「It scales」（能扩展到多个开放问题）、campaign 流程更有效、独立裁判能真正纠正错误、dashboard 让进展可见——README 没有给出任何数字、对比实验或成功案例统计。局限与适用条件：材料只到 README 这一层，`references/lessons.md`、`docs/tutorial.md`、`references/campaigns.md` 里的具体内容看不到，真正的可照做细节要装好之后自己读；方法主要面向数学/理论科学/算法这类开放式研究，能否迁移到日常工程、运营类工作没有证据；依赖 Codex 或 Claude Code 的 subagent 委派能力，缺了这个能力结果只能停在 under review；示例依赖浏览器从 CDN 加载 d3 和字体；隐私约束意味着未发表结果不能直接公开复用。
+- pm-skills 路线的全部内容均来自调研《phuryn/pm-skills》，即该仓库 README（MIT，26,862 stars）。9 插件 / 69 skills / 42 commands 是 README 明细口径（其中 pm-ai-shipping 标题写 3 个 skill，正文实际列 2 个）；Cowork 自动全装、Claude Code 与 Codex 的安装命令、其它助手拷 skills 目录、Start Here 命令对照表、示例提示词、Windows 用 PowerShell 计划任务监视 CoworkVMService（README 称解决 90% 的问题）都来自该 README。属作者主张、没有依据的是：Codex「原生读同一份 marketplace 文件、无需转换」、让 Codex 把命令文件改写成 skill 是可行替代、skills「兼容其它 AI 助手」。主要局限：本次只拿到 README，没有任何一个 skill 或 command 的正文，也没有任何效果数据、对照实验或成功案例；所以只能按本手册做法 A 试装 1–2 个插件并用真实想法对照，不能直接采用。
 - 文中提到的 star 数来自 metrics，不构成有效性证据。
 
 ## 依据的调研
@@ -648,3 +798,4 @@ agent 读 skill 后会在你的仓库里建立 `labyrinth/`，之后按下面的
 - [twostraws/SwiftUI-Agent-Skill](../research/radar/2026-10-10/2269-twostraws-swiftui-agent-skill.md)：值得一试，如果你用 Claude Code、Codex、Cursor 等做 SwiftUI 开发，按 README 的 npx 或插件市场步骤安装 swiftui-pro，并在写/审 SwiftUI 代码时显式触发；更一般地，可借鉴其“领域技能包 + 按需触发 + 只写 LLM 边界知识”的模式为其他工作补上下文。理由是安装与触发步骤明确、可直接照做，但效果证据主要是作者经验，且适用范围限于 SwiftUI。
 - [phuryn/work-humanizer](../research/radar/2026-10-10/2323-phuryn-work-humanizer.md)：值得一试，把 phuryn/work-humanizer 作为标准 SKILL.md 装进 Claude Code / Codex 的 skills 目录，用「改写 + 先访谈」流程处理工作写作，并优先喂自己的笔记或粗稿，而不是直接重写 AI 草稿；理由是安装路径、调用提示词和 check.py 都可照抄，且它以「不改动事实与承诺强度」为核心约束（12 篇里 18 处意义改动，对比 blader/humanizer 33、单行提示 42、Emulate-1 120），但这些证据来自作者自设的小样本 AI 盲评、真人与合同类文本未测，所以先小范围试用。
 - [nasqret/labyrinth-exploration](../research/radar/2026-10-10/2372-nasqret-labyrinth-exploration.md)：值得一试，先在 Claude Code 或 Codex 里按 README 的 git clone 方式把它装成 skill，跑通 triangle-counts 示例后，拿一个自己领域里边界清楚的小型开放问题走 2–3 轮完整循环再决定是否推广；理由是它给出了可复制的安装/运行命令和一整套可操作的证据分级、独立裁判、地图更新流程，但材料只到 README 层，效果只有作者主张、没有量化证据。
+- [phuryn/pm-skills](../research/radar/2026-10-10/2391-phuryn-pm-skills.md)：值得一试，建议小范围试：按 README 给出的 CLI 命令装 1–2 个插件（如 pm-product-discovery），用 /discover 跑一个真实想法，检验产出是否是结构化流程而非泛泛文本；理由是安装步骤与命令示例可直接照抄，但原文只有宣传性主张、没有 skill 内容和任何效果数据，不足以直接采用。
