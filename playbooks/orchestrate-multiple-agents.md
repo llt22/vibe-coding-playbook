@@ -1,14 +1,14 @@
-# 让编码 agent 在宣布完成前拿出证据：并行、隔离与验证关卡
+# 让多个编码 agent 并行干活：隔离、验证、评审与注意力路由
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：多个 agent 并行、多个项目同时推进之后，真正缺的不是更多工具，而是「谁在等我、卡在哪一步、有没有被独立验证过」——这篇手册给出一批可照做的流程，把这些变成可执行的关卡和可见的状态。
-> 先试这一步：先挑一个已有测试的小仓库，把「完成」定义写成一条你能手动跑通的验证命令，再决定用哪条做法把它挂到 agent 提交之前。
-> 最近修订：2026-10-09
+> 解决的问题：单个 AI 回答或单条串行会话交付的常常是未经验证的结果；这篇手册给出一套可照做的流程，把任务拆给多个 agent、用独立验证和评审设门槛、把产物落盘，并用通知与看板让“谁在等我”可见。
+> 先试这一步：挑一个已有测试的小 git 仓库，先用 `npx neurosquad` 开一个 `--worktree` agent（或先用 `/arena --quick --seed 7` 把被拒的旧答案送进 16 个 agent 的锦标赛），在 1–2 个真实任务上确认隔离、验证和通知真的成立，再扩大。
+> 最近修订：2026-10-10
 
 ## 解决什么问题
 
-单个 AI 回答、单条串行的 agent 会话，交付的往往是你没有验证过的结果：看起来合理，但可能漏了你真正在意的约束。这篇手册把「不满意就重问一次」升级成一套可执行的流程——把同一个任务交给多个子代理用不同策略并行求解、互相对抗、由独立裁判按公开标准打分淘汰；把有固定分工的多步任务（先搜集资料、再扩写成文）固化成角色化 Crew 流水线，产物落盘成文件；代码类任务则必须通过你自己的验证命令才能合入，再进一步可以把整条链固化成 GitHub 上的 issue → PR → 浏览器实测 → 合并。同时给出成本预估、可观察指标，以及「什么时候不值得这么做」的判断线。新增的做法 H 把「隔离、记忆、评审」三件事落成可手工照做的流程：每个 agent 一个 git worktree、项目记忆写成 conventions.md/plan.md/dead-ends.md、第二个 agent 在提交前读 diff 做同行评审；Offrun 是这套流程在 macOS 上的一种现成实现。新增的做法 I 解决另一个并行 agent 的常见瓶颈：注意力。多个终端型 agent 跑起来后，真正的浪费常常不是模型慢，而是「哪个 agent 在等我」不可见。cmux 把等待输入变成蓝色通知环、侧栏徽标、通知面板和 ⌘⇧U 跳转，让「谁在等我」成为可路由的信号；但 cmux 作者明确说它是 primitive，不是 solution，不替代验证、记忆和评审。新增的做法 J 把「第二个智能体在同一 commit 上验证通过才算完成」做成可强制执行的状态机：SPEC.md 一行一行批准、每条 lane 一个 worktree、提交必须过 gate、验证必须由没参与构建的另一个 agent 在确切 commit 上做、给出 receipt 才合并；Pullboard 是本机运行、存在你 git 仓库里的看板实现，不调用模型。新增的做法 K 把镜头再拉远一层：不再只管一个仓库、一个任务，而是把多个已注册项目的状态、六步流水线（spec → build → sync → verify → review → release）、Git 摘要与 PR/CI 收进一块本地控制台面板——一个控制台会话承担跨项目的规格、监督与评审关卡，你只做决策和最终发布审批；项目状态（● 待决策、◆ 待评审、▶ 运行中、↻ 待同步、○ 空闲）来自项目里的 STATUS 卡，关卡字段没清空就阻止继续；默认执行者是 Claude Code 原生后台 agent（不需要 Codex 账号），也可按项目切到 Codex 或标成 manual 只做交接不派工；刷新只查本地文件和 CLI、不请求模型，只有提交决策草稿时才花 Claude 额度。
+单个 AI 回答、单条串行的 agent 会话，交付的往往是你没有验证过的结果：看起来合理，但可能漏了你真正在意的约束。这篇手册把「不满意就重问一次」升级成一套可执行的流程——把同一个任务交给多个子代理用不同策略并行求解、互相对抗、由独立裁判按公开标准打分淘汰；把有固定分工的多步任务（先搜集资料、再扩写成文）固化成角色化 Crew 流水线，产物落盘成文件；代码类任务则必须通过你自己的验证命令才能合入，再进一步可以把整条链固化成 GitHub 上的 issue → PR → 浏览器实测 → 合并。同时给出成本预估、可观察指标，以及「什么时候不值得这么做」的判断线。新增的做法 H 把「隔离、记忆、评审」三件事落成可手工照做的流程：每个 agent 一个 git worktree、项目记忆写成 conventions.md/plan.md/dead-ends.md、第二个 agent 在提交前读 diff 做同行评审；Offrun 是这套流程在 macOS 上的一种现成实现。新增的做法 I 解决另一个并行 agent 的常见瓶颈：注意力。多个终端型 agent 跑起来后，真正的浪费常常不是模型慢，而是「哪个 agent 在等我」不可见。cmux 把等待输入变成蓝色通知环、侧栏徽标、通知面板和 ⌘⇧U 跳转，让「谁在等我」成为可路由的信号；但 cmux 作者明确说它是 primitive，不是 solution，不替代验证、记忆和评审。新增的做法 J 把「第二个智能体在同一 commit 上验证通过才算完成」做成可强制执行的状态机：SPEC.md 一行一行批准、每条 lane 一个 worktree、提交必须过 gate、验证必须由没参与构建的另一个 agent 在确切 commit 上做、给出 receipt 才合并；Pullboard 是本机运行、存在你 git 仓库里的看板实现，不调用模型。新增的做法 K 把镜头再拉远一层：不再只管一个仓库、一个任务，而是把多个已注册项目的状态、六步流水线（spec → build → sync → verify → review → release）、Git 摘要与 PR/CI 收进一块本地控制台面板——一个控制台会话承担跨项目的规格、监督与评审关卡，你只做决策和最终发布审批；项目状态（● 待决策、◆ 待评审、▶ 运行中、↻ 待同步、○ 空闲）来自项目里的 STATUS 卡，关卡字段没清空就阻止继续；默认执行者是 Claude Code 原生后台 agent（不需要 Codex 账号），也可按项目切到 Codex 或标成 manual 只做交接不派工；刷新只查本地文件和 CLI、不请求模型，只有提交决策草稿时才花 Claude 额度。新增的做法 L 把「谁在跑、谁在等我、花了多少」做成终端里的 daemon + dashboard：Claude Code、Codex、OpenCode 或任意命令都能注册成 agent，每个 agent 有自己的终端，dashboard 用网格显示；关闭 dashboard 或终端后 agent 继续跑，重启机器后 `nsq up` 按各自 session 恢复；agent 提问时通知里原样带出问题，不切进终端也能按 y/a/n 回答；`nsq ls --json`、`nsq cost --since 7d`、`nsq diff`、`nsq peek` 把状态、成本、改动、屏幕尾部做成可脚本化的信号。它管的是可见性与权限路由，不替代验证、记忆和评审；README 自标 0.1.0 preview。
 
 ## 适用与不适用
 
@@ -33,6 +33,13 @@
 - 新增：你的环境是 Windows 或 macOS，Claude Code 2.1.289 或更高且支持 mod，并且你接受自建「项目注册表 + STATUS 卡」这两样约定（做法 K）。
 - 新增：你想按项目切换执行者——默认用 Claude Code 原生后台 agent，Claude 额度紧张时把个别项目切到 Codex，或标成 manual 只做交接不派工（做法 K）。
 - 新增：你希望不可撤销命令（rm -r、force push、git reset --hard、DROP TABLE 等）在执行前被问一次，并让同一参数同一错误的工具调用不再试第三次（做法 K）。
+- 新增：你在 macOS / Windows / Linux 上并行跑 Claude Code、Codex、OpenCode 或任意长驻命令，想在一个终端 dashboard 里看到谁在 working / 需要你 / 已完成（做法 L）。
+- 新增：你希望关掉 dashboard 或终端后 agent 继续跑，`nsq up` 能按各自 session 恢复，重启机器后也可（做法 L）。
+- 新增：你想不切进具体终端就回答权限询问（y/a/n）或发送提示（s / S），并在 agent 提问时从通知里原样看到它的问题（做法 L）。
+- 新增：你想把非 AI 的长驻进程（如 `npm run dev`）和 AI agent 并列在同一个面板里管理（做法 L）。
+- 新增：你想脚本化拿状态与成本：`nsq ls --json`、`nsq cost --since 7d --json`、`nsq diff`、`nsq peek`（做法 L）。
+- 新增：你想给 agent 换 OpenRouter 模型，或指向自建 OpenAI/Anthropic 兼容服务器（llama.cpp、Ollama、LM Studio、vLLM、SGLang、Unsloth Studio 等），且不想让密钥进 argv、日志或文件（做法 L）。
+- 新增：你需要在手机上（experimental，默认关闭）看 agent 屏幕、发提示、回答权限询问、中断 agent（做法 L）。
 
 **不适用**
 
@@ -65,6 +72,12 @@
 - 新增：希望面板替你执行发布或正式环境变更：原文明确面板自身不执行发布（做法 K）。
 - 新增：指望面板刷新时调用模型来给出真实状态：刷新只查本地文件和 CLI、不请求模型（做法 K）。
 - 新增：想把它当成熟方案直接全量采用：仓库仅 53 stars、版本 0.15.x，UI 当前是繁体中文，且强依赖特定 Claude Code 版本与自建的注册表/状态卡约定（做法 K）。
+- 新增：你把它当成熟方案：nsq README 自标 0.1.0 preview，命令与配置在 1.0 前可能变化（做法 L）。
+- 新增：任意命令 agent 没有 hooks，只有 working / finished，永远不会出现 needs you；对这类进程不要指望它提醒你权限或提问（做法 L）。
+- 新增：需要手机端启动 agent、改设置或敲任意键：手机端只能看屏幕、发提示、回答权限、中断（做法 L）。
+- 新增：Windows arm64 想用语音听写：不可用（做法 L）。
+- 新增：你指望 README 给出改善幅度的量化指标：nsq README 没有基准或效果数据（做法 L）。
+- 新增：涉密/敏感环境：手机端链接携带 pairing token，要当密码对待；是否可用要自己评估（做法 L）。
 
 ## 前置条件
 
@@ -80,6 +93,7 @@
 - 做法 I（cmux）仅支持 macOS，会读取你已有的 Ghostty 配置 `~/.config/ghostty/config`。推荐 DMG 安装，也可 Homebrew。若要用 agent hooks 的自动恢复，必须先装好对应 agent CLI，且其 binary 在 PATH 上。README 列出的受支持恢复集成包括：Claude Code、Codex、Grok、OpenCode、Pi、Amp、Cursor CLI、Gemini、Rovo Dev、Copilot、CodeBuddy、Factory、Qoder。Claude Code 由 cmux 的 Claude wrapper 处理，需在 Settings 中开启 Claude 集成。要远程跑 agent 需可 SSH 的远程主机。自定义 resume 绑定若要自动执行，必须先批准签名命令前缀；token、password、secret、API key 等敏感环境键在存储绑定前会被丢弃。
 - 做法 J（pullboard）：本机有 git 和 Node 22.13 或更新版本（README 原文："You need git and Node 22.13 or newer"）；在一个 git 仓库内操作；MIT 许可；本机运行、无账号、无依赖、不调用模型。要真正跑起来还需要三样你自己提供的东西：`SPEC.md` 里已批准的需求行、`PRACTICE.md` 里的 doctrine、`pullboard.json` 里的 gate 命令与每条 lane 的 `owns` / `specs` 授权。
 - 新增做法 K（claude-console）：Windows 或 macOS；Claude Code 2.1.289 或更高且支持 mod；每个要纳入面板的项目在注册表里有一项、并有一个 STATUS 文件。若要用 Codex 执行者，还需要 Node.js、Codex Companion 和一个 Codex 账号（Windows 探测需要 PowerShell 和 Codex 桌面应用，macOS 需要 PATH 上有 `codex` CLI）。
+- 新增做法 L（nsq）：Node.js 22.13 或更新；native 部分预编译（Windows x64/arm64、macOS Apple silicon/Intel、Linux x64/arm64），无需编译器。要使用 Claude Code / Codex / OpenCode 之一，需该 CLI 自身已登录，或改走 OpenRouter / 自建模型服务器。目录是 git 仓库时 `--worktree` 才会生效。数据在 `~/.neurosquad-cli`（可用 `NSQ_HOME` 迁移），密钥在 OS keyring；`~/.claude`、`~/.codex`、`opencode.json` 永不被写。
 
 ## 操作步骤
 
@@ -98,6 +112,7 @@
 | macOS 上并行跑多个终端型 coding agent，想一眼看到谁在等我 | 做法 I |
 | 想让「另一个 agent 在同一 commit 上验证通过才算完成」变成硬约束：SPEC 行 + gate + lane 隔离 | 做法 J |
 | 同时照看多个项目的 agent，想在一屏里看到状态、决策与评审关卡 | 做法 K |
+| 跨平台并行跑多 CLI agent / 任意长驻命令，想用 daemon + dashboard 统一看状态、回权限、脚本化取成本 | 做法 L |
 
 ### 做法 A：把不满意的回答送进锦标赛（arena-skill）
 
@@ -984,6 +999,93 @@ Before dispatching to any executor, read ~/.claude/handoffs/dispatch.json
 
 **Git/PR/CI（可选，`gitProbe` 默认 on）**：每次刷新在每个项目根跑 `git status --porcelain=v2 --branch --show-stash`（带 `--no-optional-locks`，不抢执行者需要的 index 锁）；装了 `gh` 并登录时，`gh pr view` 读当前分支 PR 与检查，每五分钟一次、检查还在跑时每分钟一次、强制刷新或分支变化时也读。设 `gitProbe: git` 跳过 GitHub，设 `off` 两者都跳过。冲突（`✕衝突n`）、CI 失败（`CI✕n`，状态带变红）、未提交（`●n`）、未推送（`↑n`）、落后上游（`↓n`）显示在 Git 列；`▸ 檔案`（菜单里 `f`）按 `git status` 的分组展开文件列表，每组最多 12 个。`提交` 字段显示最近三到五条提交；最后一次 `git fetch` 超过一天会提示 ahead/behind 可能过期。
 
+### 做法 L：用一个终端 daemon + dashboard 管住并行 agent 的可见性与权限（nsq / neurosquad-cli）
+
+把这条路径当作 0.1.0 preview 来试，而不是直接纳入日常：README 给了可直接复制的安装、启动、回答与成本命令，也明确支持 Claude Code、Codex、OpenCode（1.x 与 2.x）以及任意命令；但命令与配置在 1.0 前可能变化，且没有给出任何改善幅度的量化指标。
+
+前提：Node.js 22.13 或更新；要使用 Claude Code / Codex / OpenCode 之一，需该 CLI 自身已登录，或改走 OpenRouter / 自建模型服务器；`--worktree` 只在 git 仓库里生效。
+
+1. 安装（二选一；`npx` 方式无需安装）：
+
+```sh
+npm install -g neurosquad      # then run: nsq
+npx neurosquad                 # or try it without installing
+```
+
+2. 在代码仓库里启动 agent。前提是该目录是 git 仓库（`--worktree` 才会生效）。`--worktree` 会给该 agent 一份独立 checkout，分支名为 `nsq/<name>`，避免多个并行 agent 互相踩：
+
+```sh
+cd ~/code/my-app
+nsq run claude "fix the flaky checkout test" --worktree   # an agent on its own branch
+nsq run codex --name reviewer                             # a second agent
+nsq run -- npm run dev                                    # any command, as an agent
+nsq                                                       # the dashboard
+```
+
+注意：`nsq run -- <command>` 这种任意命令没有 hooks，只能显示 working / finished，永远不会出现 “needs you”。
+
+3. 在 dashboard 里操作：方向键（或 h j k l / Tab）选择 agent，**Enter** 进入全屏（此后所有按键都发给该 agent），**Ctrl+]** 回到网格。agent 弹出权限问题时，不进去也能按 **y**（yes）/ **a**（always）/ **n**（no）回答；**i** 中断、**s** 发送提示、**S** 在当前回合结束后再发送；**q** 关闭 dashboard 而 agent 继续跑。
+
+4. 让 agent 脱离窗口存活：关闭 dashboard 或终端都不影响，daemon 一直持有它们。停止与恢复：
+
+```sh
+nsq down            # 停止 daemon（及其 agent）
+nsq up              # 或直接 nsq；按各自 session 恢复，重启机器后也可
+```
+
+5. 用脚本化接口做无人看护 / 流水线（README 明确说 dashboard 里能做的都能脚本化）：
+
+```sh
+nsq ls --json                       # agents and their status
+nsq send <agent> "prompt" [--when-done]   # 当前回合结束后再发送
+nsq answer <agent> yes|always|no    # 回答权限询问
+nsq peek <agent> [-n 20]            # 看它屏幕的最后几行
+nsq diff <agent>                    # 其目录下的未提交改动（git diff HEAD）
+nsq cost [--since 7d] [--json]      # 每个 agent 花了多少
+```
+
+6. 接模型（前提：想跨 CLI 换模型时）。OpenRouter key 存 OS keyring，也可用环境变量 `OPENROUTER_API_KEY`；key 只进 agent 的环境，不进 argv、日志或文件：
+
+```sh
+nsq openrouter set-key                 # stored in the OS keyring (or set OPENROUTER_API_KEY)
+nsq run claude --provider openrouter --model anthropic/claude-sonnet-4.5
+nsq openrouter models qwen             # search the catalogue
+```
+
+7. 接自己的模型服务器（llama.cpp、Ollama、LM Studio、vLLM、SGLang、Unsloth Studio 或任意 OpenAI/Anthropic 兼容 API）。`provider add` 会先做连通性测试：
+
+```sh
+nsq provider add lmstudio --url http://localhost:1234      # tests it: models, which APIs it speaks
+nsq run claude --provider lmstudio --model qwen/qwen3-coder-30b
+nsq provider models lmstudio
+nsq provider list · nsq provider test|remove <name>
+```
+
+Claude Code 走该服务器的 Anthropic endpoint，Codex 走 Responses endpoint（或经本地网关走 chat completions），OpenCode 两种都行；key 无回显读取并存入 OS keyring，这类请求显示 “no price”。
+
+8. 手机端（experimental，默认关闭；README 反复提示链接携带 pairing token，当作密码对待）：
+
+```sh
+nsq phone on --lan     # off by default; without --lan it listens on this machine only
+nsq phone pair         # prints the link and a QR code — scan it with the phone
+nsq phone on --online  # from anywhere: an https link through a Cloudflare quick tunnel
+nsq phone push ntfy    # optional: a push via ntfy when an agent needs you
+```
+
+手机上可见 agent 与其屏幕、发提示、回答权限询问、中断；不能启动 agent、改设置或敲任意键。`nsq phone rotate` 让所有手机登出，`nsq phone off` 关闭。
+
+9. 语音听写：dashboard 里按 **v**（或默认全局热键 `Ctrl+Shift+Space` / `Cmd+Shift+Space`）说话，识别在**本机**完成，文本只粘贴进输入框、不会自动提交，需你按 Enter。首次按 v 或执行 `nsq dictation setup` 会下载约 670 MB 模型（SHA-256 校验）；Windows arm64 不可用。
+
+10. 配置与体检：
+
+```sh
+nsq config set autoUpdate false      # 也可 NSQ_NO_UPDATE=1 关掉更新检查
+nsq doctor                            # check harnesses, hooks, terminal, updates
+nsq set <agent> [--dangerous on|off] [--model id|none] [--provider name|openrouter|none]
+```
+
+默认自动更新：npm/Homebrew/Scoop 安装的会在后台装新版本，并在“不会丢东西”（没有忙碌 agent、没有打开的 dashboard、每个 agent 都能 resume）时切换，或按 **U** 立即切换。
+
 ### 通用收尾：不管走哪条路径
 
 - 开始前先固定「完成」的定义（哪条测试通过、谁来复核、在哪里看结果），不要只依赖 agent 的自证。
@@ -995,6 +1097,7 @@ Before dispatching to any executor, read ~/.claude/handoffs/dispatch.json
 - 做法 I 的通知环只负责把「谁在等我」变得可见；看到通知后仍要回到验证、记忆和评审，不要让通知替代合入门槛。
 - 做法 J 的 verifier 必须是没参与构建该条目的另一个 agent，并在确切 commit 上给出证据；worktree 身份不是安全边界，不要拿它当权限隔离。
 - 做法 K 的看板状态来自你自己维护的注册表与 STATUS 卡；刷新只查本地文件和 CLI、不请求模型，卡上写错了它不会替你纠正。
+- 做法 L 的 daemon/dashboard 解决的是「agent 在不在跑、要不要你、花了多少」；它不替代验证、记忆和评审，权限回答快不等于产出可合入。
 
 ## 怎么判断变好了
 
@@ -1011,6 +1114,7 @@ Before dispatching to any executor, read ~/.claude/handoffs/dispatch.json
 - 做法 I：从 agent 等待输入到人响应的时间；漏掉通知导致 agent 空转的时长；手动在终端里寻找 pane 的次数；通知环、侧栏未读徽标、通知面板是否能可靠触发；⌘⇧U 跳转是否真的减少切换成本；恢复会话后布局、工作目录、scrollback 和浏览器历史是否保留；`cmux hooks setup` 后受支持 agent 是否能按预期恢复；跨安装迁移时 `--from <channel>` 与 `--from <path>` 的信任差异是否符合预期；本机 `local-tmux` 撑不过 logout/重启/关机/断电这一边界是否被团队知道。
 - 做法 J：每条条目是否都有 gate 绿 + verifier 的 accept/reject receipt；你仓库里的返工比例（原文称自家开发 Pullboard 时 "nearly one in three items goes back"）是多少；Timeline 里每条目的 claim / submit / verdict 是否完整；越界提交是否被 lane 的 `owns` 授权拒绝；"Needs you" 里出现的是不是只有你能做的决定；verifier 抓到的驳回理由里有多少是你事后确认有效的问题。
 - 新增做法 K：面板上「● 待决策」「◆ 待评审」的条目从出现到你处理完的时间；你实际同时盯的窗口/终端数 vs 只看面板；autoSync 写回 CARD 后你是否还需要手工记状态；`關卡` 是否真的拦住了没清空的条目；Git 列里的冲突/CI 失败/未提交/未推送/落后上游是否比你手工发现得更早；刷新时是否产生模型调用（原文称刷新只查本地文件和 CLI）；被 `commandGuard` 拦下的不可撤销命令次数、`loopGuard` 阻止重复失败调用的次数。注意「减少盯盘」目前只是作者主张，要你自己前后对照。
+- 新增做法 L：从 agent 需要你到人响应的时间；漏掉通知导致空转的时长；关掉 dashboard 或终端后 agent 是否继续跑、`nsq up` 后是否按各自 session 恢复；`nsq ls --json` 的状态是否与屏幕一致；`nsq cost` 是否读得到 token、无已知价格的模型是否显示 “no price” 而不是 $0；`nsq diff` 是否能看出该 agent 未提交改动；`nsq peek` 是否能不看全屏就判断它在做什么；`nsq doctor` 是否能无阻断跑完；手机上能否看屏幕、发提示、回答权限、中断；`nsq run --` 的任意命令是否如预期只显示 working / finished。README 没有给出改善幅度的量化指标，这些都要你自己前后对照。
 
 **最小试用**
 
@@ -1025,6 +1129,7 @@ Before dispatching to any executor, read ~/.claude/handoffs/dispatch.json
 - 做法 I：在 macOS 上装好 cmux，跑 `cmux hooks setup`，开 2–3 个终端型 agent（例如一个 Claude Code、一个 Codex），用 `cmux notify` 或让 agent hooks 触发通知，试 ⌘⇧U、⌘I 和通知面板；只在一两个真实任务上试半天到一天，观察「谁在等我」是否真的更快被处理。
 - 做法 J（半天内可完成）：先在一次性仓库跑 `npm i -g pullboard && pullboard tour`，确认你理解「提交—驳回—修复—复验—合并」的节奏；再选一个真实小仓库，`pullboard init` 并提交它写出的文件，只写 1–3 行 approved 的 SPEC.md，设一个真实的 gate（如 `pytest` 或 `npm test`），配 1 条 builder lane + 1 条 review lane；然后用 2–3 个小条目走完整流程：`add` → builder `worktree/next/submit` → 另一个 agent `next --verify` → `verify ... accept/reject`。
 - 新增做法 K（半天内可完成）：按 README 两条命令装好插件 → `/console demo` 看整块面板（不需要 registry）→ `/console refresh` 回到真实状态 → 挑一两个可回滚的项目，照 `workflow/projects-scope.example.md` 建注册表，并在项目里写一个用 `<!-- CARD -->` / `<!-- /CARD -->` 包住的 STATUS 块（Git 项目可放 `.console/STATUS.md` 并在 `.git/info/exclude` 里排除）→ 用 `dispatch.json` 给其中一个项目指定执行者（可先试 `manual`，或把它切到 Codex）→ 走一遍「派工 → 执行者完成 → autoSync 写回 CARD → 关卡评审」，看这条闭环是否真的减少了你的盯盘。
+- 新增做法 L（半天内可完成）：装好 `npm install -g neurosquad`（或直接 `npx neurosquad`）→ 在一个 git 仓库里跑 `nsq run claude "fix the flaky checkout test" --worktree` 和 `nsq run codex --name reviewer` → 打开 dashboard，试 Enter 全屏、Ctrl+] 回网格、y/a/n 回答权限、s / S 发送提示 → 按 q 关掉 dashboard 再 `nsq up`，确认 agent 是否按各自 session 恢复 → 用 `nsq ls --json`、`nsq peek <agent> -n 20`、`nsq diff <agent>`、`nsq cost --since 7d` 看状态、屏幕、改动和成本 → 可选：`nsq phone on --lan` + `nsq phone pair` 试手机端，或 `nsq provider add lmstudio --url http://localhost:1234` 接一个自建模型服务器。
 
 **试多久、什么时候升级**
 
@@ -1036,6 +1141,7 @@ Before dispatching to any executor, read ~/.claude/handoffs/dispatch.json
 - 做法 I 没有第三方性能与收益数据：先在 1–2 个 agent、半天到一天内试用；若通知可靠、漏掉等待的时间下降、恢复会话不丢布局，再扩大 agent 数。若通知常漏、恢复信任规则让你不确定、或本机 tmux 生命周期边界不满足，就不要把它作为默认方案。
 - 做法 J 只有 41 stars 和作者自述的返工比例：先在 2–3 个小条目上跑完整闭环，再决定是否固化成日常流程；如果 verifier 抓不到问题、或每个 PR 你仍要人工兜底，说明当前形态还没带来净收益。
 - 新增做法 K 只有 53 stars 和 0.15.x 的版本号：先在一两个可回滚的项目上跑一到两周，确认「派工 → 执行者完成 → autoSync 写回 CARD → 关卡评审」这条闭环真能减少人工盯盘；如果 STATUS 卡总得你手工维护、关卡拦不住东西、或配置/版本一变就装不上，就退回你现在的看板方式。
+- 新增做法 L 是 0.1.0 preview：先在一个 git 仓库、一两个真实任务上试半天到一天，确认 daemon 恢复、通知、权限内联回答、`nsq ls/cost/diff/peek` 都可靠；若命令或配置随版本变化导致你反复修，或手机端/自建 provider 的边界不满足，就只把它当临时观察窗，不要写进日常流程。
 
 ## 常见坑
 
@@ -1157,6 +1263,19 @@ Before dispatching to any executor, read ~/.claude/handoffs/dispatch.json
 - 成熟度不足：仓库仅 53 stars、版本 0.15.x、UI 当前是繁体中文，且强依赖特定 Claude Code 版本与自建注册表/状态卡约定；升级靠页脚 `⬆ 更新` 或 `/console update`，逐版本变更看仓库 `CHANGELOG.md`。
 - 材料在「对应的研究问题」小节处被截断，除这里列出的配置键与命令外，不要照片段猜其他能力。
 
+**新增做法 L（nsq / neurosquad-cli）**
+
+- 0.1.0 preview：README 自标 preview，命令与配置在 1.0 前可能变化；不要把它直接写进团队的日常流程。
+- `nsq run -- <command>` 这类任意命令没有 hooks，只能显示 working / finished，永远不会出现 “needs you”；不要把非 hook CLI 也当成能被通知的 agent。
+- 手机端是 experimental 且默认关闭；链接携带 pairing token，要当作密码对待。手机上只能看 agent 与屏幕、发提示、回答权限询问、中断，不能启动 agent、改设置或敲任意键。`nsq phone rotate` 让所有手机登出，`nsq phone off` 关闭。
+- 语音听写首次按 v 或 `nsq dictation setup` 会下载约 670 MB 模型（SHA-256 校验）；识别在本机完成，文本只粘贴进输入框、不会自动提交，需你按 Enter；Windows arm64 不可用。
+- 默认自动更新：npm/Homebrew/Scoop 安装的会在后台装新版本，并在“不会丢东西”（没有忙碌 agent、没有打开的 dashboard、每个 agent 都能 resume）时切换，或按 U 立即切换；想关掉用 `nsq config set autoUpdate false` 或 `NSQ_NO_UPDATE=1`。
+- 密钥在 OS keyring 或 `OPENROUTER_API_KEY`；key 只进 agent 的环境，不进 argv、日志或文件。自建模型服务器上的请求显示 “no price”，不是 $0；无已知价格的模型都如此。
+- 数据在 `~/.neurosquad-cli`（可用 `NSQ_HOME` 迁移），密钥在 OS keyring；`~/.claude`、`~/.codex`、`opencode.json` 永不被写；nsq 需要的一切放在 per-agent 层（flags、环境变量、自己的文件夹）。
+- README 没有给出任何“改善幅度”的量化指标或基准；状态、成本、diff、屏幕尾部是它能给的可观测信号，但不等于产出已被验证。
+- 与做法 I（cmux）的差异：nsq 跨平台（Windows/macOS/Linux）、用 per-user daemon 持有终端、有脚本化接口和成本命令；cmux 仅 macOS、是 GUI 终端、通知与恢复能力更细。两者都只是注意力路由，不替代验证、记忆和评审。
+- 与做法 J/K 的差异：nsq 不提供 gate/verifier 状态机，也不提供跨项目关卡看板；它不做「完成」的定义，也不做合入闸门。
+
 **通用**
 
 - 别把「工具很多」当成改善证据；没有验证命令或盲评对比，只是把不确定性放大了。
@@ -1164,6 +1283,7 @@ Before dispatching to any executor, read ~/.claude/handoffs/dispatch.json
 - 多步流水线不做落盘校验（只看聊天里的输出），事后无法复盘是哪一步坏了。
 - 并行 agent 的通知很多时，先保证「谁在等我」可路由，再谈扩并发；否则只是把等待堆到更多 pane 里。
 - 用面板/看板时，先确认它的状态来源是你或 agent 真的写下来的文件，而不是它自己猜的；做法 K 的刷新只查本地文件和 CLI、不请求模型，卡上写错它不会替你纠正。
+- 用 daemon/dashboard 时，先确认它管的是「可见性与权限」而不是「完成与合入」；做法 L 不替代验证、记忆和评审。
 
 ## 证据与来源
 
@@ -1178,6 +1298,7 @@ Before dispatching to any executor, read ~/.claude/handoffs/dispatch.json
 - **做法 I** 依据调研《manaflow-ai/cmux》。可核对：仅 macOS、基于 Ghostty 渲染引擎、DMG 与 Homebrew 安装、`cmux hooks setup` 及其受支持 agent 列表、OSC 9/99/777 与 `cmux notify` 通知路径、快捷键表、`cmux claude-teams`、`cmux ssh` 与 `--command` 行为、`autoResumeAgentSessions` 配置、`cmux restore-session` 的 `--from <channel>` 与 `--from <path>` 信任差异、`cmux surface resume set/show/clear` 信任规则、`cmux local-tmux` / `cmux local-zellij` 生命周期边界、`CMUX_NO_GIT_WATCH=1`、浏览器导入/自动化、Skills 仓库等。属于作者主张：通知驱动的注意力路由能改善并行 agent 工作流，但没有第三方性能与收益数据。重要限制：调研材料在配置面 `~/.config/c...` 处被截断，其他配置细节在外链文档；因此本手册只写能照做的安装、hooks、通知、恢复与生命周期部分，不补写未给出的配置项。
 - **做法 J** 依据调研《pullboard-dev/pullboard》。可核对：完整 CLI 命令、`SPEC.md` 格式、`pullboard.json` 配置与各栈 gate 表、tour 的端到端示例（含故意破坏修复再看测试失败）、一个真实的 reject/accept receipt 样例、条目状态机（open → claimed → submitted → verified / 回 open）、`PRACTICE.md` doctrine、看板是放在 `.git` 里的一个 SQLite 文件、Node 22.13+、MIT 许可、41 stars。属于作者主张：这套方法论「更好」、返工比例可复现、多 agent 更连贯；「nearly one in three items goes back」是作者对自己开发 Pullboard 时的描述，不是可复现的第三方基准。原文自己声明的局限：worktree 身份只在一台机器上有意义、不是安全边界；可用 `--no-verify` 跳过 hook（靠 pre-push gate 和 verifier 兜底）；CI 只在 Linux 和 macOS 上跑，Windows 未测试；relay 和 Pullboard View 里的 roadmap 仍是 planned。
 - **新增做法 K** 依据调研《SaM-runtime/claude-console》。可核对：两条安装命令、`/console demo` 与 `/console refresh`、插件配置的 `--values-stdin` 写法与全部配置键及默认值、注册表 + STATUS 卡格式（`<!-- CARD -->` / `<!-- /CARD -->`、十行上限、繁体键名、`關卡` 的四种取值）、`dispatch.json` 结构与执行者解析顺序（面板覆盖 > 注册表 Executor 列 > 全局）、`sync` 的模型/session 覆盖规则、动作键与数字键回答待决事项、`/console reply`、命令速查表、`commandGuard` / `loopGuard` / `activation` / `projectMode` 的取值与默认、Git/PR/CI 探测行为与 `gitProbe` 三档、`/console update`。属于作者主张：「一个控制台会话承担跨项目规格、监督与评审关卡」「刷新只查本地文件和 CLI、不请求模型」「减少盯盘」等来自原文自述，没有第三方基准或对照实验。原文自己声明的局限与材料限制：仓库仅 53 stars、版本 0.15.x、UI 为繁体中文、强依赖特定 Claude Code 版本与自建的注册表/STATUS 卡约定；材料在「对应的研究问题」小节处被截断，本手册只写能照做的安装、配置、派工、状态卡、动作与护栏部分。
+- **新增做法 L** 依据调研《glmn-ai/neurosquad-cli》。可核对：`npm install -g neurosquad` / `npx neurosquad`、`nsq run claude "..." --worktree` 与分支名 `nsq/<name>`、`nsq run codex --name reviewer`、`nsq run -- npm run dev`、dashboard 的 Enter / Ctrl+] / y / a / n / i / s / S / q、`nsq down` / `nsq up`、`nsq ls --json` / `nsq send <agent> "prompt" [--when-done]` / `nsq answer <agent> yes|always|no` / `nsq peek <agent> [-n 20]` / `nsq diff <agent>` / `nsq cost [--since 7d] [--json]`、`nsq openrouter set-key`、`nsq provider add lmstudio --url http://localhost:1234`、`nsq phone on --lan|--online` / `nsq phone pair` / `nsq phone push ntfy` / `nsq phone rotate` / `nsq phone off`、语音听写 `v` 与约 670 MB 模型 / Windows arm64 不可用、`nsq config set autoUpdate false`、`nsq doctor`、`nsq set <agent> ...`、数据目录 `~/.neurosquad-cli` 与 `NSQ_HOME`、OS keyring、`~/.claude` / `~/.codex` / `opencode.json` 永不被写、Node.js 22.13+、MIT、README 自标 0.1.0 preview、native 预编译平台。属于作者主张、没有外部验证：daemon/dashboard 能改善并行 agent 的响应速度与成本可见性，README 没有给出任何“改善幅度”的量化指标或基准；`--worktree` 的隔离边界是文件系统路径而非安全边界。重要限制：本条只依据 README 级材料，命令与配置在 1.0 前可能变化，不宜直接纳入日常流程。
 
 ## 依据的调研
 
@@ -1192,3 +1313,4 @@ Before dispatching to any executor, read ~/.claude/handoffs/dispatch.json
 - [manaflow-ai/cmux](../research/radar/2026-10-08/1856-manaflow-ai-cmux.md)：值得一试，macOS 上并行跑多个终端型 coding agent 的人，可以照 README 的安装与 hooks 步骤小范围试一套「通知驱动的注意力路由」工作流：装 cmux、跑 `cmux hooks setup`、用 workspace 分屏跑 agent、靠通知环和 ⌘⇧U 跳转；理由是多 agent 并行时「哪个在等我」是可复制的痛点，而这份 README 给出了具体命令与配置键，但它只支持 macOS、性能与收益均无第三方数据，因此不宜作为通用默认方案直接采用。
 - [pullboard-dev/pullboard](../research/radar/2026-10-08/2038-pullboard-dev-pullboard.md)：值得一试，建议在小范围试：先用 `pullboard tour` 看一遍闭环，再在一个真实小仓库里把「SPEC 行 → gate → 另一个智能体在同一 commit 上验证」跑通，然后决定是否固化成日常流程；理由是它把「第二个智能体验证通过才算完成」做成了可强制执行的状态机，并给出了可直接复制的命令与配置（MIT、本地运行、不调用模型），但项目很小（41 stars）、Windows 未测试、部分功能仍在 planned，适合先试验证收益。
 - [SaM-runtime/claude-console](../research/radar/2026-10-09/2187-sam-runtime-claude-console.md)：值得一试，建议小范围试：先按 README 的两条命令装好插件、用 /console demo 跑通面板，再挑一两个可回滚的项目接入 registry + STATUS 卡，验证「派工 → 执行者完成 → autoSync 写回 CARD → 关卡评审」这条闭环是否真的减少了人工盯盘；理由是它给出了可直接照做的安装命令、配置键表、dispatch.json 结构、动作快捷键和状态卡格式，但仓库仅 53 stars、版本 0.15.x、强依赖特定 Claude Code 版本与自建的注册表/状态卡约定，成熟度还不够直接全量采用。
+- [glmn-ai/neurosquad-cli](../research/radar/2026-10-10/2422-glmn-ai-neurosquad-cli.md)：值得一试，先在单个 git 仓库里用 npx neurosquad 跑一两个带 --worktree 的后台 agent，实测“关掉窗口后继续跑 + 状态/成本可观测 + 权限内联回答”是否成立，再决定是否纳入日常；README 给了可直接复制的安装、启动、回答与成本命令，但项目自标 0.1.0 preview、命令与配置在 1.0 前可能变化，不宜直接 adopt。
