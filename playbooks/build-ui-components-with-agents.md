@@ -1,25 +1,26 @@
-# 把检查挪到 agent 交付之前：图表、组件、架构图和前端界面
+# 让编码 agent 在宣布完成前拿出证据
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：编码 agent 交出来的东西常常“看着完成了”，问题要等人来发现；这份手册给四条可落地的做法，让图表、组件、架构图和前端界面在交付前先过一遍可自动执行的检查。
-> 先试这一步：挑一类你最近返工最多的交付物，装上对应技能跑一次真实任务，并在不装技能的情况下让同一个 agent 做同样任务，做一次基线对照；前端项目可以先跑 `npx impeccable install` 加 `npx impeccable detect --json src/` 拿到一份可量化的检测基线。
-> 最近修订：2026-10-02
+> 解决的问题：编码 agent 的交付物常常“看着完成了”——图表、组件、架构图、前端 UI 和终端内视觉验证都有可判定的坏味道，却没有在交付前被系统检查。
+> 先试这一步：如果你在 macOS + Ghostty/kitty 下用 Claude Code，先跑 show-your-work 的 examples/pricing 前后对比 QA；否则先给当前任务装一个 Agent Skill（图表用 evident-charts）做一次交付前检查。
+> 最近修订：2026-10-11
 
 ## 解决什么问题
 
-编码 agent 交出来的东西常常“看着完成了”：图表用了没说清的对数轴、把 EU 总量和它的成员国排在一起、来源行靠猜或直接写文件名、图上还留着 TODO；组件会发明路由、引入第二套设计系统、漏掉加载/取消/无效输入/结果恢复这类状态；架构图则可能脱离真实系统、与部署漂移、无法增量维护；前端界面则是“所有模型都在同一套 SaaS 模板上训练”，不加指导就产出同样的坏味道——Inter 字体、紫到蓝渐变、卡片套卡片、彩色背景上的灰字、每个标题上方一个圆角方块图标。这份手册给四条可落地的做法，把“检查”从你手里挪到 agent 交付之前：图表过三道检查、组件写代码前先签契约、架构图从真实来源生成并在合并前校验、前端 UI 先固定持久事实再用确定性规则当门禁。
+编码 agent 交出来的东西常常“看着完成了”：图表用了没说清的对数轴、把 EU 总量和它的成员国排在一起、来源行靠猜或直接写文件名、图上还留着 TODO；组件会发明路由、引入第二套设计系统、漏掉加载/取消/无效输入/结果恢复这类状态；架构图则可能脱离真实系统、与部署漂移、无法增量维护；前端界面则是“所有模型都在同一套 SaaS 模板上训练”，不加指导就产出同样的坏味道——Inter 字体、紫到蓝渐变、卡片套卡片、彩色背景上的灰字、每个标题上方一个圆角方块图标。更麻烦的是，改完前端 UI 后，你往往还要自己开浏览器、起 localhost、手动点一遍才能确认。这份手册给五条可落地的做法，把“检查”和“展示”从你手里挪到 agent 交付之前：图表过三道检查、组件写代码前先签契约、架构图从真实来源生成并在合并前校验、前端 UI 先固定持久事实再用确定性规则当门禁、以及让 Claude Code 在终端里直接展示截图/录屏/前后对比 QA。
 
 ## 适用与不适用
 
 **适用：**
 
-- 你已经在用支持 Agent Skills 的编码代理（evident-charts 声明支持 Claude Code、Codex、Cursor、Gemini CLI、GitHub Copilot、Antigravity；Bricks 要求支持 skills 的代理；drawio-skill 声明兼容 Claude Code、Cursor、Copilot、OpenClaw、Codex、Autohand Code、Hermes 等 Agent Skills 格式的智能体），并且任务落在四类交付物上：
+- 你已经在用支持 Agent Skills 的编码代理（evident-charts 声明支持 Claude Code、Codex、Cursor、Gemini CLI、GitHub Copilot、Antigravity；Bricks 要求支持 skills 的代理；drawio-skill 声明兼容 Claude Code、Cursor、Copilot、OpenClaw、Codex、Autohand Code、Hermes 等 Agent Skills 格式的智能体；show-your-work 是 Claude Code 插件，要求 Claude Code v2.1.287+），并且任务落在五类交付物上：
   - 用数据画图：matplotlib、seaborn、pandas `.plot`、ggplot2、Plotly、Vega-Lite/Altair、D3；输出尺寸有博客、X、LinkedIn、Instagram、幻灯片、报告、手机预设。
   - 实现一个有明确边界的命名组件或有界组合（Footer、FAQ、Task Input、Agent Workspace 这类容易翻车的类型）。
   - 架构图/系统图/架构文档维护：从自然语言、代码、Terraform、Kubernetes、docker-compose、SQL DDL、OpenAPI/AsyncAPI/Protobuf/GraphQL、CI 配置生成可编辑 `.drawio`，或对已有图做增量同步、漂移 diff、规则校验。
   - 用 AI 代理做前端/UI 的设计与实现：项目涉及前端，你想让 agent 在一个已经写进仓库的视觉系统里干活，而不是每来一个新会话重新猜风格。
-- 项目已有代码库、组件、设计令牌、框架、路由和响应式约定（Bricks 的前提），或者项目里已有图表脚本与源数据，或者手上有可导入的真实架构来源（Terraform/K8s 配置、SQL、API 定义、代码目录、白板照片/截图），或者一个有前端界面的项目（Impeccable 的前提）。
+  - 在终端里用 Claude Code 做前端/UI、视频/动画类产出或需要视觉回归验证的修复，且你不想每完成一件事就切到浏览器手动 QA。
+- 项目已有代码库、组件、设计令牌、框架、路由和响应式约定（Bricks 的前提），或者项目里已有图表脚本与源数据，或者手上有可导入的真实架构来源（Terraform/K8s 配置、SQL、API 定义、代码目录、白板照片/截图），或者一个有前端界面的项目（Impeccable 的前提），或者一份可重复运行的 Playwright 脚本和能画图的终端环境（show-your-work 的前提）。
 
 **不适用：**
 
@@ -27,7 +28,8 @@
 - 复杂领域行为组件（编辑器、数据网格、图表组件、日历、可访问性原语）在项目没有现成方案时，应该用成熟库，而不是让 agent 从零写。
 - 架构图如果不想安装 draw.io 桌面 CLI，或没有真实来源/反馈循环，drawio-skill 的核心能力会受限；它也不适合替代手绘风、diagrams-as-code、自由画布（README 建议换同作者家族其他 skill）。
 - 前端 UI 的检测规则是确定性的、只覆盖可判定的坏味道；`/impeccable critique` 这类设计评审是 LLM-only 的主观判断，别把它当门禁。Impeccable 也不自带组件库或设计系统，视觉方向要你在持久事实和 `DESIGN.md` 里自己定。
-- 想要现成的量化改善数据：四份材料都没有给出效果数字，只能自己跑基线对照。
+- show-your-work 只支持 macOS 与 Ghostty/kitty；iTerm2、macOS Terminal、VS Code 内置终端目前画不了这类图片；Linux 和 Windows 尚不支持；tmux 内“还不可靠”，可尝试在 tmux 配置里开 `set -g allow-passthrough on`。它也不适合已经工作在 VS Code/Cursor 编辑器里的用户（原文 FAQ 直接这么说）。
+- 想要现成的量化改善数据：五份材料都没有给出效果数字，只能自己跑基线对照。
 
 ## 前置条件
 
@@ -50,6 +52,12 @@
   - 项目涉及前端/UI；本地有 Node——只为 `npx` 本身，skill 和 hook 自带引擎二进制，不需要 Node 运行时。
   - 扫 URL 时用本地已装的 Chrome/Chromium/Edge。
   - 想让检测在编辑时自动跑，需要在 Claude Code、Cursor、Codex、GitHub Copilot、Grok Build 这类支持 provider 原生 hook 的 harness 上安装（Codex 装/更新后要打开 `/hooks` 批准项目 hook；Grok Build 需要项目目录信任）。
+- 终端内展示做法（做法 E）：
+  - macOS；终端为 Ghostty 或 kitty（iTerm2、macOS Terminal、VS Code 内置终端目前画不了这类图片）；Claude Code v2.1.287 或更新。
+  - 装 ffmpeg（视频播放需要）：`brew install ffmpeg`。
+  - 任务侧需要一份可重复运行的 Playwright 脚本，能产出同一脚本的 before/after 两段录制。
+  - 信息侧要提供 `url`、`changes` 的时间戳、`summary` 的检查项与通过数——这三样决定了“随视频打勾”“点击跳转改动”“差异行”这些能力能不能出现。
+  - 图片、视频和文件不出本机、也不进模型上下文；匿名遥测可关。
 
 ## 操作步骤
 
@@ -178,8 +186,7 @@
 
    手动安装示例：
    ```bash
-   git clone https://github.com/Agents365-ai/drawio-skill.git \
-     ~/.claude/skills/drawio-skill
+   git clone https://github.com/Agents365-ai/drawio-skill.git ~/.claude/skills/drawio-skill
    ```
 
    更新：`skills update drawio-skill`，手动安装则 `git pull`。
@@ -361,13 +368,87 @@
 
 10. 把反模式写成项目规范。预期结果：团队约定里有一份明确禁止项，直接拦掉模型默认的模板口味。skill 自带的明确禁止项包括：不用过度使用的字体（材料里列到 Arial、Inter、系统默认字体，此处被截断），以及前述坏味道——紫到蓝渐变、卡片套卡片、彩色背景上的灰字、每个标题上方一个圆角方块图标。
 
-### 怎么选 A / B / C / D
+### 做法 E：让 Claude Code 在终端里展示截图、录屏和前后对比 QA
 
-按交付物分：要的是数据图表，走 A；要的是一个命名组件或有界组合，走 B；要的是架构图/系统图/架构文档维护，走 C；要的是前端界面的设计与实现，走 D。A、B、D 是请求驱动、在对应事件（生成/审阅图表、收到组件任务、编辑 UI 文件或调用 `/impeccable` 命令）时触发，都不是常驻巡检；D 的确定性检测还能独立于 LLM 跑，适合直接接 CI。C 也是 Agent Skill/MCP 形态，可生成与校验，并可按 README 接入 CI。四者都需要你在请求里带足上下文。原文没有给出四者联动的做法。
+用 iamumeransari/claude-show-your-work。它的思路是当 Claude 做完一件事，把成果直接显示在终端聊天里：生成页面的截图、用 Playwright 点按应用的录屏，或一次修复的完整 QA（原始版 / 修改版并排对比）。原文的定位是“No browser, no localhost, no manual QA”。它靠两件事成立：Claude Code 的 mods 第一次允许插件改变 Claude Code 内部界面的显示；能画图的终端 Ghostty 和 kitty 支持 kitty graphics protocol。图片和视频不经过 Claude，Claude 只告诉插件该显示哪个文件，原文称几乎不消耗 token。
+
+1. 前提：macOS；终端为 Ghostty 或 kitty；Claude Code v2.1.287 或更新。在 Claude Code 里添加插件市场并安装插件：
+   ```text
+   /plugin marketplace add https://github.com/iamumeransari/claude-show-your-work.git
+   /plugin install show-your-work@iamumeransari
+   ```
+
+2. 在你自己的终端里装 ffmpeg（视频播放需要）。预期结果：装完即用，原文称 Claude 会自己开始展示它的工作，不需要额外配置。
+   ```bash
+   brew install ffmpeg
+   ```
+
+3. （可选）关掉每日自动更新。前提：不想每天跟着 GitHub 最新代码走。预期结果：需要手动更新。插件默认每天检查 GitHub 上新版本、自动安装，并提示你重启 Claude Code 才生效：
+   ```bash
+   SHOW_YOUR_WORK_AUTO_UPDATE=0
+   ```
+   关掉后手动更新用：
+   ```bash
+   claude plugin update show-your-work@iamumeransari
+   ```
+
+4. （可选）关掉匿名遥测。预期结果：不发送会话、展示类型和按钮使用情况。原文声明不上传文件名、路径、URL、标题、提示词、你输入或 Claude 写出的任何内容。
+   ```bash
+   SHOW_YOUR_WORK_TELEMETRY=0
+   ```
+   或 `DO_NOT_TRACK=1`；设置了 `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` 时也会自动关闭。
+
+5. 先跑官方 demo 验证环境。前提：完成步骤 1、2。预期结果：得到 before/after 两段录制。`examples/pricing` 是一个计费开关坏掉的定价页，外加一个录制前后对比的脚本：
+   ```bash
+   cd examples/pricing && npm i playwright
+   node qa.cjs before rec-before   # the broken version: 3 checks fail
+   node qa.cjs after  rec-after    # the fixed version: all 5 pass
+   ```
+
+6. 让 Claude 展示这组对比，提示词原文照抄：
+   ```text
+   "show me the QA, rec-after vs rec-before"
+   ```
+
+7. 用在自己的项目上：让 Claude 用 Playwright 跑一遍改动前的应用并录制，改完再用**同一个脚本**录一遍，然后把两个文件作为前后对比交给 `show_video`。原文给出了 Claude 传给插件的参数结构，可作为“你需要准备哪些信息”的清单：
+   ```jsonc
+   {
+     "path": "qa/after.webm",          // the updated run
+     "compare": "qa/before.webm",      // the original run, same script
+     "title": "Pricing page",
+     "url": "http://localhost:3000/pricing",
+     "changes": [                      // what changed, and the second it shows up
+       { "title": "Annual toggle sets prices", "at": 3.2 },
+       { "title": "Plan buttons line up", "at": 5.4 }
+     ],
+     "summary": [                      // the test results, at most three lines
+       { "label": "Billing: toggle works", "ok": true, "passed": 1, "total": 1 },
+       { "label": "Layout: plans, buttons", "ok": true, "passed": 3, "total": 3 }
+     ]
+   }
+   ```
+   要点：`compare` 必须是**同一脚本**录的原始版，`changes[].at` 是每处改动出现在视频第几秒（用于点击跳转），`summary` 最多三行测试结果。
+
+8. 只想看单张文件时，可以自己在 Claude Code 里打开：
+   ```text
+   /img path/to/file.png
+   ```
+
+9. （改插件本身时）编辑 `hooks/register.tsx`，然后：
+   ```text
+   /reload-plugins
+   ```
+   校验用 `claude plugin validate .` 和 `claude plugin test .`。
+
+10. 知道参数上限：视频用 ffmpeg 切帧，最高 12 帧/秒、960 px 宽、最多 900 帧。QA summary 直接给结果（例 “Form: 8/8 passed”，最多三行）；每条 check 在视频播到被测试的那一刻弹出勾或叉；同一组 checks 会同时显示在原始版和修改版上；Compare 视图把两段录制逐帧对齐，“旧版加载慢的话视频会等它”；视频下方一行给出“此刻的差异”，例 `Annual toggle updates prices · Original ✗ → Updated ✓`；多次修改会保留每一版历史以便回看对比。
+
+### 怎么选 A / B / C / D / E
+
+按交付物分：要的是数据图表，走 A；要的是一个命名组件或有界组合，走 B；要的是架构图/系统图/架构文档维护，走 C；要的是前端界面的设计与实现，走 D；要的是在终端里直接看截图/录屏/前后对比 QA，走 E。A、B、D、E 是请求驱动、在对应事件（生成/审阅图表、收到组件任务、编辑 UI 文件或调用 `/impeccable` 命令、Claude 做完一件事）时触发，都不是常驻巡检；D 的确定性检测还能独立于 LLM 跑，适合直接接 CI。C 也是 Agent Skill/MCP 形态，可生成与校验，并可按 README 接入 CI。D 和 E 有分工：D 用 61 条确定性规则做可自动执行的守门人，E 把视觉验证留在终端、不额外开浏览器；原文没有给出 D 与 E 联动的做法。五者都需要你在请求里带足上下文。
 
 ## 怎么判断变好了
 
-最小试用：在单个代理上装一次（图表优先 Claude Code，命令最短），用一个已有图表脚本，或一个已有类似实现的组件任务，或一两个真实架构来源，或一个现有前端页面来试。并做基线对照——让同一 agent 在不装技能的情况下做同样任务，再比一次。
+最小试用：在单个代理上装一次（图表优先 Claude Code，命令最短），用一个已有图表脚本，或一个已有类似实现的组件任务，或一两个真实架构来源，或一个现有前端页面来试；如果符合 macOS + Ghostty/kitty + Claude Code ≥2.1.287，再跑一次 show-your-work 的 examples/pricing。并做基线对照——让同一 agent 在不装技能的情况下做同样任务，再比一次。
 
 图表侧可直接观察的指标（都能从一次试用里看到）：
 
@@ -402,11 +483,20 @@
 - `critique` / `audit` / `polish` 抓出的层级、清晰度、a11y、性能、响应式问题数量，以及返工轮次。
 - `PRODUCT.md` / `DESIGN.md` 是否真的减少了 agent 反复问同样问题、反复换风格的情况。
 
-这些指标是验证方法建议，四份材料都没有给出对应的量化结果。试多久：原文没有给时长，按任务数量定——若干张历史图表、一个边界清晰的组件任务、一两个真实架构来源导入并接入一次 PR，再加一个现有前端页面的检测基线。
+终端内展示侧（做法 E）：
+
+- 视频是否真的在终端内播放，全程**没有**打开浏览器或播放器（目标：跳出终端次数 = 0）。
+- before 是否显示 3 项失败、after 是否显示 5/5 通过，与脚本输出一致。
+- 点 “What changed” 里的条目，视频是否跳到对应时间点、被选中的条目是否高亮。
+- Compare 视图两段录制是否逐步同步；视频下方的差异行描述与实际差异是否吻合（例：`Annual toggle updates prices · Original ✗ → Updated ✓`）。
+- 同一次任务的会话 token 用量与不装插件时相比没有明显上升（对应“几乎不耗 token”的主张）。
+- 再上自己的任务：挑一个真实前端 UI 修复，让 Claude 改完并录前后对比，人工看视频判断两类错误——误报（显示通过但实际没修好）和漏报（实际修好但显示失败）。原文没有给准确率数据，所以这一步必须人工兜底；连续 3–5 个任务都没有误判，才值得把“改完自动录一段前后对比 QA”写进常规流程。
+
+这些指标是验证方法建议，五份材料都没有给出对应的量化结果。试多久：原文没有给时长，按任务数量定——若干张历史图表、一个边界清晰的组件任务、一两个真实架构来源导入并接入一次 PR，再加一个现有前端页面的检测基线，以及一次 show-your-work 的官方 demo 和 3–5 个真实前端修复任务。
 
 ## 常见坑
 
-- 四份材料的兼容性声明和效果描述都来自各自 README 或作者自述，没有安装实测、没有 issue/失败案例；evident-charts 和 Bricks 星标分别只有 52 和 77，drawio-skill 同样缺乏第三方验证。先小范围试，不要直接全量采用。
+- 五份材料的兼容性声明和效果描述都来自各自 README 或作者自述，没有安装实测、没有 issue/失败案例；evident-charts 和 Bricks 星标分别只有 52 和 77；drawio-skill 同样缺乏第三方验证；show-your-work 只有 36 stars，属早期小项目。先小范围试，不要直接全量采用。
 - 没有 headless Chrome 时，非 matplotlib 库的代码级 lint 会直接缺失，只剩规格检查和图像复审——别把降级结果当成完整检查。
 - 技能是事件触发（生成/审阅图表、收到组件任务、处理架构图任务、编辑 UI 文件时加载或运行），不会主动巡检；你不给源数据、PNG、脚本、项目上下文或真实架构来源，它就没有可查的东西。
 - style guide 的覆盖权限只到 `[T]`，别指望用项目风格去关掉柱状图零基线这类 `[E]` 完整性规则。
@@ -424,6 +514,12 @@
 - 人类可读的 findings 写 stderr，机器可读才走 stdout；重定向和 CI 解析时别搞混。
 - `critique` 是 LLM-only 的主观评审，和 61 条确定性规则不是一回事，别把它当硬门禁。
 - Impeccable 的改善效果目前只有作者主张和一个未展开的案例页，缺实测数据。
+- show-your-work 适用条件很窄：仅 macOS；仅 Ghostty 和 kitty；iTerm2、macOS Terminal、VS Code 终端不行；tmux 内“还不可靠”，可尝试在 tmux 配置里开 `set -g allow-passthrough on`；Linux 和 Windows 尚不支持。
+- show-your-work 默认每天从 GitHub 拉新版本并覆盖安装，接受“始终跟最新代码”就等于接受供应链风险，可关掉自动更新或锁定版本。
+- show-your-work 的匿名遥测虽明确不上传文件名/路径/URL/内容，但仍会上报会话、展示类型和按钮使用情况，可用环境变量关闭。
+- “几乎不消耗 token”“Claude 自动开始展示”“两段录制逐帧同步”“点击改动跳到视频对应时刻”都是作者主张，机制解释说得通，但没有量化数据支撑。
+- 视频参数上限：12 帧/秒、960 px 宽、最多 900 帧；QA summary 最多三行。
+- 原文没有给 show-your-work 的准确率数据，必须人工兜底看误报和漏报。
 
 ## 证据与来源
 
@@ -449,9 +545,17 @@
 **前端 UI 做法：**
 
 - 依据 pbakaus/impeccable 的调研材料（作者 Paul Bakaus，Apache 2.0）。可操作材料是 `npx impeccable install` / `update` / `link`、`/impeccable init` 及命令表、`npx impeccable detect` 的若干调用形式与退出码语义、`.impeccable/config.json` 的 `detector` 键与 `ignores` 命令、内联豁免注释、`.gitignore` 片段与必须保留跟踪的产物清单、`buildPath` 配置、Git submodule 安装命令、hook 在各 harness 上的行为差异、`PRODUCT.md` / `DESIGN.md` 的分工。
-- 材料给出的具体数字：24 条命令、61 条确定性检测规则、321/18 之外的 logo 数据不属于本篇；退出码 `0`/`2`/`1` 的语义；覆盖的 harness 包括 Claude Code、Cursor、Codex、GitHub Copilot、Grok Build。
+- 材料给出的具体数字：24 条命令、61 条确定性检测规则；退出码 `0`/`2`/`1` 的语义；覆盖的 harness 包括 Claude Code、Cursor、Codex、GitHub Copilot、Grok Build。
 - 作者主张：“所有模型都在同一套 SaaS 模板上训练，不加指导就产出同样的坏味道”、检测规则不需要 LLM 和 API key、hook 能在编辑时把检测结果送回 agent 流程、方法论可迁移到任何需要稳定产出的任务——这些都是作者自述。
 - 未提供：没有任何使用前后的成功率、返工次数、时间节省等量化结果；反模式清单在给定材料里被截断（止于“不用过度使用的字体（Arial、Inter、系统”）；改善效果目前只有一个未展开的案例页。
+
+**终端内展示做法：**
+
+- 依据 iamumeransari/claude-show-your-work 的 README。可操作材料是安装与更新命令、环境变量、`examples/pricing` 目录 + 两条可直接执行的命令（before 3 项失败、after 5 项全过）+ 一句提示词、`show_video` 参数结构、`/img`、`/reload-plugins`、`claude plugin validate .` 和 `claude plugin test .`。
+- 可当作参数事实的：视频 12 帧/秒、960 px 宽、最多 900 帧；QA summary 最多三行；`show_image` / `show_video` 两个工具的用途划分；前后对比所需字段。
+- 只是作者主张的：“几乎不消耗 token”“Claude 自动开始展示”“两段录制逐帧同步”“点击改动跳到视频对应时刻”。机制解释（Claude 不看图、只传文件路径）在逻辑上说得通，但没有量化数据支撑。
+- 适用条件很窄：仅 macOS；仅 Ghostty 和 kitty；tmux 内“还不可靠”；Linux 和 Windows 尚不支持。仓库 36 stars，属早期小项目；默认每天从 GitHub 拉新版本并覆盖安装；匿名遥测仍会上报会话、展示类型和按钮使用情况，可关。
+- 未提供：没有任何使用前后的成功率、返工次数、时间节省等量化结果；准确率数据缺失，必须人工兜底。
 
 ## 依据的调研
 
@@ -459,3 +563,4 @@
 - [kostja94/bricks](../research/radar/2026-10-01/35-kostja94-bricks.md)：值得一试，建议按 README 的安装命令引入 component-builder，并在一个有明确边界的组件任务上小范围试用；它把组件责任、上下文、变体、状态和验证要求前置为契约，能约束 agent 少写脱离项目的 UI 代码，但目前只有作者主张和流程说明，缺少效果数据，不宜直接全量采用。
 - [Agents365-ai/drawio-skill](../research/radar/2026-10-02/795-agents365-ai-drawio-skill.md)：值得一试，建议先在小范围试：按 README 给出的安装与命令，把一两个真实来源（Terraform/K8s 配置、Python 包、SQL DDL、OpenAPI）导入成可编辑 .drawio，并把 diff/校验接入一次 PR，验证增量同步与漂移检测是否真能用。理由：README 提供了可直接照做的安装命令、CLI 调用和提示词样例，但关键的 CI 规则配置、sync 参数细节都在未提供的链接文档里，且核心卖点多为作者自述，缺乏第三方验证。
 - [pbakaus/impeccable](../research/radar/2026-10-02/666-pbakaus-impeccable.md)：值得一试，建议先在前端项目上小范围试：按 `npx impeccable install` + `/impeccable init` 把持久产品事实（PRODUCT.md）和视觉系统（DESIGN.md）固定下来，再用 `npx impeccable detect --json` 建立可量化的基线并把检测接进 hook/CI 当验收门槛；它把“给智能体供给上下文+约束+自动反馈”写成了可照抄的步骤，但改善效果目前只有作者主张和一个未展开的案例页，缺实测数据。
+- [iamumeransari/claude-show-your-work](../research/radar/2026-10-11/2567-iamumeransari-claude-show-your-work.md)：值得一试，在 macOS + Ghostty/kitty 的 Claude Code 终端工作流里小范围试装这个插件，先跑官方 examples/pricing 的 before/after 录制、确认 QA 视频、勾选清单和对比视图都能在终端内正常呈现，再把「Claude 改完前端 UI 后录一段前后对比 QA」纳入日常；理由是原文给出了可复制的安装命令、demo 脚本和前后对比的参数结构，能把视觉验证留在终端、不额外开浏览器，但目前只支持 macOS 与两种终端、项目仅 36 stars，属早期工具，不宜直接全量采用。
