@@ -1,10 +1,10 @@
-# 让编码 agent 在宣布完成前拿出可核对的证据
+# 让编码 agent 在宣布完成前拿出证据
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：agent 自称「已完成、测试都过了」，但改动周围的问题、界面上的事实、以及测试输出的真相都没人核对。
-> 先试这一步：下一次改动收尾时，先要求 agent 交出 `Verified: <what was run> → <result>` 和明确列出的「没被验证的部分」，给不出就别接受 done。
-> 最近修订：2026-10-06
+> 解决的问题：agent 说「完成」「测试通过」只是一句主张——这篇手册给你一套能照做的做法，让它交出可复核的证据，或者老老实实报告为 built。
+> 先试这一步：别急着装全套：下次 agent 说「完成」时，要它交出一份回执——跑过的命令、命令自己的退出码、实际输出、以及没被验证的部分；缺了哪项，就把它写进报告里。
+> 最近修订：2026-10-11
 
 ## 解决什么问题
 
@@ -16,6 +16,8 @@
 
 第三件事：「测试通过」这四个字本身也可能是假的。dotpals 的做法是**读测试输出而不是听 agent 自称**——它把每个测试结果归为 `✅ ran successfully` / `❌ failed` / `❔ unclear` / `⚪ not run`，识别「伪造通过」（改测试去掉断言、加 skip、改期望值），并指出「测试通过后又改了文件、此后没再测过」这类时点问题；在 Claude Code 上还会在 agent 试图结束、commit 或 push 时把失败测试回推给它修。
 
+第四件事：「完成」是主张，不是事实。`Grit-77/done-is-a-claim` 把这句话落成可搬走的东西：一条 understand → plan → implement → diagnose → review → verify → deliver 的主流程、13 个互相衔接的技能、18 条实战规则（每条在 `INCIDENTS.md` 里对应一个失败故事）、可复用的完成回执 / 验收简报 / 交接模板，以及 `tools/receipt.py` 这类本地采证小工具。它和 first-pass 的分工很明确：first-pass 用 hook 把没有证据的「done」扣住，是**闸门**；done-is-a-claim 原文写死了「规则不是闸门」——**不拦截工具调用、不阻断合并、不强制执行部署策略**，它给的是能带走、能贴进任何项目、不依赖某一家宿主的规则、模板和回执工具。宿主拿不到 hooks 时，用这一组。
+
 ## 适用与不适用
 
 **适用**
@@ -25,6 +27,7 @@
 - Cursor、Codex、Windsurf 等：能拿到同样的规则和技能，但**没有 hooks**。
 - 有界面的项目：浏览器 skill 以后台方式运行，不占用你正在用的浏览器，前端、后端、非 Node 项目都能用。
 - 有测试套件的编码项目：dotpals 读测试输出判定真通过、识别伪造通过，并在 Claude Code 上回推修复；对「改了代码但测试通过后又改文件」这类时点问题特别有用。
+- done-is-a-claim：宿主是 Claude Code 或 Codex（两者都有原生插件装法），或任意会读 `AGENTS.md` 的 agent；你只想拿走规则、模板和回执工具，不想装一套会拦你的插件；需要在 agent 之间交接工作（`handoff.md`、`evidence-freshness`、`resuming-work`、`collecting-worker-results` 就是处理「检查之后工作又变了」「subagent 汇报成功」这类收尾问题的）。
 
 **不适用 / 需要知道**
 
@@ -35,6 +38,8 @@
 - 后端纯逻辑改动、没有页面的项目，用不上浏览器这一套；别为了用而用。
 - dotpals 很新（**31 stars、v0.10**）：**强制回推修复只支持 Claude Code**；Cursor / Gemini CLI / OpenCode / GitHub Copilot CLI 只挂只读 hook，原文明确「none of them can approve or block anything」，只能事后观察和提醒。
 - 无测试的项目不会被 dotpals 拦住；它对「没改代码、只是让你跑测试」的请求只报告失败，对「Claude 动手前就已经失败」的测试也只报告、不强制修。
+- done-is-a-claim 作者明说：**不拦截 agent 的工具调用、不阻断合并、不强制部署策略**，所以它自己挡不住任何东西，别把它当闸门用。
+- done-is-a-claim 的演示和本地工具需要 **Python 3.10+**；只复制规则文件则不需要。效果数据为作者自报，原始日志未公开。
 
 ## 前置条件
 
@@ -61,9 +66,16 @@
 - 二次复核：Laya 需 **Python 3.10+**；云端 TypeSafe Jev **默认关**，需要你自己的 key。
 - 首次会下载 Electron runtime（约 **100 MB**，只下一次）。
 
+**done-is-a-claim**
+
+- 本机有 Git；跑演示和 `tools/` 下的工具需要 **Python 3.10+**。
+- 宿主是 Claude Code、Codex，或任意会读 `AGENTS.md` 的 agent。
+- 想装成原生插件，需要对应宿主的插件命令（见第 29 步）；想只拿规则，只需要能往项目里复制文件。
+- 有一个自己的小项目可用来试跑一轮，最好带测试套件。
+
 ## 操作步骤
 
-下面 1–20 是「规定什么才算完成」和「让它自己看到界面事实」；21–28 是去核对 agent 说的「测试通过」是不是真的。三组可以各自单独用。
+下面 1–20 是「规定什么才算完成」和「让它自己看到界面事实」；21–28 是去核对 agent 说的「测试通过」是不是真的；29–38 是同一件事的「不装闸门」做法——把证据要求写成规则、模板和本地回执，不依赖某个宿主的 hooks。四组可以各自单独用。
 
 ### 1. 安装 first-pass：选做法 A 还是 B
 
@@ -410,6 +422,183 @@ dotpals notch --auto | --off
 
 快捷键：`Ctrl+Alt+P`（macOS `⌘⌥P`）显示/隐藏 pal；批准卡显示时 `Ctrl+Alt+N` / `Ctrl+Alt+Y`（macOS `⌘⌥N` / `⌘⌥Y`）拒绝/允许。
 
+### 29. 装 done-is-a-claim：四种方式选一
+
+前提：本机有 Git；宿主是 Claude Code、Codex，或任意读 `AGENTS.md` 的 agent。
+
+**做法 A（让 agent 自己装，最省事）**——把下面这段原样发给你的 coding agent：
+
+> Install https://github.com/Grit-77/done-is-a-claim. Then explain simply what
+> changed, what it helps with, and how I start using it.
+
+安装方 agent 应遵循 `INSTALL.md`：识别当前宿主和安装范围、保留既有工作、验证结果，并用你的语言做简短说明。
+
+**做法 B（手动装成原生插件）**
+
+Claude Code：
+
+```bash
+claude plugin marketplace add Grit-77/done-is-a-claim --scope local
+claude plugin install done-is-a-claim@done-is-a-claim-marketplace --scope local
+```
+
+Codex：
+
+```bash
+codex plugin marketplace add Grit-77/done-is-a-claim
+codex plugin add done-is-a-claim@done-is-a-claim-marketplace
+```
+
+装完开一个新 session：Claude Code 里调用 `/done-is-a-claim:using-done-is-a-claim`；Codex 里通过 `/skills` 或 `$` 技能选择器选 `using-done-is-a-claim`。
+
+**做法 C（只想要规则文件，不要插件）**
+
+先 clone：
+
+```bash
+git clone https://github.com/Grit-77/done-is-a-claim.git
+cd done-is-a-claim
+```
+
+再按你的宿主挑：
+
+| 你用的东西 | 加到项目里 |
+|---|---|
+| Codex 或读 `AGENTS.md` 的 agent | 把 `AGENTS.md` 复制到项目根目录 |
+| Claude Code | 复制 `AGENTS.md` 和 `CLAUDE.md`（后者用 `@AGENTS.md` 导入它） |
+| 已有指令文件 | 把相关规则合并进去，保留你项目自己的命令和约束 |
+
+**做法 D（不覆盖已有文件地装技能）**——在 clone 出来的仓库目录里执行，把 `../my-project` 换成你真实项目路径：
+
+```bash
+python tools/install_skills.py --project ../my-project --agent codex --profile workflow --dry-run
+```
+
+预览没问题后去掉 `--dry-run` 正式安装；Claude Code 用 `--agent claude-code`。已存在的技能目标会被拒绝安装，项目指令文件不动；用 `--list` 看有哪些 profile 和单个技能；显式 `--update` 可以替换未被修改过的、安装器自己管理的副本并保留备份，本地改过的会被拒绝。
+
+**怎么选**：想一次拿到全流程 + 工具 → A 或 B；只想拿走规则、不想装插件 → C；项目里已有自己的技能和指令、怕被覆盖 → D。
+
+**预期结果与注意**：技能装好、规则文件就位。**原生插件安装不会把这些规则加进被采用项目的指令里**——想让项目本身带上规则，必须走 C 或 D。
+
+### 30. 先看两个演示，理解要防的是什么
+
+前提：Python 3.10+，在第 29 步 clone 出来的目录里。
+
+```bash
+python examples/false_green.py
+python examples/wrong_delivery.py
+```
+
+**预期现象**：
+
+- `false_green.py`（假绿，合成演示）：verifier 以退出码 **1** 失败，summarizer 打印它的输出后却以 **0** 退出；receipt 跟随 verifier，标注 **FAIL**。demo 自身退出 0，是因为它把这个不一致演示出来了，**不代表 verifier 通过**。
+- `wrong_delivery.py`（交付错件）：对比三种情况——过期的副本、正确的副本、字节相同但无法解析的内容。用的是临时本地 fixture，退出 0 表示陷阱被演示出来，不代表真实交付成功。
+
+**怎么选**：时间紧就只跑假绿这一个；要给别人讲清楚「字节对不等于交付对」，再跑第二个。
+
+### 31. 用第一句请求试一次（在你自己的项目里）
+
+```
+Use using-done-is-a-claim for this task. Identify observable acceptance, take a
+proportionate path through implementation and review, and report the actual
+result, tested inputs and remaining gaps. Continue within my existing authorization.
+```
+
+这一步是在检查 agent 有没有理解请求，**并不强制它遵守**——它没有 hooks。
+
+**预期结果**：agent 的报告里出现「可观察的验收标准」和「没验证的部分」，而不是一句「都做完了」。
+
+### 32. 在真实工作上冒烟测试安装
+
+前提：已按第 29 步装好，且你用自己正常的宿主和账号把 agent 跑起来（`native_smoke` 只创建和检查 fixture）。从 clone 目录执行：
+
+```bash
+python tools/native_smoke.py create --project ../claim-smoke
+python tools/native_smoke.py verify --project ../claim-smoke --json
+```
+
+**预期结果**：初始的独立检查是**故意失败**的，尽管 starter 的窄测试能过——这正是用来练「窄测试通过 ≠ 独立验收通过」。
+
+### 33. 给一条命令采集回执
+
+```bash
+python tools/receipt.py -- python tools/run_tests.py
+```
+
+它会在 `.local/receipts/` 下写出新的 `receipt.json` 和 `command.log`，记录这条命令自己的退出码、完整输出和 Git 状态。用 `--input` 可以在运行前后对选定文件做指纹。
+
+**语义要记牢**：退出码为 0 只记录「这条命令成功了」，**不等于用户的任务完成**；没有用 `--input` 选定输入的回执，对「新鲜度复查」来说是不完整的。
+
+### 34. 编辑或交接后复核回执
+
+用第 33 步打印出来的确切路径：
+
+```bash
+tools/check_receipt.py path/to/receipt.json --project .
+```
+
+**什么时候用**：你改完东西之后、或者把活交接给另一个 agent 之前——确认这份回执仍然描述你即将据以行动的那些输入。
+
+### 35. 用模板固化报告格式
+
+- `templates/completion-receipt.md`：完成回执
+- `templates/acceptance-brief.md`：验收简报
+- `templates/handoff.md`：交接
+
+**原则：缺了哪项检查，就要写进报告里。** 主张和证据的对照关系可以直接抄进你的报告规范：
+
+| 主张 | 能支撑它的证据 |
+|---|---|
+| “测试通过了。” | 命令、收集到的用例、实际结果、它自己的退出状态、被测的代码树 |
+| “那个失败在 main 上本来就有。” | 可比的 branch 运行与干净基线运行，且失败签名匹配 |
+| “worker 干完了。” | worker 实际的 diff、被检查的输入、验收结果；交付要单独记录 |
+| “截图保存了。” | 一张能解码、且被肉眼检查过的图片 |
+| “可以发布了。” | 被评审的产物与即将发布的产物仍然一致 |
+
+### 36. 按场景挑 skill
+
+| 出现这种情况 | 用这个 skill | 它帮你判断 |
+|---|---|---|
+| 想要一个任务入口 | using-done-is-a-claim | 结合任务、授权和已有证据，下一步最有用的动作是什么 |
+| 变更有依赖或范围较大 | planning-changes | 哪些有界任务、负责人和观察点能到达目标结果 |
+| 计划里有已就绪且已授权的工作 | executing-plans | 现在能推进什么，什么证据能收尾每个任务 |
+| 行为与预期矛盾 | debugging-with-evidence | 哪个实验能区分几种可能原因 |
+| 变更准备送审 | reviewing-changes | 实际 diff 是否满足请求，发现的问题是否已解决并复查 |
+| 任务的“通过”条件含糊 | acceptance-design | 这个检查是否跨过了用户真正在意的边界 |
+| 数字看起来很可信 | reading-measurements | 这个输出建立了什么，又留下了什么未知 |
+| 你的分支上测试失败 | whose-red | 有没有可比证据区分回归、既有失败、还是原因未明 |
+| subagent 汇报成功 | collecting-worker-results | 有没有相关工作、是否被测过、是否真的交付了 |
+| 检查之后工作又变了 | evidence-freshness | 回执是否仍描述你即将据以行动的那些输入 |
+| README 或发布帖提出主张 | public-claims | 读者能否追溯它，验证的边界有没有写清 |
+| 你接手了未完成的工作 | resuming-work | 哪个检查点、产物和下一步动作在当前 checkout 里仍然有效 |
+| 发送或发布报告成功 | checking-delivery | 实际目的地是否含被评审的结果，其消费者能否使用 |
+
+### 37. 把 18 条规则贴到手边
+
+完整措辞在 `AGENTS.md`，每条规则背后的失败故事在 `INCIDENTS.md`。按出现的时刻分组记：
+
+| 时刻 | 规则 |
+|---|---|
+| **开工前** | **01** 干活前先定义验收。 **02** 检查路径。 |
+| **说“完成”之前** | **03** 在当前工作状态上重跑。 **04** 检查更宽的测试套件。 **05** 抓取命令自己的退出码。 **06** 没测试就是没通过。 **07** 未知不等于通过。 **08** 每项必需检查都要读。 |
+| **汇报时** | **09** 读产物。 **10** 打开写出来的东西。 **11** 自己亲眼看。 **12** 核对引用。 **13** 声明基线并在发布前复核它。 |
+| **测试与修复时** | **14** 测行为，别测“是否等于某个常量”。 **15** 修一整类缺陷。 **16** 在已知正确的用例上测试检测器。 **17** 干活前先登记清理。 |
+| **永远保住已有工作** | **18** 永远不要用破坏性命令来回答一个问题。 |
+
+### 38. 仓库自检与压力测试（可选）
+
+用来确认环境可用：
+
+```bash
+python tools/run_tests.py
+python tools/check_repository.py
+python tools/check_package.py
+```
+
+测试 runner 会拒绝空的或全被跳过的测试套件；后两个检查验证工具、本地文档链接目标、技能元数据和 import。CI（`.github/workflows/check.yml`）在 Windows 和 Linux 上跑。
+
+还想压一压这些指令，就用 `evals/` 场景包：通过的管道、错配的对照组、没有任何相关改动的 worker、过期证据等陷阱。参与者提示与评测 rubric 是分开的；在新 session 里跑提示词并保留回复。注意这是**人工行为评测，不是公布的成功率**。
+
 ## 怎么判断变好了
 
 **可观察的指标（first-pass）**
@@ -437,17 +626,26 @@ dotpals notch --auto | --off
 - 会话故事是可以直接用的文本：`today` + **Copy today** 出 standup 便条，**Copy recap** 出 PR 描述或 commit message，`handoff_note` 把会话交接给另一个 agent。
 - `risky_steps` 能列出 force push、递归删除、`.env` 改动这类风险步骤。
 
+**可观察的指标（done-is-a-claim）**
+
+- 回执里有命令、实际输出、命令自己的退出码、Git 状态；`receipt.json` 和 `command.log` 落在 `.local/receipts/` 下。
+- `check_receipt.py` 能判定这份回执是否还描述当前的输入（新鲜度），而不是只看它存不存在。
+- 报告里出现的是「主张 vs 证据」的对照（见第 35 步的表），而不是一句「测试通过了」。
+- subagent 汇报成功时，带着它实际的 diff、被检查的输入和验收结果，而不是一句「干完了」。
+
 **最小试用方式**
 
 - first-pass：在**一个仓库**上小范围试装，第一个改动完整走一遍 premortem → 修改（只当场修真实伤害）→ breaker 评审 → ship-check。
 - 浏览器 skill：先在**一个前端项目**里只做「多尺寸截图 + 移动端溢出定位」这一件事，把结果和手动 F12 的结论对照，确认它对得上再扩展。
 - dotpals：在**一个有测试套件的小项目**上按 README 一条命令装起来，小范围试。先让 agent 报一次「测试通过」，再用 `test_status` / MCP 核对它说的和实际是否一致；有条件的话加一次「改测试让它变绿」的对照，看它是否识别并回推。
+- done-is-a-claim：在**一个小项目**上按第 29 步装一次，用 `receipt.py` 给一条命令采一份回执（第 33 步）、跑一次 `check_receipt.py`（第 34 步），再用第 31 步的请求让 agent 交一次报告，看它有没有把没验证的部分写出来。跑完这一轮再决定要不要固化进团队流程。
 
 **试多久**
 
 - first-pass：作者的建议是跑**几周**再判断是否铺开。成本要有预期：小 demo 上修一个重复扣费 bug 加 ship-check 约 29 美元，且作者自己说每次改动更慢更贵、收益尚未测量。
 - 浏览器 skill：原文只给了「各跑一次」的对比数据，没有多轮、没有跨项目验证，因此没有可信的试用时长建议。先按上面的最小试用走，自己记录 2–3 次真实任务里「它报的问题是否成立、漏报了什么」，再决定是否常驻。
 - dotpals：报告没有给出试用时长建议；项目是 31 stars、v0.10，先记录 2–3 次真实任务里「它拦下的失败是否成立、误报和漏报各几次」，再决定是否长期用。注意强制回修只在 Claude Code 上有效，其他 agent 只能事后观察。
+- done-is-a-claim：报告同样没有给出试用时长，只说先在一个小项目上试跑一轮，再决定是否固化进团队流程。同样记录 2–3 次真实任务里「回执记录的事实和实际是否一致、它漏掉了什么」。
 
 ## 常见坑
 
@@ -471,6 +669,11 @@ dotpals notch --auto | --off
 - **Connect 会改你的配置文件**（会先备份、只合并不覆盖、读不了的文件不动），**Disconnect 只移除 dotpals 加的内容**；不想用某个集成就在 `~/.dotpals/config.json` 里按 id 关掉。
 - **云端二次复核默认是关的**，开了会把去除密码/密钥/邮箱/IP 之后的测试输出尾部发到 TypeSafe Jev，需要你自己的 key。
 - **MCP 只读本地 pal**，dotpals 没在跑时问不到东西。
+- **done-is-a-claim 不是闸门。** 作者写明它不拦截工具调用、不阻断合并、不强制部署策略；想真的拦住，得靠 first-pass 的 hooks 或 CI，它自己只提供规则、模板和回执。
+- **原生插件装完，规则不会进你的项目指令文件。** 想让项目本身带上这些规则，走第 29 步的做法 C（复制 `AGENTS.md` / `CLAUDE.md`）或做法 D（`install_skills.py`）。
+- **回执里退出码 0 ≠ 任务完成。** 它只记录「这条命令成功了」；没有用 `--input` 对选定文件做指纹的回执，对新鲜度复查来说是不完整的。
+- **`install_skills.py` 默认不覆盖。** 已存在的技能目标会被拒绝安装，项目指令文件不动；本地改过的副本连 `--update` 也不会替换。
+- **跑演示时别把退出码读反。** `false_green.py` 和 `wrong_delivery.py` 退出 0 表示陷阱被演示出来了，不代表真实交付成功或 verifier 通过。
 
 ## 证据与来源
 
@@ -514,10 +717,23 @@ dotpals notch --auto | --off
 - 回推上限是**每个请求最多两次**。
 - 云端 TypeSafe Jev 默认关，需要你的 key，会发送去除密码/密钥/邮箱/IP 后的测试输出尾部。
 
-**没有证据支撑的部分**：把 dotpals 的测试状态核对接在 first-pass 的「完成的定义」之后、以及「在已有测试套件的小项目上小范围试，并加一次改绿测试看它是否识别」这套试用方式，是本次合并时按上述材料做的编排，报告本身没有给出验证结论，也没有给试用时长；三组做法之间可以互相替代的部分，材料里也没有做过交叉验证。
+**done-is-a-claim 部分**来自本次调研的 **Grit-77/done-is-a-claim** 报告：主流程（understand → plan → implement → diagnose → review → verify → deliver）、13 个技能、18 条实战规则与 `INCIDENTS.md`、安装四法（agent 自装 / Claude Code 与 Codex 原生插件 / 复制规则文件 / `install_skills.py`）、`examples/false_green.py` 与 `examples/wrong_delivery.py`、`tools/receipt.py`、`tools/check_receipt.py`、`tools/native_smoke.py`、`tools/run_tests.py`、`templates/` 三份模板、主张与证据对照表、按场景挑 skill 的表、`AGENTS.md` / `CLAUDE.md` 的复制方式。
+
+报告里的数据与局限（均为作者 / README 自述，未见第三方复现）：
+
+- 假绿演示：verifier 退出码 **1**、summarizer 退出码 **0**，receipt 跟随 verifier 标 **FAIL**。
+- 定位声明（原文明确）：**不拦截 agent 的工具调用、不阻断合并、不强制执行部署策略**——「规则不是闸门」。
+- 原生插件安装**不会**把规则加进被采用项目的指令文件。
+- `receipt.py` 的退出码 0 只代表命令成功，不代表任务完成；未用 `--input` 指认输入的回执对新鲜度复查不完整。
+- 13 个技能、18 条规则，每条规则在 `INCIDENTS.md` 里有对应失败故事；CI 在 Windows 和 Linux 上跑。
+- 演示与工具需要 Python 3.10+。
+- 效果数据为作者自报，原始日志未公开。
+
+**没有证据支撑的部分**：把 dotpals 的测试状态核对接在 first-pass 的「完成的定义」之后、「在已有测试套件的小项目上小范围试，并加一次改绿测试看它是否识别」这套试用方式，以及把 done-is-a-claim 的「回执 + 新鲜度复核」作为 first-pass 完成定义的无 hook 替代，都是本次合并时按上述材料做的编排，报告本身没有给出验证结论，也没有给试用时长；四组做法之间可以互相替代的部分，材料里也没有做过交叉验证。
 
 ## 依据的调研
 
 - [joetawil7/first-pass](../research/radar/2026-10-01/8-joetawil7-first-pass.md)：值得一试，建议在一个仓库上小范围试装并跑几周，因为它把“确保正确”这类模糊要求换成了可执行的具名检查（十个问题、非作者评审、改动前失败的测试），直接对应本项目的任务匹配与效果验证问题；但作者自己说这是 0.5 版、收益尚未测量，且每次改动更慢更贵（小 demo 上修一个重复扣费 bug 加 ship-check 约 29 美元），因此不宜直接全团队采用。
 - [AndyShiu/claude-skill-playwright-browser](../research/radar/2026-10-01/22-andyshiu-claude-skill-playwright-browser.md)：值得一试，建议在一个前端项目里按 README 的安装与命令做小范围试跑（先只做「多尺寸截图 + 移动端溢出定位」这一件事，与手动 F12 对照），因为原文给出了可直接复制的安装步骤、CLI 命令、登录流程和排错表，且自带视觉比对与健康检查等验证手段；但它只是 49 stars 的单作者第三方 skill，效果数据仅来自各跑一次的对比，不足以直接写成标准做法。
 - [Rikinshah787/dotpals](../research/radar/2026-10-06/1427-rikinshah787-dotpals.md)：值得一试，建议在已有测试套件的小项目上按 README 一条命令装起来小范围试：用 dotpals 读取测试输出、识别“伪造通过”，并在 Claude Code 试图收尾/commit/push 时把失败测试回推给它修。理由是它给出了完整可照做的安装、MCP 接入和自定义 agent 事件接口，且自带一份逐条人工核对的准确率数据；但项目很新（31 stars、v0.10），强制回修只支持 Claude Code，其余 agent 只能事后观察，需先验证再决定是否长期用。
+- [Grit-77/done-is-a-claim](../research/radar/2026-10-11/2455-grit-77-done-is-a-claim.md)：值得一试，把「完成是一句主张，要附证据」落成可操作的规则文件+技能包+本地采证工具，先在一个小项目上按 README 的安装路径和 receipt 工具试跑一轮，再决定是否固化进团队流程；理由是它给出了可照抄的安装命令、18 条规则、回执工具用法和验证模板，但作者自己声明不强制、不拦截，效果数据为自报且原始日志未公开。

@@ -1,14 +1,14 @@
-# 把浏览器、桌面或手机交给 AI 前，先用最小任务验证反馈回路
+# 在把浏览器、桌面或手机交给 AI 之前，先验证反馈回路
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：在把浏览器、桌面或安卓手机交给 AI 操作之前，用成本递增的步骤先验证它的反馈回路和验收标准，并把「高效」变成同批任务上的可比较数字，避免装完一堆组件却不知道能不能用。
-> 先试这一步：先只跑做法 A 的两条安装命令，建一个最小任务、跑它的参考解，确认 evaluator 返回 1.0；如果你已有 agent 和一台可信安卓测试机，就先跑一条只读任务：「打开系统设置首页，确认页面，不修改设置」。
-> 最近修订：2026-10-09
+> 解决的问题：在把浏览器、桌面或安卓手机交给 AI 操作之前，用成本递增的步骤先验证它的反馈回路和验收标准，并把「高效」变成同批任务上的可比较数字。
+> 先试这一步：先跑做法 A 的两条安装命令建最小任务、确认参考解 reward 为 1.0；如果你已在 macOS + Chrome + 编码 agent 环境，可直接按做法 F 走一次需登录站点的四步流程并用 audit 复盘。
+> 最近修订：2026-10-11
 
 ## 解决什么问题
 
-在把浏览器、桌面或安卓手机交给 AI 操作之前，用成本递增的步骤先验证它的反馈回路和验收标准，并把「高效」变成同批任务上的可比较数字，避免装完一堆组件却不知道能不能用。
+在把浏览器、桌面或安卓手机交给 AI 操作之前，用成本递增的步骤先验证它的反馈回路和验收标准，并把「高效」变成同批任务上的可比较数字，避免装完一堆组件却不知道能不能用。新增：如果你已在 macOS + Chrome + 编码 agent 环境，也可以先用 Chrome Relay 借用真实登录态的后台标签页，验证「agent 不抢焦点、不弹框地完成一个需登录站点的四步流程」，并用 audit 复盘。
 
 ## 适用与不适用
 
@@ -20,19 +20,24 @@
 - 你已有 Claude Code / Codex / Cursor / OpenClaw 等 agent，想通过 MCP 或 skill 接上界面操作能力。
 - 你已有 agent，想让它通过 ADB 操控一台**已授权**的安卓测试机：打开 App、查找页面、点击/滑动/长按/输入文字，查看授权范围内的界面信息、处理有限列表、复现测试操作、准备消息草稿（明确授权后才执行发送）。
 - 你的技能宿主是 Pi Agent、Codex CLI/IDE、Claude Code、OpenCode 之一。
+- 你在 macOS + Google Chrome + Node.js 20+，希望编码 agent（Claude Code / Codex / Cursor / Paseo）借用你已登录的 Chrome 后台标签页做网页操作，且不抢焦点、不弹对话框。
 
 **不适用 / 先别用：**
 - 团队不在用 dsh 桌面端：浏览器路线完全绑定 dsh 生态（桥接是 dsh 插件，配置写在桌面 profile 的 `cordis.patch.yml` 里）。
 - 手机或平板：dsh 浏览器方案明确不支持（这与下面安卓 ADB 路线是两件事，后者只走 ADB，不依赖浏览器）。
 - 你要的是成熟稳定的 1.0 产品：Cua Spaces 为 0.1.0，Pro/Teams 标注「即将推出」；CUA-S1 是早期源码研究版；dsh 扩展在 Chrome / Firefox 均标注 not yet listed；android-adb-control 作者自述「本版本已做文档审查和静态检查，尚未完成修订版真机端到端验收」。
-- 你的机器不满足硬性条件：Spaces 需 macOS 26+，Lume 需 Apple Silicon；dsh 需 Node ≥ 20、桌面版 Chrome/Chromium/Edge ≥ 116 或 Firefox ≥ 140.0。
+- 你的机器不满足硬性条件：Spaces 需 macOS 26+，Lume 需 Apple Silicon；dsh 需 Node ≥ 20、桌面版 Chrome/Chromium/Edge ≥ 116 或 Firefox ≥ 140.0；Chrome Relay 仅 macOS + Google Chrome + Node.js 20+。
 - 你只看了 README 就想跑完整流程：Cua 的权限授予、平台支持边界、任务编写格式都在外链文档里；dsh 的安装确认在仓库 `docs/INSTALL.md`。
-- 你要做对外托管或商用集成：Cua 的许可不是单一的；dsh 方案 README 通篇没有给出基准实测结果，不宜直接全量采用。
+- 你要做对外托管或商用集成：Cua 的许可不是单一的；dsh 方案 README 通篇没有给出基准实测结果，不宜直接全量采用；Chrome Relay 的 0.15s/命令、2 分钟 setup 也只是作者自述。
 - 你在 Windows 且想装除 Driver 以外的 Cua 组件：原文只提供 Windows 的 Driver PowerShell 安装脚本，其余以 macOS / Linux 为主。
 - 你想用安卓路线去绕过锁屏、验证码、支付验证或企业策略：android-adb-control 明确排除这些用途。
 - 你要无人值守监控、自动交易、无限重试：同样被 android-adb-control 明确排除。
 - 你打算在云端会话或远程容器里跑安卓路线：那里不会自动获得本地 USB 设备，不匹配。
 - 你打算把手里的主力机（承载凭据的设备）当试验田：ADBKeyboard 的部分实现允许其他本地应用发送控制广播，应优先用于可信测试设备，不用于凭据输入。
+- 你不在 macOS 或不用 Google Chrome：Chrome Relay 不适用。
+- 你的 agent 不在 Claude Code / Codex / Cursor / Paseo 四类之内：Chrome Relay 只放行这四类应用。
+- 你指望 Chrome Relay 防住「已以你身份运行的恶意软件」：作者明确说它不是这种安全边界，那种程序能读 secret、伪造标记。
+- 你不接受在每个希望 agent 使用的 Chrome profile 里手动 Load unpacked 扩展：Chrome Relay 不会替你装扩展。
 
 ## 前置条件
 
@@ -45,10 +50,11 @@
 - Lume：Apple Silicon。
 - Windows 下只有 Driver 有 PowerShell 安装脚本，其余组件以 macOS / Linux 为主。
 - 安卓 ADB 路线：本机有 ADB 可执行权限；一台已解锁并确认 RSA 授权的安卓测试机（`adb devices -l` 显示 `device`）；正确的技能安装目录与调用方式；明确的授权边界；截图与 UI XML 的数据与日志策略；任务预算（默认 30 个状态变更动作 / 5 分钟）。自绘界面还需截图工具与视觉模型；中文输入可选 ADBKeyboard；跑静态检查需要 Bash、Git 和 uv。
+- Chrome Relay：macOS、Google Chrome、Node.js 20+、`agent-browser`；每个希望 agent 使用的 Chrome profile 需手动加载扩展；`bin/chrome-relay setup` 会生成密钥、装后台服务、生成身份映射、把 `chrome-relay` 放进 PATH，并把 Claude Code skill 链进去。连接只放行 Claude Code、Codex、Cursor、Paseo 四类 agent 应用。
 
 ## 操作步骤
 
-下面按成本从低到高排。**建议先做做法 A**；如果团队已在用 dsh 桌面端，做法 B 是最短的一条「模型真的读浏览器」的路；如果你已有 agent 和一台可信安卓测试机，做法 E 是最短的一条「agent 真的操作手机」的路。
+下面按成本从低到高排。**建议先做做法 A**；如果团队已在用 dsh 桌面端，做法 B 是最短的一条「模型真的读浏览器」的路；如果你已有 agent 和一台可信安卓测试机，做法 E 是最短的一条「agent 真的操作手机」的路；如果你在 macOS + Chrome + 编码 agent 环境，做法 F 是最短的一条「agent 用你真实登录态读网页」的路。
 
 ### 做法 A：只跑评测回路，不碰界面（最便宜的入口）
 
@@ -258,8 +264,7 @@ Windows 需使用官方 Platform-Tools 并适配路径、引号和截图输出�
 
 ```bash
 mkdir -p "$HOME/.agents/skills"
-git clone https://github.com/robbin/android-adb-control.git \
-  "$HOME/.agents/skills/android-adb-control"
+git clone https://github.com/robbin/android-adb-control.git "$HOME/.agents/skills/android-adb-control"
 ```
 
 前提与注意：目标已存在时先检查，不要覆盖。
@@ -268,8 +273,7 @@ git clone https://github.com/robbin/android-adb-control.git \
 
 ```bash
 mkdir -p "$HOME/.claude/skills"
-ln -s "$HOME/.agents/skills/android-adb-control" \
-  "$HOME/.claude/skills/android-adb-control"
+ln -s "$HOME/.agents/skills/android-adb-control" "$HOME/.claude/skills/android-adb-control"
 ```
 
 注意：OpenCode 也会扫描 `.claude/skills`，兼容链接可能引起同名告警；确认最终加载路径，不要再安装第二份副本。
@@ -329,6 +333,58 @@ uv run --no-project python scripts/check_docs.py
 
 更新前检查安装目录的本地修改，确认可接受上游变更后再运行 `git pull --ff-only`，然后刷新 Agent 会话。
 
+### 做法 F：用 Chrome Relay 借用已登录的 Chrome 后台标签页（macOS + Chrome + 四类 agent）
+
+前提：macOS、Google Chrome、Node.js 20+，以及 `agent-browser`。预期结果：`chrome-relay doctor` 自检通过；在单个 Chrome profile 加载扩展后，agent 能用 `chrome-relay url <你的邮箱>` → `open` → `snapshot -i` → `click @e5` → `close` 走完一个需登录站点的四步流程，中途不手动登录；`chrome-relay audit` 能复盘这次会话。
+
+1. 安装 agent-browser：
+
+```bash
+npm i -g agent-browser
+```
+
+2. 克隆仓库并执行 setup（最省事的替代方案：把 https://agent-chrome-relay.aindeev.com/setup-prompt.txt 粘进 Claude Code / Codex / Cursor，让 agent 自己装）：
+
+```bash
+git clone https://github.com/aindeev/agent-chrome-relay
+cd agent-chrome-relay
+bin/chrome-relay setup     # secret, background service, identities, `chrome-relay` on PATH, Claude Code skill
+```
+
+setup 会生成密钥、装后台服务、生成身份映射、把 `chrome-relay` 放进 PATH，并把 Claude Code skill 链进去。链路结构：`agent-browser (CLI) ──ws──▶ relay (127.0.0.1:9333, LaunchAgent) ──ws──▶ Chrome Relay extension ──chrome.debugger──▶ agent tab`。
+
+3. **在每个希望 agent 使用的 Chrome profile 里**加载扩展：打开 `chrome://extensions`，打开 Developer mode，点 Load unpacked，选中你 clone 下来的 `extension` 文件夹。
+
+4. 自检：
+
+```bash
+chrome-relay doctor
+```
+
+5. 告诉 agent 怎么用这个 skill：Claude Code 由 `setup` 自动把 `skill/SKILL.md` 链到 `~/.claude/skills/chrome-relay`（所有仓库都能用）；Codex、Cursor 等把同一个文件指给它们，例如在全局 `~/.codex/AGENTS.md` 里写一行：For any browser step that needs my logins, follow `<path>/agent-chrome-relay/skill/SKILL.md`. 某个仓库的 `CLAUDE.md`/`AGENTS.md` 只需一行指向该 skill。
+
+6. 典型用法（在 agent 里或命令行）：
+
+```bash
+agent-browser --cdp "$(chrome-relay url you@company.com)" open https://app.example.com/
+agent-browser snapshot -i          # the page's buttons, links and fields, each with a ref like @e5
+agent-browser click @e5
+agent-browser close
+```
+
+7. 日常维护：`git pull` 之后跑 `chrome-relay update`（重启 relay，并在每个 profile 重载扩展）。卸载：`chrome-relay uninstall`，然后每个 profile 里手动移除扩展。
+
+8. 排查与审计：`chrome-relay logs`（日志在 `~/.chrome-relay/relay.log`）；`chrome-relay audit` 读 `~/.chrome-relay/audit/YYYY-MM-DD.jsonl`；`chrome-relay identities` 管身份映射。环境变量 `CHROME_RELAY_HOME`、`CHROME_RELAY_PORT` 可覆盖数据目录和端口。改扩展要编辑 `extension/` 后跑 `chrome-relay update`。
+
+9. 谁可以连（两道校验，属配置前提）：
+   - **本机 secret**：setup 时生成在 `~/.chrome-relay/token`（权限 600），嵌在 `chrome-relay url` 打印的 URL 里。
+   - **允许的 agent 应用**：连接进程必须来自 Claude Code、Codex、Cursor 或 Paseo——relay 用 `lsof`、`ps` 查进程，并检查这些应用在子进程里设的标记（`CLAUDECODE`、`CODEX_*`、`CURSOR_*`、`PASEO_AGENT_ID`）及其父进程。
+   - 带浏览器 `Origin` 头的连接（网页）即使有 secret 也被拒。扩展连接还需 `Origin: chrome-extension://<id>`，且 id 由 setup 记到 `~/.chrome-relay/config.json`；连接进程必须是 Chrome。
+
+10. 登录态（`~/.chrome-relay/identities.json`，用 `chrome-relay identities` 管理）：agent **从不输入凭据**。当站点跳到 Google 且对应账号**已登录**时，扩展会替它点账号并点 **Continue/Allow**（页面脚本方式，所以 1Password 的框在页面上也照样工作）。遇到密码、passkey、两步验证或未登录账号，就停下，agent 收到 `SIGN-IN NEEDED: ...`，让你在自己的窗口里登录。站点用哪个 Google 账号来自 identities.json：Chrome profile（setup 填好）、可选的 `sites.rules`、以及 relay 每次成功跳转后自己填的 `sites.learned`。默认用 profile 自己的账号。
+
+11. 自动行为边界：原文的自动行为是**清理而非任务推进**——沉默 30 分钟的 agent 标签页会被关闭；relay 重启时扩展会关掉它开过的标签页（按 tab id 追踪，不动你自己的标签组）。另外登录跳转中的 Continue/Allow 会自动点击。原文没有描述按时间/事件持续跑的自主任务循环。工作期间 Chrome 会显示 “Chrome Relay started debugging this browser”。
+
 ### 怎么选
 
 - 只想验证「这套东西在我这儿能不能用起来」：选做法 A，成本最低。
@@ -336,6 +392,8 @@ uv run --no-project python scripts/check_docs.py
 - 已有 agent，想让它先做一件有明确对错的事：选做法 C。
 - 已有 agent 和一台可信安卓测试机，只做获授权设备与 App 的事：选做法 E，先跑只读任务，再跑「停在动作前」的边界任务。
 - 需要完整桌面、隔离沙箱、本地 VM、或把本机接进来：选做法 D。
+- 你在 macOS + Chrome + Node.js 20+，希望编码 agent（Claude Code / Codex / Cursor / Paseo）复用你已登录的 Chrome 后台标签页，且不抢焦点、不弹对话框：选做法 F。先在单机单 profile、非关键账号上试四步流程，并用 `chrome-relay audit` 复盘。
+- 做法 B 与做法 F 的差异：做法 B 绑定 dsh 桌面端，走自己的 MV3 扩展与文本快照，提供 17 个工具和成对基准；做法 F 复用你真实在用的 Chrome 与登录态，agent 在后台标签页运行，不抢焦点，但不附带成对基准，且只放行四类 agent 应用、仅 macOS + Google Chrome。若团队不在 dsh 生态但已有 macOS Chrome 编码 agent，做法 F 更直接；若需要可比较的浏览器后端数字，做法 B 更合适。
 - 已经装了旧包 `cuabot`（npm）：先停用并卸载，见「常见坑」。
 
 ## 怎么判断变好了
@@ -346,15 +404,17 @@ uv run --no-project python scripts/check_docs.py
 - 做法 C：计算器里 6 × 7 的结果被验证为显示 42。
 - 做法 D：Lume 创建并启动的 macOS Tahoe VM 能用 SSH 连上；`cua sb exec dev uname -a` 能返回结果；`cua sb screenshot dev` 能拿到截图。
 - 做法 E：任务一次跑通的步骤数对比你手动操作的步数；人工接管次数（每次接管记一次，越少越好）；越界动作次数——未经授权的发送/购买/删除/安装/改设置次数应为 0，「停在发送前」这类约束是否 100% 被遵守；是否守住预算（动作数不超过 30、时长不超过 5 分钟，超预算时正确停止并报告）；不可验证/不可恢复时是否如约停止并报告；同一任务重复执行多次的成功率与结果一致性。
+- 做法 F：四步流程（`chrome-relay url <你的邮箱>` → `open` → `snapshot -i` → `click @e5` → `close`）一次跑通的成功率；每条命令的实际耗时（对照作者称的 ~0.15s）；出现 `SIGN-IN NEEDED` 的次数（越少说明登录态复用越顺；频繁出现则调 `identities.json`）；运行过程中是否发生抢焦点、弹框、Chrome 弹远程调试确认框（按设计应为 0；工作期间 Chrome 会显示 “Chrome Relay started debugging this browser”）；`chrome-relay audit` 里 blocked pages 的数量与原因，确认权限边界符合预期；对比基线：同样这些浏览器步骤之前靠人工切换窗口/手动登录花的时间。
 
 最小试用方式：
 - 先只跑做法 A 的两条安装命令，建最小任务、跑参考解，确认 reward 为 `1.0`。这是「这套东西在我这儿能不能用起来」最便宜的入口。
 - 若团队已在用 dsh 桌面端，做法 B 的最小试用是「装桥接插件 → 在 profile 里装一次扩展 → 让模型做一次快照与点击」。成对基准要等你自己的 dsh 命令行就位（`BENCHMARK_DSH_COMMAND`）再跑。
 - 跑通后再做做法 C：只装 Driver，让现成 agent 在计算器里算 6 × 7 并确认显示 42。
 - 做法 E 的最小试用顺序：① 准备一台可信测试机（非承载凭据的主力机），开启开发者选项与 USB 调试，解锁并确认 RSA 授权，`adb devices -l` 显示 `device`；② 按第 3～6 步装技能到对应宿主目录，重开会话或 `/reload`，确认技能能被发现并调用；③ 先只跑只读任务「打开系统设置首页，确认页面，不修改设置」；④ 再跑一条「停在动作前」的边界任务（测试联系人会话里输入草稿但明确不发送）；⑤ 最后跑一条有限列表任务（前 20 项，只记录名称与编号，到 20 个或预算用完即停）。指标稳定达标后再扩到真实业务设备；若出现越界动作或无法恢复的状态，停止使用并报告。
+- 做法 F 的最小试用（一台 Mac，约需几分钟安装）：① `npm i -g agent-browser`，clone 仓库后跑 `bin/chrome-relay setup`；② 在**一个** Chrome profile 里 Load unpacked 加载扩展，跑 `chrome-relay doctor` 确认；③ 选一个**需要登录**的内部站点，让 agent 走完 `chrome-relay url <你的邮箱>` → `open` → `snapshot -i` → `click @e5` → `close` 这条四步流程，中途不手动登录；④ 跑 `chrome-relay audit` 复盘这次会话记录是否完整。放量前的门槛：先只在单机单 profile、非关键账号上试；确认 audit 记录、权限拦截和登录跳转行为符合预期后，再考虑更多 profile 或更多 agent。
 
 试多久：
-- 材料没有给出耗时或成功率的数字；以「参考解拿到 `1.0`」「快照能给出编号控件并且点得中」「只读任务不改动设置」这类单点事实跑通为准，不要用 star 数或视频演示判定。
+- 材料没有给出耗时或成功率的数字；以「参考解拿到 `1.0`」「快照能给出编号控件并且点得中」「只读任务不改动设置」「Chrome Relay 的 doctor 通过且四步流程一次跑通」这类单点事实跑通为准，不要用 star 数或视频演示判定。
 
 ## 常见坑
 
@@ -381,6 +441,14 @@ uv run --no-project python scripts/check_docs.py
 - 以为后台投递一定成立：「不移动指针、不抢焦点」只在「app 和平台支持时」成立，具体边界被外链到 platform support，正文没写；原文也没有给出由时间、事件或状态触发并持续完成任务的机制，「常驻」不等于「自动推进」。
 - 商用许可踩坑：Spaces 之外的 SDK、CLI、Driver、Lume 是 MIT；Cua Spaces（应用、cua-spacesd、Keyvault、teleport、cua-volume、流媒体客户端）是 FSL-1.1-MIT（免费自托管自建，但不得做竞争性托管服务，每版发布两年后转 MIT）；`cua-som` 是 AGPL-3.0-or-later，其 Ultralytics 依赖另有许可；可选扩展 `cua-perception` 打包了 AGPL-3.0-only 的 OmniParser 模型产物，网络分发或托管可能触发 AGPL 源码义务，原文明确说 Cua 无法为此重新授权。做商用集成前必须逐目录查 LICENSING.md。android-adb-control 是 MIT。
 - 以为 README 就是全部：Cua 的权限授予、平台支持边界、任务编写格式都在外链文档里，照着装可以，照着做完整流程需要再去读 quickstart；dsh 的安装确认也要按仓库 `docs/INSTALL.md` 逐步走；android-adb-control 的具体 ADB 命令、故障处理、真机验收清单在 references/adb-commands.md、references/troubleshooting.md、docs/testing.md 里，本次材料只包含 README，无法复述这些文档里的判据。
+- 以为 Chrome Relay 能覆盖所有浏览器：仅 macOS + Google Chrome + Node.js 20+；只放行 Claude Code / Codex / Cursor / Paseo 四类 agent 应用。
+- 以为 setup 会自动装扩展：不会。Chrome Relay 是 opt-in 的，需要**每个**希望 agent 使用的 Chrome profile 手动 Load unpacked。
+- 把 Chrome Relay 当恶意软件安全边界：作者明确说它不是对「已以你身份运行的恶意软件」的安全边界；那种程序能读 secret、伪造标记。
+- 忽略调试提示条：工作期间 Chrome 会显示 “Chrome Relay started debugging this browser”。
+- 把作者自述当实测：0.15s/命令、2 分钟 setup、30 分钟沉默清理都是作者自述，没有第三方基准或用户案例数据。
+- 以为它会自动推进任务：原文的自动行为是清理而非任务推进——沉默 30 分钟的 agent 标签页关闭；relay 重启时扩展关掉它开过的标签页；登录跳转中的 Continue/Allow 自动点击。原文没有描述按时间/事件持续跑的自主任务循环。
+- 凭据处理：agent 从不输入凭据；遇到密码、passkey、两步验证或未登录账号会停下并给 `SIGN-IN NEEDED`；频繁出现时调 `identities.json`。
+- 忘记卸载：`chrome-relay uninstall` 后还要每个 profile 手动移除扩展。
 
 ## 证据与来源
 
@@ -398,9 +466,13 @@ uv run --no-project python scripts/check_docs.py
 - 安卓路线的「观察—执行一步—验证—再决定下一步」循环、发送状态不明不自动重发、预算与检查点：来自同一份 README，属于方法描述而非实测数据。
 - 安卓路线目前只是主张：作者自述本版本已做文档审查和静态检查，尚未完成修订版真机端到端验收；「兼容四个宿主」只是格式与加载层面的兼容声明；没有给出成功率、耗时、错误率或真实案例结果。方法来源是 DroidClaw 的启发，但明确不是其官方产品或运行时。
 - 安卓路线的具体 ADB 命令、故障处理、真机验收判据、DroidClaw 笔记内容：本次材料只包含 README，未给出，只能确认 docs/testing.md 这套检查方法存在，不能复述其判据。
+- 做法 F 的命令、架构图、路径（`~/.chrome-relay/` 下的 token、config.json、identities.json、audit/、relay.log）、端口 127.0.0.1:9333、权限校验机制、`relay/` 下有 `npm test` 覆盖「谁可以连接」、四步用法、audit 字段、登录态处理、维护命令：来自 aindev/agent-chrome-relay README（本次整理的调研材料）。
+- Chrome Relay 的 0.15s/命令、2 分钟 setup、30 分钟沉默清理只是作者自述；没有第三方基准或用户案例数据；仅 macOS + Google Chrome + Node.js 20+；只放行四类 agent 应用；作者明确它不是恶意软件安全边界。
+- Chrome Relay 与 dsh 的对比是本次整理，不是原文主张。
 
 ## 依据的调研
 
 - [trycua/cua](../research/radar/2026-10-08/1857-trycua-cua.md)：值得一试，可以把 Cua 当作一套「让 AI 真正操作电脑」的试验台小范围搭起来：先用 Cua Bench 的无 VM 模拟任务跑通「建任务→跑参考解→evaluator 返回 reward=1.0」，再装 cua-driver 做 Calculator 6×7 这类有明确验收标准的首个结果；理由是原文给了可复制的安装与 CLI 命令和明确的验收口径，但详细权限/平台支持步骤都在外链文档里，且 Spaces 仅 0.1.0、CUA-S1 为早期源码研究版，尚不足以直接写进手册当标准流程。
 - [youbaiyun/dsh-browser-crossplatform](../research/radar/2026-10-08/2037-youbaiyun-dsh-browser-crossplatform.md)：值得一试，若团队已在用 dsh 桌面端、又需要让模型真的去读和操作浏览器，可以按仓库给出的安装/配置命令小范围试装，并优先复刻它的权限与反馈设计（敏感字段打码、动手前批准开关、回环 id 白名单）和成对基准方法；理由是安装命令、配置片段、工具面与验证指标都能直接照抄，但 README 通篇没有给出基准实测结果，且方案完全绑定 dsh 生态，不宜直接全量采用。
 - [robbin/android-adb-control](../research/radar/2026-10-09/2231-robbin-android-adb-control.md)：值得一试，先把该技能装到一台可信测试机上，用最低风险任务（如“打开系统设置首页并只读确认”）跑通观察—一步操作—验证的闭环，再考虑扩大范围；README 给了可照做的安装路径、调用方式和安全预算，但作者自述本版本尚未完成真机端到端验收。
+- [aindeev/agent-chrome-relay](../research/radar/2026-10-11/2456-aindeev-agent-chrome-relay.md)：值得一试，在一台 Mac 上按 README 的 setup 流程装 Chrome Relay，让 Claude Code/Codex/Cursor 这类编码 agent 借用你已登录的 Chrome 后台标签页做网页操作；它给出了可直接照做的命令、安装步骤和权限/审计机制，值得小范围试，但仅限 macOS、只放行四类 agent 应用，且作者自认不是恶意软件的边界，所以先试不要全量铺开。
