@@ -4,6 +4,7 @@
 
 | 手册 | 解决的问题 | 先试这一步 | 最近修订 |
 |---|---|---|---|
+| [让 AI 在宣布完成前拿出证据：用内置命令与四条路线审代码](code-review-with-agents.md) | 代码评审缺少结构图、push 前可核对的自动评审和主动找漏洞，而且很多人不知道自己已有的 Claude Code 里就有 /code-review 可用。 | 如果你已经在用 Claude Code，下次审代码时先原样跑一次 `/code-review`（别名 `/review`），记录它报出的问题清单，再对照人工 review 标记真 bug 和误报。 | 2026-10-11 |
 | [让新会话先核对事实再接手工作](persistent-memory-for-coding-agents.md) | AI 每次开新会话都会把上次笔记当作事实继续施工，这篇手册解决如何把长期信息落盘，并在接手前用 git 与机器状态核对主张与事实。 | 先 clone truongfelix/workflow，跑通 ground-truth.sh 到 `GROUND TRUTH: complete`，下一次会话用 /session-start 开始。 | 2026-10-11 |
 | [先小范围试装技能包，用对照确认 agent 真的少返工](build-and-install-agent-skills.md) | 你已经在用编码 agent，但不确定装技能包是否真的减少返工；这篇手册给出小范围试装、对照验证、再写自己技能或补 AI 研究知识的流程。 | 选一个非关键项目和一类重复任务，只装一个技能包，同一任务分别在有技能和无技能下各跑 3 次并记录差异。 | 2026-10-11 |
 | [让逆向重建 agent 在宣布完成前通过机器验收](reverse-engineer-software-with-agents.md) | 当目标没有源码、需要搞懂并重建某个功能时，如何让 agent 产出可回溯的证据，并在有 ground truth 时用机器可判定的 PASS/FAIL 守住正确性。 | 先选一个存在可机器比对 ground truth 的最小逆向/重建任务，写一个让 agent 提交前自己跑的 PASS/FAIL 验收脚本；没有 ground truth 时，先用 REA 对已提取的 JS/Electron 目录跑一次静态分析，检查 Evidence 与 limitations。 | 2026-10-11 |
@@ -20,7 +21,6 @@
 | [一边做饭一边口述需求：用语音把一个小功能推到可审的 PR](voice-driven-coding-sessions.md) | 心里已经想清楚一个小功能时，怎么用语音口述需求驱动编码智能体在本地改代码，自己只在本地预览和 PR 审阅处介入，细节阶段再切回键盘。 | 挑一个自己已经想清楚的小功能，在本地仓库先打字发 `Start dev server and open in browser` 拿到预览，再点 Codex 标签页里话筒右边那个「Start new voice chat」，把需求连边界条件一起口述一遍。 | 2026-10-10 |
 | [让编码 agent 不再因配额、限流和选错模型中断](model-routing-for-coding-agents.md) | 编码时某个供应商配额耗尽、被限流、key 失效，或者一直用最重的模型、agent 说完成却没通过检查——怎么用本地网关收敛多供应商、按难度路由并按证据验收。 | 先只接一个你已经在用的工具：npm i -g omniroute 后 curl http://localhost:20128/v1/chat/completions 打一次 model=auto（或在 Python 环境里 uv add litellm 用同一个 completion() 调两个供应商），跑通一条请求再谈全量切换。 | 2026-10-10 |
 | [让 AI 写数学论文时按流程推进并逐页核对渲染结果](write-math-papers-with-agents.md) | 解决 AI 写数学/理论论文时只编译不检查、改动假设或隐藏 gap 的问题，给出一套可安装、可调用、带审计约束的工作流程。 | 先克隆仓库并把四个 skill 链入你的 agent skills 目录，然后拿一篇已有论文的一节用 latex-math-writing 润色，编译后逐页读 PDF，检查是否无意改变假设、结论或记号。 | 2026-10-09 |
-| [让代码评审先看懂改动、再主动找漏洞](code-review-with-agents.md) | 一次代码评审，如何既让评审者看懂系统结构和数据流，又在 push 前做可核对的 AI 复查，还能用子代理对抗性审查主动找漏洞并控制误报。 | 先在一个非关键仓库用你手上的编码代理原样跑那条对抗性审查提示词，让它用子代理找漏洞、二次核验后写入你指定的列表，你再逐条判定真缺陷/误报。 | 2026-10-09 |
 | [把一件周期性重复的工作交给常驻 agent：六条路线选一条，跑两周再定去留](self-hosted-agent-automation.md) | 面对一批只给安装配置、不给效果数据的常驻 agent / 定时自动化方案，用一条可执行的试跑路径和一套自建指标，决定它是否进入你的日常工作流。 | 把要试的定时任务缩到「单一来源 + 单一收件人 + 每日一次」，先手动触发跑通一次、确认结果真的投递到了，再去等排期。 | 2026-10-09 |
 | [把本地 AI 编码对话导出成可复盘的数据底座](review-agent-conversation-logs.md) | 把散落在 Claude Code、Cursor、Cline、Aider 等本地 AI 编码助手中的对话统一导出成 JSONL，用于复盘、比较或备份，并避免分享/训练时泄漏敏感内容。 | 在装有 Python 3.9+ 的机器上把仓库代码放到本地并进入项目根目录，先运行 `python extract.py --list`，确认它能找到你的数据目录后再提取。 | 2026-10-08 |
 | [让编码 agent 少吞上下文、不失忆，并守住规则文件的长度预算](manage-agent-context.md) | 编码 agent 在真实任务里把大量工具输出、跨会话状态、旧提示习惯和过长的规则文件一起塞进上下文，既烧配额又降低遵循度；这篇手册按浪费类型逐项削减，并用任务侧指标验证结果有没有变好。 | 先量一遍现状：在 Claude Code 里跑一次 /context 看清 token 去向（做法 N），在项目根目录跑一次 wc -l AGENTS.md && wc -c AGENTS.md 看清规则文件多长（做法 S），然后只改一项，用同一个真实任务对比前后。 | 2026-10-08 |
