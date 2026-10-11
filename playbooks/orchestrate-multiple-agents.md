@@ -1,14 +1,14 @@
-# 让多个编码 agent 并行干活：隔离、验证、评审与注意力路由
+# 别让 agent 自己宣布完成：并行 agent 的验证、隔离与注意力路由
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：单个 AI 回答或单条串行会话交付的常常是未经验证的结果；这篇手册给出一套可照做的流程，把任务拆给多个 agent、用独立验证和评审设门槛、把产物落盘，并用通知与看板让“谁在等我”可见。
-> 先试这一步：挑一个已有测试的小 git 仓库，先用 `npx neurosquad` 开一个 `--worktree` agent（或先用 `/arena --quick --seed 7` 把被拒的旧答案送进 16 个 agent 的锦标赛），在 1–2 个真实任务上确认隔离、验证和通知真的成立，再扩大。
-> 最近修订：2026-10-10
+> 解决的问题：多个 AI agent 并行干活时，怎么让「完成」有验证、让「谁在等我」可路由、让隔离与评审成为流程而不是口头要求。
+> 先试这一步：挑一个你在意的真实任务，先把它的完成判据写下来（哪条命令通过、谁来复核、结果在哪里看），再按处境选一条做法；想先试最小改动，就把一个编码任务切成 2～3 块，交给「只生成、不验证」的子 Agent，验证全部留给主 Agent。
+> 最近修订：2026-10-12
 
 ## 解决什么问题
 
-单个 AI 回答、单条串行的 agent 会话，交付的往往是你没有验证过的结果：看起来合理，但可能漏了你真正在意的约束。这篇手册把「不满意就重问一次」升级成一套可执行的流程——把同一个任务交给多个子代理用不同策略并行求解、互相对抗、由独立裁判按公开标准打分淘汰；把有固定分工的多步任务（先搜集资料、再扩写成文）固化成角色化 Crew 流水线，产物落盘成文件；代码类任务则必须通过你自己的验证命令才能合入，再进一步可以把整条链固化成 GitHub 上的 issue → PR → 浏览器实测 → 合并。同时给出成本预估、可观察指标，以及「什么时候不值得这么做」的判断线。新增的做法 H 把「隔离、记忆、评审」三件事落成可手工照做的流程：每个 agent 一个 git worktree、项目记忆写成 conventions.md/plan.md/dead-ends.md、第二个 agent 在提交前读 diff 做同行评审；Offrun 是这套流程在 macOS 上的一种现成实现。新增的做法 I 解决另一个并行 agent 的常见瓶颈：注意力。多个终端型 agent 跑起来后，真正的浪费常常不是模型慢，而是「哪个 agent 在等我」不可见。cmux 把等待输入变成蓝色通知环、侧栏徽标、通知面板和 ⌘⇧U 跳转，让「谁在等我」成为可路由的信号；但 cmux 作者明确说它是 primitive，不是 solution，不替代验证、记忆和评审。新增的做法 J 把「第二个智能体在同一 commit 上验证通过才算完成」做成可强制执行的状态机：SPEC.md 一行一行批准、每条 lane 一个 worktree、提交必须过 gate、验证必须由没参与构建的另一个 agent 在确切 commit 上做、给出 receipt 才合并；Pullboard 是本机运行、存在你 git 仓库里的看板实现，不调用模型。新增的做法 K 把镜头再拉远一层：不再只管一个仓库、一个任务，而是把多个已注册项目的状态、六步流水线（spec → build → sync → verify → review → release）、Git 摘要与 PR/CI 收进一块本地控制台面板——一个控制台会话承担跨项目的规格、监督与评审关卡，你只做决策和最终发布审批；项目状态（● 待决策、◆ 待评审、▶ 运行中、↻ 待同步、○ 空闲）来自项目里的 STATUS 卡，关卡字段没清空就阻止继续；默认执行者是 Claude Code 原生后台 agent（不需要 Codex 账号），也可按项目切到 Codex 或标成 manual 只做交接不派工；刷新只查本地文件和 CLI、不请求模型，只有提交决策草稿时才花 Claude 额度。新增的做法 L 把「谁在跑、谁在等我、花了多少」做成终端里的 daemon + dashboard：Claude Code、Codex、OpenCode 或任意命令都能注册成 agent，每个 agent 有自己的终端，dashboard 用网格显示；关闭 dashboard 或终端后 agent 继续跑，重启机器后 `nsq up` 按各自 session 恢复；agent 提问时通知里原样带出问题，不切进终端也能按 y/a/n 回答；`nsq ls --json`、`nsq cost --since 7d`、`nsq diff`、`nsq peek` 把状态、成本、改动、屏幕尾部做成可脚本化的信号。它管的是可见性与权限路由，不替代验证、记忆和评审；README 自标 0.1.0 preview。
+单个 AI 回答、单条串行的 agent 会话，交付的往往是你没有验证过的结果：看起来合理，但可能漏了你真正在意的约束。这篇手册把「不满意就重问一次」升级成一套可执行的流程——把同一个任务交给多个子代理用不同策略并行求解、互相对抗、由独立裁判按公开标准打分淘汰；把有固定分工的多步任务（先搜集资料、再扩写成文）固化成角色化 Crew 流水线，产物落盘成文件；代码类任务则必须通过你自己的验证命令才能合入，再进一步可以把整条链固化成 GitHub 上的 issue → PR → 浏览器实测 → 合并。同时给出成本预估、可观察指标，以及「什么时候不值得这么做」的判断线。新增的做法 H 把「隔离、记忆、评审」三件事落成可手工照做的流程：每个 agent 一个 git worktree、项目记忆写成 conventions.md/plan.md/dead-ends.md、第二个 agent 在提交前读 diff 做同行评审；Offrun 是这套流程在 macOS 上的一种现成实现。新增的做法 I 解决另一个并行 agent 的常见瓶颈：注意力。多个终端型 agent 跑起来后，真正的浪费常常不是模型慢，而是「哪个 agent 在等我」不可见。cmux 把等待输入变成蓝色通知环、侧栏徽标、通知面板和 ⌘⇧U 跳转，让「谁在等我」成为可路由的信号；但 cmux 作者明确说它是 primitive，不是 solution，不替代验证、记忆和评审。新增的做法 J 把「第二个智能体在同一 commit 上验证通过才算完成」做成可强制执行的状态机：SPEC.md 一行一行批准、每条 lane 一个 worktree、提交必须过 gate、验证必须由没参与构建的另一个 agent 在确切 commit 上做、给出 receipt 才合并；Pullboard 是本机运行、存在你 git 仓库里的看板实现，不调用模型。新增的做法 K 把镜头再拉远一层：不再只管一个仓库、一个任务，而是把多个已注册项目的状态、六步流水线（spec → build → sync → verify → review → release）、Git 摘要与 PR/CI 收进一块本地控制台面板——一个控制台会话承担跨项目的规格、监督与评审关卡，你只做决策和最终发布审批；项目状态（● 待决策、◆ 待评审、▶ 运行中、↻ 待同步、○ 空闲）来自项目里的 STATUS 卡，关卡字段没清空就阻止继续；默认执行者是 Claude Code 原生后台 agent（不需要 Codex 账号），也可按项目切到 Codex 或标成 manual 只做交接不派工；刷新只查本地文件和 CLI、不请求模型，只有提交决策草稿时才花 Claude 额度。新增的做法 L 把「谁在跑、谁在等我、花了多少」做成终端里的 daemon + dashboard：Claude Code、Codex、OpenCode 或任意命令都能注册成 agent，每个 agent 有自己的终端，dashboard 用网格显示；关闭 dashboard 或终端后 agent 继续跑，重启机器后 `nsq up` 按各自 session 恢复；agent 提问时通知里原样带出问题，不切进终端也能按 y/a/n 回答；`nsq ls --json`、`nsq cost --since 7d`、`nsq diff`、`nsq peek` 把状态、成本、改动、屏幕尾部做成可脚本化的信号。它管的是可见性与权限路由，不替代验证、记忆和评审；README 自标 0.1.0 preview。新增的做法 M 把镜头收回到单个会话内部：主 Agent 保留编排与验证权，子 Agent 只负责生成，指令里硬性写「不 Build、不 Test、不 Typecheck，早提交早返回」——它把「谁来做验证」变成一条可以写进 prompt 的边界，用来压住「越修越乱」的连续返工和子 Agent 的上下文消耗；代价是失败成本后移到主 Agent 侧，因此它不替代做法 B/G/J 的合入门禁。
 
 ## 适用与不适用
 
@@ -40,6 +40,10 @@
 - 新增：你想脚本化拿状态与成本：`nsq ls --json`、`nsq cost --since 7d --json`、`nsq diff`、`nsq peek`（做法 L）。
 - 新增：你想给 agent 换 OpenRouter 模型，或指向自建 OpenAI/Anthropic 兼容服务器（llama.cpp、Ollama、LM Studio、vLLM、SGLang、Unsloth Studio 等），且不想让密钥进 argv、日志或文件（做法 L）。
 - 新增：你需要在手机上（experimental，默认关闭）看 agent 屏幕、发提示、回答权限询问、中断 agent（做法 L）。
+- 新增：你在 Claude Code 里能拉起子 Agent（子任务 / 子进程），并愿意把验证环节留在主 Agent 这一侧（做法 M）。
+- 新增：任务较大、多文件、上下文吃紧，你希望子 Agent 尽早返回，而不是边写边修（做法 M）。
+- 新增：你愿意自己设计「正交隔离」的拆法并迭代——原文只给了这四个字，没有给判据（做法 M）。
+- 新增：你想把「生成」和「验证」当作两类可拆给不同 Agent 的工作，并保留一个平时做法作对照（做法 M）。
 
 **不适用**
 
@@ -78,6 +82,10 @@
 - 新增：Windows arm64 想用语音听写：不可用（做法 L）。
 - 新增：你指望 README 给出改善幅度的量化指标：nsq README 没有基准或效果数据（做法 L）。
 - 新增：涉密/敏感环境：手机端链接携带 pairing token，要当密码对待；是否可用要自己评估（做法 L）。
+- 新增：任务必须边写边跑测试才能写对（强类型约束、依赖外部服务状态的改动）：把 Build/Test/Typecheck 全部推迟到主 Agent，会把失败成本集中到下游、增加返工（做法 M）。
+- 新增：你想要现成的拆解方法：原文在「2. 任务拆解：正交隔离」处就被截断，怎么正交、怎么保证隔离、结果怎么合并都没有依据（做法 M）。
+- 新增：你需要量化收益再决定：这条规则只有作者主张，没有案例、对照实验、耗时或成本数字（做法 M）。
+- 新增：你想让子 Agent 自己跑测试再返回：这正好与做法 M 的硬性禁止项相反，两者只能选一个（做法 M 与做法 B/G/J 的差异见操作步骤）。
 
 ## 前置条件
 
@@ -94,6 +102,7 @@
 - 做法 J（pullboard）：本机有 git 和 Node 22.13 或更新版本（README 原文："You need git and Node 22.13 or newer"）；在一个 git 仓库内操作；MIT 许可；本机运行、无账号、无依赖、不调用模型。要真正跑起来还需要三样你自己提供的东西：`SPEC.md` 里已批准的需求行、`PRACTICE.md` 里的 doctrine、`pullboard.json` 里的 gate 命令与每条 lane 的 `owns` / `specs` 授权。
 - 新增做法 K（claude-console）：Windows 或 macOS；Claude Code 2.1.289 或更高且支持 mod；每个要纳入面板的项目在注册表里有一项、并有一个 STATUS 文件。若要用 Codex 执行者，还需要 Node.js、Codex Companion 和一个 Codex 账号（Windows 探测需要 PowerShell 和 Codex 桌面应用，macOS 需要 PATH 上有 `codex` CLI）。
 - 新增做法 L（nsq）：Node.js 22.13 或更新；native 部分预编译（Windows x64/arm64、macOS Apple silicon/Intel、Linux x64/arm64），无需编译器。要使用 Claude Code / Codex / OpenCode 之一，需该 CLI 自身已登录，或改走 OpenRouter / 自建模型服务器。目录是 git 仓库时 `--worktree` 才会生效。数据在 `~/.neurosquad-cli`（可用 `NSQ_HOME` 迁移），密钥在 OS keyring；`~/.claude`、`~/.codex`、`opencode.json` 永不被写。
+- 新增做法 M：Claude Code，且你的用法里能拉起子 Agent（子任务 / 子进程），并愿意把验证环节留在主 Agent 这一侧；能编辑子 Agent 收到的指令文本。原文没有写怎么拉起子 Agent、怎么提交、怎么保证「正交」，这部分需要你自己补。
 
 ## 操作步骤
 
@@ -113,6 +122,7 @@
 | 想让「另一个 agent 在同一 commit 上验证通过才算完成」变成硬约束：SPEC 行 + gate + lane 隔离 | 做法 J |
 | 同时照看多个项目的 agent，想在一屏里看到状态、决策与评审关卡 | 做法 K |
 | 跨平台并行跑多 CLI agent / 任意长驻命令，想用 daemon + dashboard 统一看状态、回权限、脚本化取成本 | 做法 L |
+| 想让子 Agent 只写、验证全部集中在主 Agent，压住「越修越乱」和上下文消耗 | 做法 M（先做对照实验） |
 
 ### 做法 A：把不满意的回答送进锦标赛（arena-skill）
 
@@ -1086,6 +1096,33 @@ nsq set <agent> [--dangerous on|off] [--model id|none] [--provider name|openrout
 
 默认自动更新：npm/Homebrew/Scoop 安装的会在后台装新版本，并在“不会丢东西”（没有忙碌 agent、没有打开的 dashboard、每个 agent 都能 resume）时切换，或按 **U** 立即切换。
 
+### 做法 M：主 Agent 编排 + 哑子 Agent 只生成（验证集中在主 Agent）
+
+把这条路径当作待验证的候选：原文只给了两条约束——子 Agent 禁止试错、任务拆解正交隔离——后者在标题处就被截断；没有案例、没有对照实验、没有耗时或成本数字，只有作者主张。它改的是「生成与验证怎么分工」，不是又一个工具；与做法 B/G/J 的合入门禁不冲突，但不能替代它们。
+
+1. 先划清「生成」与「验证」的边界。把任务切成若干块，指定某几个 Agent 只做生成，主 Agent 保留验证权。原文只给了这条分工原则，没有给拆解方法；怎么切要你自己定。
+
+2. 给生成型子 Agent 写入硬性禁止项。把下面这段约束原样放进子 Agent 拿到的指令里（不是放在主 Agent 的对话里，否则等于没写）：
+
+```
+不 Build、不 Test、不 Typecheck，早提交早返回。
+```
+
+预期结果：子 Agent 写完代码就提交、就返回，不运行构建、不跑测试、不做类型检查。
+
+3. 子 Agent 返回后，由主 Agent 统一做验证。这是第 2 步的必然推论——原文说「剥离验证环节」，同时整体架构叫「主 Agent + 哑子 Agent」，据此推断验证归主 Agent（原文未逐字写明主 Agent 的验证动作，此处为按架构名称与「剥离」一词的合理推断，请以自己环境实测为准）。做法：主 Agent 单独跑构建、测试、类型检查，并统一修复。
+
+4. 按「正交」方式拆解隔离。原文只有这四个字，没有说明正交的判据是什么、怎么保证隔离、结果如何合并。这一步需要你自行设计：先按文件/模块边界把 2～3 块切开，分别交给生成型子 Agent，返回后检查有没有合并冲突或语义重复；有就换一种切法再试。
+
+5. 控制子 Agent 的存活时间：早提交、早返回。不要让它长驻，不要让它边写边修，返回越早越好。
+
+**与已有做法的差异（照做前先读这一条）**
+
+- 做法 B（`FARM_VERIFY_CMD`）、做法 G（QA 通过 + GitHub checks 全绿）、做法 J（gate + 没参与构建的 verifier 在确切 commit 上给 receipt）把验证做成合入前的强制门禁，验证是流水线的一部分，不通过就不落 `main`。做法 M 把验证集中到主 Agent，靠你自己的纪律兜底，没有机器强制的关卡。
+- 做法 H 的「第二个 agent 在提交前读 diff 评审」也是验证后置，但归属是另一个 agent；做法 M 的归属是同一个主 Agent 的同一轮上下文。做法 J 明确要求 verifier 没参与过构建，做法 M 不满足这条。
+- 做法 I/L 解决的是「谁在等我、花了多少」的可见性，做法 K 解决跨项目的状态与关卡；它们都不定义「完成」，也不做合入闸门。
+- 因此：做法 M 可以叠加在 B/G/J 之上（子 Agent 只写、主 Agent 或独立 verifier 再验），不要用它替代门禁。风险是把失败成本集中到下游、增加返工，尤其对「必须边写边跑才能写对」的任务。
+
 ### 通用收尾：不管走哪条路径
 
 - 开始前先固定「完成」的定义（哪条测试通过、谁来复核、在哪里看结果），不要只依赖 agent 的自证。
@@ -1098,6 +1135,8 @@ nsq set <agent> [--dangerous on|off] [--model id|none] [--provider name|openrout
 - 做法 J 的 verifier 必须是没参与构建该条目的另一个 agent，并在确切 commit 上给出证据；worktree 身份不是安全边界，不要拿它当权限隔离。
 - 做法 K 的看板状态来自你自己维护的注册表与 STATUS 卡；刷新只查本地文件和 CLI、不请求模型，卡上写错了它不会替你纠正。
 - 做法 L 的 daemon/dashboard 解决的是「agent 在不在跑、要不要你、花了多少」；它不替代验证、记忆和评审，权限回答快不等于产出可合入。
+- 做法 M 的禁止项要原样写进子 Agent 拿到的指令；只写在主 Agent 的对话里等于没写。别把「剥离验证」理解成「不做验证」——验证移到主 Agent，合入门禁（做法 B/G/J）仍然保留。
+- 做法 M 的「正交隔离」原文缺失，拆完先看有没有合并冲突或语义重复；有，就说明这次拆法不行，换一种再试。
 
 ## 怎么判断变好了
 
@@ -1115,6 +1154,7 @@ nsq set <agent> [--dangerous on|off] [--model id|none] [--provider name|openrout
 - 做法 J：每条条目是否都有 gate 绿 + verifier 的 accept/reject receipt；你仓库里的返工比例（原文称自家开发 Pullboard 时 "nearly one in three items goes back"）是多少；Timeline 里每条目的 claim / submit / verdict 是否完整；越界提交是否被 lane 的 `owns` 授权拒绝；"Needs you" 里出现的是不是只有你能做的决定；verifier 抓到的驳回理由里有多少是你事后确认有效的问题。
 - 新增做法 K：面板上「● 待决策」「◆ 待评审」的条目从出现到你处理完的时间；你实际同时盯的窗口/终端数 vs 只看面板；autoSync 写回 CARD 后你是否还需要手工记状态；`關卡` 是否真的拦住了没清空的条目；Git 列里的冲突/CI 失败/未提交/未推送/落后上游是否比你手工发现得更早；刷新时是否产生模型调用（原文称刷新只查本地文件和 CLI）；被 `commandGuard` 拦下的不可撤销命令次数、`loopGuard` 阻止重复失败调用的次数。注意「减少盯盘」目前只是作者主张，要你自己前后对照。
 - 新增做法 L：从 agent 需要你到人响应的时间；漏掉通知导致空转的时长；关掉 dashboard 或终端后 agent 是否继续跑、`nsq up` 后是否按各自 session 恢复；`nsq ls --json` 的状态是否与屏幕一致；`nsq cost` 是否读得到 token、无已知价格的模型是否显示 “no price” 而不是 $0；`nsq diff` 是否能看出该 agent 未提交改动；`nsq peek` 是否能不看全屏就判断它在做什么；`nsq doctor` 是否能无阻断跑完；手机上能否看屏幕、发提示、回答权限、中断；`nsq run --` 的任意命令是否如预期只显示 working / finished。README 没有给出改善幅度的量化指标，这些都要你自己前后对照。
+- 新增做法 M：子 Agent 的平均轮次与工具调用次数是否下降（对应原文声称的「上下文消耗压到最低」）；子 Agent 是否还会出现「改了又改、越修越乱」的连续返工（原文声称被消除的幻觉循环）；同一任务的总时长、主 Agent 的一次通过率、跨 Agent 交接处的返工次数是否变差（这是把验证后置的主要风险）；正交拆解后是否出现合并冲突或语义重复。原文明说这是推断性表述、没有量化指标，所以这几项只能你自己前后对照。
 
 **最小试用**
 
@@ -1130,6 +1170,7 @@ nsq set <agent> [--dangerous on|off] [--model id|none] [--provider name|openrout
 - 做法 J（半天内可完成）：先在一次性仓库跑 `npm i -g pullboard && pullboard tour`，确认你理解「提交—驳回—修复—复验—合并」的节奏；再选一个真实小仓库，`pullboard init` 并提交它写出的文件，只写 1–3 行 approved 的 SPEC.md，设一个真实的 gate（如 `pytest` 或 `npm test`），配 1 条 builder lane + 1 条 review lane；然后用 2–3 个小条目走完整流程：`add` → builder `worktree/next/submit` → 另一个 agent `next --verify` → `verify ... accept/reject`。
 - 新增做法 K（半天内可完成）：按 README 两条命令装好插件 → `/console demo` 看整块面板（不需要 registry）→ `/console refresh` 回到真实状态 → 挑一两个可回滚的项目，照 `workflow/projects-scope.example.md` 建注册表，并在项目里写一个用 `<!-- CARD -->` / `<!-- /CARD -->` 包住的 STATUS 块（Git 项目可放 `.console/STATUS.md` 并在 `.git/info/exclude` 里排除）→ 用 `dispatch.json` 给其中一个项目指定执行者（可先试 `manual`，或把它切到 Codex）→ 走一遍「派工 → 执行者完成 → autoSync 写回 CARD → 关卡评审」，看这条闭环是否真的减少了你的盯盘。
 - 新增做法 L（半天内可完成）：装好 `npm install -g neurosquad`（或直接 `npx neurosquad`）→ 在一个 git 仓库里跑 `nsq run claude "fix the flaky checkout test" --worktree` 和 `nsq run codex --name reviewer` → 打开 dashboard，试 Enter 全屏、Ctrl+] 回网格、y/a/n 回答权限、s / S 发送提示 → 按 q 关掉 dashboard 再 `nsq up`，确认 agent 是否按各自 session 恢复 → 用 `nsq ls --json`、`nsq peek <agent> -n 20`、`nsq diff <agent>`、`nsq cost --since 7d` 看状态、屏幕、改动和成本 → 可选：`nsq phone on --lan` + `nsq phone pair` 试手机端，或 `nsq provider add lmstudio --url http://localhost:1234` 接一个自建模型服务器。
+- 新增做法 M（半天内可完成）：挑一个中等规模的编码任务（例如一次性改 3～5 个文件的功能改动），保留你平时的做法作对照 → 按正交方式切成 2～3 块，每块交给一个生成型子 Agent，指令里写入 `不 Build、不 Test、不 Typecheck，早提交早返回。` → 子 Agent 返回后，由主 Agent 单独跑构建、测试、类型检查并统一修复 → 记录同样任务在你原来的做法下需要多少轮、多少上下文。
 
 **试多久、什么时候升级**
 
@@ -1142,6 +1183,7 @@ nsq set <agent> [--dangerous on|off] [--model id|none] [--provider name|openrout
 - 做法 J 只有 41 stars 和作者自述的返工比例：先在 2–3 个小条目上跑完整闭环，再决定是否固化成日常流程；如果 verifier 抓不到问题、或每个 PR 你仍要人工兜底，说明当前形态还没带来净收益。
 - 新增做法 K 只有 53 stars 和 0.15.x 的版本号：先在一两个可回滚的项目上跑一到两周，确认「派工 → 执行者完成 → autoSync 写回 CARD → 关卡评审」这条闭环真能减少人工盯盘；如果 STATUS 卡总得你手工维护、关卡拦不住东西、或配置/版本一变就装不上，就退回你现在的看板方式。
 - 新增做法 L 是 0.1.0 preview：先在一个 git 仓库、一两个真实任务上试半天到一天，确认 daemon 恢复、通知、权限内联回答、`nsq ls/cost/diff/peek` 都可靠；若命令或配置随版本变化导致你反复修，或手机端/自建 provider 的边界不满足，就只把它当临时观察窗，不要写进日常流程。
+- 新增做法 M 只有作者主张、没有数据：先在 2–3 个中等任务上做对照；只有当子 Agent 轮次下降、且主 Agent 侧返工没有明显增加时，才算这条规则在你的场景里成立。若总时长变长、主 Agent 一次通过率下降、或交接处返工变多，就退回原来的「边写边跑」方式。原文没有给观察周期，也没有说什么时候该升级。
 
 ## 常见坑
 
@@ -1276,6 +1318,17 @@ nsq set <agent> [--dangerous on|off] [--model id|none] [--provider name|openrout
 - 与做法 I（cmux）的差异：nsq 跨平台（Windows/macOS/Linux）、用 per-user daemon 持有终端、有脚本化接口和成本命令；cmux 仅 macOS、是 GUI 终端、通知与恢复能力更细。两者都只是注意力路由，不替代验证、记忆和评审。
 - 与做法 J/K 的差异：nsq 不提供 gate/verifier 状态机，也不提供跨项目关卡看板；它不做「完成」的定义，也不做合入闸门。
 
+**新增做法 M（主 Agent + 哑子 Agent）**
+
+- 原文被截断：正文在「2. 任务拆解：正交隔离」处即告结束，第 2 条规则的完整内容缺失（怎么正交、怎么保证隔离、结果怎么合并都没有）。不要照标题猜做法。
+- 只有作者主张、没有数据：原文没有给出任何案例、对照实验、耗时或成本数字；互动量为 151 赞、24 转发、30 回复，这些不能当效果证据。
+- 「防止越修越乱」「上下文消耗压到最低」是推断性表述，没有量化指标支撑；手册里的指标要你自己测。
+- 子 Agent 被禁止 Build/Test/Typecheck 后，失败成本集中到主 Agent 一侧；如果任务本身需要边写边跑测试才能写对（强类型约束、依赖外部服务状态的改动），风险最高。
+- 验证归属是推断：原文说「剥离验证环节」，架构名是「主 Agent + 哑子 Agent」，据此推断验证由主 Agent 做；这不是原文逐字写明的，请以自己环境实测为准，别当成保证。
+- 硬性禁止项要写在子 Agent 收到的指令里；只写在主 Agent 的对话里等于没写。
+- 不要用做法 M 替代合入门禁：做法 B 的 `FARM_VERIFY_CMD`、做法 G 的 QA + checks、做法 J 的 gate + 独立 verifier 都是机器可查的门禁，做法 M 只有你自己的纪律。
+- 「正交隔离」没有可照搬内容；如果拆完出现合并冲突或语义重复，说明这次的拆法有问题，需要自行迭代，而不是子 Agent 的错。
+
 **通用**
 
 - 别把「工具很多」当成改善证据；没有验证命令或盲评对比，只是把不确定性放大了。
@@ -1284,6 +1337,7 @@ nsq set <agent> [--dangerous on|off] [--model id|none] [--provider name|openrout
 - 并行 agent 的通知很多时，先保证「谁在等我」可路由，再谈扩并发；否则只是把等待堆到更多 pane 里。
 - 用面板/看板时，先确认它的状态来源是你或 agent 真的写下来的文件，而不是它自己猜的；做法 K 的刷新只查本地文件和 CLI、不请求模型，卡上写错它不会替你纠正。
 - 用 daemon/dashboard 时，先确认它管的是「可见性与权限」而不是「完成与合入」；做法 L 不替代验证、记忆和评审。
+- 把验证后置（做法 M）不等于取消验证：剥离的是子 Agent 的试错，不是你的合入门槛；如果主 Agent 侧返工明显增加，说明这次拆法和任务不匹配。
 
 ## 证据与来源
 
@@ -1299,6 +1353,7 @@ nsq set <agent> [--dangerous on|off] [--model id|none] [--provider name|openrout
 - **做法 J** 依据调研《pullboard-dev/pullboard》。可核对：完整 CLI 命令、`SPEC.md` 格式、`pullboard.json` 配置与各栈 gate 表、tour 的端到端示例（含故意破坏修复再看测试失败）、一个真实的 reject/accept receipt 样例、条目状态机（open → claimed → submitted → verified / 回 open）、`PRACTICE.md` doctrine、看板是放在 `.git` 里的一个 SQLite 文件、Node 22.13+、MIT 许可、41 stars。属于作者主张：这套方法论「更好」、返工比例可复现、多 agent 更连贯；「nearly one in three items goes back」是作者对自己开发 Pullboard 时的描述，不是可复现的第三方基准。原文自己声明的局限：worktree 身份只在一台机器上有意义、不是安全边界；可用 `--no-verify` 跳过 hook（靠 pre-push gate 和 verifier 兜底）；CI 只在 Linux 和 macOS 上跑，Windows 未测试；relay 和 Pullboard View 里的 roadmap 仍是 planned。
 - **新增做法 K** 依据调研《SaM-runtime/claude-console》。可核对：两条安装命令、`/console demo` 与 `/console refresh`、插件配置的 `--values-stdin` 写法与全部配置键及默认值、注册表 + STATUS 卡格式（`<!-- CARD -->` / `<!-- /CARD -->`、十行上限、繁体键名、`關卡` 的四种取值）、`dispatch.json` 结构与执行者解析顺序（面板覆盖 > 注册表 Executor 列 > 全局）、`sync` 的模型/session 覆盖规则、动作键与数字键回答待决事项、`/console reply`、命令速查表、`commandGuard` / `loopGuard` / `activation` / `projectMode` 的取值与默认、Git/PR/CI 探测行为与 `gitProbe` 三档、`/console update`。属于作者主张：「一个控制台会话承担跨项目规格、监督与评审关卡」「刷新只查本地文件和 CLI、不请求模型」「减少盯盘」等来自原文自述，没有第三方基准或对照实验。原文自己声明的局限与材料限制：仓库仅 53 stars、版本 0.15.x、UI 为繁体中文、强依赖特定 Claude Code 版本与自建的注册表/STATUS 卡约定；材料在「对应的研究问题」小节处被截断，本手册只写能照做的安装、配置、派工、状态卡、动作与护栏部分。
 - **新增做法 L** 依据调研《glmn-ai/neurosquad-cli》。可核对：`npm install -g neurosquad` / `npx neurosquad`、`nsq run claude "..." --worktree` 与分支名 `nsq/<name>`、`nsq run codex --name reviewer`、`nsq run -- npm run dev`、dashboard 的 Enter / Ctrl+] / y / a / n / i / s / S / q、`nsq down` / `nsq up`、`nsq ls --json` / `nsq send <agent> "prompt" [--when-done]` / `nsq answer <agent> yes|always|no` / `nsq peek <agent> [-n 20]` / `nsq diff <agent>` / `nsq cost [--since 7d] [--json]`、`nsq openrouter set-key`、`nsq provider add lmstudio --url http://localhost:1234`、`nsq phone on --lan|--online` / `nsq phone pair` / `nsq phone push ntfy` / `nsq phone rotate` / `nsq phone off`、语音听写 `v` 与约 670 MB 模型 / Windows arm64 不可用、`nsq config set autoUpdate false`、`nsq doctor`、`nsq set <agent> ...`、数据目录 `~/.neurosquad-cli` 与 `NSQ_HOME`、OS keyring、`~/.claude` / `~/.codex` / `opencode.json` 永不被写、Node.js 22.13+、MIT、README 自标 0.1.0 preview、native 预编译平台。属于作者主张、没有外部验证：daemon/dashboard 能改善并行 agent 的响应速度与成本可见性，README 没有给出任何“改善幅度”的量化指标或基准；`--worktree` 的隔离边界是文件系统路径而非安全边界。重要限制：本条只依据 README 级材料，命令与配置在 1.0 前可能变化，不宜直接纳入日常流程。
+- **新增做法 M** 依据调研《@yanhua1010: 总结一下，推荐收藏》。可核对：原文明确给出的两条规则（子 Agent「不 Build、不 Test、不 Typecheck，早提交早返回」；任务拆解「正交隔离」）、架构名称「主 Agent + 哑子 Agent」、以及原样引用的指令文本。属于作者主张：「剥离验证环节可以防止大模型陷入越修越乱的幻觉循环」「把上下文消耗压到最低」——原文没有给出测量方式或数据，也没有案例、耗时或成本数字；互动量为 151 赞、24 转发、30 回复。重要限制：原文在「2. 任务拆解：正交隔离」处即被截断，第 2 条规则的完整内容缺失，本手册只采用已保存前半段的两条规则，不补造拆解方法；「主 Agent 统一做验证」是按架构名称与「剥离」一词做出的合理推断，原文未逐字写明，请以自己环境实测为准。
 
 ## 依据的调研
 
@@ -1314,3 +1369,4 @@ nsq set <agent> [--dangerous on|off] [--model id|none] [--provider name|openrout
 - [pullboard-dev/pullboard](../research/radar/2026-10-08/2038-pullboard-dev-pullboard.md)：值得一试，建议在小范围试：先用 `pullboard tour` 看一遍闭环，再在一个真实小仓库里把「SPEC 行 → gate → 另一个智能体在同一 commit 上验证」跑通，然后决定是否固化成日常流程；理由是它把「第二个智能体验证通过才算完成」做成了可强制执行的状态机，并给出了可直接复制的命令与配置（MIT、本地运行、不调用模型），但项目很小（41 stars）、Windows 未测试、部分功能仍在 planned，适合先试验证收益。
 - [SaM-runtime/claude-console](../research/radar/2026-10-09/2187-sam-runtime-claude-console.md)：值得一试，建议小范围试：先按 README 的两条命令装好插件、用 /console demo 跑通面板，再挑一两个可回滚的项目接入 registry + STATUS 卡，验证「派工 → 执行者完成 → autoSync 写回 CARD → 关卡评审」这条闭环是否真的减少了人工盯盘；理由是它给出了可直接照做的安装命令、配置键表、dispatch.json 结构、动作快捷键和状态卡格式，但仓库仅 53 stars、版本 0.15.x、强依赖特定 Claude Code 版本与自建的注册表/状态卡约定，成熟度还不够直接全量采用。
 - [glmn-ai/neurosquad-cli](../research/radar/2026-10-10/2422-glmn-ai-neurosquad-cli.md)：值得一试，先在单个 git 仓库里用 npx neurosquad 跑一两个带 --worktree 的后台 agent，实测“关掉窗口后继续跑 + 状态/成本可观测 + 权限内联回答”是否成立，再决定是否纳入日常；README 给了可直接复制的安装、启动、回答与成本命令，但项目自标 0.1.0 preview、命令与配置在 1.0 前可能变化，不宜直接 adopt。
+- [@yanhua1010: 总结一下，推荐收藏](../research/radar/2026-10-12/2630-item.md)：值得一试，建议在 Claude Code 里小范围试：让生成型子 Agent 只写代码、硬性禁止 Build/Test/Typecheck 并要求尽早提交返回，验证工作全部交给主 Agent 统一做；原文给出的这两条约束足够具体、可以直接照做，但原文被截断且只有作者主张、无任何数据。
