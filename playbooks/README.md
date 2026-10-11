@@ -4,6 +4,7 @@
 
 | 手册 | 解决的问题 | 先试这一步 | 最近修订 |
 |---|---|---|---|
+| [让逆向重建 agent 在宣布完成前通过机器验收](reverse-engineer-software-with-agents.md) | 当目标没有源码、需要搞懂并重建某个功能时，如何让 agent 产出可回溯的证据，并在有 ground truth 时用机器可判定的 PASS/FAIL 守住正确性。 | 先选一个存在可机器比对 ground truth 的最小逆向/重建任务，写一个让 agent 提交前自己跑的 PASS/FAIL 验收脚本；没有 ground truth 时，先用 REA 对已提取的 JS/Electron 目录跑一次静态分析，检查 Evidence 与 limitations。 | 2026-10-11 |
 | [给 AI 的写操作和外部执行装上可审批、可回滚、可拒绝的边界](agent-operations-with-permissions.md) | 让 AI 在审计、改代码、调外部服务和跨机器执行时，不拿到超出任务所需的权限，并对写操作保留审批、回滚与可核验记录。 | 先选一个不重要的项目或账号，只读跑一轮；再把一次写操作改成“出草案→人工核准→存还原点→沙箱执行”；如果你在 Windows 11，用 MXC 的 Permissive 模式跑一个无害任务并看活动报告。 | 2026-10-11 |
 | [给一个职能装 AI 工作流：知识可复用、待办不漏掉、效果可对比](install-and-customize-agent-plugins.md) | 怎么选装一个职能插件、按团队真实流程改一条，再叠上待办收口面板与观测 mod，让 AI 少重复解释、不漏掉中途抛出的问题和失败测试，并且让“有没有变好”有数字支撑。 | 选一个和你当前工作最接近的职能插件装上，跑通一个斜杠命令（例如 `/data:write-query`），确认它真的出现在会话里——命令不出现就是没生效。 | 2026-10-11 |
 | [先小范围试装技能，再用四条硬约束管住编码 agent](build-and-install-agent-skills.md) | 如何用对照验证代替「装上了就等于变好了」，把现成技能、自写技能和编码 agent 的行为约束安全地引入日常流程。 | 先按做法 A 只装一个技能包做对照；如果你常把非琐碎代码任务交给编码 agent，再按做法 AJ 把四条原则追加到项目级 CLAUDE.md 并试一个非琐碎任务。 | 2026-10-11 |
@@ -27,7 +28,6 @@
 | [把屏幕上的视觉信息变成 agent 能用的证据](add-vision-to-text-agents.md) | 工作流里的视觉信息经常卡在人看得到、模型或编码 agent 吃不到，本篇把图片、模拟器 UI 缺陷和长按反馈转成结构化证据，交给 text-only 模型或编码 agent。 | 如果你已经在 iOS 模拟器上用 Claude Code，先在 FixKit 自带 Tally 示例上跑通“长按 → 一句话 → agent 改代码”闭环；否则按痛点选路线 A（图片）或路线 B（模拟器批注）。 | 2026-10-08 |
 | [把私有名称交给模型前先做别名替换](redact-sensitive-data-for-agents.md) | 在把私有名称、公司信息交给模型前，用配置好的别名替换它们，并在本地工具执行前还原，从而降低上下文泄露面。 | 先不要写真实姓名/公司，直接用示例里的虚构映射跑通建配置、装插件、`/reload-plugins` + `/my-privacy-status` 的流程。 | 2026-10-07 |
 | [让编码 agent 在可控环境里按项目规则跑，并且拿得出证据](host-coding-agents.md) | 把编码 agent 从本机随手跑一次，变成在可控环境里按项目规则反复跑，并且能实时观察、在真实系统里验证、用命令证明完成。 | 先用做法 C 在一个可回退的真实项目里落地短 CLAUDE.md + allow/ask/deny 权限 + 一个 PostToolUse hook，再用 Plan mode 跑一个边界清晰的小任务。 | 2026-10-07 |
-| [在没有源码时，让 agent 有证据地搞懂一个功能再重建](reverse-engineer-software-with-agents.md) | 当需要搞懂没有源码的应用、二进制或前端包（例如要复刻它的离线搜索）时，怎么让编码 agent 按固定流程调查、每步都给出证据和限制，而不是靠猜。 | 先在单个已提取的 JS/Electron 目录上跑一次 `npx -y rea-agents@latest analyze-javascript-application <绝对路径> --json`，不装 Hopper/Ghidra，用一次带 Evidence/limitations 的结果判断这套流程值不值得继续。 | 2026-10-07 |
 | [让 coding agent 长期在线，崩溃重启后还能接着干](build-agent-from-scratch.md) | 解决把 AI 从聊天框搬到项目里、补齐 harness 与生产分层，并让 coding agent 可持久恢复、可观测、可验证的问题。 | 先选一条最小路线：跑通 learn-claude-code 的 s01，或用 Pi Durable 的 SQLite 骨架提交一个带稳定 requestId 的任务，验证进程重启后能继续。 | 2026-10-06 |
 | [让 AI 照着参照物重建：先量出规格或写死一份 DESIGN.md，再用机器可比指标验收](replicate-web-pages-with-agents.md) | AI 做“照着某个真实参照物做一遍”的任务时容易靠猜和“看着不错”来验收，这篇手册给一套可照做的流程：先从参照物量出规格或拿到一份写死取值的 DESIGN.md，再重建，最后用机器可比的 diff、加权打分、部署门禁或按同一份规范的复查来卡住交付。 | 挑一个自己拥有或熟悉、结构中等的页面：copycat 先只跑测量那一步，打开 copycat/<域名>/REPORT.md 看字体、配色、断点是否完整；或者把一份现成的 DESIGN.md 拷进项目根目录，用一句“build me a page that looks like this”让智能体生成一个单页，看它是否真的按文件里的取值来。 | 2026-10-06 |
 | [把编码 agent 的一次性对话改成可复用的工程工作流](adopt-coding-agent-workflows.md) | 怎么用五个扩展点和三条工作流，把编码 agent 的重复提示词与流程固化成技能、钩子和子智能体，让每次改动都有探索、有计划、有测试或有截图，并且提交得出去。 | 今天先只跑一遍 Explore → Plan → Code → Commit：让它先把相关文件读完并出计划，你确认计划后再允许写代码。 | 2026-10-05 |
