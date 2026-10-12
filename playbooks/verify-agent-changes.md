@@ -1,10 +1,10 @@
-# 让编码 agent 在宣布完成前拿出证据
+# 让编码 agent 在说「完成」前交出可核对的证据
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：agent 说「完成」「测试通过」只是一句主张——这篇手册给你一套能照做的做法，让它交出可复核的证据，或者老老实实报告为 built。
-> 先试这一步：别急着装全套：下次 agent 说「完成」时，要它交出一份回执——跑过的命令、命令自己的退出码、实际输出、以及没被验证的部分；缺了哪项，就把它写进报告里。
-> 最近修订：2026-10-11
+> 解决的问题：agent 说「做完了」「测试通过」，但你手上没有任何能核对的证据——这篇手册给出一套可搬走的检查、回执、运行轨迹和界面事实，让「完成」变成必须交出来的东西。
+> 先试这一步：下一次让 agent 动手前，先要求它对着真实代码跑一遍 premortem，并交出「改动前会失败的那个测试」；它给不出，就当它还没开始。
+> 最近修订：2026-10-12
 
 ## 解决什么问题
 
@@ -18,6 +18,8 @@
 
 第四件事：「完成」是主张，不是事实。`Grit-77/done-is-a-claim` 把这句话落成可搬走的东西：一条 understand → plan → implement → diagnose → review → verify → deliver 的主流程、13 个互相衔接的技能、18 条实战规则（每条在 `INCIDENTS.md` 里对应一个失败故事）、可复用的完成回执 / 验收简报 / 交接模板，以及 `tools/receipt.py` 这类本地采证小工具。它和 first-pass 的分工很明确：first-pass 用 hook 把没有证据的「done」扣住，是**闸门**；done-is-a-claim 原文写死了「规则不是闸门」——**不拦截工具调用、不阻断合并、不强制执行部署策略**，它给的是能带走、能贴进任何项目、不依赖某一家宿主的规则、模板和回执工具。宿主拿不到 hooks 时，用这一组。
 
+第五件事：上面几条都建立在「agent 能读到正确的事实」上，但它定位 bug 时多数只能读代码猜——它看得见代码，看不见这次点击实际走了哪条路径、哪一步的值是 `undefined`。Shrike 把一次点击从浏览器 → 服务器 → 数据库的整条路径记录成一条 trip，坏掉的那一步标红并内联当时真实的值（例如 `userId: undefined` 出现在 `todos.controller.ts` 第 18 行），再通过 MCP 交给终端里的 Claude Code；agent 只能给出 diff，必须你点 Apply 才真正改码，改完自动重放同一次点击来证明修好了。它补的不是「什么算完成」，而是「agent 据以判断的事实从哪来」，以及把改码的批准权留在你手里。
+
 ## 适用与不适用
 
 **适用**
@@ -28,6 +30,9 @@
 - 有界面的项目：浏览器 skill 以后台方式运行，不占用你正在用的浏览器，前端、后端、非 Node 项目都能用。
 - 有测试套件的编码项目：dotpals 读测试输出判定真通过、识别伪造通过，并在 Claude Code 上回推修复；对「改了代码但测试通过后又改文件」这类时点问题特别有用。
 - done-is-a-claim：宿主是 Claude Code 或 Codex（两者都有原生插件装法），或任意会读 `AGENTS.md` 的 agent；你只想拿走规则、模板和回执工具，不想装一套会拦你的插件；需要在 agent 之间交接工作（`handoff.md`、`evidence-freshness`、`resuming-work`、`collecting-worker-results` 就是处理「检查之后工作又变了」「subagent 汇报成功」这类收尾问题的）。
+- Shrike：用 AI 搭 Web 应用、需要在**本地**调试「点按钮没反应 / 报错」这类 bug 的人；后端是 Node（Express、Next.js、NestJS、Hono、Remix）或 Python 3.12+（FastAPI、Flask、Django），前端是 Vite/Next 时，能拿到逐函数的参数、返回值和源码行号。
+- Shrike：手上是 macOS Apple Silicon，并且希望把「写文件的权限」从 agent 手里收回来——每个改动都是你点 Apply 才落地。
+- Shrike：已经用 Claude Code，想给它补一份「真实执行轨迹」当上下文；不装 Claude Code 也能用内置 agent + 你自己的 Anthropic API key，完全不接 agent 时记录、Thread、API client 仍然可用。
 
 **不适用 / 需要知道**
 
@@ -40,6 +45,11 @@
 - 无测试的项目不会被 dotpals 拦住；它对「没改代码、只是让你跑测试」的请求只报告失败，对「Claude 动手前就已经失败」的测试也只报告、不强制修。
 - done-is-a-claim 作者明说：**不拦截 agent 的工具调用、不阻断合并、不强制部署策略**，所以它自己挡不住任何东西，别把它当闸门用。
 - done-is-a-claim 的演示和本地工具需要 **Python 3.10+**；只复制规则文件则不需要。效果数据为作者自报，原始日志未公开。
+- Shrike **只覆盖本地开发调试，不做生产监控**——README 明确写「For errors in production, keep Sentry」，生产上的错误还是 Sentry 的活。
+- Shrike 平台强绑定 **macOS Apple Silicon**（语音需 macOS 15+）。Linux 只有 x64/arm64 的自构建（AppImage 或 `.deb`，或取 CI 的 `shrike-linux-x64` artifact，NixOS 用 `appimage-run`）且没有语音；Windows 能用同一份配置构建，但**从未在 Windows 机器上跑过**。
+- Shrike 对**其他会说 OpenTelemetry 的后端**（.NET、Go、Java、3.12 之前的 Python）只有请求、查询和外部调用级的基础 tracing，拿不到逐函数的值。
+- Shrike 成熟度有限：仓库 **31 stars**、只有 GitHub README，没有实测、没有第三方评测；Roadmap 里的自动更新、Windows/Linux 正式发布、`.shriketrace` 可分享记录与只读 web viewer、更多栈（Vite SSR、SvelteKit、Nuxt）都**尚未完成**。
+- Shrike 原文几乎没有「时间/事件/状态触发的持续完成」依据：只有「点击即自动记录整条 trip」「worktree 里并行跑修复」「任何离开本机的动作都要先问」，不要指望它自己定时推进长任务。
 
 ## 前置条件
 
@@ -73,9 +83,16 @@
 - 想装成原生插件，需要对应宿主的插件命令（见第 29 步）；想只拿规则，只需要能往项目里复制文件。
 - 有一个自己的小项目可用来试跑一轮，最好带测试套件。
 
+**Shrike**
+
+- **macOS Apple Silicon**；语音需要 macOS 15+。
+- 你的应用能在 **Node 22.18 及以上**运行；从源码跑需要 **Node 24 + pnpm 10**；语音还要 Xcode（helper 首次使用时构建）。
+- Claude Code 是**可选项**：装了就用你自己的订阅；没装则用内置 agent + 你自己的 Anthropic API key。完全不接 agent 时，记录、Thread、API client 仍然可用。
+- 想拿到逐函数的值，后端得是 Node（Express、Next.js、NestJS、Hono、Remix）或 Python 3.12+（FastAPI、Flask、Django）；只有基础 tracing 的栈拿不到。
+
 ## 操作步骤
 
-下面 1–20 是「规定什么才算完成」和「让它自己看到界面事实」；21–28 是去核对 agent 说的「测试通过」是不是真的；29–38 是同一件事的「不装闸门」做法——把证据要求写成规则、模板和本地回执，不依赖某个宿主的 hooks。四组可以各自单独用。
+下面 1–20 是「规定什么才算完成」和「让它自己看到界面事实」；21–28 是去核对 agent 说的「测试通过」是不是真的；29–38 是同一件事的「不装闸门」做法——把证据要求写成规则、模板和本地回执，不依赖某个宿主的 hooks；39–43 是去补上「agent 看不见实际执行」这块——用真实运行轨迹把原因钉到具体代码行，并把改码的批准权留在你手里。五组可以各自单独用。
 
 ### 1. 安装 first-pass：选做法 A 还是 B
 
@@ -599,6 +616,81 @@ python tools/check_package.py
 
 还想压一压这些指令，就用 `evals/` 场景包：通过的管道、错配的对照组、没有任何相关改动的 worker、过期证据等陷阱。参与者提示与评测 rubric 是分开的；在新 session 里跑提示词并保留回复。注意这是**人工行为评测，不是公布的成功率**。
 
+### 39. 装 Shrike：做法 A（二进制）还是做法 B（源码）
+
+**做法 A（二进制，最快）**
+
+1. 从 Releases 下载 `Shrike-<version>-arm64.dmg`，拖进 Applications。
+2. 打开 Shrike（该构建已由 Apple 签名并公证，可像普通应用一样打开）。
+3. 点 **Open the sample project** → 按 **Run** → 加一个 todo，看它如何崩。
+
+**做法 B（从源码跑）**
+
+```sh
+git clone https://github.com/SumantxD/shrike.git
+cd shrike
+pnpm i
+pnpm dev
+```
+
+**怎么选**：只想尽快走通闭环、或不想碰构建 → A；要改代码、或要在自己机器上出 Linux 包 → B。
+
+**平台注意**：Linux（x64/arm64）暂无发布版，用 `scripts/release/build-linux.sh` 构建 AppImage 或 `.deb`（见 `docs/RELEASING.md`），或取某次 CI 的 `shrike-linux-x64` artifact；NixOS 上用 `appimage-run`。Windows 能用同一份配置构建，但从未在 Windows 机器上跑过。语音仅 macOS。
+
+**预期结果**：Shrike 打开，sample project 能跑起来，应用被它接管（它会把应用的 OpenTelemetry SDK 指向自己）。
+
+### 40. 先在 sample project 上走通一次完整闭环
+
+用自带示例把整条链路走熟，再换自己的项目：
+
+1. 点击出问题的按钮：Thread 视图画出 trip（你、页面、服务器、数据库各泳道），坏掉的那步变红，并内联显示真实值。
+2. 按 **E** 打开 Files 视图：打开的就是实际执行到的行、带当时经过的值，旁边是这次点击碰过的所有文件（热行=跑过，红行=坏了），底部是可拖动的调用路径。
+3. 用大白话提问，例如原句：
+
+```
+when I click Add Todo nothing shows up
+```
+
+4. 看它给出的 diff → 点 Apply 批准 → 看 Shrike 重放同一次点击证明通过。
+
+**预期结果**：一次点击 → 一条记录 → 原因被钉到某一行并一句话说明；agent 还会告诉你它用了哪个 playbook。这一步不追求修好，追求你看懂「记录 → 定位 → 批准 → 重放」四个动作各自长什么样。
+
+### 41. 接进终端里的 Claude Code（或别的 MCP 客户端）
+
+```
+/plugin marketplace add SumantxD/shrike
+/plugin install shrike@shrike
+```
+
+装好后，终端里的 Claude Code 能读 Shrike 的同一份记录（**Shrike 需保持打开**），会在提示词上方带出最新 trip，并可用 `/shrike`。
+
+用 Cursor 或其他 MCP 客户端时，从 Shrike 的 Tools 面板复制一行式 setup（报告里只写到「复制一行式 setup」，没有给出具体命令，无法照抄）。
+
+**预期结果**：你在终端里问同一个 bug，agent 走的是那一条已记录的 trip，而不是让你把日志粘过来；但改码仍然只在 Shrike 里点 Apply 才生效——接入不改变审批闸门的位置。
+
+### 42. 在你自己的项目上走一遍闭环
+
+1. 让 Shrike 运行你的应用（它会把应用的 OpenTelemetry SDK 指向自己）。
+2. 点一次会出问题的那颗按钮——先复现，再谈定位。
+3. 用大白话描述症状（例如第 40 步那句例句的写法）。
+4. 看 agent 把原因钉在哪一行、一句话说明是什么，以及它用了哪个 playbook。
+5. 看 diff → 点 Apply 批准 → 观察同一次点击的 replay 是否通过 → 再提交、开 PR。
+6. 修复进 PR 后，CI 检查失败与 review 评论可在同一窗口读，并可把失败转成 lessons。
+7. 想并行比方案：用 git worktree 副本（各自端口、各自 agent）同时跑两份修复，留下通过的那份。
+
+**前提与预期结果**：后端是 Node（Express、Next.js、NestJS、Hono、Remix）或 Python 3.12+（FastAPI、Flask、Django）时，才能拿到进你自己代码的每次调用及其参数、返回值、文件与行号，并嵌套在触发它的请求下；其他会说 OpenTelemetry 的后端只有请求、查询和外部调用级。验收信号是「同一次点击重放通过」，不是模型自评。
+
+### 43. 不用配置就已经生效的隐私与审批行为
+
+这四条是默认值，不用去设置里找：
+
+- 无账号、无遥测，代码、记录和密钥留在本机。
+- 密钥在存储、展示、发给 agent、导出之前一律剥离。
+- agent 不能直接改文件，每个改动都是你批准的 diff。
+- 只有你主动要求时才外连：agent 自己的 API、从 Hugging Face 下载语音模型、通过你的 `gh` 登录访问 GitHub。
+
+**预期结果**：你不需要额外写一份安全说明，也不要为了「省事」把 Apply 这一步自动化掉——那正是这条做法存在的理由。
+
 ## 怎么判断变好了
 
 **可观察的指标（first-pass）**
@@ -633,12 +725,21 @@ python tools/check_package.py
 - 报告里出现的是「主张 vs 证据」的对照（见第 35 步的表），而不是一句「测试通过了」。
 - subagent 汇报成功时，带着它实际的 diff、被检查的输入和验收结果，而不是一句「干完了」。
 
+**可观察的指标（Shrike）**
+
+- 从点击到定位到具体代码行的往返次数：对照 README 的 Without 列（复制三个终端日志 → 猜是哪个请求 → 模型读代码猜 → 试到碰对），看是否收敛到「一次点击一条记录」。
+- agent 第一次给出的修复是否需要推倒重来；把「replay 同一次点击是否通过」当硬判定，统计通过率。
+- 需要人工粘贴日志、翻找文件的次数是否下降。
+- 调试、发 API 请求、看 PR/CI 是否能在同一窗口完成，窗口切换是否减少。
+- 注意：以上全是过程指标。README 没有任何节省时间或成功率的基准数字，别把这些当已验证的收益结论。
+
 **最小试用方式**
 
 - first-pass：在**一个仓库**上小范围试装，第一个改动完整走一遍 premortem → 修改（只当场修真实伤害）→ breaker 评审 → ship-check。
 - 浏览器 skill：先在**一个前端项目**里只做「多尺寸截图 + 移动端溢出定位」这一件事，把结果和手动 F12 的结论对照，确认它对得上再扩展。
 - dotpals：在**一个有测试套件的小项目**上按 README 一条命令装起来，小范围试。先让 agent 报一次「测试通过」，再用 `test_status` / MCP 核对它说的和实际是否一致；有条件的话加一次「改测试让它变绿」的对照，看它是否识别并回推。
 - done-is-a-claim：在**一个小项目**上按第 29 步装一次，用 `receipt.py` 给一条命令采一份回执（第 33 步）、跑一次 `check_receipt.py`（第 34 步），再用第 31 步的请求让 agent 交一次报告，看它有没有把没验证的部分写出来。跑完这一轮再决定要不要固化进团队流程。
+- Shrike：在一台 **macOS Apple Silicon** 上装二进制版，先用自带 sample project 走通一次完整闭环（点到崩溃 → 看 Thread 红行与内联真实值 → 看 diff → Apply → 看 replay），再换成你自己一个真实项目（Node/Express、Next.js、NestJS、Hono、Remix，或 FastAPI/Flask/Django 3.12+）挑一个真实的「点按钮没反应或报错」的 bug 复现一遍；然后装上 Claude Code 插件，用终端里的 agent 定位同一个 bug，跟「直接把报错粘进聊天」的做法对照表现差异。
 
 **试多久**
 
@@ -646,6 +747,7 @@ python tools/check_package.py
 - 浏览器 skill：原文只给了「各跑一次」的对比数据，没有多轮、没有跨项目验证，因此没有可信的试用时长建议。先按上面的最小试用走，自己记录 2–3 次真实任务里「它报的问题是否成立、漏报了什么」，再决定是否常驻。
 - dotpals：报告没有给出试用时长建议；项目是 31 stars、v0.10，先记录 2–3 次真实任务里「它拦下的失败是否成立、误报和漏报各几次」，再决定是否长期用。注意强制回修只在 Claude Code 上有效，其他 agent 只能事后观察。
 - done-is-a-claim：报告同样没有给出试用时长，只说先在一个小项目上试跑一轮，再决定是否固化进团队流程。同样记录 2–3 次真实任务里「回执记录的事实和实际是否一致、它漏掉了什么」。
+- Shrike：报告没有给出试用时长，也没有任何准确率、耗时或成功率数字，验证方式可操作但未被独立度量。先用一两个真实 bug 做前后对照，记录「定位到行要几个来回、replay 是否通过、还需要人工粘几次日志」，再决定是否扩大使用范围。
 
 ## 常见坑
 
@@ -674,6 +776,13 @@ python tools/check_package.py
 - **回执里退出码 0 ≠ 任务完成。** 它只记录「这条命令成功了」；没有用 `--input` 对选定文件做指纹的回执，对新鲜度复查来说是不完整的。
 - **`install_skills.py` 默认不覆盖。** 已存在的技能目标会被拒绝安装，项目指令文件不动；本地改过的副本连 `--update` 也不会替换。
 - **跑演示时别把退出码读反。** `false_green.py` 和 `wrong_delivery.py` 退出 0 表示陷阱被演示出来了，不代表真实交付成功或 verifier 通过。
+- **Shrike 只做本地调试，不做生产监控。** README 明确写「For errors in production, keep Sentry」；别把它当成线上告警方案的替代。
+- **Shrike 平台强绑定。** 只有 macOS Apple Silicon 有发布版；Linux 需自己构建且无语音；Windows 能用同一份配置构建，但从未在 Windows 机器上跑过。
+- **不是所有栈都能拿到逐函数的值。** 只有 Node（Express/Next.js/NestJS/Hono/Remix）和 Python 3.12+（FastAPI/Flask/Django）拿得到参数、返回值、文件和行号；其他会说 OpenTelemetry 的后端只有请求、查询和外部调用级，别指望靠它精确定位到行。
+- **Shrike 没有定时 / 事件 / 状态触发的编排。** 原文只有「点击即自动记录」「worktree 并行跑修复」「离开本机的动作先问」，不要据此指望它自动推进长任务。
+- **Shrike 的效果宣称没有度量。** 对比表、Bazaar 示例、「agent 第一次就修对」「40 秒演示视频」都是作者主张，没有准确率、耗时或对照实验数据；31 stars，先用一两个真实 bug 做前后对照。
+- **不装 Claude Code 就要自备 Anthropic API key**；从源码跑要 Node 24 + pnpm 10，语音还要 Xcode（helper 首次使用时构建）。
+- **别把 Apply 这步自动化掉。** 「agent 不能直接改文件、每个改动都是你批准的 diff」是 Shrike 这条做法的一半价值，绕过去就只剩一份更好的日志。
 
 ## 证据与来源
 
@@ -729,7 +838,17 @@ python tools/check_package.py
 - 演示与工具需要 Python 3.10+。
 - 效果数据为作者自报，原始日志未公开。
 
-**没有证据支撑的部分**：把 dotpals 的测试状态核对接在 first-pass 的「完成的定义」之后、「在已有测试套件的小项目上小范围试，并加一次改绿测试看它是否识别」这套试用方式，以及把 done-is-a-claim 的「回执 + 新鲜度复核」作为 first-pass 完成定义的无 hook 替代，都是本次合并时按上述材料做的编排，报告本身没有给出验证结论，也没有给试用时长；四组做法之间可以互相替代的部分，材料里也没有做过交叉验证。
+**Shrike 部分**来自本次调研的 **SumantxD/shrike** 报告：安装（二进制版 `Shrike-<version>-arm64.dmg` 拖进 Applications；源码 `git clone` + `pnpm i` + `pnpm dev`）、Claude Code 插件两行命令与 `/shrike`、sample project 的完整闭环（点击 → Thread 红行与内联真实值 → 按 **E** 看 Files 视图 → 大白话提问 → 看 diff → Apply → replay）、worktree 并行比两份修复、默认的隐私与审批四条规定、支持的技术栈与各栈的记录粒度、Linux 自构建路径与 NixOS 的 `appimage-run`、包结构（`packages/browser-agent`、`node-agent`、`correlator`、`mcp-server`、`apps/desktop`）。
+
+报告里的数据与局限：
+
+- 材料只来自 GitHub README（仓库 31 stars）：没有实测、没有 issue/讨论内容、没有版本发布记录或第三方评测。
+- **较可核验的具体内容**：安装与源码运行命令、Claude Code 插件两行命令、支持技术栈清单与各栈记录粒度、隐私与审批机制描述、Roadmap 勾选状态、包结构。
+- **仅属作者主张**：「How it compares」对比表中对浏览器 devtools、Sentry、Postman/Bruno、单用 Claude Code 的各项优劣判定；Bazaar 示例应用「一次 Place order 跨 8 个服务、3 个 Postgres、1 个 SQLite outbox、3 个 LRU 缓存、队列、Stripe 和邮件服务，仍能停在那一行」；「agent 第一次就修对」「40 秒演示视频」等效果宣称——均无准确率、耗时或对照实验数据。
+- **硬限制**：只覆盖本地开发调试，不能替代生产监控；平台强绑定 macOS Apple Silicon；从源码跑要求 Node 24 + pnpm 10；语音还要 Xcode；不装 Claude Code 要自备 Anthropic API key；Roadmap 中自动更新、Windows/Linux 正式发布、`.shriketrace` 可分享记录与只读 web viewer、更多栈（Vite SSR、SvelteKit、Nuxt）均未完成。
+- **主动推进这一项在本条线索中基本无依据**，报告明说「不宜据此写进手册」，因此本手册没有为 Shrike 写任何定时或状态触发的步骤。
+
+**没有证据支撑的部分**：把 dotpals 的测试状态核对接在 first-pass 的「完成的定义」之后、「在已有测试套件的小项目上小范围试，并加一次改绿测试看它是否识别」这套试用方式，把 done-is-a-claim 的「回执 + 新鲜度复核」作为 first-pass 完成定义的无 hook 替代，以及把 Shrike 的「真实执行轨迹 + Apply 审批 + replay 验收」接在 first-pass 与浏览器 skill 之后，都是本次合并时按上述材料做的编排，报告本身没有给出验证结论，也没有给试用时长；四组（现在五组）做法之间可以互相替代的部分，材料里也没有做过交叉验证。
 
 ## 依据的调研
 
@@ -737,3 +856,4 @@ python tools/check_package.py
 - [AndyShiu/claude-skill-playwright-browser](../research/radar/2026-10-01/22-andyshiu-claude-skill-playwright-browser.md)：值得一试，建议在一个前端项目里按 README 的安装与命令做小范围试跑（先只做「多尺寸截图 + 移动端溢出定位」这一件事，与手动 F12 对照），因为原文给出了可直接复制的安装步骤、CLI 命令、登录流程和排错表，且自带视觉比对与健康检查等验证手段；但它只是 49 stars 的单作者第三方 skill，效果数据仅来自各跑一次的对比，不足以直接写成标准做法。
 - [Rikinshah787/dotpals](../research/radar/2026-10-06/1427-rikinshah787-dotpals.md)：值得一试，建议在已有测试套件的小项目上按 README 一条命令装起来小范围试：用 dotpals 读取测试输出、识别“伪造通过”，并在 Claude Code 试图收尾/commit/push 时把失败测试回推给它修。理由是它给出了完整可照做的安装、MCP 接入和自定义 agent 事件接口，且自带一份逐条人工核对的准确率数据；但项目很新（31 stars、v0.10），强制回修只支持 Claude Code，其余 agent 只能事后观察，需先验证再决定是否长期用。
 - [Grit-77/done-is-a-claim](../research/radar/2026-10-11/2455-grit-77-done-is-a-claim.md)：值得一试，把「完成是一句主张，要附证据」落成可操作的规则文件+技能包+本地采证工具，先在一个小项目上按 README 的安装路径和 receipt 工具试跑一轮，再决定是否固化进团队流程；理由是它给出了可照抄的安装命令、18 条规则、回执工具用法和验证模板，但作者自己声明不强制、不拦截，效果数据为自报且原始日志未公开。
+- [SumantxD/shrike](../research/radar/2026-10-12/2683-sumantxd-shrike.md)：值得一试，在一台 macOS Apple Silicon 上用一个小型 Node/Next（或 FastAPI/Flask/Django）项目接入 Shrike，完整走一遍“点击出错按钮→Agent 沿真实执行轨迹定位到行→批准 diff→重放同一次点击验证”的闭环，理由是把真实运行轨迹（含行内真实值）通过 MCP 喂给 Claude Code、并强制人工批准后才能改码，正好补上编程智能体“看不见实际执行、只能读代码猜”的短板；但只有 macOS 构建、项目仅 31 stars 且无独立评测，先小范围试。
