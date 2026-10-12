@@ -4,6 +4,7 @@
 
 | 手册 | 解决的问题 | 先试这一步 | 最近修订 |
 |---|---|---|---|
+| [别让限流、闲置配额和模型选择拖住编码 agent](model-routing-for-coding-agents.md) | 这篇手册解决如何用本地网关/路由统一多个模型和供应商，在配额耗尽、限流或死 key 时自动回退，按任务选择轻/重模型，把闲置的次要模型挂成顾问，并用确定性检查验收 agent 是否真的完成。 | 先只把一个工具接到本机 OpenAI 兼容网关（做法 A 或 C），保留直连对照，连续几天记录中断次数和人工切换次数；若你日常用 Claude Code，另开一个会话试 `/advisor fable`，先确认命令是否真实存在，不存在就停。 | 2026-10-12 |
 | [别让 agent 自己宣布完成：并行 agent 的验证、隔离与注意力路由](orchestrate-multiple-agents.md) | 多个 AI agent 并行干活时，怎么让「完成」有验证、让「谁在等我」可路由、让隔离与评审成为流程而不是口头要求。 | 挑一个你在意的真实任务，先把它的完成判据写下来（哪条命令通过、谁来复核、结果在哪里看），再按处境选一条做法；想先试最小改动，就把一个编码任务切成 2～3 块，交给「只生成、不验证」的子 Agent，验证全部留给主 Agent。 | 2026-10-12 |
 | [让长跑的编码 agent 跨上下文窗口交接不断线](install-and-customize-agent-plugins.md) | 当 Claude Code 的编码任务跑得比一个上下文窗口更久时，如何让它在自动交接、定时等待和需要你拍板的地方都不掉线，并且你能看出它是不是真的减少了上下文溢出和人工盯守。 | 先用 claude --plugin-dir /path/to/project-sentinel/plugins/project-sentinel 在一个长任务会话里不安装地试跑，打开 Autopilot、状态栏和 Activity，用 Handoff Health 与跨交接的里程碑连续性判断它是否真的减少了上下文溢出和人工盯守。 | 2026-10-11 |
 | [让编码 agent 在宣布完成前拿出证据](build-ui-components-with-agents.md) | 编码 agent 的交付物常常“看着完成了”——图表、组件、架构图、前端 UI 和终端内视觉验证都有可判定的坏味道，却没有在交付前被系统检查。 | 如果你在 macOS + Ghostty/kitty 下用 Claude Code，先跑 show-your-work 的 examples/pricing 前后对比 QA；否则先给当前任务装一个 Agent Skill（图表用 evident-charts）做一次交付前检查。 | 2026-10-11 |
@@ -20,7 +21,6 @@
 | [让 agent 在提交漏洞报告前先分出证据与推断并否掉弱报告](triage-vulnerability-reports-with-agents.md) | 如何用 agent skill 做漏洞报告的分诊与提交前把关，做到证据与推断分离、拒绝弱报告、不夸大严重性，而不是直接把报告交出去。 | 先只做静态试用：装好 bug-bounty-triage，拿 3～5 份你已知结论的历史漏洞报告，逐份用给定模板跑一遍，看它能否拒掉你混进去的假阳性报告。 | 2026-10-10 |
 | [按任务给 AI 分配算力：开发循环分档、手动选档与逐条自动路由](tune-agent-effort.md) | 解决「同一件事该给 AI 多少算力」的判断问题：先分清该升档、该补 spec 还是交给自动路由，再用开发循环、手动 /effort 或 effortless 插件把它落到日常。 | 先拿一个边界情况多的任务（如输入校验/清洗，或在存量代码里修 bug），在 low 和 high 各跑一次做对照，据此判断你的失败属于「缺边界情况」（该升档）还是「走错方向」（该补 spec）。 | 2026-10-10 |
 | [一边做饭一边口述需求：用语音把一个小功能推到可审的 PR](voice-driven-coding-sessions.md) | 心里已经想清楚一个小功能时，怎么用语音口述需求驱动编码智能体在本地改代码，自己只在本地预览和 PR 审阅处介入，细节阶段再切回键盘。 | 挑一个自己已经想清楚的小功能，在本地仓库先打字发 `Start dev server and open in browser` 拿到预览，再点 Codex 标签页里话筒右边那个「Start new voice chat」，把需求连边界条件一起口述一遍。 | 2026-10-10 |
-| [让编码 agent 不再因配额、限流和选错模型中断](model-routing-for-coding-agents.md) | 编码时某个供应商配额耗尽、被限流、key 失效，或者一直用最重的模型、agent 说完成却没通过检查——怎么用本地网关收敛多供应商、按难度路由并按证据验收。 | 先只接一个你已经在用的工具：npm i -g omniroute 后 curl http://localhost:20128/v1/chat/completions 打一次 model=auto（或在 Python 环境里 uv add litellm 用同一个 completion() 调两个供应商），跑通一条请求再谈全量切换。 | 2026-10-10 |
 | [让 AI 写数学论文时按流程推进并逐页核对渲染结果](write-math-papers-with-agents.md) | 解决 AI 写数学/理论论文时只编译不检查、改动假设或隐藏 gap 的问题，给出一套可安装、可调用、带审计约束的工作流程。 | 先克隆仓库并把四个 skill 链入你的 agent skills 目录，然后拿一篇已有论文的一节用 latex-math-writing 润色，编译后逐页读 PDF，检查是否无意改变假设、结论或记号。 | 2026-10-09 |
 | [把一件周期性重复的工作交给常驻 agent：六条路线选一条，跑两周再定去留](self-hosted-agent-automation.md) | 面对一批只给安装配置、不给效果数据的常驻 agent / 定时自动化方案，用一条可执行的试跑路径和一套自建指标，决定它是否进入你的日常工作流。 | 把要试的定时任务缩到「单一来源 + 单一收件人 + 每日一次」，先手动触发跑通一次、确认结果真的投递到了，再去等排期。 | 2026-10-09 |
 | [把本地 AI 编码对话导出成可复盘的数据底座](review-agent-conversation-logs.md) | 把散落在 Claude Code、Cursor、Cline、Aider 等本地 AI 编码助手中的对话统一导出成 JSONL，用于复盘、比较或备份，并避免分享/训练时泄漏敏感内容。 | 在装有 Python 3.9+ 的机器上把仓库代码放到本地并进入项目根目录，先运行 `python extract.py --list`，确认它能找到你的数据目录后再提取。 | 2026-10-08 |

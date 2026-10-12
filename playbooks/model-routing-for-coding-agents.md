@@ -1,18 +1,18 @@
-# 让编码 agent 不再因配额、限流和选错模型中断
+# 别让限流、闲置配额和模型选择拖住编码 agent
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：编码时某个供应商配额耗尽、被限流、key 失效，或者一直用最重的模型、agent 说完成却没通过检查——怎么用本地网关收敛多供应商、按难度路由并按证据验收。
-> 先试这一步：先只接一个你已经在用的工具：npm i -g omniroute 后 curl http://localhost:20128/v1/chat/completions 打一次 model=auto（或在 Python 环境里 uv add litellm 用同一个 completion() 调两个供应商），跑通一条请求再谈全量切换。
-> 最近修订：2026-10-10
+> 解决的问题：这篇手册解决如何用本地网关/路由统一多个模型和供应商，在配额耗尽、限流或死 key 时自动回退，按任务选择轻/重模型，把闲置的次要模型挂成顾问，并用确定性检查验收 agent 是否真的完成。
+> 先试这一步：先只把一个工具接到本机 OpenAI 兼容网关（做法 A 或 C），保留直连对照，连续几天记录中断次数和人工切换次数；若你日常用 Claude Code，另开一个会话试 `/advisor fable`，先确认命令是否真实存在，不存在就停。
+> 最近修订：2026-10-12
 
 ## 解决什么问题
 
-编码过程中经常遇到三种中断：某个供应商的订阅配额到期没用完、编码到一半被限流、某个 key 死掉导致整条流程卡住。这些事本身没有谁专门负责，于是变成你手动换模型、换 key。另一类问题是模型选择：要么一直用最重最贵的模型，要么靠手动切换；agent 宣布完成时，也可能只看进程退出，不看任务是否真的通过确定性检查。
+编码过程中经常遇到几种中断：某个供应商的订阅配额到期没用完、编码到一半被限流、某个 key 死掉导致整条流程卡住、工具输出烧 token。这些事本身没有谁专门负责，于是变成你手动换模型、换 key。另一类问题是模型选择：要么一直用最重最贵的模型，要么靠手动切换；agent 宣布完成时，也可能只看进程退出，不看任务是否真的通过确定性检查。还有一种浪费是：主力模型已经成为日常，另一个模型的配额一直闲置，却没有把它挂进当前会话。
 
-本手册给出一套本地可试的做法：用 OpenAI 兼容网关统一接多个供应商，并在配额耗尽、供应商失败或成本上升时自动回退；在 Codex 内用 Adaptive Router 按本地难度启发式选择轻/重模型；用“有证据的验收”判断是否真的完成；再用一层控制平台，为每次会话选择 harness × model × effort 并观察成本与上下文；以及用 LiteLLM 的 SDK 或网关把 100+ 供应商统一成 OpenAI 格式，并做按项目/用户的成本追踪。
+本手册给出一套本地可试的做法：用 OpenAI 兼容网关统一接多个供应商，并在配额耗尽、供应商失败或成本上升时自动回退；在 Codex 内用 Adaptive Router 按本地难度启发式选择轻/重模型；用“有证据的验收”判断是否真的完成；再用一层控制平台，为每次会话选择 harness × model × effort 并观察成本与上下文；以及用 LiteLLM 的 SDK 或网关把 100+ 供应商统一成 OpenAI 格式，并做按项目/用户的成本追踪。新增一条 Claude Code 内的做法：用 `/advisor` 把次要模型挂成顾问，先确认命令真实存在再考虑长期使用。
 
-OmniRoute 调研把四类痛点明确列为可接管项：订阅配额到期未用完、编码中途被限流、工具输出烧 token、死 key 导致阻塞。agent-smith 的核心主张是：常规工作交给更轻的模型，困难任务才动用重型模型，路由依据是一个本地、未校准的 1.0–10.0 难度启发式。FlagshipRouter 是同一层的另一种接法：本地 OpenAI 兼容网关，把 Claude Code、Cline 等工具接到多家免费供应商的模型表上，用面板统一改配置。Gluon 在会话层：把 Claude Code、Codex、Antigravity、Grok Build、OpenCode、Kimi Code 并排跑在同一个终端框架里，把 agent 定义为 harness × model × effort，先和你确定 spec 再按可配置规则路由，并提供成本与上下文可观测性。LiteLLM 提供 SDK 和 AI Gateway 两种用法：SDK 侧一个 `completion()` 换 `model` 字符串就能调不同供应商；网关侧在本机 4000 端口起服务，README 列出的能力包括虚拟密钥与鉴权授权、按项目/用户的多租户成本追踪与花费管理、按项目的日志/guardrails/缓存定制、管理后台 UI，以及把 Claude Code / Codex / OpenCode / Deep Agents 跑在任意模型上的 harness 抽象。五个项目的材料都未说明可以互相集成，先分别试。
+OmniRoute 调研把四类痛点明确列为可接管项：订阅配额到期未用完、编码中途被限流、工具输出烧 token、死 key 导致阻塞。agent-smith 的核心主张是：常规工作交给更轻的模型，困难任务才动用重型模型，路由依据是一个本地、未校准的 1.0–10.0 难度启发式。FlagshipRouter 是同一层的另一种接法：本地 OpenAI 兼容网关，把 Claude Code、Cline 等工具接到多家免费供应商的模型表上，用面板统一改配置。Gluon 在会话层：把 Claude Code、Codex、Antigravity、Grok Build、OpenCode、Kimi Code 并排跑在同一个终端框架里，把 agent 定义为 harness × model × effort，先和你确定 spec 再按可配置规则路由，并提供成本与上下文可观测性。LiteLLM 提供 SDK 和 AI Gateway 两种用法：SDK 侧一个 `completion()` 换 `model` 字符串就能调不同供应商；网关侧在本机 4000 端口起服务，README 列出的能力包括虚拟密钥与鉴权授权、按项目/用户的多租户成本追踪与花费管理、按项目的日志/guardrails/缓存定制、管理后台 UI，以及把 Claude Code / Codex / OpenCode / Deep Agents 跑在任意模型上的 harness 抽象。Claude Code 的 `/advisor` 是另一条线：原文称主模型继续工作，顾问模型在旁待命，用来不浪费另一个模型的配额；但原文在关键处被截断，模型名与文档地址都无法核实。六个项目的材料都未说明可以互相集成，先分别试。
 
 ## 适用与不适用
 
@@ -27,6 +27,7 @@ OmniRoute 调研把四类痛点明确列为可接管项：订阅配额到期未�
 - 你想按会话看到成本与上下文占用，用来比较不同选择；并且能在 Linux/macOS/WSL/Windows 的本地 git 仓库里跑终端命令。
 - 你想先在 Python 代码里用同一个函数调不同供应商（换模型只改 `model` 字符串），再决定要不要上网关。
 - 你需要在本地网关侧做按项目/用户的成本追踪与虚拟密钥，或想把 Claude Code / Codex / OpenCode / Deep Agents 作为 harness 跑在自己的网关上，并拿到每次调用的 cost 与产出文件。
+- 你使用 Claude Code，且你所用的版本确实支持 `/advisor`，主模型已设为日常主力，同时还有另一个模型的可用配额。
 - 你只想先在非敏感、非生产任务上小范围试。
 
 不适用或需要谨慎：
@@ -44,6 +45,9 @@ OmniRoute 调研把四类痛点明确列为可接管项：订阅配额到期未�
 - 想让 LiteLLM 的 MCP OAuth 一路走通：上游可能宣称支持动态客户端注册，但实际用 HTTP 401/403 拒绝，需要预注册 OAuth app 并在该 MCP server 上配 `credentials.client_id`（必要时 `credentials.client_secret`），且 provider 必须批准该 app 用于 MCP 访问。
 - 生产环境想用明文 ALB 长跑：`allow_plaintext_alb = true` 按 README 只限 dev/trial，生产要提供 ACM 证书。
 - 想要完整的 MCP 登记步骤、Docker 快速上手、E2E 教程：LiteLLM README 指向 docs，本页未展开。
+- 想直接照抄 Claude Code 的 `/advisor`：原文唯一依据是文档地址 `code.claude.com/docs/en/advisor`，且该链接在原文中被截断；模型名（Opus 5.5、Fable 5.1）也无法从给定材料核实。执行前先确认你的 Claude Code 版本确实存在该命令，否则不要写进长期流程。
+- 想用 `/advisor` 改善结果但没有任何观察指标：原文没有说明顾问在什么时机、以什么形式产出，也没有效果数据；只能先观察是否真介入。
+- 想把 `/advisor` 与 A–E 的网关/路由自动叠加：材料未说明可集成，先分开试。
 
 ## 前置条件
 
@@ -53,6 +57,7 @@ OmniRoute 调研把四类痛点明确列为可接管项：订阅配额到期未�
 - FlagshipRouter：Node.js 20.9 或更高（README 建议 22）；git 与 npm 可用；本地端口 20128 空闲——注意这与 OmniRoute 的默认端口相同，两者不能按默认端口同时启动；要接自有供应商时需要相应凭证，不想注册时可先只用 OpenCode Free 的免注册模型。
 - Gluon：至少一个受支持编程智能体的 API key 或订阅（Claude Code、Codex、Antigravity、Grok Build、OpenCode、Kimi Code）；Linux、macOS、WSL 或 Windows；在本地 git 仓库目录中操作。安装需要能访问 GitHub release，或用 Bun 从 release tarball 安装。仓库为 Apache-2.0，有 CI 和 release，原文显示 35 stars。
 - LiteLLM：Python 环境 + `uv`；装 SDK 用 `uv add litellm`，注意同一环境只能装 litellm 或 litellm-core 之一（两者写重叠的 Python 文件），要用 proxy/CLI/可选 extras 就装 litellm；起网关用 `uv tool install 'litellm[proxy]'`，需要本机 4000 端口可用；接 MCP 需要 master key 或虚拟 key，且 MCP server 已可用；跑 harness 需要 `starlette`、`uvicorn` 以及对应 agent 的 CLI（`claude`、`codex` 或 `opencode`），用 Deep Agents 则装 `deepagents langchain-litellm`；走 A2A SDK 需 `a2a-sdk>=1.1.0`；从源码构建 core 包需要 Git、`uv` 和 Rust 工具链，且要在没有 litellm 的全新环境里装。
+- Claude Code `/advisor`：原文只给出两个命令，未给出更完整流程。执行前先确认你所用的 Claude Code 版本确实存在 `/advisor`（原文唯一依据是文档地址，且被截断）；已把主力模型设为原文所称的 Opus 5.5；另有一个模型的可用配额（原文称 Fable 5.1）；某些计划下需要先执行 `/model fable` 接受按使用信用计费的确认。上述模型名与文档地址均无法从给定材料验证。
 
 ## 操作步骤
 
@@ -466,19 +471,46 @@ response = await client.send_message(request)
 
 前提：网关侧已把 agent 加入（按 agent 设 `protocolVersion` 为 `1.0` 或 `0.3`）；走 A2A SDK 需 `a2a-sdk>=1.1.0`。支持的 agent 来源：LangGraph、Vertex AI Agent Engine、Azure AI Foundry、Bedrock AgentCore、Pydantic AI。注意：抓到的原文在这里（`from mcp import ClientSessio`）被截断，MCP Bridge 部分没有可依据的内容。
 
-**做法 A / B / C / D / E 怎么选**
+**做法 F：在 Claude Code 里把次要模型挂成顾问，避免闲置配额（Claude Code `/advisor`）**
+
+前提：原文只给出以下两个命令，未给出更完整流程。执行前先确认你所用的 Claude Code 版本确实存在 `/advisor`（原文唯一依据是文档地址 `code.claude.com/docs/en/advisor`，且该链接在原文中被截断），否则以下步骤不成立。原文所称模型名（Opus 5.5、Fable 5.1）与文档地址均无法从给定材料核实。
+
+1. 前提：Claude Code 中已把主力模型设为原文所称的 Opus 5.5，且你还有另一个模型的可用配额（原文称 Fable 5.1）。
+2. 仅在“某些计划”下需要这一步——先执行一次 `/model fable`，以接受按使用信用（usage credit）计费的确认。若你的计划没有该提示，可跳过。
+
+```text
+/model fable
+```
+
+预期结果：按原文，这是某些计划下的计费确认；若命令不存在或计划无此提示，先停。
+
+3. 把次要模型置于“顾问/通话”状态：
+
+```text
+/advisor fable
+```
+
+预期结果：原文称把 Fable 5.1 置于顾问状态；原文未说明顾问在什么时机、以什么形式产出内容，这一步需要自行观察。
+
+4. 之后照常用主模型推进工作。原文：Opus 5.5 继续工作，Fable 5.1 作为顾问。预期结果：顾问是否实际介入并给出可读建议，需要你自己在会话里观察。
+
+5. 做一次 A/B：同一任务开顾问 vs. 不开顾问。前提：在单个项目、单个会话里试。记录返工次数、被采纳的评审意见数、最终产出差异，以及多出的计费额度与响应延迟。放弃条件：`/advisor` 不存在、顾问全程不介入，或多次任务中没有可观察差异。
+
+**做法 A / B / C / D / E / F 怎么选**
 
 - 主要痛点是跨供应商配额、限流、死 key、工具输出烧 token：先做 A。
 - 已经在用 Codex，痛点是“常规任务也调用最重模型”且想用确定性 grader 验收：先做 B。
 - 想让多个工具从一个面板统一改配置、按任务换模型，并先拿免注册的免费模型打通：做 C。
 - 痛点是“同一任务不知道该交给哪个 harness/模型/effort”，或者想按会话看成本与上下文：先做 D。
 - 想先在 Python 代码里把多 provider 的调用收敛成一个函数，或者需要按项目/用户的成本追踪、虚拟密钥、Terraform 云部署：做 E。E1 只动代码、零运维，E2 起网关后才会碰端口和密钥。
+- 日常用 Claude Code、主模型已就位、另有闲置模型配额：先做 F。F 只动 Claude Code 会话内的两个命令，不碰网关；但必须先确认命令真实存在。
 - A 和 C 是同一层的本地 OpenAI 兼容网关，功能重叠，且默认端口都是 20128：先选一个跑通，不要同时按默认端口启动。E 也是请求层网关，但默认 4000 端口，与 A/C 不撞；端口不撞不代表能自动叠加，材料没有说明它们可以集成。
 - A/C/E 与 D 不是同一层：A/C/E 在请求层按供应商/模型别名路由；D 在会话层把已有 harness 并排跑起来，按 harness × model × effort 路由。E 的 harness 抽象能在自己的网关上跑 Claude Code / Codex / OpenCode / Deep Agents，与 D 的“并排多个 harness”语义不同。两者材料都未说明可互相集成。
 - B 与 D 都涉及 Codex：B 是在 Codex 内装插件按难度选模型，D 是把 Codex 当作可并排的一个 harness；材料未说明两者关系。
-- 五个项目的材料都未说明可以集成。如果确实要同时装，先把各自跑通，再自行验证请求实际走哪条路径；不要默认叠加。D 会把多个 harness 接到同一框架里，建议先在一个非关键、已纳入版本控制的仓库里试。
+- F 与 A–E 不是同一层：F 是 Claude Code 内部命令，材料未说明能与网关/路由自动集成；先单独试。
+- 六个项目的材料都未说明可以集成。如果确实要同时装，先把各自跑通，再自行验证请求实际走哪条路径；不要默认叠加。D 会把多个 harness 接到同一框架里，建议先在一个非关键、已纳入版本控制的仓库里试。
 
-**暂时不要碰的部分**：OmniRoute README 提到的 MCP（110 个工具）、A2A、memory、guardrails、evals、TLS stealth、key pools 公平配额、AES-256-GCM 加密存 key，在给定材料里只有名词，没有配置步骤。agent-smith 的“多 agent 协作、重试、失败升级带来的收益”需要单独实验，材料未给步骤。FlagshipRouter 的 Media Models 页面和 Agent Skills 页面同样只有存在性描述，没有用法。Gluon 的 `routing.yaml`、权限与工具供给、安全隐私、成本分析示例、故障排查都不在给定材料里。LiteLLM 的 MCP 登记细节、Docker 快速上手、E2E 教程都在 README 指向的 docs 里，本页未展开；A2A 与 MCP Bridge 的原文被截断。
+**暂时不要碰的部分**：OmniRoute README 提到的 MCP（110 个工具）、A2A、memory、guardrails、evals、TLS stealth、key pools 公平配额、AES-256-GCM 加密存 key，在给定材料里只有名词，没有配置步骤。agent-smith 的“多 agent 协作、重试、失败升级带来的收益”需要单独实验，材料未给步骤。FlagshipRouter 的 Media Models 页面和 Agent Skills 页面同样只有存在性描述，没有用法。Gluon 的 `routing.yaml`、权限与工具供给、安全隐私、成本分析示例、故障排查都不在给定材料里。LiteLLM 的 MCP 登记细节、Docker 快速上手、E2E 教程都在 README 指向的 docs 里，本页未展开；A2A 与 MCP Bridge 的原文被截断。Claude Code `/advisor` 的顾问介入方式、效果说明、与网关集成都未在原文中展开。
 
 ## 怎么判断变好了
 
@@ -489,6 +521,7 @@ response = await client.send_message(request)
 - FlagshipRouter（半天以内，全部本地）：clone + `npm run launch -- --host 127.0.0.1`，先去 Settings 把密码从 `123456` 改掉；在 Models 里挑一个 OpenCode Free 的免注册模型，用第 6 步的 curl 打通一条请求；用 CLI Tools 只给一个当前已在用的工具（例如 Claude Code）写配置，并记录原配置以便回滚；拿一个真实的小任务，分别在原配置和走网关的配置下各跑一遍。
 - Gluon（非关键、已纳入版本控制的仓库）：按做法 D 的安装命令装好，`cd your-repo && gluon` 启动；选一个边界清晰的小任务，先用默认/交互方式让 intake agent 推荐 agent/model/effort，记录它给出的 spec；再手动用第二个 harness 或模型做同一任务，比较结果。如果要从路由规则开始，先查文档中的 `routing.yaml` 写法，不要照搬本文。
 - LiteLLM（分两半，先 SDK 后网关）：先用 `uv add litellm`，用同一个 `completion()` 分别调 `openai/gpt-4o` 和 `anthropic/claude-sonnet-4-20250514`，确认换模型只改一个字符串；再用 `uv tool install 'litellm[proxy]'` + `litellm --model gpt-4o`，用上面的 OpenAI SDK 片段把 base_url 指向 `http://0.0.0.0:4000` 打通一条请求；只接 1–2 个模型，连续几天看成本追踪与失败率，而不是看 README 的能力清单。如果 SDK 层就够用（不需要虚拟密钥、多租户成本追踪、管理后台），不必起网关。
+- Claude Code `/advisor`（单个项目、单个会话）：按做法 F 执行 `/model fable`（如提示计费则确认）与 `/advisor fable`，然后照常完成一个日常任务（例如修一个 bug 或做一次代码审查），全程记录顾问模型是否真的产出了可见内容。原文未给试用时长建议；先按单个任务/单会话判断，若 `/advisor` 不存在、顾问不介入，或多次任务中没有可观察差异，就停用并把结论降为 study。
 
 指标（都自己测，不采信 README 的百分比）：
 
@@ -511,6 +544,7 @@ response = await client.send_message(request)
 - 每项目/用户成本（LiteLLM）：README 列出的能力是“按项目/用户的多租户成本追踪与花费管理”，但没有给面板位置与操作步骤，需自己确认在哪里看、数字能不能对上你的账单。
 - 失败率与重试/回退次数（LiteLLM）：SDK 侧 Router 支持跨多个部署（如 Azure/OpenAI）重试与回退，但需自测触发条件和成功率。
 - 质量不下降：用你既有的评测方式（或同一组任务的人工打分）确认换模型后结果没有变差；auto/chaos 并行面板会成倍消耗上游调用，试用时单独计费观察。
+- 顾问是否真实介入（Claude Code `/advisor`）：命令是否真实存在、是否报错；顾问模型是否在会话中实际介入并给出可读建议，而不是只挂名；开顾问 vs. 不开顾问的返工次数、被采纳的评审意见数、最终产出差异；多出的计费额度与响应延迟是否值得换来上述差异。
 
 试多久、什么情况下停：
 
@@ -519,6 +553,7 @@ response = await client.send_message(request)
 - FlagshipRouter：先按半天的最小试用跑通，再决定要不要多用几天。只要出现“模型连通但结果明显变差”或“配置互相覆盖且难回滚”，就停止推广，把结论降为 study。
 - Gluon：材料没有给出试用时长建议，只建议小范围试。在非关键仓库试到你能判断“推荐是否真的更省钱或更省上下文”为止；若质量明显下降，或成本/上下文没有可见改善，就停用并把结论降为 study。
 - LiteLLM：SDK 最小验证半天内做完，网关最小验证再半天。若两天内你还说不清“换 provider 省了几步、成本数字是否可信”，就停在 SDK 层，不要上网关和 Terraform。
+- Claude Code `/advisor`：原文没有试用时长建议。先按单个项目、单个会话判断；若 `/advisor` 不存在、顾问全程不介入，或多次任务中开/不开顾问没有可观察差异，就停用并把结论降为 study。
 
 ## 常见坑
 
@@ -543,13 +578,18 @@ response = await client.send_message(request)
 - LiteLLM 的生产部署别用明文。没有 ACM 证书时 `allow_plaintext_alb = true` 按 README 只限 dev/trial。“`-stable` 镜像发布前经过 12 小时负载测试”是 README 自述，没给测试方法。
 - 照抄 LiteLLM 的 Terraform。抓到的原文在 Terraform 输出段被截断，云部署只有前半段可依据；Docker 快速上手、E2E 教程、MCP 登记步骤都在 docs，本页没有。
 - 把 LiteLLM 的 A2A / MCP Bridge 当现成能力。原文在这两处被截断，没有可照做的完整步骤。
-- 材料本身是截断的。OmniRoute 原文正文在 19 种路由策略表格第 12 行处被截断，Docker/pnpm 等安装方式、MCP/A2A/guardrails/evals 的配置步骤都不在材料内。Gluon 的给定文本也只是 README landing page。
+- 把 Claude Code 的 `/advisor` 当必然存在。原文唯一依据是文档地址 `code.claude.com/docs/en/advisor`，且该链接在原文中被截断；执行前先确认版本支持，命令不存在就停。
+- 照抄 `/advisor fable` 和 `/model fable` 里的模型名。原文称 Opus 5.5、Fable 5.1，但给定材料无法核实这些模型名和文档地址；不同计划的计费确认方式可能不同，不要把这套命令当成跨版本通用。
+- 以为挂上顾问就会自动介入。原文正文在关键处中断，未说明顾问在什么时机、以什么形式产出内容；必须观察它是否真的给出可读建议。
+- 把“别让配额白白浪费”当成效果结论。原文没有给出任何成本、效果或对比数据；可核实的互动量只有 70 赞、8 次转发、14 条回复。
+- 把 `/advisor` 与 A–E 的网关/路由混为一谈。前者是 Claude Code 内部命令，材料未说明能与本地网关、Adaptive Router、Gluon 或 LiteLLM 集成；先分开试。
+- 材料本身是截断的。OmniRoute 原文正文在 19 种路由策略表格第 12 行处被截断，Docker/pnpm 等安装方式、MCP/A2A/guardrails/evals 的配置步骤都不在材料内。Gluon 的给定文本也只是 README landing page。Claude Code `/advisor` 原文在“Opus 5.5 继续工作 / Fable 5.1”处中断，链接也只剩半截。
 - 名称相近但关系不明。OmniRoute 材料里作为 keyless 免费后端的 “OpenCode Free”（oc/…）与别处提到的 OpenCode 名称相近，但原文没有说明两者是否同一项目，不能确认；FlagshipRouter 也把 OpenCode Free 列为免注册可用模型来源，同样没有说明它与 OmniRoute 那边的 OpenCode Free 是不是同一回事。
 - agent-smith 的 USD 数值是“实测用量 × 冻结的 API Standard 参考价”，不是 Codex 订阅账单。
 - agent-smith 的难度打分是本地、未校准的启发式；缓存效应与用量覆盖不全（partial usage coverage）会如何影响成本对比，作者自己列为待解决问题。
 - agent-smith 除 Astra、6.1 Sol 外，原文没有给出被路由模型清单、支持的任务类型或失败案例。
 - agent-smith 分发为源码优先，无预打包 DMG，构建为 ad-hoc 签名；Float 仅 macOS 14+。
-- 五个项目材料都未说明可集成；同时安装时不要假设请求一定经过你以为的那一层。
+- 六个项目材料都未说明可集成；同时安装时不要假设请求一定经过你以为的那一层。
 
 ## 证据与来源
 
@@ -692,6 +732,27 @@ response = await client.send_message(request)
 
 调研结论：值得小范围试——照 README 给的命令先在本地起一个 LiteLLM 网关，把 1–2 个模型统一成 OpenAI 格式并开启花费追踪，用自己的成本和失败率数据决定是否推广；它给出了可复制的安装与调用步骤，但整体是特性索引 + 宣传，实际收益需自测。
 
+**Claude Code `/advisor`（调研《@polydao: Claude Code 提示：一旦 Opus 5.5 成为你的主要模型，就别让你的 Fable 5.1 配额白白浪费了》）**
+
+可当证据、可照做的操作性内容：
+
+- 在某些计划下先执行 `/model fable` 接受按使用信用（usage credit）计费的确认。
+- 把次要模型置于顾问状态：`/advisor fable`。
+- 原文称主模型 Opus 5.5 继续工作，Fable 5.1 作为顾问；但正文在“Opus 5.5 继续工作 / Fable 5.1”处中断，顾问如何介入未给出。
+- 文档入口为 `code.claude.com/docs/en/advisor`；原文中该链接被截断。
+
+只是作者主张、未经验证：
+
+- “一旦主模型就位，就别浪费另一个模型的配额”是作者的成本利用主张，没有给出成本、效果或对比数据。
+- 可核实的互动量只有 70 赞、8 次转发、14 条回复。
+
+原文自己给出的限制说明与材料局限：
+
+- 原文正文在关键处被截断，看不到顾问模型实际做什么、何时被调用、有无效果说明；链接也只剩半截。
+- 文中出现的模型名（Opus 5.5、Fable 5.1）与文档地址均无法从给定材料中验证，本手册不对其真实性做判断。
+- 适用条件：仅在你所使用的 Claude Code 版本支持 `/advisor`、且你的订阅计划允许挂载第二个模型时成立；不同计划的计费确认方式可能不同。
+- 调研结论：可以小范围试——先用 `/model fable`（如提示计费则确认）与 `/advisor fable` 确认命令真实存在，再观察顾问是否实际介入；若不存在、不介入或多次任务无可观察差异，则不写进长期流程。
+
 ## 依据的调研
 
 - [diegosouzapw/OmniRoute](../research/radar/2026-10-02/531-diegosouzapw-omniroute.md)：值得一试，可以小范围试：先把 OmniRoute 当作本地 OpenAI 兼容网关装起来（npm i -g omniroute → localhost:20128 → 用 model=auto 打通），再把一个编码工具指向它，用它验证「按任务选模型别名 + 配额耗尽自动回退」这一套是否真能减少中断；理由是原文给出了可照抄的安装与调用命令和模型别名清单，但节省比例、免费额度等数字都是项目自述，且原文截断、缺少配置细节，不宜直接采纳。
@@ -699,3 +760,4 @@ response = await client.send_message(request)
 - [theRizwan/FlagshipRouter](../research/radar/2026-10-07/1614-therizwan-flagshiprouter.md)：值得一试，可以小范围试：在本地用 FlagshipRouter 起一个 OpenAI 兼容网关，把 Claude Code、Cline 等已在用的编程工具统一接到一个模型入口、按任务切换模型；但原文只是接线层的 README，没有质量或收益数据，且有已知测试失败和默认密码风险，先局部验证再决定是否写进手册。
 - [fidipro/gluon](../research/radar/2026-10-09/2068-fidipro-gluon.md)：值得一试，建议小范围试：在非关键仓库按 README 的安装命令安装，然后 cd your-repo && gluon 启动，让 intake agent 为同一任务推荐并对比不同 harness/model/effort，同时记录成本与上下文。理由是原文给出了可照做的安装与启动流程，并把任务匹配和成本/上下文可观测做成了产品能力，但 README 未展开 routing.yaml、权限配置和效果数据，需要自行验证。
 - [BerriAI/litellm](../research/radar/2026-10-10/2267-berriai-litellm.md)：值得一试，值得小范围试：照 README 给的命令先在本地起一个 LiteLLM 网关（uv tool install 'litellm[proxy]' + litellm --model gpt-4o），把 1–2 个模型统一成 OpenAI 格式并开启花费追踪，用自己的成本和失败率数据决定是否推广；它给出了可复制的安装与调用步骤，但整体是特性索引+宣传，实际收益需自测。
+- [@polydao: Claude Code 提示：一旦 Opus 5.5 成为你的主要模型，就别让你的 Fable 5.1 配额白白浪费了](../research/radar/2026-10-12/2641-claude-code-opus-5-5-fable-5-1.md)：值得一试，可以小范围试：在支持 /advisor 的 Claude Code 里先用 /model fable 接受计费、再 /advisor fable 把次要模型挂成顾问，让主模型继续干活；理由是原文给了可照抄的命令，但正文在关键处被截断、模型名与文档地址都无法核实，只能先自测确认命令真实存在再考虑写进手册。
