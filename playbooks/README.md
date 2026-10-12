@@ -4,11 +4,11 @@
 
 | 手册 | 解决的问题 | 先试这一步 | 最近修订 |
 |---|---|---|---|
+| [让 agent 的交付物在真实环境里跑一遍，再交给另一个 agent 独立评审](build-ui-components-with-agents.md) | 编码 agent 交出的图表、组件、架构图、前端 UI 和游戏特效常常只是“看着完成了”，缺的是真实环境里的验证和第二方独立评审。 | 挑一类你已有的交付物（图表 / 组件 / 架构图 / 前端 UI / 特效），让 agent 在真实环境里渲染或运行一遍并留下证据，再让另一个看不到生成脚本的 agent 按固定评分表做一次独立评审。 | 2026-10-12 |
 | [把编码 agent 的上下文当成预算来管](manage-agent-context.md) | 编码 agent 在真实任务里会被工具输出塞满上下文、跨会话失忆、配额提前耗尽、规则文件冗长重复；这篇手册给出一套可逐项试用的上下文预算管理做法，并把自动压缩阈值也纳入可调参数。 | 先做成本最低的做法 N：在 Claude Code 里运行 /context 看清 token 去向，然后只改一项——先禁用当前会话里用不到的 MCP 服务器。 | 2026-10-12 |
 | [别让限流、闲置配额和模型选择拖住编码 agent](model-routing-for-coding-agents.md) | 这篇手册解决如何用本地网关/路由统一多个模型和供应商，在配额耗尽、限流或死 key 时自动回退，按任务选择轻/重模型，把闲置的次要模型挂成顾问，并用确定性检查验收 agent 是否真的完成。 | 先只把一个工具接到本机 OpenAI 兼容网关（做法 A 或 C），保留直连对照，连续几天记录中断次数和人工切换次数；若你日常用 Claude Code，另开一个会话试 `/advisor fable`，先确认命令是否真实存在，不存在就停。 | 2026-10-12 |
 | [别让 agent 自己宣布完成：并行 agent 的验证、隔离与注意力路由](orchestrate-multiple-agents.md) | 多个 AI agent 并行干活时，怎么让「完成」有验证、让「谁在等我」可路由、让隔离与评审成为流程而不是口头要求。 | 挑一个你在意的真实任务，先把它的完成判据写下来（哪条命令通过、谁来复核、结果在哪里看），再按处境选一条做法；想先试最小改动，就把一个编码任务切成 2～3 块，交给「只生成、不验证」的子 Agent，验证全部留给主 Agent。 | 2026-10-12 |
 | [让长跑的编码 agent 跨上下文窗口交接不断线](install-and-customize-agent-plugins.md) | 当 Claude Code 的编码任务跑得比一个上下文窗口更久时，如何让它在自动交接、定时等待和需要你拍板的地方都不掉线，并且你能看出它是不是真的减少了上下文溢出和人工盯守。 | 先用 claude --plugin-dir /path/to/project-sentinel/plugins/project-sentinel 在一个长任务会话里不安装地试跑，打开 Autopilot、状态栏和 Activity，用 Handoff Health 与跨交接的里程碑连续性判断它是否真的减少了上下文溢出和人工盯守。 | 2026-10-11 |
-| [让编码 agent 在宣布完成前拿出证据](build-ui-components-with-agents.md) | 编码 agent 的交付物常常“看着完成了”——图表、组件、架构图、前端 UI 和终端内视觉验证都有可判定的坏味道，却没有在交付前被系统检查。 | 如果你在 macOS + Ghostty/kitty 下用 Claude Code，先跑 show-your-work 的 examples/pricing 前后对比 QA；否则先给当前任务装一个 Agent Skill（图表用 evident-charts）做一次交付前检查。 | 2026-10-11 |
 | [让 AI 在宣布完成前拿出证据：用内置命令与四条路线审代码](code-review-with-agents.md) | 代码评审缺少结构图、push 前可核对的自动评审和主动找漏洞，而且很多人不知道自己已有的 Claude Code 里就有 /code-review 可用。 | 如果你已经在用 Claude Code，下次审代码时先原样跑一次 `/code-review`（别名 `/review`），记录它报出的问题清单，再对照人工 review 标记真 bug 和误报。 | 2026-10-11 |
 | [让新会话先核对事实再接手工作](persistent-memory-for-coding-agents.md) | AI 每次开新会话都会把上次笔记当作事实继续施工，这篇手册解决如何把长期信息落盘，并在接手前用 git 与机器状态核对主张与事实。 | 先 clone truongfelix/workflow，跑通 ground-truth.sh 到 `GROUND TRUTH: complete`，下一次会话用 /session-start 开始。 | 2026-10-11 |
 | [先小范围试装技能包，用对照确认 agent 真的少返工](build-and-install-agent-skills.md) | 你已经在用编码 agent，但不确定装技能包是否真的减少返工；这篇手册给出小范围试装、对照验证、再写自己技能或补 AI 研究知识的流程。 | 选一个非关键项目和一类重复任务，只装一个技能包，同一任务分别在有技能和无技能下各跑 3 次并记录差异。 | 2026-10-11 |

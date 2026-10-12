@@ -1,26 +1,27 @@
-# 让编码 agent 在宣布完成前拿出证据
+# 让 agent 的交付物在真实环境里跑一遍，再交给另一个 agent 独立评审
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：编码 agent 的交付物常常“看着完成了”——图表、组件、架构图、前端 UI 和终端内视觉验证都有可判定的坏味道，却没有在交付前被系统检查。
-> 先试这一步：如果你在 macOS + Ghostty/kitty 下用 Claude Code，先跑 show-your-work 的 examples/pricing 前后对比 QA；否则先给当前任务装一个 Agent Skill（图表用 evident-charts）做一次交付前检查。
-> 最近修订：2026-10-11
+> 解决的问题：编码 agent 交出的图表、组件、架构图、前端 UI 和游戏特效常常只是“看着完成了”，缺的是真实环境里的验证和第二方独立评审。
+> 先试这一步：挑一类你已有的交付物（图表 / 组件 / 架构图 / 前端 UI / 特效），让 agent 在真实环境里渲染或运行一遍并留下证据，再让另一个看不到生成脚本的 agent 按固定评分表做一次独立评审。
+> 最近修订：2026-10-12
 
 ## 解决什么问题
 
-编码 agent 交出来的东西常常“看着完成了”：图表用了没说清的对数轴、把 EU 总量和它的成员国排在一起、来源行靠猜或直接写文件名、图上还留着 TODO；组件会发明路由、引入第二套设计系统、漏掉加载/取消/无效输入/结果恢复这类状态；架构图则可能脱离真实系统、与部署漂移、无法增量维护；前端界面则是“所有模型都在同一套 SaaS 模板上训练”，不加指导就产出同样的坏味道——Inter 字体、紫到蓝渐变、卡片套卡片、彩色背景上的灰字、每个标题上方一个圆角方块图标。更麻烦的是，改完前端 UI 后，你往往还要自己开浏览器、起 localhost、手动点一遍才能确认。这份手册给五条可落地的做法，把“检查”和“展示”从你手里挪到 agent 交付之前：图表过三道检查、组件写代码前先签契约、架构图从真实来源生成并在合并前校验、前端 UI 先固定持久事实再用确定性规则当门禁、以及让 Claude Code 在终端里直接展示截图/录屏/前后对比 QA。
+编码 agent 交出来的东西常常“看着完成了”：图表用了没说清的对数轴、把 EU 总量和它的成员国排在一起、来源行靠猜或直接写文件名、图上还留着 TODO；组件会发明路由、引入第二套设计系统、漏掉加载/取消/无效输入/结果恢复这类状态；架构图则可能脱离真实系统、与部署漂移、无法增量维护；前端界面则是“所有模型都在同一套 SaaS 模板上训练”，不加指导就产出同样的坏味道——Inter 字体、紫到蓝渐变、卡片套卡片、彩色背景上的灰字、每个标题上方一个圆角方块图标；游戏实时特效则可能“代码编译通过、linter 通过”，但没有任何人在真实引擎里看过它长什么样。更麻烦的是，改完前端 UI 或特效后，你往往还要自己开浏览器、起 localhost、开 Godot 窗口、手动点一遍才能确认。这份手册给六条可落地的做法，把“检查”和“展示”从你手里挪到 agent 交付之前：图表过三道检查、组件写代码前先签契约、架构图从真实来源生成并在合并前校验、前端 UI 先固定持久事实再用确定性规则当门禁、让 Claude Code 在终端里直接展示截图/录屏/前后对比 QA，以及让游戏特效在真实 Godot 视口里渲染成胶片条、再交由另一个 agent 独立评审。最后一条的骨架——生成 → 真实渲染验证 → 独立评审 → 防篡改证据绑定到具体构建——不限于特效，可以直接搬到别的交付物。
 
 ## 适用与不适用
 
 **适用：**
 
-- 你已经在用支持 Agent Skills 的编码代理（evident-charts 声明支持 Claude Code、Codex、Cursor、Gemini CLI、GitHub Copilot、Antigravity；Bricks 要求支持 skills 的代理；drawio-skill 声明兼容 Claude Code、Cursor、Copilot、OpenClaw、Codex、Autohand Code、Hermes 等 Agent Skills 格式的智能体；show-your-work 是 Claude Code 插件，要求 Claude Code v2.1.287+），并且任务落在五类交付物上：
+- 你已经在用支持 Agent Skills 的编码代理（evident-charts 声明支持 Claude Code、Codex、Cursor、Gemini CLI、GitHub Copilot、Antigravity；Bricks 要求支持 skills 的代理；drawio-skill 声明兼容 Claude Code、Cursor、Copilot、OpenClaw、Codex、Autohand Code、Hermes 等 Agent Skills 格式的智能体；show-your-work 是 Claude Code 插件，要求 Claude Code v2.1.287+；effekseer-vfx 声明支持 Claude Code、Codex、Cursor、Gemini CLI、GitHub Copilot、OpenCode 等 Agent Skill 宿主），并且任务落在六类交付物上：
   - 用数据画图：matplotlib、seaborn、pandas `.plot`、ggplot2、Plotly、Vega-Lite/Altair、D3；输出尺寸有博客、X、LinkedIn、Instagram、幻灯片、报告、手机预设。
   - 实现一个有明确边界的命名组件或有界组合（Footer、FAQ、Task Input、Agent Workspace 这类容易翻车的类型）。
   - 架构图/系统图/架构文档维护：从自然语言、代码、Terraform、Kubernetes、docker-compose、SQL DDL、OpenAPI/AsyncAPI/Protobuf/GraphQL、CI 配置生成可编辑 `.drawio`，或对已有图做增量同步、漂移 diff、规则校验。
   - 用 AI 代理做前端/UI 的设计与实现：项目涉及前端，你想让 agent 在一个已经写进仓库的视觉系统里干活，而不是每来一个新会话重新猜风格。
   - 在终端里用 Claude Code 做前端/UI、视频/动画类产出或需要视觉回归验证的修复，且你不想每完成一件事就切到浏览器手动 QA。
-- 项目已有代码库、组件、设计令牌、框架、路由和响应式约定（Bricks 的前提），或者项目里已有图表脚本与源数据，或者手上有可导入的真实架构来源（Terraform/K8s 配置、SQL、API 定义、代码目录、白板照片/截图），或者一个有前端界面的项目（Impeccable 的前提），或者一份可重复运行的 Playwright 脚本和能画图的终端环境（show-your-work 的前提）。
+  - 用 Godot + Effekseer 做实时游戏特效（火焰、冰、毒、暗四组远程“投射物 + 命中”，加上 hit、slash、charge、shield、heal），或者你想把“真实渲染验证 + 独立评审 + 证据绑定到具体构建”这套闭环搬到别的领域。
+- 项目已有代码库、组件、设计令牌、框架、路由和响应式约定（Bricks 的前提），或者项目里已有图表脚本与源数据，或者手上有可导入的真实架构来源（Terraform/K8s 配置、SQL、API 定义、代码目录、白板照片/截图），或者一个有前端界面的项目（Impeccable 的前提），或者一份可重复运行的 Playwright 脚本和能画图的终端环境（show-your-work 的前提），或者一个 Godot 4 游戏项目与 macOS Apple silicon / Windows x64 机器（effekseer-vfx 的构建前提）。
 
 **不适用：**
 
@@ -29,7 +30,8 @@
 - 架构图如果不想安装 draw.io 桌面 CLI，或没有真实来源/反馈循环，drawio-skill 的核心能力会受限；它也不适合替代手绘风、diagrams-as-code、自由画布（README 建议换同作者家族其他 skill）。
 - 前端 UI 的检测规则是确定性的、只覆盖可判定的坏味道；`/impeccable critique` 这类设计评审是 LLM-only 的主观判断，别把它当门禁。Impeccable 也不自带组件库或设计系统，视觉方向要你在持久事实和 `DESIGN.md` 里自己定。
 - show-your-work 只支持 macOS 与 Ghostty/kitty；iTerm2、macOS Terminal、VS Code 内置终端目前画不了这类图片；Linux 和 Windows 尚不支持；tmux 内“还不可靠”，可尝试在 tmux 配置里开 `set -g allow-passthrough on`。它也不适合已经工作在 VS Code/Cursor 编辑器里的用户（原文 FAQ 直接这么说）。
-- 想要现成的量化改善数据：五份材料都没有给出效果数字，只能自己跑基线对照。
+- 实时特效这条链路的前提很硬：build 只在 macOS Apple silicon 与 Windows x64 已验证；Windows ARM64 会装上匹配的 .NET 运行时但**未验证**；Linux **只能跑 authoring，build 路径未验证**。如果你不做 Godot + Effekseer，只想复用那套闭环结构，那 F 只是参照，不必装它。沙箱内的 agent（例如 Codex 工作区沙箱）打不开 Godot 窗口，`review`/`preview`/`showcase` 需要用户在桌面终端放行。
+- 想要现成的量化改善数据：六份材料都没有给出效果数字，只能自己跑基线对照。
 
 ## 前置条件
 
@@ -58,6 +60,13 @@
   - 任务侧需要一份可重复运行的 Playwright 脚本，能产出同一脚本的 before/after 两段录制。
   - 信息侧要提供 `url`、`changes` 的时间戳、`summary` 的检查项与通过数——这三样决定了“随视频打勾”“点击跳转改动”“差异行”这些能力能不能出现。
   - 图片、视频和文件不出本机、也不进模型上下文；匿名遥测可关。
+- 实时特效做法（做法 F）：
+  - authoring（写 brief/recipe、lint、处理与测量贴图）：Python 3.11+ 或 [uv](https://docs.astral.sh/uv/)；macOS/Linux/Windows 均可（macOS 自带 Python 3.9 太旧）。
+  - build（用官方 EffekseerCore 编译 `.efkefc`/`.efk`）：需要 **macOS on Apple silicon** 或 **Windows x64**；首次 setup 需联网，约 250 MB 下载到 `~/.cache/effekseer-vfx`（可用 `EFFEKSEER_VFX_HOME` 改位置）。
+  - render（Godot 胶片条评审、Lab、预览、打包）：在以上基础上还需要 PATH 中或 `GODOT` 环境变量指向的 [Godot 4](https://godotengine.org)（Forward+），以及用于参考片段和录制的 `ffmpeg`。
+  - 已验证组合：macOS ARM64（Effekseer Core 1.80.7、EffekseerForGodot4 1.80.5.1、Godot 4.7、.NET 9）与 Windows 11 x64（同版本，Godot 4.7.2）。Windows ARM64 由 setup 装上匹配的 .NET 运行时但**未验证**；Linux 只能跑 authoring，其 build 路径**未验证**。
+  - Windows 上所有 `sh <skill>/scripts/...` 命令也可在 Git Bash（Claude Code 所用）里跑；在 cmd 或 PowerShell 里，`vfx` 改用 `<skill>\scripts\vfx.cmd`，`setup.sh` 改用 `powershell -NoProfile -ExecutionPolicy Bypass -File <skill>\scripts\setup.ps1`。
+  - 一个 Godot 4 游戏项目（技能在**用户自己的游戏项目目录**下运行，不是在自己的目录里凭空造）。
 
 ## 操作步骤
 
@@ -442,13 +451,91 @@
 
 10. 知道参数上限：视频用 ffmpeg 切帧，最高 12 帧/秒、960 px 宽、最多 900 帧。QA summary 直接给结果（例 “Form: 8/8 passed”，最多三行）；每条 check 在视频播到被测试的那一刻弹出勾或叉；同一组 checks 会同时显示在原始版和修改版上；Compare 视图把两段录制逐帧对齐，“旧版加载慢的话视频会等它”；视频下方一行给出“此刻的差异”，例 `Annual toggle updates prices · Original ✗ → Updated ✓`；多次修改会保留每一版历史以便回看对比。
 
-### 怎么选 A / B / C / D / E
+### 做法 F：让实时特效在真实引擎里渲染出来，再交给另一个 agent 独立评审
 
-按交付物分：要的是数据图表，走 A；要的是一个命名组件或有界组合，走 B；要的是架构图/系统图/架构文档维护，走 C；要的是前端界面的设计与实现，走 D；要的是在终端里直接看截图/录屏/前后对比 QA，走 E。A、B、D、E 是请求驱动、在对应事件（生成/审阅图表、收到组件任务、编辑 UI 文件或调用 `/impeccable` 命令、Claude 做完一件事）时触发，都不是常驻巡检；D 的确定性检测还能独立于 LLM 跑，适合直接接 CI。C 也是 Agent Skill/MCP 形态，可生成与校验，并可按 README 接入 CI。D 和 E 有分工：D 用 61 条确定性规则做可自动执行的守门人，E 把视觉验证留在终端、不额外开浏览器；原文没有给出 D 与 E 联动的做法。五者都需要你在请求里带足上下文。
+用 kanaworksai-hue/effekseer-vfx-skill（32 stars）。它把“让编码 Agent 用写代码的方式做实时游戏特效”封装成 Agent Skill，自称的循环是 **design brief → textures → Python recipe → EffekseerCore build → real Godot filmstrip → look → fix one thing → repeat → independent review**。仓库含两个技能：`effekseer-vfx`（创作：特效制作规则、经核实的 Effekseer/Godot 引擎约定、约 30 个可组合的图层原语、静态 linter、官方 EffekseerCore 编译器（带保存/打开回读校验）、Godot Lab（把每个特效摆成两个假人之间的交换动作）、带像素标记的胶片条截帧、迭代历史，以及把评审绑定到“它所看到的那次确切构建”的防篡改证据）和 `vfx-review`（由**另一个** Agent 在看不到 recipe 的前提下按固定评分表给胶片条打分——因为作者不给自己打分）。另有 13 个完成态特效示例（火焰、冰、毒、暗四组远程“投射物 + 命中”，加上 hit、slash、charge、shield、heal 各一，以及三个带诊断的 before/after 案例）。
+
+1. 安装技能。README 说最简方式是把这个仓库 URL 交给你的编码 Agent 并让它安装；也可以自己装：
+
+   Claude Code（在 Claude Code 中输入）：
+   ```text
+   /plugin marketplace add kanaworksai-hue/effekseer-vfx-skill
+   /plugin install effekseer-vfx@effekseer-vfx
+   ```
+
+   Codex（在 Codex 会话中；技能落在 `~/.codex/skills` 或 `$CODEX_HOME/skills`，从下一轮或新会话生效）：
+   ```text
+   $skill-installer install https://github.com/kanaworksai-hue/effekseer-vfx-skill/tree/main/skills/effekseer-vfx
+   $skill-installer install https://github.com/kanaworksai-hue/effekseer-vfx-skill/tree/main/skills/vfx-review
+   ```
+
+   其他 Agent（Cursor、Gemini CLI、Copilot、OpenCode 等）：
+   ```sh
+   npx skills add kanaworksai-hue/effekseer-vfx-skill
+   ```
+
+   或手动把 `skills/effekseer-vfx` 和 `skills/vfx-review` 拷进你 Agent 的 skills 目录（`~/.claude/skills/`、`.agents/skills/` 等），保持目录名不变。注意：**不要拷别的东西**，两个技能目录自带 `LICENSE`（`effekseer-vfx` 另有 `THIRD_PARTY_NOTICES.md`），运行时自包含且只读。
+
+2. 加载并在游戏项目里查机器。若技能列表里还没出现，让用户开个新会话。然后在**用户自己的游戏项目目录**下运行：
+   ```sh
+   sh <skill>/scripts/vfx doctor
+   ```
+   （Windows 非 Git Bash：`<skill>\scripts\vfx.cmd doctor`），并按其 `next` 提示操作。注意 `doctor` 里的 `render: true` 只表示“找到了 Godot”。
+
+3. 下载前先征求同意。`sh <skill>/scripts/setup.sh`（Windows 用 `setup.ps1`，确切命令在 `doctor` 的 `next` 里）会把工具链装进 `~/.cache/effekseer-vfx`（macOS ARM64 与 Windows x64 约 250 MB；其他平台用 `--authoring-only`），首次 `vfx init` 还会下载官方 Effekseer Godot 插件（约 34 MB）。setup 需要 Python 3.11+ 或 uv；若 `doctor` 报告两者都没有，先让用户装一个。**Godot 4 从不由它代装**：让用户自己装（或获得允许后代装），若不在 PATH 上则设置 `GODOT`。
+
+4. 在沙箱外跑 Godot。`vfx review`、`preview`、`showcase` 会在用户桌面打开 Godot 窗口；沙箱内的 Agent（例如 Codex 工作区沙箱）打不开，需用户批准后在沙箱外运行，或把确切命令交给用户在桌面终端里跑。若一次评审没有渲染出任何帧，约 90 秒后会以 "rendered no frame" 停止（多半是窗口没打开，检查它附带的 Godot 输出）。
+
+5. 确认可用并跑通第一步。再跑一次 `vfx doctor`（`modes` 应显示本机支持的能力），然后在游戏项目里对 Agent 说：*"Set up the effekseer-vfx skill here and show me the fire example."* 它会执行：
+   ```sh
+   sh <skill>/scripts/vfx doctor            # what this machine can do, and what to install
+   sh <skill>/scripts/setup.sh              # macOS ARM64 / Windows x64; use --authoring-only elsewhere (asks you first)
+   sh <skill>/scripts/vfx init              # creates vfx/ with the Godot Lab, materials and math textures
+   sh <skill>/scripts/vfx examples add fire
+   sh <skill>/scripts/vfx build --ids VFX_Projectile_Fire VFX_Fire_Explosion
+   sh <skill>/scripts/vfx review --ids VFX_Projectile_Fire VFX_Fire_Explosion --note "baseline"
+   sh <skill>/scripts/vfx showcase          # play the library in the Lab
+   ```
+   工具链默认在 `~/.cache/effekseer-vfx`，可用 `EFFEKSEER_VFX_HOME` 改位置（见 `skills/effekseer-vfx/references/cli.md`）。
+
+6. 下一条自然语言需求触发完整循环。例如对 Agent 说：
+   ```text
+   Make a lightning strike for a targeted spell, short and sharp, with a return stroke.
+   ```
+   技能会让 Agent 写 brief、向你的图像生成工具索取手绘贴图（或直接找你要）、写 recipe、构建、多轮评审胶片条，并在报告 `effect-verify` 通过之前交给独立评审者。**关键约束**：在独立评审被提交且 `vfx overview` 被重跑之前，即使特效渲染正确，`effect-verify` 也会显示 `verified: false`；此时 Agent 应说 "builds and renders" 而不是 "verified"。
+
+7. 贴图来源规则。复杂手绘形状（烟、斩击弧线、火、裂纹、冰、符号）**必须**来自图像生成模型，技能不会用代码伪造；若你的 Agent 有内置或对接的图像工具，它会用，并把提示词记录在 `vfx/texture_prompts.json`；否则它会明确告诉你该生成哪张图、存到哪里。数学形状（辉光、圆环、噪声、渐变、拖尾、畸变图）则程序化生成。
+
+8. 在游戏里使用产出。特效最终是 `.efk` 运行时导出与 `.efkefc` 源文件，外加 `vfx_manifest.json`；生成的 Godot 项目带一个小 API：
+   ```gdscript
+   var handle = Vfx.play("VFX_Fire_Explosion", position)
+   var shot = Vfx.launch("VFX_Projectile_Fire", from, to)
+   shot.arrived.connect(func(at): Vfx.play("VFX_Fire_Explosion", at))
+   ```
+   详见 `skills/effekseer-vfx/references/godot.md`。
+
+9. （可选）自测技能本身。README 给开发者的跑法：
+   ```sh
+   sh skills/effekseer-vfx/scripts/setup.sh --authoring-only
+   ~/.cache/effekseer-vfx/venv/bin/python -m pip install pytest
+   ~/.cache/effekseer-vfx/venv/bin/python -m pytest -q tests
+   ```
+   Windows PowerShell：
+   ```powershell
+   powershell -NoProfile -ExecutionPolicy Bypass -File skills\effekseer-vfx\scripts\setup.ps1 --authoring-only
+   ~\.cache\effekseer-vfx\venv\Scripts\python.exe -m pip install pytest   # a venv made by uv: uv pip install --python <that python.exe> pytest
+   ~\.cache\effekseer-vfx\venv\Scripts\python.exe -X utf8 -m pytest -q tests
+   ```
+
+10. 把这套闭环搬到别的领域。F 真正可迁移的不是 Effekseer，而是这条骨架：**生成 → 在真实环境里渲染/运行 → 截图或截帧成可评审的产物 → 只看产物、看不到生成脚本的第二个 agent 独立评审 → 评审提交前不给 verified**。做法 A 里“只看得到 PNG 的新审阅者”是同一结构在图表上的版本；做法 E 的 before/after 录制是它在 UI 上的版本。如果你在别的领域要复用，需要自己补三样：一个能把产物落到可观察形态的真实环境、一份固定评分表、一份把评审绑定到“那次确切构建”的证据。
+
+### 怎么选 A / B / C / D / E / F
+
+按交付物分：要的是数据图表，走 A；要的是一个命名组件或有界组合，走 B；要的是架构图/系统图/架构文档维护，走 C；要的是前端界面的设计与实现，走 D；要的是在终端里直接看截图/录屏/前后对比 QA，走 E；要的是在真实 Godot 里可运行的实时特效，或者想把“生成 → 真实渲染验证 → 独立评审 → 证据绑定具体构建”的闭环搬到别的领域，走 F。A、B、D、E 是请求驱动、在对应事件（生成/审阅图表、收到组件任务、编辑 UI 文件或调用 `/impeccable` 命令、Claude 做完一件事）时触发，都不是常驻巡检；D 的确定性检测还能独立于 LLM 跑，适合直接接 CI。C 也是 Agent Skill/MCP 形态，可生成与校验，并可按 README 接入 CI。D 和 E 有分工：D 用 61 条确定性规则做可自动执行的守门人，E 把视觉验证留在终端、不额外开浏览器；原文没有给出 D 与 E 联动的做法。F 与 A 最像的是“独立评审”这一环——A 是同一个 skill 里换一个只看到 PNG 的审阅者，F 是**另一个 agent、另一个技能**，而且评审未提交就不给 verified。六者都需要你在请求里带足上下文。
 
 ## 怎么判断变好了
 
-最小试用：在单个代理上装一次（图表优先 Claude Code，命令最短），用一个已有图表脚本，或一个已有类似实现的组件任务，或一两个真实架构来源，或一个现有前端页面来试；如果符合 macOS + Ghostty/kitty + Claude Code ≥2.1.287，再跑一次 show-your-work 的 examples/pricing。并做基线对照——让同一 agent 在不装技能的情况下做同样任务，再比一次。
+最小试用：在单个代理上装一次（图表优先 Claude Code，命令最短），用一个已有图表脚本，或一个已有类似实现的组件任务，或一两个真实架构来源，或一个现有前端页面来试；如果符合 macOS + Ghostty/kitty + Claude Code ≥2.1.287，再跑一次 show-your-work 的 examples/pricing；如果你有 Godot 4 游戏项目且机器是 macOS Apple silicon / Windows x64，再跑一次 effekseer-vfx 的 fire 示例。并做基线对照——让同一 agent 在不装技能的情况下做同样任务，再比一次。
 
 图表侧可直接观察的指标（都能从一次试用里看到）：
 
@@ -492,13 +579,22 @@
 - 同一次任务的会话 token 用量与不装插件时相比没有明显上升（对应“几乎不耗 token”的主张）。
 - 再上自己的任务：挑一个真实前端 UI 修复，让 Claude 改完并录前后对比，人工看视频判断两类错误——误报（显示通过但实际没修好）和漏报（实际修好但显示失败）。原文没有给准确率数据，所以这一步必须人工兜底；连续 3–5 个任务都没有误判，才值得把“改完自动录一段前后对比 QA”写进常规流程。
 
-这些指标是验证方法建议，五份材料都没有给出对应的量化结果。试多久：原文没有给时长，按任务数量定——若干张历史图表、一个边界清晰的组件任务、一两个真实架构来源导入并接入一次 PR，再加一个现有前端页面的检测基线，以及一次 show-your-work 的官方 demo 和 3–5 个真实前端修复任务。
+实时特效侧（做法 F）：
+
+- `vfx doctor` 的 `modes` 是否显示本机支持的能力；记住 `render: true` 只表示“找到了 Godot”，不代表能构建。
+- 官方 fire 示例是否能一次跑通 doctor → setup → init → examples add fire → build → review → showcase，且 `vfx review` 真的渲染出了帧（没帧会在约 90 秒后以 "rendered no frame" 停止）。
+- 未提交独立评审时，`effect-verify` 是否如实显示 `verified: false`——这是“证据绑定到具体构建”是否真的生效的关键判据；如果它在你没做独立评审时就显示 verified，这套机制就是假的。
+- `vfx-review`（看不到 recipe 的另一个 agent）的评分与你自己看胶片条的结论差多少；同一个特效要返工几轮。
+- 复杂手绘贴图是否真的来自图像生成模型，`vfx/texture_prompts.json` 是否记录了提示词。
+- 试多久：跑通官方 fire 示例，再用一条自然语言需求（例：带回击的闪电）走一遍完整循环，看它是否在 `effect-verify` 通过前就敢说 “verified”。
+
+这些指标是验证方法建议，六份材料都没有给出对应的量化结果。试多久：原文没有给时长，按任务数量定——若干张历史图表、一个边界清晰的组件任务、一两个真实架构来源导入并接入一次 PR、一个现有前端页面的检测基线、一次 show-your-work 的官方 demo 和 3–5 个真实前端修复任务，再加一次 effekseer-vfx 的 fire 示例和一条真实特效需求。
 
 ## 常见坑
 
-- 五份材料的兼容性声明和效果描述都来自各自 README 或作者自述，没有安装实测、没有 issue/失败案例；evident-charts 和 Bricks 星标分别只有 52 和 77；drawio-skill 同样缺乏第三方验证；show-your-work 只有 36 stars，属早期小项目。先小范围试，不要直接全量采用。
+- 六份材料的兼容性声明和效果描述都来自各自 README 或作者自述，没有安装实测、没有 issue/失败案例；evident-charts、Bricks、effekseer-vfx 星标分别只有 52、77、32；drawio-skill 同样缺乏第三方验证；show-your-work 只有 36 stars，属早期小项目。先小范围试，不要直接全量采用。
 - 没有 headless Chrome 时，非 matplotlib 库的代码级 lint 会直接缺失，只剩规格检查和图像复审——别把降级结果当成完整检查。
-- 技能是事件触发（生成/审阅图表、收到组件任务、处理架构图任务、编辑 UI 文件时加载或运行），不会主动巡检；你不给源数据、PNG、脚本、项目上下文或真实架构来源，它就没有可查的东西。
+- 技能是事件触发（生成/审阅图表、收到组件任务、处理架构图任务、编辑 UI 文件、收到特效需求时加载或运行），不会主动巡检；你不给源数据、PNG、脚本、项目上下文、真实架构来源或游戏项目目录，它就没有可查的东西。
 - style guide 的覆盖权限只到 `[T]`，别指望用项目风格去关掉柱状图零基线这类 `[E]` 完整性规则。
 - 组件任务边界不清（整页、整产品）会跑偏；复杂域组件不要重复造轮子。
 - Bricks 明确不声称未在目标项目中实际验证过的性能、可访问性、合规或转化结果。
@@ -520,6 +616,16 @@
 - “几乎不消耗 token”“Claude 自动开始展示”“两段录制逐帧同步”“点击改动跳到视频对应时刻”都是作者主张，机制解释说得通，但没有量化数据支撑。
 - 视频参数上限：12 帧/秒、960 px 宽、最多 900 帧；QA summary 最多三行。
 - 原文没有给 show-your-work 的准确率数据，必须人工兜底看误报和漏报。
+- effekseer-vfx 的构建平台很窄：只在 macOS Apple silicon 与 Windows x64 验证过；Windows ARM64 虽会装上匹配的 .NET 运行时但**未验证**；**Linux 只能跑 authoring，build 路径未验证**。
+- macOS 自带 Python 3.9 太旧，authoring 需要 Python 3.11+ 或 uv；`doctor` 报告两者都没有时先让用户装一个。
+- **Godot 4 从不由 setup 代装**；不在 PATH 上要设置 `GODOT`；`doctor` 里的 `render: true` 只表示找到了 Godot。
+- setup 约 250 MB、首次 `vfx init` 还会下约 34 MB 官方插件，下载前先征求用户同意；非 macOS ARM64 / Windows x64 平台要用 `--authoring-only`。
+- 沙箱内的 agent（如 Codex 工作区沙箱）打不开 Godot 窗口，`vfx review`/`preview`/`showcase` 需用户批准后在沙箱外跑，或把确切命令交给用户在桌面终端执行。
+- Windows 上命令形式不同：cmd/PowerShell 里 `vfx` 用 `<skill>\scripts\vfx.cmd`，setup 用 `setup.ps1`。
+- 手动安装只拷 `skills/effekseer-vfx` 和 `skills/vfx-review` 两个目录，别拷别的东西（`effekseer-vfx` 自带 `LICENSE` 与 `THIRD_PARTY_NOTICES.md`）。
+- 在独立评审提交且 `vfx overview` 重跑之前，即使特效渲染正确，`effect-verify` 也一直是 `verified: false`；此时 agent 只能说 "builds and renders"，说 "verified" 就是越界。
+- 复杂手绘贴图（烟、斩击弧线、火、裂纹、冰、符号）必须来自图像生成模型，不要接受技能“用代码伪造”这些形状；数学形状才是程序化生成。
+- 32 stars 的早期小项目；13 个完成态示例和 3 个 before/after 案例属于仓库自证，没有第三方验证和量化数据。
 
 ## 证据与来源
 
@@ -539,7 +645,7 @@
 
 - 依据 Agents365-ai/drawio-skill 的 README。可操作材料是安装与命令、CLI 调用、自然语言提示词样例、从真实来源导入的命令、`shapesearch.py`、`aiicons.py`、自定义样式预设、CI 命令名（`diagramctl doctor/build/sync/views/query/test/review/whatif/story/publish/transform`、`validate.py --score` / `--strict`、`prdiff.py`、官方 GitHub Action）、`raster2drawio.py`、Mermaid→.drawio、支持 6+ 平台。
 - 原文给出的具体数据：draw.io 桌面 CLI ≥ 30 才支持 Mermaid→.drawio 转换与 ELK `--layout`；覆盖 321 个 logo（源：lobe-icons，MIT）+ 18 个数据存储品牌（源：simple-icons，CC0）；内置 5 个预设：`default`、`corporate`、`handdrawn`、`colorblind-safe`、`dark`；自检最多 2 轮、用户反馈最多 5 轮；Mermaid 支持 28 种标准类型（含 mindmap、gantt、timeline、journey、pie、sankey、kanban）。
-- 作者主张：增量同步不丢弃手工布局、双状态漂移 diff、git 历史时间回放、交互式 HTML 浏览、故障传播模拟、依赖查询、多视图投影、Diagram-as-Test；README 称在 CI 中可 regenerate + validate（`--strict` gate）+ headless 渲染；Architecture Studio showcase“每个产物由一个脚本再生成，并在测试套件中验证”属于仓库自证。
+- 作者主张：增量同步不丢弃手工布局、双状态漂移 diff、git 历史时间回放、交互式 HTML 浏览、故障传播模拟、依赖查询、多视图投影、Diagram-as-Test；README 称在 CI 中可 regenerate + validate（`--strict` gate）+ headless 渲染。
 - 未提供：CI 规则配置、sync 参数细节在未提供的链接文档里；核心卖点多来自作者自述，缺乏第三方验证；未给出使用前后的成功率、返工次数、时间节省等量化结果。
 
 **前端 UI 做法：**
@@ -557,6 +663,13 @@
 - 适用条件很窄：仅 macOS；仅 Ghostty 和 kitty；tmux 内“还不可靠”；Linux 和 Windows 尚不支持。仓库 36 stars，属早期小项目；默认每天从 GitHub 拉新版本并覆盖安装；匿名遥测仍会上报会话、展示类型和按钮使用情况，可关。
 - 未提供：没有任何使用前后的成功率、返工次数、时间节省等量化结果；准确率数据缺失，必须人工兜底。
 
+**实时特效做法：**
+
+- 依据 kanaworksai-hue/effekseer-vfx-skill 的 README（32 stars）。可操作材料是安装命令（Claude Code 插件市场、Codex `$skill-installer`、`npx skills add`、手动拷贝两个技能目录）、`doctor`/`setup`/`init`/`examples add`/`build`/`review`/`showcase` 命令序列、Windows 下的 `vfx.cmd` 与 `setup.ps1` 形式、`EFFEKSEER_VFX_HOME`、`vfx/texture_prompts.json`、`Vfx.play` / `Vfx.launch` 的 GDScript 用法、开发者自测的 pytest 跑法、两个技能（`effekseer-vfx` 与 `vfx-review`）的分工。
+- 原文给出的具体事实：约 30 个图层原语、13 个完成态特效示例、3 个 before/after 案例、工具链约 250 MB（装到 `~/.cache/effekseer-vfx`）与官方 Godot 插件约 34 MB、build 需 macOS Apple silicon 或 Windows x64、已验证版本组合（Effekseer Core 1.80.7、EffekseerForGodot4 1.80.5.1、Godot 4.7、.NET 9；Windows 11 x64 为 Godot 4.7.2）、评审无帧时约 90 秒停止、authoring 需 Python 3.11+ 或 uv。
+- 仓库自证与作者主张：防篡改证据绑定到“那次确切构建”、由另一个 agent 做独立评审（作者不给自己打分）、`effect-verify` 在独立评审提交前显示 `verified: false`、静态 linter 与保存/打开回读校验、Godot Lab 与带像素标记的胶片条截帧——这些都来自本仓库自述，没有第三方验证。
+- 未提供：没有使用前后的成功率、返工次数、时间节省等量化结果；Windows ARM64 与 Linux 的 build 路径明确标注未验证。
+
 ## 依据的调研
 
 - [rhiever/evident-charts](../research/radar/2026-10-01/21-rhiever-evident-charts.md)：值得一试，按 README 给出的安装命令在 Claude Code（或 Cursor/Codex/Gemini CLI）里装上 evident-charts，然后照常提图表需求、让它在出图前自查，是最小可试的用法；理由是它把“数据核对 + 代码级 lint + 渲染图复审”做成了自动加载的 Agent Skill，步骤和检查项都写得很具体，但改善幅度只有作者自述和一张对比图，需要自己跑一遍验证。
@@ -564,3 +677,4 @@
 - [Agents365-ai/drawio-skill](../research/radar/2026-10-02/795-agents365-ai-drawio-skill.md)：值得一试，建议先在小范围试：按 README 给出的安装与命令，把一两个真实来源（Terraform/K8s 配置、Python 包、SQL DDL、OpenAPI）导入成可编辑 .drawio，并把 diff/校验接入一次 PR，验证增量同步与漂移检测是否真能用。理由：README 提供了可直接照做的安装命令、CLI 调用和提示词样例，但关键的 CI 规则配置、sync 参数细节都在未提供的链接文档里，且核心卖点多为作者自述，缺乏第三方验证。
 - [pbakaus/impeccable](../research/radar/2026-10-02/666-pbakaus-impeccable.md)：值得一试，建议先在前端项目上小范围试：按 `npx impeccable install` + `/impeccable init` 把持久产品事实（PRODUCT.md）和视觉系统（DESIGN.md）固定下来，再用 `npx impeccable detect --json` 建立可量化的基线并把检测接进 hook/CI 当验收门槛；它把“给智能体供给上下文+约束+自动反馈”写成了可照抄的步骤，但改善效果目前只有作者主张和一个未展开的案例页，缺实测数据。
 - [iamumeransari/claude-show-your-work](../research/radar/2026-10-11/2567-iamumeransari-claude-show-your-work.md)：值得一试，在 macOS + Ghostty/kitty 的 Claude Code 终端工作流里小范围试装这个插件，先跑官方 examples/pricing 的 before/after 录制、确认 QA 视频、勾选清单和对比视图都能在终端内正常呈现，再把「Claude 改完前端 UI 后录一段前后对比 QA」纳入日常；理由是原文给出了可复制的安装命令、demo 脚本和前后对比的参数结构，能把视觉验证留在终端、不额外开浏览器，但目前只支持 macOS 与两种终端、项目仅 36 stars，属早期工具，不宜直接全量采用。
+- [kanaworksai-hue/effekseer-vfx-skill](../research/radar/2026-10-12/2652-kanaworksai-hue-effekseer-vfx-skill.md)：值得一试，若团队做 Godot + Effekseer 实时特效，可按 README 给出的安装与 vfx doctor/setup/init/build/review 命令小范围试装；它的核心可迁移之处是把「生成 → 真实渲染验证 → 独立评审 → 证据绑定到具体构建」做成可复用闭环，即使不做特效也值得把这套结构搬到别的领域。
