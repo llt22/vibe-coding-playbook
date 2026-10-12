@@ -1,18 +1,20 @@
-# 先小范围试装技能包，用对照确认 agent 真的少返工
+# 让 agent 技能真的减少返工：先小范围对照，再把重复工作和长流程沉淀成技能
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：你已经在用编码 agent，但不确定装技能包是否真的减少返工；这篇手册给出小范围试装、对照验证、再写自己技能或补 AI 研究知识的流程。
-> 先试这一步：选一个非关键项目和一类重复任务，只装一个技能包，同一任务分别在有技能和无技能下各跑 3 次并记录差异。
-> 最近修订：2026-10-11
+> 解决的问题：解决「装了 agent 技能却不知道有没有变好、重复工作和多阶段长流程每次都要重新交代」的问题：给出先小范围试装、用同一任务做有/无对照、再把自己的重复工作或长流程沉淀成技能的完整流程，并逐条列出各做法的安装、验证与常见坑。
+> 先试这一步：先在一个非关键项目里只装一个技能包，用同一任务、同一输入做有技能与无技能各 3 次的对照，记录返工轮数和人工修改次数后再决定是否纳入常规流程。
+> 最近修订：2026-10-13
 
 ## 解决什么问题
 
 你已经在用编码 agent、写作 agent 或通用 agent，但每次都要重复描述同一套规范，或者不确定装一个技能包是否真的减少了返工——甚至因为一次装太多，上下文反而更乱。这篇手册给出一个可照做的流程：先小范围试装一个现成技能包，用同一任务做有/无技能的对照，确认有效后再考虑把自己的重复工作写成 `SKILL.md`，或者把一本反复查阅的技术书、一份内部文档、或一套 AI 研究全流程知识转成按需加载的技能。
 
-它也覆盖一批具体场景：让 agent 代理编码 CLI 跑长任务并拿硬证据验收；给 agent 补行业设计知识；把一句模糊想法写成可让 agent 独立跑几小时的任务书；写一个把会话状态嵌进界面的 Claude Code mod；让 agent 把一句话描述／一个代码仓库变成可交互的架构图、工作流图、时序图、数据流图、生命周期图；让 agent 检索中国金融市场数据；把移动端模拟器与真机画面接进 Codex 聊天；把多步复杂任务拆成三阶段并加门禁；把中英文学术写作去模板化改写并用命题级核对保住数字、引文与证据强度；让路由技能自动选工作流并对 bug 交出失败→通过证据；按职能只装少量 agent 角色并用真实任务与默认提示对照；在 T3 Code 里用 p3-stack 按 playbook 路由并用 worktree 与 PR 监视减少等待和冲突；审计并改进自己的 `SKILL.md`；让 agent 把结论、方案对比、多步流程、仓库模块、逐句批注、时间线和一段历史渲染成一页可离线打开的单文件 HTML；把自己的 `SKILL.md` 校验、打包并分发到多端；给 agent 补一块 SwiftUI 领域知识并按需触发审查；给工作写作去 AI 腔并保住事实与承诺强度；把产品经理的重复流程交给 agent 跑成命令链；给编码 agent 立四条硬约束；以及给 agent 补 AI 研究全流程知识（微调、推理服务、分布式训练、评估、论文写作等）。
+它也覆盖一批具体场景：让 agent 代理编码 CLI 跑长任务并拿硬证据验收；给 agent 补行业设计知识；把一句模糊想法写成可让 agent 独立跑几小时的任务书；写一个把会话状态嵌进界面的 Claude Code mod；让 agent 把一句话描述／一个代码仓库变成可交互的架构图、工作流图、时序图、数据流图、生命周期图；让 agent 检索中国金融市场数据；把移动端模拟器与真机画面接进 Codex 聊天；把多步复杂任务拆成三阶段并加门禁；把中英文学术写作去模板化改写并用命题级核对保住数字、引文与证据强度；让路由技能自动选工作流并对 bug 交出失败→通过证据；按职能只装少量 agent 角色并用真实任务与默认提示对照；在 T3 Code 里用 p3-stack 按 playbook 路由并用 worktree 与 PR 监视减少等待和冲突；审计并改进自己的 `SKILL.md`；让 agent 把结论、方案对比、多步流程、仓库模块、逐句批注、时间线和一段历史渲染成一页可离线打开的单文件 HTML；把自己的 `SKILL.md` 校验、打包并分发到多端；给 agent 补一块 SwiftUI 领域知识并按需触发审查；给工作写作去 AI 腔并保住事实与承诺强度；把产品经理的重复流程交给 agent 跑成命令链；给编码 agent 立四条硬约束；让 agent 按阶段从零建一个网站，并在中途停下后仅凭状态文件继续（做法 AL）；以及给 agent 补 AI 研究全流程知识（微调、推理服务、分布式训练、评估、论文写作等）。
 
 新增做法 AK：当你需要给 agent 补 AI 研究全流程知识，或想抄一套可迁移的技能目录规范来整理内部知识时，用 `Orchestra-Research/AI-Research-SKILLs`，按类别只装 1 个技能，在真实研究任务上做有/无技能对照；同时把它的 `skill-name/SKILL.md + references/` 目录规范抄来整理自己的文档。
+
+新增做法 AL：当你有一条多阶段、跨多天、会中途停下的长流程（典型是从零建一个网站：名称与 Logo → 用真实搜索数据做调研 → 文案 → 设计方向 → 构建 → 检查 → 上线 → 上线后在 Google 和 ChatGPT 里复测），用 `Julian-Ivanov/website-bauen` 这类「skill + 状态文件 + 按阶段接工具」的打包方式试一次：只跑到调研／设计方向阶段就叫停，检查每阶段产出物能否直接用，再用 `WEBSITE-STATUS.md` 断点续做一次。即使你不需要建站，也可以只借鉴这套打包思路，把进度写进一个状态文件、外部工具放到真正需要它的阶段才接入。
 
 ## 适用与不适用
 
@@ -38,6 +40,8 @@
 - 经常把非琐碎的代码改动、重构或修 bug 交给 Claude Code 或 Cursor，希望它先写假设、不猜、不顺手重构、按可验证目标跑完（做法 AJ）。
 - 要做 AI 研究相关任务（微调 Llama 3、优化 vLLM 推理延迟、扩到 100 GPU、评估模型等），想让 agent 带上对应类别的技能和深度文档（做法 AK）。
 - 想抄一套 `SKILL.md` 加 `references/` 的技能目录规范，用来整理自己已有的内部知识（做法 AK）。
+- 有一条多阶段、跨多天的长流程，希望把它打包成技能、用状态文件跨会话续做、并且只在需要它的阶段才去配置外部工具和账号（做法 AL）。
+- 想小范围试一次「从零建站」的前半程，验证「skill + 状态文件 + 阶段化接工具」这套形态是否成立（做法 AL）。
 
 不适用：
 
@@ -45,7 +49,8 @@
 - 直接在生产关键项目上全量安装；一次装完整个插件市场。
 - 只看 stars、README 徽章或 CI 状态就决定采用。
 - 只是想改拼写或一行显然的改动，却套整套四条原则；不备份直接覆盖项目原有 CLAUDE.md；把四条原则或 stars 当效果证据（做法 AJ）。
-- 各做法自己的边界见对应小节。例如：E 只针对中文技术文档；F 只针对生物医学论文；M 不适用于无合法访问权的书或打算再分发第三方版权书生成的 skill；O 只在 Postgres / TimescaleDB / PostGIS 任务上有用；P 只对自有或书面授权资产；Q 的领域内容不通用；T 不支持直接驱动交易或投顾建议；U 需要 Apple Silicon Mac + Codex desktop + 私有仓库访问权；X 面向全栈开发；Y 需要能加载完整 Skill 文件夹的环境，且 DOCX 抽取保留不了复杂样式、批注、修订记录、脚注与文本框；AF 只覆盖 SwiftUI / Apple 平台开发；AG 的材料没有覆盖合同或其他法律文件，也不承诺通过 AI 检测器；AH 主要面向数学/理论科学/算法类开放式研究；AI 的材料只有 README；AJ 只面向会读 CLAUDE.md 的编码智能体；AK 的材料只有 README，单个技能的 `SKILL.md` 正文没随材料给出，技能数在 README 内自相矛盾（标题 98，Roadmap 写 87），效果必须自测。
+- 只有 README、没有 skill 本体细节和效果数据，却直接把它当成熟流程全量采用；或第一次试用就走完上线环节（做法 AL）。
+- 各做法自己的边界见对应小节。例如：E 只针对中文技术文档；F 只针对生物医学论文；M 不适用于无合法访问权的书或打算再分发第三方版权书生成的 skill；O 只在 Postgres / TimescaleDB / PostGIS 任务上有用；P 只对自有或书面授权资产；Q 的领域内容不通用；T 不支持直接驱动交易或投顾建议；U 需要 Apple Silicon Mac + Codex desktop + 私有仓库访问权；X 面向全栈开发；Y 需要能加载完整 Skill 文件夹的环境，且 DOCX 抽取保留不了复杂样式、批注、修订记录、脚注与文本框；AF 只覆盖 SwiftUI / Apple 平台开发；AG 的材料没有覆盖合同或其他法律文件，也不承诺通过 AI 检测器；AH 主要面向数学/理论科学/算法类开放式研究；AI 的材料只有 README；AJ 只面向会读 CLAUDE.md 的编码智能体；AK 的材料只有 README，单个技能的 `SKILL.md` 正文没随材料给出，技能数在 README 内自相矛盾（标题 98，Roadmap 写 87），效果必须自测；AL 的材料只有 README，skill 本体的阶段步骤、提示词与检查标准都看不到，README 未给任何案例、耗时或成功率数字，且含 DataForSEO 联盟链接，要走完全程还需第三方付费账号（DataForSEO、webhosting）。
 
 ## 前置条件
 
@@ -61,10 +66,11 @@
 
 - A：无额外。B：一件每周重复、有明文规范的工作。C：`pip install skill-seekers`。D：你的提供商端点与 key，以及你网关实际提供的模型名。E：可用的 `npx` 或 `git`；可选装 autocorrect。F：宿主能读 PDF/图像。G：Claude Code 2.1.287 或更高。H：Cline CLI；Python 3；支持 Agent Skills 规范的宿主。I：Node/npm 装 CLI；本机 Python 3.x。J：本地 Node 环境。K：一个受支持的 Agent Skills 宿主。L：Claude Code 或 `gh`/可用 `npx`。M：本机 Python 并能安装抽取器。N：支持 Agent Skills 的 Agent；git、`CLAUDE.md`/`AGENTS.md`、`docs/`。O：本机 `npx`；目标 agent 支持 Agent Skills 或 MCP。P：已装 Claude Code；只对自有或书面授权资产使用。Q：支持本地 Skills 的宿主；可写的 `PROJECT_ROOT` 与只读的 `SKILL_ROOT` 分开。R：支持 agent skills 的编码 agent。S：Node.js/npx；Google Cloud 账号、项目和权限。T：Node.js 22.20+ / npm；Python 3.9+。U：Codex desktop + Apple Silicon Mac；Xcode 26+ 与 simulator runtime。V：本机已安装 Claude Code。W：Node.js；`SKILL.md`、`references/`、`scripts/` 三部分放在一起。X：已安装并使用 Claude Code。Y：Python 3.10+；PDF 文本抽取需 Poppler。Z：先装好对应 harness；Codex 需先通过 `/hooks` 信任路由 hook。AA：本地有 git 与 bash。AB：一台能跑 T3 Code 的机器。AC：Claude Code 环境或 claude.ai 账号；本地 Python 3.8+。AD：Node.js ≥ 20；agent 能执行 shell 命令。AE：用现成技能需要 Claude Code 或支持 Agent Skills 的 agent；用这套流程分发自己的技能，只需 Claude Code + Python 3。AF：用支持 Agent Skills 的编程助手；安装需要 Node/npx，或用 Claude Code 插件市场。AG：一个能加载 skills 的 agent（Claude Code、Codex 或其他）；要处理的文本；最好有作者自己的笔记、语音转写或自写粗稿；跑 `check.py` 需要 Python 和能执行代码的 agent 环境。AH：装有 Codex 或 Claude Code；Python 3.9 或更新；一个浏览器；可选获授权的 Slurm 集群、LaTeX、私有 dashboard 目的地。AI：能访问 GitHub；Cowork 路线需要桌面端 Claude；Claude Code / Codex 路线需要先装好对应 CLI 并登录；其它助手路线只需对目标 skills 目录有写权限。AJ：Claude Code 或 Cursor；一个非琐碎的代码任务；项目级写入 CLAUDE.md 的权限，或能装 Claude Code 插件；Cursor 用户需使用仓库自带的 `.cursor/rules/karpathy-guidelines.mdc`。
 - AK：本地有 Node.js 才能用 `npx`；至少一个被支持的编码智能体（README 列出 Claude Code、Hermes Agent、OpenCode、Qoder、Cursor、Gemini CLI 等）；能访问 npm 与 GitHub；有权限写入 `~/.orchestra/skills/` 并把技能 symlink 到各 agent 目录。
+- AL：一个支持 skill 机制的编程智能体（Claude Code 或 Codex）；一个空的项目文件夹；设计插件 `impeccable`（skill 会在开始时和你一起配置）；DataForSEO 账号与 webhosting 由 skill 在真正需要它们的那个阶段才来配置，不必提前准备。
 
 ## 操作步骤
 
-怎么选：先做做法 A；A 里某个技能确实有效、且你有一件每周重复且规范明确的工作，再做做法 B。其余按场景选：C 多来源知识打包；D 补模型端点/权限/搜索；E 中文技术文档写作与审稿；F 单篇论文精读；G 写一个 Claude Code mod；H 用 Cline CLI 代理长任务拿硬证据验收；I 补 UI/UX 设计知识；J 出带交互的单文件 HTML 图；K 出品牌一致的静态 HTML+SVG 图；L 从大插件市场只装一个单元并按任务档位选模型；M 把书或内部文档转成按需加载技能；N 把模糊想法写成任务书并给破坏性操作加闸门；O 补 Postgres 领域知识与版本化文档检索；P 在授权安全场景按主题加载安全技能库；Q 把多步任务拆成三阶段加门禁；R 装一套小而可组合的工程技能集；S 从 google/skills 按任务只装一个；T 让 agent 检索中国金融市场数据并核对来源与时间戳；U 把移动端模拟器与真机画面接进 Codex 聊天；V 用一行 curl 装单个 Markdown 技能；W 用元技能观察你怎么用技能；X 装一套全栈开发技能包按请求自动激活；Y 把中英文学术写作去模板化改写并用命题核对保住事实；Z 用路由技能自动选工作流并对 bug 交出失败→通过证据；AA 按职能只装少量 agent 角色并用真实任务与默认提示对照；AB 在 T3 Code 里用 p3-stack 按 playbook 路由并用 worktree/PR 监视减少等待和冲突；AC 审计并改进自己的 SKILL.md；AD 让 agent 把结论、方案对比与流程解释渲染成一页可离线打开的 HTML；AE 把自己的 SKILL.md 校验、打包并分发到多端；AF 给 agent 补一块 SwiftUI 领域知识并按需触发审查；AG 给工作写作去 AI 腔并保住事实与承诺强度；AH 把开放式研究做成迷宫地图、证据分级与独立裁判循环；AI 装 1–2 个 PM 插件并用 `/discover` 跑一个真实想法；AJ 给编码 agent 立四条行为约束并把任务改写成带验证标准的目标；AK 给 agent 补 AI 研究全流程知识，按类别只装一个技能并用真实研究任务对照。
+怎么选：先做做法 A；A 里某个技能确实有效、且你有一件每周重复且规范明确的工作，再做做法 B。其余按场景选：C 多来源知识打包；D 补模型端点/权限/搜索；E 中文技术文档写作与审稿；F 单篇论文精读；G 写一个 Claude Code mod；H 用 Cline CLI 代理长任务拿硬证据验收；I 补 UI/UX 设计知识；J 出带交互的单文件 HTML 图；K 出品牌一致的静态 HTML+SVG 图；L 从大插件市场只装一个单元并按任务档位选模型；M 把书或内部文档转成按需加载技能；N 把模糊想法写成任务书并给破坏性操作加闸门；O 补 Postgres 领域知识与版本化文档检索；P 在授权安全场景按主题加载安全技能库；Q 把多步任务拆成三阶段加门禁；R 装一套小而可组合的工程技能集；S 从 google/skills 按任务只装一个；T 让 agent 检索中国金融市场数据并核对来源与时间戳；U 把移动端模拟器与真机画面接进 Codex 聊天；V 用一行 curl 装单个 Markdown 技能；W 用元技能观察你怎么用技能；X 装一套全栈开发技能包按请求自动激活；Y 把中英文学术写作去模板化改写并用命题核对保住事实；Z 用路由技能自动选工作流并对 bug 交出失败→通过证据；AA 按职能只装少量 agent 角色并用真实任务与默认提示对照；AB 在 T3 Code 里用 p3-stack 按 playbook 路由并用 worktree/PR 监视减少等待和冲突；AC 审计并改进自己的 SKILL.md；AD 让 agent 把结论、方案对比与流程解释渲染成一页可离线打开的 HTML；AE 把自己的 SKILL.md 校验、打包并分发到多端；AF 给 agent 补一块 SwiftUI 领域知识并按需触发审查；AG 给工作写作去 AI 腔并保住事实与承诺强度；AH 把开放式研究做成迷宫地图、证据分级与独立裁判循环；AI 装 1–2 个 PM 插件并用 `/discover` 跑一个真实想法；AJ 给编码 agent 立四条行为约束并把任务改写成带验证标准的目标；AK 给 agent 补 AI 研究全流程知识，按类别只装一个技能并用真实研究任务对照；AL 把多阶段、跨天的长流程（如从零建站）打包成 skill，用状态文件断点续做、按阶段按需接外部工具。
 
 几组容易混的：
 
@@ -88,8 +94,10 @@
 - AI 与 A：都是先小范围试装一个技能来源。区别在粒度：A 的默认是「只装一个技能包」，AI 的 README 建议「装整个插件而不是挑单个 skill」，理由是一个工作流通常依赖同一插件里一起发布的多个 skill。两条同时遵守的做法是：A 管「只引入一个新来源」，AI 管「在这个来源内部装一个插件」——仍然只装 1 个插件做对照。
 - AJ 与 B / R / W / AA：AJ 是往编码 agent 里写一份行为约束，不装技能包、不审计已有 SKILL.md、不观察你怎么用技能。
 - AK 与 C / M：C 是把外部文档打包成技能；M 是把书或内部文档转成按需加载技能；AK 是现成的 AI 研究技能库，并给你一套可抄的 `SKILL.md + references/` 目录规范。要补研究流程用 AK，要打包自己的书或文档用 C/M。
+- AL 与 B / M / Q / N：B 是把自己的一件重复工作写成单个 `SKILL.md`；M 是把书或内部文档转成按需加载技能；N 是把一句模糊想法写成任务书；Q 是把复杂分析任务拆成三阶段并加五道门禁；AL 是把一条长流程（从零建站）整体打包成 skill，进度写进 `WEBSITE-STATUS.md` 跨会话续做，外部工具按阶段才接入。要打包流程本身用 AL，要打包文档用 C/M，要拆分析任务用 Q。
+- AL 与 A：A 的默认是「只装一个技能包」并做有/无对照；AL 同样必须先套用 A 的对照方法，只跑到调研／设计方向阶段就停，不要因为阶段顺序看起来完整就默认它有效。
 
-E、F、G、H、I、J、K、L、M、N、O、P、Q、R、S、T、U、V、W、X、Y、Z、AA、AB、AC、AD、AE、AF、AG、AH、AI、AJ、AK 都必须套用 A 的对照方法，不要跳过验证直接纳入常规流程。
+E、F、G、H、I、J、K、L、M、N、O、P、Q、R、S、T、U、V、W、X、Y、Z、AA、AB、AC、AD、AE、AF、AG、AH、AI、AJ、AK、AL 都必须套用 A 的对照方法，不要跳过验证直接纳入常规流程。
 
 ### 做法 A：先用现成技能包做小范围试装（推荐先做）
 
@@ -469,6 +477,61 @@ skill-name/
 
 9. 验证安装只证明装上了：`npx @orchestra-research/ai-research-skills list` 能看到技能，不等于研究产出更好。效果必须按第 7 步做对照。
 
+### 做法 AL：把多阶段长流程（从零建站）打包成 skill，用状态文件断点续做（新增，按 A 的对照法验证）
+
+定位：`Julian-Ivanov/website-bauen`（30 stars）是一个给 Claude Code / Codex 用的 skill，用德语描述从零到上线建一个网站的完整流程：名称与 Logo → 用真实搜索数据做调研 → 文案 → 设计方向 → 构建 → 检查 → 上线 → 上线后在 Google 和 ChatGPT 里复测。README 明确说即使还没有名称和 Logo 也能用。它最值得抄的不是建站本身，而是「skill + 状态文件 + 按阶段调工具」这套打包形态。
+
+1. 前提：一个支持 skill 机制的编程智能体（Claude Code 或 Codex），以及一个空的项目文件夹。
+2. 项目级安装（只对当前项目生效），把仓库链接交给智能体，由它自己放置 skill：
+
+```
+Installiere den Skill von https://github.com/Julian-Ivanov/website-bauen in diesem Projekt.
+```
+
+3. 或全局安装（所有项目可用）：
+
+```
+Installiere den Skill von https://github.com/Julian-Ivanov/website-bauen global, damit er in jedem Projekt verfügbar ist.
+```
+
+4. 安装后如果 skill 没有立刻出现，重启一次智能体（README 原话即为需重启）。
+5. 启动。Claude Code 在空项目文件夹里输入：
+
+```
+/website-bauen start
+```
+
+其他智能体则用自然语言：
+
+```
+Starte den Skill website-bauen.
+```
+
+6. 按阶段准备外部依赖。必需的是一个 AI 智能体；`impeccable`（免费设计插件）由 skill 在开始时和你一起配置；调研阶段的 DataForSEO 账号和上线阶段的 webhosting 都由 skill 在真正需要它们的那个阶段才来配置，不必提前准备。注意：README 里的 DataForSEO 注册链接是作者的联盟链接，走该链接可得 5 美元初始额度（对使用者无额外费用），判断时留意推荐动机。
+7. 断点续做。进度保存在项目里的 `WEBSITE-STATUS.md`。几天后继续时，在项目文件夹新开一个对话：
+
+```
+Mach mit dem Skill website-bauen weiter
+```
+
+Claude Code 中也可用：
+
+```
+/website-bauen weiter
+```
+
+8. 更新 skill 版本，让智能体从 GitHub 重新拉取：
+
+```
+Aktualisiere den Skill website-bauen von GitHub.
+```
+
+9. 把阶段顺序当检查清单用：名称与 Logo → 用真实搜索数据做调研 → 文案 → 设计方向 → 构建 → 检查 → 上线 → 在 Google 和 ChatGPT 中复测。注意 README 只给出使用层的步骤，skill 内部每个阶段的具体步骤、提示词和检查标准都没出现，所以这只是一张阶段框架，不能据此复现细节。
+10. 做对照。新建一个空文件夹，按第 2 步装、第 5 步启动，只跑到「调研／设计方向」阶段即主动叫停，检查命名与 Logo 方案、带真实搜索数据的调研结果、文案初稿、设计方向说明这些产出物是否可直接使用；对比你自己手工做同一件事的耗时与返工次数。不要第一次就走完上线，以免被账号和部署环节带偏。
+11. 如果你不需要建站，只借它的形态：把一条自己多阶段、跨天的流程写成 skill，把进度写进一个状态文件（对应 `WEBSITE-STATUS.md`），外部工具和账号放到真正需要它们的阶段才接入。
+
+降级条件：如果关键阶段拿不出可核查的产出、或大量步骤仍需人工补做，说明 README 之外的 skill 本体并未兑现承诺，应从「试用这个 skill」降为「只借鉴 skill + 状态文件 + 阶段化接工具的思路」。
+
 ## 怎么判断变好了
 
 最小试用方式：
@@ -506,12 +569,14 @@ skill-name/
 - PM 工作流类（做法 AI）：只装 1–2 个插件（推荐先 `pm-product-discovery`）。选一句你手头真实的产品想法，先在没装插件的会话里让模型自由发挥一次，保存输出；再跑 `/discover <你的真实想法>`；再跑一次 `/write-prd <同一想法>`，看它会不会按 README 说的提示你进入下一条命令。同一想法至少跑 3 次，或换 2–3 个想法。
 - 编码 agent 行为约束类（做法 AJ）：在一个已有项目里按第 3 步追加 CLAUDE.md，或先只在单个项目装插件，不要全局铺开。挑一个非琐碎的改动任务，按第 7 步把命令式要求改写成「先写失败测试→改到通过」，让智能体自行跑完，再 review diff。
 - AI 研究技能类（做法 AK）：只装 1 个类别，例如 `fine-tuning` 或 `inference-serving`。选一个与类别对应的真实小任务，先在不装该技能的会话里让 agent 做一次，记录查文档时间、命令/配置正确率、人工纠正次数；再装上该技能做一次。至少跑 3 次或换 2–3 个任务。同时用它的目录规范整理一份自己的内部知识，检查 `SKILL.md` 是否控制在 50–150 行、细节是否进 `references/`、是否写了「When to use this skill」和 breaking changes。
+- 建站长流程类（做法 AL）：新建一个空文件夹，项目级装好 skill 后用 `/website-bauen start` 跑到「调研／设计方向」阶段即主动叫停，逐项检查命名与 Logo 方案、带真实搜索数据的调研结果、文案初稿、设计方向说明是否可直接使用；然后新开一个对话用 `/website-bauen weiter`，看能否仅凭 `WEBSITE-STATUS.md` 正确恢复上下文。
 
 可观察的指标：
 
 - 通用：人工修改次数 / 返工轮数是否下降；首稿可用率；背景重述次数；输出一致性；单次任务耗时；规则类返工次数。
 - 做法 AK：是否减少查文档时间；命令/配置正确率；人工纠正次数；权限申请次数；是否只装一个类别；是否把目录规范用于内部知识；不要拿 13,433 stars、98/87 技能数、demo 数字当效果证据。
-- 其余做法指标保留：H 看测试是否通过、非空文件、git 改动；I 看交付前 8 条检查清单；J 看按 `diagnostics[]` 修的轮数；K 看品牌 onboarding 后是否还需手动改配色字体；L 看完成时间与返工次数；M 看 8 个已知答案题命中数与 0 幻觉；N 看七问是否全有答案；O 看约束数量与 PG 版本匹配；P 看 7-Question Gate；Q 看五道门禁通过/失败记录；R 看 `GLOSSARY.md` 与 ADR 是否更新；S 看任务完成时间与权限收敛；T 看数据来源、行情时间、抓取时间；U 看从描述问题到 Codex 指到具体元素的耗时；V 看是否自动触发；W 看观察条数与被接受改动数；X 看激活命中与返工轮次；Y 看模板化表达减少与事实不变；Z 看失败→通过证据；AA 看角色激活命中与返工；AB 看 playbook 是否走完与冲突次数；AC 看 validator 退出码与 warning 数；AD 看输出 token 与页面可读性；AE 看校验是否 0 错误与分发效率；AF 看弃用 API 检出数量与误报率；AG 看「愿意发出」比例与意义改动条数；AH 看 tier 计数与 frontier 已解决比例；AI 看 `/discover` 是否产出假设清单与实验设计；AJ 看 diff 是否只含被请求改动。
+- 做法 AL：到「可用初稿」的墙钟时间对比手工；人工返工次数；中途断开对话后 `/website-bauen weiter` 能否仅凭 `WEBSITE-STATUS.md` 正确恢复上下文；调研阶段的数据是否真来自外部搜索数据源而不是模型编造；若走完上线，Google 与 ChatGPT 复测中是否出现可观测、可记录的变化。不要拿 30 stars、阶段顺序本身或「有检查、有复测环节」当效果证据。
+- 其余做法指标保留：H 看测试是否通过、非空文件、git 改动；I 看交付前 8 条检查清单；J 看按 `diagnostics[]` 修的轮数；K 看品牌 onboarding 后是否还需手动改配色字体；L 看完成时间与返工次数；M 看 8 个已知答案题命中数与 0 幻觉；N 看七问是否全有答案；O 看约束数量与 PG 版本匹配；P 看 7-Question Gate；Q 看五道门禁通过/失败记录；R 看 `GLOSSARY.md` 与 ADR 是否更新；S 看任务完成时间与权限收敛；T 看数据来源、行情时间、抓取时间；U 看从描述问题到 Codex 指到具体元素的耗时；V 看是否自动触发；W 看观察条数与被接受改动数；X 看激活命中与返工轮次；Y 看模板化表达减少与事实不变；Z 看失败→通过证据；AA 看角色激活命中与返工；AB 看 playbook 是否走完与冲突次数；AC 看 validator 退出码与 warning 数；AD 看输出 token 与页面可读性；AE 看校验是否 0 错误与分发效率；AF 看弃用 API 检出数量与误报率；AG 看「愿意发出」比例与意义改动条数；AH 看 tier 计数与 frontier 已解决比例；AI 看 `/discover` 是否产出假设清单与实验设计；AJ 看 diff 是否只含被请求改动；AL 看到「可用初稿」的墙钟时间与人工返工次数、断点续做能否恢复上下文、调研数据是否来自外部搜索源。
 
 反向指标：
 
@@ -547,6 +612,7 @@ skill-name/
 - 做法 AH：把 T4–T6 的直觉或猜测当成事实引用；把 dashboard 里的 tier 计数当成效果结论；把跑通 triangle-counts 示例当成研究质量提升；未发表结果未经同意就公开；在缺 subagent 委派能力的环境里硬跑 campaign。
 - 做法 AI：把 26,862 stars 或 README 的 9 插件 / 69 skills / 42 commands 当效果证据；照着安装清单把 9 个插件一次全装；在 Codex 上等 `/discover` 自己跑起来；在 OpenCode / Cursor / Gemini CLI / Kiro 上期待 slash 命令。
 - 做法 AJ：对拼写修正、显而易见的一行改动也套全套四条原则；把四条原则、stars 或「Karpathy 说的」当效果证据。
+- 做法 AL：`/website-bauen weiter` 无法仅凭 `WEBSITE-STATUS.md` 恢复上下文，或调研阶段的数据看不出外部搜索来源，先降级为只借鉴「skill + 状态文件 + 阶段化接工具」的形态。
 - 做法 AK：一次装全部 98/87 个技能；没看权限说明就把技能 symlink 到所有 agent 目录；把 13,433 stars、98/87 技能数、demo 里的 r=-0.99、95.6% recovery、1.9× 压缩仅 1.3% ppl 损失、两篇论文完全由 agent 写成当成效果证据；没读单个技能的 `SKILL.md` 正文就下结论；把 `npx @orchestra-research/ai-research-skills list` 能列出技能当成研究产出变好。
 
 注意：`doctor`、`validate`、`npm test`、`claude plugin validate`、`npx @anthropics/skills-ref validate`、`archify doctor`、`validate --json`、`python -m unittest discover -s tests`、`validate_skill.py`、`check.py` 这类检查只能证明「技能或 mod 装得上、格式合法、不带危险命令、图能通过校验、回归测试能过、技能符合规则表」，不能证明「产出更好」。效果必须自己对照。做法 AK 的 `npx @orchestra-research/ai-research-skills list` 同理。
@@ -591,6 +657,7 @@ skill-name/
 - 做法 AI：把 26,862 stars 或「9 插件 / 69 skills / 42 commands」当效果证据；照着安装清单把 9 个插件一次全跑一遍；在 Codex 上装完 slash 命令却一直等它触发；在 Codex 上把「让 Codex 把命令文件改写成 skill」当成等价移植；把 README 的 Windows PowerShell 监视任务当成官方修复；没跑过任何一条命令就判断「这个市场没用」。
 - 做法 AJ：不备份直接覆盖项目原有 CLAUDE.md；对琐碎任务套整套四条原则；在非 Claude Code / Cursor 的环境里照搬 `.cursor/rules/karpathy-guidelines.mdc`；把四条原则或 stars 当效果证据；忘了 Goal-Driven Execution 需要先有测试或可验证标准。
 - 做法 AK：把材料里「98 Skills」和 Roadmap 的「87 current」当成确定技能数——两者矛盾；一次装全部；忽略 README 没有权限、沙箱或安全说明就 symlink 到所有 agent 目录；把 demo 结果（r=-0.99、95.6%、1.9× 压缩仅 1.3% ppl 损失、两篇论文完全由 agent 写成）当成第三方复现；把 13,433 stars 当效果证据；不看单个技能的 `SKILL.md` 正文就判断技能质量；把 `npx @orchestra-research/ai-research-skills list` 能列出技能当成研究产出变好。
+- 做法 AL：把 README 的阶段顺序当成可以复现的细节；第一次试用就走完上线，被 DataForSEO、webhosting 账号和部署环节带偏；把「有检查、有复测环节」当成效果证据；忽略 README 里的 DataForSEO 联盟链接；在非 Claude Code / Codex 或不支持 skill 机制的宿主上硬装；断点续做时不在项目文件夹里开新对话，导致读不到 `WEBSITE-STATUS.md`；把 30 stars 当效果证据。
 
 ## 证据与来源
 
@@ -636,6 +703,7 @@ skill-name/
 - pm-skills 路线的全部内容均来自调研《phuryn/pm-skills》，即该仓库 README（MIT，26,862 stars）。9 插件 / 69 skills / 42 commands 是 README 明细口径（其中 pm-ai-shipping 标题写 3 个 skill，正文实际列 2 个）；Cowork 自动全装、Claude Code 与 Codex 的安装命令、其它助手拷 skills 目录、Start Here 命令对照表、示例提示词、Windows 用 PowerShell 计划任务监视 CoworkVMService（README 称解决 90% 的问题）都来自该 README。属作者主张、没有依据的是：Codex「原生读同一份 marketplace 文件、无需转换」、让 Codex 把命令文件改写成 skill 是可行替代、skills「兼容其它 AI 助手」。主要局限：本次只拿到 README，没有任何一个 skill 或 command 的正文，也没有任何效果数据、对照实验或成功案例；所以只能按本手册做法 A 试装 1–2 个插件并用真实想法对照，不能直接采用。
 - andrej-karpathy-skills 路线的全部内容均来自调研《multica-ai/andrej-karpathy-skills》，即该仓库 README 与 CLAUDE.md。证据：原文直接引用 Karpathy 推文三段，作为四类问题的来源；给出四条可照做的行为规则和一张任务改写对照表；「How to Know It's Working」给出四条可观察信号。属作者主张、没有对照实验或量化数据的是：四条原则本身、四条「working」信号、以及「强成功标准能让 LLM 独立循环」的机制解释。适用条件：偏向谨慎而非速度，对琐碎任务价值低；面向会读 CLAUDE.md 的编码智能体（Claude Code / Cursor），其他形态需自己迁移规则。仓库 MIT 许可。
 - AI-Research-SKILLs 路线的全部内容均来自调研《Orchestra-Research/AI-Research-SKILLs》，即该仓库 README。证据：README 自述了技能结构（每个技能含 50–150 行 `SKILL.md` 快速参考和 300KB+ `references/` 深度文档）、质量标准（官方仓库、真实 GitHub issue、生产工作流、必须写「When to use this skill」、必须列 breaking changes）、三条安装方式（npx 交互式安装器、Claude Code 插件市场、让 agent 读 welcome.md 自助安装）、日常管理 `list`/`update`、7 个 demo；输入 metrics 显示 13,433 stars；README 称平均每技能 420 行、总文档约 130,000 行、65 个 gold standard 技能、覆盖 23 类。局限与矛盾：正文标题写「98 Skills」，Roadmap 统计表却写「Skills 87（current）」，实际技能数无法确定；作者人数为 1（Contributors: 1，target 100+），基本没有第三方交叉验证；材料只有 README 且结尾被截断，单个技能的 `SKILL.md` 正文完全没出现，因此「production-ready」「battle-tested」只能算作者主张；demo 结果（r=-0.99、95.6% recovery、1.9× 压缩/1.3% ppl 损失、「两篇论文完全由 agent 写成」）均为作者自述，材料未给第三方复现或评测方法；「autoresearch 支持 Claude Code /loop 和 OpenClaw heartbeat」只有一句陈述，没有配置细节。适用条件：给编码智能体补 AI 研究全流程知识，或抄技能目录规范整理内部知识；必须按本手册做法 A 只装一个类别并在真实研究任务上对照，不能直接采用。
+- website-bauen 路线的全部内容均来自调研《Julian-Ivanov/website-bauen》，即该仓库 README。可照做的部分：两条德语安装提示词、`/website-bauen start` 与 `/website-bauen weiter`、续做方式、更新方式、状态文件 `WEBSITE-STATUS.md`、阶段顺序、依赖清单与「按阶段配置依赖」的规则。属作者主张、没有数据的是：标题层面的「一步步带你完成整站建设」「即使还没有名称和 Logo 也能用」；README 未给任何案例、成品网站、耗时、成功率或用户反馈，全文没有任何数字支撑效果，只有 30 stars 这一外部指标。主要局限：输入只有 README，skill 本体的具体步骤、提示词与检查标准都看不到，无法核实各阶段究竟做什么、能否复现；README 含 DataForSEO 联盟链接，存在推荐动机；原文为德语，非德语使用者需确认语言处理是否顺滑；要走完全程需要第三方付费账号（DataForSEO、webhosting）。适用条件：仅对支持 skill 机制的智能体有效；对不需要建站的工作，价值主要落在「skill 打包 + 状态文件续做 + 阶段化接工具」这套方法上，而非建站本身。
 - 文中提到的 star 数来自 metrics，不构成有效性证据。
 
 ## 依据的调研
@@ -682,3 +750,4 @@ skill-name/
 - [phuryn/pm-skills](../research/radar/2026-10-10/2391-phuryn-pm-skills.md)：值得一试，建议小范围试：按 README 给出的 CLI 命令装 1–2 个插件（如 pm-product-discovery），用 /discover 跑一个真实想法，检验产出是否是结构化流程而非泛泛文本；理由是安装步骤与命令示例可直接照抄，但原文只有宣传性主张、没有 skill 内容和任何效果数据，不足以直接采用。
 - [multica-ai/andrej-karpathy-skills](../research/radar/2026-10-11/2466-multica-ai-andrej-karpathy-skills.md)：建议采用，直接在编码智能体项目里落一份 CLAUDE.md（或装 Claude Code 插件），把四条原则当成硬约束，并把命令式任务改写成带验证标准的目标；理由是原文给了可复制的安装命令、四条可照做的行为规则和一张任务改写对照表，属于拿到就能用的配置，而非泛泛观点。
 - [Orchestra-Research/AI-Research-SKILLs](../research/radar/2026-10-11/2507-orchestra-research-ai-research-skills.md)：值得一试，建议小范围试用：先用 npx 安装器或 Claude Code 的 /plugin 命令装一两个类别，在真实任务上跑一遍，同时把它的 skill-name/SKILL.md + references/ 目录规范抄来整理自己已有的内部知识；理由是原文给出了可直接复制的安装命令和技能打包结构，但单个技能的正文没有随材料给出，宣称的效果只能自测。
+- [Julian-Ivanov/website-bauen](../research/radar/2026-10-12/2728-julian-ivanov-website-bauen.md)：值得一试，可以把 Claude Code 的“agent skill + 状态文件 + 按阶段调工具”这套打包方式小范围试一遍，用它跑一次从零建站的前半程；理由是原文给出了可直接复制的安装/启动/续跑指令和明确的阶段顺序，但 skill 本体内容和实测效果未在材料中给出，只能算小范围验证。

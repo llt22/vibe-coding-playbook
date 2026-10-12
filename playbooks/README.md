@@ -4,6 +4,7 @@
 
 | 手册 | 解决的问题 | 先试这一步 | 最近修订 |
 |---|---|---|---|
+| [让 agent 技能真的减少返工：先小范围对照，再把重复工作和长流程沉淀成技能](build-and-install-agent-skills.md) | 解决「装了 agent 技能却不知道有没有变好、重复工作和多阶段长流程每次都要重新交代」的问题：给出先小范围试装、用同一任务做有/无对照、再把自己的重复工作或长流程沉淀成技能的完整流程，并逐条列出各做法的安装、验证与常见坑。 | 先在一个非关键项目里只装一个技能包，用同一任务、同一输入做有技能与无技能各 3 次的对照，记录返工轮数和人工修改次数后再决定是否纳入常规流程。 | 2026-10-13 |
 | [让编码 agent 把 runbook 改写成低歧义的操作步骤](controlled-language-explanations.md) | 如何让编码 agent 按简化技术英语规则改写 runbook、操作步骤和解释，并在文本仍不够时按最低理解阶梯升级，减少歧义和误读，同时保住事实与限定条件。 | 挑一份团队真实在用的 runbook 或 API how-to，用 STE-Prompt 的 `/ste`（或把 10 条 STE 规则粘贴进对话）改写，保留原文，并让 2–3 位同事按改写稿实际执行一次。 | 2026-10-13 |
 | [AI 起草后，做一道“AI 味”清单检查再交付](detect-ai-slop-in-writing.md) | AI 起草的稿子读着假但说不出哪里假，缺少可逐条检查、按对照改写的清单流程。 | 挑一篇最近由 AI 起草、你觉得“读着有点假但说不出哪里假”的稿子，贴进对话并附上 FeedHive/ai-slop-detector 的清单，要求逐条列出命中的模式并给出行号。 | 2026-10-13 |
 | [让研究构思 agent 交出可证伪提案：冻结基线、精确版本证据、结构校验](research-ideation-with-agents.md) | 怎么把「研究构思」拆成一条可执行、有预算边界、产物可校验的多 agent 流水线，让 agent 交出带精确版本证据和可证伪预测的提案，而不是一个无法追溯的结论。 | 在 Claude Code 里装上 ideascientist 插件，拿自己熟悉的一个窄研究问题跑一次 `/ideascientist:ideate`，再用 `check_artifacts.py` 校验产物结构。 | 2026-10-13 |
@@ -19,7 +20,6 @@
 | [让长跑的编码 agent 跨上下文窗口交接不断线](install-and-customize-agent-plugins.md) | 当 Claude Code 的编码任务跑得比一个上下文窗口更久时，如何让它在自动交接、定时等待和需要你拍板的地方都不掉线，并且你能看出它是不是真的减少了上下文溢出和人工盯守。 | 先用 claude --plugin-dir /path/to/project-sentinel/plugins/project-sentinel 在一个长任务会话里不安装地试跑，打开 Autopilot、状态栏和 Activity，用 Handoff Health 与跨交接的里程碑连续性判断它是否真的减少了上下文溢出和人工盯守。 | 2026-10-11 |
 | [让 AI 在宣布完成前拿出证据：用内置命令与四条路线审代码](code-review-with-agents.md) | 代码评审缺少结构图、push 前可核对的自动评审和主动找漏洞，而且很多人不知道自己已有的 Claude Code 里就有 /code-review 可用。 | 如果你已经在用 Claude Code，下次审代码时先原样跑一次 `/code-review`（别名 `/review`），记录它报出的问题清单，再对照人工 review 标记真 bug 和误报。 | 2026-10-11 |
 | [让新会话先核对事实再接手工作](persistent-memory-for-coding-agents.md) | AI 每次开新会话都会把上次笔记当作事实继续施工，这篇手册解决如何把长期信息落盘，并在接手前用 git 与机器状态核对主张与事实。 | 先 clone truongfelix/workflow，跑通 ground-truth.sh 到 `GROUND TRUTH: complete`，下一次会话用 /session-start 开始。 | 2026-10-11 |
-| [先小范围试装技能包，用对照确认 agent 真的少返工](build-and-install-agent-skills.md) | 你已经在用编码 agent，但不确定装技能包是否真的减少返工；这篇手册给出小范围试装、对照验证、再写自己技能或补 AI 研究知识的流程。 | 选一个非关键项目和一类重复任务，只装一个技能包，同一任务分别在有技能和无技能下各跑 3 次并记录差异。 | 2026-10-11 |
 | [让逆向重建 agent 在宣布完成前通过机器验收](reverse-engineer-software-with-agents.md) | 当目标没有源码、需要搞懂并重建某个功能时，如何让 agent 产出可回溯的证据，并在有 ground truth 时用机器可判定的 PASS/FAIL 守住正确性。 | 先选一个存在可机器比对 ground truth 的最小逆向/重建任务，写一个让 agent 提交前自己跑的 PASS/FAIL 验收脚本；没有 ground truth 时，先用 REA 对已提取的 JS/Electron 目录跑一次静态分析，检查 Evidence 与 limitations。 | 2026-10-11 |
 | [给 AI 的写操作和外部执行装上可审批、可回滚、可拒绝的边界](agent-operations-with-permissions.md) | 让 AI 在审计、改代码、调外部服务和跨机器执行时，不拿到超出任务所需的权限，并对写操作保留审批、回滚与可核验记录。 | 先选一个不重要的项目或账号，只读跑一轮；再把一次写操作改成“出草案→人工核准→存还原点→沙箱执行”；如果你在 Windows 11，用 MXC 的 Permissive 模式跑一个无害任务并看活动报告。 | 2026-10-11 |
 | [在把浏览器、桌面或手机交给 AI 之前，先验证反馈回路](computer-use-agents.md) | 在把浏览器、桌面或安卓手机交给 AI 操作之前，用成本递增的步骤先验证它的反馈回路和验收标准，并把「高效」变成同批任务上的可比较数字。 | 先跑做法 A 的两条安装命令建最小任务、确认参考解 reward 为 1.0；如果你已在 macOS + Chrome + 编码 agent 环境，可直接按做法 F 走一次需登录站点的四步流程并用 audit 复盘。 | 2026-10-11 |
