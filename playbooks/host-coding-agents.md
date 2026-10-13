@@ -1,14 +1,14 @@
-# 让编码 agent 在可控环境里按项目规则跑，并且拿得出证据
+# 让 agent 在受控沙箱里干活：看得见、能接管、拿得出证据
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：把编码 agent 从本机随手跑一次，变成在可控环境里按项目规则反复跑，并且能实时观察、在真实系统里验证、用命令证明完成。
-> 先试这一步：先用做法 C 在一个可回退的真实项目里落地短 CLAUDE.md + allow/ask/deny 权限 + 一个 PostToolUse hook，再用 Plan mode 跑一个边界清晰的小任务。
-> 最近修订：2026-10-07
+> 解决的问题：把编码 agent 从「在本机随手跑一次」变成「在可控环境里、按项目规则反复跑」，并能观察它的读写、限制它的边界、需要时接管，最后拿到可判定的结果。
+> 先试这一步：先挑一类重复任务，在单个可回退的真实项目里只落地做法 C 的三件套（短 CLAUDE.md + allow/ask/deny 权限 + 一个 PostToolUse 格式化 hook），用 Plan mode 跑 3–5 次记下基线；要「每个 agent 一台隔离桌面 + 能随时接管」就先看做法 L。
+> 最近修订：2026-10-13
 
 ## 解决什么问题
 
-本手册解决的是：把编码 agent（Claude Code / Codex CLI / OpenCode / goose / pi / agentbox 里的 agent）从「在本机随手跑一次」变成「在可控环境里、按项目规则反复跑」，并且能实时看到它在读什么、写什么，需要时还能在真实（仿真）系统里执行并拿到可判定结果。要补十二件事：工作区与文件持久化、权限与凭据边界、工具与扩展供给、项目级护栏（上下文供给 + 自动化触发）、按轮次的用量成本记录、「先只读规划、再放权编辑」的分工、「运行时/界面扩展面」的受控试点、「跨模型统一接口」——让同一套流程换供应商而不改上层、「实时观察与危险动作闸门」、「把桌面 Codex 会话接到手机做异步审批与完成通知」，「让 agent 在真实内核/网络的 guest 里跑命令并验证」，以及「把边界清晰、需要独立验证的任务放到云端并行跑，并要求会话用命令证明完成」。给出十一条可照做的路径：做法 A 是在 Linux 服务器上自托管 agentbox 工作区；做法 B 是在非生产机器上装 goose，用 MCP 供给工具与权限；做法 C 是在单个真实项目里给 Claude Code 配 CLAUDE.md、allow/ask/deny 权限、hook、subagent、skill，并把主工作流固定成 Explore → Plan → Code → Verify → Commit；做法 D 是用 OpenCode 的 build/plan 双 agent 把「先只读规划、再放权编辑」固定成分工；做法 E 是在本机装 Codex CLI 并用 ChatGPT 账号登录，先跑通一次终端编码任务；做法 F 是在一次性项目里用实验开关试点 Claude Mods（function hooks），按验收矩阵检查后再决定是否留下；做法 G 是按 pi 的官方安装脚本装好 CLI，用 `/login` 接入模型，在容器边界内跑一个边界清晰的小任务，验证「同一套流程换 provider」是否成立；做法 H 是在真实仓库里装 hamzafer/claude-code-mods 的 mission-control 与观察类插件，先看清 agent 的读写与上下文水位，再决定是否加 blast-radius 这类危险命令闸门；做法 I 是在一台已运行 Codex App 的 macOS/Windows 电脑上装 Codex Mobile Bridge 桌面 App，只开局域网和账号密码，用手机扫码接入已有会话，回应待确认操作、切模型与 Skill、配 Bark/ntfy 通知，再决定是否开外网入口；做法 J 是在 Windows 或 Linux/macOS 上按 qemu-harness（qh）README 装好 Python 3.8+、QEMU、Go 1.22+，用 `qh up --kernel alpine:aarch64` → `qh exec` → `qh down` 跑通最小链路，用项目级 `qh.json` 固化配置，把自带 `skill/SKILL.md` 接给 Claude Code，让需要真实系统验证的任务在 guest 里执行；做法 K 是按 Claude Code 官方云的「五分钟起步」流程开通云端会话：连接 GitHub、在一次性 VM 里跑一个自包含工单、要求它用点名命令证明完成，再用并行 session、`--teleport`、Auto-fix 与 routines 把这套流程接进日常。
+本手册解决的是：把编码 agent（Claude Code / Codex CLI / OpenCode / goose / pi / agentbox / Xiryn 里的 agent）从「在本机随手跑一次」变成「在可控环境里、按项目规则反复跑」，并且能实时看到它在读什么、写什么，需要时还能在真实（仿真）系统里执行并拿到可判定结果。要补十三件事：工作区与文件持久化、权限与凭据边界、工具与扩展供给、项目级护栏（上下文供给 + 自动化触发）、按轮次的用量成本记录、「先只读规划、再放权编辑」的分工、「运行时/界面扩展面」的受控试点、「跨模型统一接口」——让同一套流程换供应商而不改上层、「实时观察与危险动作闸门」、「把桌面 Codex 会话接到手机做异步审批与完成通知」，「让 agent 在真实内核/网络的 guest 里跑命令并验证」，「把边界清晰、需要独立验证的任务放到云端并行跑，并要求会话用命令证明完成」，以及「给每个 agent 一台独立沙箱桌面、把登录/卡号/个人信息挡在 agent 视野之外、需要时人工接管再交回」。给出十二条可照做的路径：做法 A 是在 Linux 服务器上自托管 agentbox 工作区；做法 B 是在非生产机器上装 goose，用 MCP 供给工具与权限；做法 C 是在单个真实项目里给 Claude Code 配 CLAUDE.md、allow/ask/deny 权限、hook、subagent、skill，并把主工作流固定成 Explore → Plan → Code → Verify → Commit；做法 D 是用 OpenCode 的 build/plan 双 agent 把「先只读规划、再放权编辑」固定成分工；做法 E 是在本机装 Codex CLI 并用 ChatGPT 账号登录，先跑通一次终端编码任务；做法 F 是在一次性项目里用实验开关试点 Claude Mods（function hooks），按验收矩阵检查后再决定是否留下；做法 G 是按 pi 的官方安装脚本装好 CLI，用 `/login` 接入模型，在容器边界内跑一个边界清晰的小任务，验证「同一套流程换 provider」是否成立；做法 H 是在真实仓库里装 hamzafer/claude-code-mods 的 mission-control 与观察类插件，先看清 agent 的读写与上下文水位，再决定是否加 blast-radius 这类危险命令闸门；做法 I 是在一台已运行 Codex App 的 macOS/Windows 电脑上装 Codex Mobile Bridge 桌面 App，只开局域网和账号密码，用手机扫码接入已有会话，回应待确认操作、切模型与 Skill、配 Bark/ntfy 通知，再决定是否开外网入口；做法 J 是在 Windows 或 Linux/macOS 上按 qemu-harness（qh）README 装好 Python 3.8+、QEMU、Go 1.22+，用 `qh up --kernel alpine:aarch64` → `qh exec` → `qh down` 跑通最小链路，用项目级 `qh.json` 固化配置，把自带 `skill/SKILL.md` 接给 Claude Code，让需要真实系统验证的任务在 guest 里执行；做法 K 是按 Claude Code 官方云的「五分钟起步」流程开通云端会话：连接 GitHub、在一次性 VM 里跑一个自包含工单、要求它用点名命令证明完成，再用并行 session、`--teleport`、Auto-fix 与 routines 把这套流程接进日常；做法 L 是在一台非主力、可装 Docker 的机器上自托管 Xiryn，让每个 agent 跑在自己的 Linux 桌面容器里（含 shell、持久 home、1280×800 桌面 + Chromium），配一个模型 provider key，用 Telegram 远程指挥，需要时 Take over 接管并在交回时附一句说明，重点验证沙箱隔离、hand-off 人工介入成本与 token 花费后再决定是否推广。
 
 ## 适用与不适用
 
@@ -34,6 +34,10 @@
 - 想在一次性 VM 里跑不完全信任的代码（贡献者 PR、新依赖安装脚本、刚 clone 的仓库），并且能接受把环境网络收窄到 None 或 Trusted 的人（做法 K）。
 - 想用时间/事件触发工作（schedule 最快每小时、对 routine endpoint 发 HTTP 调用、GitHub 事件），或把 follow-up 排队进正在运行的 session 的人（做法 K；注意 routine 是 research preview）。
 - 已经在用 Claude Code、仓库里已有 CLAUDE.md / rules / skills / agents / commands，想把这些项目规则原样带进云端会话的人（做法 K）。
+- 想在个人电脑上自托管一个 agent 运行环境、让每个 agent 有自己的隔离 Linux 桌面（不读宿主文件、不看你屏幕、不动你鼠标）、并且想用手机远程指挥的人（做法 L）。
+- 需要「登录/卡号/UPI/个人信息不直接暴露给 agent」（掩码显示、由宿主自己填、支付逐笔批准）这一层凭据边界的人（做法 L；机制来自 README 自述）。
+- 需要「能实时看 agent 的桌面、随时接管、交接时附一句说明让 agent 接着做」这种 human-in-the-loop 流程的人（做法 L；机制来自 README 自述，具体操作细节本次材料未给出）。
+- 需要按 agent 单独选模型、并想覆盖托管 provider（OpenAI / Anthropic / Google / xAI / Groq / Mistral / DeepSeek / OpenRouter）与本地运行时（Ollama / LM Studio / 任意 OpenAI 兼容端点）的人（做法 L）。
 - 能给出一台非生产机器或一个可回退的 Git 分支，愿意先小范围试用再扩大的人。
 
 不适用：
@@ -69,8 +73,13 @@
 - 需要把共享环境变量当私密通道的人不适用做法 K：环境变量对使用该环境的人可见，secrets 不应放共享变量；Pro/Max 上可用环境 API credentials 在 VM 外把 key 附加到你指定 host 的请求。
 - 把 routines / projects 当作已 GA 能力的人不适用做法 K：routines 是 research preview，projects 在 Pro/Max 上是 public beta。
 - 想靠做法 K 彻底规避合并冲突的人不适用：Claude 不会收到与 base 分支的 merge conflict 通知，需要让它 rebase；它的评论也可能触发 comment-driven automation（如 Atlantis）。
-- 五条已有线索加 Claude Mods、pi、hamzafer/claude-code-mods、Codex Mobile Bridge、qemu-harness、Claude Code 云端会话都没有给出「AI 是否让结果变好了」的对照评测方法或基准数据；Claude Mods 给出了验收矩阵与成本公式，qh 给出了退出码/probe/dry-run 这类验证抓手，云端会话给出的是「用点名命令证明完成」这类证据要求，但都是作者提出的评估方法或可判定接口，不是独立基准。
-- 涉密或受管环境要额外做安全审查与权限约束，不能直接照搬 `curl | bash` 类安装，也不能为了跑通 Claude Mods 示例而关掉组织托管保护；pi 的 pi-telemetry / pi-share-hf 会话导出等于把工作数据上传，需先确认合规；第三方插件集合要走组织审批流程；qh 的 lab overlay 不可放到不可信网络；做法 K 要走组织的套餐与 GitHub App 审批流程。
+- Xiryn 只有 49 star、没有第三方评测，本次调研也没有给出「用了它以后结果是否更好」的对照数据；把它当成成熟生产方案的人不适用，只适合在非主力机器上小范围试（做法 L）。
+- 想让 agent 按时间/事件/状态自动循环干活的人不适用做法 L：定时/循环任务仍在 roadmap 上、尚未实现。
+- 不想让 agent 联网、或不愿引入 Docker 的人不适用做法 L：每个 agent 的独立 Linux 桌面本身就是一个 Docker 容器，安装脚本还会代为安装 Git、Node.js、Docker（Windows 可能要求接受 Docker Desktop 条款或重启以启用 WSL 2）。
+- 需要「agent 直接看到完整凭据并自己登录/支付」的人不适用做法 L：凭据保险箱只给 agent 掩码（如「Visa ···· 4242」）、由 Xiryn 自己往页面里填，且每笔支付都要用户逐次批准。
+- 想直接照抄 Xiryn 全部配置项的人暂时不适用：本次调研正文在配置表处截断，`XIRYN_WORKSTATION_CPUS` / `XIRYN_WORKSTATION_MEMORY_GB` 这一行的说明没有给全，需要自行查 README。
+- 涉密或受管环境要额外做安全审查与权限约束，不能直接照搬 `curl | bash` 类安装，也不能为了跑通 Claude Mods 示例而关掉组织托管保护；pi 的 pi-telemetry / pi-share-hf 会话导出等于把工作数据上传，需先确认合规；第三方插件集合要走组织审批流程；qh 的 lab overlay 不可放到不可信网络；做法 K 要走组织的套餐与 GitHub App 审批流程；做法 L 的 setup 脚本同样是「下载即执行」，受管环境应先审阅或改用 clone 后本地执行。
+- 十二条做法都没有给出「AI 是否让结果变好了」的对照评测方法或基准数据；Claude Mods 给出了验收矩阵与成本公式，qh 给出了退出码/probe/dry-run 这类验证抓手，云端会话给出的是「用点名命令证明完成」这类证据要求，但都是作者提出的评估方法或可判定接口，不是独立基准。
 
 ## 前置条件
 
@@ -154,9 +163,19 @@
 - 一个可回退的仓库和一条获准测试的任务；`claude --cloud` 会从 GitHub 克隆你当前分支，所以本地未 push 的 commit 要先 push。
 - 想用 `/teleport` 拉回本地收尾时：同一仓库、工作树干净（会提示 stash）、分支已 push。
 
+做法 L（Xiryn 自托管个人 agent 运行环境）：
+- 一台有约 **4 GB 空闲磁盘**的电脑；非主力机器优先（agent 会在本机跑 Docker 容器）。
+- **至少一个模型 provider 的 API key（必需）**；Firecrawl key 可选（用于快速搜索与正文读取）。
+- 安装脚本会自行安装 Git、Node.js、Docker；Windows 上可能要求接受 Docker Desktop 条款或重启以启用 WSL 2。
+- README 未声明操作系统版本下限，仅声明 Node **≥ 20.9**。
+- 手动安装路径要求已装 Node.js 20.9+ 与 Docker。
+- 想用远程控制需要 Telegram 账号（给 @BotFather 发 `/newbot` 拿 token）；机器人走本地 long-poll，无需公网 URL、隧道或端口转发，且只能被一个配对账号使用。
+- 一个可回退的真实小任务（例如 clone 一个仓库跑测试并给 diff，或做一次带引用的调研）作为首次验证对象。
+- 受管或涉密环境：setup 脚本是「下载即执行」，应先审阅脚本内容与来源，或 clone 后本地执行 `./setup.sh` / `setup.cmd`。
+
 ## 操作步骤
 
-十一条做法按环境选：要服务器、多人、持久工作区、共享目录、Git 审查、按轮用量成本记录，选做法 A；只有一台非生产机器、想要通用 agent 并愿意自己接 MCP，选做法 B；已经在单个真实项目里用 Claude Code、想把项目级规则和自动化触发固定下来，选做法 C；需要先读懂陌生代码库、要一个默认只读、bash 前询问权限的 plan 模式，选做法 D；已经用 ChatGPT 订阅、想在本机装官方 CLI 跑通一次终端编码任务，选做法 E；需要更深的运行时事件组合或受支持界面行为，且能满足一次性项目、合成数据、有回滚负责人等条件，才考虑做法 F；要在同一套流程里换模型供应商、准备把 agent 嵌进脚本或服务，并且愿意自己容器化隔离，选做法 G；已经在用 Claude Code、想先看清它在读写在跑什么、并在危险命令前设一道闸门，选做法 H；已经有 Codex App 桌面会话、想让审批和完成通知离开桌面，选做法 I；需要让 agent 在真实内核/网络的 guest 里执行命令、跑跨架构或内核/网络行为验证，选做法 J；已经有 Claude Code 的 Pro/Max/Team/Enterprise 计划、想把边界清晰且需要独立验证的任务放到云端并行跑，选做法 K。做法 C 可以和 A 叠加：A 管服务器工作区与账号边界，C 管单个项目内的工具调用规则。做法 F 是做法 C 在 Claude Code 上的扩展面试点，不替代 Skills、MCP、经典 hook 或插件系统。做法 G 与它们不是替代关系：pi 提供的是「统一多提供商接口 + 可嵌入的 harness」，权限边界要你自己用容器补，原文明确把 OpenClaw 列为它的真实集成案例。做法 H 与做法 F 不是同一层：F 是 Anthropic 原生 function hooks 的受控试点（early access），H 是第三方插件集合，走 `claude plugin marketplace add` / `claude plugin install`，属于对已采用 Claude Code 的观察与守卫增强；两者都建立在做法 C 的项目级护栏之上，都不能替代 Skills、MCP、经典 hook。做法 I 与做法 E 也不是替代关系：E 管在本机装 Codex CLI 跑通终端任务，I 管把 Codex App 已有的桌面会话延伸到手机浏览器做异步审批与通知，模型和权限策略默认继承原会话，链路是手机 → 网关 → 原电脑（或经 SSH 到原服务器）；两者可以并存。做法 J 与 A–I 也不是同一层：A–I 管的是 agent 运行的环境、权限、护栏与观察面，J 补的是「执行目标系统」这一层——让需要真实内核/网络验证的任务在 QEMU guest 里跑；它能和做法 C 叠加（C 管项目规则与权限，J 管执行目标），也不替代 Skills、MCP、经典 hook 或容器化隔离。做法 K 管的是「会话跑在哪里」：每个任务分配一台全新 VM、仓库克隆到新分支、环境预装好，仓库内的 CLAUDE.md、rules、skills、agents、commands 随仓库进入云端，个人 ~/.claude 留在本地；它能和做法 C 叠加（C 管项目规则本身，K 管把这类任务放到云端并行跑），也不替代 Skills、MCP、经典 hook 或容器化隔离。
+十二条做法按环境选：要服务器、多人、持久工作区、共享目录、Git 审查、按轮用量成本记录，选做法 A；只有一台非生产机器、想要通用 agent 并愿意自己接 MCP，选做法 B；已经在单个真实项目里用 Claude Code、想把项目级规则和自动化触发固定下来，选做法 C；需要先读懂陌生代码库、要一个默认只读、bash 前询问权限的 plan 模式，选做法 D；已经用 ChatGPT 订阅、想在本机装官方 CLI 跑通一次终端编码任务，选做法 E；需要更深的运行时事件组合或受支持界面行为，且能满足一次性项目、合成数据、有回滚负责人等条件，才考虑做法 F；要在同一套流程里换模型供应商、准备把 agent 嵌进脚本或服务，并且愿意自己容器化隔离，选做法 G；已经在用 Claude Code、想先看清它在读写在跑什么、并在危险命令前设一道闸门，选做法 H；已经有 Codex App 桌面会话、想让审批和完成通知离开桌面，选做法 I；需要让 agent 在真实内核/网络的 guest 里执行命令、跑跨架构或内核/网络行为验证，选做法 J；已经有 Claude Code 的 Pro/Max/Team/Enterprise 计划、想把边界清晰且需要独立验证的任务放到云端并行跑，选做法 K；想在个人电脑上自托管、给每个 agent 一台隔离 Linux 桌面、把凭据挡在 agent 视野之外、并且能从手机上指挥和随时接管，选做法 L。做法 C 可以和 A 叠加：A 管服务器工作区与账号边界，C 管单个项目内的工具调用规则。做法 F 是做法 C 在 Claude Code 上的扩展面试点，不替代 Skills、MCP、经典 hook 或插件系统。做法 G 与它们不是替代关系：pi 提供的是「统一多提供商接口 + 可嵌入的 harness」，权限边界要你自己用容器补，原文明确把 OpenClaw 列为它的真实集成案例。做法 H 与做法 F 不是同一层：F 是 Anthropic 原生 function hooks 的受控试点（early access），H 是第三方插件集合，走 `claude plugin marketplace add` / `claude plugin install`，属于对已采用 Claude Code 的观察与守卫增强；两者都建立在做法 C 的项目级护栏之上，都不能替代 Skills、MCP、经典 hook。做法 I 与做法 E 也不是替代关系：E 管在本机装 Codex CLI 跑通终端任务，I 管把 Codex App 已有的桌面会话延伸到手机浏览器做异步审批与通知，模型和权限策略默认继承原会话，链路是手机 → 网关 → 原电脑（或经 SSH 到原服务器）；两者可以并存。做法 J 与 A–I 也不是同一层：A–I 管的是 agent 运行的环境、权限、护栏与观察面，J 补的是「执行目标系统」这一层——让需要真实内核/网络验证的任务在 QEMU guest 里跑；它能和做法 C 叠加（C 管项目规则与权限，J 管执行目标），也不替代 Skills、MCP、经典 hook 或容器化隔离。做法 K 管的是「会话跑在哪里」：每个任务分配一台全新 VM、仓库克隆到新分支、环境预装好，仓库内的 CLAUDE.md、rules、skills、agents、commands 随仓库进入云端，个人 ~/.claude 留在本地；它能和做法 C 叠加（C 管项目规则本身，K 管把这类任务放到云端并行跑），也不替代 Skills、MCP、经典 hook 或容器化隔离。做法 L 与做法 A 也不是替代关系：A 是在服务器上给 Claude Code / Codex CLI 搭共享工作区与账号边界，L 是在个人电脑上给每个 agent 一台独立 Linux 桌面容器 + 凭据保险箱 + 人工接管，面向「个人自托管、能看见桌面、能随时接手」的场景；两者都建立在做法 C 的项目级护栏之上，都不替代 Skills、MCP、经典 hook。
 
 ### 做法 A：在 Linux 服务器上搭自托管 agentbox 工作区
 
@@ -1085,6 +1104,109 @@ claude.ai/code?prompt=Triage+the+newest+issues&repositories=acme-labs/tidepool
 
 诚实说明：本次调研正文在「五个 ses」处截断，因此并行 session 与计划限额的全部细节本手册无法给出。做法 K 的步骤、按钮名、环境变量名与故障排查均来自该报告转述的原文，未在本次材料中独立验证；原文没有给出「用了它以后结果是否更好」的对照评测或基准数据。
 
+### 做法 L：在非主力机器上自托管 Xiryn，给每个 agent 一台隔离桌面
+
+来源是 `SouravBeraAkaSpeed/xiryn`（MIT，49 stars），一个可自托管的个人 agent 运行环境。README 描述的四个核心机制：
+
+- **每个 agent 一台独立 Linux 桌面**：一个 Docker 容器，内含 shell、持久 home 目录和 1280×800 桌面 + Chromium；首次使用时创建，空闲时停止；与宿主系统隔离，不读宿主的文件、屏幕，不动鼠标。
+- **单体架构**：一个 Next.js 进程同时提供 UI、在进程内通过 AI SDK 跑 agent turn、并持有 SQLite（`data/xiryn.db`）。README 明确写「no queue, no worker, no backend of ours」。
+- **模型可换**：README 列出 OpenAI / Anthropic / Google / xAI / Groq / Mistral / DeepSeek / OpenRouter / Ollama / LM Studio / 任意 OpenAI 兼容端点，可按 agent 单独选模型。
+- **远程控制与人工接管**：Telegram 机器人（本地 long-poll，无需公网 URL / 隧道 / 端口转发），只能被一个配对账号使用；可实时看 agent 的桌面并「Take over」，交回时可附一句说明（如「I picked the 6:40 flight」），agent 看屏后继续。
+
+README 开头把它定位为 Muse / Grok Bot / Dots 的开源自托管替代（属宣传表述，见「证据与来源」）。下面每一步的命令、变量名与按钮路径都来自该仓库 README 自述，未在本次材料中独立验证。
+
+1. 确认前提。一台有约 **4 GB 空闲磁盘**的电脑；**至少一个模型 provider 的 API key（必需）**；Firecrawl key 可选（用于快速搜索与正文读取）。安装脚本会自行安装 Git、Node.js、Docker；Windows 上可能要求接受 Docker Desktop 条款或重启以启用 WSL 2。README 未声明操作系统版本下限，仅声明 Node **≥ 20.9**。
+
+2. 一键安装（前提：可执行 shell / PowerShell 脚本）。
+
+```bash
+# macOS / Linux
+curl -fsSL https://raw.githubusercontent.com/SouravBeraAkaSpeed/xiryn/main/setup.sh | bash
+```
+
+```powershell
+# Windows (PowerShell)
+irm https://raw.githubusercontent.com/SouravBeraAkaSpeed/xiryn/main/setup.ps1 | iex
+```
+
+已经 clone 过仓库的话：macOS/Linux 跑 `./setup.sh`，Windows 双击 `setup.cmd`。README 说明 setup 会依次做四件事（可据此核对每步是否成功）：(1) 装缺失的 **Git、Node.js、Docker**（Windows 走 `winget`/Docker Desktop，macOS 走 Homebrew，Linux 走 `get.docker.com` 装 Docker Engine）；(2) 把 Xiryn clone 到 `./xiryn` 并安装依赖；(3) 启动 Docker 并构建 agent 桌面镜像（首次需几分钟）；(4) 生成 `.env`，在 **http://127.0.0.1:6796** 启动。失败重跑：脚本会跳过已完成部分。
+
+注意：与其他做法一样，这是从网络直接下载脚本并执行；受管或涉密环境应先审阅脚本内容与来源，或改用下一步的手动安装。
+
+3. 替代方案：手动安装（前提：已装 Node.js 20.9+ 与 Docker）。
+
+```bash
+git clone https://github.com/SouravBeraAkaSpeed/xiryn.git
+cd xiryn
+npm install
+npm run setup     # checks Docker, builds the agents' desktop image, creates .env
+npm run dev
+```
+
+4. 让编码 agent 代你装。README 给出了原样提示词，可整段粘贴到 Claude Code / Codex / Cursor：
+
+```text
+Install and start Xiryn for me — the open-source personal agent that runs on my own computer: https://github.com/SouravBeraAkaSpeed/xiryn
+
+1. From my home folder, run Xiryn's setup without prompts. It clones Xiryn into ./xiryn (or reuses it), installs Git, Node.js and Docker if they're missing, installs the packages and builds the agents' desktop image, which takes several minutes the first time — let it finish:
+   - macOS / Linux:  curl -fsSL https://raw.githubusercontent.com/SouravBeraAkaSpeed/xiryn/main/setup.sh | XIRYN_YES=1 XIRYN_NO_START=1 bash
+   - Windows (PowerShell):  $env:XIRYN_YES="1"; $env:XIRYN_NO_START="1"; irm https://raw.githubusercontent.com/SouravBeraAkaSpeed/xiryn/main/setup.ps1 | iex
+   (If you'd rather not pipe a script, clone the repo and run ./setup.sh or .\setup.ps1 inside it with the same two variables.)
+   - If it stops and shows a command that needs my password, show me that command, wait for me to run it in my own terminal, then run the setup again.
+   - If Docker Desktop was just installed or isn't running, ask me to open it and accept its terms (Windows may also ask for a restart). Wait until `docker info` works, then run the setup again.
+   - Node.js may have been installed into ~/.xiryn/node/bin; add that to PATH in your shell if `node` isn't found.
+
+2. Ask me for my keys. Explain each in one sentence with where to get it, and let me skip the optional ones:
+   - Required, at least one model provider: OpenAI (OPENAI_API_KEY, platform.openai.com/api-keys), Anthropic (ANTHROPIC_API_KEY, console.anthropic.com), Google Gemini (GOOGLE_GENERATIVE_AI_API_KEY, aistudio.google.com/apikey) — or any other provider listed in .env.example, including a local Ollama or LM Studio.
+   - Optional: FIRECRAWL_API_KEY (firecrawl.dev) for fast web search.
+   - Optional: TELEGRAM_BOT_TOKEN to talk to my agents from my phone. Tell me how to get it: in Telegram, message @BotFather, send /newbot, choose a name and a username ending in "bot", and copy the token it replies with.
+   Put what I give you into the matching lines of xiryn/.env. Never repeat the keys back to me, log them or commit .env.
+
+3. Start Xiryn with `npm run dev` inside the xiryn folder, in the background. Wait until http://127.0.0.1:6796 responds, then open it in my browser.
+
+4. Finish with a short summary: what got installed, which keys are set, how to start Xiryn next time (cd xiryn && npm run dev), and — if I added a Telegram token — that I should open Settings → Remote access in Xiryn and scan the QR code with my phone to pair it.
+```
+
+5. 填 key 与启动（前提：安装已完成）。在应用 **Settings** 里粘贴 key，或写进 `.env`：
+
+```bash
+OPENAI_API_KEY=sk-...          # or any other provider
+FIRECRAWL_API_KEY=fc-...       # optional: web search & reading
+```
+
+日常启动：
+
+```bash
+cd xiryn
+npm run dev                    # or: npm run build && npm start
+```
+
+打开 `http://127.0.0.1:6796`。想连 Xiryn 本身也跑在容器里：`docker compose up -d`。首次进去后在状态栏点一次 **alerts**，才允许桌面通知（agent 完成/失败/需要你时会有提示音与通知）。预期结果：UI 能打开，且状态栏通知在你点过 alerts 后生效。
+
+6. 配 Telegram 远程控制（前提：有 Telegram 账号）。在 Telegram 里给 **@BotFather** 发 `/newbot`，复制返回的 token；把 token 粘到 **Settings → Remote access**；用手机扫二维码，点 **Start**。可用命令（README 原样给出）：
+
+```
+/agents   pick an agent or squad      /new     start a fresh thread
+/stop     interrupt the agent         /status  what's running
+```
+
+预期结果：手机能选 agent、开新会话、打断和看状态；机器人走本地 long-poll，不需要公网入口，且只能被一个配对账号使用。
+
+7. 关键配置项（来自 README 的配置表；可在 `.env` 或 Settings 里改，**Settings 里的值优先**，只存于 `data/xiryn.db`）：
+
+| 变量 | 作用 |
+| --- | --- |
+| `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `XAI_API_KEY`, `GROQ_API_KEY`, `MISTRAL_API_KEY`, `DEEPSEEK_API_KEY`, `OPENROUTER_API_KEY` | 托管模型 provider |
+| `OLLAMA_BASE_URL`, `LMSTUDIO_BASE_URL`, `CUSTOM_BASE_URL` | 本地运行时与任意 OpenAI 兼容 API |
+| `XIRYN_DEFAULT_MODEL`, `XIRYN_MAX_STEPS` | 默认 `provider/model`；每轮最大工具调用数 |
+| `XIRYN_WORKSTATION_CPUS`, `XIRYN_WORKSTATION_MEMORY_GB` | （本次材料在此截断，说明未给出，需查 README） |
+
+诚实说明：本次调研正文在配置表这一行处截断，因此 agent 桌面的 CPU / 内存配额怎么设、以及后续配置项，本手册无法给出；`TELEGRAM_BOT_TOKEN` 则来自第 4 步提示词里要求写进 `.env` 的键。
+
+8. 需要时人工接管（Take over）。README 描述的做法是：在界面上实时看 agent 的桌面，直接接管操作，交回时附一句说明（例如「I picked the 6:40 flight」），agent 看屏后接着做。预期结果：卡住或需要人做一步的操作由你完成后，agent 能在同一任务里继续，而不是从头再来。（本次材料只给出机制描述，没有逐步的按钮路径。）
+
+9. 凭据不进 agent 视野。登录/卡号/UPI/个人信息用 AES-256-GCM 加密，密钥由操作系统钥匙串（macOS Keychain / Windows DPAPI / Linux Secret Service）保存；agent 只看到掩码（如「Visa ···· 4242」），由 Xiryn 自己往页面里填；每笔支付需用户逐次批准。预期结果：agent 能在网页上推进流程，但拿不到完整凭据，也不能自行完成支付。（本次材料只给出机制描述，没有逐步的配置路径。）
+
 ## 怎么判断变好了
 
 做法 A（agentbox）看成本与交付把关，不看「结果是否更好」：
@@ -1254,6 +1376,23 @@ claude.ai/code?prompt=Triage+the+newest+issues&repositories=acme-labs/tidepool
 
 判定规则：能稳定拿到证据、返工不超过本地基线，再把更多同类任务迁到云端；否则先退回本地会话，把工单写得更自包含（问题、完成定义、证明命令三件都写清）再试。
 
+做法 L（Xiryn）最小试用方式（1 台非主力机器 + 1 个真实小任务，半天内可完成）：
+1. 在一台非主力、可装 Docker 的机器上按第 2 步（或第 3 步手动）装一份 Xiryn，先只配一个模型 provider key，不接 Firecrawl、不接 Telegram。
+2. 在 http://127.0.0.1:6796 建**单个** agent，给它一个真实小任务：clone 一个仓库跑测试并给 diff，或做一次带引用的调研。
+3. 全程确认隔离是否真的成立：agent 在自己的 Linux 桌面里（含 shell、持久 home、Chromium），能不能读到宿主的文件、屏幕，能不能动你的鼠标。
+4. 同一条任务，用你现有工具（本手册做法 C 的本地 Claude Code 会话）再做一遍作为对照。
+5. 记录一次需要人介入的时刻，实际用一次 Take over，交回时附一句说明，看 agent 能否接着做。
+6. 看 token 花费与上下文消耗，和对照跑法比。
+
+判断有没有改善的指标（本手册沿用做法 B 的节奏；README 没有给出任何效果数据，属作者主张）：
+- 沙箱隔离是否成立：agent 的工作是否被限制在容器边界内，有没有触及宿主文件/屏幕/鼠标；
+- hand-off 人工介入成本：从「agent 卡住」到「你接管完并交回、它继续」的耗时，以及这类介入的次数；
+- token 花费与单任务成本，相对对照跑法的变化；
+- 持久 home 是否真的留住了文件：空闲停止后再启动，agent 之前写的文件还在不在；
+- 凭据边界是否生效：agent 看到的是掩码而不是完整凭据，支付是否确实需要你逐笔批准。
+
+判定规则：隔离成立、接管一两次就能让任务跑完、token 花费不高于对照基线，再考虑加 Telegram 远程控制和第二个 agent；否则停留在单机单 agent，先把任务边界缩小再评估。退出条件：如果容器起不来、桌面镜像构建反复失败，或你的平台需要 WSL 2/重启才能装 Docker 而你不接受，就停在这一步。
+
 ## 常见坑
 
 - agentbox 的权限默认值：原文自述存在 bypassPermissions 默认权限、凭据可被终端用户读取、单机单进程等硬约束。账号凭据会传给容器内 CLI，有终端权限的用户可以读到。
@@ -1284,7 +1423,7 @@ claude.ai/code?prompt=Triage+the+newest+issues&repositories=acme-labs/tidepool
 - Codex 独立安装脚本默认从 `https://releases.openai.com/codex` 下载，元数据或资源不可用时回退到 GitHub Releases；需要强制走 GitHub Releases 用 `CODEX_INSTALLER_USE_RELEASES_OPENAI_COM=false`。
 - Codex Web 是云端代理，原文没有任何关于定时、事件或状态触发的说明，不能据此做主动推进。
 - Codex 的 `curl | sh` / PowerShell `irm | iex` 同样是直接从网络下载脚本并执行；受管或涉密环境应先审阅脚本内容与来源，或改用 npm / brew / 手动下载二进制。
-- 不要把「服务器上默认放开」（agentbox 的 bypassPermissions 默认值）当成「项目内也可以不设白名单」；做法 C/D/G/H/J/K 的权限边界与 agentbox 的账号边界不是同一层。
+- 不要把「服务器上默认放开」（agentbox 的 bypassPermissions 默认值）当成「项目内也可以不设白名单」；做法 C/D/G/H/I/J/K/L 的权限边界与 agentbox 的账号边界不是同一层。
 - Claude Mods 源码目录明确标注接口为 early access，API 可能不通知就变；官方 9 月 9 日更新称「数周内」扩大发布，本审阅检查的 TypeScript 声明对应 Claude Code 2.1.273。
 - 不要混淆三个对象：社区仓库 `0xDarkMatter/claude-mods` 与 Anthropic 原生功能无关；第三方插件集合 `hamzafer/claude-code-mods`（做法 H）走 `claude plugin marketplace add` 安装；做法 F 说的是 Anthropic 原生 Claude Mods（function hooks）。
 - `/diff` 已是内置命令，会与你的实现争夺命令归属；「加载了一个目录」不足以证明某个 handler 真的跑了，要用测试或显式的非敏感诊断证据确认当前生效的实现。
@@ -1339,6 +1478,16 @@ claude.ai/code?prompt=Triage+the+newest+issues&repositories=acme-labs/tidepool
 - 并行 session 并行消耗计划限额（原文此处截断，完整说明本次材料没有给出）。
 - `--teleport` 拉回本地的前提是同一仓库、工作树干净（会提示 stash）、分支已 push；不满足就会失败。
 - 个人 `~/.claude` 不到云 VM：仓库里没写清楚的命令（例如怎么跑集成测试），云端会话就不知道，必须写进 CLAUDE.md。
+- Xiryn 的 setup 脚本与 goose / Claude Code / Codex / pi / qh 一样是「下载即执行」：受管或涉密环境应先审阅 `setup.sh` / `setup.ps1` 内容与来源，或 clone 后本地跑 `./setup.sh` / `setup.cmd`。
+- Xiryn 只有 49 star、没有第三方评测，也没有任何「用了它以后 AI 结果是否更好」的对照数据；README 开头把它定位为 Muse / Grok Bot / Dots 的开源自托管替代，属宣传表述，不能当作能力对比结论。
+- Xiryn 的定时/循环任务仍在 roadmap 上、尚未实现：不要指望它按时间/事件自动反复跑任务。
+- Xiryn 是单体架构：一个 Next.js 进程同时提供 UI、跑 agent turn、持有 SQLite（`data/xiryn.db`）。README 明确写「no queue, no worker, no backend of ours」——这既是部署简单的优点，也意味着这个进程就是单点。
+- Xiryn 需要 Docker，每个 agent 就是一台 Linux 桌面容器：装 Docker、构建桌面镜像（首次几分钟）是必须付出的一次性成本；Windows 可能还要接受 Docker Desktop 条款或重启启用 WSL 2。
+- Xiryn 的 Settings 值优先于 `.env`，且只存于 `data/xiryn.db`：改了 `.env` 却看不到变化时，先去 Settings 里核对。
+- 本次调研正文在 Xiryn 配置表 `XIRYN_WORKSTATION_CPUS` / `XIRYN_WORKSTATION_MEMORY_GB` 这一行处截断：agent 桌面的 CPU / 内存配额怎么设、以及后续配置项，本手册给不出，必须查 README。
+- Xiryn 的「Take over 人工接管」与「凭据保险箱（AES-256-GCM + 操作系统钥匙串 + 每笔支付逐笔批准）」在本次材料里只有机制描述，没有逐步的按钮路径；照做前先到界面里确认。
+- Xiryn 的 Telegram 机器人走本地 long-poll、不需要公网入口，且只能被一个配对账号使用：这降低了暴露面，但也意味着手机与运行 Xiryn 的电脑都要能访问 Telegram，断网时远程控制就不可用。
+- README 未声明操作系统版本下限，只声明 Node ≥ 20.9；实际可跑性需在自己平台上验证。
 
 ## 证据与来源
 
@@ -1353,8 +1502,9 @@ claude.ai/code?prompt=Triage+the+newest+issues&repositories=acme-labs/tidepool
 - 做法 I 依据调研《try2love/codex-mobile-bridge》：v1.3.1 桌面 App 的下载与安装步骤（Windows x64 Setup.exe / 完整 ZIP、macOS arm64 与 x64 DMG、Ubuntu .deb 实验性）、macOS 未公证提示与 `xattr -dr com.apple.quarantine` 命令、局域网网关启动、手机扫码登录（二维码 5 分钟内有效、仅一次、网关重启失效）、手机端可做的事（发消息、排队、撤回、停止、回应命令/文件/临时权限请求/提问卡片、切换模型与推理强度、选择 Skill、上传附件每消息最多 10 个且单个 1 字节至 20 MiB、总计不超过 100 MiB、计划模式/目标模式）、Bark 与 ntfy 通知配置、四种入口（临时 HTTPS · Cloudflare、自有服务器 + SSH、NAS / 已有反代、反向代理读取超时建议不少于 300 秒）、仅源码部署的命令行参数（`--lan`、`--tunnel --cloudflared`、`--origin`、`--set-password`、`--no-auth`）、安全与数据说明（密码至少 12 位、登录有效期默认 12 小时且可设 0–87600 小时、HTTP API/SSE/长轮询需登录并校验 Host 与 Origin、写操作另校验 CSRF、`.local/` 不应上传）、可直接复制给部署 Agent 的提示词，均来自该报告转述的仓库 README。来源是仓库 README，非 OpenAI 官方文档；当前 stars 为 32。作者主张包括：手机无需登录与电脑相同的 OpenAI 账号、不要求把模型 API key 放到手机、任务继续在原电脑或 SSH 服务器执行、模型请求沿用会话提供商与认证；未见独立性能数据或第三方评测。局限包括：社区项目、与 OpenAI 无隶属关系、依赖 Codex App 内部 IPC、App 更新后可能不兼容、macOS/Windows 实测范围需看 VERIFICATION.md、Linux 为实验性、无多用户角色隔离、云聊天与 SSH 文件下载未接入、复杂 MCP 表单与身份验证挑战需桌面处理、临时隧道地址会变化且无持续可用性保证、通知不承诺严格恰好一次投递。做法 I 的最小试用与指标来自该报告的验收维度（登录与访问保护、原 App 会话读取、同一会话发消息、手机回应、模型与 Skill、SSH、列表、外网、持续运行），属项目自述而非独立评测。
 - 做法 J 依据调研《b3s3da/qemu-harness》：一行安装与非交互安装参数、Linux/macOS 安装方式、`qh up --kernel alpine:aarch64` → `qh exec` → `qh down` 最小链路、`qh.json` 示例与全部 CLI 开关、overlay/pkgs/内核模块说明、常用命令表、`skill/SKILL.md` 接入 Claude Code 与 Grok、排障路径（`agent did not respond`、Git Bash 路径改写、TCG 加速）、性能说明（`qh up` 到 agent 可应答约 2–5 秒、rootfs 打包 initramfs 约 0.3 秒、无 virtio-net 的原版内核隧道约 15 KB/s 入、75 KB/s 出、在 Windows 10 + QEMU 11 上测试过），均来自该报告转述的 README 自述，属作者自述，无第三方复现。案例非常有限：只有 Alpine 内核，以及一段 Android GKI 的性能说明，没有 benchmark 脚本、没有对照基线，也没有第三方使用报告。明确的安全限制：自带 overlay 会以 root、空密码启动 dropbear，README 自己标注 lab only，不可放到不可信网络。「适合小范围试用而非全盘采用」是调研结论中的作者主张。做法 J 的最小试用与指标由调研报告提出（其验证抓手是 `qh exec` 的退出码与 `--json`、`qh probe`、`qh up --dry-run`），但原文没有任何关于「用了它以后 AI 的结果是否更好」的评测数据或基线对比。
 - 做法 K 依据调研《Claude Code in the cloud: a field guide to cloud sessions》：五步起步流程、GitHub 连接的三条路径与四类常见故障排查、三条可直接复制的自包含工单提示词、并行 session 示例、`BASH_DEFAULT_TIMEOUT_MS` / `BASH_MAX_TIMEOUT_MS`、本地 plan + `claude --cloud` 执行 + `claude --teleport` 收尾、手机应用查看、Auto-fix 与 `/autofix-pr`、routine（research preview）的三种 trigger 与 `/schedule`、`claude -p "..." --cloud <session-id>` 与预填 URL、一次性 VM 与网络 None/Trusted、setup script 与 SessionStart hook、`CLAUDE_CODE_REMOTE`、服务按 session 启动、网络级别 Trusted/Custom/Full、环境 API credentials、CLAUDE.md 要写命令，以及一段降低返工的习惯清单，均来自该报告转述的原文。原文明确：云端会话随 Pro、Max、Team、Enterprise 计划提供、无单独云机器费用、组织 owner 可能需要开启、不适用于 Console API key 或第三方 provider；每任务独立 VM/分支/端口、笔记本睡眠或断网后会话继续、GitHub token 不进入 VM（由代理持有，会话拿短期凭据且只能推自己的工作分支）、仓库内 CLAUDE.md/rules/skills/agents/commands 随仓库进入云端、个人 `~/.claude` 留在本地、闲置 VM 被回收后重开得到新 VM 但恢复对话。调研结论「建议按文中步骤先开通并用它跑边界清晰、需要独立验证的任务，再决定是否推广」是作者主张；套餐包含与组织权限、routines/projects 的 preview/beta 状态均为原文自述，未在本材料中独立验证。**本次调研正文在「五个 ses」处截断**，因此「并行 session 与计划限额」的完整说明本手册无法给出。做法 K 的最小试用与指标沿用本手册通用节奏（同类任务重复 3–5 次），属作者主张；原文同样没有给出「AI 是否让结果变好了」的对照评测或基准数据。
-- 五条已有线索加 Claude Mods、pi、hamzafer/claude-code-mods、Codex Mobile Bridge、qemu-harness、Claude Code 云端会话都没有给出「AI 是否让结果变好了」的对照评测方法或基准数据。agentbox 的成本与用量指标属于记账维度；goose 没有任务效果指标；claude-code-pro-course 没有效果数据；OpenCode 与 Codex 的 README 也没有效果数据；Claude Mods 的验收矩阵与成本公式是作者提出的评估方法；pi 的原文同样没有效果数据，其会话导出只是留档路径；hamzafer/claude-code-mods 只有 README，没有基准、耗时、token 节省或用户反馈数据；Codex Mobile Bridge 的指标来自项目 README 自述的验收维度，没有独立性能数据或第三方评测；qemu-harness 的退出码/probe/dry-run 只是可判定接口与预检手段，没有效果评测或基线对比。做法 C、D、E、F、G、H、I、J、K 的「怎么判断变好了」分别沿用做法 B 或调研报告提出的最小试用方法与指标，属于作者主张。
-- 与清单的关系：agentbox 不替代 Claude Code，而是给它（以及 Codex CLI）提供自托管环境；goose 这条线索给出了可复制安装命令和通过 MCP 供给工具权限、通过定制发行版预置配置两条路径；claude-code-pro-course 给出了项目级护栏与自动化触发的可复制配置；OpenCode 补上了可复制的安装命令和 `build`/`plan` 权限分工，但 README 不含效果数据，不足以支撑 adopt，可作为把清单中 OpenCode（watch）推进到 try 的依据；Codex CLI 给出了安装与登录路径，并说明可作为 Cursor 里的智能体使用（同一层叠加），但原文只到首页，可作为对比参照，没有给出与 Cursor 的功能差异证据；Claude Mods 补上了 Claude Code 的运行时/界面扩展面、选型表、验收矩阵与成本口径，但处于 early access，适合受控试点而非直接采纳；pi 补上了「统一多提供商接口 + 可嵌入 harness」这一层，给出了安装、启动、登录、Nix 固定版本与三种容器化边界的可复制步骤，并把 OpenClaw 列为真实集成案例，但 README 是宣传 + 导览，扩展与容器化细节只给了链接，默认没有权限系统，没有效果数据，需要在容器里实测后再决定是否写进日常流程；hamzafer/claude-code-mods 补上了 Claude Code 会话内的实时观察面与危险命令闸门，给出了可复制的 marketplace 安装命令、快捷键和平台前提，足以小范围试，但材料只有 README，无实测数据，且 Code 视图限 macOS + Chrome；Codex Mobile Bridge 补上了「把 Codex App 桌面会话延伸到手机做异步审批与完成通知」这一层，给出了桌面 App 安装、局域网/临时 HTTPS/自有服务器 SSH/NAS 反代四种入口、Bark 与 ntfy 通知、命令行参数与安全说明等可照做的步骤，但材料同样只有 README，依赖 Codex App 内部 IPC，无多用户隔离，无独立评测，适合在局域网 + 账号密码下先小范围试；qemu-harness 补上了「让 agent 在真实（仿真）系统里执行并拿到可判定结果」这一层，给出了可复制的安装与最小链路命令、项目级 `qh.json`、SKILL.md 接入与排障路径，但项目体量小、自带 overlay 为 lab 用途、无评测数据，适合小范围试用；Claude Code 云端会话补上了「会话跑在哪里」这一层，给出了五步起步、GitHub 接入三条路径、自包含工单提示词、并行 session、teleport 回本地收尾、Auto-fix、routine 触发、环境与网络自检等可照做的步骤，但依赖套餐与组织权限、routines/projects 属 preview/beta、本次材料在「五个 ses」处截断，适合先跑一个边界清晰的任务再决定是否推广；清单中相关条目是 Claude Code（tool，adopt），云端会话接在它之下作为执行位置的选择。十一条都可把评估从 watch 上调为 try，但都必须先读官方文档、审查安装脚本或社区项目源码，并做一次实际任务。
+- 做法 L 依据调研《SouravBeraAkaSpeed/xiryn》：一键安装脚本（macOS/Linux `curl … | bash`、Windows PowerShell `irm … | iex`、已 clone 时 `./setup.sh` / `setup.cmd`）、setup 依次做的四件事（装 Git/Node.js/Docker、clone 到 `./xiryn` 并装依赖、启动 Docker 并构建 agent 桌面镜像、生成 `.env` 并在 http://127.0.0.1:6796 启动）、手动安装四步（`git clone` / `npm install` / `npm run setup` / `npm run dev`）、可直接粘贴给编码 agent 的整段部署提示词（含 `XIRYN_YES`、`XIRYN_NO_START` 两个变量与「若需要我的密码就把命令给我」的处理方式）、`.env` 里的 key 示例、启动命令与 `docker compose up -d`、状态栏 alerts 授权、Telegram 配对（@BotFather → `/newbot` → Settings → Remote access → 扫码 Start）与 `/agents` `/new` `/stop` `/status` 四条命令、配置表（各托管 provider key、`OLLAMA_BASE_URL` / `LMSTUDIO_BASE_URL` / `CUSTOM_BASE_URL`、`XIRYN_DEFAULT_MODEL` / `XIRYN_MAX_STEPS`、以及截断的 `XIRYN_WORKSTATION_CPUS` / `XIRYN_WORKSTATION_MEMORY_GB`）、「每个 agent 一台独立 Linux 桌面容器（shell + 持久 home + 1280×800 桌面 + Chromium、首次创建、空闲停止、与宿主隔离）」、单体架构与 `data/xiryn.db`、「no queue, no worker, no backend of ours」、Take over 交回附一句说明、凭据保险箱（AES-256-GCM + macOS Keychain / Windows DPAPI / Linux Secret Service + 掩码 + 每笔支付逐次批准）、Node ≥ 20.9 与约 4 GB 空闲磁盘、以及 MIT 许可，均来自该调研转述的仓库 README。当前 stars 为 49。「Muse / Grok Bot / Dots 的开源自托管替代」是 README 的宣传表述；定时/循环任务仍在 roadmap 上未实现；本次调研正文在配置表处截断。调研结论给的是 try 而非 adopt：README 提供了可直接复制的安装、配置、Telegram 配对与编码 agent 提示词，具备可照做性，但仓库仅 49 star、无第三方评测、定时/循环任务未实现。做法 L 的最小试用与指标沿用本手册通用节奏（同类任务重复 3–5 次并设对照），属作者主张而非基准数据。
+- 十二条做法（A–L）都没有给出「AI 是否让结果变好了」的对照评测方法或基准数据。agentbox 的成本与用量指标属于记账维度；goose 没有任务效果指标；claude-code-pro-course 没有效果数据；OpenCode 与 Codex 的 README 也没有效果数据；Claude Mods 的验收矩阵与成本公式是作者提出的评估方法；pi 的原文同样没有效果数据，其会话导出只是留档路径；hamzafer/claude-code-mods 只有 README，没有基准、耗时、token 节省或用户反馈数据；Codex Mobile Bridge 的指标来自项目 README 自述的验收维度，没有独立性能数据或第三方评测；qemu-harness 的退出码/probe/dry-run 只是可判定接口与预检手段，没有效果评测或基线对比；Xiryn 没有第三方评测，也没有「用了它以后结果是否更好」的数据。做法 C、D、E、F、G、H、I、J、K、L 的「怎么判断变好了」分别沿用做法 B 或调研报告提出的最小试用方法与指标，属于作者主张。
+- 与清单的关系：agentbox 不替代 Claude Code，而是给它（以及 Codex CLI）提供自托管环境；goose 这条线索给出了可复制安装命令和通过 MCP 供给工具权限、通过定制发行版预置配置两条路径；claude-code-pro-course 给出了项目级护栏与自动化触发的可复制配置；OpenCode 补上了可复制的安装命令和 `build`/`plan` 权限分工，但 README 不含效果数据，不足以支撑 adopt，可作为把清单中 OpenCode（watch）推进到 try 的依据；Codex CLI 给出了安装与登录路径，并说明可作为 Cursor 里的智能体使用（同一层叠加），但原文只到首页，可作为对比参照，没有给出与 Cursor 的功能差异证据；Claude Mods 补上了 Claude Code 的运行时/界面扩展面、选型表、验收矩阵与成本口径，但处于 early access，适合受控试点而非直接采纳；pi 补上了「统一多提供商接口 + 可嵌入 harness」这一层，给出了安装、启动、登录、Nix 固定版本与三种容器化边界的可复制步骤，并把 OpenClaw 列为真实集成案例，但 README 是宣传 + 导览，扩展与容器化细节只给了链接，默认没有权限系统，没有效果数据，需要在容器里实测后再决定是否写进日常流程；hamzafer/claude-code-mods 补上了 Claude Code 会话内的实时观察面与危险命令闸门，给出了可复制的 marketplace 安装命令、快捷键和平台前提，足以小范围试，但材料只有 README，无实测数据，且 Code 视图限 macOS + Chrome；Codex Mobile Bridge 补上了「把 Codex App 桌面会话延伸到手机做异步审批与完成通知」这一层，给出了桌面 App 安装、局域网/临时 HTTPS/自有服务器 SSH/NAS 反代四种入口、Bark 与 ntfy 通知、命令行参数与安全说明等可照做的步骤，但材料同样只有 README，依赖 Codex App 内部 IPC，无多用户隔离，无独立评测，适合在局域网 + 账号密码下先小范围试；qemu-harness 补上了「让 agent 在真实（仿真）系统里执行并拿到可判定结果」这一层，给出了可复制的安装与最小链路命令、项目级 `qh.json`、SKILL.md 接入与排障路径，但项目体量小、自带 overlay 为 lab 用途、无评测数据，适合小范围试用；Claude Code 云端会话补上了「会话跑在哪里」这一层，给出了五步起步、GitHub 接入三条路径、自包含工单提示词、并行 session、teleport 回本地收尾、Auto-fix、routine 触发、环境与网络自检等可照做的步骤，但依赖套餐与组织权限、routines/projects 属 preview/beta、本次材料在「五个 ses」处截断，适合先跑一个边界清晰的任务再决定是否推广；清单中相关条目是 Claude Code（tool，adopt），云端会话接在它之下作为执行位置的选择。Xiryn 补上了「个人自托管 + 每个 agent 一台隔离桌面 + 凭据不进 agent 视野 + 随时接管」这一层，给出了可复制的安装、手动安装、agent 代装提示词、启动、Telegram 配对与配置表，但仓库仅 49 star、单体架构、需要 Docker、定时/循环任务未实现、正文在配置表处截断，适合在非主力机器上先跑一个真实小任务再决定是否推广。十二条都可把评估从 watch 上调为 try，但都必须先读官方文档、审查安装脚本或社区项目源码，并做一次实际任务。
 
 ## 依据的调研
 
@@ -1369,3 +1519,4 @@ claude.ai/code?prompt=Triage+the+newest+issues&repositories=acme-labs/tidepool
 - [try2love/codex-mobile-bridge](../research/radar/2026-10-04/1187-try2love-codex-mobile-bridge.md)：值得一试，建议在单台 macOS/Windows 电脑上加装该桌面 App，先在局域网和账号密码模式下小范围试用，把已有 Codex 会话接到手机做异步审批和完成通知；原因是它给出了可照做的安装、启动、通知和部署 Agent 步骤，但依赖 Codex App 内部 IPC、属社区项目，外网暴露和安全边界需自行验收。
 - [b3s3da/qemu-harness](../research/radar/2026-10-06/1581-b3s3da-qemu-harness.md)：值得一试，先在一台 Windows 或 Linux/macOS 机器上按 README 跑通「qh up → qh exec → qh down」这条最小链路，再用自带的 skill/SKILL.md 把它接给 Claude Code，让需要真实系统验证的任务在 guest 里执行；理由是原文给出了可直接复制的安装命令、完整 CLI 用法、qh.json 配置和排障路径，能补上 agent 缺少真实内核/网络执行环境这一环，但项目体量小、自带 overlay 为 lab 用途，适合小范围试用而非全盘采用。
 - [Claude Code in the cloud: a field guide to cloud sessions](../research/radar/2026-10-07/1611-claude-code-in-the-cloud-a-field-guide-to-cloud-se.md)：值得一试，建议按文中步骤在 Claude Code 套餐中开通云端会话，先把边界清晰、需要独立验证的任务（如修 flaky test、更新 API 文档、结构化日志）以自包含工单+证明命令的方式并行跑起来，再决定是否推广；理由是原文给出了可直接复制的命令、环境配置、GitHub 接入与证据要求，但依赖套餐/组织权限且 routines/projects 等仍属 preview/beta。
+- [SouravBeraAkaSpeed/xiryn](../research/radar/2026-10-13/2843-souravberaakaspeed-xiryn.md)：值得一试，在一台非主力、可装 Docker 的机器上按 README 的一键脚本（或手动 clone + npm run setup）装一份 Xiryn，配一个模型 key、建单个 agent 跑一个真实小任务（如 clone 仓库跑测试给 diff、或一次带引用的调研），重点验证沙箱隔离、hand-off 人工介入成本和 token 花费后再决定是否推广。README 提供了可直接复制的安装、配置、Telegram 配对与编码 agent 提示词，具备可照做性；但仓库仅 49 star、无第三方评测，定时/循环任务仍在 roadmap 未实现，故给 try 而非 adopt。
