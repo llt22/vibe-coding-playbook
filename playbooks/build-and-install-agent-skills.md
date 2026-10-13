@@ -1,9 +1,9 @@
-# 让 agent 技能真的减少返工：先小范围对照，再把重复工作和长流程沉淀成技能
+# 把专家经验蒸馏成可复用技能：从一个人到一套领域方法论
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：解决「装了 agent 技能却不知道有没有变好、重复工作和多阶段长流程每次都要重新交代」的问题：给出先小范围试装、用同一任务做有/无对照、再把自己的重复工作或长流程沉淀成技能的完整流程，并逐条列出各做法的安装、验证与常见坑。
-> 先试这一步：先在一个非关键项目里只装一个技能包，用同一任务、同一输入做有技能与无技能各 3 次的对照，记录返工轮数和人工修改次数后再决定是否纳入常规流程。
+> 解决的问题：当你反复需要某个人的判断方式，或反复需要一套成体系的领域方法论时，把它固化成可按需加载的技能，并用真实任务做带／不带技能的对照，而不是凭安装成功就当成改善。
+> 先试这一步：挑一位同事，只喂他本人的设计文档或评审意见，用 Distilly 生成一份 colleague profile，再用 3–5 个他平时会被问到的真实问题做「带 Skill / 不带 Skill」对照。
 > 最近修订：2026-10-13
 
 ## 解决什么问题
@@ -15,6 +15,10 @@
 新增做法 AK：当你需要给 agent 补 AI 研究全流程知识，或想抄一套可迁移的技能目录规范来整理内部知识时，用 `Orchestra-Research/AI-Research-SKILLs`，按类别只装 1 个技能，在真实研究任务上做有/无技能对照；同时把它的 `skill-name/SKILL.md + references/` 目录规范抄来整理自己的文档。
 
 新增做法 AL：当你有一条多阶段、跨多天、会中途停下的长流程（典型是从零建一个网站：名称与 Logo → 用真实搜索数据做调研 → 文案 → 设计方向 → 构建 → 检查 → 上线 → 上线后在 Google 和 ChatGPT 里复测），用 `Julian-Ivanov/website-bauen` 这类「skill + 状态文件 + 按阶段接工具」的打包方式试一次：只跑到调研／设计方向阶段就叫停，检查每阶段产出物能否直接用，再用 `WEBSITE-STATUS.md` 断点续做一次。即使你不需要建站，也可以只借鉴这套打包思路，把进度写进一个状态文件、外部工具放到真正需要它的阶段才接入。
+
+新增做法 AM：当某位同事（或导师、上下游）的判断方式、评审标准和表达习惯反复出现在你的工作里，想把它固化成可反复调用的技能时，用 `titanwings/distilly` 按「选家族 → 按素材优先级喂一手素材 → 生成 Person Profile → 用真实问题做带/不带对照」试一次：先只喂他本人的长文写作或评审意见（最高优先级素材），生成 colleague profile，再拿 3–5 个他平时会被问到的真实问题对照。同时把它三条维护机制（追加文件增量合并不覆盖、对话纠正写入 Correction 层立即生效、每次更新自动归档可回滚）当成你自建技能时的参考。
+
+新增做法 AN：当你有一套成体系的领域方法论（代码评审、故障排查、合规检查等）要交给 agent，并希望「不用就不占上下文」时，照 `SnailSploit/claude-red` 的交付方式做一次：把你的方法论拆成细粒度的 `Skills/<类别>/<技能名>/SKILL.md`，按对话触发词按需加载；需要时用 `claude --system-file -` 把某份 `SKILL.md` 注入，或在 Claude.ai 项目里手工粘贴。该仓库自带的是进攻性安全技能，只在授权红队、漏洞赏金、安全研究、CTF 等合法场景使用；它的价值是交付模板与粒度设计，不是内容本身。
 
 ## 适用与不适用
 
@@ -42,6 +46,8 @@
 - 想抄一套 `SKILL.md` 加 `references/` 的技能目录规范，用来整理自己已有的内部知识（做法 AK）。
 - 有一条多阶段、跨多天的长流程，希望把它打包成技能、用状态文件跨会话续做、并且只在需要它的阶段才去配置外部工具和账号（做法 AL）。
 - 想小范围试一次「从零建站」的前半程，验证「skill + 状态文件 + 阶段化接工具」这套形态是否成立（做法 AL）。
+- 想把某位同事、导师或上下游的判断方式、评审标准与表达习惯固化成可反复调用的技能，并愿意用真实问题做带/不带对照（做法 AM）。
+- 需要把一套成体系的领域方法论拆成细粒度技能文件，做到按需加载、不用不占上下文，并能在 Claude Code、Claude.ai 等不同通道交付（做法 AN）。
 
 不适用：
 
@@ -50,7 +56,7 @@
 - 只看 stars、README 徽章或 CI 状态就决定采用。
 - 只是想改拼写或一行显然的改动，却套整套四条原则；不备份直接覆盖项目原有 CLAUDE.md；把四条原则或 stars 当效果证据（做法 AJ）。
 - 只有 README、没有 skill 本体细节和效果数据，却直接把它当成熟流程全量采用；或第一次试用就走完上线环节（做法 AL）。
-- 各做法自己的边界见对应小节。例如：E 只针对中文技术文档；F 只针对生物医学论文；M 不适用于无合法访问权的书或打算再分发第三方版权书生成的 skill；O 只在 Postgres / TimescaleDB / PostGIS 任务上有用；P 只对自有或书面授权资产；Q 的领域内容不通用；T 不支持直接驱动交易或投顾建议；U 需要 Apple Silicon Mac + Codex desktop + 私有仓库访问权；X 面向全栈开发；Y 需要能加载完整 Skill 文件夹的环境，且 DOCX 抽取保留不了复杂样式、批注、修订记录、脚注与文本框；AF 只覆盖 SwiftUI / Apple 平台开发；AG 的材料没有覆盖合同或其他法律文件，也不承诺通过 AI 检测器；AH 主要面向数学/理论科学/算法类开放式研究；AI 的材料只有 README；AJ 只面向会读 CLAUDE.md 的编码智能体；AK 的材料只有 README，单个技能的 `SKILL.md` 正文没随材料给出，技能数在 README 内自相矛盾（标题 98，Roadmap 写 87），效果必须自测；AL 的材料只有 README，skill 本体的阶段步骤、提示词与检查标准都看不到，README 未给任何案例、耗时或成功率数字，且含 DataForSEO 联盟链接，要走完全程还需第三方付费账号（DataForSEO、webhosting）。
+- 各做法自己的边界见对应小节。例如：E 只针对中文技术文档；F 只针对生物医学论文；M 不适用于无合法访问权的书或打算再分发第三方版权书生成的 skill；O 只在 Postgres / TimescaleDB / PostGIS 任务上有用；P 只对自有或书面授权资产；Q 的领域内容不通用；T 不支持直接驱动交易或投顾建议；U 需要 Apple Silicon Mac + Codex desktop + 私有仓库访问权；X 面向全栈开发；Y 需要能加载完整 Skill 文件夹的环境，且 DOCX 抽取保留不了复杂样式、批注、修订记录、脚注与文本框；AF 只覆盖 SwiftUI / Apple 平台开发；AG 的材料没有覆盖合同或其他法律文件，也不承诺通过 AI 检测器；AH 主要面向数学/理论科学/算法类开放式研究；AI 的材料只有 README；AJ 只面向会读 CLAUDE.md 的编码智能体；AK 的材料只有 README，单个技能的 `SKILL.md` 正文没随材料给出，技能数在 README 内自相矛盾（标题 98，Roadmap 写 87），效果必须自测；AL 的材料只有 README，skill 本体的阶段步骤、提示词与检查标准都看不到，README 未给任何案例、耗时或成功率数字，且含 DataForSEO 联盟链接，要走完全程还需第三方付费账号（DataForSEO、webhosting）；AM 的材料只有 README，项目自述仍是 demo 版，`INSTALL.md` / `INSTALL_EN.md` 与 `SKILL.md` 实现细节都没给到，三个 demo 都是挑选过的对话展示、无对照组无评测数字，且素材涉及他人聊天记录与个人信息而原文完全没有讨论授权与隐私；AN 的材料只有 README，没有任何一份 `SKILL.md` 的实际内容、frontmatter 示例或撰写模板（模板在未随材料给出的 `CONTRIBUTING.md` 里），也没有任何评测数据，且内容属进攻性安全领域、适用范围受授权条件限制。
 
 ## 前置条件
 
@@ -67,10 +73,12 @@
 - A：无额外。B：一件每周重复、有明文规范的工作。C：`pip install skill-seekers`。D：你的提供商端点与 key，以及你网关实际提供的模型名。E：可用的 `npx` 或 `git`；可选装 autocorrect。F：宿主能读 PDF/图像。G：Claude Code 2.1.287 或更高。H：Cline CLI；Python 3；支持 Agent Skills 规范的宿主。I：Node/npm 装 CLI；本机 Python 3.x。J：本地 Node 环境。K：一个受支持的 Agent Skills 宿主。L：Claude Code 或 `gh`/可用 `npx`。M：本机 Python 并能安装抽取器。N：支持 Agent Skills 的 Agent；git、`CLAUDE.md`/`AGENTS.md`、`docs/`。O：本机 `npx`；目标 agent 支持 Agent Skills 或 MCP。P：已装 Claude Code；只对自有或书面授权资产使用。Q：支持本地 Skills 的宿主；可写的 `PROJECT_ROOT` 与只读的 `SKILL_ROOT` 分开。R：支持 agent skills 的编码 agent。S：Node.js/npx；Google Cloud 账号、项目和权限。T：Node.js 22.20+ / npm；Python 3.9+。U：Codex desktop + Apple Silicon Mac；Xcode 26+ 与 simulator runtime。V：本机已安装 Claude Code。W：Node.js；`SKILL.md`、`references/`、`scripts/` 三部分放在一起。X：已安装并使用 Claude Code。Y：Python 3.10+；PDF 文本抽取需 Poppler。Z：先装好对应 harness；Codex 需先通过 `/hooks` 信任路由 hook。AA：本地有 git 与 bash。AB：一台能跑 T3 Code 的机器。AC：Claude Code 环境或 claude.ai 账号；本地 Python 3.8+。AD：Node.js ≥ 20；agent 能执行 shell 命令。AE：用现成技能需要 Claude Code 或支持 Agent Skills 的 agent；用这套流程分发自己的技能，只需 Claude Code + Python 3。AF：用支持 Agent Skills 的编程助手；安装需要 Node/npx，或用 Claude Code 插件市场。AG：一个能加载 skills 的 agent（Claude Code、Codex 或其他）；要处理的文本；最好有作者自己的笔记、语音转写或自写粗稿；跑 `check.py` 需要 Python 和能执行代码的 agent 环境。AH：装有 Codex 或 Claude Code；Python 3.9 或更新；一个浏览器；可选获授权的 Slurm 集群、LaTeX、私有 dashboard 目的地。AI：能访问 GitHub；Cowork 路线需要桌面端 Claude；Claude Code / Codex 路线需要先装好对应 CLI 并登录；其它助手路线只需对目标 skills 目录有写权限。AJ：Claude Code 或 Cursor；一个非琐碎的代码任务；项目级写入 CLAUDE.md 的权限，或能装 Claude Code 插件；Cursor 用户需使用仓库自带的 `.cursor/rules/karpathy-guidelines.mdc`。
 - AK：本地有 Node.js 才能用 `npx`；至少一个被支持的编码智能体（README 列出 Claude Code、Hermes Agent、OpenCode、Qoder、Cursor、Gemini CLI 等）；能访问 npm 与 GitHub；有权限写入 `~/.orchestra/skills/` 并把技能 symlink 到各 agent 目录。
 - AL：一个支持 skill 机制的编程智能体（Claude Code 或 Codex）；一个空的项目文件夹；设计插件 `impeccable`（skill 会在开始时和你一起配置）；DataForSEO 账号与 webhosting 由 skill 在真正需要它们的那个阶段才来配置，不必提前准备。
+- AM：一个受支持的本地 agent host（README 列出 Claude Code、Hermes、OpenClaw、Codex、DeepSeek Harness、Pi、Grok Build、OpenCode，其中 Grok Bot 仅列为「saved Skill · 预览」，官方文档未描述直接导入本地 `SKILL.md`）；Python 3.9+；知道该 host 的 Skills 目录；素材可能涉及他人聊天记录与个人信息，原文完全没有讨论授权与隐私，实际试用前须自行解决；`INSTALL_EN.md` 里的 host 具体路径、迁移、Windows、生成 profile 的安装与凭据配置，本次材料未给出内容。
+- AN：一个 Claude 使用环境（Claude Skills 系统 / Claude Code / Claude.ai 项目）；使用范围合法合规（README 限定为授权红队、漏洞赏金、安全研究、CTF 等场景）；对 `~/.claude/skills` 有写权限；迁移到自己领域所需的 frontmatter 标准与技能模板在 `CONTRIBUTING.md`，本次材料未包含。
 
 ## 操作步骤
 
-怎么选：先做做法 A；A 里某个技能确实有效、且你有一件每周重复且规范明确的工作，再做做法 B。其余按场景选：C 多来源知识打包；D 补模型端点/权限/搜索；E 中文技术文档写作与审稿；F 单篇论文精读；G 写一个 Claude Code mod；H 用 Cline CLI 代理长任务拿硬证据验收；I 补 UI/UX 设计知识；J 出带交互的单文件 HTML 图；K 出品牌一致的静态 HTML+SVG 图；L 从大插件市场只装一个单元并按任务档位选模型；M 把书或内部文档转成按需加载技能；N 把模糊想法写成任务书并给破坏性操作加闸门；O 补 Postgres 领域知识与版本化文档检索；P 在授权安全场景按主题加载安全技能库；Q 把多步任务拆成三阶段加门禁；R 装一套小而可组合的工程技能集；S 从 google/skills 按任务只装一个；T 让 agent 检索中国金融市场数据并核对来源与时间戳；U 把移动端模拟器与真机画面接进 Codex 聊天；V 用一行 curl 装单个 Markdown 技能；W 用元技能观察你怎么用技能；X 装一套全栈开发技能包按请求自动激活；Y 把中英文学术写作去模板化改写并用命题核对保住事实；Z 用路由技能自动选工作流并对 bug 交出失败→通过证据；AA 按职能只装少量 agent 角色并用真实任务与默认提示对照；AB 在 T3 Code 里用 p3-stack 按 playbook 路由并用 worktree/PR 监视减少等待和冲突；AC 审计并改进自己的 SKILL.md；AD 让 agent 把结论、方案对比与流程解释渲染成一页可离线打开的 HTML；AE 把自己的 SKILL.md 校验、打包并分发到多端；AF 给 agent 补一块 SwiftUI 领域知识并按需触发审查；AG 给工作写作去 AI 腔并保住事实与承诺强度；AH 把开放式研究做成迷宫地图、证据分级与独立裁判循环；AI 装 1–2 个 PM 插件并用 `/discover` 跑一个真实想法；AJ 给编码 agent 立四条行为约束并把任务改写成带验证标准的目标；AK 给 agent 补 AI 研究全流程知识，按类别只装一个技能并用真实研究任务对照；AL 把多阶段、跨天的长流程（如从零建站）打包成 skill，用状态文件断点续做、按阶段按需接外部工具。
+怎么选：先做做法 A；A 里某个技能确实有效、且你有一件每周重复且规范明确的工作，再做做法 B。其余按场景选：C 多来源知识打包；D 补模型端点/权限/搜索；E 中文技术文档写作与审稿；F 单篇论文精读；G 写一个 Claude Code mod；H 用 Cline CLI 代理长任务拿硬证据验收；I 补 UI/UX 设计知识；J 出带交互的单文件 HTML 图；K 出品牌一致的静态 HTML+SVG 图；L 从大插件市场只装一个单元并按任务档位选模型；M 把书或内部文档转成按需加载技能；N 把模糊想法写成任务书并给破坏性操作加闸门；O 补 Postgres 领域知识与版本化文档检索；P 在授权安全场景按主题加载安全技能库；Q 把多步任务拆成三阶段加门禁；R 装一套小而可组合的工程技能集；S 从 google/skills 按任务只装一个；T 让 agent 检索中国金融市场数据并核对来源与时间戳；U 把移动端模拟器与真机画面接进 Codex 聊天；V 用一行 curl 装单个 Markdown 技能；W 用元技能观察你怎么用技能；X 装一套全栈开发技能包按请求自动激活；Y 把中英文学术写作去模板化改写并用命题核对保住事实；Z 用路由技能自动选工作流并对 bug 交出失败→通过证据；AA 按职能只装少量 agent 角色并用真实任务与默认提示对照；AB 在 T3 Code 里用 p3-stack 按 playbook 路由并用 worktree/PR 监视减少等待和冲突；AC 审计并改进自己的 SKILL.md；AD 让 agent 把结论、方案对比与流程解释渲染成一页可离线打开的 HTML；AE 把自己的 SKILL.md 校验、打包并分发到多端；AF 给 agent 补一块 SwiftUI 领域知识并按需触发审查；AG 给工作写作去 AI 腔并保住事实与承诺强度；AH 把开放式研究做成迷宫地图、证据分级与独立裁判循环；AI 装 1–2 个 PM 插件并用 `/discover` 跑一个真实想法；AJ 给编码 agent 立四条行为约束并把任务改写成带验证标准的目标；AK 给 agent 补 AI 研究全流程知识，按类别只装一个技能并用真实研究任务对照；AL 把多阶段、跨天的长流程（如从零建站）打包成 skill，用状态文件断点续做、按阶段按需接外部工具；AM 把某个人的工作方式蒸馏成可复用 Person Profile 技能，按其素材优先级喂一手素材并用真实问题做对照；AN 把一套领域方法论拆成细粒度、按对话触发词按需加载的技能文件，并在自动加载、`--system-file` 注入、手工粘贴 system prompt 三条通道里选一条。
 
 几组容易混的：
 
@@ -96,8 +104,13 @@
 - AK 与 C / M：C 是把外部文档打包成技能；M 是把书或内部文档转成按需加载技能；AK 是现成的 AI 研究技能库，并给你一套可抄的 `SKILL.md + references/` 目录规范。要补研究流程用 AK，要打包自己的书或文档用 C/M。
 - AL 与 B / M / Q / N：B 是把自己的一件重复工作写成单个 `SKILL.md`；M 是把书或内部文档转成按需加载技能；N 是把一句模糊想法写成任务书；Q 是把复杂分析任务拆成三阶段并加五道门禁；AL 是把一条长流程（从零建站）整体打包成 skill，进度写进 `WEBSITE-STATUS.md` 跨会话续做，外部工具按阶段才接入。要打包流程本身用 AL，要打包文档用 C/M，要拆分析任务用 Q。
 - AL 与 A：A 的默认是「只装一个技能包」并做有/无对照；AL 同样必须先套用 A 的对照方法，只跑到调研／设计方向阶段就停，不要因为阶段顺序看起来完整就默认它有效。
+- AM 与 AA / AJ：AA 装的是现成的、按职能组织的 agent 角色库；AM 蒸馏的是你身边具体某个人的判断方式，产出留在本地的 profile，并自带 Correction 层与「增量合并不覆盖」；AJ 是往编码 agent 里写行为约束，不涉及素材采集。
+- AM 与 B / M：B 把你自己的一件重复工作写成 `SKILL.md`；M 把书或内部文档转成按需加载技能；AM 把一个人的判断、表达与做事方法变成可调用的 profile，需要先有此人的一手素材。
+- AN 与 P：P 是现成的安全技能库（Claude-BugHunter，按主题自动加载并有 7-Question Gate）；AN 的核心是「领域专长怎么拆成细粒度 `SKILL.md`、怎么按需加载或注入」这套交付模板，它自带的内容属进攻性安全，只在授权场景使用。
+- AN 与 AK：AK 是按类别只装一个现成的 AI 研究技能并做对照；AN 是把自有方法论拆成多个细粒度技能，按对话触发词按需加载或按需注入。
+- AN 与 V：V 用一行 curl 装单个 Markdown 技能并验证它按 `description` 自动加载；AN 讲的是把一套方法论拆成多个细粒度技能，并在 Skills 目录自动加载、`claude --system-file -` 注入、Claude.ai 手工粘贴三条通道里选一条。
 
-E、F、G、H、I、J、K、L、M、N、O、P、Q、R、S、T、U、V、W、X、Y、Z、AA、AB、AC、AD、AE、AF、AG、AH、AI、AJ、AK、AL 都必须套用 A 的对照方法，不要跳过验证直接纳入常规流程。
+E、F、G、H、I、J、K、L、M、N、O、P、Q、R、S、T、U、V、W、X、Y、Z、AA、AB、AC、AD、AE、AF、AG、AH、AI、AJ、AK、AL、AM、AN 都必须套用 A 的对照方法，不要跳过验证直接纳入常规流程。
 
 ### 做法 A：先用现成技能包做小范围试装（推荐先做）
 
@@ -532,6 +545,102 @@ Aktualisiere den Skill website-bauen von GitHub.
 
 降级条件：如果关键阶段拿不出可核查的产出、或大量步骤仍需人工补做，说明 README 之外的 skill 本体并未兑现承诺，应从「试用这个 skill」降为「只借鉴 skill + 状态文件 + 阶段化接工具的思路」。
 
+### 做法 AM：把某个人的工作方式蒸馏成可复用 Person Profile 技能（新增，按 A 的对照法验证）
+
+定位：`titanwings/distilly`（前身 Colleague Skill / colleague-skill）是一个把某个人的经验、判断、表达方式和做事方法蒸馏成可复用 Person Profile、并打包为 Agent Skill 的创建器。流程是：消息记录 / 文档 / 访谈 / 公开资料 → Distilly → Person Profile → Agent / Bot。它有三个「人物家族」，各有素材采集策略、分析维度和 profile 结构：`colleague`（同事/导师/上下游）、`relationship`（伴侣/家人/朋友）、`celebrity`（公众人物/创作者/虚构角色）。生成的 Skill 名为 `{character}-{slug}`，可安装到支持原生本地 Skill 发现的 host：Claude Code、Hermes、OpenClaw、Codex、DeepSeek Harness、Pi、Grok Build、OpenCode（Grok Bot 仅列为「saved Skill · 预览」）。MIT 许可，Python 3.9+；引用技术报告 COLLEAGUE.SKILL（arXiv 2605.31264），该论文只覆盖 colleague 家族（前身）。
+
+1. 前提：一个受支持的本地 agent host；Python 3.9+；知道该 host 的 Skills 目录。素材可能涉及他人聊天记录与个人信息，原文完全没有讨论授权与隐私，实际试用前须自行解决。
+2. 安装（两种方式二选一）。让 agent 自己装，在任意受支持的本地 host 里发：
+
+```
+Install Distilly from `https://github.com/titanwings/distilly`, then verify that this host can discover it.
+```
+
+或人工 clone 到 host 的 Skills 目录：
+
+```bash
+git clone https://github.com/titanwings/distilly <DISTILLY_SKILL_DIR>
+```
+
+注意：创建者 Skill 的规范名是 `distilly`，要装在名为 `distilly` 的目录下。host 具体路径、迁移、Windows、生成 profile 的安装、凭据配置在 `INSTALL_EN.md`（本材料未给出其内容）。
+3. 给自己建 profile（刚上手个人 agent 时）：
+
+```
+Use Distilly to set up my profile.
+```
+
+它会访谈约 5 分钟，展示 profile，然后把一段短摘要写进 agent 每次会话都读的文件（Claude Code 是 `~/.claude/CLAUDE.md`，OpenClaw 是 `USER.md`），完整 profile 留在本地 `~/.distilly/owner/profile.md`。
+4. 给别人建 profile：
+
+```
+Use Distilly to create a Person Profile for `<person>`.
+```
+
+然后 ① 选 `colleague` / `relationship` / `celebrity`；② 加描述或素材（每个字段都可选）；③ 审阅结果，让 Distilly 生成 profile。
+5. 按家族选择素材优先级（原文给的排序，高 → 低）：
+   - `colleague`：本人的长文写作（设计文档 / 评审意见）> 决策性回复 > 日常群聊
+   - `relationship`：完整聊天记录 > 信件 / 社交帖 / 日记 > 第三方描述（时间跨度越长越好，最好同时包含冲突与修复）
+   - `celebrity`：第一人称书籍 / 博客 / 长访谈 > 决策记录（发布、commit、问答）> 可核实的第一人称短帖 > 第三方评论（避免只喂二手解读）
+6. 可选：用自动采集通道替代手工上传。可用来源与前置条件：
+   - Lark：消息走 API、文档/Wiki 支持，只要输入名字即可自动采集；需要把 App bot 加进相关群。
+   - DingTalk：文档支持，消息只能走浏览器（其 API 不支持消息历史）。
+   - Slack：消息走 API；需要管理员安装 Bot，免费版仅 90 天。
+   - X 公开帖：走 API，可选，经计量型第三方服务 Xquik 做有边界的名人研究候选。
+   - 微信聊天记录：SQLite；需先用 WeChatMsg 或 PyWxDump 导出。
+   - 手工上传：PDF/图片/截图、Lark JSON 导出、`.eml`/`.mbox` 邮件、Markdown 或直接粘贴。
+7. 持续维护（三条机制）：
+   - 追加文件 → 自动分析增量 → 合并进相关小节，不覆盖已有结论。
+   - 对话纠正：说“他不会这样，他会 xxx” → 写入 Correction 层，立即生效。
+   - 每次更新自动归档，可回滚到任一历史版本。
+8. 做对照。挑一位同事，只喂其设计文档/评审意见（按原文最高优先级素材），生成 colleague profile；准备 3–5 个该同事平时会被问到的真实问题（如“评审这个 API 设计”），分别问「不带 Skill 的通用 agent」和「装了该 Skill 的 agent」，自己看输出能不能直接用。同一批问题再只喂群聊素材重建一次，对照两次输出，验证原文的素材优先级排序是否成立。追加一份新文档，确认旧结论没被覆盖；再用一句“他不会这样，他会 xxx”纠正，确认立即生效且可回滚。
+
+判断有没有改善的指标（原文未给，需自定并记录基线）：直接采纳率（生成结果被直接用／小改后用的比例，对照无 Skill 版本）；格式合规（输出是否符合团队既有规范、是否先追问影响面）；纠正轮数（需要“他不会这样”纠正的次数，应随使用下降）；稳定性（同一问题重复询问，关键判断是否一致）；可溯源性（输出中的判断能否指回所提供的原文素材，出现编造即视为失败）。
+
+淘汰条件：若纠正轮数不下降、或输出无法溯源到素材（出现编造），则退回到只借鉴「Persona + 家族模块 + Correction 层 + 增量合并不覆盖」的结构，不实际使用该工具。
+
+### 做法 AN：把领域专家方法论拆成细粒度 SKILL.md，按对话触发词按需加载（新增，按 A 的对照法验证）
+
+定位：`SnailSploit/claude-red` 是一个面向 Claude Skills 系统的进攻性安全技能库，每个技能是一份结构化的 `SKILL.md`，把某类攻击面（如 SQL 注入、EDR 规避、ADCS 滥用）的专家方法论预先注入 Claude。README 称其包含 78 个技能、23 个类别，目标约 130 个技能，MIT 许可。对本书读者真正有价值的不是这些安全技能本身，而是它演示的交付方式：把领域专长拆成细粒度、可单独安装、按对话触发词自动加载的技能文件，从而做到「不用就不占上下文」。
+
+1. 前提：已有一个 Claude 使用环境（Claude Skills 系统 / Claude Code / Claude.ai 项目），且使用范围合法合规（README 明确限定为授权红队、漏洞赏金、安全研究、CTF 等场景）。
+2. 整库安装到 Claude Skills 目录（README 称此为推荐方式）：
+
+```bash
+git clone https://github.com/SnailSploit/claude-red ~/.claude/skills/claude-red
+```
+
+README 说明：Claude 会根据对话触发词自动加载匹配的技能，例如提到 SQL injection 会加载 `offensive-sqli`；未使用的技能不占用上下文。
+3. 只安装单个类别（稀疏检出）：
+
+```bash
+git clone --filter=blob:none --sparse https://github.com/SnailSploit/claude-red
+cd claude-red && git sparse-checkout set Skills/web Skills/active-directory
+```
+
+4. 使用仓库自带安装脚本：
+
+```bash
+./install.sh                           # interactive
+./install.sh --target ~/.claude/skills # explicit target
+./install.sh --category web            # single category
+```
+
+5. 在 Claude Code 中把技能当作 system file 注入：
+
+```bash
+cat Skills/web/offensive-sqli/SKILL.md | claude --system-file -
+
+cat Skills/active-directory/**/SKILL.md | claude --system-file -
+```
+
+6. Claude.ai 手动方式：把某份 `SKILL.md` 的内容粘贴进 Project 的 system prompt，或直接前置到对话开头。
+7. 迁移到自己的领域（这是把该仓库变成通用做法的关键一步）：按它的目录约定自建 `Skills/<类别>/<技能名>/SKILL.md`，技能粒度保持「单一任务面」，README 在 Contributing 一节明确说「偏好聚焦的单一表面技能，而非大而全的综述」；frontmatter 标准与技能模板在 `CONTRIBUTING.md`（本次输入未包含该文件内容，需到仓库查看）。
+8. 做对照。选一个自己工作里反复出现、依赖成体系方法论的任务（例如代码评审、故障排查、合规检查）：先不要技能，让 Claude 处理 3–5 个真实任务并记录输出；再按第 7 步自建一份 `SKILL.md`，把任务需要的技术要点、可用工具、常见边界情况、何时该升级/求助写进去，安装或注入；用同样输入再跑一次，逐条对比；只在这一类任务上小范围用，不扩张到其它任务，直到显示出稳定差异。
+
+建议观察的指标（均可自行计数）：首次输出即可用的比例；为得到可用结果所需的纠正轮数；专家检查清单中被遗漏项的条数（对照你自己的清单逐项打勾）；完成同一任务的时间；上下文占用（未加载技能与加载技能时同一任务的 token/长度差异，用来验证「按需加载省上下文」这一主张）。
+
+淘汰条件：如果这些指标在多个任务上都没有稳定改善，说明该模式对你这套工作不成立，应降级为只借鉴「细粒度切分 + 按需加载」的思路。
+
 ## 怎么判断变好了
 
 最小试用方式：
@@ -570,12 +679,16 @@ Aktualisiere den Skill website-bauen von GitHub.
 - 编码 agent 行为约束类（做法 AJ）：在一个已有项目里按第 3 步追加 CLAUDE.md，或先只在单个项目装插件，不要全局铺开。挑一个非琐碎的改动任务，按第 7 步把命令式要求改写成「先写失败测试→改到通过」，让智能体自行跑完，再 review diff。
 - AI 研究技能类（做法 AK）：只装 1 个类别，例如 `fine-tuning` 或 `inference-serving`。选一个与类别对应的真实小任务，先在不装该技能的会话里让 agent 做一次，记录查文档时间、命令/配置正确率、人工纠正次数；再装上该技能做一次。至少跑 3 次或换 2–3 个任务。同时用它的目录规范整理一份自己的内部知识，检查 `SKILL.md` 是否控制在 50–150 行、细节是否进 `references/`、是否写了「When to use this skill」和 breaking changes。
 - 建站长流程类（做法 AL）：新建一个空文件夹，项目级装好 skill 后用 `/website-bauen start` 跑到「调研／设计方向」阶段即主动叫停，逐项检查命名与 Logo 方案、带真实搜索数据的调研结果、文案初稿、设计方向说明是否可直接使用；然后新开一个对话用 `/website-bauen weiter`，看能否仅凭 `WEBSITE-STATUS.md` 正确恢复上下文。
+- 个人经验蒸馏类（做法 AM）：在 Claude Code 上装好 distilly 并确认 host 能发现该 Skill；只喂一位同事的设计文档/评审意见生成 colleague profile；用 3–5 个该同事平时会被问到的真实问题分别问「不带 Skill 的通用 agent」和「装了该 Skill 的 agent」，看输出能不能直接用；同一批问题再只喂群聊素材重建一次做对照；追加一份新文档确认旧结论未被覆盖；用一句纠正确认 Correction 层立即生效且可回滚。
+- 领域方法论技能包类（做法 AN）：先不用技能，让 Claude 处理 3–5 个自己工作里的真实任务并留存输出；按第 7 步自建一份 `Skills/<类别>/<技能名>/SKILL.md`（写清技术要点、可用工具、边界情况、何时升级/求助）；安装或注入后用同样输入再跑一次，逐条对比；只在自建的那一类任务上使用，不扩张。
 
 可观察的指标：
 
 - 通用：人工修改次数 / 返工轮数是否下降；首稿可用率；背景重述次数；输出一致性；单次任务耗时；规则类返工次数。
 - 做法 AK：是否减少查文档时间；命令/配置正确率；人工纠正次数；权限申请次数；是否只装一个类别；是否把目录规范用于内部知识；不要拿 13,433 stars、98/87 技能数、demo 数字当效果证据。
 - 做法 AL：到「可用初稿」的墙钟时间对比手工；人工返工次数；中途断开对话后 `/website-bauen weiter` 能否仅凭 `WEBSITE-STATUS.md` 正确恢复上下文；调研阶段的数据是否真来自外部搜索数据源而不是模型编造；若走完上线，Google 与 ChatGPT 复测中是否出现可观测、可记录的变化。不要拿 30 stars、阶段顺序本身或「有检查、有复测环节」当效果证据。
+- 做法 AM：直接采纳率（对照无 Skill 版本）；输出是否符合团队既有规范、是否先追问影响面；需要「他不会这样」纠正的次数是否下降；同一问题重复询问时关键判断是否一致；输出中的判断能否指回所喂素材（出现编造即失败）。不要拿三个 demo（Karpathy、字节 L2-1 后端、暗恋对象）或 25,547 stars 当效果证据。
+- 做法 AN：首次输出即可用的比例；为得到可用结果所需的纠正轮数；专家检查清单中被遗漏项的条数；完成同一任务的时间；未加载技能与加载技能时同一任务的 token/长度差异是否符合「按需加载省上下文」的预期。不要拿 7,460 stars 或 README 对覆盖完整度的自述当效果证据。
 - 其余做法指标保留：H 看测试是否通过、非空文件、git 改动；I 看交付前 8 条检查清单；J 看按 `diagnostics[]` 修的轮数；K 看品牌 onboarding 后是否还需手动改配色字体；L 看完成时间与返工次数；M 看 8 个已知答案题命中数与 0 幻觉；N 看七问是否全有答案；O 看约束数量与 PG 版本匹配；P 看 7-Question Gate；Q 看五道门禁通过/失败记录；R 看 `GLOSSARY.md` 与 ADR 是否更新；S 看任务完成时间与权限收敛；T 看数据来源、行情时间、抓取时间；U 看从描述问题到 Codex 指到具体元素的耗时；V 看是否自动触发；W 看观察条数与被接受改动数；X 看激活命中与返工轮次；Y 看模板化表达减少与事实不变；Z 看失败→通过证据；AA 看角色激活命中与返工；AB 看 playbook 是否走完与冲突次数；AC 看 validator 退出码与 warning 数；AD 看输出 token 与页面可读性；AE 看校验是否 0 错误与分发效率；AF 看弃用 API 检出数量与误报率；AG 看「愿意发出」比例与意义改动条数；AH 看 tier 计数与 frontier 已解决比例；AI 看 `/discover` 是否产出假设清单与实验设计；AJ 看 diff 是否只含被请求改动；AL 看到「可用初稿」的墙钟时间与人工返工次数、断点续做能否恢复上下文、调研数据是否来自外部搜索源。
 
 反向指标：
@@ -614,8 +727,10 @@ Aktualisiere den Skill website-bauen von GitHub.
 - 做法 AJ：对拼写修正、显而易见的一行改动也套全套四条原则；把四条原则、stars 或「Karpathy 说的」当效果证据。
 - 做法 AL：`/website-bauen weiter` 无法仅凭 `WEBSITE-STATUS.md` 恢复上下文，或调研阶段的数据看不出外部搜索来源，先降级为只借鉴「skill + 状态文件 + 阶段化接工具」的形态。
 - 做法 AK：一次装全部 98/87 个技能；没看权限说明就把技能 symlink 到所有 agent 目录；把 13,433 stars、98/87 技能数、demo 里的 r=-0.99、95.6% recovery、1.9× 压缩仅 1.3% ppl 损失、两篇论文完全由 agent 写成当成效果证据；没读单个技能的 `SKILL.md` 正文就下结论；把 `npx @orchestra-research/ai-research-skills list` 能列出技能当成研究产出变好。
+- 做法 AM：纠正轮数一直不下降，或输出里的判断无法指回所喂素材（出现编造），退回 study，只借鉴「Persona + 家族模块 + Correction 层 + 增量合并不覆盖」的结构；只给二手解读不给一手素材却指望 profile 像本人；把他人聊天记录直接喂进去而不先解决授权与隐私；把三个 demo 当效果证据；把 Grok Bot 的「saved Skill · 预览」当成能直接导入本地 `SKILL.md`；在 README 未列出的 host 上硬装。
+- 做法 AN：在未获授权的目标上使用这些进攻性技能；把「像领域专家一样行为」「不用就不付上下文成本」当成已验证结论；期待 README 提供 `SKILL.md` 撰写模板（模板在未随材料给出的 `CONTRIBUTING.md`）；把 7,460 stars 当效果证据；在多个任务上都看不到稳定改善时仍把它写进常规流程。
 
-注意：`doctor`、`validate`、`npm test`、`claude plugin validate`、`npx @anthropics/skills-ref validate`、`archify doctor`、`validate --json`、`python -m unittest discover -s tests`、`validate_skill.py`、`check.py` 这类检查只能证明「技能或 mod 装得上、格式合法、不带危险命令、图能通过校验、回归测试能过、技能符合规则表」，不能证明「产出更好」。效果必须自己对照。做法 AK 的 `npx @orchestra-research/ai-research-skills list` 同理。
+注意：`doctor`、`validate`、`npm test`、`claude plugin validate`、`npx @anthropics/skills-ref validate`、`archify doctor`、`validate --json`、`python -m unittest discover -s tests`、`validate_skill.py`、`check.py` 这类检查只能证明「技能或 mod 装得上、格式合法、不带危险命令、图能通过校验、回归测试能过、技能符合规则表」，不能证明「产出更好」。效果必须自己对照。做法 AK 的 `npx @orchestra-research/ai-research-skills list` 同理；做法 AM 里「host 能发现该 Skill」也只证明装上了。
 
 ## 常见坑
 
@@ -658,6 +773,8 @@ Aktualisiere den Skill website-bauen von GitHub.
 - 做法 AJ：不备份直接覆盖项目原有 CLAUDE.md；对琐碎任务套整套四条原则；在非 Claude Code / Cursor 的环境里照搬 `.cursor/rules/karpathy-guidelines.mdc`；把四条原则或 stars 当效果证据；忘了 Goal-Driven Execution 需要先有测试或可验证标准。
 - 做法 AK：把材料里「98 Skills」和 Roadmap 的「87 current」当成确定技能数——两者矛盾；一次装全部；忽略 README 没有权限、沙箱或安全说明就 symlink 到所有 agent 目录；把 demo 结果（r=-0.99、95.6%、1.9× 压缩仅 1.3% ppl 损失、两篇论文完全由 agent 写成）当成第三方复现；把 13,433 stars 当效果证据；不看单个技能的 `SKILL.md` 正文就判断技能质量；把 `npx @orchestra-research/ai-research-skills list` 能列出技能当成研究产出变好。
 - 做法 AL：把 README 的阶段顺序当成可以复现的细节；第一次试用就走完上线，被 DataForSEO、webhosting 账号和部署环节带偏；把「有检查、有复测环节」当成效果证据；忽略 README 里的 DataForSEO 联盟链接；在非 Claude Code / Codex 或不支持 skill 机制的宿主上硬装；断点续做时不在项目文件夹里开新对话，导致读不到 `WEBSITE-STATUS.md`；把 30 stars 当效果证据。
+- 做法 AM：只给二手解读、不给一手素材，却指望 profile 像本人；把他人聊天记录直接喂进工具而不先解决授权与隐私；把三个 demo（Karpathy、字节 L2-1 后端、暗恋对象）当效果证据；把「素材质量 = profile 质量」「不克隆本人、只做 source-grounded 建模」当成已验证结论；把创建者 Skill 装在非 `distilly` 的目录名下；在 README 未列出的 host 上硬装；把 Grok Bot 的「saved Skill · 预览」当成能直接导入本地 `SKILL.md`；忽略 Lark 需 bot 入群、Slack 需管理员且免费版仅 90 天、DingTalk 消息历史只能走浏览器、微信需先导出的硬约束；把 `INSTALL_EN.md`（本材料未给出）里的内容当成已知。
+- 做法 AN：在未授权目标上使用这些进攻性技能；把「像领域专家一样行为」「触发词自动加载的实际命中效果」「不用就不占上下文」当成已验证结论；期待 README 给出 `SKILL.md` 的实际内容、frontmatter 示例或撰写模板（它只在 `CONTRIBUTING.md`，本次材料未包含）；把 7,460 stars 当效果证据；一次性把所有类别都装上；把它的目录结构当成可以跨领域直接复制的通用框架，而不做粒度调整。
 
 ## 证据与来源
 
@@ -704,6 +821,8 @@ Aktualisiere den Skill website-bauen von GitHub.
 - andrej-karpathy-skills 路线的全部内容均来自调研《multica-ai/andrej-karpathy-skills》，即该仓库 README 与 CLAUDE.md。证据：原文直接引用 Karpathy 推文三段，作为四类问题的来源；给出四条可照做的行为规则和一张任务改写对照表；「How to Know It's Working」给出四条可观察信号。属作者主张、没有对照实验或量化数据的是：四条原则本身、四条「working」信号、以及「强成功标准能让 LLM 独立循环」的机制解释。适用条件：偏向谨慎而非速度，对琐碎任务价值低；面向会读 CLAUDE.md 的编码智能体（Claude Code / Cursor），其他形态需自己迁移规则。仓库 MIT 许可。
 - AI-Research-SKILLs 路线的全部内容均来自调研《Orchestra-Research/AI-Research-SKILLs》，即该仓库 README。证据：README 自述了技能结构（每个技能含 50–150 行 `SKILL.md` 快速参考和 300KB+ `references/` 深度文档）、质量标准（官方仓库、真实 GitHub issue、生产工作流、必须写「When to use this skill」、必须列 breaking changes）、三条安装方式（npx 交互式安装器、Claude Code 插件市场、让 agent 读 welcome.md 自助安装）、日常管理 `list`/`update`、7 个 demo；输入 metrics 显示 13,433 stars；README 称平均每技能 420 行、总文档约 130,000 行、65 个 gold standard 技能、覆盖 23 类。局限与矛盾：正文标题写「98 Skills」，Roadmap 统计表却写「Skills 87（current）」，实际技能数无法确定；作者人数为 1（Contributors: 1，target 100+），基本没有第三方交叉验证；材料只有 README 且结尾被截断，单个技能的 `SKILL.md` 正文完全没出现，因此「production-ready」「battle-tested」只能算作者主张；demo 结果（r=-0.99、95.6% recovery、1.9× 压缩/1.3% ppl 损失、「两篇论文完全由 agent 写成」）均为作者自述，材料未给第三方复现或评测方法；「autoresearch 支持 Claude Code /loop 和 OpenClaw heartbeat」只有一句陈述，没有配置细节。适用条件：给编码智能体补 AI 研究全流程知识，或抄技能目录规范整理内部知识；必须按本手册做法 A 只装一个类别并在真实研究任务上对照，不能直接采用。
 - website-bauen 路线的全部内容均来自调研《Julian-Ivanov/website-bauen》，即该仓库 README。可照做的部分：两条德语安装提示词、`/website-bauen start` 与 `/website-bauen weiter`、续做方式、更新方式、状态文件 `WEBSITE-STATUS.md`、阶段顺序、依赖清单与「按阶段配置依赖」的规则。属作者主张、没有数据的是：标题层面的「一步步带你完成整站建设」「即使还没有名称和 Logo 也能用」；README 未给任何案例、成品网站、耗时、成功率或用户反馈，全文没有任何数字支撑效果，只有 30 stars 这一外部指标。主要局限：输入只有 README，skill 本体的具体步骤、提示词与检查标准都看不到，无法核实各阶段究竟做什么、能否复现；README 含 DataForSEO 联盟链接，存在推荐动机；原文为德语，非德语使用者需确认语言处理是否顺滑；要走完全程需要第三方付费账号（DataForSEO、webhosting）。适用条件：仅对支持 skill 机制的智能体有效；对不需要建站的工作，价值主要落在「skill 打包 + 状态文件续做 + 阶段化接工具」这套方法上，而非建站本身。
+- Distilly 路线的全部内容均来自调研《titanwings/distilly》，即该仓库 README。原文给出的可核实内容：可复制的安装命令与提示词；素材来源表及其前置条件；三家族的 profile 结构与 Work Skill 模块；三条维护机制（增量合并不覆盖、对话纠正写 Correction 层、更新自动归档可回滚）；三个演示样例（Karpathy、字节 L2-1 后端、暗恋对象）以及作者自述的 20K ⭐ 里程碑（本次元数据记为 25,547 stars）；MIT 许可，Python 3.9+；引用技术报告 COLLEAGUE.SKILL（arXiv 2605.31264）。只是作者主张：三个 demo 都是挑选过的对话展示，无对照组、无评测数字；「不克隆本人、只做 source-grounded 建模」「素材优先级排序」「素材质量 = profile 质量」均为作者经验判断且无数据。局限与适用条件：本材料只是仓库 README，`INSTALL.md` / `INSTALL_EN.md` 与 `SKILL.md` 的实现细节都没给到，无法核对；README 自述仍是 demo 版；Grok Bot 的安装路径未验证；DingTalk 消息历史只能走浏览器、Slack 免费版仅 90 天，都是硬约束；素材涉及他人聊天记录与个人信息，原文完全没有讨论授权与隐私问题，实际试用前须自行解决。
+- Claude-Red 路线的全部内容均来自调研《SnailSploit/claude-red》，即该仓库 README。原文给出的可核实内容：安装与调用命令、目录与类别结构（23 类别、78 技能、目标约 130）、各类别技能清单与一句话描述、Roadmap 各阶段状态、MIT 许可、致谢（原始检查清单来自 Sahar Shlichov 的 offensive-checklist 集合）。指标方面仅有 stars 7460（来自本次线索的 metrics，不在 README 正文中）。仅为作者主张、无法从本次材料验证的：技能能让 Claude「像领域专家一样行为」、触发词自动加载的实际命中效果、「不用就不付上下文成本」的收益、78 个技能的覆盖完整度与质量。明显局限：README 只是目录与安装说明，没有任何一份 `SKILL.md` 的实际内容、frontmatter 示例、撰写模板或对照评测结果，因此只能提炼「怎么安装/怎么注入/怎么组织结构」，无法提炼「技能文件内部该怎么写」；内容属进攻性安全领域，适用范围受授权条件限制。
 - 文中提到的 star 数来自 metrics，不构成有效性证据。
 
 ## 依据的调研
@@ -751,3 +870,5 @@ Aktualisiere den Skill website-bauen von GitHub.
 - [multica-ai/andrej-karpathy-skills](../research/radar/2026-10-11/2466-multica-ai-andrej-karpathy-skills.md)：建议采用，直接在编码智能体项目里落一份 CLAUDE.md（或装 Claude Code 插件），把四条原则当成硬约束，并把命令式任务改写成带验证标准的目标；理由是原文给了可复制的安装命令、四条可照做的行为规则和一张任务改写对照表，属于拿到就能用的配置，而非泛泛观点。
 - [Orchestra-Research/AI-Research-SKILLs](../research/radar/2026-10-11/2507-orchestra-research-ai-research-skills.md)：值得一试，建议小范围试用：先用 npx 安装器或 Claude Code 的 /plugin 命令装一两个类别，在真实任务上跑一遍，同时把它的 skill-name/SKILL.md + references/ 目录规范抄来整理自己已有的内部知识；理由是原文给出了可直接复制的安装命令和技能打包结构，但单个技能的正文没有随材料给出，宣称的效果只能自测。
 - [Julian-Ivanov/website-bauen](../research/radar/2026-10-12/2728-julian-ivanov-website-bauen.md)：值得一试，可以把 Claude Code 的“agent skill + 状态文件 + 按阶段调工具”这套打包方式小范围试一遍，用它跑一次从零建站的前半程；理由是原文给出了可直接复制的安装/启动/续跑指令和明确的阶段顺序，但 skill 本体内容和实测效果未在材料中给出，只能算小范围验证。
+- [titanwings/distilly](../research/radar/2026-10-13/2901-titanwings-distilly.md)：值得一试，可按 README 给出的最小流程在受支持的 host（建议先用 Claude Code）小范围试：安装 distilly Skill，选一位同事，按其素材优先级（本人长文/评审意见 > 决策性回复 > 群聊）生成 colleague profile，再用真实问题做“带 Skill / 不带 Skill”对照。理由是它把“个人工作方式”固化成可反复调用的 Skill，并给出对话纠正、增量合并不覆盖、版本回滚三条可操作的维护机制；但材料只是 README、项目自述为 demo 版，且没有任何效果数据，所以只值得小范围试，不能直接进手册作为既定做法。
+- [SnailSploit/Claude-Red](../research/radar/2026-10-13/2904-snailsploit-claude-red.md)：值得一试，建议小范围试：把 claude-red 当作“领域专家方法论 → 可注入技能包”的可复制模板，照它的安装/加载命令在自己领域复现一次技能加载，再决定是否写进手册；理由是 README 给出了具体可执行的安装与注入命令、以及技能粒度设计，但没给 SKILL.md 撰写模板和任何效果数据。
