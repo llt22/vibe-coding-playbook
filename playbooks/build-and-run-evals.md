@@ -1,14 +1,14 @@
-# 让 AI 的每次改动都拿出可核验证据：离线评测、代码回归闸门、行为 harness 与上线验收
+# 让 AI 改动在宣布变好前先过评测与验收闸门
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：解决如何用可核验证据而不是感觉验收 AI 的文本类改进、代码改动与上线交付，并按模型能力决定行为 harness 该在开发全程还是只在最终门禁运行。
-> 先试这一步：先按第 34–43 步，在一个契约清晰的小服务上做一次有/无行为 harness 的配对试跑；如果只有前沿模型，先只在最终验收门禁跑一次确定性检查。
-> 最近修订：2026-10-13
+> 解决的问题：手工建评测、靠感觉判断 AI 改动是否变好很容易自欺；这篇手册给出一套可复现的评测、爬坡、回归闸门、上线验收、评测质检和基准评测脚手架流程。
+> 先试这一步：先在一个真实任务上跑一遍零成本预览或 baseline，确认评测环境与判分链路能跑通，再谈改动。
+> 最近修订：2026-10-14
 
 ## 解决什么问题
 
-手工搭评测集、手工调 prompt 和参数、靠感觉判断「这次改动到底有没有变好」，都很费时而且容易自欺。这套做法有四条腿，外加一道对尺子本身的质检，再加一条按模型能力决定行为 harness 开销的支线。
+手工搭评测集、手工调 prompt 和参数、靠感觉判断「这次改动到底有没有变好」，都很费时而且容易自欺。这套做法有四条腿，外加一道对尺子本身的质检，再加一条按模型能力决定行为 harness 开销的支线，以及一条用现成脚手架跑 agent benchmark 的支线。
 
 第一条腿针对可反复跑的文本类改进对象（system prompt、skill 或 instruction 文件、tool 描述、模型与参数）：让 Claude Code 里的 claude-api skill 先把评测建起来（从真实数据采样用例、选最便宜够用的 grader、跑 baseline 并做诊断检查），再对着这套评测做自动爬坡——一轮只改一处，用 train/test 拆分和置信区间判断增益是不是真的，并自动回滚过拟合或回退的改动。
 
@@ -19,6 +19,8 @@
 第三条腿针对上线之后到底算不算改善：借用 FDE Gym 的评分口径——0 分是什么都没改，100 分是参考解，≥80 通过，生产事故最高 0 分，占用客户人员时间要扣分；验证发生在客户从未展示过的流量上，指标是客户自己那个数字改善了多少，而且一次运行只交付一次。前三条腿都是离线、可回滚、可重跑的；这一条是最终闸门，交出去就没有第二次。
 
 新增支线针对编码 agent 的行为 harness 成本：不是所有模型都值得在开发全程挂契约化 guides+sensors。用着便宜或不稳定的模型时，开发全程挂，把漂移当场抓住；用前沿模型且能一次做对时，把同一套确定性检查只在最终验收门禁跑一次。实验里 GPT-6 Luna 无 harness 只有 3/10 通过，挂上 harness 后 10/10，单次估算成本约 $0.273，低于无 harness 的 GPT-6 Sol 的约 $0.406；而 Sol 加 harness 只是把成本推到约 7 倍、通过率仍为 10/10。共同点仍是：改动必须拿出可核验的证据，而不是「我觉得好多了」。
+
+新增支线 RSI Eval 针对 agent/基准评测场景：如果你已经有一套自己的候选生成、记忆、选择、停止规则循环，只缺一个稳定的评测边界，可以用这个轻量 Python SDK + CLI，把 `candidate -> evaluate() -> task feedback -> your next candidate` 中的 `evaluate()` 交给它。它不要求继承某个 optimizer 基类，只负责跑基准、调 grader、返回统一结果；任务选择、evolve/test 划分仍由你自己的方法控制。
 
 ## 适用与不适用
 
@@ -33,6 +35,8 @@
 - 想先跑一遍原工具验证这套口径是否成立：本机有 Docker、Python 3.9+ 和一个 OpenRouter key。
 - 行为 harness：用编码智能体在清晰 brief 下构建绿地服务，接口契约可机器执行，有一批独立验收测试，想比较有/无行为 harness 的通过率、可靠性、token、耗时、估算成本。
 - 行为 harness：想按模型能力选择传感器节奏：便宜或不稳定模型开发全程挂 harness，前沿模型只在验收门禁跑一次。
+- RSI Eval：你已有自己的 RSI/候选循环，只想在 agent benchmark 上获得统一评测边界；或者想先零成本预览一个打包基准任务，再对单个任务跑 oracle 基线与候选对比。
+- RSI Eval：需要覆盖终端与软件工程、代码生成、推理与数学、阅读理解、MCE 任务、工程、领域工作流等打包基准；或想直接跑 Meta-Harness、RRSI、AHE、HarnessX 四个方法集成。
 
 **不适用或要谨慎**
 
@@ -49,6 +53,11 @@
 - 行为 harness 的不适用与局限：新实验未验证遗留代码修改、其他语言或推理设置、模糊或不完整需求；样本是每个模型 10 组配对运行、1 个绿地 Java 服务、两个模型都是低推理努力。
 - 行为 harness 的 guides 与 sensors 是一起加的，无法区分各自贡献；成本口径不含契约、示例、断言与 harness 的编写、评审和维护投入，也不含发现、诊断、修复不可接受结果的人力，未测量跨实现复用带来的摊薄。
 - 只有前沿模型且能一次做对时，开发全程挂 harness 可能只是把成本推到约 7 倍而通过率不变（Sol 有 harness 约 $2.679 vs 无 harness 约 $0.406，均 10/10），所以不一定在开发全程跑。
+- RSI Eval 只覆盖 agent/基准评测场景，不是通用文本 prompt 评测工具；没有实测数据佐证其可靠性，只能当评测脚手架小范围试。
+- RSI Eval 的部分任务需要 NVIDIA GPU、原生 Linux amd64 或外部资产；JobBench、Harvey LAB、APEX 需要单独的 native judge 凭据；会消耗模型配额。
+- RSI Eval 的 catalog 不预设永久的 evolve/test 角色，任务选择属于你的实验；它提供的是评测边界，不是选择、停止或 RSI 方法本身。
+- RSI Eval 的 Harbor extra 会 pin 住 Harbor 0.18.0；其可执行文件必须在 `PATH` 上，或在运行配置里用 `options.harbor_executable` 指定。
+- RSI Eval 原文最后一段接自有循环的代码被截断，无法据以写出完整示例；需自己按 SDK 文档补齐。
 
 ## 前置条件
 
@@ -62,10 +71,12 @@
 - 做上线验收时：一个跑着的系统 + 一个业务方能说清的目标指标 + 一段客户或业务方从未展示过的流量；有人为线上后果负责；愿意把占用对方人员的时间计入成本。
 - 要本地起 FDE Gym 试跑时：Docker、Python 3.9+、一个 OpenRouter key（放在仓库之外的文件里，避免提交进版本库）。`docker compose up` 会起四样东西：站点本身、runner（运行 case 的机器，此处为容器）、PostgreSQL、S3 兼容对象存储。
 - 做行为 harness 时：写详细应用 brief；提供可机器执行的接口契约（OpenAPI/AsyncAPI）；请求-响应示例；一个实现 skill；MCP 工具与 agent plugin；契约驱动的下游 mock；配置校验（例如校验环境变量）；一个可被 agent 调用的统一测试命令；隔离容器与干净 agent home；一套独立、答案不外泄的验收套件。
+- 做 RSI Eval 时：Python 3.12+；Docker（Linux 上 Docker Engine + Compose + Buildx，macOS 上用 Docker Desktop 或 Colima Linux VM）；部分任务需要 NVIDIA GPU、原生 Linux amd64 或外部资产；JobBench、Harvey LAB、APEX 需要单独的 native judge 凭据；会消耗模型配额。
+- 做 RSI Eval 时：凭据必须放在候选产物和仓库之外；为实验建专用、file-backed 的 Codex 登录，并用 `configure` 生成 profile。
 
 ## 操作步骤
 
-A 组（第 1–7 步）先建评测，A 组续（第 8–11 步）给这套评测本身做质检，B 组（第 12–18 步）再对着它爬坡，C 组（第 19–24 步）给 AI 的代码改动加回归闸门，D 组（第 25–29 步）给上线验收定一套能自动判分的口径；第 30–33 步是各阶段要对照的清单；E 组（第 34–43 步）按模型能力决定行为 harness 的传感器节奏。
+A 组（第 1–7 步）先建评测，A 组续（第 8–11 步）给这套评测本身做质检，B 组（第 12–18 步）再对着它爬坡，C 组（第 19–24 步）给 AI 的代码改动加回归闸门，D 组（第 25–29 步）给上线验收定一套能自动判分的口径；第 30–33 步是各阶段要对照的清单；E 组（第 34–43 步）按模型能力决定行为 harness 的传感器节奏；F 组（第 44–56 步）用现成评测脚手架跑 agent benchmark。
 
 1. **建评测。** 前提：skill 已装好，并准备好能访问的生产数据或示例。在 Claude Code 里运行：
 
@@ -237,6 +248,153 @@ A 组（第 1–7 步）先建评测，A 组续（第 8–11 步）给这套评�
 
     另外，skill 要求留下依赖交互与最终验证结果的可审查证据，完成与否不能只凭 agent 自述。最小配对试验：选一个接口契约清晰、有明确外部验收标准的绿地服务；至少选一个成本优化模型和一个前沿模型，各跑 10 次配对（有/无 harness），每次在干净容器/干净 agent home 中开始；记录每轮通过与否、token、耗时、估算成本，并把失败按位置聚类（协议边界、韧性路径、集成缝）。作者用的是 Specmatic 实现这套 harness，但指出等价的契约测试与服务虚拟化工具可以提供相同能力。
 
+### F 组：用现成评测脚手架跑 agent benchmark（RSI Eval）
+
+44. **克隆仓库、建虚拟环境、可编辑安装。** 前提：Python 3.12+。这一步不需要 Docker 和登录。
+
+    ```sh
+    git clone https://github.com/Danielxu0208/rsi_eval.git
+    cd rsi_eval
+    python3.12 -m venv .venv
+    source .venv/bin/activate
+    python -m pip install -e .
+    ```
+
+    预期结果：本地能运行 `rsi-eval` CLI。
+
+45. **先做零副作用预览。** `preview` 只解析任务引用、候选哈希和运行设置，不需要 Docker、Harbor、登录或模型调用。示例默认选 Terminal-Bench 2.0 的 `extract-elf` 任务和打包的 Codex 候选。
+
+    ```sh
+    rsi-eval list
+    rsi-eval preview --config examples/evaluate.json
+    ```
+
+    预期结果：看到任务引用、候选哈希和运行设置；没有副作用。
+
+46. **装 Harbor extra。** 前提：要真正跑基准评测。这一步会 pin 住 Harbor 0.18.0。其可执行文件必须在 `PATH` 上，或在运行配置里用 `options.harbor_executable` 指定。非可编辑安装用 `python -m pip install '.[harbor]'`。
+
+    ```sh
+    python -m pip install -e '.[harbor]'
+    ```
+
+47. **校验 Docker 可用。** 用实际跑评测的账号。
+
+    ```sh
+    docker info
+    docker compose version
+    docker buildx version
+    ```
+
+    Apple Silicon 上如需独立的 Colima profile：
+
+    ```sh
+    brew install colima docker docker-compose docker-buildx
+    colima start rsi-eval --cpus 6 --memory 12 --disk 120 \
+      --vm-type vz --vz-rosetta --runtime docker --activate=false \
+      --ssh-config=false --mount "$PWD:w"
+    source scripts/mac-env.sh
+    ```
+
+    按机器情况调整资源；该 Colima 命令要求 Rosetta；x86-only 镜像在 Apple Silicon 上需要模拟。任务要求时设 `DOCKER_DEFAULT_PLATFORM=linux/amd64`，按任务选平台的配置则要清掉它。
+
+48. **为实验建专用、file-backed 的 Codex 登录，并用 `configure` 生成 profile。** `configure` 只探测并记录 Codex CLI 版本，不调用模型。凭据必须放在候选产物和仓库之外。
+
+    ```sh
+    mkdir -p "$HOME/.codex-rsi-eval"
+    chmod 700 "$HOME/.codex-rsi-eval"
+    CODEX_HOME="$HOME/.codex-rsi-eval" codex \
+      -c 'cli_auth_credentials_store="file"' login
+
+    rsi-eval configure --model YOUR_MODEL \
+      --auth-dir "$HOME/.codex-rsi-eval" --output profile.json
+    ```
+
+49. **改 `examples/evaluate.json`（运行前必做三处）。** `target.model` 设为你能访问的模型；`target.config.codex_auth_dir` 设为上一步的专用登录目录；`target.config.codex_version` 设为 `profile.json` 里记录的 `codex.expected_version` 精确版本。
+
+50. **按“检查 → 参考解 → 候选”三段跑。** `check` 不调用模型；`--oracle` 跑声明的参考解、不经过 Codex，但仍需要任务环境；最后一条才消耗模型配额。路径规则：run JSON 里的路径相对配置文件解析，CLI `--output` 相对当前目录；每次新评测用新的输出目录。
+
+    ```sh
+    rsi-eval check --config examples/evaluate.json
+    rsi-eval run --config examples/evaluate.json \
+      --oracle --output runs/tb20-reference
+    rsi-eval run --config examples/evaluate.json \
+      --output runs/tb20-candidate
+    ```
+
+51. **选基准与任务。** 选择可用显式 `task_ids`，或 `manifest`（含 JSON ID 列表，如 `["extract-elf"]`）；两者都不写就选整个配置。扩大运行前先看任务数和整个 job 的超时：
+
+    ```sh
+    rsi-eval status --benchmark terminal-bench@2.0 --method rrsi
+    rsi-eval preview --config examples/benchmarks/mgsm.json
+    rsi-eval preview --config examples/benchmarks/frontier-eng.json
+    ```
+
+    任务专属设置放 `options.benchmark_runtime`。想复用源下载，设 `RSI_EVAL_SOURCE_CACHE="$PWD/.runtime/source-cache"`。
+
+52. **用 Python SDK。** 与 CLI 共用同一套 target、selection、options；打包的订阅版 Codex 目标要求 `concurrency=1`。
+
+    ```python
+    import json
+    from pathlib import Path
+    from rsi_eval import BenchmarkSelection, RunOptions, TargetSpec, evaluate
+
+    profile = json.loads(Path("profile.json").read_text())["codex"]
+    target = TargetSpec(
+        artifact_dir=Path("templates/codex_agent"),
+        entrypoint="rsi_eval.harbor_codex:Agent",
+        model=profile["model"],
+        config={
+            "codex_auth_dir": profile["auth_dir"],
+            "codex_version": profile["expected_version"],
+            "reasoning_effort": profile["reasoning_effort"],
+        },
+    )
+    result = evaluate(
+        target=target,
+        benchmark=BenchmarkSelection(
+            "terminal-bench", "2.0", task_ids=("extract-elf",)
+        ),
+        options=RunOptions(repetitions=1, concurrency=1),
+        output_dir=Path("runs/sdk-candidate"),
+    )
+    print(result.status)
+    for trial in result.trials:
+        print(trial.task_id, trial.status, trial.reward)
+    print(result.report_path)
+    ```
+
+53. **跑一个打包方法。** prepare 会建独立依赖环境、拉 pin 住的上游代码、冻结配置和 seed，不调用模型；run 起原生改进流程；test 独立评测其选定产物。把 `--method` 换成 `rrsi`、`ahe`、`harnessx`；准备时用 `--config experiment.json` 选任务和方法设置。连续或异构奖励要先看各方法的目标要求，显式 score policy 可适配方法目标同时保留基准原始奖励。
+
+    ```sh
+    rsi-eval method list
+    rsi-eval method prepare --method meta-harness \
+      --profile profile.json --experiment runs/meta-example
+    rsi-eval method check --experiment runs/meta-example
+    rsi-eval method run --experiment runs/meta-example
+    rsi-eval method test --experiment runs/meta-example --output runs/meta-test
+    ```
+
+54. **读结果。** 每次评测在输出目录下写这些产物：
+
+    | 路径 | 内容 |
+    | --- | --- |
+    | `result.json` | 统一状态、逐任务结果、指标与用量 |
+    | `resolved.json` | 选中任务、源引用、候选哈希与设置 |
+    | `candidate/` | 提交执行的候选快照 |
+    | `native/eval/` | Harbor trials、verifier 输出和可用轨迹 |
+    | `harbor.log` | 后端进程输出 |
+
+    `completed` 包含测得的零奖励；`partial` 和 `failed` 保留可用结果并说明缺失部分；基础设施与鉴权失败和判分结果分开；基准自己的汇总保持原有含义；未知 token 数保持未知。
+
+55. **中断后显式恢复。** core 恢复会重试未完成的任务重复、保留已完成测量和此前尝试；方法恢复按各方法自己的 checkpoint 与回滚行为，可能重复中断轮次里的调用。
+
+    ```sh
+    rsi-eval resume --output runs/tb20-candidate
+    rsi-eval method resume --experiment runs/meta-example
+    ```
+
+56. **接自己的 RSI 循环。** 在你需要候选反馈的地方调 `evaluate()`。工具不要求你继承某个 optimizer 基类；候选生成、记忆、选择、停止规则、evolve/test 任务划分都由你自己的方法控制。注意：原文最后一段接自有循环的代码被截断，无法据以写出完整示例，需自己按 SDK 文档补齐。
+
 ## 怎么判断变好了
 
 - baseline 与最终结果都带置信区间；最终报的是 test 集（留出集）相对 baseline 的表现。
@@ -258,7 +416,10 @@ A 组（第 1–7 步）先建评测，A 组续（第 8–11 步）给这套评�
 - 行为 harness 侧：主指标是外部验收通过率（必须应用能启动且全部检查通过才算通过，部分通过不算）；可靠性是同一模型重复运行中通过次数的一致性（原文是 10 次里的通过数）；效率是每次尝试的 token、墙钟时间、估算成本，且把 harness 的编写/维护成本单列，别混进单次运行成本。
 - 行为 harness 侧经济性判据：有 harness 的便宜模型单次成本是否低于无 harness 的前沿模型，同时通过率不下降（原文 $0.273 vs $0.406）。
 - 行为 harness 侧缺口指标：失败是否集中在契约与示例覆盖不到的地方——这些应当转成新增契约/示例或人工审查清单，而不是放宽断言。
-- 最小试用方式：文本侧，原文建议先在一个任务上小范围试，节奏是流程自身的收敛条件——先跑出 baseline，再让爬坡跑到收敛或连续 2–3 轮停滞为止（原文没有给固定的天数或轮数）。代码侧约半天：clone + `uv sync` + `sweep infra doctor`，再跑一个任务的完整流程，并加上第 22 步的两个对照。元评估侧最省的一轮：挑一个你已经在用的评估（不要新造），选 2–3 个能力档位不同的模型各跑一遍并留轨迹，取几条失败或判定有争议的轨迹交给能读验证器逻辑的审查代理，附上一份至少包含评判过于严格的陷阱清单，然后人工核对它提出的每一条。原文没有给固定时长；先跑一轮看误报率和新陷阱发现率——误报率很高、或提出的全是已知陷阱，就说明这一步没有产生增量价值，应降级为参考思路。上线验收侧的最小试用：本机按第 29 步起站点，让一名工程师带编码智能体跑通一个公开 case 的完整交付，记录最终得分；报告没有给时长或轮数，且项目自述处于早期，不要一上来就用它下能力结论。行为 harness 侧的最小试用：按第 34–43 步做一次配对设计，缩小规模：选一个接口契约清晰、有明确外部验收标准的绿地服务，不要先拿遗留系统试；写详细 brief；做契约、示例、`examples validate`、契约驱动 mock、统一测试命令；准备独立验收套件；至少选一个成本优化模型和一个前沿模型各跑 10 次配对，每次干净容器/干净 agent home；记录通过与否、token、耗时、估算成本，并把失败按位置聚类。
+- RSI Eval 侧：先看 `preview` 和 `check` 是否通过，再看 oracle 基线是否完成，最后才看候选 reward；`result.json` 的状态要区分 `completed`、`partial`、`failed`，并确认基础设施/鉴权失败没有混进判分结果。
+- RSI Eval 侧：中断后 `resume` 是否保留已完成测量、只重试未完成任务；方法恢复是否按各方法 checkpoint 行为执行。
+- RSI Eval 侧的限制：没有实测数据佐证可靠性；只能作为自己实验的评测脚手架，不能拿它的数字当能力结论。
+- 最小试用方式：文本侧，原文建议先在一个任务上小范围试，节奏是流程自身的收敛条件——先跑出 baseline，再让爬坡跑到收敛或连续 2–3 轮停滞为止（原文没有给固定的天数或轮数）。代码侧约半天：clone + `uv sync` + `sweep infra doctor`，再跑一个任务的完整流程，并加上第 22 步的两个对照。元评估侧最省的一轮：挑一个你已经在用的评估（不要新造），选 2–3 个能力档位不同的模型各跑一遍并留轨迹，取几条失败或判定有争议的轨迹交给能读验证器逻辑的审查代理，附上一份至少包含评判过于严格的陷阱清单，然后人工核对它提出的每一条。原文没有给固定时长；先跑一轮看误报率和新陷阱发现率——误报率很高、或提出的全是已知陷阱，就说明这一步没有产生增量价值，应降级为参考思路。上线验收侧的最小试用：本机按第 29 步起站点，让一名工程师带编码智能体跑通一个公开 case 的完整交付，记录最终得分；报告没有给时长或轮数，且项目自述处于早期，不要一上来就用它下能力结论。行为 harness 侧的最小试用：按第 34–43 步做一次配对设计，缩小规模：选一个接口契约清晰、有明确外部验收标准的绿地服务，不要先拿遗留系统试；写详细 brief；做契约、示例、`examples validate`、契约驱动 mock、统一测试命令；准备独立验收套件；至少选一个成本优化模型和一个前沿模型各跑 10 次配对，每次干净容器/干净 agent home；记录通过与否、token、耗时、估算成本，并把失败按位置聚类。RSI Eval 侧的最小试用：先按第 44–50 步做零成本预览和单任务三段跑（check → oracle → candidate），不要一开始就扩大基准范围；原文没有给时长，先跑通一个任务再判断是否值得接入自有循环。
 
 ## 常见坑
 
@@ -299,6 +460,19 @@ A 组（第 1–7 步）先建评测，A 组续（第 8–11 步）给这套评�
 - 行为 harness 的坑：把新实验直接外推到遗留代码修改、其他语言或推理设置、模糊或不完整需求——这些边界作者明确说未验证。
 - 行为 harness 的坑：让 agent 自己解释需求、自己写测试、失败后再改期望，把同一个误读或遗漏同时写进实现和测试。
 - 行为 harness 的坑：检查只能执行人类编码进去的期望，覆盖不到的地方仍要靠人工审查，不能因为挂了 harness 就省人工。
+- RSI Eval 的坑：不先跑 `preview` 就装 Docker/Harbor，或跳过 `check` 直接跑候选；零成本步骤就是用来省钱的。
+- RSI Eval 的坑：忘了改 `examples/evaluate.json` 三处，或 `codex_version` 不是 `profile.json` 里的精确版本。
+- RSI Eval 的坑：把凭据放在候选产物或仓库里；凭据必须放在仓库外。
+- RSI Eval 的坑：每次新评测复用同一个输出目录；每次新评测要用新输出目录。
+- RSI Eval 的坑：不先跑 oracle 直接跑候选，导致无法区分任务环境问题和候选问题。
+- RSI Eval 的坑：忽略 Harbor 0.18.0 pin 和 `PATH` 要求；Harbor 可执行文件不在 `PATH` 时必须用 `options.harbor_executable` 指定。
+- RSI Eval 的坑：Apple Silicon 上不处理平台模拟；任务要求时设 `DOCKER_DEFAULT_PLATFORM=linux/amd64`，按任务选平台的配置则要清掉它。
+- RSI Eval 的坑：以为所有任务都能本地跑；部分任务需要 NVIDIA GPU、原生 Linux amd64 或外部资产，JobBench、Harvey LAB、APEX 还需要单独的 native judge 凭据。
+- RSI Eval 的坑：中断后不显式 `resume`，或把方法恢复当成不会重复调用。
+- RSI Eval 的坑：把基础设施/鉴权失败当成判分结果；产物设计里它们应与判分结果分开。
+- RSI Eval 的坑：把未知 token 数当成已知，或把基准自己的汇总改得面目全非。
+- RSI Eval 的坑：把 RSI Eval 当成通用文本 prompt 评测工具，或拿它当能力结论；它只覆盖 agent/基准评测，且没有实测数据。
+- RSI Eval 的坑：期望原文给出完整的接自有循环代码；最后一段代码被截断，需要自己按 SDK 文档补齐。
 
 ## 证据与来源
 
@@ -321,7 +495,9 @@ A 组（第 1–7 步）先建评测，A 组续（第 8–11 步）给这套评�
 - 行为 harness 的数据（10 次运行均值，成本为按 token 用量和模型价格折算的 API 等价估算，非实际账单）：GPT-6 Sol 有 harness：11,331,970 tokens、19m53s、约 $2.679、10/10；GPT-6 Sol 无 harness：1,076,371 tokens、6m51s、约 $0.406、10/10；GPT-6 Luna 有 harness：22,933,648 tokens、35 min、约 $0.273、10/10；GPT-6 Luna 无 harness：5,860,736 tokens、15m56s、约 $0.086、3/10。harness 让 Luna 每次平均多花 17,072,912 tokens、19 分 4 秒自主运行时间、约 $0.187；有 harness 的 Luna 总 token 约为无 harness Luna 的 3.9 倍；无 harness 的 Luna 通过 94.8% 的功能检查；失败的 Java 应用也都至少通过 178 项中的 144 项。失败聚类：超时边界上 4 个应用返回 503、2 个返回 400、1 个返回 429（应为 202+monitor link），7 次运行因缺 monitor URL 引发次生失败，3 次 Kafka 消息实际送达但违反线上契约（Spring JSON 序列化器多加 `__TypeId__` 头；`"categories": null` 而该可选字段存在时必须是数组），另有 415（brief 明确要求 400）、非法请求落到通用 500、缺失 monitor 返回错误表示、配置名分歧（生成客户端读 `ORDER_API_API_KEY`，启动脚本提供 `ORDER_API_KEY`）导致普通创建返回 503。探索性运行中 Claude Sonnet 4.6、Claude Opus 4.6、Gemini 3.8 Flash（低推理努力）也都在无 harness 下一次完成。
 - 行为 harness 中只是作者主张的部分：executable attention、attention lapse 是作者对失败机制的解释性框架，作者自己也说实验未确立因果关系——例如超时识别失败，只记录了错误响应，没记录实际客户端异常，所以窄异常类型匹配只是可能解释。
 - 行为 harness 的适用边界：每个模型 10 组配对运行、1 个绿地 Java 服务、两个模型都是低推理努力；样本不足以判断长期失败率或得到一个可接受应用的总成本；brief 异常详细，未测试模糊需求、遗留代码、其他语言或推理设置；guides 与 sensors 是一起加的，无法区分各自贡献；成本口径不含契约、示例、断言与 harness 的编写、评审和维护投入，也不含发现、诊断、修复不可接受结果的人力，作者未测量跨实现复用带来的摊薄。
-- 局限（四份材料共通）：claude-api 流程依赖该 skill 的实际可用性，案例全部来自作者内部基准，未经第三方复现；元评估只有 4 条无数据支撑的步骤；swe-sweep 无任何结果数字；FDE Gym 的打分机制无实测数据、项目处于早期；行为 harness 实验样本小、场景单一、成本口径不含维护与人力。四个做法都需要在自己的任务上验证后再推广。
+- 主要依据（RSI Eval 评测脚手架）：调研《Danielxu0208/rsi_eval》。安装、零成本预览、Harbor extra、Docker 校验、专用 Codex 登录、`configure`、三段跑、Python SDK 示例、打包方法、产物路径、恢复命令，以及 catalog 覆盖范围，都出自该仓库 README/正文。
+- RSI Eval 缺数据的部分：原文没有给任何实测数据佐证可靠性；只覆盖 agent/基准评测场景；最后一段接自有 RSI 循环的代码被截断，无法据以写出完整示例。因此它只能作为小范围试用的评测脚手架，不能当能力结论的依据。
+- 局限（五份材料共通）：claude-api 流程依赖该 skill 的实际可用性，案例全部来自作者内部基准，未经第三方复现；元评估只有 4 条无数据支撑的步骤；swe-sweep 无任何结果数字；FDE Gym 的打分机制无实测数据、项目处于早期；行为 harness 实验样本小、场景单一、成本口径不含维护与人力；RSI Eval 无实测数据、只覆盖 agent/基准评测。五个做法都需要在自己的任务上验证后再推广。
 
 ## 依据的调研
 
@@ -330,3 +506,4 @@ A 组（第 1–7 步）先建评测，A 组续（第 8–11 步）给这套评�
 - [@Vtrivedy10: “评估评估”的最佳方式仍然是：](../research/radar/2026-10-08/1960-item.md)：值得一试，按四步小范围试：用多个不同模型的代理在当前评估上跑轨迹，让一个带环境与验证器逻辑读取权限的审查代理审这些轨迹、挂上“常见陷阱”技能并主动找新陷阱，最后人工复核形成闭环；步骤本身可照做，但原文没给提示词、配置和数据，只能先试再定。
 - [deeplethe/fde-gym](../research/radar/2026-10-12/2684-deeplethe-fde-gym.md)：值得一试，建议小范围试：按 README 的三条命令本地起 FDE Gym，拿一个公开 case 让工程师带编码智能体走一次完整交付，重点借用它“在客户未见过的流量上线计分、0 分是没改动、100 分是参考解、生产事故一票否决、一次运行只交付一次”的评分口径来设计自己工作里的效果验证；理由是它给的是可复制的评测流程与判分机制，而不是一套已验证过的 AI 使用法，且项目自述处于早期。
 - [Are Harnesses Worth the Cost?](../research/radar/2026-10-13/2964-are-harnesses-worth-the-cost.md)：值得一试，先按模型能力决定行为 harness 的运行节奏——用着便宜/不稳定的模型就在开发全程挂着契约化的 guides+sensors，用前沿模型则把这套确定性检查只在最终验收门禁跑一次。理由是实验中 GPT-6 Luna 从无 harness 的 3/10 提升到有 harness 的 10/10，且单次估算成本 $0.273 低于无 harness 的 GPT-6 Sol 的 $0.406，而 Sol 加 harness 只是把成本推到约 7 倍、通过率没有变化。
+- [Danielxu0208/rsi_eval](../research/radar/2026-10-14/3012-danielxu0208-rsi-eval.md)：值得一试，值得小范围试：把它当作“AI 改动到底有没有变好”的评测脚手架来用——先用零成本的 preview 验证环境，再对单个任务跑 oracle 基线与候选对比；理由是它给出了可直接复制的安装、配置、运行、产物和恢复流程，但只覆盖 agent/基准评测场景，且没有任何实测数据佐证其可靠性。

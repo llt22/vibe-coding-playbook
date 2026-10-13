@@ -1,16 +1,16 @@
-# 让编码 agent 带上领域知识干活：先小范围试装技能包，再按需加载
+# 给 agent 加技能前，先小范围试装并用同一任务做有/无对照
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：你已经在用编码 agent，但每次都要重复描述同一套规范，也不确定装技能包是否真的减少了返工——这篇手册给出一个可照做的流程：先小范围试装一个现成技能包，用同一任务做有/无技能的对照，确认有效后再考虑把自己的重复工作或领域知识写成按需加载的技能。
-> 先试这一步：挑一个非关键项目和一个你当前最痛的任务，只装一个技能包，用同一任务、同一输入在没技能和有技能的条件下各跑 3 次，记录返工轮数与人工纠正次数。
-> 最近修订：2026-10-13
+> 解决的问题：在把任何技能包、领域知识、流程或角色交给 agent 之前，怎么用最小代价判断它是否真的减少了返工，而不是只证明它装上了。
+> 先试这一步：选一个非关键项目和一类重复任务，只装一个技能，用同一输入在无技能和有技能下各跑 3 次，对比返工轮数与首稿可用率。
+> 最近修订：2026-10-14
 
 ## 解决什么问题
 
 你已经在用编码 agent、写作 agent 或通用 agent，但每次都要重复描述同一套规范，或者不确定装一个技能包是否真的减少了返工——甚至因为一次装太多，上下文反而更乱。这篇手册给出一个可照做的流程：先小范围试装一个现成技能包，用同一任务做有/无技能的对照，确认有效后再考虑把自己的重复工作写成 `SKILL.md`，或者把一本反复查阅的技术书、一份内部文档、或一套 AI 研究全流程知识转成按需加载的技能。
 
-它也覆盖一批具体场景：让 agent 代理编码 CLI 跑长任务并拿硬证据验收；给 agent 补行业设计知识；把一句模糊想法写成可让 agent 独立跑几小时的任务书；写一个把会话状态嵌进界面的 Claude Code mod；让 agent 把一句话描述／一个代码仓库变成可交互的架构图、工作流图、时序图、数据流图、生命周期图；让 agent 检索中国金融市场数据；把移动端模拟器与真机画面接进 Codex 聊天；把多步复杂任务拆成三阶段并加门禁；把中英文学术写作去模板化改写并用命题级核对保住数字、引文与证据强度；让路由技能自动选工作流并对 bug 交出失败→通过证据；按职能只装少量 agent 角色并用真实任务与默认提示对照；在 T3 Code 里用 p3-stack 按 playbook 路由并用 worktree 与 PR 监视减少等待和冲突；审计并改进自己的 `SKILL.md`；让 agent 把结论、方案对比、多步流程、仓库模块、逐句批注、时间线和一段历史渲染成一页可离线打开的单文件 HTML；把自己的 `SKILL.md` 校验、打包并分发到多端；给 agent 补一块 SwiftUI 领域知识并按需触发审查；给工作写作去 AI 腔并保住事实与承诺强度；把产品经理的重复流程交给 agent 跑成命令链；给编码 agent 立四条硬约束；让 agent 按阶段从零建一个网站，并在中途停下后仅凭状态文件继续（做法 AL）；给 agent 补 AI 研究全流程知识（微调、推理服务、分布式训练、评估、论文写作等）；以及给写 Go 终端 UI 的编码 agent 补 Charm 生态各库的用法（做法 AO）。
+它也覆盖一批具体场景：让 agent 代理编码 CLI 跑长任务并拿硬证据验收；给 agent 补行业设计知识；把一句模糊想法写成可让 agent 独立跑几小时的任务书；写一个把会话状态嵌进界面的 Claude Code mod；让 agent 把一句话描述／一个代码仓库变成可交互的架构图、工作流图、时序图、数据流图、生命周期图；让 agent 检索中国金融市场数据；把移动端模拟器与真机画面接进 Codex 聊天；把多步复杂任务拆成三阶段并加门禁；把中英文学术写作去模板化改写并用命题级核对保住数字、引文与证据强度；让路由技能自动选工作流并对 bug 交出失败→通过证据；按职能只装少量 agent 角色并用真实任务与默认提示对照；在 T3 Code 里用 p3-stack 按 playbook 路由并用 worktree 与 PR 监视减少等待和冲突；审计并改进自己的 `SKILL.md`；让 agent 把结论、方案对比、多步流程、仓库模块、逐句批注、时间线和一段历史渲染成一页可离线打开的单文件 HTML；把自己的 `SKILL.md` 校验、打包并分发到多端；给 agent 补一块 SwiftUI 领域知识并按需触发审查；给工作写作去 AI 腔并保住事实与承诺强度；把产品经理的重复流程交给 agent 跑成命令链；给编码 agent 立四条硬约束；让 agent 按阶段从零建一个网站，并在中途停下后仅凭状态文件继续（做法 AL）；给 agent 补 AI 研究全流程知识（微调、推理服务、分布式训练、评估、论文写作等）；给写 Go 终端 UI 的编码 agent 补 Charm 生态各库的用法（做法 AO）；以及让 agent 把真实 UI 组件拆成绘制层、自动读出测量值与 token、并用审计脚本验收（做法 AP）。
 
 新增做法 AK：当你需要给 agent 补 AI 研究全流程知识，或想抄一套可迁移的技能目录规范来整理内部知识时，用 `Orchestra-Research/AI-Research-SKILLs`，按类别只装 1 个技能，在真实研究任务上做有/无技能对照；同时把它的 `skill-name/SKILL.md + references/` 目录规范抄来整理自己的文档。
 
@@ -21,6 +21,8 @@
 新增做法 AN：当你有一套成体系的领域方法论（代码评审、故障排查、合规检查等）要交给 agent，并希望「不用就不占上下文」时，照 `SnailSploit/claude-red` 的交付方式做一次：把你的方法论拆成细粒度的 `Skills/<类别>/<技能名>/SKILL.md`，按对话触发词按需加载；需要时用 `claude --system-file -` 把某份 `SKILL.md` 注入，或在 Claude.ai 项目里手工粘贴。该仓库自带的是进攻性安全技能，只在授权红队、漏洞赏金、安全研究、CTF 等合法场景使用；它的价值是交付模板与粒度设计，不是内容本身。
 
 新增做法 AO：当你让编码 agent 写 Go 终端 UI（Bubble Tea、Bubbles、Lip Gloss、Huh、Log、Glamour、Gum、VHS），希望它一上手就用对库用法和 v2 的 `charm.land` 导入路径时，用 `tpscloud/charmedimsure` 按库粒度只装 1–2 个技能，在一个已有的小型 Go TUI 任务上做有/无技能对照。即使你不写 Go 终端 UI，也可以只抄它「一个库一份 `SKILL.md`、示例放 `examples/` 并由 CI 按固定模块版本编译」这个结构，用来整理你自己的某个库或框架知识。
+
+新增做法 AP：当你做前端组件文档、设计系统维护，或要给组件出规格表、标注图、anatomy 图，希望 agent 直接从真实组件读出测量值和 design token、而不是手打数字时，用 `diip3sh/exploded` 试一次：在一个 CSS 与页面同源、本地可运行的页面上，先按现有方式手工出一份规格表并记录耗时，再装技能跑一次 `/exploded spec sheet for …`，用 `node scripts/audit.mjs` 看每处涂色是否恰好落在一个层上、每种状态的布局误差是否在 0.5 px 以内，并用 `T` 模式看有多少值显示成你写过的 token 名。跨源 CSS、Shadow DOM、canvas/WebGL 组件它不覆盖，不要在这些组件上硬用。
 
 ## 适用与不适用
 
@@ -52,6 +54,8 @@
 - 需要把一套成体系的领域方法论拆成细粒度技能文件，做到按需加载、不用不占上下文，并能在 Claude Code、Claude.ai 等不同通道交付（做法 AN）。
 - 正在写 Go 终端 UI（Bubble Tea / Bubbles / Lip Gloss / Huh / Log / Glamour / Gum / VHS），希望编码 agent 写这些代码时自动带上对应库的用法、组件选择和 v2 导入路径（做法 AO）。
 - 想抄「一个库一份 `SKILL.md` + `examples/` 用 CI 按固定版本编译」这套领域知识打包结构，用来整理自己常用的某个库或框架（做法 AO）。
+- 做前端组件文档或设计系统维护，希望 agent 直接把真实组件的绘制层拆开、枚举状态、读出测量值与 design token，并且这些数字来自浏览器计算样式而不是人手敲（做法 AP）。
+- 想抄「用运行时克隆真实组件取数、再给产出配一条机器可判验收线」这套形态，给自己已有的可视化或文档工具加一条能被脚本打断的验收标准（做法 AP）。
 
 不适用：
 
@@ -60,7 +64,7 @@
 - 只看 stars、README 徽章或 CI 状态就决定采用。
 - 只是想改拼写或一行显然的改动，却套整套四条原则；不备份直接覆盖项目原有 CLAUDE.md；把四条原则或 stars 当效果证据（做法 AJ）。
 - 只有 README、没有 skill 本体细节和效果数据，却直接把它当成熟流程全量采用；或第一次试用就走完上线环节（做法 AL）。
-- 各做法自己的边界见对应小节。例如：E 只针对中文技术文档；F 只针对生物医学论文；M 不适用于无合法访问权的书或打算再分发第三方版权书生成的 skill；O 只在 Postgres / TimescaleDB / PostGIS 任务上有用；P 只对自有或书面授权资产；Q 的领域内容不通用；T 不支持直接驱动交易或投顾建议；U 需要 Apple Silicon Mac + Codex desktop + 私有仓库访问权；X 面向全栈开发；Y 需要能加载完整 Skill 文件夹的环境，且 DOCX 抽取保留不了复杂样式、批注、修订记录、脚注与文本框；AF 只覆盖 SwiftUI / Apple 平台开发；AG 的材料没有覆盖合同或其他法律文件，也不承诺通过 AI 检测器；AH 主要面向数学/理论科学/算法类开放式研究；AI 的材料只有 README；AJ 只面向会读 CLAUDE.md 的编码智能体；AK 的材料只有 README，单个技能的 `SKILL.md` 正文没随材料给出，技能数在 README 内自相矛盾（标题 98，Roadmap 写 87），效果必须自测；AL 的材料只有 README，skill 本体的阶段步骤、提示词与检查标准都看不到，README 未给任何案例、耗时或成功率数字，且含 DataForSEO 联盟链接，要走完全程还需第三方付费账号（DataForSEO、webhosting）；AM 的材料只有 README，项目自述仍是 demo 版，`INSTALL.md` / `INSTALL_EN.md` 与 `SKILL.md` 实现细节都没给到，三个 demo 都是挑选过的对话展示、无对照组无评测数字，且素材涉及他人聊天记录与个人信息而原文完全没有讨论授权与隐私；AN 的材料只有 README，没有任何一份 `SKILL.md` 的实际内容、frontmatter 示例或撰写模板（模板在未随材料给出的 `CONTRIBUTING.md` 里），也没有任何评测数据，且内容属进攻性安全领域、适用范围受授权条件限制；AO 只对 Go + Charm 生态的终端 UI 开发有用，换语言或框架完全不可迁移，是第三方项目（与 Charm 官方无关联）且绑定 v2 的 `charm.land` 导入路径，v1 项目直接用会不匹配，材料也没有任何「装上技能前后代理表现」的对照数据。
+- 各做法自己的边界见对应小节。例如：E 只针对中文技术文档；F 只针对生物医学论文；M 不适用于无合法访问权的书或打算再分发第三方版权书生成的 skill；O 只在 Postgres / TimescaleDB / PostGIS 任务上有用；P 只对自有或书面授权资产；Q 的领域内容不通用；T 不支持直接驱动交易或投顾建议；U 需要 Apple Silicon Mac + Codex desktop + 私有仓库访问权；X 面向全栈开发；Y 需要能加载完整 Skill 文件夹的环境，且 DOCX 抽取保留不了复杂样式、批注、修订记录、脚注与文本框；AF 只覆盖 SwiftUI / Apple 平台开发；AG 的材料没有覆盖合同或其他法律文件，也不承诺通过 AI 检测器；AH 主要面向数学/理论科学/算法类开放式研究；AI 的材料只有 README；AJ 只面向会读 CLAUDE.md 的编码智能体；AK 的材料只有 README，单个技能的 `SKILL.md` 正文没随材料给出，技能数在 README 内自相矛盾（标题 98，Roadmap 写 87），效果必须自测；AL 的材料只有 README，skill 本体的阶段步骤、提示词与检查标准都看不到，README 未给任何案例、耗时或成功率数字，且含 DataForSEO 联盟链接，要走完全程还需第三方付费账号（DataForSEO、webhosting）；AM 的材料只有 README，项目自述仍是 demo 版，`INSTALL.md` / `INSTALL_EN.md` 与 `SKILL.md` 实现细节都没给到，三个 demo 都是挑选过的对话展示、无对照组无评测数字，且素材涉及他人聊天记录与个人信息而原文完全没有讨论授权与隐私；AN 的材料只有 README，没有任何一份 `SKILL.md` 的实际内容、frontmatter 示例或撰写模板（模板在未随材料给出的 `CONTRIBUTING.md` 里），也没有任何评测数据，且内容属进攻性安全领域、适用范围受授权条件限制；AO 只对 Go + Charm 生态的终端 UI 开发有用，换语言或框架完全不可迁移，是第三方项目（与 Charm 官方无关联）且绑定 v2 的 `charm.land` 导入路径，v1 项目直接用会不匹配，材料也没有任何「装上技能前后代理表现」的对照数据；AP 只对基于 DOM/CSS 的组件有效：跨源 CSS 读不到（其 hover/focus 规则无法强制、token 无法溯源），Shadow DOM、canvas、WebGL 组件不被捕获（canvas 克隆出来没有像素），过渡只冻结在末态、展示的是状态而不是动效，JS 驱动的弹簧动画状态目前需要补一个 `apply` 状态，材料只有 README 与 35 stars，没有任何实测或第三方评测数据。
 
 ## 前置条件
 
@@ -80,10 +84,11 @@
 - AM：一个受支持的本地 agent host（README 列出 Claude Code、Hermes、OpenClaw、Codex、DeepSeek Harness、Pi、Grok Build、OpenCode，其中 Grok Bot 仅列为「saved Skill · 预览」，官方文档未描述直接导入本地 `SKILL.md`）；Python 3.9+；知道该 host 的 Skills 目录；素材可能涉及他人聊天记录与个人信息，原文完全没有讨论授权与隐私，实际试用前须自行解决；`INSTALL_EN.md` 里的 host 具体路径、迁移、Windows、生成 profile 的安装与凭据配置，本次材料未给出内容。
 - AN：一个 Claude 使用环境（Claude Skills 系统 / Claude Code / Claude.ai 项目）；使用范围合法合规（README 限定为授权红队、漏洞赏金、安全研究、CTF 等场景）；对 `~/.claude/skills` 有写权限；迁移到自己领域所需的 frontmatter 标准与技能模板在 `CONTRIBUTING.md`，本次材料未包含。
 - AO：本机有 Node/npx（skills CLI 安装用）；目标代理是 Claude Code、Codex 或其他被 skills CLI 支持的代理；用符号链接或 `--plugin-dir` 方式时需要已 clone 该仓库并保留 checkout 在原位；想跑通示例验证可用性需要本机 Go 环境，以及 clone 仓库（示例在仓库根的 `examples/`）。
+- AP：一个能读 skills 的代理（README 点名 Claude Code、Cursor、Codex 等）；组件在本地可运行，且 CSS 与页面同源（跨源 CSS 读不到）；有 Chrome（审计脚本用无头 Chrome，Chrome 在非标准路径时需设置 `CHROME_PATH`）；用运行时手动挂载时要在 `document.fonts.ready` 之后再执行。
 
 ## 操作步骤
 
-怎么选：先做做法 A；A 里某个技能确实有效、且你有一件每周重复且规范明确的工作，再做做法 B。其余按场景选：C 多来源知识打包；D 补模型端点/权限/搜索；E 中文技术文档写作与审稿；F 单篇论文精读；G 写一个 Claude Code mod；H 用 Cline CLI 代理长任务拿硬证据验收；I 补 UI/UX 设计知识；J 出带交互的单文件 HTML 图；K 出品牌一致的静态 HTML+SVG 图；L 从大插件市场只装一个单元并按任务档位选模型；M 把书或内部文档转成按需加载技能；N 把模糊想法写成任务书并给破坏性操作加闸门；O 补 Postgres 领域知识与版本化文档检索；P 在授权安全场景按主题加载安全技能库；Q 把多步任务拆成三阶段加门禁；R 装一套小而可组合的工程技能集；S 从 google/skills 按任务只装一个；T 让 agent 检索中国金融市场数据并核对来源与时间戳；U 把移动端模拟器与真机画面接进 Codex 聊天；V 用一行 curl 装单个 Markdown 技能；W 用元技能观察你怎么用技能；X 装一套全栈开发技能包按请求自动激活；Y 把中英文学术写作去模板化改写并用命题核对保住事实；Z 用路由技能自动选工作流并对 bug 交出失败→通过证据；AA 按职能只装少量 agent 角色并用真实任务与默认提示对照；AB 在 T3 Code 里用 p3-stack 按 playbook 路由并用 worktree/PR 监视减少等待和冲突；AC 审计并改进自己的 SKILL.md；AD 让 agent 把结论、方案对比与流程解释渲染成一页可离线打开的 HTML；AE 把自己的 SKILL.md 校验、打包并分发到多端；AF 给 agent 补一块 SwiftUI 领域知识并按需触发审查；AG 给工作写作去 AI 腔并保住事实与承诺强度；AH 把开放式研究做成迷宫地图、证据分级与独立裁判循环；AI 装 1–2 个 PM 插件并用 `/discover` 跑一个真实想法；AJ 给编码 agent 立四条行为约束并把任务改写成带验证标准的目标；AK 给 agent 补 AI 研究全流程知识，按类别只装一个技能并用真实研究任务对照；AL 把多阶段、跨天的长流程（如从零建站）打包成 skill，用状态文件断点续做、按阶段按需接外部工具；AM 把某个人的工作方式蒸馏成可复用 Person Profile 技能，按其素材优先级喂一手素材并用真实问题做对照；AN 把一套领域方法论拆成细粒度、按对话触发词按需加载的技能文件，并在自动加载、`--system-file` 注入、手工粘贴 system prompt 三条通道里选一条；AO 给写 Go 终端 UI 的编码 agent 补 Charm 生态各库的用法，按库粒度只装 1–2 个技能并用已有 TUI 任务对照。
+怎么选：先做做法 A；A 里某个技能确实有效、且你有一件每周重复且规范明确的工作，再做做法 B。其余按场景选：C 多来源知识打包；D 补模型端点/权限/搜索；E 中文技术文档写作与审稿；F 单篇论文精读；G 写一个 Claude Code mod；H 用 Cline CLI 代理长任务拿硬证据验收；I 补 UI/UX 设计知识；J 出带交互的单文件 HTML 图；K 出品牌一致的静态 HTML+SVG 图；L 从大插件市场只装一个单元并按任务档位选模型；M 把书或内部文档转成按需加载技能；N 把模糊想法写成任务书并给破坏性操作加闸门；O 补 Postgres 领域知识与版本化文档检索；P 在授权安全场景按主题加载安全技能库；Q 把多步任务拆成三阶段加门禁；R 装一套小而可组合的工程技能集；S 从 google/skills 按任务只装一个；T 让 agent 检索中国金融市场数据并核对来源与时间戳；U 把移动端模拟器与真机画面接进 Codex 聊天；V 用一行 curl 装单个 Markdown 技能；W 用元技能观察你怎么用技能；X 装一套全栈开发技能包按请求自动激活；Y 把中英文学术写作去模板化改写并用命题核对保住事实；Z 用路由技能自动选工作流并对 bug 交出失败→通过证据；AA 按职能只装少量 agent 角色并用真实任务与默认提示对照；AB 在 T3 Code 里用 p3-stack 按 playbook 路由并用 worktree/PR 监视减少等待和冲突；AC 审计并改进自己的 SKILL.md；AD 让 agent 把结论、方案对比与流程解释渲染成一页可离线打开的 HTML；AE 把自己的 SKILL.md 校验、打包并分发到多端；AF 给 agent 补一块 SwiftUI 领域知识并按需触发审查；AG 给工作写作去 AI 腔并保住事实与承诺强度；AH 把开放式研究做成迷宫地图、证据分级与独立裁判循环；AI 装 1–2 个 PM 插件并用 `/discover` 跑一个真实想法；AJ 给编码 agent 立四条行为约束并把任务改写成带验证标准的目标；AK 给 agent 补 AI 研究全流程知识，按类别只装一个技能并用真实研究任务对照；AL 把多阶段、跨天的长流程（如从零建站）打包成 skill，用状态文件断点续做、按阶段按需接外部工具；AM 把某个人的工作方式蒸馏成可复用 Person Profile 技能，按其素材优先级喂一手素材并用真实问题做对照；AN 把一套领域方法论拆成细粒度、按对话触发词按需加载的技能文件，并在自动加载、`--system-file` 注入、手工粘贴 system prompt 三条通道里选一条；AO 给写 Go 终端 UI 的编码 agent 补 Charm 生态各库的用法，按库粒度只装 1–2 个技能并用已有 TUI 任务对照；AP 把真实 UI 组件拆成绘制层、自动读出测量值与 token 并跑审计验收，用来替代或校对手工规格表。
 
 几组容易混的：
 
@@ -117,8 +122,12 @@
 - AO 与 I / AF / AK / AG：都是给 agent 补一块领域知识。AO 补的是 Go 终端 UI 的 Charm 生态库用法，按库粒度拆技能；I 是通用 UI/UX 设计知识；AF 是 SwiftUI / Apple 平台；AK 是 AI 研究全流程；AG 是工作写作去 AI 腔。
 - AO 与 B：AO 装的是别人按库拆好的现成技能包；B 是把你自己每周重复的工作写成单个 `SKILL.md`。即使不写 Go 终端 UI，也可以只抄 AO 的「一个库一份 `SKILL.md` + `examples/` 用 CI 固定模块版本编译」这个结构。
 - AO 与 C / M：C 把文档站点打包成技能，M 把书或内部文档转成按需加载技能；AO 是把某个库的用法按库粒度拆成 `SKILL.md` 并配可编译示例，知识来源是上游库本身而不是你的文档。
+- AP 与 B / AC / AD：B 把你自己的重复工作写成 `SKILL.md`；AC 审计你已有的 `SKILL.md`；AD 把结论、方案对比与流程渲染成一页可离线打开的 HTML；AP 是把真实 UI 组件拆成绘制层、自动读出测量值与 token，产出的是一份跟实际 CSS 不漂移的规格表与 anatomy 图。
+- AP 与 I / AO：都是给 agent 加前端相关能力。I 补的是通用 UI/UX 设计知识；AO 补的是 Go 终端 UI 的 Charm 生态库用法；AP 不补知识，而是给 agent 一个能把真实组件拆开、读数并跑审计的技能，且只在 DOM/CSS 组件上成立。
+- AP 与 J / K：J 出带 JavaScript 交互的单文件 HTML 图，K 出品牌一致的静态 HTML+SVG 图，AP 出的是组件绘制层规格表与 anatomy 图，数字必须来自浏览器计算样式，验收靠审计而不是靠肉眼。
+- AP 与 A：AP 同样必须先套用 A 的对照方法：同一批 1–2 个组件，先手工出一份规格表记录耗时，再装技能跑一次，半天内就能看出差别，不要因为审计能跑通就直接纳入常规流程。
 
-E、F、G、H、I、J、K、L、M、N、O、P、Q、R、S、T、U、V、W、X、Y、Z、AA、AB、AC、AD、AE、AF、AG、AH、AI、AJ、AK、AL、AM、AN、AO 都必须套用 A 的对照方法，不要跳过验证直接纳入常规流程。
+E、F、G、H、I、J、K、L、M、N、O、P、Q、R、S、T、U、V、W、X、Y、Z、AA、AB、AC、AD、AE、AF、AG、AH、AI、AJ、AK、AL、AM、AN、AO、AP 都必须套用 A 的对照方法，不要跳过验证直接纳入常规流程。
 
 ### 做法 A：先用现成技能包做小范围试装（推荐先做）
 
@@ -712,6 +721,76 @@ skillforge check .
 
 10. 如果你不写 Go 终端 UI，只借它的形态：把一个库或框架的用法按「一个库一份 `SKILL.md`」拆开，配一份可编译的 `examples/`，用 CI 按固定版本构建（或至少人工定期跑一遍）防片段漂移，再用 skills CLI 分发到各代理。
 
+### 做法 AP：让 agent 把真实 UI 组件拆成绘制层，自动出规格表并用审计验收（新增，按 A 的对照法验证）
+
+定位：`diip3sh/exploded` 是一个 Claude Code 技能，外加它依赖的运行时。作用是把真实 UI 组件拆开：说出一个组件名，Claude 先渲染它，再按等距视角把它拆成绘制层——elevation、surface、stroke、内部表面（chips、thumbs、avatars）、content 和 focus ring；可以切换状态，并直接在层上读到每个测量值和 design token。它的核心规则是「不重绘，不手打数字」：每个层都是实时组件，用浏览器自身的 computed styles 克隆出来的，属于其它层的涂色被置为透明；每个数字都来自 `getComputedStyle`、布局盒和文本范围；每个 token 名都来自作者真正写下的那条 CSS 规则。产出包括：自动找到的层、全部状态（hover、focus、pressed、disabled、invalid、on/off 或自定义）、标注线（padding、radius、gap、type、shadow 印在悬停的那一层上）、token 显示、实时组件并排展示，以及一个审计。
+
+1. 前提：装有能读 skills 的代理（README 点名 Claude Code、Cursor、Codex 等）；组件在本地可运行且 CSS 与页面同源（跨源 CSS 读不到）；有 Chrome（审计脚本用无头 Chrome，非标准路径需设置 `CHROME_PATH`）。
+2. 安装技能：
+
+```bash
+npx skills add diip3sh/exploded
+```
+
+或手动 clone：
+
+```bash
+git clone https://github.com/diip3sh/exploded ~/.claude/skills/exploded
+```
+
+3. 重启代理后调用。命令不是必须的，README 说 Claude 在做组件文档、规格表、标注和 anatomy 图时会自行使用该技能；完整工作流写在 `SKILL.md`。
+
+```text
+/exploded document our Button, all states, for the Next.js docs
+/exploded spec sheet for the email field and the switch, dark theme
+```
+
+4. 或直接用运行时（HTML）。注意在 `document.fonts.ready` 之后挂载；`states` 可用 `pressable`、`field` 或自定义；`parts` 用来给内部子部件命名。
+
+```html
+<link rel="stylesheet" href="runtime/exploded.css">
+<script src="runtime/exploded.js"></script>
+<script>
+  document.fonts.ready.then(() =>
+    Exploded.mount(document.querySelector("#fig"), {
+      target: document.querySelector(".btn"),
+      title: "Button · primary",
+      states: "pressable",               // or "field", or your own
+      parts: { ".btn-kbd": "Shortcut chip" },
+      theme: "dark",
+    }));
+</script>
+```
+
+5. React / Next.js：
+
+```tsx
+import { Exploded } from "@/components/exploded/react/Exploded";
+
+<Exploded fig={1} title="Button · primary" states="pressable">
+  <Button>Deploy</Button>
+</Exploded>
+```
+
+6. 交互键位：`1`–`9` 切状态 · `E` 拆开 · `↑` `↓` 换层 · `←` `→` 旋转 · `T` 显示 token · `Esc` 复位；悬停打开、拖动旋转。
+7. 跑审计。无依赖、跑无头 Chrome，打印每个状态的层、执行审计，并保存每张图拆开与合起的 PNG：
+
+```bash
+node scripts/audit.mjs examples/gallery/index.html --out shots
+```
+
+8. 本地预览：
+
+```bash
+python3 -m http.server 8731
+open http://127.0.0.1:8731/
+```
+
+9. 做对照（必须走 A 的对照方法）。在一个本地前端项目里挑 1 个按钮 + 1 个输入类组件（CSS 同源），先按你现有的人工方式出一份规格表并记录耗时；再装技能跑一次 `/exploded spec sheet for …`，并用第 4 步的 HTML 片段把同一组件挂到页面里对照。半天足够。
+10. 指标与止损。审计是否通过：每处涂色恰好落在唯一一个层上、每一层的副本在每一种状态下与实时组件的布局误差在 0.5 px 以内；token 溯源比例：`T` 模式下有多少值显示成作者写的 token 名、多少是硬编码原值，后者数量下降即为改善；人工成本对比：同一份规格表手工做需要多久、生成加校对需要多久；漂移检查：改一次组件的 radius/spacing 后重跑，规格表是否自动跟上。止损条件：若以上任一项在真实组件上无法通过（尤其跨源 CSS 或 Shadow DOM 组件），说明该场景不适用，退回人工流程。
+11. 注意原文没有给出由时间、事件或状态触发并持续运行的机制，也没有 CI 集成说明。唯一可脚本化的是审计命令，但原文未说明把它接进流水线，所以这条只能算线索，不能算依据。
+12. 如果你不做前端组件文档，只借它的形态：用运行时克隆真实对象而不是重绘，用 `getComputedStyle` 这类真实来源取数而不是手打，再给产出配一条机器可判的验收线（这里对应「每处涂色恰好落在一个层上 + 每种状态布局误差 ≤ 0.5 px」）。
+
 ## 怎么判断变好了
 
 最小试用方式：
@@ -753,6 +832,7 @@ skillforge check .
 - 个人经验蒸馏类（做法 AM）：在 Claude Code 上装好 distilly 并确认 host 能发现该 Skill；只喂一位同事的设计文档/评审意见生成 colleague profile；用 3–5 个该同事平时会被问到的真实问题分别问「不带 Skill 的通用 agent」和「装了该 Skill 的 agent」，看输出能不能直接用；同一批问题再只喂群聊素材重建一次做对照；追加一份新文档确认旧结论未被覆盖；用一句纠正确认 Correction 层立即生效且可回滚。
 - 领域方法论技能包类（做法 AN）：先不用技能，让 Claude 处理 3–5 个自己工作里的真实任务并留存输出；按第 7 步自建一份 `Skills/<类别>/<技能名>/SKILL.md`（写清技术要点、可用工具、边界情况、何时升级/求助）；安装或注入后用同样输入再跑一次，逐条对比；只在自建的那一类任务上使用，不扩张。
 - Go 终端 UI 领域技能类（做法 AO）：先 clone 仓库并在 `examples/` 下跑通 `go run ./charmed-bubbletea/counter`，确认技能引用的代码在本机可编译。然后选一个已有的小型 Go TUI 任务（例如给某个 CLI 加可滚动列表 + spinner，或用 huh 做交互式表单）作为对照组，先不装技能让代理做一次并记录数据；再用 `npx skills add tpscloud/charmedimsure --skill charmed-bubbletea --skill charmed-bubbles --skill charmed-huh -a claude-code` 装 2–3 个技能，开新会话做同类但不同的任务，记录同样数据。两轮都用同一套指标记录，别只看它是否装上了。
+- 组件规格表类（做法 AP）：在一个本地前端项目里挑 1 个按钮 + 1 个输入类组件（CSS 同源），先手工出一份规格表并记录耗时；再装技能跑一次 `/exploded spec sheet for …`，用第 4 步的运行时 HTML 片段把同一组件挂到页面里对照；跑 `node scripts/audit.mjs examples/gallery/index.html --out shots`，看输出与 PNG。再用 `T` 模式数一遍有多少值显示成你写过的 token 名、多少是硬编码原值。半天足够。
 
 可观察的指标：
 
@@ -762,6 +842,7 @@ skillforge check .
 - 做法 AM：直接采纳率（对照无 Skill 版本）；输出是否符合团队既有规范、是否先追问影响面；需要「他不会这样」纠正的次数是否下降；同一问题重复询问时关键判断是否一致；输出中的判断能否指回所喂素材（出现编造即失败）。不要拿三个 demo（Karpathy、字节 L2-1 后端、暗恋对象）或 25,547 stars 当效果证据。
 - 做法 AN：首次输出即可用的比例；为得到可用结果所需的纠正轮数；专家检查清单中被遗漏项的条数；完成同一任务的时间；未加载技能与加载技能时同一任务的 token/长度差异是否符合「按需加载省上下文」的预期。不要拿 7,460 stars 或 README 对覆盖完整度的自述当效果证据。
 - 做法 AO：首次编译/测试通过率；API 用错次数（典型是仍用 v1 导入路径或引用不存在的组件、方法）；到可运行状态所需的人机往返轮次；人工纠正次数与纠正内容类型（导入路径、组件选择、布局/样式写法）；是否主动用对了 `charmed-ecosystem` 的选型建议。不要拿 Tessl 100/100、审计徽章、CI 状态或 38 stars 当效果证据——徽章衡量的是技能包本身，不是代理表现。
+- 做法 AP：`node scripts/audit.mjs` 是否通过（每处涂色恰好落在唯一一个层上、每一次状态切换每层与实时组件的布局误差 ≤ 0.5 px）；token 溯源比例（`T` 模式下显示成作者写的 token 名的值是否变多、硬编码原值是否变少）；同一份规格表手工做与生成加校对的耗时对比；改一次组件的 radius/spacing 后重跑，规格表是否自动跟上。不要拿 35 stars 或「规格表不可能漂移」这句话当效果证据——审计只证明渲染忠实于实时组件，不证明它比手工标注更省事。
 - 其余做法指标保留：H 看测试是否通过、非空文件、git 改动；I 看交付前 8 条检查清单；J 看按 `diagnostics[]` 修的轮数；K 看品牌 onboarding 后是否还需手动改配色字体；L 看完成时间与返工次数；M 看 8 个已知答案题命中数与 0 幻觉；N 看七问是否全有答案；O 看约束数量与 PG 版本匹配；P 看 7-Question Gate；Q 看五道门禁通过/失败记录；R 看 `GLOSSARY.md` 与 ADR 是否更新；S 看任务完成时间与权限收敛；T 看数据来源、行情时间、抓取时间；U 看从描述问题到 Codex 指到具体元素的耗时；V 看是否自动触发；W 看观察条数与被接受改动数；X 看激活命中与返工轮次；Y 看模板化表达减少与事实不变；Z 看失败→通过证据；AA 看角色激活命中与返工；AB 看 playbook 是否走完与冲突次数；AC 看 validator 退出码与 warning 数；AD 看输出 token 与页面可读性；AE 看校验是否 0 错误与分发效率；AF 看弃用 API 检出数量与误报率；AG 看「愿意发出」比例与意义改动条数；AH 看 tier 计数与 frontier 已解决比例；AI 看 `/discover` 是否产出假设清单与实验设计；AJ 看 diff 是否只含被请求改动；AL 看到「可用初稿」的墙钟时间与人工返工次数、断点续做能否恢复上下文、调研数据是否来自外部搜索源。
 
 反向指标：
@@ -803,8 +884,12 @@ skillforge check .
 - 做法 AM：纠正轮数一直不下降，或输出里的判断无法指回所喂素材（出现编造），退回 study，只借鉴「Persona + 家族模块 + Correction 层 + 增量合并不覆盖」的结构；只给二手解读不给一手素材却指望 profile 像本人；把他人聊天记录直接喂进去而不先解决授权与隐私；把三个 demo 当效果证据；把 Grok Bot 的「saved Skill · 预览」当成能直接导入本地 `SKILL.md`；在 README 未列出的 host 上硬装。
 - 做法 AN：在未获授权的目标上使用这些进攻性技能；把「像领域专家一样行为」「不用就不付上下文成本」当成已验证结论；期待 README 提供 `SKILL.md` 撰写模板（模板在未随材料给出的 `CONTRIBUTING.md`）；把 7,460 stars 当效果证据；在多个任务上都看不到稳定改善时仍把它写进常规流程。
 - 做法 AO：把各技能的 Tessl 100/100、三项审计 pass 或「CI 里示例按固定版本编译并测试」当成代理表现会变好的证据——它们衡量的是技能包自身；把 v2 的 `charm.land` 导入路径写进 v1 项目；用符号链接方式安装后又删掉或移动了 checkout，导致链接全部失效；一次把 9 个技能全装上；在非 Go、非 Charm 生态的项目里指望它有用；把 38 stars 当效果证据。
+- 做法 AP：`node scripts/audit.mjs` 报出某处涂色同时落在多个层、或某个状态的布局误差超过 0.5 px，先停下改组件或退回人工，不要拿这份规格表当交付。
+- 做法 AP：跨源 CSS 的组件读不到 hover/focus 规则、token 也无法溯源，说明这份规格表只覆盖了能读到的部分，不要当成完整规格。
+- 做法 AP：Shadow DOM、canvas 或 WebGL 组件拆不出层（canvas 克隆出来没有像素），先退回人工流程。
+- 做法 AP：以为它会展开展示过渡动效——过渡只冻结在末态；JS 驱动的弹簧动画状态不补 `apply` 状态就看不到。
 
-注意：`doctor`、`validate`、`npm test`、`claude plugin validate`、`npx @anthropics/skills-ref validate`、`archify doctor`、`validate --json`、`python -m unittest discover -s tests`、`validate_skill.py`、`check.py`、`skillforge validate` / `skillforge check` 这类检查只能证明「技能或 mod 装得上、格式合法、不带危险命令、图能通过校验、回归测试能过、技能符合规则表」，不能证明「产出更好」。效果必须自己对照。做法 AK 的 `npx @orchestra-research/ai-research-skills list` 同理；做法 AM 里「host 能发现该 Skill」也只证明装上了；做法 AO 里 `go run ./charmed-bubbletea/counter` 跑通只证明环境没问题。
+注意：`doctor`、`validate`、`npm test`、`claude plugin validate`、`npx @anthropics/skills-ref validate`、`archify doctor`、`validate --json`、`python -m unittest discover -s tests`、`validate_skill.py`、`check.py`、`skillforge validate` / `skillforge check` 这类检查只能证明「技能或 mod 装得上、格式合法、不带危险命令、图能通过校验、回归测试能过、技能符合规则表」，不能证明「产出更好」。效果必须自己对照。做法 AK 的 `npx @orchestra-research/ai-research-skills list` 同理；做法 AM 里「host 能发现该 Skill」也只证明装上了；做法 AO 里 `go run ./charmed-bubbletea/counter` 跑通只证明环境没问题。做法 AP 的 `node scripts/audit.mjs` 比上面这些强一层：它检的是产出物本身的保真度（每处涂色恰好落在一个层、每种状态布局误差 ≤ 0.5 px），但它检的是渲染是否忠实于实时组件，不证明这份规格表比手工标注更省事。
 
 ## 常见坑
 
@@ -850,6 +935,7 @@ skillforge check .
 - 做法 AM：只给二手解读、不给一手素材，却指望 profile 像本人；把他人聊天记录直接喂进工具而不先解决授权与隐私；把三个 demo（Karpathy、字节 L2-1 后端、暗恋对象）当效果证据；把「素材质量 = profile 质量」「不克隆本人、只做 source-grounded 建模」当成已验证结论；把创建者 Skill 装在非 `distilly` 的目录名下；在 README 未列出的 host 上硬装；把 Grok Bot 的「saved Skill · 预览」当成能直接导入本地 `SKILL.md`；忽略 Lark 需 bot 入群、Slack 需管理员且免费版仅 90 天、DingTalk 消息历史只能走浏览器、微信需先导出的硬约束；把 `INSTALL_EN.md`（本材料未给出）里的内容当成已知。
 - 做法 AN：在未授权目标上使用这些进攻性技能；把「像领域专家一样行为」「触发词自动加载的实际命中效果」「不用就不占上下文」当成已验证结论；期待 README 给出 `SKILL.md` 的实际内容、frontmatter 示例或撰写模板（它只在 `CONTRIBUTING.md`，本次材料未包含）；把 7,460 stars 当效果证据；一次性把所有类别都装上；把它的目录结构当成可以跨领域直接复制的通用框架，而不做粒度调整。
 - 做法 AO：只看各技能的 Tessl 100/100、三项审计 pass 或 CI 状态就认为代理表现会变好——徽章与 CI 衡量的是技能包本身，仓库没有给出任何「装上技能前后代理表现」的对照数据；把 v2 的 `charm.land` 导入路径用到 v1 项目上；用符号链接方式安装后又删掉或移动了 checkout，链接全部失效；一次把 9 个技能全装上；在非 Go、非 Charm 生态的项目里硬用；把 `go run ./charmed-bubbletea/counter` 跑通当成研究或开发质量提升；把 38 stars、MIT、非官方项目身份当效果证据；把「CI 里示例按 pinned 版本编译」当成「装上后返工一定减少」。
+- 做法 AP：把「规格表不可能漂移」当成已验证结论——它是作者主张，本次材料只有 README，没有实测数据、没有第三方评测或 CI 使用案例；把 35 stars 当效果证据；不做基线就直接拿生成的规格表替换手工交付；在跨源 CSS 的项目上硬用，结果 hover/focus 规则读不到、token 也无法溯源；拿 Shadow DOM、canvas 或 WebGL 组件去拆（不被捕获，canvas 克隆出来没有像素）；期待它展示过渡动效——过渡只冻结在末态；JS 驱动的弹簧动画状态没补 `apply` 状态就抱怨拆不出来；没过 `document.fonts.ready` 就挂载运行时；Chrome 在非标准路径时跑审计却不设 `CHROME_PATH`；把「自动找到的层」「浅色涂色自动垫底色」「token 名来自作者的 CSS 规则」当成已验证事实；把审计通过当成「比手工标注更省事」的证据。
 
 ## 证据与来源
 
@@ -899,6 +985,7 @@ skillforge check .
 - Distilly 路线的全部内容均来自调研《titanwings/distilly》，即该仓库 README。原文给出的可核实内容：可复制的安装命令与提示词；素材来源表及其前置条件；三家族的 profile 结构与 Work Skill 模块；三条维护机制（增量合并不覆盖、对话纠正写 Correction 层、更新自动归档可回滚）；三个演示样例（Karpathy、字节 L2-1 后端、暗恋对象）以及作者自述的 20K ⭐ 里程碑（本次元数据记为 25,547 stars）；MIT 许可，Python 3.9+；引用技术报告 COLLEAGUE.SKILL（arXiv 2605.31264）。只是作者主张：三个 demo 都是挑选过的对话展示，无对照组、无评测数字；「不克隆本人、只做 source-grounded 建模」「素材优先级排序」「素材质量 = profile 质量」均为作者经验判断且无数据。局限与适用条件：本材料只是仓库 README，`INSTALL.md` / `INSTALL_EN.md` 与 `SKILL.md` 的实现细节都没给到，无法核对；README 自述仍是 demo 版；Grok Bot 的安装路径未验证；DingTalk 消息历史只能走浏览器、Slack 免费版仅 90 天，都是硬约束；素材涉及他人聊天记录与个人信息，原文完全没有讨论授权与隐私问题，实际试用前须自行解决。
 - Claude-Red 路线的全部内容均来自调研《SnailSploit/claude-red》，即该仓库 README。原文给出的可核实内容：安装与调用命令、目录与类别结构（23 类别、78 技能、目标约 130）、各类别技能清单与一句话描述、Roadmap 各阶段状态、MIT 许可、致谢（原始检查清单来自 Sahar Shlichov 的 offensive-checklist 集合）。指标方面仅有 stars 7460（来自本次线索的 metrics，不在 README 正文中）。仅为作者主张、无法从本次材料验证的：技能能让 Claude「像领域专家一样行为」、触发词自动加载的实际命中效果、「不用就不付上下文成本」的收益、78 个技能的覆盖完整度与质量。明显局限：README 只是目录与安装说明，没有任何一份 `SKILL.md` 的实际内容、frontmatter 示例、撰写模板或对照评测结果，因此只能提炼「怎么安装/怎么注入/怎么组织结构」，无法提炼「技能文件内部该怎么写」；内容属进攻性安全领域，适用范围受授权条件限制。
 - charmedimsure 路线的全部内容均来自调研《tpscloud/charmedimsure》，即该仓库 README。原文实际给出的、可核查的信息：完整安装命令与全部选项（`--skill`、`-a`、`-g`、`--list`、`npx skills update`）；两种本地加载方式的路径（Claude Code `~/.claude/skills`、Codex `~/.agents/skills`）与临时加载方式 `claude --plugin-dir /path/to/charmedimsure`；示例位置与运行方式（`examples/`、`go run ./charmed-bubbletea/counter`）；CI 行为（示例按 pinned 模块版本构建与测试）；徽章数值（各技能 Tessl 100/100、三项审计 pass，原文注明记录于 2026-10-12，且徽章由项目维护、不构成服务商背书）；项目状态（38 stars、MIT、与 Charm 官方无关联）；9 个技能的清单与各库覆盖主题。只是作者主张、没有数据支撑的部分：「技能质量高」「因为经过 CI 所以片段不会漂移」——后者有机制描述，但没有失败率或不漂移的验证数据；尤其是没有任何「装上技能前后代理表现」的对照数据，没有任务成功率、首次可编译率、返工轮次、token 或时间节省的任何数字——徽章衡量的是技能包本身，不是使用效果。适用条件与局限：只对 Go + Charm 生态的终端 UI 开发有用，换到别的语言或框架完全不可迁移（可迁移的只是「把领域库用法做成 skills 分发」这个模式）；skills CLI 安装需要 Node/npx；符号链接方式要求 checkout 常驻，删掉仓库链接即失效；是第三方项目、非 Charm 官方；`charm.land` v2 导入路径意味着它绑定 v2 API，v1 项目直接用会不匹配。因此本手册只把它列为「按做法 A 小范围试装」，而不是直接采用。
+- exploded 路线的全部内容均来自调研《diip3sh/exploded》，即该仓库 README。原文实际给出的、可核查的信息：安装命令（`npx skills add diip3sh/exploded`，或 `git clone https://github.com/diip3sh/exploded ~/.claude/skills/exploded`）、两条调用示例、运行时 HTML 挂载方式（`Exploded.mount(..., { target, title, states, parts, theme })`）与 React/Next.js 组件写法、交互键位（`1`–`9` 切状态、`E` 拆开、`↑`/`↓` 换层、`←`/`→` 旋转、`T` 显示 token、`Esc` 复位）、审计命令 `node scripts/audit.mjs examples/gallery/index.html --out shots`、本地预览命令 `python3 -m http.server 8731`，以及两条验收规则（每一处涂色恰好落在唯一一个层上；每一层的副本在每一种状态下与实时组件的布局误差在 0.5 px 以内）；仓库 35 stars（来源指标）。属作者主张、未独立验证的是：层是「自动找到的」；浅色涂色会自动垫上其所在表面的底色；token 名来自作者写下的 CSS 规则；「规格表不可能漂移」。本次只拿到 README，没有实测数据、没有第三方评测或 CI 使用案例。原文自述的局限：跨源 CSS 无法读取，其 hover/focus 规则无法强制、token 无法溯源，必须同源提供 CSS；Shadow DOM、canvas、WebGL 组件不被捕获（canvas 克隆出来没有像素）；过渡被冻结在末态，展示的是状态而不是动效；JS 驱动状态（弹簧动画）目前需要补一个 `apply` 状态；运行时示例依赖 `document.fonts.ready` 之后再挂载。原文没有给出由时间、事件或状态触发并持续运行的机制，也没有 CI 集成说明——唯一可脚本化的审计命令原文未说明接进流水线，只能算线索，不能算依据。适用条件：前端有真实组件与可运行本地环境、CSS 同源、组件基于 DOM/CSS（非 canvas 或 Shadow DOM 封装）；仍须按本手册做法 A 在 1–2 个组件上做半天对照，不能直接替代人工标注流程。
 - 文中提到的 star 数来自 metrics，不构成有效性证据。
 
 ## 依据的调研
@@ -949,3 +1036,4 @@ skillforge check .
 - [titanwings/distilly](../research/radar/2026-10-13/2901-titanwings-distilly.md)：值得一试，可按 README 给出的最小流程在受支持的 host（建议先用 Claude Code）小范围试：安装 distilly Skill，选一位同事，按其素材优先级（本人长文/评审意见 > 决策性回复 > 群聊）生成 colleague profile，再用真实问题做“带 Skill / 不带 Skill”对照。理由是它把“个人工作方式”固化成可反复调用的 Skill，并给出对话纠正、增量合并不覆盖、版本回滚三条可操作的维护机制；但材料只是 README、项目自述为 demo 版，且没有任何效果数据，所以只值得小范围试，不能直接进手册作为既定做法。
 - [SnailSploit/Claude-Red](../research/radar/2026-10-13/2904-snailsploit-claude-red.md)：值得一试，建议小范围试：把 claude-red 当作“领域专家方法论 → 可注入技能包”的可复制模板，照它的安装/加载命令在自己领域复现一次技能加载，再决定是否写进手册；理由是 README 给出了具体可执行的安装与注入命令、以及技能粒度设计，但没给 SKILL.md 撰写模板和任何效果数据。
 - [tpscloud/charmedimsure](../research/radar/2026-10-13/2912-tpscloud-charmedimsure.md)：值得一试，可以在 Go 终端 UI 相关的编码代理工作中小范围试用：按 README 给出的 skills CLI 命令把 Charm 生态技能包装进 Claude Code/Codex，再对比装上前后代理写 Bubble Tea/Lip Gloss 代码的返工情况。之所以只给 try 而不是 adopt，是因为原文的安装和运行步骤确实可照做，但全部效果主张（技能质量高、能改善代理表现）都没有对照数据支撑，且适用范围局限在 Go + Charm 生态。
+- [diip3sh/exploded](../research/radar/2026-10-14/3014-diip3sh-exploded.md)：值得一试，先用 npx skills add diip3sh/exploded 在本地、CSS 同源的前端项目上对一两个组件跑一次规格表生成与审计，验证它能否替代手工标注；理由是仓库给了完整可照做的安装、调用、运行时和审计步骤，但只有 README 与 35 stars，效果未经独立验证，且对跨源 CSS、Shadow DOM/canvas 有明确不覆盖。
