@@ -1,14 +1,14 @@
-# 在把浏览器、桌面或手机交给 AI 之前，先验证反馈回路
+# 把浏览器、桌面、终端和手机交给 agent 之前：先验证反馈回路与验收标准
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：在把浏览器、桌面或安卓手机交给 AI 操作之前，用成本递增的步骤先验证它的反馈回路和验收标准，并把「高效」变成同批任务上的可比较数字。
-> 先试这一步：先跑做法 A 的两条安装命令建最小任务、确认参考解 reward 为 1.0；如果你已在 macOS + Chrome + 编码 agent 环境，可直接按做法 F 走一次需登录站点的四步流程并用 audit 复盘。
-> 最近修订：2026-10-11
+> 解决的问题：在把浏览器、桌面、终端或手机界面交给 AI 操作之前，用成本递增的步骤先验证它的反馈回路、验收标准和安全边界，避免装完一堆组件却不知道能不能用。
+> 先试这一步：先在一台可控机器上跑一次最小验证：`pip install AutoCua` 后用 `run_agent(mode="web use", ...)` 让它驱动你已登录的 Chrome 打开一个页面并停下（若没有可控机器或模型密钥，则先跑做法 A 的 Cua Bench 参考解，确认 evaluator 返回 `1.0`）。
+> 最近修订：2026-10-13
 
 ## 解决什么问题
 
-在把浏览器、桌面或安卓手机交给 AI 操作之前，用成本递增的步骤先验证它的反馈回路和验收标准，并把「高效」变成同批任务上的可比较数字，避免装完一堆组件却不知道能不能用。新增：如果你已在 macOS + Chrome + 编码 agent 环境，也可以先用 Chrome Relay 借用真实登录态的后台标签页，验证「agent 不抢焦点、不弹框地完成一个需登录站点的四步流程」，并用 audit 复盘。
+在把浏览器、桌面、终端或手机界面交给 AI 操作之前，用成本递增的步骤先验证它的反馈回路、验收标准和安全边界，并把「高效」变成同批任务上的可比较数字，避免装完一堆组件却不知道能不能用。新增：如果你已在 macOS + Chrome + 编码 agent 环境，也可以先用 Chrome Relay 借用真实登录态的后台标签页，验证「agent 不抢焦点、不弹框地完成一个需登录站点的四步流程」，并用 audit 复盘。新增：如果你需要一个统一入口同时覆盖真实桌面、你自己的 Chrome、真实终端和 iOS 手机，可以先用 AutoCua 的 `run_agent(...)` 做一次最小验证；但调研结论明确要求，先在一台可控机器上小范围验证稳定性和安全边界后再全量采用。
 
 ## 适用与不适用
 
@@ -21,12 +21,17 @@
 - 你已有 agent，想让它通过 ADB 操控一台**已授权**的安卓测试机：打开 App、查找页面、点击/滑动/长按/输入文字，查看授权范围内的界面信息、处理有限列表、复现测试操作、准备消息草稿（明确授权后才执行发送）。
 - 你的技能宿主是 Pi Agent、Codex CLI/IDE、Claude Code、OpenCode 之一。
 - 你在 macOS + Google Chrome + Node.js 20+，希望编码 agent（Claude Code / Codex / Cursor / Paseo）借用你已登录的 Chrome 后台标签页做网页操作，且不抢焦点、不弹对话框。
+- 你要在 macOS / Windows / Linux 上让 agent 操作真实桌面（点击、输入、快捷键、应用、AppleScript）：AutoCua 的 `computer use`。
+- 你要让 agent 驱动你自己的 Chrome（复用已登录 profile）或无人模式通过调试端口：AutoCua 的 `web use`。
+- 你要让编码代理进入真实终端：AutoCua 的 `shell use`。
+- 你要在 macOS 宿主上让 agent 操作 iOS 模拟器或已配对的 iPhone/iPad：AutoCua 的 `mobile use, ios`。
+- 你想用一个 pip 包和一次 `run_agent(...)` 调用同时覆盖上述几种界面，并接受先在可控机器上小范围验证。
 
 **不适用 / 先别用：**
 - 团队不在用 dsh 桌面端：浏览器路线完全绑定 dsh 生态（桥接是 dsh 插件，配置写在桌面 profile 的 `cordis.patch.yml` 里）。
 - 手机或平板：dsh 浏览器方案明确不支持（这与下面安卓 ADB 路线是两件事，后者只走 ADB，不依赖浏览器）。
 - 你要的是成熟稳定的 1.0 产品：Cua Spaces 为 0.1.0，Pro/Teams 标注「即将推出」；CUA-S1 是早期源码研究版；dsh 扩展在 Chrome / Firefox 均标注 not yet listed；android-adb-control 作者自述「本版本已做文档审查和静态检查，尚未完成修订版真机端到端验收」。
-- 你的机器不满足硬性条件：Spaces 需 macOS 26+，Lume 需 Apple Silicon；dsh 需 Node ≥ 20、桌面版 Chrome/Chromium/Edge ≥ 116 或 Firefox ≥ 140.0；Chrome Relay 仅 macOS + Google Chrome + Node.js 20+。
+- 你的机器不满足硬性条件：Spaces 需 macOS 26+，Lume 需 Apple Silicon；dsh 需 Node ≥ 20、桌面版 Chrome/Chromium/Edge ≥ 116 或 Firefox ≥ 140.0；Chrome Relay 仅 macOS + Google Chrome + Node.js 20+；AutoCua 需 Python 3.10+。
 - 你只看了 README 就想跑完整流程：Cua 的权限授予、平台支持边界、任务编写格式都在外链文档里；dsh 的安装确认在仓库 `docs/INSTALL.md`。
 - 你要做对外托管或商用集成：Cua 的许可不是单一的；dsh 方案 README 通篇没有给出基准实测结果，不宜直接全量采用；Chrome Relay 的 0.15s/命令、2 分钟 setup 也只是作者自述。
 - 你在 Windows 且想装除 Driver 以外的 Cua 组件：原文只提供 Windows 的 Driver PowerShell 安装脚本，其余以 macOS / Linux 为主。
@@ -38,6 +43,14 @@
 - 你的 agent 不在 Claude Code / Codex / Cursor / Paseo 四类之内：Chrome Relay 只放行这四类应用。
 - 你指望 Chrome Relay 防住「已以你身份运行的恶意软件」：作者明确说它不是这种安全边界，那种程序能读 secret、伪造标记。
 - 你不接受在每个希望 agent 使用的 Chrome profile 里手动 Load unpacked 扩展：Chrome Relay 不会替你装扩展。
+- 你要用 AutoCua 操作安卓手机：`mobile use, android` 尚不可用（这与做法 E 的 ADB 路线是两件事）。
+- 你不在 macOS 宿主却想用 AutoCua 的 `mobile use, ios`：iOS 模式仅 macOS 宿主；模拟器需要完整 Xcode，真机需要一次性配对和 Team ID 签名。
+- 你不满足 AutoCua 的 Linux 条件：x86_64 + GNOME 桌面，Wayland 已测，X11 未测；KDE 需换 portal 包；Fedora/Arch/openSUSE 包名不同。
+- 你想把 AutoCua 的 Python 包直接 pip 进系统 Python（Ubuntu/Debian 会拒绝）：需要在存放 `main.py` 和 `.env` 的目录用发行版自带 python3（3.10–3.14）建 venv。
+- 你的模型名不在 AutoCua 仓库的 `model_list.txt` 里：会原样转发并返回 404；模型名区分大小写。
+- 你想把 AutoCua 的 Interception 驱动随 wheel 分发或商用：它是 LGPL-3.0 非商业 / 付费商业双许可。
+- 你要在 AutoCua 材料里找事件/时间触发调度：截断文本中未出现这些细节。
+- 你还没有在可控机器上验证 AutoCua 的稳定性和安全边界：不要直接全量采用。
 
 ## 前置条件
 
@@ -51,10 +64,15 @@
 - Windows 下只有 Driver 有 PowerShell 安装脚本，其余组件以 macOS / Linux 为主。
 - 安卓 ADB 路线：本机有 ADB 可执行权限；一台已解锁并确认 RSA 授权的安卓测试机（`adb devices -l` 显示 `device`）；正确的技能安装目录与调用方式；明确的授权边界；截图与 UI XML 的数据与日志策略；任务预算（默认 30 个状态变更动作 / 5 分钟）。自绘界面还需截图工具与视觉模型；中文输入可选 ADBKeyboard；跑静态检查需要 Bash、Git 和 uv。
 - Chrome Relay：macOS、Google Chrome、Node.js 20+、`agent-browser`；每个希望 agent 使用的 Chrome profile 需手动加载扩展；`bin/chrome-relay setup` 会生成密钥、装后台服务、生成身份映射、把 `chrome-relay` 放进 PATH，并把 Claude Code skill 链进去。连接只放行 Claude Code、Codex、Cursor、Paseo 四类 agent 应用。
+- AutoCua：Python 3.10+；写 `main.py` 并安装 `pip install AutoCua`；模型密钥写 `.env` 文件或在桌面应用 Settings 里粘贴；模型名从仓库 `model_list.txt` 选且区分大小写；代理保存的一切（聊天、密钥、自定义技能、浏览器 profile）落在运行 Python 目录下的 `AutoCua_data/`。
+- AutoCua 的 Windows UAC（可选）：从源码检出目录运行 `setup_windows.bat`，脚本会先询问，然后下载固定版本、校验 SHA-256、安装、只绑定内置键盘，重启前再询问。
+- AutoCua 的 Linux：x86_64 + GNOME 桌面，Wayland 已测，X11 未测；需要 `python3-gi` 等发行版绑定；在存放 `main.py` 和 `.env` 的目录用发行版自带 python3（3.10–3.14）建 venv；首次 computer-use 运行需在 GNOME 屏幕共享同意里打开 Allow Remote Interaction；首次扫描会下载 PP-OCRv6 模型。
+- AutoCua 的 iOS：完整 Xcode 和 git；模拟器模式不需要 Apple ID、签名或配对；真机模式需要一次性配对和 Team ID 签名，且不支持 `app_build`。
+- AutoCua 的桌面应用：首次运行加 `ui=True` 会询问是否下载 Electron（120–160 MB，一次）。
 
 ## 操作步骤
 
-下面按成本从低到高排。**建议先做做法 A**；如果团队已在用 dsh 桌面端，做法 B 是最短的一条「模型真的读浏览器」的路；如果你已有 agent 和一台可信安卓测试机，做法 E 是最短的一条「agent 真的操作手机」的路；如果你在 macOS + Chrome + 编码 agent 环境，做法 F 是最短的一条「agent 用你真实登录态读网页」的路。
+下面按成本从低到高排。**建议先做做法 A**；如果团队已在用 dsh 桌面端，做法 B 是最短的一条「模型真的读浏览器」的路；如果你已有 agent 和一台可信安卓测试机，做法 E 是最短的一条「agent 真的操作手机」的路；如果你在 macOS + Chrome + 编码 agent 环境，做法 F 是最短的一条「agent 用你真实登录态读网页」的路；如果你要一个统一入口覆盖桌面、自己的 Chrome、真实终端和 iOS 手机，做法 G 是最短的一条「先用 pip 包和一次 `run_agent(...)` 验证」的路。
 
 ### 做法 A：只跑评测回路，不碰界面（最便宜的入口）
 
@@ -385,6 +403,121 @@ agent-browser close
 
 11. 自动行为边界：原文的自动行为是**清理而非任务推进**——沉默 30 分钟的 agent 标签页会被关闭；relay 重启时扩展会关掉它开过的标签页（按 tab id 追踪，不动你自己的标签组）。另外登录跳转中的 Continue/Allow 会自动点击。原文没有描述按时间/事件持续跑的自主任务循环。工作期间 Chrome 会显示 “Chrome Relay started debugging this browser”。
 
+### 做法 G：AutoCua——用一个 `run_agent(...)` 覆盖桌面、你自己的 Chrome、真实终端和 iOS 手机（需要一台可控机器小范围验证）
+
+前提：Python 3.10+；一台可控机器；模型密钥；若要 iOS 则 macOS 宿主 + 完整 Xcode。预期结果：`pip install AutoCua` 成功，`python main.py` 能让 agent 按 `mode` 驱动对应界面，并且模型只从编号元素里选（未展示过的编号会被拒绝）。调研结论：它给出了完整的 pip 安装、各平台依赖清单、`run_agent` 调用示例和权限配置步骤，但需要在一台可控机器上小范围验证稳定性和安全边界后再进手册。
+
+1. 安装包：
+
+```bash
+pip install AutoCua
+```
+
+2. 在 `main.py` 中写入调用（README 称为「整个 API」），四个关键参数决定驱动对象：
+
+```python
+from AutoCua.agent_launcher import run_agent
+
+run_agent(mode="web use", provider="openrouter", model="gemini-3.8-flash",
+          task="Open wikipedia.org and summarise today's featured article.")
+```
+
+`mode` 取值与含义：
+
+| `mode` | 驱动对象 | 运行位置 |
+|---|---|---|
+| `"computer use"` | 桌面：点击、输入、快捷键、应用、AppleScript | macOS / Windows / Linux，自动检测 |
+| `"shell use"` | 编码代理，进入真实终端 | macOS / Windows / Linux |
+| `"web use"` | 通过 AutoCua 扩展驱动用户自己的 Chrome；无人模式用调试端口 | 任何装了 Chrome 的宿主，缺 Chrome 时自动安装 |
+| `"mobile use, ios"` | 默认 iOS 模拟器，或已配对的 iPhone/iPad | macOS 宿主 |
+| `"mobile use, android"` | 尚不可用 | |
+
+3. 运行：
+
+```bash
+python main.py
+```
+
+4. 配置模型密钥：写入 `.env` 文件，或在桌面应用的 Settings 里粘贴。模型名来自仓库的 `model_list.txt`，**区分大小写**；不在清单里的名字会原样转发并返回 404。
+
+5. 首次运行注意：
+   - 加 `ui=True` 可打开桌面应用；首次会询问是否下载 Electron（120–160 MB，一次），拒绝则在 pywebview 打开。
+   - 代理保存的一切（聊天、密钥、自定义技能、浏览器 profile）落在运行 Python 目录下的 `AutoCua_data/`。
+
+6. **Windows 上处理 UAC 提权弹窗**（可选，不做也能用，只是遇到提权提示会停住）。前提：从源码检出目录运行。
+
+```bat
+setup_windows.bat
+```
+
+该脚本会先询问（答 N 则不下载不安装），然后下载固定版本、校验 SHA-256、安装、**只绑定内置键盘**（不外接键盘被过滤），重启前再询问。原因：Interception 驱动是 LGPL-3.0 非商业 / 付费商业双许可，不能随 wheel 分发。
+
+7. **Linux 上安装发行版绑定**（前提：x86_64 + GNOME 桌面，Wayland 已测，X11 未测）：
+
+```bash
+sudo apt install python3-gi python3-cairo python3-gi-cairo python3-venv gir1.2-atspi-2.0 gir1.2-gtk-3.0 \
+                 gir1.2-webkit2-4.1 at-spi2-core xdg-desktop-portal xdg-desktop-portal-gnome \
+                 gir1.2-gstreamer-1.0 gstreamer1.0-pipewire gstreamer1.0-plugins-base \
+                 libglib2.0-bin libgtk-3-bin xdg-utils
+```
+
+KDE 用户把 `xdg-desktop-portal-gnome` 换成 `xdg-desktop-portal-kde`。Fedora/Arch/openSUSE 包名不同，仓库里的 `setup_linux.sh` 列了对应名称。
+
+8. **Linux 上用虚拟环境**（前提：Ubuntu/Debian 拒绝向系统 Python pip 安装；venv 必须建在存放 `main.py` 和 `.env` 的目录里，且用发行版自带 python3，版本 3.10–3.14，否则报 cannot import gi）：
+
+```bash
+cd my-agent                         # the folder with your main.py and .env
+python3 -m venv .venv
+source .venv/bin/activate
+pip install AutoCua
+python main.py
+```
+
+9. **Linux 首次 computer-use 运行**：GNOME 会请求屏幕共享同意，点 Share 前务必打开 **Allow Remote Interaction**（GNOME 默认关闭）。选择会保存在 `AutoCua_data/`。首次扫描还会下载 PP-OCRv6 模型，用于读取桌面未公开的文本。
+
+10. 从源码运行：
+
+```bash
+git clone https://github.com/AutoCua/AutoCua.git
+cd AutoCua
+
+bash setup_mac.sh            # macOS
+setup_windows.bat            # Windows, 自行提权，安装内核驱动前会询问
+
+cp .env.example .env         # add your provider key
+python main.py
+```
+
+11. 常用可选参数直接写进 `run_agent(...)`：`ui`、`save_conversation`、`speed`、`external_terminal`、`headless`、`browser_port`、`browser_profile`、`extra_tasks`、`device`、`ios_version`、`sim_device`、`app_build`、`api_key`、`os`。完整的文档在仓库的 `agent_capabilities.md`。
+
+12. 分别单独调用子代理：编码代理和只读侦察代理可以独立运行（注意：它们从自己的工作目录启动，处理已有项目时要给绝对路径）：
+
+```bash
+python -m AutoCua.mac.agent.coder   --task "refactor the auth module in /Users/me/projects/api" --provider anthropic --model claude-sonnet-5
+python -m AutoCua.mac.agent.minions --task "where is _validate_token defined in /Users/me/projects/api and who calls it?" --provider anthropic --model claude-sonnet-5
+```
+
+13. iOS 使用：选择模拟器或真机：
+
+```python
+run_agent(
+    mode="mobile use, ios",
+    provider="anthropic", model="claude-sonnet-5",
+    device="simulation",        # or "hardware"
+    ios_version=None,           # e.g. "26.5"; None picks the newest usable runtime
+    sim_d
+```
+
+（材料中该示例到 `sim_d` 处截断，完整参数见仓库 `agent_capabilities.md`。）
+
+- `device="simulation"`（默认）：跑在 Mac 上的 iOS 模拟器，用 `xcrun simctl` + 一次**未签名**的 `xcodebuild test`；需要完整 Xcode，**不需要 Apple ID、签名或配对**；可用 `app_build="MyApp-Simulator.ipa"` 预设安装自己的构建。
+- `device="hardware"`：已配对的 iPhone/iPad，通过 pymobiledevice3 + USB 转发 + XCUITest 启动；需要一次性配对和 Team ID 签名；**不支持** `app_build`，传了会直接报错停止。
+- 首次运行 `"mobile use, ios"` 会自动克隆 WebDriverAgent，需要完整 Xcode 和 git，无需手工操作。
+
+14. 验证 AutoCua 是否按设计工作：模型看到的是一棵元素树（操作系统无障碍树 + OCR 融合）和一张打了编号框的截图，模型只能从编号元素里选，未展示过的编号会被拒绝。桌面输入走操作系统输入层（macOS 的 `kCGHIDEventTap`、Windows 的 `SendInput` / Interception 内核驱动），不打开调试端口。作者声明：无遥测，除所选模型提供方和用户自连的 Telegram 外不发送数据。
+
+15. 效果自证：coder agent 的操作流程内置 VERIFY，且要求「任何含逻辑的改动都要在 `./.AutoCua_verify/` 下写一次性测试并真正运行、记录输出、退出前删除」；`replace` 写入前后各校验一次，行号过期会报 mismatch at line X。除此之外，效果验证更多依赖用户自己定义的任务完成信号（`done`），文档未提供系统性的效果度量方法。
+
 ### 怎么选
 
 - 只想验证「这套东西在我这儿能不能用起来」：选做法 A，成本最低。
@@ -393,7 +526,12 @@ agent-browser close
 - 已有 agent 和一台可信安卓测试机，只做获授权设备与 App 的事：选做法 E，先跑只读任务，再跑「停在动作前」的边界任务。
 - 需要完整桌面、隔离沙箱、本地 VM、或把本机接进来：选做法 D。
 - 你在 macOS + Chrome + Node.js 20+，希望编码 agent（Claude Code / Codex / Cursor / Paseo）复用你已登录的 Chrome 后台标签页，且不抢焦点、不弹对话框：选做法 F。先在单机单 profile、非关键账号上试四步流程，并用 `chrome-relay audit` 复盘。
+- 你要一个 pip 包和一次 `run_agent(...)` 同时覆盖真实桌面、你自己的 Chrome、真实终端和 iOS 手机，并且能在一台可控机器上先小范围验证：选做法 G。
 - 做法 B 与做法 F 的差异：做法 B 绑定 dsh 桌面端，走自己的 MV3 扩展与文本快照，提供 17 个工具和成对基准；做法 F 复用你真实在用的 Chrome 与登录态，agent 在后台标签页运行，不抢焦点，但不附带成对基准，且只放行四类 agent 应用、仅 macOS + Google Chrome。若团队不在 dsh 生态但已有 macOS Chrome 编码 agent，做法 F 更直接；若需要可比较的浏览器后端数字，做法 B 更合适。
+- 做法 G 与做法 C/D 的差异：C/D 来自 Cua 生态（Driver/Spaces/sandbox/Lume），做法 G 是 AutoCua 的 pip 包与 `run_agent(...)`，MIT，多智能体架构；两者都能操作桌面，但组件、命令、许可与平台支持不同，不要混用命令。
+- 做法 G 与做法 F 的差异：两者都能复用已登录的 Chrome（G 的 `web use` 通过 AutoCua 扩展驱动用户自己的 Chrome，或用调试端口；F 的 Chrome Relay 复用真实登录态的后台标签页），但 G 还覆盖桌面/终端/iOS，F 只覆盖 Chrome 后台标签页且仅 macOS + Google Chrome + 四类 agent 应用。
+- 做法 G 与做法 E 的差异：E 用 ADB 操作安卓测试机；G 的 `mobile use, android` 尚不可用，G 的 iOS 模式需要 macOS 宿主 + 完整 Xcode。
+- 做法 G 与做法 A/B 的差异：G 没有给出成对基准或评测器；B 的成对基准、A 的 Cua Bench 仍是把「高效」变成数字的手段，G 的文档未提供系统性效果度量方法。
 - 已经装了旧包 `cuabot`（npm）：先停用并卸载，见「常见坑」。
 
 ## 怎么判断变好了
@@ -405,6 +543,7 @@ agent-browser close
 - 做法 D：Lume 创建并启动的 macOS Tahoe VM 能用 SSH 连上；`cua sb exec dev uname -a` 能返回结果；`cua sb screenshot dev` 能拿到截图。
 - 做法 E：任务一次跑通的步骤数对比你手动操作的步数；人工接管次数（每次接管记一次，越少越好）；越界动作次数——未经授权的发送/购买/删除/安装/改设置次数应为 0，「停在发送前」这类约束是否 100% 被遵守；是否守住预算（动作数不超过 30、时长不超过 5 分钟，超预算时正确停止并报告）；不可验证/不可恢复时是否如约停止并报告；同一任务重复执行多次的成功率与结果一致性。
 - 做法 F：四步流程（`chrome-relay url <你的邮箱>` → `open` → `snapshot -i` → `click @e5` → `close`）一次跑通的成功率；每条命令的实际耗时（对照作者称的 ~0.15s）；出现 `SIGN-IN NEEDED` 的次数（越少说明登录态复用越顺；频繁出现则调 `identities.json`）；运行过程中是否发生抢焦点、弹框、Chrome 弹远程调试确认框（按设计应为 0；工作期间 Chrome 会显示 “Chrome Relay started debugging this browser”）；`chrome-relay audit` 里 blocked pages 的数量与原因，确认权限边界符合预期；对比基线：同样这些浏览器步骤之前靠人工切换窗口/手动登录花的时间。
+- 做法 G：`pip install AutoCua` 成功；`python main.py` 后 agent 能按 `mode` 驱动对应界面；模型只从编号元素里选，未展示过的编号被拒绝；桌面输入走 OS 输入层而不打开调试端口；coder agent 的含逻辑改动在 `./.AutoCua_verify/` 下写一次性测试并运行、记录输出、退出前删除；`replace` 行号过期时报 mismatch at line X；`AutoCua_data/` 里能看到聊天、密钥、自定义技能、浏览器 profile。作者视频示例声称：一次航班搜索 6.1 秒（fast 模式）；一次运行不足一分钟完成三件事（iPhone 18 Pro 加入 Apple 购物袋、保护壳加入 Amazon 购物车、Google Sheet 写 Meta 五年财务数据）——这些是作者主张，不是第三方实测。
 
 最小试用方式：
 - 先只跑做法 A 的两条安装命令，建最小任务、跑参考解，确认 reward 为 `1.0`。这是「这套东西在我这儿能不能用起来」最便宜的入口。
@@ -412,9 +551,11 @@ agent-browser close
 - 跑通后再做做法 C：只装 Driver，让现成 agent 在计算器里算 6 × 7 并确认显示 42。
 - 做法 E 的最小试用顺序：① 准备一台可信测试机（非承载凭据的主力机），开启开发者选项与 USB 调试，解锁并确认 RSA 授权，`adb devices -l` 显示 `device`；② 按第 3～6 步装技能到对应宿主目录，重开会话或 `/reload`，确认技能能被发现并调用；③ 先只跑只读任务「打开系统设置首页，确认页面，不修改设置」；④ 再跑一条「停在动作前」的边界任务（测试联系人会话里输入草稿但明确不发送）；⑤ 最后跑一条有限列表任务（前 20 项，只记录名称与编号，到 20 个或预算用完即停）。指标稳定达标后再扩到真实业务设备；若出现越界动作或无法恢复的状态，停止使用并报告。
 - 做法 F 的最小试用（一台 Mac，约需几分钟安装）：① `npm i -g agent-browser`，clone 仓库后跑 `bin/chrome-relay setup`；② 在**一个** Chrome profile 里 Load unpacked 加载扩展，跑 `chrome-relay doctor` 确认；③ 选一个**需要登录**的内部站点，让 agent 走完 `chrome-relay url <你的邮箱>` → `open` → `snapshot -i` → `click @e5` → `close` 这条四步流程，中途不手动登录；④ 跑 `chrome-relay audit` 复盘这次会话记录是否完整。放量前的门槛：先只在单机单 profile、非关键账号上试；确认 audit 记录、权限拦截和登录跳转行为符合预期后，再考虑更多 profile 或更多 agent。
+- 做法 G 的最小试用（一台可控机器，Python 3.10+）：① `pip install AutoCua`，写好 `.env` 或桌面 Settings 里的模型密钥，用 `run_agent(mode="web use", ...)` 让它驱动你自己的 Chrome 打开一个页面并停下，确认登录态复用和停止条件；② 若要用桌面模式，先跑 `computer use` 做一个可判对错的小任务（例如点击/输入后检查应用显示的结果）；③ 若要用 iOS，先跑 `device="simulation"` 的模拟器任务，确认 WebDriverAgent 克隆和 Xcode 环境；④ 观察 `AutoCua_data/` 数据落点，确认没有你不希望外发的数据。
 
 试多久：
-- 材料没有给出耗时或成功率的数字；以「参考解拿到 `1.0`」「快照能给出编号控件并且点得中」「只读任务不改动设置」「Chrome Relay 的 doctor 通过且四步流程一次跑通」这类单点事实跑通为准，不要用 star 数或视频演示判定。
+- 材料没有给出耗时或成功率的数字；以「参考解拿到 `1.0`」「快照能给出编号控件并且点得中」「只读任务不改动设置」「Chrome Relay 的 doctor 通过且四步流程一次跑通」「AutoCua 能驱动目标界面一次且模型只选编号元素」这类单点事实跑通为准，不要用 star 数或视频演示判定。
+- AutoCua 材料同样没有给出耗时或成功率数字（6.1 秒、不足一分钟只是作者视频声称）；以「能驱动目标界面一次」「模型只选编号元素」「含逻辑改动真的跑过一次性测试」这类单点事实跑通为准。
 
 ## 常见坑
 
@@ -436,10 +577,10 @@ agent-browser close
 - 把设备连接问题当技能问题：`unauthorized`、`offline`、Linux `no permissions` 先解决连接；多个设备时明确指定目标；不要将 ADB 端口暴露到公网。
 - 以为技能会自己无限跑：默认预算是最多 30 个设备状态变更动作、5 分钟，发送状态不明时不会自动重发；原文也没有时间/事件触发的持续运行、无人值守监控或无限重试，这些被明确排除。
 - 忽略成熟度：Cua Spaces 是 0.1.0，个人免费，Pro 和 Teams 标注为「即将推出」；CUA-S1 自述为「早期的、仅源码的研究发布」，权重另放 Hugging Face，「System 1」只是工程类比，不替代通用 agent 的规划推理；dsh 扩展在 Chrome / Firefox 均 not yet listed。
-- 环境不满足硬装：Spaces 需 macOS 26+，Lume 需 Apple Silicon；dsh 需 Node ≥ 20、桌面版浏览器 ≥ 116/140；手机与平板不支持 dsh 方案；Windows 下只有 Cua Driver 有 PowerShell 安装脚本，安卓路线的安装命令原文只给了 macOS 的 brew。
-- 跑错已废弃包：`cuabot`（npm）有已知安全问题，原文明确写「Do not run it」，应停用并卸载，改用 Cua Driver 或 `cua` CLI；`cua-computer`、`cua-computer-server`、`cua-agent`、`cua-som` 也已被替代。
+- 环境不满足硬装：Spaces 需 macOS 26+，Lume 需 Apple Silicon；dsh 需 Node ≥ 20、桌面版浏览器 ≥ 116/140；手机与平板不支持 dsh 方案；Windows 下只有 Cua Driver 有 PowerShell 安装脚本，安卓路线的安装命令原文只给了 macOS 的 brew；AutoCua 需 Python 3.10+。
+- 跑错已废弃包：`cuabot`（npm）有已知安全问题，原文明确写 Do not run it，应停用并卸载，改用 Cua Driver 或 `cua` CLI；`cua-computer`、`cua-computer-server`、`cua-agent`、`cua-som` 也已被替代。
 - 以为后台投递一定成立：「不移动指针、不抢焦点」只在「app 和平台支持时」成立，具体边界被外链到 platform support，正文没写；原文也没有给出由时间、事件或状态触发并持续完成任务的机制，「常驻」不等于「自动推进」。
-- 商用许可踩坑：Spaces 之外的 SDK、CLI、Driver、Lume 是 MIT；Cua Spaces（应用、cua-spacesd、Keyvault、teleport、cua-volume、流媒体客户端）是 FSL-1.1-MIT（免费自托管自建，但不得做竞争性托管服务，每版发布两年后转 MIT）；`cua-som` 是 AGPL-3.0-or-later，其 Ultralytics 依赖另有许可；可选扩展 `cua-perception` 打包了 AGPL-3.0-only 的 OmniParser 模型产物，网络分发或托管可能触发 AGPL 源码义务，原文明确说 Cua 无法为此重新授权。做商用集成前必须逐目录查 LICENSING.md。android-adb-control 是 MIT。
+- 商用许可踩坑：Spaces 之外的 SDK、CLI、Driver、Lume 是 MIT；Cua Spaces（应用、cua-spacesd、Keyvault、teleport、cua-volume、流媒体客户端）是 FSL-1.1-MIT（免费自托管自建，但不得做竞争性托管服务，每版发布两年后转 MIT）；`cua-som` 是 AGPL-3.0-or-later，其 Ultralytics 依赖另有许可；可选扩展 `cua-perception` 打包了 AGPL-3.0-only 的 OmniParser 模型产物，网络分发或托管可能触发 AGPL 源码义务，原文明确说 Cua 无法为此重新授权。做商用集成前必须逐目录查 LICENSING.md。android-adb-control 是 MIT。AutoCua 是 MIT；其 Windows Interception 驱动是 LGPL-3.0 非商业 / 付费商业双许可，不能随 wheel 分发。
 - 以为 README 就是全部：Cua 的权限授予、平台支持边界、任务编写格式都在外链文档里，照着装可以，照着做完整流程需要再去读 quickstart；dsh 的安装确认也要按仓库 `docs/INSTALL.md` 逐步走；android-adb-control 的具体 ADB 命令、故障处理、真机验收清单在 references/adb-commands.md、references/troubleshooting.md、docs/testing.md 里，本次材料只包含 README，无法复述这些文档里的判据。
 - 以为 Chrome Relay 能覆盖所有浏览器：仅 macOS + Google Chrome + Node.js 20+；只放行 Claude Code / Codex / Cursor / Paseo 四类 agent 应用。
 - 以为 setup 会自动装扩展：不会。Chrome Relay 是 opt-in 的，需要**每个**希望 agent 使用的 Chrome profile 手动 Load unpacked。
@@ -449,6 +590,18 @@ agent-browser close
 - 以为它会自动推进任务：原文的自动行为是清理而非任务推进——沉默 30 分钟的 agent 标签页关闭；relay 重启时扩展关掉它开过的标签页；登录跳转中的 Continue/Allow 自动点击。原文没有描述按时间/事件持续跑的自主任务循环。
 - 凭据处理：agent 从不输入凭据；遇到密码、passkey、两步验证或未登录账号会停下并给 `SIGN-IN NEEDED`；频繁出现时调 `identities.json`。
 - 忘记卸载：`chrome-relay uninstall` 后还要每个 profile 手动移除扩展。
+- 把 AutoCua 的 `mobile use, android` 当成可用：尚不可用。
+- 以为 AutoCua 的 iOS 模式能在非 macOS 宿主跑：仅 macOS 宿主；模拟器需要完整 Xcode，真机需要一次性配对和 Team ID 签名。
+- 给 AutoCua 真机传 `app_build`：不支持，传了会直接报错停止。
+- AutoCua 模型名写错或大小写不对：模型名来自 `model_list.txt`，区分大小写；不在清单里的名字会原样转发并返回 404。
+- 在 Ubuntu/Debian 直接 `pip install AutoCua` 进系统 Python：会拒绝，需在存放 `main.py` 和 `.env` 的目录用发行版自带 python3（3.10–3.14）建 venv，否则报 cannot import gi。
+- Linux 首次 computer-use 没开 Allow Remote Interaction：GNOME 屏幕共享同意里默认关闭，不打开会导致远程交互失败。
+- 把 Windows 的 `setup_windows.bat` 当自动运行：它先询问，答 N 则不下载不安装；Interception 驱动是 LGPL-3.0 非商业 / 付费商业双许可，不能随 wheel 分发。
+- 忽略 `AutoCua_data/` 的数据落点：代理保存的聊天、密钥、自定义技能、浏览器 profile 都落在运行 Python 目录下，属于要纳入数据与日志策略的目录。
+- 把 AutoCua 作者视频里的 6.1 秒、不足一分钟完成三件事当实测：原文是视频示例声称，没有第三方基准或用户案例数据。
+- 以为 AutoCua 提供系统性效果度量：文档未提供，效果验证更多依赖用户自己定义的任务完成信号（`done`）。
+- 以为 AutoCua 有事件/时间触发调度：材料里事件/时间触发式的调度细节未出现（截断文本中未出现）。
+- 把 AutoCua 和 Cua 生态（Driver/Spaces/sandbox/Lume）的命令混用：它们是不同项目、不同命令、不同许可。
 
 ## 证据与来源
 
@@ -469,6 +622,12 @@ agent-browser close
 - 做法 F 的命令、架构图、路径（`~/.chrome-relay/` 下的 token、config.json、identities.json、audit/、relay.log）、端口 127.0.0.1:9333、权限校验机制、`relay/` 下有 `npm test` 覆盖「谁可以连接」、四步用法、audit 字段、登录态处理、维护命令：来自 aindev/agent-chrome-relay README（本次整理的调研材料）。
 - Chrome Relay 的 0.15s/命令、2 分钟 setup、30 分钟沉默清理只是作者自述；没有第三方基准或用户案例数据；仅 macOS + Google Chrome + Node.js 20+；只放行四类 agent 应用；作者明确它不是恶意软件安全边界。
 - Chrome Relay 与 dsh 的对比是本次整理，不是原文主张。
+- 做法 G 的 `pip install AutoCua`、`run_agent(...)` 示例、`mode` 表、平台依赖、Linux venv、GNOME 屏幕共享、Windows UAC、iOS 模拟器/真机差别、`setup_mac.sh` / `setup_windows.bat`、`model_list.txt`、`AutoCua_data/`、可选参数列表、子代理命令、`agent_capabilities.md`：来自 AutoCua/AutoCua README（本次整理的调研材料）。
+- AutoCua 的元素树 + OCR 融合、编号框截图、未展示编号被拒绝、桌面输入走 `kCGHIDEventTap` / `SendInput` / Interception 内核驱动：来自同一份调研，属项目描述。
+- AutoCua 的无遥测声明、coder agent 的 VERIFY 与 `./.AutoCua_verify/` 要求、`replace` 行号过期报错、多智能体层次与上下文压缩：来自同一份调研。
+- AutoCua 的 6.1 秒航班搜索、不足一分钟完成三件事：来自同一份调研的作者视频示例声称，不是第三方基准或用户案例数据。
+- AutoCua 的 MIT 许可、Interception 的 LGPL-3.0 双许可：来自同一份调研。
+- 本次材料没有给出 AutoCua 的稳定性/安全边界实测，也没有给出事件/时间触发调度的细节；调研结论明确要求「需要在一台可控机器上小范围验证稳定性和安全边界后再进手册」。
 
 ## 依据的调研
 
@@ -476,3 +635,4 @@ agent-browser close
 - [youbaiyun/dsh-browser-crossplatform](../research/radar/2026-10-08/2037-youbaiyun-dsh-browser-crossplatform.md)：值得一试，若团队已在用 dsh 桌面端、又需要让模型真的去读和操作浏览器，可以按仓库给出的安装/配置命令小范围试装，并优先复刻它的权限与反馈设计（敏感字段打码、动手前批准开关、回环 id 白名单）和成对基准方法；理由是安装命令、配置片段、工具面与验证指标都能直接照抄，但 README 通篇没有给出基准实测结果，且方案完全绑定 dsh 生态，不宜直接全量采用。
 - [robbin/android-adb-control](../research/radar/2026-10-09/2231-robbin-android-adb-control.md)：值得一试，先把该技能装到一台可信测试机上，用最低风险任务（如“打开系统设置首页并只读确认”）跑通观察—一步操作—验证的闭环，再考虑扩大范围；README 给了可照做的安装路径、调用方式和安全预算，但作者自述本版本尚未完成真机端到端验收。
 - [aindeev/agent-chrome-relay](../research/radar/2026-10-11/2456-aindeev-agent-chrome-relay.md)：值得一试，在一台 Mac 上按 README 的 setup 流程装 Chrome Relay，让 Claude Code/Codex/Cursor 这类编码 agent 借用你已登录的 Chrome 后台标签页做网页操作；它给出了可直接照做的命令、安装步骤和权限/审计机制，值得小范围试，但仅限 macOS、只放行四类 agent 应用，且作者自认不是恶意软件的边界，所以先试不要全量铺开。
+- [AutoCua/AutoCua](../research/radar/2026-10-13/2911-autocua-autocua.md)：值得一试，可以把 AutoCua 当作"给代理开放真实桌面/浏览器/手机界面权限"的可试方案：它给出了完整的 pip 安装、各平台依赖清单、run_agent 调用示例和权限配置步骤，但需要在一台可控机器上小范围验证稳定性和安全边界后再进手册。

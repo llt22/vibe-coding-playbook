@@ -1,14 +1,14 @@
-# 让 agent 在受控沙箱里干活：看得见、能接管、拿得出证据
+# 让编码 agent 在可控环境里反复跑，并拿出可判定的证据
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：把编码 agent 从「在本机随手跑一次」变成「在可控环境里、按项目规则反复跑」，并能观察它的读写、限制它的边界、需要时接管，最后拿到可判定的结果。
-> 先试这一步：先挑一类重复任务，在单个可回退的真实项目里只落地做法 C 的三件套（短 CLAUDE.md + allow/ask/deny 权限 + 一个 PostToolUse 格式化 hook），用 Plan mode 跑 3–5 次记下基线；要「每个 agent 一台隔离桌面 + 能随时接管」就先看做法 L。
+> 解决的问题：把编码 agent 从「在本机随手跑一次」变成「在可控环境里按项目规则反复跑、看得到它在读写什么、能在真实系统里执行并拿到可判定结果」，并且换一套实现也能用同一套流程对比后再决定是否迁移。
+> 先试这一步：先挑一条最贴近你现状的做法落地：在单个真实项目里给 Claude Code 配一份短 CLAUDE.md、一份 allow/ask/deny 权限白名单和一个 PostToolUse 格式化 hook（做法 C），用 Plan mode 跑 3–5 次同类任务并记录人工介入与返工；确认有效后再考虑容器、云端、真实系统验证或换实现（做法 M）。
 > 最近修订：2026-10-13
 
 ## 解决什么问题
 
-本手册解决的是：把编码 agent（Claude Code / Codex CLI / OpenCode / goose / pi / agentbox / Xiryn 里的 agent）从「在本机随手跑一次」变成「在可控环境里、按项目规则反复跑」，并且能实时看到它在读什么、写什么，需要时还能在真实（仿真）系统里执行并拿到可判定结果。要补十三件事：工作区与文件持久化、权限与凭据边界、工具与扩展供给、项目级护栏（上下文供给 + 自动化触发）、按轮次的用量成本记录、「先只读规划、再放权编辑」的分工、「运行时/界面扩展面」的受控试点、「跨模型统一接口」——让同一套流程换供应商而不改上层、「实时观察与危险动作闸门」、「把桌面 Codex 会话接到手机做异步审批与完成通知」，「让 agent 在真实内核/网络的 guest 里跑命令并验证」，「把边界清晰、需要独立验证的任务放到云端并行跑，并要求会话用命令证明完成」，以及「给每个 agent 一台独立沙箱桌面、把登录/卡号/个人信息挡在 agent 视野之外、需要时人工接管再交回」。给出十二条可照做的路径：做法 A 是在 Linux 服务器上自托管 agentbox 工作区；做法 B 是在非生产机器上装 goose，用 MCP 供给工具与权限；做法 C 是在单个真实项目里给 Claude Code 配 CLAUDE.md、allow/ask/deny 权限、hook、subagent、skill，并把主工作流固定成 Explore → Plan → Code → Verify → Commit；做法 D 是用 OpenCode 的 build/plan 双 agent 把「先只读规划、再放权编辑」固定成分工；做法 E 是在本机装 Codex CLI 并用 ChatGPT 账号登录，先跑通一次终端编码任务；做法 F 是在一次性项目里用实验开关试点 Claude Mods（function hooks），按验收矩阵检查后再决定是否留下；做法 G 是按 pi 的官方安装脚本装好 CLI，用 `/login` 接入模型，在容器边界内跑一个边界清晰的小任务，验证「同一套流程换 provider」是否成立；做法 H 是在真实仓库里装 hamzafer/claude-code-mods 的 mission-control 与观察类插件，先看清 agent 的读写与上下文水位，再决定是否加 blast-radius 这类危险命令闸门；做法 I 是在一台已运行 Codex App 的 macOS/Windows 电脑上装 Codex Mobile Bridge 桌面 App，只开局域网和账号密码，用手机扫码接入已有会话，回应待确认操作、切模型与 Skill、配 Bark/ntfy 通知，再决定是否开外网入口；做法 J 是在 Windows 或 Linux/macOS 上按 qemu-harness（qh）README 装好 Python 3.8+、QEMU、Go 1.22+，用 `qh up --kernel alpine:aarch64` → `qh exec` → `qh down` 跑通最小链路，用项目级 `qh.json` 固化配置，把自带 `skill/SKILL.md` 接给 Claude Code，让需要真实系统验证的任务在 guest 里执行；做法 K 是按 Claude Code 官方云的「五分钟起步」流程开通云端会话：连接 GitHub、在一次性 VM 里跑一个自包含工单、要求它用点名命令证明完成，再用并行 session、`--teleport`、Auto-fix 与 routines 把这套流程接进日常；做法 L 是在一台非主力、可装 Docker 的机器上自托管 Xiryn，让每个 agent 跑在自己的 Linux 桌面容器里（含 shell、持久 home、1280×800 桌面 + Chromium），配一个模型 provider key，用 Telegram 远程指挥，需要时 Take over 接管并在交回时附一句说明，重点验证沙箱隔离、hand-off 人工介入成本与 token 花费后再决定是否推广。
+本手册解决的是：把编码 agent（Claude Code / Codex CLI / OpenCode / goose / pi / agentbox / Xiryn 里的 agent）从「在本机随手跑一次」变成「在可控环境里、按项目规则反复跑」，并且能实时看到它在读什么、写什么，需要时还能在真实（仿真）系统里执行并拿到可判定结果。要补十四件事：工作区与文件持久化、权限与凭据边界、工具与扩展供给、项目级护栏（上下文供给 + 自动化触发）、按轮次的用量成本记录、「先只读规划、再放权编辑」的分工、「运行时/界面扩展面」的受控试点、「跨模型统一接口」——让同一套流程换供应商而不改上层、「实时观察与危险动作闸门」、「把桌面 Codex 会话接到手机做异步审批与完成通知」，「让 agent 在真实内核/网络的 guest 里跑命令并验证」，「把边界清晰、需要独立验证的任务放到云端并行跑，并要求会话用命令证明完成」，「给每个 agent 一台独立沙箱桌面、把登录/卡号/个人信息挡在 agent 视野之外、需要时人工接管再交回」，以及「把同一套流程换一个实现重跑一遍，用资源占用与可靠性做对比后再决定是否迁移」。给出十三条可照做的路径：做法 A 是在 Linux 服务器上自托管 agentbox 工作区；做法 B 是在非生产机器上装 goose，用 MCP 供给工具与权限；做法 C 是在单个真实项目里给 Claude Code 配 CLAUDE.md、allow/ask/deny 权限、hook、subagent、skill，并把主工作流固定成 Explore → Plan → Code → Verify → Commit；做法 D 是用 OpenCode 的 build/plan 双 agent 把「先只读规划、再放权编辑」固定成分工；做法 E 是在本机装 Codex CLI 并用 ChatGPT 账号登录，先跑通一次终端编码任务；做法 F 是在一次性项目里用实验开关试点 Claude Mods（function hooks），按验收矩阵检查后再决定是否留下；做法 G 是按 pi 的官方安装脚本装好 CLI，用 `/login` 接入模型，在容器边界内跑一个边界清晰的小任务，验证「同一套流程换 provider」是否成立；做法 H 是在真实仓库里装 hamzafer/claude-code-mods 的 mission-control 与观察类插件，先看清 agent 的读写与上下文水位，再决定是否加 blast-radius 这类危险命令闸门；做法 I 是在一台已运行 Codex App 的 macOS/Windows 电脑上装 Codex Mobile Bridge 桌面 App，只开局域网和账号密码，用手机扫码接入已有会话，回应待确认操作、切模型与 Skill、配 Bark/ntfy 通知，再决定是否开外网入口；做法 J 是在 Windows 或 Linux/macOS 上按 qemu-harness（qh）README 装好 Python 3.8+、QEMU、Go 1.22+，用 `qh up --kernel alpine:aarch64` → `qh exec` → `qh down` 跑通最小链路，用项目级 `qh.json` 固化配置，把自带 `skill/SKILL.md` 接给 Claude Code，让需要真实系统验证的任务在 guest 里执行；做法 K 是按 Claude Code 官方云的「五分钟起步」流程开通云端会话：连接 GitHub、在一次性 VM 里跑一个自包含工单、要求它用点名命令证明完成，再用并行 session、`--teleport`、Auto-fix 与 routines 把这套流程接进日常；做法 L 是在一台非主力、可装 Docker 的机器上自托管 Xiryn，让每个 agent 跑在自己的 Linux 桌面容器里（含 shell、持久 home、1280×800 桌面 + Chromium），配一个模型 provider key，用 Telegram 远程指挥，需要时 Take over 接管并在交回时附一句说明，重点验证沙箱隔离、hand-off 人工介入成本与 token 花费后再决定是否推广；做法 M 是在一个小仓库上用 npm 装一份 opencode-rust（OpenCode 的 Rust 重实现），配好有余额的 provider key，用 `opr run` 和 TUI 各跑同一个任务，与现有编码代理对比资源占用、完成率与返工后再决定是否迁移。
 
 ## 适用与不适用
 
@@ -38,6 +38,9 @@
 - 需要「登录/卡号/UPI/个人信息不直接暴露给 agent」（掩码显示、由宿主自己填、支付逐笔批准）这一层凭据边界的人（做法 L；机制来自 README 自述）。
 - 需要「能实时看 agent 的桌面、随时接管、交接时附一句说明让 agent 接着做」这种 human-in-the-loop 流程的人（做法 L；机制来自 README 自述，具体操作细节本次材料未给出）。
 - 需要按 agent 单独选模型、并想覆盖托管 provider（OpenAI / Anthropic / Google / xAI / Groq / Mistral / DeepSeek / OpenRouter）与本地运行时（Ollama / LM Studio / 任意 OpenAI 兼容端点）的人（做法 L）。
+- 已经在用 OpenCode 或任何本地编码代理，想知道换一个实现（Rust 重实现）是否更省资源、是否值得迁移的人（做法 M）。
+- 需要在一条 prompt 里跑完单次任务，并且希望进程在本轮结束后继续等待子 agent 与后台任务真正完成（`opr run`）的人（做法 M）。
+- 需要按路径限定权限、把 MCP（stdio + HTTP）与 TypeScript 插件桥接进 agent、或用代理池提供多个出口 IP 的人（做法 M）。
 - 能给出一台非生产机器或一个可回退的 Git 分支，愿意先小范围试用再扩大的人。
 
 不适用：
@@ -78,8 +81,13 @@
 - 不想让 agent 联网、或不愿引入 Docker 的人不适用做法 L：每个 agent 的独立 Linux 桌面本身就是一个 Docker 容器，安装脚本还会代为安装 Git、Node.js、Docker（Windows 可能要求接受 Docker Desktop 条款或重启以启用 WSL 2）。
 - 需要「agent 直接看到完整凭据并自己登录/支付」的人不适用做法 L：凭据保险箱只给 agent 掩码（如「Visa ···· 4242」）、由 Xiryn 自己往页面里填，且每笔支付都要用户逐次批准。
 - 想直接照抄 Xiryn 全部配置项的人暂时不适用：本次调研正文在配置表处截断，`XIRYN_WORKSTATION_CPUS` / `XIRYN_WORKSTATION_MEMORY_GB` 这一行的说明没有给全，需要自行查 README。
-- 涉密或受管环境要额外做安全审查与权限约束，不能直接照搬 `curl | bash` 类安装，也不能为了跑通 Claude Mods 示例而关掉组织托管保护；pi 的 pi-telemetry / pi-share-hf 会话导出等于把工作数据上传，需先确认合规；第三方插件集合要走组织审批流程；qh 的 lab overlay 不可放到不可信网络；做法 K 要走组织的套餐与 GitHub App 审批流程；做法 L 的 setup 脚本同样是「下载即执行」，受管环境应先审阅或改用 clone 后本地执行。
-- 十二条做法都没有给出「AI 是否让结果变好了」的对照评测方法或基准数据；Claude Mods 给出了验收矩阵与成本公式，qh 给出了退出码/probe/dry-run 这类验证抓手，云端会话给出的是「用点名命令证明完成」这类证据要求，但都是作者提出的评估方法或可判定接口，不是独立基准。
+- opencode-rust 只有 35 stars，作者声明与 OpenCode 团队无关；`run` 的完整链路（真实模型 → 工具执行 → 后台等待）在本次材料里没有被证明——免费 OpenRouter 模型拒绝 tool schema，付费模型没额度时返回 402，作者自认尚未在有过余额的 provider 上做端到端验证。只冲着「一条命令跑完就放心」来的人不适用做法 M。
+- 想从做法 M 拿到「换实现后结果更好」的对照数据的人不适用：原文只有工具自身行为数据（21 crates、571 tests、22 个内置工具、3 个 MCP server 约 4 秒启动暴露 77 个工具）与作者对旧 TypeScript 引擎的叙述（5 队 × 5 agent 把 MacBook Pro M5 的 CPU 打到 99%），没有与 TypeScript 版的对照测量。
+- 不想为构建付出成本的人不适用做法 M 的 Homebrew 路径：该 formula 从源码构建，首次安装会把 Rust 工具链作为构建依赖拉下来；npm 路径只拉对应平台的预编译包、不编译。
+- 平台不在 darwin-arm64/x64、linux-x64-gnu、linux-arm64-gnu、linux-x64-musl、win32-x64-msvc 之内的人不适用做法 M 的 npm 路径：没有匹配平台时安装器会打印可选方案后干净退出，不会自动装 Rust 工具链。
+- opencode-rust 的 README 主体是工程修复记录，扩展入口只有 MCP 与 Node 子进程插件桥，原文没有给出各类具体工具的使用范例；想照着「现成工具清单」搭流程的人不适用。
+- 涉密或受管环境要额外做安全审查与权限约束，不能直接照搬 `curl | bash` 类安装，也不能为了跑通 Claude Mods 示例而关掉组织托管保护；pi 的 pi-telemetry / pi-share-hf 会话导出等于把工作数据上传，需先确认合规；第三方插件集合要走组织审批流程；qh 的 lab overlay 不可放到不可信网络；做法 K 要走组织的套餐与 GitHub App 审批流程；做法 L 的 setup 脚本同样是「下载即执行」，受管环境应先审阅或改用 clone 后本地执行；做法 M 的 `./install.sh` 同理，先读再跑。
+- 十三条做法都没有给出「AI 是否让结果变好了」的对照评测方法或基准数据；Claude Mods 给出了验收矩阵与成本公式，qh 给出了退出码/probe/dry-run 这类验证抓手，云端会话给出的是「用点名命令证明完成」这类证据要求，opencode-rust 给出的是测试数、工具数、MCP 启动时间这类工具自检数据，但都是作者提出的评估方法或工具可用性接口，不是独立基准。
 
 ## 前置条件
 
@@ -173,9 +181,17 @@
 - 一个可回退的真实小任务（例如 clone 一个仓库跑测试并给 diff，或做一次带引用的调研）作为首次验证对象。
 - 受管或涉密环境：setup 脚本是「下载即执行」，应先审阅脚本内容与来源，或 clone 后本地执行 `./setup.sh` / `setup.cmd`。
 
+做法 M（opencode-rust 对比试用）：
+- Node 18+：引擎要用 Node 跑插件桥、用 npx 启动 MCP 服务器，无论怎么装都需要。
+- 一个可用的 provider key（首次运行前 export，例如 `ANTHROPIC_API_KEY`）。
+- 一个非关键、可回退的小仓库，用来做与现有编码代理的对照试用。
+- 想走源码安装需要能构建 Rust（`install.sh` 会构建 release 二进制并安装 `opr`）；Homebrew 路径也会把 Rust 工具链作为构建依赖拉下来。
+- 需要多出口 IP 时准备代理池文件（每行一条，前两个冒号分隔字段必填：host、大于 0 的 port；可选 user:pass；`|` 之后是按键解析的元数据）。
+- 受管或涉密环境：`./install.sh` 与其他做法一样是本地构建脚本，先读再跑。
+
 ## 操作步骤
 
-十二条做法按环境选：要服务器、多人、持久工作区、共享目录、Git 审查、按轮用量成本记录，选做法 A；只有一台非生产机器、想要通用 agent 并愿意自己接 MCP，选做法 B；已经在单个真实项目里用 Claude Code、想把项目级规则和自动化触发固定下来，选做法 C；需要先读懂陌生代码库、要一个默认只读、bash 前询问权限的 plan 模式，选做法 D；已经用 ChatGPT 订阅、想在本机装官方 CLI 跑通一次终端编码任务，选做法 E；需要更深的运行时事件组合或受支持界面行为，且能满足一次性项目、合成数据、有回滚负责人等条件，才考虑做法 F；要在同一套流程里换模型供应商、准备把 agent 嵌进脚本或服务，并且愿意自己容器化隔离，选做法 G；已经在用 Claude Code、想先看清它在读写在跑什么、并在危险命令前设一道闸门，选做法 H；已经有 Codex App 桌面会话、想让审批和完成通知离开桌面，选做法 I；需要让 agent 在真实内核/网络的 guest 里执行命令、跑跨架构或内核/网络行为验证，选做法 J；已经有 Claude Code 的 Pro/Max/Team/Enterprise 计划、想把边界清晰且需要独立验证的任务放到云端并行跑，选做法 K；想在个人电脑上自托管、给每个 agent 一台隔离 Linux 桌面、把凭据挡在 agent 视野之外、并且能从手机上指挥和随时接管，选做法 L。做法 C 可以和 A 叠加：A 管服务器工作区与账号边界，C 管单个项目内的工具调用规则。做法 F 是做法 C 在 Claude Code 上的扩展面试点，不替代 Skills、MCP、经典 hook 或插件系统。做法 G 与它们不是替代关系：pi 提供的是「统一多提供商接口 + 可嵌入的 harness」，权限边界要你自己用容器补，原文明确把 OpenClaw 列为它的真实集成案例。做法 H 与做法 F 不是同一层：F 是 Anthropic 原生 function hooks 的受控试点（early access），H 是第三方插件集合，走 `claude plugin marketplace add` / `claude plugin install`，属于对已采用 Claude Code 的观察与守卫增强；两者都建立在做法 C 的项目级护栏之上，都不能替代 Skills、MCP、经典 hook。做法 I 与做法 E 也不是替代关系：E 管在本机装 Codex CLI 跑通终端任务，I 管把 Codex App 已有的桌面会话延伸到手机浏览器做异步审批与通知，模型和权限策略默认继承原会话，链路是手机 → 网关 → 原电脑（或经 SSH 到原服务器）；两者可以并存。做法 J 与 A–I 也不是同一层：A–I 管的是 agent 运行的环境、权限、护栏与观察面，J 补的是「执行目标系统」这一层——让需要真实内核/网络验证的任务在 QEMU guest 里跑；它能和做法 C 叠加（C 管项目规则与权限，J 管执行目标），也不替代 Skills、MCP、经典 hook 或容器化隔离。做法 K 管的是「会话跑在哪里」：每个任务分配一台全新 VM、仓库克隆到新分支、环境预装好，仓库内的 CLAUDE.md、rules、skills、agents、commands 随仓库进入云端，个人 ~/.claude 留在本地；它能和做法 C 叠加（C 管项目规则本身，K 管把这类任务放到云端并行跑），也不替代 Skills、MCP、经典 hook 或容器化隔离。做法 L 与做法 A 也不是替代关系：A 是在服务器上给 Claude Code / Codex CLI 搭共享工作区与账号边界，L 是在个人电脑上给每个 agent 一台独立 Linux 桌面容器 + 凭据保险箱 + 人工接管，面向「个人自托管、能看见桌面、能随时接手」的场景；两者都建立在做法 C 的项目级护栏之上，都不替代 Skills、MCP、经典 hook。
+十三条做法按环境选：要服务器、多人、持久工作区、共享目录、Git 审查、按轮用量成本记录，选做法 A；只有一台非生产机器、想要通用 agent 并愿意自己接 MCP，选做法 B；已经在单个真实项目里用 Claude Code、想把项目级规则和自动化触发固定下来，选做法 C；需要先读懂陌生代码库、要一个默认只读、bash 前询问权限的 plan 模式，选做法 D；已经用 ChatGPT 订阅、想在本机装官方 CLI 跑通一次终端编码任务，选做法 E；需要更深的运行时事件组合或受支持界面行为，且能满足一次性项目、合成数据、有回滚负责人等条件，才考虑做法 F；要在同一套流程里换模型供应商、准备把 agent 嵌进脚本或服务，并且愿意自己容器化隔离，选做法 G；已经在用 Claude Code、想先看清它在读写在跑什么、并在危险命令前设一道闸门，选做法 H；已经有 Codex App 桌面会话、想让审批和完成通知离开桌面，选做法 I；需要让 agent 在真实内核/网络的 guest 里执行命令、跑跨架构或内核/网络行为验证，选做法 J；已经有 Claude Code 的 Pro/Max/Team/Enterprise 计划、想把边界清晰且需要独立验证的任务放到云端并行跑，选做法 K；想在个人电脑上自托管、给每个 agent 一台隔离 Linux 桌面、把凭据挡在 agent 视野之外、并且能从手机上指挥和随时接管，选做法 L；已经在用 OpenCode 或任何本地编码代理、想换一套实现跑同一批任务并对比资源占用、完成率与返工后再决定是否迁移，选做法 M。做法 C 可以和 A 叠加：A 管服务器工作区与账号边界，C 管单个项目内的工具调用规则。做法 F 是做法 C 在 Claude Code 上的扩展面试点，不替代 Skills、MCP、经典 hook 或插件系统。做法 G 与它们不是替代关系：pi 提供的是「统一多提供商接口 + 可嵌入的 harness」，权限边界要你自己用容器补，原文明确把 OpenClaw 列为它的真实集成案例。做法 H 与做法 F 不是同一层：F 是 Anthropic 原生 function hooks 的受控试点（early access），H 是第三方插件集合，走 `claude plugin marketplace add` / `claude plugin install`，属于对已采用 Claude Code 的观察与守卫增强；两者都建立在做法 C 的项目级护栏之上，都不能替代 Skills、MCP、经典 hook。做法 I 与做法 E 也不是替代关系：E 管在本机装 Codex CLI 跑通终端任务，I 管把 Codex App 已有的桌面会话延伸到手机浏览器做异步审批与通知，模型和权限策略默认继承原会话，链路是手机 → 网关 → 原电脑（或经 SSH 到原服务器）；两者可以并存。做法 J 与 A–I 也不是同一层：A–I 管的是 agent 运行的环境、权限、护栏与观察面，J 补的是「执行目标系统」这一层——让需要真实内核/网络验证的任务在 QEMU guest 里跑；它能和做法 C 叠加（C 管项目规则与权限，J 管执行目标），也不替代 Skills、MCP、经典 hook 或容器化隔离。做法 K 管的是「会话跑在哪里」：每个任务分配一台全新 VM、仓库克隆到新分支、环境预装好，仓库内的 CLAUDE.md、rules、skills、agents、commands 随仓库进入云端，个人 ~/.claude 留在本地；它能和做法 C 叠加（C 管项目规则本身，K 管把这类任务放到云端并行跑），也不替代 Skills、MCP、经典 hook 或容器化隔离。做法 L 与做法 A 也不是替代关系：A 是在服务器上给 Claude Code / Codex CLI 搭共享工作区与账号边界，L 是在个人电脑上给每个 agent 一台独立 Linux 桌面容器 + 凭据保险箱 + 人工接管，面向「个人自托管、能看见桌面、能随时接手」的场景；两者都建立在做法 C 的项目级护栏之上，都不替代 Skills、MCP、经典 hook。做法 M 与做法 D 是同一层的两个实现：D 是 OpenCode 的官方实现（`build`/`plan` 双 agent、`Tab` 切换），M 是第三方 Rust 重实现（README 末句写明 "Not affiliated with the OpenCode team"），配置文件名（`opencode.json` 等）、`opencode` 二进制名、agent 与会话概念沿用同一套命名，因此可以拿同一批任务在两者之间做对比；M 不替代 D，也不替代做法 C 的项目级护栏，它的权限是 per-path scoping 且「最后匹配的规则生效」。
 
 ### 做法 A：在 Linux 服务器上搭自托管 agentbox 工作区
 
@@ -1207,6 +1223,123 @@ npm run dev                    # or: npm run build && npm start
 
 9. 凭据不进 agent 视野。登录/卡号/UPI/个人信息用 AES-256-GCM 加密，密钥由操作系统钥匙串（macOS Keychain / Windows DPAPI / Linux Secret Service）保存；agent 只看到掩码（如「Visa ···· 4242」），由 Xiryn 自己往页面里填；每笔支付需用户逐次批准。预期结果：agent 能在网页上推进流程，但拿不到完整凭据，也不能自行完成支付。（本次材料只给出机制描述，没有逐步的配置路径。）
 
+### 做法 M：用 opencode-rust 跑同一批任务，与现有编码代理对比后再决定是否迁移
+
+来源是 `vakandi/opencode-rust`（MIT，35 stars），OpenCode 的 Rust 重实现，作者声明与 OpenCode 团队无关（README 末句："Not affiliated with the OpenCode team"）。它把原本用 TypeScript 写的本地 AI 编码代理引擎换成 Rust，对外提供三种使用面：交互式 TUI（`opr`）、单次执行（`opr run "…"`）、HTTP 服务（`opr serve --port 3000`），另有 Web 和 ACP。能力面包括 22 个内置工具、MCP（stdio + HTTP）、LSP、TypeScript 插件桥（Node 子进程）、SQLite 存储、按路径的权限控制。注意：README 主体其实是工程修复记录，下面每一步的命令、参数与数字都来自该仓库 README 转述，属作者自述，未有第三方复现。
+
+前提：Node 18+（引擎要用 Node 跑插件桥、用 npx 启动 MCP 服务器，无论怎么装都需要），以及一个可用的 provider key；一个非关键、可回退的小仓库。
+
+1. 安装。三条路，行为**不完全等价**。
+
+npm（Linux/macOS/Windows）：
+
+```bash
+npm install -g opencode-rust
+```
+
+安装过程不编译，npm 只拉取对应平台的预编译包（darwin-arm64/x64、linux-x64-gnu、linux-arm64-gnu、linux-x64-musl、win32-x64-msvc）。没有匹配平台时安装器打印可选方案后干净退出，不会让安装失败，也不会强制装 Rust 工具链。预期结果：`opr` 命令可用。
+
+Homebrew（macOS/Linux）：
+
+```bash
+brew install vakandi/tap/opencode-rust
+```
+
+这个 formula 从源码构建，首次安装会把 Rust 工具链作为构建依赖拉下来。
+
+源码：
+
+```bash
+git clone https://github.com/vakandi/opencode-rust.git
+cd opencode-rust
+./install.sh          # 构建 release 二进制并安装 `opr`
+```
+
+`install.sh` 会对每个 `.rs` 文件和 `Cargo.toml`/`Cargo.lock` 做指纹，代码没变时重复执行会跳过重建，`--force` 强制重建。它还会为每个 agent 安装一个快捷命令。受管或涉密环境应先读脚本再跑。
+
+2. 首次运行前配置 provider key：
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+```
+
+3. 按安装方式使用正确的命令形式（这一步不做会在 Homebrew 安装下直接报错）：`opr` 在不同安装下行为不同：npm 装的是分发脚本，`opr --some-flag` 会被转成 `opencode tui --some-flag`；Homebrew 装的是普通符号链接，同样写法会变成 `opencode --some-flag` 并被拒绝，必须显式写子命令（`opr tui --some-flag`）。
+
+4. 三种运行方式：
+
+```bash
+opr                                   # 交互式 TUI
+opr run "check this repo for risks"    # 单次 prompt，跑到完成
+opr serve --port 3000                 # HTTP 服务
+```
+
+5. TUI 里用 `Tab` 在内置 agent 间切换：`build`（默认，全权，开发工作）、`plan`（只读，分析和代码探索）。更多 agent 在配置里定义。预期结果：界面显示当前处于哪个 agent；`plan` 阶段不会直接改文件。
+
+6. 命名 agent 快捷命令（由 `install.sh` 安装，每个 agent 一条，等价于 `--agent <slug>`）：
+
+```bash
+gilfoyle  "fix this failing test"     # --agent gilfoyle
+setbon    "write 5 ad hooks"          # --agent setbon
+googlebot "audit my meta tags"        # --agent googlebot
+```
+
+不给 prompt 时打印 usage 到 stderr 并以退出码 2 结束。
+
+7. 配置文件解析（向上搜索并合并）：
+- `opencode.jsonc` · `opencode.json` · `.opencode/opencode.jsonc` · `.opencode/opencode.json`
+- 全局默认：`~/.config/opencode/opencode.json[c]`
+- agent 定义另外从 `~/.omo/omo.jsonc` 和 `~/.config/omo/omo.jsonc` 读取（oh-my-opencode 实际存放 agent 的文件）
+
+运行期解析路径可以这样核对我到底读的是哪个文件：
+
+```bash
+opr db path
+opr debug paths
+```
+
+8. 需要 MCP 时在配置里声明服务器（stdio 或 HTTP）。stdio 传输是换行分隔 JSON；服务器并行启动，上限 90 秒。原文实测修复后「3 servers start in ~4 s and 77 tools are exposed to agents」。预期结果：配置里的 MCP server 起来后，工具会同时注册给模型并能在同一轮的 `ToolRegistry` 里被解析执行。
+
+9. 无人值守跑长任务时用 `run` 并设置后台等待上限：
+
+```bash
+opr run --wait-background-timeout 300 "…"
+```
+
+默认 120 秒。`run` 在本轮结束后继续持有进程，依次等待：本轮工具执行与 awaited 子 agent 完成、`session.idle` 通知、子 agent/团队成员（记录在 omo 自己的 SQLite 里）、`.omo/run-continuation/<session>.json` 的后台任务账本（带过期保护）。drain 逻辑 fail-open：没有数据库就当作没有子任务，账本缺失或 JSON 损坏就当作空闲，不会挂死。
+
+10. 代理池（需要多出口 IP 时）。文件位置：
+- macOS — `~/Library/Application Support/opencode/proxy-pool.txt`
+- Linux — `~/.local/share/opencode/proxy-pool.txt`
+- Windows — `%LOCALAPPDATA%\opencode\proxy-pool.txt`
+- 若设置了 `OPENCODE_PATHS_ROOT`，文件为 `$OPENCODE_PATHS_ROOT/opencode/proxy-pool.txt`（同一开关也移动数据库和凭据）
+
+格式为每行一条，前两个冒号分隔字段必填（host、大于 0 的 port）：
+
+```text
+198.51.100.10:8080
+203.0.113.24:1080
+
+198.51.100.31:3128:myuser:mypass
+
+203.0.113.77:8000 | note:rotates hourly
+```
+
+`|` 之后是按键解析的元数据（`last:`、`dur:`），不是按位置解析。没有注释语法，`#` 开头的行只是解析失败被丢弃并记一条 debug 日志。
+
+关键约束：代理必须通过 `opencode_proxy::start()` 启用，**不要**自己 export 代理环境变量——`reqwest` 在构建客户端时就快照了代理环境，export 必须早于 provider 注册表构建。池为空或不可读时 `start()` 返回错误，而不是起一个对所有请求回 502 的监听器。同目录下还会自动维护 `proxy-quarantine.json`（探测失败的候选）和 `proxy-claims.json`（会话与上游的归属）。预期结果：每 120 秒重选最久未使用的上游，候选需先通过真实 CONNECT 探测才生效，被拒绝的进入隔离而非无限重试。
+
+11. 自检/开发：
+
+```bash
+cargo test --workspace          # 571 tests
+cargo build --release --bin opencode
+cargo clippy --workspace --all-targets
+```
+
+12. 做迁移决策：在一个小仓库上用 `opr run` 和 TUI 各跑同一个任务，与现有编码代理（做法 C 的 Claude Code 会话，或做法 D 的 OpenCode）对比资源占用、完成率与返工后再决定是否迁移。注意原文自认 `run` 的端到端链路尚未在有过余额的 provider 上验证过。
+
+诚实说明：这条做法里可直接照做的是安装、配置路径、代理池格式和 `run` 的后台等待语义；扩展入口只有 MCP 与 Node 子进程插件桥，原文没有给出各类具体工具的使用范例，也没有与 TypeScript 版的对照测量。因此只适合小范围试。
+
 ## 怎么判断变好了
 
 做法 A（agentbox）看成本与交付把关，不看「结果是否更好」：
@@ -1393,6 +1526,24 @@ npm run dev                    # or: npm run build && npm start
 
 判定规则：隔离成立、接管一两次就能让任务跑完、token 花费不高于对照基线，再考虑加 Telegram 远程控制和第二个 agent；否则停留在单机单 agent，先把任务边界缩小再评估。退出条件：如果容器起不来、桌面镜像构建反复失败，或你的平台需要 WSL 2/重启才能装 Docker 而你不接受，就停在这一步。
 
+做法 M（opencode-rust）最小试用方式（一台机器、一个小仓库、一个任务，约半天）：
+1. 用 npm 装一份（避免一开始就为 Homebrew 的源码构建付成本），`export` 一个**有余额**的 provider key。
+2. 选一个非关键、有 git 版本控制、能随时回滚的小仓库，用 `opr run "…"` 和 TUI 各跑同一个任务。
+3. 同一个任务再用你现有的编码代理（做法 C 的 Claude Code 会话，或做法 D 的 OpenCode）跑一遍作为对照。
+4. 记录下面几项，重复 3–5 次；用 `opr debug paths` / `opr db path` 确认它实际读的是哪份配置。
+
+判断有没有改善的指标（原文没有基线，需自建对照；以下属于作者主张而非基准数据）：
+- 任务是否一次跑通，人工介入了几轮；
+- 最终 diff 中人工需要重写/删除的比例；
+- 同一任务的耗时与机器资源占用（作者给出的动机叙述是旧 TypeScript 引擎下 5 队 × 5 agent 把 MacBook Pro M5 的 CPU 打到 99%、机器不可用，可据此判断你自己的机器是否被拖垮）；
+- `run` 的后台等待是否真的等到了它启动的工作：用 `--wait-background-timeout` 设上限，观察是否出现提前退出或挂死（drain 是 fail-open，不会挂死，但也不保证一定等到）；
+- MCP 相关的可观察量：配置的 server 是否都起来、工具是否真的注册给 agent（原文实测修复后 3 servers 约 4 秒启动、77 个工具暴露）；
+- 换实现后同一提示是否仍然跑通。
+
+判定规则：只有任务完成率与返工不低于现有代理、且资源占用可接受时，才把做法 M 从小范围试推进；否则停留在只做工具可用性验证（`cargo test --workspace`、MCP server 启动与工具暴露）这一层。
+
+退出条件：如果 `run` 在你有余额的 provider 上仍然跑不通端到端（原文记录的现象是免费 OpenRouter 模型拒绝 tool schema、付费模型没额度时返回 402），就先只用 TUI，不要把它写进无人值守流程。做法 M 的调研没有给出任何效果数据，以上指标与试用节奏属于作者主张。
+
 ## 常见坑
 
 - agentbox 的权限默认值：原文自述存在 bypassPermissions 默认权限、凭据可被终端用户读取、单机单进程等硬约束。账号凭据会传给容器内 CLI，有终端权限的用户可以读到。
@@ -1423,7 +1574,7 @@ npm run dev                    # or: npm run build && npm start
 - Codex 独立安装脚本默认从 `https://releases.openai.com/codex` 下载，元数据或资源不可用时回退到 GitHub Releases；需要强制走 GitHub Releases 用 `CODEX_INSTALLER_USE_RELEASES_OPENAI_COM=false`。
 - Codex Web 是云端代理，原文没有任何关于定时、事件或状态触发的说明，不能据此做主动推进。
 - Codex 的 `curl | sh` / PowerShell `irm | iex` 同样是直接从网络下载脚本并执行；受管或涉密环境应先审阅脚本内容与来源，或改用 npm / brew / 手动下载二进制。
-- 不要把「服务器上默认放开」（agentbox 的 bypassPermissions 默认值）当成「项目内也可以不设白名单」；做法 C/D/G/H/I/J/K/L 的权限边界与 agentbox 的账号边界不是同一层。
+- 不要把「服务器上默认放开」（agentbox 的 bypassPermissions 默认值）当成「项目内也可以不设白名单」；做法 C/D/G/H/I/J/K/L/M 的权限边界与 agentbox 的账号边界不是同一层。
 - Claude Mods 源码目录明确标注接口为 early access，API 可能不通知就变；官方 9 月 9 日更新称「数周内」扩大发布，本审阅检查的 TypeScript 声明对应 Claude Code 2.1.273。
 - 不要混淆三个对象：社区仓库 `0xDarkMatter/claude-mods` 与 Anthropic 原生功能无关；第三方插件集合 `hamzafer/claude-code-mods`（做法 H）走 `claude plugin marketplace add` 安装；做法 F 说的是 Anthropic 原生 Claude Mods（function hooks）。
 - `/diff` 已是内置命令，会与你的实现争夺命令归属；「加载了一个目录」不足以证明某个 handler 真的跑了，要用测试或显式的非敏感诊断证据确认当前生效的实现。
@@ -1488,6 +1639,14 @@ npm run dev                    # or: npm run build && npm start
 - Xiryn 的「Take over 人工接管」与「凭据保险箱（AES-256-GCM + 操作系统钥匙串 + 每笔支付逐笔批准）」在本次材料里只有机制描述，没有逐步的按钮路径；照做前先到界面里确认。
 - Xiryn 的 Telegram 机器人走本地 long-poll、不需要公网入口，且只能被一个配对账号使用：这降低了暴露面，但也意味着手机与运行 Xiryn 的电脑都要能访问 Telegram，断网时远程控制就不可用。
 - README 未声明操作系统版本下限，只声明 Node ≥ 20.9；实际可跑性需在自己平台上验证。
+- opencode-rust 的 `run` 端到端链路在本次材料里没有被证明：原文记录免费 OpenRouter 模型拒绝 tool schema、付费模型没额度时返回 402，作者自认尚未在有过余额的 provider 上做端到端验证。不要把它当成可以放心放进无人值守流程的能力。
+- `opr` 在不同安装方式下行为不等价：npm 装的是分发脚本，`opr --some-flag` 会转成 `opencode tui --some-flag`；Homebrew 装的是普通符号链接，同样写法会变成 `opencode --some-flag` 并被拒绝，必须显式写 `opr tui --some-flag`。
+- Homebrew formula 从源码构建，首次安装会把 Rust 工具链作为构建依赖拉下来；npm 路径只拉对应平台的预编译包、不编译。没有匹配平台（darwin-arm64/x64、linux-x64-gnu、linux-arm64-gnu、linux-x64-musl、win32-x64-msvc）时安装器打印可选方案后干净退出，不会自动装 Rust 工具链。
+- 代理池不要自己 export 代理环境变量：`reqwest` 在构建客户端时就快照了代理环境，export 必须早于 provider 注册表构建；代理必须通过 `opencode_proxy::start()` 启用。池为空或不可读时 `start()` 报错，而不是起一个对所有请求回 502 的监听器。
+- 代理池文件没有注释语法：`#` 开头的行只是解析失败被丢弃并记一条 debug 日志；`|` 之后是按键解析的元数据（`last:`、`dur:`），不是按位置解析；前两个冒号分隔字段（host、大于 0 的 port）必填。
+- 命名 agent 的显示名与配置文件里的 slug 不是一回事：原文举例插件用显示名注册 agent（如 `Atlas - Plan Executor`），而配置用 slug（`atlas`）作为键，两者不一致会导致按精确键查找失败、配置的模型落不到 agent 上。
+- `run` 的 drain 逻辑是 fail-open：没有数据库就当作没有子任务，账本缺失或 JSON 损坏就当作空闲——不会挂死，但也意味着漏等的可能性要用 `--wait-background-timeout` 和任务产出自行核对。
+- `opencode-rust` 的 README 主体是工程修复记录；扩展入口只有 MCP 与 Node 子进程插件桥，原文没有给出各类具体工具的使用范例。它自报的测试数（571 tests）、工具数（22 个内置工具）、MCP 启动数据（3 servers 约 4 秒、77 个工具）属于工具自身行为数据；「Rust 版内存与 CPU 更好」是作者主张，原文没有与 TypeScript 版的对照测量。
 
 ## 证据与来源
 
@@ -1503,8 +1662,9 @@ npm run dev                    # or: npm run build && npm start
 - 做法 J 依据调研《b3s3da/qemu-harness》：一行安装与非交互安装参数、Linux/macOS 安装方式、`qh up --kernel alpine:aarch64` → `qh exec` → `qh down` 最小链路、`qh.json` 示例与全部 CLI 开关、overlay/pkgs/内核模块说明、常用命令表、`skill/SKILL.md` 接入 Claude Code 与 Grok、排障路径（`agent did not respond`、Git Bash 路径改写、TCG 加速）、性能说明（`qh up` 到 agent 可应答约 2–5 秒、rootfs 打包 initramfs 约 0.3 秒、无 virtio-net 的原版内核隧道约 15 KB/s 入、75 KB/s 出、在 Windows 10 + QEMU 11 上测试过），均来自该报告转述的 README 自述，属作者自述，无第三方复现。案例非常有限：只有 Alpine 内核，以及一段 Android GKI 的性能说明，没有 benchmark 脚本、没有对照基线，也没有第三方使用报告。明确的安全限制：自带 overlay 会以 root、空密码启动 dropbear，README 自己标注 lab only，不可放到不可信网络。「适合小范围试用而非全盘采用」是调研结论中的作者主张。做法 J 的最小试用与指标由调研报告提出（其验证抓手是 `qh exec` 的退出码与 `--json`、`qh probe`、`qh up --dry-run`），但原文没有任何关于「用了它以后 AI 的结果是否更好」的评测数据或基线对比。
 - 做法 K 依据调研《Claude Code in the cloud: a field guide to cloud sessions》：五步起步流程、GitHub 连接的三条路径与四类常见故障排查、三条可直接复制的自包含工单提示词、并行 session 示例、`BASH_DEFAULT_TIMEOUT_MS` / `BASH_MAX_TIMEOUT_MS`、本地 plan + `claude --cloud` 执行 + `claude --teleport` 收尾、手机应用查看、Auto-fix 与 `/autofix-pr`、routine（research preview）的三种 trigger 与 `/schedule`、`claude -p "..." --cloud <session-id>` 与预填 URL、一次性 VM 与网络 None/Trusted、setup script 与 SessionStart hook、`CLAUDE_CODE_REMOTE`、服务按 session 启动、网络级别 Trusted/Custom/Full、环境 API credentials、CLAUDE.md 要写命令，以及一段降低返工的习惯清单，均来自该报告转述的原文。原文明确：云端会话随 Pro、Max、Team、Enterprise 计划提供、无单独云机器费用、组织 owner 可能需要开启、不适用于 Console API key 或第三方 provider；每任务独立 VM/分支/端口、笔记本睡眠或断网后会话继续、GitHub token 不进入 VM（由代理持有，会话拿短期凭据且只能推自己的工作分支）、仓库内 CLAUDE.md/rules/skills/agents/commands 随仓库进入云端、个人 `~/.claude` 留在本地、闲置 VM 被回收后重开得到新 VM 但恢复对话。调研结论「建议按文中步骤先开通并用它跑边界清晰、需要独立验证的任务，再决定是否推广」是作者主张；套餐包含与组织权限、routines/projects 的 preview/beta 状态均为原文自述，未在本材料中独立验证。**本次调研正文在「五个 ses」处截断**，因此「并行 session 与计划限额」的完整说明本手册无法给出。做法 K 的最小试用与指标沿用本手册通用节奏（同类任务重复 3–5 次），属作者主张；原文同样没有给出「AI 是否让结果变好了」的对照评测或基准数据。
 - 做法 L 依据调研《SouravBeraAkaSpeed/xiryn》：一键安装脚本（macOS/Linux `curl … | bash`、Windows PowerShell `irm … | iex`、已 clone 时 `./setup.sh` / `setup.cmd`）、setup 依次做的四件事（装 Git/Node.js/Docker、clone 到 `./xiryn` 并装依赖、启动 Docker 并构建 agent 桌面镜像、生成 `.env` 并在 http://127.0.0.1:6796 启动）、手动安装四步（`git clone` / `npm install` / `npm run setup` / `npm run dev`）、可直接粘贴给编码 agent 的整段部署提示词（含 `XIRYN_YES`、`XIRYN_NO_START` 两个变量与「若需要我的密码就把命令给我」的处理方式）、`.env` 里的 key 示例、启动命令与 `docker compose up -d`、状态栏 alerts 授权、Telegram 配对（@BotFather → `/newbot` → Settings → Remote access → 扫码 Start）与 `/agents` `/new` `/stop` `/status` 四条命令、配置表（各托管 provider key、`OLLAMA_BASE_URL` / `LMSTUDIO_BASE_URL` / `CUSTOM_BASE_URL`、`XIRYN_DEFAULT_MODEL` / `XIRYN_MAX_STEPS`、以及截断的 `XIRYN_WORKSTATION_CPUS` / `XIRYN_WORKSTATION_MEMORY_GB`）、「每个 agent 一台独立 Linux 桌面容器（shell + 持久 home + 1280×800 桌面 + Chromium、首次创建、空闲停止、与宿主隔离）」、单体架构与 `data/xiryn.db`、「no queue, no worker, no backend of ours」、Take over 交回附一句说明、凭据保险箱（AES-256-GCM + macOS Keychain / Windows DPAPI / Linux Secret Service + 掩码 + 每笔支付逐次批准）、Node ≥ 20.9 与约 4 GB 空闲磁盘、以及 MIT 许可，均来自该调研转述的仓库 README。当前 stars 为 49。「Muse / Grok Bot / Dots 的开源自托管替代」是 README 的宣传表述；定时/循环任务仍在 roadmap 上未实现；本次调研正文在配置表处截断。调研结论给的是 try 而非 adopt：README 提供了可直接复制的安装、配置、Telegram 配对与编码 agent 提示词，具备可照做性，但仓库仅 49 star、无第三方评测、定时/循环任务未实现。做法 L 的最小试用与指标沿用本手册通用节奏（同类任务重复 3–5 次并设对照），属作者主张而非基准数据。
-- 十二条做法（A–L）都没有给出「AI 是否让结果变好了」的对照评测方法或基准数据。agentbox 的成本与用量指标属于记账维度；goose 没有任务效果指标；claude-code-pro-course 没有效果数据；OpenCode 与 Codex 的 README 也没有效果数据；Claude Mods 的验收矩阵与成本公式是作者提出的评估方法；pi 的原文同样没有效果数据，其会话导出只是留档路径；hamzafer/claude-code-mods 只有 README，没有基准、耗时、token 节省或用户反馈数据；Codex Mobile Bridge 的指标来自项目 README 自述的验收维度，没有独立性能数据或第三方评测；qemu-harness 的退出码/probe/dry-run 只是可判定接口与预检手段，没有效果评测或基线对比；Xiryn 没有第三方评测，也没有「用了它以后结果是否更好」的数据。做法 C、D、E、F、G、H、I、J、K、L 的「怎么判断变好了」分别沿用做法 B 或调研报告提出的最小试用方法与指标，属于作者主张。
-- 与清单的关系：agentbox 不替代 Claude Code，而是给它（以及 Codex CLI）提供自托管环境；goose 这条线索给出了可复制安装命令和通过 MCP 供给工具权限、通过定制发行版预置配置两条路径；claude-code-pro-course 给出了项目级护栏与自动化触发的可复制配置；OpenCode 补上了可复制的安装命令和 `build`/`plan` 权限分工，但 README 不含效果数据，不足以支撑 adopt，可作为把清单中 OpenCode（watch）推进到 try 的依据；Codex CLI 给出了安装与登录路径，并说明可作为 Cursor 里的智能体使用（同一层叠加），但原文只到首页，可作为对比参照，没有给出与 Cursor 的功能差异证据；Claude Mods 补上了 Claude Code 的运行时/界面扩展面、选型表、验收矩阵与成本口径，但处于 early access，适合受控试点而非直接采纳；pi 补上了「统一多提供商接口 + 可嵌入 harness」这一层，给出了安装、启动、登录、Nix 固定版本与三种容器化边界的可复制步骤，并把 OpenClaw 列为真实集成案例，但 README 是宣传 + 导览，扩展与容器化细节只给了链接，默认没有权限系统，没有效果数据，需要在容器里实测后再决定是否写进日常流程；hamzafer/claude-code-mods 补上了 Claude Code 会话内的实时观察面与危险命令闸门，给出了可复制的 marketplace 安装命令、快捷键和平台前提，足以小范围试，但材料只有 README，无实测数据，且 Code 视图限 macOS + Chrome；Codex Mobile Bridge 补上了「把 Codex App 桌面会话延伸到手机做异步审批与完成通知」这一层，给出了桌面 App 安装、局域网/临时 HTTPS/自有服务器 SSH/NAS 反代四种入口、Bark 与 ntfy 通知、命令行参数与安全说明等可照做的步骤，但材料同样只有 README，依赖 Codex App 内部 IPC，无多用户隔离，无独立评测，适合在局域网 + 账号密码下先小范围试；qemu-harness 补上了「让 agent 在真实（仿真）系统里执行并拿到可判定结果」这一层，给出了可复制的安装与最小链路命令、项目级 `qh.json`、SKILL.md 接入与排障路径，但项目体量小、自带 overlay 为 lab 用途、无评测数据，适合小范围试用；Claude Code 云端会话补上了「会话跑在哪里」这一层，给出了五步起步、GitHub 接入三条路径、自包含工单提示词、并行 session、teleport 回本地收尾、Auto-fix、routine 触发、环境与网络自检等可照做的步骤，但依赖套餐与组织权限、routines/projects 属 preview/beta、本次材料在「五个 ses」处截断，适合先跑一个边界清晰的任务再决定是否推广；清单中相关条目是 Claude Code（tool，adopt），云端会话接在它之下作为执行位置的选择。Xiryn 补上了「个人自托管 + 每个 agent 一台隔离桌面 + 凭据不进 agent 视野 + 随时接管」这一层，给出了可复制的安装、手动安装、agent 代装提示词、启动、Telegram 配对与配置表，但仓库仅 49 star、单体架构、需要 Docker、定时/循环任务未实现、正文在配置表处截断，适合在非主力机器上先跑一个真实小任务再决定是否推广。十二条都可把评估从 watch 上调为 try，但都必须先读官方文档、审查安装脚本或社区项目源码，并做一次实际任务。
+- 做法 M 依据调研《vakandi/opencode-rust》：安装三条路径（npm 预编译包、Homebrew 源码构建、`./install.sh` 指纹跳过重建与 `--force`）、平台包名（darwin-arm64/x64、linux-x64-gnu、linux-arm64-gnu、linux-x64-musl、win32-x64-msvc）、`export ANTHROPIC_API_KEY`、三种运行方式（`opr` / `opr run "…"` / `opr serve --port 3000`）、`build` 与 `plan` 及 `Tab` 切换、命名 agent 快捷命令与「不给 prompt 打印 usage 到 stderr 并以退出码 2 结束」、配置文件解析路径与 `opr db path` / `opr debug paths`、MCP（stdio 换行分隔 JSON、HTTP、并行启动上限 90 秒）、`run` 的四阶段等待与 `--wait-background-timeout`（默认 120 秒）、代理池文件位置与格式与 `opencode_proxy::start()` 约束及 `proxy-quarantine.json` / `proxy-claims.json`、`cargo test --workspace`（571 tests）/ `cargo build --release --bin opencode` / `cargo clippy --workspace --all-targets`，均来自该报告转述的 README 原文。MIT 许可、35 stars、21 crates、22 个内置工具、MCP 修复后 3 个 server 约 4 秒启动并暴露 77 个工具、代理每 120 秒轮换，属于仓库自述或工具自身行为数据。属于作者主张的部分：Rust 版在内存与 CPU 上更好的整体结论（原文只描述机制——SQLite 落盘、请求体流式、工具 schema 按 `(model, tool-set)` 缓存、实例状态按配置哈希池化并做 LRU+TTL 驱逐、不需要容器运行时——没有给出与 TypeScript 版的对照测量）、代理池对「长 agent 跑不烧穿单个出口 IP」的效果、插件反向通道的实际用途。原文明确声明的关键局限：`run` 是针对真实 `bash` 工具、经真实 session 引擎验证的，但**没有**在有过余额的 provider 上跑通端到端——免费 OpenRouter 模型拒绝 tool schema，付费模型没额度时返回 402；也就是说完整链路（真实模型 → 工具执行 → 后台等待）在本材料里没有被证明。该仓库明确是 OpenCode 的 Rust 重实现，README 末句写 "Not affiliated with the OpenCode team"，可作为做法 D 的对比或迁移对象；原文还把 oh-my-opencode 的 agent 文件位置（`~/.omo/omo.jsonc`）与「显示名注册 / slug 作为配置键」的不一致列为已知坑。做法 M 的最小试用与指标沿用本手册通用节奏，属作者主张而非基准数据。
+- 十三条做法（A–M）都没有给出「AI 是否让结果变好了」的对照评测方法或基准数据。agentbox 的成本与用量指标属于记账维度；goose 没有任务效果指标；claude-code-pro-course 没有效果数据；OpenCode 与 Codex 的 README 也没有效果数据；Claude Mods 的验收矩阵与成本公式是作者提出的评估方法；pi 的原文同样没有效果数据，其会话导出只是留档路径；hamzafer/claude-code-mods 只有 README，没有基准、耗时、token 节省或用户反馈数据；Codex Mobile Bridge 的指标来自项目 README 自述的验收维度，没有独立性能数据或第三方评测；qemu-harness 的退出码/probe/dry-run 只是可判定接口与预检手段，没有效果评测或基线对比；opencode-rust 的测试数、工具数与 MCP 启动时间只是工具自身行为数据，没有与 TypeScript 版的对照测量；Xiryn 没有第三方评测，也没有「用了它以后结果是否更好」的数据。做法 C、D、E、F、G、H、I、J、K、L、M 的「怎么判断变好了」分别沿用做法 B 或调研报告提出的最小试用方法与指标，属于作者主张。
+- 与清单的关系：agentbox 不替代 Claude Code，而是给它（以及 Codex CLI）提供自托管环境；goose 这条线索给出了可复制安装命令和通过 MCP 供给工具权限、通过定制发行版预置配置两条路径；claude-code-pro-course 给出了项目级护栏与自动化触发的可复制配置；OpenCode 补上了可复制的安装命令和 `build`/`plan` 权限分工，但 README 不含效果数据，不足以支撑 adopt，可作为把清单中 OpenCode（watch）推进到 try 的依据；Codex CLI 给出了安装与登录路径，并说明可作为 Cursor 里的智能体使用（同一层叠加），但原文只到首页，可作为对比参照，没有给出与 Cursor 的功能差异证据；Claude Mods 补上了 Claude Code 的运行时/界面扩展面、选型表、验收矩阵与成本口径，但处于 early access，适合受控试点而非直接采纳；pi 补上了「统一多提供商接口 + 可嵌入 harness」这一层，给出了安装、启动、登录、Nix 固定版本与三种容器化边界的可复制步骤，并把 OpenClaw 列为真实集成案例，但 README 是宣传 + 导览，扩展与容器化细节只给了链接，默认没有权限系统，没有效果数据，需要在容器里实测后再决定是否写进日常流程；hamzafer/claude-code-mods 补上了 Claude Code 会话内的实时观察面与危险命令闸门，给出了可复制的 marketplace 安装命令、快捷键和平台前提，足以小范围试，但材料只有 README，无实测数据，且 Code 视图限 macOS + Chrome；Codex Mobile Bridge 补上了「把 Codex App 桌面会话延伸到手机做异步审批与完成通知」这一层，给出了桌面 App 安装、局域网/临时 HTTPS/自有服务器 SSH/NAS 反代四种入口、Bark 与 ntfy 通知、命令行参数与安全说明等可照做的步骤，但材料同样只有 README，依赖 Codex App 内部 IPC，无多用户隔离，无独立评测，适合在局域网 + 账号密码下先小范围试；qemu-harness 补上了「让 agent 在真实（仿真）系统里执行并拿到可判定结果」这一层，给出了可复制的安装与最小链路命令、项目级 `qh.json`、SKILL.md 接入与排障路径，但项目体量小、自带 overlay 为 lab 用途、无评测数据，适合小范围试用；Claude Code 云端会话补上了「会话跑在哪里」这一层，给出了五步起步、GitHub 接入三条路径、自包含工单提示词、并行 session、teleport 回本地收尾、Auto-fix、routine 触发、环境与网络自检等可照做的步骤，但依赖套餐与组织权限、routines/projects 属 preview/beta、本次材料在「五个 ses」处截断，适合先跑一个边界清晰的任务再决定是否推广；清单中相关条目是 Claude Code（tool，adopt），云端会话接在它之下作为执行位置的选择。Xiryn 补上了「个人自托管 + 每个 agent 一台隔离桌面 + 凭据不进 agent 视野 + 随时接管」这一层，给出了可复制的安装、手动安装、agent 代装提示词、启动、Telegram 配对与配置表，但仓库仅 49 star、单体架构、需要 Docker、定时/循环任务未实现、正文在配置表处截断，适合在非主力机器上先跑一个真实小任务再决定是否推广。opencode-rust 补上了「同一套流程换一个实现再跑一遍」这一层：它明确是 OpenCode 的 Rust 重实现、与 OpenCode 团队无关，配置文件名与 `opencode` 二进制名沿用同一套命名，安装、配置路径、代理池格式与 `run` 的后台等待语义都可直接照做，但 `run` 的端到端链路尚未在有余额的 provider 上验证、README 主体是工程修复记录、没有与 TypeScript 版的对照测量，因此适合拿同一批任务在两个实现之间做小范围对比，而不是直接迁移。十三条都可把评估从 watch 上调为 try，但都必须先读官方文档、审查安装脚本或社区项目源码，并做一次实际任务。
 
 ## 依据的调研
 
@@ -1520,3 +1680,4 @@ npm run dev                    # or: npm run build && npm start
 - [b3s3da/qemu-harness](../research/radar/2026-10-06/1581-b3s3da-qemu-harness.md)：值得一试，先在一台 Windows 或 Linux/macOS 机器上按 README 跑通「qh up → qh exec → qh down」这条最小链路，再用自带的 skill/SKILL.md 把它接给 Claude Code，让需要真实系统验证的任务在 guest 里执行；理由是原文给出了可直接复制的安装命令、完整 CLI 用法、qh.json 配置和排障路径，能补上 agent 缺少真实内核/网络执行环境这一环，但项目体量小、自带 overlay 为 lab 用途，适合小范围试用而非全盘采用。
 - [Claude Code in the cloud: a field guide to cloud sessions](../research/radar/2026-10-07/1611-claude-code-in-the-cloud-a-field-guide-to-cloud-se.md)：值得一试，建议按文中步骤在 Claude Code 套餐中开通云端会话，先把边界清晰、需要独立验证的任务（如修 flaky test、更新 API 文档、结构化日志）以自包含工单+证明命令的方式并行跑起来，再决定是否推广；理由是原文给出了可直接复制的命令、环境配置、GitHub 接入与证据要求，但依赖套餐/组织权限且 routines/projects 等仍属 preview/beta。
 - [SouravBeraAkaSpeed/xiryn](../research/radar/2026-10-13/2843-souravberaakaspeed-xiryn.md)：值得一试，在一台非主力、可装 Docker 的机器上按 README 的一键脚本（或手动 clone + npm run setup）装一份 Xiryn，配一个模型 key、建单个 agent 跑一个真实小任务（如 clone 仓库跑测试给 diff、或一次带引用的调研），重点验证沙箱隔离、hand-off 人工介入成本和 token 花费后再决定是否推广。README 提供了可直接复制的安装、配置、Telegram 配对与编码 agent 提示词，具备可照做性；但仓库仅 49 star、无第三方评测，定时/循环任务仍在 roadmap 未实现，故给 try 而非 adopt。
+- [vakandi/opencode-rust](../research/radar/2026-10-13/2915-vakandi-opencode-rust.md)：值得一试，用 npm 装一份、配好有余额的 provider key，在一个小仓库上用 `opr run` 和 TUI 各跑同一个任务，与现有编码代理对比后再决定是否迁移——它的安装、配置路径、代理池格式和 run 的后台等待语义都是可直接照做的具体内容，但作者自认 `run` 的端到端链路尚未在有过余额的 provider 上验证过，因此只适合小范围试。
