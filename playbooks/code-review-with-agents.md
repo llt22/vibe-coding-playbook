@@ -1,14 +1,14 @@
-# 让 AI 在宣布完成前拿出证据：用内置命令与四条路线审代码
+# 让 AI 生成的代码在评审前先过一遍自动质量门
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：代码评审缺少结构图、push 前可核对的自动评审和主动找漏洞，而且很多人不知道自己已有的 Claude Code 里就有 /code-review 可用。
-> 先试这一步：如果你已经在用 Claude Code，下次审代码时先原样跑一次 `/code-review`（别名 `/review`），记录它报出的问题清单，再对照人工 review 标记真 bug 和误报。
-> 最近修订：2026-10-11
+> 解决的问题：这篇手册解决如何在代码评审前用可核对的自动检查发现 AI 生成代码的质量缺口，减少漏检、看不懂改动和被动等告警的问题。
+> 先试这一步：先在你正在用的 TypeScript + Oxlint 项目里装 ai-deslop 并只开 recommended 配置，拿一段真实 AI 生成的 diff 跑一遍，看它报的问题里有多少是你愿意修的。
+> 最近修订：2026-10-14
 
 ## 解决什么问题
 
-代码评审有四个常见缺口：评审者通常只拿到 diff，系统结构怎么变、数据怎么流要靠脑补；push 前又缺少一遍可核对的自动评审，扫描告警是否落在改动行、每条告警是否被处理、每个改动行是否送到 reviewer 面前，容易漏；常规评审是被动等告警，缺少主动的对抗性漏洞寻找；如果你已经在用 Claude Code，它其实内置了 `/code-review`（别名 `/review`）这类专门审代码的命令，可以按强度档位（low 到 max）跑，还能 `--fix` 直接修、`--comment` 发到 PR、`ultra` 走云端深度审查——但这条来源是个人推文且正文截断，参数拼接语法、权限和配置都需要先对照官方 Commands 文档确认。PR Lens 把一次改动自动画成动画架构图和数据流图，以评论形式贴进 PR，或先在终端看；OpenQodex 在 push 前跑确定性扫描器加独立 LLM reviewer，逐条核对扫描告警和改动行，并用完整性断言暴露漏审；还有一条可复制的提示词，让编码代理把整个项目当成对抗性审查对象，自主决定使用多少个子代理来并行找漏洞，对每个返回的问题再做一次核验，确认无误后才写入“已检查问题列表”。手册给出从最省事（Claude Code 内置命令）到 PR Lens、OpenQodex、再到子代理对抗审查的几条路线，以及用小范围试点判断它们是否真的让评审变轻松的方法。
+代码评审有五个常见缺口：评审者通常只拿到 diff，系统结构怎么变、数据怎么流要靠脑补；push 前又缺少一遍可核对的自动评审，扫描告警是否落在改动行、每条告警是否被处理、每个改动行是否送到 reviewer 面前，容易漏；常规评审是被动等告警，缺少主动的对抗性漏洞寻找；AI 生成的 TypeScript 代码常出现低证据、低信号模式（链式类型断言、把已知值 widened 到 unknown、仅检查 mock 调用的测试等），人工评审容易放过，也缺少确定性的 lint 门；如果你已经在用 Claude Code，它其实内置了 `/code-review`（别名 `/review`）这类专门审代码的命令，可以按强度档位（low 到 max）跑，还能 `--fix` 直接修、`--comment` 发到 PR、`ultra` 走云端深度审查——但这条来源是个人推文且正文截断，参数拼接语法、权限和配置都需要先对照官方 Commands 文档确认。PR Lens 把一次改动自动画成动画架构图和数据流图，以评论形式贴进 PR，或先在终端看；OpenQodex 在 push 前跑确定性扫描器加独立 LLM reviewer，逐条核对扫描告警和改动行，并用完整性断言暴露漏审；ai-deslop 是一组面向 AI 生成 TypeScript 的 Oxlint 规则包，把 dmmulroy/anti-slop 的通用规则 vendored 进来并增加 deslop 规则，统一放在 `deslop/*` 命名空间下，可在本地或 CI 里拦截这些模式；还有一条可复制的提示词，让编码代理把整个项目当成对抗性审查对象，自主决定使用多少个子代理来并行找漏洞，对每个返回的问题再做一次核验，确认无误后才写入“已检查问题列表”。手册给出从最省事（Claude Code 内置命令）到 PR Lens、OpenQodex、ai-deslop lint 门、再到子代理对抗审查的几条路线，以及用小范围试点判断它们是否真的让评审变轻松的方法。
 
 ## 适用与不适用
 
@@ -22,6 +22,9 @@
 - 想让编码代理主动找漏洞，而不是只等扫描器出告警；所用工具支持子代理/子任务机制；愿意人工逐条复核代理核验过的问题列表。
 - 已经在用 Claude Code，且有代码或 PR 需要审查：可以直接试内置的 `/code-review`（别名 `/review`），它专找正确性 bug，有强度档位（low 到 max），还能 `--fix` 直接修、`--comment` 发到 PR、`ultra` 走云端深度审查。
 - 想先用最低成本试一条内置命令，不装新工具、不配 key（因为 `/code-review` 是 Claude Code 内置能力）。
+- 项目使用 TypeScript，并且已经使用 Oxlint，且运行环境支持 oxlint JS 插件（Bun、Deno 或 Node.js）。
+- 想让 AI 生成的 TypeScript 代码在进入人工评审前先过一遍确定性的 lint 检查，拦截链式类型断言、未知类型参数/返回值、仅检查 mock 调用的测试等模式。
+- 愿意接受 opinionated 规则（如 `no-object-parameters`、`no-unknown-parameters`、`no-module-mocking` 等会直接拒绝一类写法），并只保留适配团队约定的子集。
 
 不适用或要谨慎：
 
@@ -40,6 +43,11 @@
 - 对抗审查依赖所用编码代理支持子代理/子任务机制；不支持的话，这条提示词会退化成普通的“找漏洞”指令。
 - “双重检查”由同一个模型完成，存在自我确认偏差的可能；报告原文未讨论这一点，人工抽检或全检是必要的。
 - 原文没有说明“列表”的载体——文件、聊天回复还是内置任务列表；需要你自己指定输出位置。
+- 非 TypeScript 项目，或没有 Oxlint/JS 插件运行时的项目，不适用 ai-deslop。
+- 团队不接受规则直接拒绝已接受的写法（如 `no-object-parameters`、`no-unknown-parameters`、`no-module-mocking`），不要全量启用 ai-deslop 的 recommended。
+- 期望 lint 规则包自带效果数据：ai-deslop README 没有给出命中率、误报率或代码质量提升数据。
+- ai-deslop 部分标准规则需要 type-aware linting；部分规则没有 fixer，修复需要人工。
+- ai-deslop 的 opt-in 规则完整配置在 `docs/*.md`，输入材料只给了链接。
 
 ## 前置条件
 
@@ -77,6 +85,15 @@ OpenQodex 路线：
 - 确认上下文窗口足够装下项目的主要代码结构；原文没有给出仓库规模、语言、子代理数量等参数，这些需要你自己按项目大小调整。
 - 代理需要读全项目的权限、允许自行派生多个子代理，以及一个可持久化的问题列表来承接核验通过的结果。
 
+ai-deslop 路线：
+
+- 项目使用 TypeScript。
+- 项目已经使用 Oxlint。
+- 运行环境支持 oxlint JS 插件（Bun、Deno 或 Node.js）。
+- 安装为开发依赖：`npm install --save-dev ai-deslop`；`@oxlint/plugins` 会作为运行时依赖一起装上，保持与 oxlint 版本同步。
+- 项目有 Oxlint 配置入口，用于加入 `jsPlugins`、`options`、`rules`。
+- 部分标准规则需要 type-aware linting；opt-in 规则的完整配置在 `docs/*.md`，输入材料只给了链接。
+
 ## 操作步骤
 
 先选路线：
@@ -85,7 +102,8 @@ OpenQodex 路线：
 - 只想最省事、不需要自己的模型 key，或想让 PR 评审者先看懂结构和数据流：走 PR Lens，做法 A-I。
 - 想在 push 前先跑可核对的 AI 评审：走 OpenQodex，做法 J-Q。
 - 想让编码代理主动对抗性找漏洞、并先做二次核验：走对抗审查路线，做法 R。
-- 四者可叠加，阶段不同：Claude Code 内置 `/code-review` 是代码审查命令，可在写码后、PR 前跑，也可用 `--comment` 发到 PR；PR Lens 在 PR 阶段画图，面向 PR 评审者；OpenQodex 在 push 前评审，面向自查漏检；对抗审查是让代理主动找漏洞，可与前几者再叠加。它们不互相替代。若只能选一个，先按你的主要缺口选：已经在用 Claude Code 且想快速跑一遍审查用 `/code-review`，看不懂改动用 PR Lens，怕 push 前漏检用 OpenQodex，想主动找漏洞用对抗审查。
+- 想在 AI 生成的 TypeScript 进入评审前先过一道确定性 lint 门：走 ai-deslop，做法 T。
+- 五者可叠加，阶段不同：Claude Code 内置 `/code-review` 是代码审查命令，可在写码后、PR 前跑，也可用 `--comment` 发到 PR；PR Lens 在 PR 阶段画图，面向 PR 评审者；OpenQodex 在 push 前评审，面向自查漏检；ai-deslop 在本地/CI 做确定性 lint，面向 AI 生成的 TypeScript 模式；对抗审查是让代理主动找漏洞，可与前几者再叠加。它们不互相替代。若只能选一个，先按你的主要缺口选：已经在用 Claude Code 且想快速跑一遍审查用 `/code-review`，看不懂改动用 PR Lens，怕 push 前漏检用 OpenQodex，AI 生成 TypeScript 模式多就用 ai-deslop，想主动找漏洞用对抗审查。
 
 ### 路线零：用 Claude Code 内置的 `/code-review`（做法 S，最省事，如果已在用 Claude Code）
 
@@ -436,6 +454,50 @@ npx openqodex doctor --install
 
 预期结果：代理用若干子代理并行找漏洞，对返回的问题二次核验后，把通过核验的问题写入你指定的列表；你再逐条复核并修复。
 
+### 路线四：用 Oxlint 规则包拦截 AI 生成的 TypeScript 模式（ai-deslop，做法 T）
+
+这条路线来自 ai-deslop 的仓库 README。它是一组面向 AI 生成 TypeScript 代码的 Oxlint 规则包，把 dmmulroy/anti-slop 的通用规则 vendored 进来，并增加 deslop 规则，统一放在 `deslop/*` 命名空间下。目标是拒绝“低证据、低信号、AI-slop”代码模式，覆盖类型安全与证据、代码质量与 API、测试、以及可选项。包发布编译后的 JavaScript，可用于任何 oxlint JS-plugin 运行时（Bun、Deno 或 Node.js）。许可证 MIT。
+
+#### 做法 T：接入 ai-deslop 的 recommended 配置，拦截 AI 生成的 TypeScript 模式
+
+前提：项目使用 TypeScript，并且已经使用 Oxlint，且运行环境支持 oxlint JS 插件（Bun、Deno 或 Node.js）。
+
+1. 安装为开发依赖：
+
+```bash
+npm install --save-dev ai-deslop
+# @oxlint/plugins comes along as a runtime dependency — keep it in sync with your oxlint version
+```
+
+预期结果：`ai-deslop` 进入 devDependencies，`@oxlint/plugins` 作为运行时依赖一起装上，需保持与 oxlint 版本同步。
+
+2. 在 Oxlint 配置入口加入 JS 插件和 recommended 配置：
+
+```ts
+import { defineConfig } from "oxlint";
+import { configs as deslopConfigs } from "ai-deslop";
+
+export default defineConfig({
+  jsPlugins: ["ai-deslop"],
+  options: deslopConfigs.recommended.options,
+  rules: deslopConfigs.recommended.rules
+});
+```
+
+预期结果：Oxlint 配置里启用 `deslop/*` 命名空间下的 recommended 规则。
+
+3. 用项目现有方式运行 Oxlint。README 没有给出 CLI 命令，只说这个配置会启用规则。重点观察 recommended 规则报告的问题。
+
+预期结果：Oxlint 报出 recommended 规则命中的模式。recommended 覆盖三类：类型安全与证据（如 `no-chained-type-assertions`、`no-unknown-parameters`、`no-unknown-returns`、`require-safety-comment-for-type-assertion`）、代码质量与 API（如 `no-array-filter-map`、`no-reduce-accumulator-copy`、`no-reflect-apply`、`no-reflect-get`）、测试（如 `no-call-only-assertions`、`no-module-mocking`、`no-poor-substring-tests`、`no-repeated-expect-call`）。同时 recommended 还启用若干标准规则：`typescript/no-deprecated`、`typescript/no-require-imports`、`typescript/no-floating-promises`、`typescript/no-unnecessary-condition`、`no-unreachable`；其中部分规则需要 type-aware linting。
+
+4. 如需更强检查，再按文档启用 opt-in 规则：`no-duplicate-consts`、`no-duplicate-types`、`no-renamed-imports`、`canonical-class-names`。README 没有在正文给出这些规则的完整配置，只指向 `docs/*.md`。注意 `no-repeated-expect-call` 和 `no-duplicate-types` 没有 fixer；`no-renamed-imports` 和 `canonical-class-names` 是 Fix 类规则。
+
+预期结果：只在你需要更强检查时启用 opt-in 规则，并按文档补齐配置。
+
+5. 根据项目风格决定是否保留全部 recommended。原文称这些规则是 opinionated，且目标是拒绝“AI-slop”模式，不是只报 bug。
+
+预期结果：如果规则大量拒绝团队已接受写法，就只保留子集或放弃；如果误报可接受且能抓住此前漏掉的 AI 代码模式，就保留。
+
 ## 怎么判断变好了
 
 四个路线都只建议小范围试点，没有给出统一的建议时长，也没有给出检出率、误报率、返工时间等量化效果数据。可以按下面方式自己量：
@@ -465,6 +527,8 @@ OpenQodex 最小试用方式：在一台 macOS/Linux 机器上先跑 `npx openqo
 
 对抗审查最小试用方式：挑一个中等规模、你比较熟悉的代码仓库（这样你能判断报告里哪些是真问题），用支持子代理的编码代理原样粘贴那条提示词，让它把通过核验的问题写入一个指定文件；人工逐条判定每个入列问题是“真缺陷 / 误报 / 已知问题 / 风格偏好”，记录数量和时间。作为对照，用同一工具、同一条提示词但**不启用子代理**（或人工只做一遍常规审查）跑一次，比较结果。
 
+ai-deslop 最小试用方式：选一个使用 TypeScript 和 Oxlint 的包，安装 `ai-deslop`，只启用 README 中的 recommended 配置；先跑当前代码库，观察噪音，再跑一段 AI 生成的 diff。
+
 PR Lens 可观察指标（来自调研结论）：
 
 - 命名修正条数：图里名字错了需要改配置文件多少次。如果一直很高，说明图对命名的自动理解不够好，或配置文件没设对。
@@ -487,7 +551,17 @@ OpenQodex 可观察指标（来自调研结论）：
 - 人工成本：逐条复核所花的时间，与不使用该流程相比是否下降。
 - 对比基线：与“单次扫描、无子代理、无二次核验”的结果比，真阳性是否增加、误报是否减少。
 
-试多久：Claude Code `/code-review` 原文没给建议时长；至少覆盖一批中等规模 PR 或改动的完整评审周期后再判断，不要只看一个 PR 或一次审查。PR Lens 和 OpenQodex 两个调研也没给建议时长；至少覆盖一批中等规模 PR 或改动的完整评审周期后再判断，不要只看一个 PR 或一次评审。对抗审查原文也没给建议时长；建议连续两三个仓库跑下来，若真阳性明显增加、误报可接受、人工复核时间下降，就可以把它固化成常规代码审查流程的一步；否则降级为“思路可借鉴”。
+ai-deslop 可观察指标（来自调研结论的试用建议）：
+
+- 按规则统计违规数量与类型。
+- 人工判断其中有多少是真正需要修的问题、多少是误报。
+- 记录修复耗时。
+- 比较启用前后同类问题在代码评审或 CI 中是否减少。
+- 原文没有给基准，所以只能做项目内前后对比。
+
+试多久：Claude Code `/code-review` 原文没给建议时长；至少覆盖一批中等规模 PR 或改动的完整评审周期后再判断，不要只看一个 PR 或一次审查。PR Lens 和 OpenQodex 两个调研也没给建议时长；至少覆盖一批中等规模 PR 或改动的完整评审周期后再判断，不要只看一个 PR 或一次评审。对抗审查原文也没给建议时长；建议连续两三个仓库跑下来，若真阳性明显增加、误报可接受、人工复核时间下降，就可以把它固化成常规代码审查流程的一步；否则降级为“思路可借鉴”。ai-deslop 原文没有给建议时长；至少覆盖一段真实 AI 生成 diff 的完整评审周期后再判断，不要只看一次运行。
+
+判断是否保留：如果 recommended 规则在真实代码上误报可接受，并且能抓住此前漏掉的 AI 代码模式，就保留；如果规则大量拒绝团队已接受写法，就只保留子集或放弃。
 
 ## 常见坑
 
@@ -521,7 +595,13 @@ OpenQodex 可观察指标（来自调研结论）：
 - 对抗审查能力依赖：仅适合已经有可读代码库、且所用代理工具支持子代理/子任务机制的场景；对没有子代理能力的工具，这条提示词的可执行部分会退化成一个普通的“找漏洞”指令。
 - 对抗审查的“Ultra”“Astra 6”未解释：无法核实，也无法复用其配置；互动数据（约 402 赞、18 次转发、26 条回复）只能说明关注度，不能作为效果证据。
 - 对抗审查的收益表述只是作者主张：“让我震惊”“一些真正令人惊叹的作品”没有任何输出样例、缺陷清单、修复前后对比或数据支撑。
-- 四条路线关系：Claude Code 内置 `/code-review` 是代码审查命令，可在写码后、PR 前跑，也可 `--comment` 发到 PR；PR Lens 是 PR 阶段画图；OpenQodex 是 push 前评审；对抗审查是主动找漏洞；不互相替代，可叠加。若只能选一个，先按你的主要缺口选：已经在用 Claude Code 且想快速跑一遍审查用 `/code-review`，看不懂改动用 PR Lens，怕 push 前漏检用 OpenQodex，想主动找漏洞用对抗审查。
+- ai-deslop 原文是仓库 README，没有给出具体代码违规示例、基准数据、误报率或用户案例。
+- ai-deslop “拒绝低证据、低信号、AI-slop 代码模式”是作者的目标主张，不是已被数据验证的结论。
+- ai-deslop 规则较 opinionated：例如 `no-object-parameters`、`no-unknown-parameters`、`no-module-mocking` 等会直接拒绝一类写法，可能不适合所有团队约定。
+- ai-deslop 部分标准规则需要 type-aware linting；部分规则没有 fixer，修复需要人工；opt-in 规则的完整配置在文档中，输入材料只给了链接。
+- ai-deslop 来源页显示 HN 31 points、7 comments，但没有评论内容或外部验证数据；这不构成质量证据。
+- ai-deslop 适用条件：TypeScript + Oxlint + 可运行 JS 插件的运行时（Bun、Deno、Node.js）。许可证 MIT。
+- 五条路线关系：Claude Code 内置 `/code-review` 是代码审查命令，可在写码后、PR 前跑，也可 `--comment` 发到 PR；PR Lens 是 PR 阶段画图；OpenQodex 是 push 前评审；ai-deslop 是本地/CI 的确定性 lint 门；对抗审查是主动找漏洞；不互相替代，可叠加。若只能选一个，先按你的主要缺口选：已经在用 Claude Code 且想快速跑一遍审查用 `/code-review`，看不懂改动用 PR Lens，怕 push 前漏检用 OpenQodex，AI 生成 TypeScript 模式多就用 ai-deslop，想主动找漏洞用对抗审查。
 
 ## 证据与来源
 
@@ -539,7 +619,10 @@ OpenQodex 可观察指标（来自调研结论）：
 - 做法 R 依据调研报告 `@twostraws` 推文。报告给出了一条完整的、可复制的提示词（编号 1），提示词中明确规定的两个动作：使用任意多子代理；对返回的问题做双重检查后加入列表。报告明确指出原文截断，编号 2 提示词丢失，无法还原作者完整流程。
 - 对抗审查哪些只是作者主张：“让我震惊”“一些真正令人惊叹的作品”——没有任何输出样例、缺陷清单、修复前后对比或数据支撑；“在 Ultra 上释放了 Astra 6”——未解释“Ultra”和“Astra 6”具体指什么，无法核实，也无法复用其配置；互动数据只能说明关注度，不能作为效果证据。
 - 对抗审查主要局限：没有说明项目规模、语言、模型配置、子代理数量、运行耗时、成本；没有说明“列表”的载体和后续处置方式；“双重检查”由同一个模型完成，存在自我确认偏差的可能，原文未讨论；适用条件仅适合已经有可读代码库、且所用代理工具支持子代理/子任务机制的场景。
-- 新旧做法差异：本次新增路线零（做法 S，Claude Code 内置 `/code-review`），不是替代前三条。Claude Code 内置命令面向快速代码审查，可在写码后、PR 前跑，也可 `--comment` 发到 PR；PR Lens 面向 PR 评审者，把 diff 画成架构/数据流图；OpenQodex 面向 push 前，跑扫描器加独立 LLM reviewer 并做完整性断言；对抗审查面向主动漏洞发现与误报控制。四者阶段不同，可叠加；若只能选一个，先按你的主要缺口选。
+- 做法 T 依据调研报告 `ai-deslop`（Show HN: Deslop – Oxlint rules for AI-generated TypeScript）。报告给出的可照做内容包括：安装命令 `npm install --save-dev ai-deslop`、Oxlint 配置示例（`jsPlugins: ["ai-deslop"]`、`options: deslopConfigs.recommended.options`、`rules: deslopConfigs.recommended.rules`）、recommended 规则清单（类型安全与证据、代码质量与 API、测试三类，以及标准规则 `typescript/no-deprecated`、`typescript/no-require-imports`、`typescript/no-floating-promises`、`typescript/no-unnecessary-condition`、`no-unreachable`）、opt-in 规则清单（`no-duplicate-consts`、`no-duplicate-types`、`no-renamed-imports`、`canonical-class-names`）。
+- ai-deslop 报告给出的限制：原文是仓库 README；没有给出具体代码违规示例、基准数据、误报率或用户案例；部分标准规则需要 type-aware linting；`no-repeated-expect-call` 和 `no-duplicate-types` 没有 fixer；opt-in 规则的完整配置在 `docs/*.md`，输入材料只给了链接；来源页显示 HN 31 points、7 comments，但没有评论内容或外部验证数据。
+- ai-deslop 哪些只是作者主张：“拒绝低证据、低信号、AI-slop 代码模式”是作者的目标主张，不是已被数据验证的结论；规则较 opinionated，可能不适合所有团队约定。
+- 新旧做法差异：此前新增路线零（做法 S，Claude Code 内置 `/code-review`）；本次新增路线四（做法 T，ai-deslop），不是替代前四条。Claude Code 内置命令面向快速代码审查，可在写码后、PR 前跑，也可 `--comment` 发到 PR；PR Lens 面向 PR 评审者，把 diff 画成架构/数据流图；OpenQodex 面向 push 前，跑扫描器加独立 LLM reviewer 并做完整性断言；对抗审查面向主动漏洞发现与误报控制；ai-deslop 面向 AI 生成的 TypeScript，在本地/CI 用确定性 lint 规则拦截低证据模式。五者阶段不同，可叠加；若只能选一个，先按你的主要缺口选。
 
 ## 依据的调研
 
@@ -547,3 +630,4 @@ OpenQodex 可观察指标（来自调研结论）：
 - [openqodex/openqodex](../research/radar/2026-10-07/1814-openqodex-openqodex.md)：值得一试，可以在一台 macOS/Linux 机器上用 `npx openqodex demo` 加一个非关键仓库的 `npx openqodex init` 做小范围试用，按“报告是否退出码 2、每条扫描告警是否有理由、每个改动行是否送到 reviewer 面前”三点验收；理由是它把“确定性扫描器 + 独立 LLM 评审逐条核对 + 完整性断言”做成了一条命令的流程，可复制的命令和配置原文都给全了，但项目自述仍在 1.0 之前、仓库仅 30 stars、单次评审 1–3 分钟且消耗你自己的 Claude Code/Codex 额度，还不够格直接当默认门禁。
 - [@twostraws: 在当前的 Codex 重置狂热中，我在 Ultra 上释放了 Astra 6，它用一些真正令人惊叹的作品让我震惊。使用这些提示：](../research/radar/2026-10-09/2116-codex-ultra-astra-6.md)：值得一试，把这条“对抗性审查 + 子代理 + 双重核验后入列”的提示词直接拿到一个中小型代码仓库上试跑一遍，用真实缺陷命中率和误报率判断是否值得固化进审查流程；理由是原文给了一条可原样复制的提示词且内置了二次核验环节，但整条线索被截断、没有任何结果数据，只能小范围验证。
 - [@riba2534: #claudecode Claude Code 里面内置了很多有用的功能，我以为是人人都知道,但好像很多人不知道。](../research/radar/2026-10-11/2564-claudecode-claude-code.md)：值得一试，下次在 Claude Code 里审代码时，直接用内置的 /code-review（别名 /review）并按其强度档位和 --fix/--comment 开关跑一遍，先小范围试，因为原文给出了可照输入的命令与参数，但正文被截断、具体拼接语法和前置条件缺失，需对照官方文档确认后再正式写入手册。
+- [Show HN: Deslop – Oxlint rules for AI-generated TypeScript](../research/radar/2026-10-14/3159-show-hn-deslop-oxlint-rules-for-ai-generated-types.md)：值得一试，建议在 TypeScript + Oxlint 项目中接入 ai-deslop 的 recommended 配置做小范围试用，用真实 AI 生成 diff 验证命中率和误报；README 给出了可直接复制的安装与配置、规则清单，但没有效果数据，且规则较主观，只有适配的团队才应保留。
