@@ -1,14 +1,14 @@
-# 让并行 agent 的等待可回答、交付有门禁
+# 给多代理流水线每个阶段先结账：进下一阶段前跑一次成本检查
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：并行跑多个编码 agent 时，怎样把「谁在等我」变成可回答的信号、把「什么时候算完成」交给可执行的门禁，而不是靠人工盯窗口和 agent 自证。
-> 先试这一步：先做最小试用：macOS 14+ 上 `brew install --cask josefchen/tap/muster`，只对 Claude Code 打开 Settings → Answer prompts from Muster，开两个并行 Claude Code 会话，一个制造权限请求、一个制造多选题，用 ⌥↓ 展开、⌥↩ 允许、⌥1–9 选择，记录「察觉→回答问题」耗时。
+> 解决的问题：如何把「让 AI 多跑几遍」变成一套能验证、能控成本、能回看的工作流，而不是把不确定性和账单一起放大。
+> 先试这一步：在你现有的多代理/分阶段流程里，把任务拆成 2–3 个阶段，每个阶段开始前跑一次 `/cost`（或打开等价成本面板），记录该阶段成本与 token，再决定要不要继续。
 > 最近修订：2026-10-14
 
 ## 解决什么问题
 
-单个 AI 回答、单条串行的 agent 会话，交付的往往是你没有验证过的结果：看起来合理，但可能漏了你真正在意的约束。这篇手册把「不满意就重问一次」升级成一套可执行的流程——把同一个任务交给多个子代理用不同策略并行求解、互相对抗、由独立裁判按公开标准打分淘汰；把有固定分工的多步任务（先搜集资料、再扩写成文）固化成角色化 Crew 流水线，产物落盘成文件；代码类任务则必须通过你自己的验证命令才能合入，再进一步可以把整条链固化成 GitHub 上的 issue → PR → 浏览器实测 → 合并。同时给出成本预估、可观察指标，以及「什么时候不值得这么做」的判断线。新增的做法 H 把「隔离、记忆、评审」三件事落成可手工照做的流程：每个 agent 一个 git worktree、项目记忆写成 conventions.md/plan.md/dead-ends.md、第二个 agent 在提交前读 diff 做同行评审；Offrun 是这套流程在 macOS 上的一种现成实现。新增的做法 I 解决另一个并行 agent 的常见瓶颈：注意力。多个终端型 agent 跑起来后，真正的浪费常常不是模型慢，而是「哪个 agent 在等我」不可见。cmux 把等待输入变成蓝色通知环、侧栏徽标、通知面板和 ⌘⇧U 跳转，让「谁在等我」成为可路由的信号；但 cmux 作者明确说它是 primitive，不是 solution，不替代验证、记忆和评审。新增的做法 J 把「第二个智能体在同一 commit 上验证通过才算完成」做成可强制执行的状态机：SPEC.md 一行一行批准、每条 lane 一个 worktree、提交必须过 gate、验证必须由没参与构建的另一个 agent 在确切 commit 上做、给出 receipt 才合并；Pullboard 是本机运行、存在你 git 仓库里的看板实现，不调用模型。新增的做法 K 把镜头再拉远一层：不再只管一个仓库、一个任务，而是把多个已注册项目的状态、六步流水线（spec → build → sync → verify → review → release）、Git 摘要与 PR/CI 收进一块本地控制台面板——一个控制台会话承担跨项目的规格、监督与评审关卡，你只做决策和最终发布审批；项目状态（● 待决策、◆ 待评审、▶ 运行中、↻ 待同步、○ 空闲）来自项目里的 STATUS 卡，关卡字段没清空就阻止继续；默认执行者是 Claude Code 原生后台 agent（不需要 Codex 账号），也可按项目切到 Codex 或标成 manual 只做交接不派工；刷新只查本地文件和 CLI、不请求模型，只有提交决策草稿时才花 Claude 额度。新增的做法 L 把「谁在跑、谁在等我、花了多少」做成终端里的 daemon + dashboard：Claude Code、Codex、OpenCode 或任意命令都能注册成 agent，每个 agent 有自己的终端，dashboard 用网格显示；关闭 dashboard 或终端后 agent 继续跑，重启机器后 `nsq up` 按各自 session 恢复；agent 提问时通知里原样带出问题，不切进终端也能按 y/a/n 回答；`nsq ls --json`、`nsq cost --since 7d`、`nsq diff`、`nsq peek` 把状态、成本、改动、屏幕尾部做成可脚本化的信号。它管的是可见性与权限路由，不替代验证、记忆和评审；README 自标 0.1.0 preview。新增的做法 M 把镜头收回到单个会话内部：主 Agent 保留编排与验证权，子 Agent 只负责生成，指令里硬性写「不 Build、不 Test、不 Typecheck，早提交早返回」——它把「谁来做验证」变成一条可以写进 prompt 的边界，用来压住「越修越乱」的连续返工和子 Agent 的上下文消耗；代价是失败成本后移到主 Agent 侧，因此它不替代做法 B/G/J 的合入门禁。新增的做法 N 换到另一类任务：不是写代码，而是一个真实、可逆的商业/经营决策。它把决策交给七个由公开资料编译成的顾问人格（Bezos、Paul Graham、Hormozi、Gary Vee、Dan Martell、Gino Wickman、Buffett）分两轮辩论、对每个选项逐项打分并按该席位领域与决策的相关度加权，由 Chair（Claude Code 本身）记分、产出带评分的结论和一份可下载 PDF；当某个席位标出「毁灭风险（ruin risk）」时 Chair 会封顶结论，当所有人过快达成一致时 Chair 会强制制造真实争论；跑完还能用 `check_quotes.py` 逐条校验引用是否有出处。成本被显式写出——一次完整委员会 21 次 sub-agent 运行，小决策用 `--quick`。它不证明结论正确，只把「一个答案」变成「一组可回看的反驳与打分」。新增的做法 O 解决「等待不可回答」：Muster 是一个 macOS 菜单栏应用，读取 Claude Code / Codex / Cursor 已经写下的会话文件（只读），某个代理开始等你时在屏幕顶部出现提醒并停留到被回答，你可以不切换窗口直接批准命令、选择选项、批准计划；⌃⌥Space 还能按会话回看最近三小时的 token 与 API 费率成本。它只覆盖 macOS 14+ 与这三家，Cursor 只能跳转不能代答，也不替代验证、记忆与评审。新增的做法 P 解决「多代理团队怎么有门禁地跑起来」：hivehouse 是一个 Claude Code 插件，在 tmux 里运行一个会话团队——orchestrator、任务所需的 agents、任何东西落地前的评审和门禁、上下文轮换、无人值守过夜、事后清理；工作文件夹里的 hub session 把任务交给各项目的 orchestrator 并双向传话。默认 relay 模式每次 start / wake / answer 都等你；delegate 模式在离开时决定项目内部工作并保持团队运行，但 push、deploy 和花费留给你，最多 7 天，且仅在只有你能写的 root 文件允许、`permission_mode_local=auto` 时才以 bypassPermissions 启动团队会话。
+单个 AI 回答、单条串行的 agent 会话，交付的往往是你没有验证过的结果：看起来合理，但可能漏了你真正在意的约束。这篇手册把「不满意就重问一次」升级成一套可执行的流程——把同一个任务交给多个子代理用不同策略并行求解、互相对抗、由独立裁判按公开标准打分淘汰；把有固定分工的多步任务（先搜集资料、再扩写成文）固化成角色化 Crew 流水线，产物落盘成文件；代码类任务则必须通过你自己的验证命令才能合入，再进一步可以把整条链固化成 GitHub 上的 issue → PR → 浏览器实测 → 合并。同时给出成本预估、可观察指标，以及「什么时候不值得这么做」的判断线。新增的做法 H 把「隔离、记忆、评审」三件事落成可手工照做的流程：每个 agent 一个 git worktree、项目记忆写成 conventions.md/plan.md/dead-ends.md、第二个 agent 在提交前读 diff 做同行评审；Offrun 是这套流程在 macOS 上的一种现成实现。新增的做法 I 解决另一个并行 agent 的常见瓶颈：注意力。多个终端型 agent 跑起来后，真正的浪费常常不是模型慢，而是「哪个 agent 在等我」不可见。cmux 把等待输入变成蓝色通知环、侧栏徽标、通知面板和 ⌘⇧U 跳转，让「谁在等我」成为可路由的信号；但 cmux 作者明确说它是 primitive，不是 solution，不替代验证、记忆和评审。新增的做法 J 把「第二个智能体在同一 commit 上验证通过才算完成」做成可强制执行的状态机：SPEC.md 一行一行批准、每条 lane 一个 worktree、提交必须过 gate、验证必须由没参与构建的另一个 agent 在确切 commit 上做、给出 receipt 才合并；Pullboard 是本机运行、存在你 git 仓库里的看板实现，不调用模型。新增的做法 K 把镜头再拉远一层：不再只管一个仓库、一个任务，而是把多个已注册项目的状态、六步流水线（spec → build → sync → verify → review → release）、Git 摘要与 PR/CI 收进一块本地控制台面板——一个控制台会话承担跨项目的规格、监督与评审关卡，你只做决策和最终发布审批；项目状态（● 待决策、◆ 待评审、▶ 运行中、↻ 待同步、○ 空闲）来自项目里的 STATUS 卡，关卡字段没清空就阻止继续；默认执行者是 Claude Code 原生后台 agent（不需要 Codex 账号），也可按项目切到 Codex 或标成 manual 只做交接不派工；刷新只查本地文件和 CLI、不请求模型，只有提交决策草稿时才花 Claude 额度。新增的做法 L 把「谁在跑、谁在等我、花了多少」做成终端里的 daemon + dashboard：Claude Code、Codex、OpenCode 或任意命令都能注册成 agent，每个 agent 有自己的终端，dashboard 用网格显示；关闭 dashboard 或终端后 agent 继续跑，重启机器后 `nsq up` 按各自 session 恢复；agent 提问时通知里原样带出问题，不切进终端也能按 y/a/n 回答；`nsq ls --json`、`nsq cost --since 7d`、`nsq diff`、`nsq peek` 把状态、成本、改动、屏幕尾部做成可脚本化的信号。它管的是可见性与权限路由，不替代验证、记忆和评审；README 自标 0.1.0 preview。新增的做法 M 把镜头收回到单个会话内部：主 Agent 保留编排与验证权，子 Agent 只负责生成，指令里硬性写「不 Build、不 Test、不 Typecheck，早提交早返回」——它把「谁来做验证」变成一条可以写进 prompt 的边界，用来压住「越修越乱」的连续返工和子 Agent 的上下文消耗；代价是失败成本后移到主 Agent 侧，因此它不替代做法 B/G/J 的合入门禁。新增的做法 N 换到另一类任务：不是写代码，而是一个真实、可逆的商业/经营决策。它把决策交给七个由公开资料编译成的顾问人格（Bezos、Paul Graham、Hormozi、Gary Vee、Dan Martell、Gino Wickman、Buffett）分两轮辩论、对每个选项逐项打分并按该席位领域与决策的相关度加权，由 Chair（Claude Code 本身）记分、产出带评分的结论和一份可下载 PDF；当某个席位标出「毁灭风险（ruin risk）」时 Chair 会封顶结论，当所有人过快达成一致时 Chair 会强制制造真实争论；跑完还能用 `check_quotes.py` 逐条校验引用是否有出处。成本被显式写出——一次完整委员会 21 次 sub-agent 运行，小决策用 `--quick`。它不证明结论正确，只把「一个答案」变成「一组可回看的反驳与打分」。新增的做法 O 解决「等待不可回答」：Muster 是一个 macOS 菜单栏应用，读取 Claude Code / Codex / Cursor 已经写下的会话文件（只读），某个代理开始等你时在屏幕顶部出现提醒并停留到被回答，你可以不切换窗口直接批准命令、选择选项、批准计划；⌃⌥Space 还能按会话回看最近三小时的 token 与 API 费率成本。它只覆盖 macOS 14+ 与这三家，Cursor 只能跳转不能代答，也不替代验证、记忆与评审。新增的做法 P 解决「多代理团队怎么有门禁地跑起来」：hivehouse 是一个 Claude Code 插件，在 tmux 里运行一个会话团队——orchestrator、任务所需的 agents、任何东西落地前的评审和门禁、上下文轮换、无人值守过夜、事后清理；工作文件夹里的 hub session 把任务交给各项目的 orchestrator 并双向传话。默认 relay 模式每次 start / wake / answer 都等你；delegate 模式在离开时决定项目内部工作并保持团队运行，但 push、deploy 和花费留给你，最多 7 天，且仅在只有你能写的 root 文件允许、`permission_mode_local=auto` 时才以 bypassPermissions 启动团队会话。新增的做法 Q 补上另一个常见缺口：成本。它把「进入下一阶段前先跑一次 `/cost`」变成多代理流水线里的一个检查点——原文给出的示例是 5 个代理、20 秒、4.18 美元，工作 token 从 198,628 涨到 233,055，作者的主张是「别再添加你无法定价的代理」。它不替代做法 B 的 budget governor、做法 L 的 `nsq cost`、做法 N 的 `--quick` 或做法 K 的护栏，只是在阶段边界上让你先看见账单。
 
 ## 适用与不适用
 
@@ -26,35 +26,37 @@
 - 你在 macOS 上并行跑多个终端型 coding agent，需要一眼看出谁在等你，并可跳到具体 pane（做法 I）。
 - 你想在远程机器上跑 agent、本地驱动（cmux ssh），或让 agent 用内置可编程浏览器自验证 web 改动（做法 I）。
 - 你希望 Claude Code teammate/subagent 以原生分屏出现，而不是隐藏后台进程（做法 I）。
-- 新增：你想让「另一个智能体在同一 commit 上验证通过才算完成」成为硬约束，而不是靠你口头要求（做法 J）。
-- 新增：你愿意把需求写成一行一行可验收的 SPEC.md，并接受「未经第二 agent 验证不算完成」（做法 J）。
-- 新增：单人或多 agent 在 git 仓库内做长期构建，希望用看板看到每条目的 claim / submit / verdict 和驳回理由（做法 J）。
-- 新增：你同时照看多个项目、每个项目里都有 agent 在跑，想在一屏里看到「谁在等我做决策 / 等我评审 / 正在跑 / 待同步」（做法 K）。
-- 新增：你的环境是 Windows 或 macOS，Claude Code 2.1.289 或更高且支持 mod，并且你接受自建「项目注册表 + STATUS 卡」这两样约定（做法 K）。
-- 新增：你想按项目切换执行者——默认用 Claude Code 原生后台 agent，Claude 额度紧张时把个别项目切到 Codex，或标成 manual 只做交接不派工（做法 K）。
-- 新增：你希望不可撤销命令（rm -r、force push、git reset --hard、DROP TABLE 等）在执行前被问一次，并让同一参数同一错误的工具调用不再试第三次（做法 K）。
-- 新增：你在 macOS / Windows / Linux 上并行跑 Claude Code、Codex、OpenCode 或任意长驻命令，想在一个终端 dashboard 里看到谁在 working / 需要你 / 已完成（做法 L）。
-- 新增：你希望关掉 dashboard 或终端后 agent 继续跑，`nsq up` 能按各自 session 恢复，重启机器后也可（做法 L）。
-- 新增：你想不切进具体终端就回答权限询问（y/a/n）或发送提示（s / S），并在 agent 提问时从通知里原样看到它的问题（做法 L）。
-- 新增：你想把非 AI 的长驻进程（如 `npm run dev`）和 AI agent 并列在同一个面板里管理（做法 L）。
-- 新增：你想脚本化拿状态与成本：`nsq ls --json`、`nsq cost --since 7d --json`、`nsq diff`、`nsq peek`（做法 L）。
-- 新增：你想给 agent 换 OpenRouter 模型，或指向自建 OpenAI/Anthropic 兼容服务器（llama.cpp、Ollama、LM Studio、vLLM、SGLang、Unsloth Studio 等），且不想让密钥进 argv、日志或文件（做法 L）。
-- 新增：你需要在手机上（experimental，默认关闭）看 agent 屏幕、发提示、回答权限询问、中断 agent（做法 L）。
-- 新增：你在 Claude Code 里能拉起子 Agent（子任务 / 子进程），并愿意把验证环节留在主 Agent 这一侧（做法 M）。
-- 新增：任务较大、多文件、上下文吃紧，你希望子 Agent 尽早返回，而不是边写边修（做法 M）。
-- 新增：你愿意自己设计「正交隔离」的拆法并迭代——原文只给了这四个字，没有给判据（做法 M）。
-- 新增：你想把「生成」和「验证」当作两类可拆给不同 Agent 的工作，并保留一个平时做法作对照（做法 M）。
-- 新增：你有一个真实、可逆、一周内能见效的商业/经营决策（例如某个报价调整、某个渠道是否加投），并愿意把决策、2–3 个选项、营收/现金/团队数字、限制、成功定义和你的倾向一次写全（做法 N）。
-- 新增：你想让 AI 不只是给一个答案，而是让七个不同框架的席位对同一批选项各自打分、互相反驳，并由 Chair 记分、封顶风险、强制争论（做法 N）。
-- 新增：你已经在用 Claude Code、只想用套餐额度、不愿另配 API key（做法 N；本地房间可选、不需要 API key，只有 API 模式才走 Anthropic 账户另计费）。
-- 新增：你想先低成本验证这套用法——`--quick`（4 席 2 轮）、`--seats` 限定 2–3 席、或 `ask` 单席问一个维度（做法 N）。
-- 新增：你关心「顾问有没有编造引语」，想有一个可执行的校验脚本（做法 N 的 `check_quotes.py`）。
-- 新增（做法 O）：你在 macOS 14+ 上并行跑多个 Claude Code / Codex / Cursor 会话，人被卡在权限批准、多选题或计划批准上，想不切换窗口直接回答。
-- 新增（做法 O）：你想在不翻会话的情况下看到各会话最近三小时的 token 与 API 费率成本（Claude 按消息含子代理、区分 5 分钟/1 小时缓存写入；Codex 为下限；Cursor 无 token 数据）。
-- 新增（做法 O）：你想在菜单栏就地完成审批，且接受 Muster 只在这三家代理上生效、Cursor 只能跳转。
-- 新增（做法 P）：你在 Claude Code ≥2.1.291、tmux ≥3.2、git ≥2.31（`hh-gate-verify commits` 需 ≥2.38）、jq、perl、shasum 齐备的环境里，想让一个 orchestrator 带 agents 跑有门禁和评审的软件任务。
-- 新增（做法 P）：你想先保持默认 relay 模式，只对一个项目运行 `/hivehouse:start <task>`，确认 hub、团队、门禁、评审、清理都工作，再考虑 `/hivehouse:overnight` 或 delegate 模式。
-- 新增（做法 P）：你需要跨项目 hub：在工作文件夹里把文件夹分组为 projects，由 hub 把任务交给各项目 orchestrator 并双向传话。
+- 你想让「另一个智能体在同一 commit 上验证通过才算完成」成为硬约束，而不是靠你口头要求（做法 J）。
+- 你愿意把需求写成一行一行可验收的 SPEC.md，并接受「未经第二 agent 验证不算完成」（做法 J）。
+- 单人或多 agent 在 git 仓库内做长期构建，希望用看板看到每条目的 claim / submit / verdict 和驳回理由（做法 J）。
+- 你同时照看多个项目、每个项目里都有 agent 在跑，想在一屏里看到「谁在等我做决策 / 等我评审 / 正在跑 / 待同步」（做法 K）。
+- 你的环境是 Windows 或 macOS，Claude Code 2.1.289 或更高且支持 mod，并且你接受自建「项目注册表 + STATUS 卡」这两样约定（做法 K）。
+- 你想按项目切换执行者——默认用 Claude Code 原生后台 agent，Claude 额度紧张时把个别项目切到 Codex，或标成 manual 只做交接不派工（做法 K）。
+- 你希望不可撤销命令（rm -r、force push、git reset --hard、DROP TABLE 等）在执行前被问一次，并让同一参数同一错误的工具调用不再试第三次（做法 K）。
+- 你在 macOS / Windows / Linux 上并行跑 Claude Code、Codex、OpenCode 或任意长驻命令，想在一个终端 dashboard 里看到谁在 working / 需要你 / 已完成（做法 L）。
+- 你希望关掉 dashboard 或终端后 agent 继续跑，`nsq up` 能按各自 session 恢复，重启机器后也可（做法 L）。
+- 你想不切进具体终端就回答权限询问（y/a/n）或发送提示（s / S），并在 agent 提问时从通知里原样看到它的问题（做法 L）。
+- 你想把非 AI 的长驻进程（如 `npm run dev`）和 AI agent 并列在同一个面板里管理（做法 L）。
+- 你想脚本化拿状态与成本：`nsq ls --json`、`nsq cost --since 7d --json`、`nsq diff`、`nsq peek`（做法 L）。
+- 你想给 agent 换 OpenRouter 模型，或指向自建 OpenAI/Anthropic 兼容服务器（llama.cpp、Ollama、LM Studio、vLLM、SGLang、Unsloth Studio 等），且不想让密钥进 argv、日志或文件（做法 L）。
+- 你需要在手机上（experimental，默认关闭）看 agent 屏幕、发提示、回答权限询问、中断 agent（做法 L）。
+- 你在 Claude Code 里能拉起子 Agent（子任务 / 子进程），并愿意把验证环节留在主 Agent 这一侧（做法 M）。
+- 任务较大、多文件、上下文吃紧，你希望子 Agent 尽早返回，而不是边写边修（做法 M）。
+- 你愿意自己设计「正交隔离」的拆法并迭代——原文只给了这四个字，没有给判据（做法 M）。
+- 你想把「生成」和「验证」当作两类可拆给不同 Agent 的工作，并保留一个平时做法作对照（做法 M）。
+- 你有一个真实、可逆、一周内能见效的商业/经营决策（例如某个报价调整、某个渠道是否加投），并愿意把决策、2–3 个选项、营收/现金/团队数字、限制、成功定义和你的倾向一次写全（做法 N）。
+- 你想让 AI 不只是给一个答案，而是让七个不同框架的席位对同一批选项各自打分、互相反驳，并由 Chair 记分、封顶风险、强制争论（做法 N）。
+- 你已经在用 Claude Code、只想用套餐额度、不愿另配 API key（做法 N；本地房间可选、不需要 API key，只有 API 模式才走 Anthropic 账户另计费）。
+- 你想先低成本验证这套用法——`--quick`（4 席 2 轮）、`--seats` 限定 2–3 席、或 `ask` 单席问一个维度（做法 N）。
+- 你关心「顾问有没有编造引语」，想有一个可执行的校验脚本（做法 N 的 `check_quotes.py`）。
+- 你在 macOS 14+ 上并行跑多个 Claude Code / Codex / Cursor 会话，人被卡在权限批准、多选题或计划批准上，想不切换窗口直接回答（做法 O）。
+- 你想在不翻会话的情况下看到各会话最近三小时的 token 与 API 费率成本（Claude 按消息含子代理、区分 5 分钟/1 小时缓存写入；Codex 为下限；Cursor 无 token 数据）（做法 O）。
+- 你想在菜单栏就地完成审批，且接受 Muster 只在这三家代理上生效、Cursor 只能跳转（做法 O）。
+- 你在 Claude Code ≥2.1.291、tmux ≥3.2、git ≥2.31（`hh-gate-verify commits` 需 ≥2.38）、jq、perl、shasum 齐备的环境里，想让一个 orchestrator 带 agents 跑有门禁和评审的软件任务（做法 P）。
+- 你想先保持默认 relay 模式，只对一个项目运行 `/hivehouse:start <task>`，确认 hub、团队、门禁、评审、清理都工作，再考虑 `/hivehouse:overnight` 或 delegate 模式（做法 P）。
+- 你需要跨项目 hub：在工作文件夹里把文件夹分组为 projects，由 hub 把任务交给各项目 orchestrator 并双向传话（做法 P）。
+- 新增：你跑多代理 / 分阶段的 agent 流程，能在进入下一阶段前读到阶段成本或运行 `/cost`（或等价成本面板），想把「事后才发现账单异常」变成阶段边界上的一次检查（做法 Q）。
+- 新增：你愿意在新增代理前先估算它的边际成本，估不出来就先不加（做法 Q）。
 
 **不适用**
 
@@ -77,36 +79,39 @@
 - 把 cmux 当完整解决方案；它不规定工作流，也不负责合入闸门（做法 I）。
 - 需要本机进程活过 logout、重启、关机或断电；本机 local-tmux 不行，要换 ssh-tmux、mosh-tmux 或持久云 VM（做法 I）。
 - 没有第三方性能与收益数据，不宜作为通用默认方案直接采用（做法 I）。
-- 新增：你想把 worktree 隔离当作安全边界：原文明确说 worktree 身份只在一台机器上有意义，不是安全边界（做法 J）。
-- 新增：你的环境是原生 Windows：Pullboard 的 CI 只在 Linux 和 macOS 上跑，Windows 未测试（做法 J）。
-- 新增：你需要现成的手机/远程看板：relay 和 Pullboard View 里的 roadmap 仍是 planned（做法 J）。
-- 新增：你不愿意写 SPEC.md，也不想设一条 gate 命令：没有 gate 就没有提交前的门槛，也没有 verifier 可以依据的验收标准（做法 J）。
-- 新增：不想维护项目注册表和每个项目的 STATUS 卡：面板的状态、同步与关卡都建立在这两样自建约定上（做法 K）。
-- 新增：Claude Code 版本低于 2.1.289 或不支持 mod：插件装不上（做法 K）。
-- 新增：原生 Linux：材料只给了 Windows 与 macOS 两个前提（做法 K）。
-- 新增：希望面板替你执行发布或正式环境变更：原文明确面板自身不执行发布（做法 K）。
-- 新增：指望面板刷新时调用模型来给出真实状态：刷新只查本地文件和 CLI、不请求模型（做法 K）。
-- 新增：想把它当成熟方案直接全量采用：仓库仅 53 stars、版本 0.15.x，UI 当前是繁体中文，且强依赖特定 Claude Code 版本与自建的注册表/状态卡约定（做法 K）。
-- 新增：你把它当成熟方案：nsq README 自标 0.1.0 preview，命令与配置在 1.0 前可能变化（做法 L）。
-- 新增：任意命令 agent 没有 hooks，只有 working / finished，永远不会出现 needs you；对这类进程不要指望它提醒你权限或提问（做法 L）。
-- 新增：需要手机端启动 agent、改设置或敲任意键：手机端只能看屏幕、发提示、回答权限、中断（做法 L）。
-- 新增：Windows arm64 想用语音听写：不可用（做法 L）。
-- 新增：你指望 README 给出改善幅度的量化指标：nsq README 没有基准或效果数据（做法 L）。
-- 新增：涉密/敏感环境：手机端链接携带 pairing token，要当密码对待；是否可用要自己评估（做法 L）。
-- 新增：任务必须边写边跑测试才能写对（强类型约束、依赖外部服务状态的改动）：把 Build/Test/Typecheck 全部推迟到主 Agent，会把失败成本集中到下游、增加返工（做法 M）。
-- 新增：你想要现成的拆解方法：原文在「2. 任务拆解：正交隔离」处就被截断，怎么正交、怎么保证隔离、结果怎么合并都没有依据（做法 M）。
-- 新增：你需要量化收益再决定：这条规则只有作者主张，没有案例、对照实验、耗时或成本数字（做法 M）。
-- 新增：你想让子 Agent 自己跑测试再返回：这正好与做法 M 的硬性禁止项相反，两者只能选一个（做法 M 与做法 B/G/J 的差异见操作步骤）。
-- 新增：决策不可逆、或你无法承担一次辩论的用量：一次完整委员会是 21 次 sub-agent 运行，README 自己说它 "takes a real bite out of your plan's usage"（做法 N）。
-- 新增：你指望它给出「正确答案」：顾问是模拟人格、与本人无关联也未获背书，且原文没有任何「用了它决策结果变好」的量化证据（做法 N）。
-- 新增：环境没有 Claude Code，或 Node.js 低于 20（做法 N）。
-- 新增：要把委员会放到会另外计费的通道上却不清楚成本：API 模式（`COUNCIL_RUNNER=api`）走你的 Anthropic API 账户，一次完整委员会约 25 次调用（做法 N）。
-- 新增（做法 O）：不是 macOS 14+；或主力是 Cursor（只能跳转、不能代答）；或你只跑一个会话、本来就不需要人工介入。
-- 新增（做法 O）：把 Muster 当完整工作流或合入闸门：它只解决「谁在等我、就地回答」，不做验证、记忆与评审。
-- 新增（做法 O）：需要第三方量化收益再决定：README 只给资源口径（2 MB 下载、十个代理忙时约 0.4% CPU / 20 MB 内存）和计价口径，没有「节省多少等待时间」的对照数据。
-- 新增（做法 P）：Claude Code 低于 2.1.291，或缺少 tmux / git / jq / perl / shasum；远程运行还缺 ssh / rsync。
-- 新增（做法 P）：想默认就无人值守：默认 relay 模式每次 start / wake / answer 都等你；delegate 模式需要只有你能写的 root 文件开启、最多 7 天，且仅在 `permission_mode_local=auto` 时 hub 才以 `--permission-mode bypassPermissions` 启动和唤醒团队会话。
-- 新增（做法 P）：打算把 delegate 模式用在涉密环境：它涉及 bypassPermissions 和把 secret 文件复制到远程的风险，`docs-health-check` 工作流也尚未在真实 Claude Code 会话验证。
+- 你想把 worktree 隔离当作安全边界：原文明确说 worktree 身份只在一台机器上有意义，不是安全边界（做法 J）。
+- 你的环境是原生 Windows：Pullboard 的 CI 只在 Linux 和 macOS 上跑，Windows 未测试（做法 J）。
+- 你需要现成的手机/远程看板：relay 和 Pullboard View 里的 roadmap 仍是 planned（做法 J）。
+- 你不愿意写 SPEC.md，也不想设一条 gate 命令：没有 gate 就没有提交前的门槛，也没有 verifier 可以依据的验收标准（做法 J）。
+- 不想维护项目注册表和每个项目的 STATUS 卡：面板的状态、同步与关卡都建立在这两样自建约定上（做法 K）。
+- Claude Code 版本低于 2.1.289 或不支持 mod：插件装不上（做法 K）。
+- 原生 Linux：材料只给了 Windows 与 macOS 两个前提（做法 K）。
+- 希望面板替你执行发布或正式环境变更：原文明确面板自身不执行发布（做法 K）。
+- 指望面板刷新时调用模型来给出真实状态：刷新只查本地文件和 CLI、不请求模型（做法 K）。
+- 想把它当成熟方案直接全量采用：仓库仅 53 stars、版本 0.15.x，UI 当前是繁体中文，且强依赖特定 Claude Code 版本与自建的注册表/状态卡约定（做法 K）。
+- 你把它当成熟方案：nsq README 自标 0.1.0 preview，命令与配置在 1.0 前可能变化（做法 L）。
+- 任意命令 agent 没有 hooks，只有 working / finished，永远不会出现 needs you；对这类进程不要指望它提醒你权限或提问（做法 L）。
+- 需要手机端启动 agent、改设置或敲任意键：手机端只能看屏幕、发提示、回答权限、中断（做法 L）。
+- Windows arm64 想用语音听写：不可用（做法 L）。
+- 你指望 README 给出改善幅度的量化指标：nsq README 没有基准或效果数据（做法 L）。
+- 涉密/敏感环境：手机端链接携带 pairing token，要当密码对待；是否可用要自己评估（做法 L）。
+- 任务必须边写边跑测试才能写对（强类型约束、 依赖外部服务状态的改动）：把 Build/Test/Typecheck 全部推迟到主 Agent，会把失败成本集中到下游、增加返工（做法 M）。
+- 你想要现成的拆解方法：原文在「2. 任务拆解：正交隔离」处就被截断，怎么正交、怎么保证隔离、结果怎么合并都没有依据（做法 M）。
+- 你需要量化收益再决定：这条规则只有作者主张，没有案例、对照实验、耗时或成本数字（做法 M）。
+- 你想让子 Agent 自己跑测试再返回：这正好与做法 M 的硬性禁止项相反，两者只能选一个（做法 M 与做法 B/G/J 的差异见操作步骤）。
+- 决策不可逆、或你无法承担一次辩论的用量：一次完整委员会是 21 次 sub-agent 运行，README 自己说它 "takes a real bite out of your plan's usage"（做法 N）。
+- 你指望它给出「正确答案」：顾问是模拟人格、与本人无关联也未获背书，且原文没有任何「用了它决策结果变好」的量化证据（做法 N）。
+- 环境没有 Claude Code，或 Node.js 低于 20（做法 N）。
+- 要把委员会放到会另外计费的通道上却不清楚成本：API 模式（`COUNCIL_RUNNER=api`）走你的 Anthropic API 账户，一次完整委员会约 25 次调用（做法 N）。
+- 不是 macOS 14+；或主力是 Cursor（只能跳转、不能代答）；或你只跑一个会话、本来就不需要人工介入（做法 O）。
+- 把 Muster 当完整工作流或合入闸门：它只解决「谁在等我、就地回答」，不做验证、记忆与评审（做法 O）。
+- 需要第三方量化收益再决定：README 只给资源口径（2 MB 下载、十个代理忙时约 0.4% CPU / 20 MB 内存）和计价口径，没有「节省多少等待时间」的对照数据（做法 O）。
+- Claude Code 低于 2.1.291，或缺少 tmux / git / jq / perl / shasum；远程运行还缺 ssh / rsync（做法 P）。
+- 想默认就无人值守：默认 relay 模式每次 start / wake / answer 都等你；delegate 模式需要只有你能写的 root 文件开启、最多 7 天，且仅在 `permission_mode_local=auto` 时 hub 才以 `--permission-mode bypassPermissions` 启动和唤醒团队会话（做法 P）。
+- 打算把 delegate 模式用在涉密环境：它涉及 bypassPermissions 和把 secret 文件复制到远程的风险，`docs-health-check` 工作流也尚未在真实 Claude Code 会话验证（做法 P）。
+- 新增：你的流程无法分阶段，或读不到任何成本 / token 数据：没有可检查的信号（做法 Q）。
+- 新增：你指望这条习惯替代工具内的节流与预算控制：做法 B 的 `FARM_*` 节流、做法 L 的 `nsq cost`、做法 N 的 `--quick` 才是持续的成本机制；阶段检查是补充，不是替代（做法 Q）。
+- 新增：需要阈值或基线才肯照做：原文没有给成本阈值或 token 阈值，只能用你自己的历史数据前后对比（做法 Q）。
 
 ## 前置条件
 
@@ -121,12 +126,13 @@
 - 做法 H（Offrun 或手工照做）：项目在 git 下（worktree 依赖 git）；至少一个你已在用的 agent CLI 和账号，有第二个账号更好（用于限额切换）。若用 Offrun 本身：Apple Silicon Mac（M1 或更新）、macOS 14 Sonoma 或更高；下载 Offrun 拖进 Applications；在 Settings → Agents 添加账号。若手工照做：任意支持 git 的环境，能创建 worktree 的 git 版本，agent CLI 能在指定目录运行。
 - 做法 I（cmux）仅支持 macOS，会读取你已有的 Ghostty 配置 `~/.config/ghostty/config`。推荐 DMG 安装，也可 Homebrew。若要用 agent hooks 的自动恢复，必须先装好对应 agent CLI，且其 binary 在 PATH 上。README 列出的受支持恢复集成包括：Claude Code、Codex、Grok、OpenCode、Pi、Amp、Cursor CLI、Gemini、Rovo Dev、Copilot、CodeBuddy、Factory、Qoder。Claude Code 由 cmux 的 Claude wrapper 处理，需在 Settings 中开启 Claude 集成。要远程跑 agent 需可 SSH 的远程主机。自定义 resume 绑定若要自动执行，必须先批准签名命令前缀；token、password、secret、API key 等敏感环境键在存储绑定前会被丢弃。
 - 做法 J（pullboard）：本机有 git 和 Node 22.13 或更新版本（README 原文："You need git and Node 22.13 or newer"）；在一个 git 仓库内操作；MIT 许可；本机运行、无账号、无依赖、不调用模型。要真正跑起来还需要三样你自己提供的东西：`SPEC.md` 里已批准的需求行、`PRACTICE.md` 里的 doctrine、`pullboard.json` 里的 gate 命令与每条 lane 的 `owns` / `specs` 授权。
-- 新增做法 K（claude-console）：Windows 或 macOS；Claude Code 2.1.289 或更高且支持 mod；每个要纳入面板的项目在注册表里有一项、并有一个 STATUS 文件。若要用 Codex 执行者，还需要 Node.js、Codex Companion 和一个 Codex 账号（Windows 探测需要 PowerShell 和 Codex 桌面应用，macOS 需要 PATH 上有 `codex` CLI）。
-- 新增做法 L（nsq）：Node.js 22.13 或更新；native 部分预编译（Windows x64/arm64、macOS Apple silicon/Intel、Linux x64/arm64），无需编译器。要使用 Claude Code / Codex / OpenCode 之一，需该 CLI 自身已登录，或改走 OpenRouter / 自建模型服务器。目录是 git 仓库时 `--worktree` 才会生效。数据在 `~/.neurosquad-cli`（可用 `NSQ_HOME` 迁移），密钥在 OS keyring；`~/.claude`、`~/.codex`、`opencode.json` 永不被写。
-- 新增做法 M：Claude Code，且你的用法里能拉起子 Agent（子任务 / 子进程），并愿意把验证环节留在主 Agent 这一侧；能编辑子 Agent 收到的指令文本。原文没有写怎么拉起子 Agent、怎么提交、怎么保证「正交」，这部分需要你自己补。
-- 新增做法 N（roast-room）：Claude Code（Claude 套餐即可，不需要 API key）+ Node.js 20 或更新版本，除此之外无需安装其他东西。本地房间（Web 界面，http://localhost:4730）是可选的，它本身不发起任何 AI 调用，不启动也不影响委员会结果。若要让房间自己发起委员会，则需另配 `ANTHROPIC_API_KEY` 并把 `COUNCIL_RUNNER=api`，走你的 Anthropic API 账户计费。
-- 新增做法 O（Muster）：macOS 14 或更高（Apple silicon 或 Intel），菜单栏的 Liquid Glass 外观需要 macOS 26；安装后要逐代理在 Settings → Answer prompts from Muster 开启；Codex 需先在 Codex 里 `/hooks` 信任一次；自定义价格写 `~/Library/Application Support/Muster/pricing.json`。
-- 新增做法 P（hivehouse）：tmux ≥ 3.2；git ≥ 2.31（`hh-gate-verify commits` 需 ≥ 2.38）；bash（macOS 3.2 足够）；jq；perl；shasum（macOS 自带）；ssh 和 rsync（远程运行需要）；Claude Code ≥ 2.1.291。还需要一个工作文件夹（存放项目的文件夹，绝不能是项目本身）、项目、任务描述、允许的 MCP 服务器配置（默认无）、远程主机列表 `remote_hosts`、要同步的 git 分支、项目文件、Claude 记忆文件、一个 secret 文件。
+- 做法 K（claude-console）：Windows 或 macOS；Claude Code 2.1.289 或更高且支持 mod；每个要纳入面板的项目在注册表里有一项、并有一个 STATUS 文件。若要用 Codex 执行者，还需要 Node.js、Codex Companion 和一个 Codex 账号（Windows 探测需要 PowerShell 和 Codex 桌面应用，macOS 需要 PATH 上有 `codex` CLI）。
+- 做法 L（nsq）：Node.js 22.13 或更新；native 部分预编译（Windows x64/arm64、macOS Apple silicon/Intel、Linux x64/arm64），无需编译器。要使用 Claude Code / Codex / OpenCode 之一，需该 CLI 自身已登录，或改走 OpenRouter / 自建模型服务器。目录是 git 仓库时 `--worktree` 才会生效。数据在 `~/.neurosquad-cli`（可用 `NSQ_HOME` 迁移），密钥在 OS keyring；`~/.claude`、`~/.codex`、`opencode.json` 永不被写。
+- 做法 M：Claude Code，且你的用法里能拉起子 Agent（子任务 / 子进程），并愿意把验证环节留在主 Agent 这一侧；能编辑子 Agent 收到的指令文本。原文没有写怎么拉起子 Agent、怎么提交、怎么保证「正交」，这部分需要你自己补。
+- 做法 N（roast-room）：Claude Code（Claude 套餐即可，不需要 API key）+ Node.js 20 或更新版本，除此之外无需安装其他东西。本地房间（Web 界面，http://localhost:4730）是可选的，它本身不发起任何 AI 调用，不启动也不影响委员会结果。若要让房间自己发起委员会，则需另配 `ANTHROPIC_API_KEY` 并把 `COUNCIL_RUNNER=api`，走你的 Anthropic API 账户计费。
+- 做法 O（Muster）：macOS 14 或更高（Apple silicon 或 Intel），菜单栏的 Liquid Glass 外观需要 macOS 26；安装后要逐代理在 Settings → Answer prompts from Muster 开启；Codex 需先在 Codex 里 `/hooks` 信任一次；自定义价格写 `~/Library/Application Support/Muster/pricing.json`。
+- 做法 P（hivehouse）：tmux ≥ 3.2；git ≥ 2.31（`hh-gate-verify commits` 需 ≥ 2.38）；bash（macOS 3.2 足够）；jq；perl；shasum（macOS 自带）；ssh 和 rsync（远程运行需要）；Claude Code ≥ 2.1.291。还需要一个工作文件夹（存放项目的文件夹，绝不能是项目本身）、项目、任务描述、允许的 MCP 服务器配置（默认无）、远程主机列表 `remote_hosts`、要同步的 git 分支、项目文件、Claude 记忆文件、一个 secret 文件。
+- 新增做法 Q：一个支持分阶段执行、且能显示成本或提供 `/cost`（或等价成本面板）的多代理 / 分阶段流程；能读到代理数、耗时与 token 数；原文没有说明 `/cost` 属于哪个工具，需要你在自己的环境里确认。
 
 ## 操作步骤
 
@@ -150,6 +156,7 @@
 | 有一个真实、可逆的商业/经营决策，想用多个专家视角压测它 | 做法 N（先跑 `--quick`） |
 | macOS 14+ 上并行跑多个 Claude Code / Codex / Cursor，人被卡在审批与多选 | 做法 O |
 | 想在 Claude Code 里跑有门禁、评审、清理与无人值守的 tmux 会话团队 | 做法 P（先 relay，后 delegate） |
+| 跑多代理 / 分阶段流程，想进下一阶段前先结一次账 | 做法 Q（先跑 2–3 个阶段） |
 
 ### 做法 A：把不满意的回答送进锦标赛（arena-skill）
 
@@ -1369,6 +1376,30 @@ delegate 模式配置：前提：你离开，且愿意用 root 文件开启。�
 - 做法 P 与做法 J（pullboard）都做门禁与评审，但 pullboard 管的是单个仓库内「条目 → gate → 独立 verifier → receipt」的状态机；hivehouse 管的是跨项目的 tmux 会话团队（orchestrator + builders + reviewer + hub），并提供 relay / delegate 模式与清理。两者都不替代你自己的验证纪律。
 - 做法 O / P 都不定义「完成」：它们管可见性与权限路由，不替代做法 B/G/J 的合入门禁。
 
+### 做法 Q：在进入下一阶段前先结一次账（`/cost` 阶段成本检查）
+
+把这条路径当作待验证的候选：原文只有一条推文级材料，给出了可照做的检查动作和一组成本/token 观测数据，但没有说明 `/cost` 属于哪个工具，也没有给成本阈值，适合先在你现有的多代理流程上小范围试。
+
+1. 前提：你的多代理 / 分阶段代理流程可以拆成至少 2–3 个阶段，并且能读到成本或提供 `/cost`（或等价的成本面板）。原文提到「Jev 面板」，但没有说明具体工具，需要你在自己的环境里确认对应命令。
+
+2. 在进入下一个阶段之前，不要直接继续跑完整流程，先做一次成本检查：
+
+```
+/cost
+```
+
+3. 记录这一阶段（或当前全局）的成本和 token 消耗，连同代理数与耗时。原文示例：5 个代理、20 秒、4.18 美元；M-01 到 M-05，最后一帧 19 次转移；工作 token 从 198,628 增加到 233,055。你记录自己流程里的同类数据。
+
+4. 对「无法定价」的新代理保持警惕。原文的主张是「别再添加你无法定价的代理了」：如果新增代理的边际成本你估不出来，或成本 / token 增长无法解释，就先不加，暂停并调整流程。
+
+5. 每个阶段重复上面的检查，直到你自己的阶段流程结束；保留每阶段的成本和 token 记录，用于事后复盘。
+
+**与已有做法的差异（照做前先读这一条）**
+
+- 做法 B 的 budget governor（周窗口 80%、5 小时窗口 85%）和 `clodfarm budget`、做法 L 的 `nsq cost [--since 7d]`、做法 N 的 `--quick` 与成本对账，都是工具内或可脚本化的成本口径，粒度更细、可持续观察；做法 Q 是你在流水线阶段边界上手工执行的一个检查点，工具无关，但依赖你记得跑、记得记。
+- 做法 K 的 `commandGuard` / `loopGuard` 管的是「危险命令」和「重复失败调用」，不报钱；做法 Q 只看钱和 token。
+- 做法 Q 不替代上述任何节流机制，也不降低单次调用的成本；它的作用是在阶段边界上尽早发现异常增长，避免带着一个错误的阶段继续放大开销。
+
 ### 通用收尾：不管走哪条路径
 
 - 开始前先固定「完成」的定义（哪条测试通过、谁来复核、在哪里看结果），不要只依赖 agent 的自证。
@@ -1389,6 +1420,7 @@ delegate 模式配置：前提：你离开，且愿意用 root 文件开启。�
 - 做法 P 的默认 relay 模式每次 start / wake / answer 都等你；不要在没有 root 文件与 `permission_mode_local=auto` 的情况下自行打开 delegate 模式。
 - 做法 P 的 delegate 模式把 push、deploy、花费留给你，hook 会拒绝 push / 发布 / 上传 / 改 Claude Code 设置；`hh-push` 只按你的指令运行、fast-forward only，且不在 delegate 模式运行。
 - 做法 P 的 `docs-health-check` 工作流尚未在真实 Claude Code 会话验证（只通过 stand-in 工作流测试），不要把它当成已验证的关卡。
+- 做法 Q 的阶段成本检查要落在阶段边界上，不要只在任务结束后看一次总账单；原文给的唯一数据是 5 个代理、20 秒、4.18 美元，没有阈值，需要用你自己的基线。
 
 ## 怎么判断变好了
 
@@ -1404,12 +1436,13 @@ delegate 模式配置：前提：你离开，且愿意用 root 文件开启。�
 - 做法 H：并行任务时文件互相覆盖/冲突的次数（期望 0）；第二个同类会话的返工量——是否还要重复解释约定、是否重复踩 dead-ends 里已有的坑；同行评审提出的问题里，你判断有效（会改）的比例，以及误报率；撞到用量限额导致的等待时间是否下降（切登录后能否无缝继续）。
 - 做法 I：从 agent 等待输入到人响应的时间；漏掉通知导致 agent 空转的时长；手动在终端里寻找 pane 的次数；通知环、侧栏未读徽标、通知面板是否能可靠触发；⌘⇧U 跳转是否真的减少切换成本；恢复会话后布局、工作目录、scrollback 和浏览器历史是否保留；`cmux hooks setup` 后受支持 agent 是否能按预期恢复；跨安装迁移时 `--from <channel>` 与 `--from <path>` 的信任差异是否符合预期；本机 `local-tmux` 撑不过 logout/重启/关机/断电这一边界是否被团队知道。
 - 做法 J：每条条目是否都有 gate 绿 + verifier 的 accept/reject receipt；你仓库里的返工比例（原文称自家开发 Pullboard 时 "nearly one in three items goes back"）是多少；Timeline 里每条目的 claim / submit / verdict 是否完整；越界提交是否被 lane 的 `owns` 授权拒绝；"Needs you" 里出现的是不是只有你能做的决定；verifier 抓到的驳回理由里有多少是你事后确认有效的问题。
-- 新增做法 K：面板上「● 待决策」「◆ 待评审」的条目从出现到你处理完的时间；你实际同时盯的窗口/终端数 vs 只看面板；autoSync 写回 CARD 后你是否还需要手工记状态；`關卡` 是否真的拦住了没清空的条目；Git 列里的冲突/CI 失败/未提交/未推送/落后上游是否比你手工发现得更早；刷新时是否产生模型调用（原文称刷新只查本地文件和 CLI）；被 `commandGuard` 拦下的不可撤销命令次数、`loopGuard` 阻止重复失败调用的次数。注意「减少盯盘」目前只是作者主张，要你自己前后对照。
-- 新增做法 L：从 agent 需要你到人响应的时间；漏掉通知导致空转的时长；关掉 dashboard 或终端后 agent 是否继续跑、`nsq up` 后是否按各自 session 恢复；`nsq ls --json` 的状态是否与屏幕一致；`nsq cost` 是否读得到 token、无已知价格的模型是否显示 “no price” 而不是 $0；`nsq diff` 是否能看出该 agent 未提交改动；`nsq peek` 是否能不看全屏就判断它在做什么；`nsq doctor` 是否能无阻断跑完；手机上能否看屏幕、发提示、回答权限、中断；`nsq run --` 的任意命令是否如预期只显示 working / finished。README 没有给出改善幅度的量化指标，这些都要你自己前后对照。
-- 新增做法 M：子 Agent 的平均轮次与工具调用次数是否下降（对应原文声称的「上下文消耗压到最低」）；子 Agent 是否还会出现「改了又改、越修越乱」的连续返工（原文声称被消除的幻觉循环）；同一任务的总时长、主 Agent 的一次通过率、跨 Agent 交接处的返工次数是否变差（这是把验证后置的主要风险）；正交拆解后是否出现合并冲突或语义重复。原文明说这是推断性表述、没有量化指标，所以这几项只能你自己前后对照。
-- 新增做法 N：**反方论点命中数**——报告里出现了几条你开会前完全没想到的风险或反例，若为 0 说明这次没带来增量；**是否改变了你的倾向**——结论与你的初始倾向是否一致，若 Chair 因 ruin risk 封顶或强制争论，记录它给出的具体理由你是否认可；**引用可核验率**——`check_quotes.py` 的通过情况，这是「有没有编造」的硬指标；**成本对账**——本次实际 sub-agent 调用次数与产出价值是否匹配，`--quick` 与完整委员会在同一决策上的结论差异有多大（若很小，以后就固定用 `--quick`）；**到期回看**——到了你设定的成功时限，实际结果与 `verdict.md` 里预测的关键假设是否吻合，连续两三次都不吻合就下调对这个工作流的依赖。
-- 新增做法 O：从代理开始等待到人察觉的时间（试用前后各记几次）；从察觉到回答完成的时间，以及期间是否切换过窗口或终端；是否出现重复回答或冲突（Claude 原生对话框与 Muster 并存时「先回答的生效」）；关掉开关后代理设置文件是否精确还原（对照 `.muster-original`），符号链接是否仍是链接；用 ⌃⌥Space 的 token/成本视图看多会话时段成本是否可见、量级是否与账单吻合（Codex 按作者说明是下限，Cursor 无数据）；若在乎资源占用，跑 `scripts/e2e.sh --soak [minutes]`，看十个代理下 CPU 与内存是否仍在约 0.4% / 20 MB 量级。README 没有给出「节省了多少等待时间」的量化数据，这些要你自己前后对照。
-- 新增做法 P：安装检查通过（版本满足，插件 `enabled: true`）；团队是否按计划产出 diff/提交，orchestrator 是否按规则运行；`/hivehouse:gate` 是否把每一步运行到日志并验证通过；`/hivehouse:bubble-review` 是否按深度给出可操作意见；`/hivehouse:cleanup` 是否只移除 manifest 记录的临时文件夹、移入 `.hivehouse/trash` 的文件、它启动的进程和窗格；默认 relay 模式下是否不出现未授权推送，`hh-push` 是否只按你的指令运行、fast-forward only、先读远程；delete guard 是否阻止 `rm`、`find`、`rsync` 删除受保护文件夹；若试 delegate，确认 root 文件控制、最多 7 天、`permission_mode_local=auto`、hook 拒绝 push/publish/upload/改设置，远程同步每次请求许可、delegate 模式拒绝。原文没有给出任务完成率、成本节约或质量提升的数据。
+- 做法 K：面板上「● 待决策」「◆ 待评审」的条目从出现到你处理完的时间；你实际同时盯的窗口/终端数 vs 只看面板；autoSync 写回 CARD 后你是否还需要手工记状态；`關卡` 是否真的拦住了没清空的条目；Git 列里的冲突/CI 失败/未提交/未推送/落后上游是否比你手工发现得更早；刷新时是否产生模型调用（原文称刷新只查本地文件和 CLI）；被 `commandGuard` 拦下的不可撤销命令次数、`loopGuard` 阻止重复失败调用的次数。注意「减少盯盘」目前只是作者主张，要你自己前后对照。
+- 做法 L：从 agent 需要你到人响应的时间；漏掉通知导致空转的时长；关掉 dashboard 或终端后 agent 是否继续跑、`nsq up` 后是否按各自 session 恢复；`nsq ls --json` 的状态是否与屏幕一致；`nsq cost` 是否读得到 token、无已知价格的模型是否显示 “no price” 而不是 $0；`nsq diff` 是否能看出该 agent 未提交改动；`nsq peek` 是否能不看全屏就判断它在做什么；`nsq doctor` 是否能无阻断跑完；手机上能否看屏幕、发提示、回答权限、中断；`nsq run --` 的任意命令是否如预期只显示 working / finished。README 没有给出改善幅度的量化指标，这些都要你自己前后对照。
+- 做法 M：子 Agent 的平均轮次与工具调用次数是否下降（对应原文声称的「上下文消耗压到最低」）；子 Agent 是否还会出现「改了又改、越修越乱」的连续返工（原文声称被消除的幻觉循环）；同一任务的总时长、主 Agent 的一次通过率、跨 Agent 交接处的返工次数是否变差（这是把验证后置的主要风险）；正交拆解后是否出现合并冲突或语义重复。原文明说这是推断性表述、没有量化指标，所以这几项只能你自己前后对照。
+- 做法 N：**反方论点命中数**——报告里出现了几条你开会前完全没想到的风险或反例，若为 0 说明这次没带来增量；**是否改变了你的倾向**——结论与你的初始倾向是否一致，若 Chair 因 ruin risk 封顶或强制争论，记录它给出的具体理由你是否认可；**引用可核验率**——`check_quotes.py` 的通过情况，这是「有没有编造」的硬指标；**成本对账**——本次实际 sub-agent 调用次数与产出价值是否匹配，`--quick` 与完整委员会在同一决策上的结论差异有多大（若很小，以后就固定用 `--quick`）；**到期回看**——到了你设定的成功时限，实际结果与 `verdict.md` 里预测的关键假设是否吻合，连续两三次都不吻合就下调对这个工作流的依赖。
+- 做法 O：从代理开始等待到人察觉的时间（试用前后各记几次）；从察觉到回答完成的时间，以及期间是否切换过窗口或终端；是否出现重复回答或冲突（Claude 原生对话框与 Muster 并存时「先回答的生效」）；关掉开关后代理设置文件是否精确还原（对照 `.muster-original`），符号链接是否仍是链接；用 ⌃⌥Space 的 token/成本视图看多会话时段成本是否可见、量级是否与账单吻合（Codex 按作者说明是下限，Cursor 无数据）；若在乎资源占用，跑 `scripts/e2e.sh --soak [minutes]`，看十个代理下 CPU 与内存是否仍在约 0.4% / 20 MB 量级。README 没有给出「节省了多少等待时间」的量化数据，这些要你自己前后对照。
+- 做法 P：安装检查通过（版本满足，插件 `enabled: true`）；团队是否按计划产出 diff/提交，orchestrator 是否按规则运行；`/hivehouse:gate` 是否把每一步运行到日志并验证通过；`/hivehouse:bubble-review` 是否按深度给出可操作意见；`/hivehouse:cleanup` 是否只移除 manifest 记录的临时文件夹、移入 `.hivehouse/trash` 的文件、它启动的进程和窗格；默认 relay 模式下是否不出现未授权推送，`hh-push` 是否只按你的指令运行、fast-forward only、先读远程；delete guard 是否阻止 `rm`、`find`、`rsync` 删除受保护文件夹；若试 delegate，确认 root 文件控制、最多 7 天、`permission_mode_local=auto`、hook 拒绝 push/publish/upload/改设置，远程同步每次请求许可、delegate 模式拒绝。原文没有给出任务完成率、成本节约或质量提升的数据。
+- 新增做法 Q：进入下一阶段前是否真的能看到该阶段成本，而不是事后才发现总成本异常（这是原文的核心主张）；实际总成本 vs 你自己设的预算；token 增长是否与任务复杂度匹配、是否出现无法解释的暴增；新增代理前你是否能估出边际成本，估不出来时是否真的选择不加；发现某阶段异常时是否能及时暂停或调整。原文给的唯一一组数据是 5 个代理、20 秒、4.18 美元、19 次转移、token 198,628 → 233,055；它没有给阈值或基线，只能拿你自己的历史数据前后对照。
 
 **最小试用**
 
@@ -1423,12 +1456,13 @@ delegate 模式配置：前提：你离开，且愿意用 root 文件开启。�
 - 做法 H：半天到一天，一个仓库。装好 Offrun（或手工照做），接两个你已有的 agent 账号（至少 Claude Code 加另一个），挑一个有 git、且有能跑的测试的 repo。别一次全上，只试两件事：隔离（同一 repo 同时开两个任务——一个重构、一个修 bug，确认两个 worktree 不互相改文件，各自分支能分别合并）；记忆（手工建 conventions.md / plan.md / dead-ends.md，把仓库约定和不许再试的死路写进去，开第二个会话时确认 agent 是否真读了，以及失败尝试是否被写回 dead-ends.md）。再试同行评审：让另一个 agent 在提交前读 diff，重点看它能不能抓到跨文件的数值/契约冲突（如上限与上游超时不一致这类）。
 - 做法 I：在 macOS 上装好 cmux，跑 `cmux hooks setup`，开 2–3 个终端型 agent（例如一个 Claude Code、一个 Codex），用 `cmux notify` 或让 agent hooks 触发通知，试 ⌘⇧U、⌘I 和通知面板；只在一两个真实任务上试半天到一天，观察「谁在等我」是否真的更快被处理。
 - 做法 J（半天内可完成）：先在一次性仓库跑 `npm i -g pullboard && pullboard tour`，确认你理解「提交—驳回—修复—复验—合并」的节奏；再选一个真实小仓库，`pullboard init` 并提交它写出的文件，只写 1–3 行 approved 的 SPEC.md，设一个真实的 gate（如 `pytest` 或 `npm test`），配 1 条 builder lane + 1 条 review lane；然后用 2–3 个小条目走完整流程：`add` → builder `worktree/next/submit` → 另一个 agent `next --verify` → `verify ... accept/reject`。
-- 新增做法 K（半天内可完成）：按 README 两条命令装好插件 → `/console demo` 看整块面板（不需要 registry）→ `/console refresh` 回到真实状态 → 挑一两个可回滚的项目，照 `workflow/projects-scope.example.md` 建注册表，并在项目里写一个用 `<!-- CARD -->` / `<!-- /CARD -->` 包住的 STATUS 块（Git 项目可放 `.console/STATUS.md` 并在 `.git/info/exclude` 里排除）→ 用 `dispatch.json` 给其中一个项目指定执行者（可先试 `manual`，或把它切到 Codex）→ 走一遍「派工 → 执行者完成 → autoSync 写回 CARD → 关卡评审」，看这条闭环是否真的减少了你的盯盘。
-- 新增做法 L（半天内可完成）：装好 `npm install -g neurosquad`（或直接 `npx neurosquad`）→ 在一个 git 仓库里跑 `nsq run claude "fix the flaky checkout test" --worktree` 和 `nsq run codex --name reviewer` → 打开 dashboard，试 Enter 全屏、Ctrl+] 回网格、y/a/n 回答权限、s / S 发送提示 → 按 q 关掉 dashboard 再 `nsq up`，确认 agent 是否按各自 session 恢复 → 用 `nsq ls --json`、`nsq peek <agent> -n 20`、`nsq diff <agent>`、`nsq cost --since 7d` 看状态、屏幕、改动和成本 → 可选：`nsq phone on --lan` + `nsq phone pair` 试手机端，或 `nsq provider add lmstudio --url http://localhost:1234` 接一个自建模型服务器。
-- 新增做法 M（半天内可完成）：挑一个中等规模的编码任务（例如一次性改 3～5 个文件的功能改动），保留你平时的做法作对照 → 按正交方式切成 2～3 块，每块交给一个生成型子 Agent，指令里写入 `不 Build、不 Test、不 Typecheck，早提交早返回。` → 子 Agent 返回后，由主 Agent 单独跑构建、测试、类型检查并统一修复 → 记录同样任务在你原来的做法下需要多少轮、多少上下文。
-- 新增做法 N（一周内可完成回看）：挑一个真实、**可逆**、一周内能见效的决策（例如某个报价调整、某个渠道是否加投），按六项清单把数字和限制写全 → 先跑低成本档：`/roast-room --quick <决策 + 选项 + 数字 + 限制 + 成功定义 + 你的倾向>` → 只想验证某个维度就先 `--seats` 限定 2–3 个最相关的席位（定价问题例：`hormozi,buffett`），或先 `ask` 单个席位 → 跑完执行 `python .claude/skills/roast-room/scripts/check_quotes.py sessions/<session>` 看引用是否全过 → 到你写下的成功截止日回看 `sessions/<date>-<decision>/verdict.md`，对照实际结果。
-- 新增做法 O（半天内可完成）：在一台 macOS 14+ 机器上 `brew install --cask josefchen/tap/muster`，只对 Claude Code 打开 Settings → Answer prompts from Muster；开两个并行的 Claude Code 会话，制造一个权限请求和一个多选题，练 ⌥↓ 展开、⌥↩ 允许、⌥1–9 选选项。可选：用 ⌃⌥Space 看最近三小时的 token 与成本。
-- 新增做法 P（半天到一天）：在非关键项目、本地环境按上面步骤安装；先保持默认 relay 模式，只对一个项目运行 `/hivehouse:start <task>`，观察 hub、团队、门禁、评审和清理；确认无误后再考虑 `/hivehouse:overnight` 或 delegate 模式。
+- 做法 K（半天内可完成）：按 README 两条命令装好插件 → `/console demo` 看整块面板（不需要 registry）→ `/console refresh` 回到真实状态 → 挑一两个可回滚的项目，照 `workflow/projects-scope.example.md` 建注册表，并在项目里写一个用 `<!-- CARD -->` / `<!-- /CARD -->` 包住的 STATUS 块（Git 项目可放 `.console/STATUS.md` 并在 `.git/info/exclude` 里排除）→ 用 `dispatch.json` 给其中一个项目指定执行者（可先试 `manual`，或把它切到 Codex）→ 走一遍「派工 → 执行者完成 → autoSync 写回 CARD → 关卡评审」，看这条闭环是否真的减少了你的盯盘。
+- 做法 L（半天内可完成）：装好 `npm install -g neurosquad`（或直接 `npx neurosquad`）→ 在一个 git 仓库里跑 `nsq run claude "fix the flaky checkout test" --worktree` 和 `nsq run codex --name reviewer` → 打开 dashboard，试 Enter 全屏、Ctrl+] 回网格、y/a/n 回答权限、s / S 发送提示 → 按 q 关掉 dashboard 再 `nsq up`，确认 agent 是否按各自 session 恢复 → 用 `nsq ls --json`、`nsq peek <agent> -n 20`、`nsq diff <agent>`、`nsq cost --since 7d` 看状态、屏幕、改动和成本 → 可选：`nsq phone on --lan` + `nsq phone pair` 试手机端，或 `nsq provider add lmstudio --url http://localhost:1234` 接一个自建模型服务器。
+- 做法 M（半天内可完成）：挑一个中等规模的编码任务（例如一次性改 3～5 个文件的功能改动），保留你平时的做法作对照 → 按正交方式切成 2～3 块，每块交给一个生成型子 Agent，指令里写入 `不 Build、不 Test、不 Typecheck，早提交早返回。` → 子 Agent 返回后，由主 Agent 单独跑构建、测试、类型检查并统一修复 → 记录同样任务在你原来的做法下需要多少轮、多少上下文。
+- 做法 N（一周内可完成回看）：挑一个真实、**可逆**、一周内能见效的决策（例如某个报价调整、某个渠道是否加投），按六项清单把数字和限制写全 → 先跑低成本档：`/roast-room --quick <决策 + 选项 + 数字 + 限制 + 成功定义 + 你的倾向>` → 只想验证某个维度就先 `--seats` 限定 2–3 个最相关的席位（定价问题例：`hormozi,buffett`），或先 `ask` 单个席位 → 跑完执行 `python .claude/skills/roast-room/scripts/check_quotes.py sessions/<session>` 看引用是否全过 → 到你写下的成功截止日回看 `sessions/<date>-<decision>/verdict.md`，对照实际结果。
+- 做法 O（半天内可完成）：在一台 macOS 14+ 机器上 `brew install --cask josefchen/tap/muster`，只对 Claude Code 打开 Settings → Answer prompts from Muster；开两个并行的 Claude Code 会话，制造一个权限请求和一个多选题，练 ⌥↓ 展开、⌥↩ 允许、⌥1–9 选选项。可选：用 ⌃⌥Space 看最近三小时的 token 与成本。
+- 做法 P（半天到一天）：在非关键项目、本地环境按上面步骤安装；先保持默认 relay 模式，只对一个项目运行 `/hivehouse:start <task>`，观察 hub、团队、门禁、评审和清理；确认无误后再考虑 `/hivehouse:overnight` 或 delegate 模式。
+- 新增做法 Q（一两次任务即可开始）：下一次多代理任务里，把流程拆成 2–3 个阶段，每个阶段开始前跑一次 `/cost`，记录阶段成本、token、转移次数和耗时；跑完对照你自己没有做阶段检查的那次同类任务。至少跑 2–3 次同类任务再判断。
 
 **试多久、什么时候升级**
 
@@ -1439,12 +1473,13 @@ delegate 模式配置：前提：你离开，且愿意用 root 文件开启。�
 - 做法 H 只在一个 repo、一两个任务上观察两周再决定是否推广；记忆是纯文件、chat 和 worktree 都在项目文件夹里，退回现有流程没有迁移成本。若同行评审有效比例低或误报高，先调整 reviewer 的 prompt 或换模型，再决定是否保留。
 - 做法 I 没有第三方性能与收益数据：先在 1–2 个 agent、半天到一天内试用；若通知可靠、漏掉等待的时间下降、恢复会话不丢布局，再扩大 agent 数。若通知常漏、恢复信任规则让你不确定、或本机 tmux 生命周期边界不满足，就不要把它作为默认方案。
 - 做法 J 只有 41 stars 和作者自述的返工比例：先在 2–3 个小条目上跑完整闭环，再决定是否固化成日常流程；如果 verifier 抓不到问题、或每个 PR 你仍要人工兜底，说明当前形态还没带来净收益。
-- 新增做法 K 只有 53 stars 和 0.15.x 的版本号：先在一两个可回滚的项目上跑一到两周，确认「派工 → 执行者完成 → autoSync 写回 CARD → 关卡评审」这条闭环真能减少人工盯盘；如果 STATUS 卡总得你手工维护、关卡拦不住东西、或配置/版本一变就装不上，就退回你现在的看板方式。
-- 新增做法 L 是 0.1.0 preview：先在一个 git 仓库、一两个真实任务上试半天到一天，确认 daemon 恢复、通知、权限内联回答、`nsq ls/cost/diff/peek` 都可靠；若命令或配置随版本变化导致你反复修，或手机端/自建 provider 的边界不满足，就只把它当临时观察窗，不要写进日常流程。
-- 新增做法 M 只有作者主张、没有数据：先在 2–3 个中等任务上做对照；只有当子 Agent 轮次下降、且主 Agent 侧返工没有明显增加时，才算这条规则在你的场景里成立。若总时长变长、主 Agent 一次通过率下降、或交接处返工变多，就退回原来的「边写边跑」方式。原文没有给观察周期，也没有说什么时候该升级。
-- 新增做法 N 只有 README 级材料（114 stars）、没有实测数据：先在一个可逆决策上跑一次 `--quick`，看反方论点命中数是否大于 0、引用是否全过校验、结论是否只是附和你的倾向；若这三项里有两项不合格，说明这次没带来增量，不要升级到完整委员会。连续两三次到期回看都不吻合，就下调对这个工作流的依赖。
-- 新增做法 O 只有作者自述的资源口径、没有对照数据：先在 1–2 个并行会话、半天到一天内试用；若「察觉—回答」耗时明显缩短、回答时不再需要离开当前窗口、且关闭后设置文件干净还原，就值得纳入多代理流程；若你通常只跑一个会话、不用 macOS，或以 Cursor 为主（只能跳转），收益有限。
-- 新增做法 P 项目较新（30 stars）、作者主张多于独立验证：先在非关键项目、本地环境用 relay 模式跑一个任务，确认门禁、评审、清理与推送边界都符合预期；若任何一项不改善或出现意外删除/推送，就停止采用。确认无误后再考虑 overnight 或 delegate。
+- 做法 K 只有 53 stars 和 0.15.x 的版本号：先在一两个可回滚的项目上跑一到两周，确认「派工 → 执行者完成 → autoSync 写回 CARD → 关卡评审」这条闭环真能减少人工盯盘；如果 STATUS 卡总得你手工维护、关卡拦不住东西、或配置/版本一变就装不上，就退回你现在的看板方式。
+- 做法 L 是 0.1.0 preview：先在一个 git 仓库、一两个真实任务上试半天到一天，确认 daemon 恢复、通知、权限内联回答、`nsq ls/cost/diff/peek` 都可靠；若命令或配置随版本变化导致你反复修，或手机端/自建 provider 的边界不满足，就只把它当临时观察窗，不要写进日常流程。
+- 做法 M 只有作者主张、没有数据：先在 2–3 个中等任务上做对照；只有当子 Agent 轮次下降、且主 Agent 侧返工没有明显增加时，才算这条规则在你的场景里成立。若总时长变长、主 Agent 一次通过率下降、或交接处返工变多，就退回原来的「边写边跑」方式。原文没有给观察周期，也没有说什么时候该升级。
+- 做法 N 只有 README 级材料（114 stars）、没有实测数据：先在一个可逆决策上跑一次 `--quick`，看反方论点命中数是否大于 0、引用是否全过校验、结论是否只是附和你的倾向；若这三项里有两项不合格，说明这次没带来增量，不要升级到完整委员会。连续两三次到期回看都不吻合，就下调对这个工作流的依赖。
+- 做法 O 只有作者自述的资源口径、没有对照数据：先在 1–2 个并行会话、半天到一天内试用；若「察觉—回答」耗时明显缩短、回答时不再需要离开当前窗口、且关闭后设置文件干净还原，就值得纳入多代理流程；若你通常只跑一个会话、不用 macOS，或以 Cursor 为主（只能跳转），收益有限。
+- 做法 P 项目较新（30 stars）、作者主张多于独立验证：先在非关键项目、本地环境用 relay 模式跑一个任务，确认门禁、评审、清理与推送边界都符合预期；若任何一项不改善或出现意外删除/推送，就停止采用。确认无误后再考虑 overnight 或 delegate。
+- 新增做法 Q 是推文级材料、没有阈值：先在一两次任务上试 2–3 个阶段；只有当「事前看见成本」真的让你避免了一次异常增长或一次不必要的代理扩容时，才把它固定成流程里的固定步骤。若你读不到细粒度成本，就退回使用做法 B/L 的工具内成本命令。
 
 ## 常见坑
 
@@ -1547,7 +1582,7 @@ delegate 模式配置：前提：你离开，且愿意用 root 文件开启。�
 - SPEC 行在你批准前是 draft，只有 approved 的行算数；含糊的需求行会得到含糊的验收。
 - 「nearly one in three items goes back」是作者对自己开发 Pullboard 时的描述，不是可复现的第三方基准。
 
-**新增做法 K（claude-console）**
+**做法 K（claude-console）**
 
 - 强依赖环境与版本：Claude Code 2.1.289 或更高且支持 mod；材料只给了 Windows 与 macOS 两个前提。
 - 状态和关卡都建立在你自建的两样约定上：项目注册表（`registryPath`，默认 `~/.claude/handoffs/projects-scope.md`）和每个项目里的 STATUS 卡；不维护它们，面板就是空的。
@@ -1566,7 +1601,7 @@ delegate 模式配置：前提：你离开，且愿意用 root 文件开启。�
 - 成熟度不足：仓库仅 53 stars、版本 0.15.x、UI 当前是繁体中文，且强依赖特定 Claude Code 版本与自建注册表/状态卡约定；升级靠页脚 `⬆ 更新` 或 `/console update`，逐版本变更看仓库 `CHANGELOG.md`。
 - 材料在「对应的研究问题」小节处被截断，除这里列出的配置键与命令外，不要照片段猜其他能力。
 
-**新增做法 L（nsq / neurosquad-cli）**
+**做法 L（nsq / neurosquad-cli）**
 
 - 0.1.0 preview：README 自标 preview，命令与配置在 1.0 前可能变化；不要把它直接写进团队的日常流程。
 - `nsq run -- <command>` 这类任意命令没有 hooks，只能显示 working / finished，永远不会出现 “needs you”；不要把非 hook CLI 也当成能被通知的 agent。
@@ -1579,7 +1614,7 @@ delegate 模式配置：前提：你离开，且愿意用 root 文件开启。�
 - 与做法 I（cmux）的差异：nsq 跨平台（Windows/macOS/Linux）、用 per-user daemon 持有终端、有脚本化接口和成本命令；cmux 仅 macOS、是 GUI 终端、通知与恢复能力更细。两者都只是注意力路由，不替代验证、记忆和评审。
 - 与做法 J/K 的差异：nsq 不提供 gate/verifier 状态机，也不提供跨项目关卡看板；它不做「完成」的定义，也不做合入闸门。
 
-**新增做法 M（主 Agent + 哑子 Agent）**
+**做法 M（主 Agent + 哑子 Agent）**
 
 - 原文被截断：正文在「2. 任务拆解：正交隔离」处即告结束，第 2 条规则的完整内容缺失（怎么正交、怎么保证隔离、结果怎么合并都没有）。不要照标题猜做法。
 - 只有作者主张、没有数据：原文没有给出任何案例、对照实验、耗时或成本数字；互动量为 151 赞、24 转发、30 回复，这些不能当效果证据。
@@ -1590,7 +1625,7 @@ delegate 模式配置：前提：你离开，且愿意用 root 文件开启。�
 - 不要用做法 M 替代合入门禁：做法 B 的 `FARM_VERIFY_CMD`、做法 G 的 QA + checks、做法 J 的 gate + 独立 verifier 都是机器可查的门禁，做法 M 只有你自己的纪律。
 - 「正交隔离」没有可照搬内容；如果拆完出现合并冲突或语义重复，说明这次的拆法有问题，需要自行迭代，而不是子 Agent 的错。
 
-**新增做法 N（roast-room）**
+**做法 N（roast-room）**
 
 - 顾问是**模拟人格**，不是本人，与本人无关联、也未获背书；只在句子确实在 brain 中且有来源时才逐字引用。别把报告里的「Bezos 说」当成本人观点。
 - 「七个顾问由公开作品构建」「每个引用都有出处」是设计声明：README 未给出编译方法或覆盖度评估；辩论能提升决策质量、打分加权能反映真实重要性，都没有实测结果。
@@ -1602,7 +1637,7 @@ delegate 模式配置：前提：你离开，且愿意用 root 文件开启。�
 - 成熟度：本次材料来源只有仓库 README，没有实际运行记录、没有第三方评测，114 stars；不要把它当成已验证的决策方法，它只是把「一个答案」变成一组可回看的反驳与打分。
 - 与做法 A 的差异（都是「多个代理评同一件事」）：A 是同模型多子代理带随机策略卡互相对抗、judge 看不到策略卡、按 rubric 打分淘汰，产出「更强答案」；N 是七个固定人格席位各自读 brain、逐项打分、由 Chair 记分并封顶风险，产出带评分的决策结论 + PDF，并附引用校验脚本。两者都不证明结论正确。
 
-**新增做法 O（Muster）**
+**做法 O（Muster）**
 
 - 仅 macOS 14+；菜单栏 Liquid Glass 外观需要 macOS 26。不是这个环境就用不了。
 - 只覆盖 Claude Code / Codex / Cursor 三家；Cursor 只能跳转、不能代答。
@@ -1613,7 +1648,7 @@ delegate 模式配置：前提：你离开，且愿意用 root 文件开启。�
 - 项目规模小（73 stars），迭代快，URL scheme、快捷键与设置项可能变化。
 - 「通知不够用、要能就地回答」是作者主张，没有对照实验；README 是仓库说明，不是实测报告。
 
-**新增做法 P（hivehouse）**
+**做法 P（hivehouse）**
 
 - 依赖门槛：tmux ≥3.2、git ≥2.31（`hh-gate-verify commits` 需 ≥2.38）、bash、jq、perl、shasum、Claude Code ≥2.1.291；远程还要 ssh / rsync。
 - 工作文件夹绝不能是项目本身；`hh-hub init` 在仓库内会拒绝。
@@ -1625,6 +1660,15 @@ delegate 模式配置：前提：你离开，且愿意用 root 文件开启。�
 - idle check 依赖 Claude Code 终端 UI 文本，版本更新可能需改 `HH_DIALOG_TEXT` 和 `hh_pane_idle_text`。
 - `docs-health-check` 工作流「Unverified here」：尚未通过真实 Claude Code 会话运行，只通过 stand-in 工作流运行时（`tests/test_docs_health.sh`）测试。
 - 没有给出实际任务完成率、成本节约或质量提升的数据；stars 为 30。作者主张多于独立验证。
+
+**新增做法 Q（阶段成本检查）**
+
+- 推文级材料：原文没有说明 `/cost` 属于哪个工具、M-01 到 M-05 是什么任务、4.18 美元是否合理、token 增长是否正常；不要把它当成完整教程。
+- 只有一组单次观测数据（5 个代理、20 秒、4.18 美元；19 次转移；token 198,628 → 233,055），没有基线、没有对照、没有阈值。
+- 「别再添加你无法定价的代理了」是作者主张，不是实测结论；如果你的流程无法估算新增代理的边际成本，正确动作是暂停和调整，而不是继续加。
+- 阶段检查依赖你能读到阶段成本；读不到就只能用做法 B 的 budget 命令、做法 L 的 `nsq cost` 或你自己的计费面板。
+- 手工检查会被跳过：把「每阶段开始前跑一次 `/cost`」写进你的阶段清单或脚本，别只靠记性。
+- 成本可见不等于产出已验证：做法 Q 只管钱，不替代验证、记忆和合入门禁（做法 B/G/J）。
 
 **通用**
 
@@ -1638,6 +1682,7 @@ delegate 模式配置：前提：你离开，且愿意用 root 文件开启。�
 - 决策类任务（做法 N）的「完成」不是一份结论，而是事后回看：先把成功定义和时限写下来，到期拿 `verdict.md` 与真实结果对照；没有这一步，委员会只是一次性咨询。
 - 用菜单栏/dashboard 回答权限时，先确认它管的是「可见性与权限」而不是「完成与合入」；做法 O / L 都不替代验证、记忆和评审。
 - 用无人值守模式（做法 P 的 delegate、做法 E 的长跑服务）前，先确认权限边界、最多运行时长与清理范围；涉及 bypassPermissions 或复制 secret 文件到远程时，先问自己能不能承担。
+- 阶段成本检查（做法 Q）要落在阶段边界上，不要只在任务结束后看一次总账单；原文只给了一组单次数据（5 个代理、20 秒、4.18 美元），没有阈值，必须用你自己的基线来判断是否异常。
 
 ## 证据与来源
 
@@ -1651,12 +1696,13 @@ delegate 模式配置：前提：你离开，且愿意用 root 文件开启。�
 - **做法 H** 依据调研《Show HN: Offrun – manage every coding agent from one workspace》。可核对：安装流程、每个 agent 一个 git worktree、三个记忆文件名与读写时机、同行评审示例输出、限额切换提示文案、数据边界表、50 次运行的对照表、Build/Planner 两种模式、通知与听写的描述。属于作者主张、没有外部验证：「50 runs in a row」「41 of 50 → 50 of 50」、免费无限/无服务器/不经手密钥等；无版本号、无发布日志、无第三方用户案例，HN 上 51 分、23 条评论的讨论内容不在给定材料里。适用条件：Apple Silicon（M1+）、macOS 14 Sonoma 或更高、至少一个已在用的 agent CLI；Pi 与 OpenCode 尚未支持。重要限制：原文是产品页面，本手册只采用其中可迁移的三条流程（worktree、记忆文件、提交前互评），Offrun 本身作为其中一种实现方式。
 - **做法 I** 依据调研《manaflow-ai/cmux》。可核对：仅 macOS、基于 Ghostty 渲染引擎、DMG 与 Homebrew 安装、`cmux hooks setup` 及其受支持 agent 列表、OSC 9/99/777 与 `cmux notify` 通知路径、快捷键表、`cmux claude-teams`、`cmux ssh` 与 `--command` 行为、`autoResumeAgentSessions` 配置、`cmux restore-session` 的 `--from <channel>` 与 `--from <path>` 信任差异、`cmux surface resume set/show/clear` 信任规则、`cmux local-tmux` / `cmux local-zellij` 生命周期边界、`CMUX_NO_GIT_WATCH=1`、浏览器导入/自动化、Skills 仓库等。属于作者主张：通知驱动的注意力路由能改善并行 agent 工作流，但没有第三方性能与收益数据。重要限制：调研材料在配置面 `~/.config/c...` 处被截断，其他配置细节在外链文档；因此本手册只写能照做的安装、hooks、通知、恢复与生命周期部分，不补写未给出的配置项。
 - **做法 J** 依据调研《pullboard-dev/pullboard》。可核对：完整 CLI 命令、`SPEC.md` 格式、`pullboard.json` 配置与各栈 gate 表、tour 的端到端示例（含故意破坏修复再看测试失败）、一个真实的 reject/accept receipt 样例、条目状态机（open → claimed → submitted → verified / 回 open）、`PRACTICE.md` doctrine、看板是放在 `.git` 里的一个 SQLite 文件、Node 22.13+、MIT 许可、41 stars。属于作者主张：这套方法论「更好」、返工比例可复现、多 agent 更连贯；「nearly one in three items goes back」是作者对自己开发 Pullboard 时的描述，不是可复现的第三方基准。原文自己声明的局限：worktree 身份只在一台机器上有意义、不是安全边界；可用 `--no-verify` 跳过 hook（靠 pre-push gate 和 verifier 兜底）；CI 只在 Linux 和 macOS 上跑，Windows 未测试；relay 和 Pullboard View 里的 roadmap 仍是 planned。
-- **新增做法 K** 依据调研《SaM-runtime/claude-console》。可核对：两条安装命令、`/console demo` 与 `/console refresh`、插件配置的 `--values-stdin` 写法与全部配置键及默认值、注册表 + STATUS 卡格式（`<!-- CARD -->` / `<!-- /CARD -->`、十行上限、繁体键名、`關卡` 的四种取值）、`dispatch.json` 结构与执行者解析顺序（面板覆盖 > 注册表 Executor 列 > 全局）、`sync` 的模型/session 覆盖规则、动作键与数字键回答待决事项、`/console reply`、命令速查表、`commandGuard` / `loopGuard` / `activation` / `projectMode` 的取值与默认、Git/PR/CI 探测行为与 `gitProbe` 三档、`/console update`。属于作者主张：「一个控制台会话承担跨项目规格、监督与评审关卡」「刷新只查本地文件和 CLI、不请求模型」「减少盯盘」等来自原文自述，没有第三方基准或对照实验。原文自己声明的局限与材料限制：仓库仅 53 stars、版本 0.15.x、UI 为繁体中文、强依赖特定 Claude Code 版本与自建的注册表/STATUS 卡约定；材料在「对应的研究问题」小节处被截断，本手册只写能照做的安装、配置、派工、状态卡、动作与护栏部分。
-- **新增做法 L** 依据调研《glmn-ai/neurosquad-cli》。可核对：`npm install -g neurosquad` / `npx neurosquad`、`nsq run claude "..." --worktree` 与分支名 `nsq/<name>`、`nsq run codex --name reviewer`、`nsq run -- npm run dev`、dashboard 的 Enter / Ctrl+] / y / a / n / i / s / S / q、`nsq down` / `nsq up`、`nsq ls --json` / `nsq send <agent> "prompt" [--when-done]` / `nsq answer <agent> yes|always|no` / `nsq peek <agent> [-n 20]` / `nsq diff <agent>` / `nsq cost [--since 7d] [--json]`、`nsq openrouter set-key`、`nsq provider add lmstudio --url http://localhost:1234`、`nsq phone on --lan|--online` / `nsq phone pair` / `nsq phone push ntfy` / `nsq phone rotate` / `nsq phone off`、语音听写 `v` 与约 670 MB 模型 / Windows arm64 不可用、`nsq config set autoUpdate false`、`nsq doctor`、`nsq set <agent> ...`、数据目录 `~/.neurosquad-cli` 与 `NSQ_HOME`、OS keyring、`~/.claude` / `~/.codex` / `opencode.json` 永不被写、Node.js 22.13+、MIT、README 自标 0.1.0 preview、native 预编译平台。属于作者主张、没有外部验证：daemon/dashboard 能改善并行 agent 的响应速度与成本可见性，README 没有给出任何“改善幅度”的量化指标或基准；`--worktree` 的隔离边界是文件系统路径而非安全边界。重要限制：本条只依据 README 级材料，命令与配置在 1.0 前可能变化，不宜直接纳入日常流程。
-- **新增做法 M** 依据调研《@yanhua1010: 总结一下，推荐收藏》。可核对：原文明确给出的两条规则（子 Agent「不 Build、不 Test、不 Typecheck，早提交早返回」；任务拆解「正交隔离」）、架构名称「主 Agent + 哑子 Agent」、以及原样引用的指令文本。属于作者主张：「剥离验证环节可以防止大模型陷入越修越乱的幻觉循环」「把上下文消耗压到最低」——原文没有给出测量方式或数据，也没有案例、耗时或成本数字；互动量为 151 赞、24 转发、30 回复。重要限制：原文在「2. 任务拆解：正交隔离」处即被截断，第 2 条规则的完整内容缺失，本手册只采用已保存前半段的两条规则，不补造拆解方法；「主 Agent 统一做验证」是按架构名称与「剥离」一词做出的合理推断，原文未逐字写明，请以自己环境实测为准。
-- **新增做法 N** 依据调研《nateherkai/roast-room》。可核对：克隆与进入命令、`npm start` 与 http://localhost:4730、在仓库内 `claude` 后执行 `/roast-room <你的决策>`、`--quick` / `--seats hormozi,buffett` / `ask hormozi` 三个变体、README 列出的六项输入清单、README 原样的完整示例提示词、目录结构（`.claude/agents/council-*.md` 席位、`.claude/skills/roast-room/brains/<name>/` 含框架/原则/立场/故事/语气笔记与 `sources.md`、`SKILL.md` 由 Chair 负责跑轮次记分写结论）、`check_quotes.py` 的用法、报告落盘路径 `sessions/<date>-<decision>/verdict.md`、成本量级（完整委员会 21 次 sub-agent 运行、API 模式约 25 次调用）、三个自带示例 session、仓库 114 stars。属于作者主张：「七个顾问由公开作品构建」「每个引用都有出处」是设计声明，README 未给编译方法或覆盖度评估；辩论能提升决策质量、打分加权能反映真实重要性，均无实测结果；`check_quotes.py` 只能验证「引文是否在 brain 里且有来源」，不能验证来源是否被正确解释。原文自己声明的局限：顾问是模拟人格，不是本人，与本人无关联、未获背书；一次完整委员会对 Claude 套餐用量消耗较大，README 自己建议小决策用 `--quick`。重要限制：本次材料来源只有仓库 README（`source_note` 标注「依据仓库 README」），没有实际运行记录、没有第三方评测；房间是可选可视化层、不做任何 AI 调用。
-- **新增做法 O** 依据调研《josefchen/muster》。可核对：macOS 14+（Liquid Glass 需 macOS 26）、`brew install --cask josefchen/tap/muster` 与 `Muster.dmg`、逐代理 Settings → Answer prompts from Muster、Claude Code 支持权限/多选/计划批准、Codex 需 `/hooks` 信任一次、Cursor 只跳转、快捷键表（⌥Tab / ⌥↩ / ⌥⌫ / ⌥1–9 / ⌥↓ / ⌥↑ / ⌃⌥Space）、URL scheme（`muster://search` 等）、`~/Library/Application Support/Muster/pricing.json`、`./build.sh` / `./test.sh` / `scripts/e2e.sh [--soak] [--ui]`、`.muster-original` / `.muster-backup` 与符号链接/解析失败不动、hooks 走 `127.0.0.1` 带每安装 token、只读读取 `~/.claude/projects` / `~/.codex/state_*.sqlite` / Cursor Agents 窗口、重扫最多每秒一次且增量读取、2 MB 下载与十个代理约 0.4% CPU / 20 MB 内存、计价口径（Claude 按消息含子代理并区分 5 分钟/1 小时缓存写入；Codex 为下限；Cursor 无 token 数据）、MIT、73 stars。属于作者主张：「通知不够用、要能就地回答」、改善幅度；README 没有「节省多少等待时间」的对照数据。重要限制：仅 macOS 14+、仅三家代理、Cursor 只能跳转、项目小且迭代快、原文是仓库 README 而非实测报告。
-- **新增做法 P** 依据调研《Cleveland-RD/hivehouse》。可核对：安装命令（`claude plugin marketplace add Cleveland-RD/hivehouse`、`claude plugin install hivehouse@hivehouse`）、依赖版本（tmux ≥3.2、git ≥2.31 且 `hh-gate-verify commits` 需 ≥2.38、bash、jq、perl、shasum、Claude Code ≥2.1.291、远程需 ssh/rsync）、`claude plugin list --json` 检查、`userConfig` 键（models、efforts、permission mode、files per commit、rotation level、overnight ceiling、`hub_auto_start`）、`<installPath>/bin/hh-hub init` 与 `start`、九条技能表与一个 docs-health-check 工作流、`<installPath>/bin/hh-slot status`、delegate 模式规则（root 文件、最多 7 天、`permission_mode_local=auto` 才 bypassPermissions、hook 拒绝 push/发布/上传/改设置、`hh-push` fast-forward only 且不在 delegate 模式运行、ssh/scp/rsync 每次请求许可、delegate 模式拒绝）、`docs/away-mode.md`、清理范围、`tests/test_docs_health.sh`、30 stars。属于作者主张：`bin/` 中每个机械动作是经过测试的 bash 可执行文件；「docs-health-check」工作流是 Unverified here（只通过 stand-in 工作流运行时测试，尚未通过真实 Claude Code 会话运行）；没有任务完成率、成本节约或质量提升数据。重要限制：idle check 依赖 Claude Code 终端 UI 文本，版本更新可能需改 `HH_DIALOG_TEXT` 和 `hh_pane_idle_text`；`hh-*` 只在启用插件的 Claude 会话中在 PATH 上；delegate 模式涉及 bypassPermissions 与复制 secret 文件到远程的风险。
+- **做法 K** 依据调研《SaM-runtime/claude-console》。可核对：两条安装命令、`/console demo` 与 `/console refresh`、插件配置的 `--values-stdin` 写法与全部配置键及默认值、注册表 + STATUS 卡格式（`<!-- CARD -->` / `<!-- /CARD -->`、十行上限、繁体键名、`關卡` 的四种取值）、`dispatch.json` 结构与执行者解析顺序（面板覆盖 > 注册表 Executor 列 > 全局）、`sync` 的模型/session 覆盖规则、动作键与数字键回答待决事项、`/console reply`、命令速查表、`commandGuard` / `loopGuard` / `activation` / `projectMode` 的取值与默认、Git/PR/CI 探测行为与 `gitProbe` 三档、`/console update`。属于作者主张：「一个控制台会话承担跨项目规格、监督与评审关卡」「刷新只查本地文件和 CLI、不请求模型」「减少盯盘」等来自原文自述，没有第三方基准或对照实验。原文自己声明的局限与材料限制：仓库仅 53 stars、版本 0.15.x、UI 为繁体中文、强依赖特定 Claude Code 版本与自建的注册表/STATUS 卡约定；材料在「对应的研究问题」小节处被截断，本手册只写能照做的安装、配置、派工、状态卡、动作与护栏部分。
+- **做法 L** 依据调研《glmn-ai/neurosquad-cli》。可核对：`npm install -g neurosquad` / `npx neurosquad`、`nsq run claude "..." --worktree` 与分支名 `nsq/<name>`、`nsq run codex --name reviewer`、`nsq run -- npm run dev`、dashboard 的 Enter / Ctrl+] / y / a / n / i / s / S / q、`nsq down` / `nsq up`、`nsq ls --json` / `nsq send <agent> "prompt" [--when-done]` / `nsq answer <agent> yes|always|no` / `nsq peek <agent> [-n 20]` / `nsq diff <agent>` / `nsq cost [--since 7d] [--json]`、`nsq openrouter set-key`、`nsq provider add lmstudio --url http://localhost:1234`、`nsq phone on --lan|--online` / `nsq phone pair` / `nsq phone push ntfy` / `nsq phone rotate` / `nsq phone off`、语音听写 `v` 与约 670 MB 模型 / Windows arm64 不可用、`nsq config set autoUpdate false`、`nsq doctor`、`nsq set <agent> ...`、数据目录 `~/.neurosquad-cli` 与 `NSQ_HOME`、OS keyring、`~/.claude` / `~/.codex` / `opencode.json` 永不被写、Node.js 22.13+、MIT、README 自标 0.1.0 preview、native 预编译平台。属于作者主张、没有外部验证：daemon/dashboard 能改善并行 agent 的响应速度与成本可见性，README 没有给出任何“改善幅度”的量化指标或基准；`--worktree` 的隔离边界是文件系统路径而非安全边界。重要限制：本条只依据 README 级材料，命令与配置在 1.0 前可能变化，不宜直接纳入日常流程。
+- **做法 M** 依据调研《@yanhua1010: 总结一下，推荐收藏》。可核对：原文明确给出的两条规则（子 Agent「不 Build、不 Test、不 Typecheck，早提交早返回」；任务拆解「正交隔离」）、架构名称「主 Agent + 哑子 Agent」、以及原样引用的指令文本。属于作者主张：「剥离验证环节可以防止大模型陷入越修越乱的幻觉循环」「把上下文消耗压到最低」——原文没有给出测量方式或数据，也没有案例、耗时或成本数字；互动量为 151 赞、24 转发、30 回复。重要限制：原文在「2. 任务拆解：正交隔离」处即被截断，第 2 条规则的完整内容缺失，本手册只采用已保存前半段的两条规则，不补造拆解方法；「主 Agent 统一做验证」是按架构名称与「剥离」一词做出的合理推断，原文未逐字写明，请以自己环境实测为准。
+- **做法 N** 依据调研《nateherkai/roast-room》。可核对：克隆与进入命令、`npm start` 与 http://localhost:4730、在仓库内 `claude` 后执行 `/roast-room <你的决策>`、`--quick` / `--seats hormozi,buffett` / `ask hormozi` 三个变体、README 列出的六项输入清单、README 原样的完整示例提示词、目录结构（`.claude/agents/council-*.md` 席位、`.claude/skills/roast-room/brains/<name>/` 含框架/原则/立场/故事/语气笔记与 `sources.md`、`SKILL.md` 由 Chair 负责跑轮次记分写结论）、`check_quotes.py` 的用法、报告落盘路径 `sessions/<date>-<decision>/verdict.md`、成本量级（完整委员会 21 次 sub-agent 运行、API 模式约 25 次调用）、三个自带示例 session、仓库 114 stars。属于作者主张：「七个顾问由公开作品构建」「每个引用都有出处」是设计声明，README 未给编译方法或覆盖度评估；辩论能提升决策质量、打分加权能反映真实重要性，均无实测结果；`check_quotes.py` 只能验证「引文是否在 brain 里且有来源」，不能验证来源是否被正确解释。原文自己声明的局限：顾问是模拟人格，不是本人，与本人无关联、未获背书；一次完整委员会对 Claude 套餐用量消耗较大，README 自己建议小决策用 `--quick`。重要限制：本次材料来源只有仓库 README（`source_note` 标注「依据仓库 README」），没有实际运行记录、没有第三方评测；房间是可选可视化层、不做任何 AI 调用。
+- **做法 O** 依据调研《josefchen/muster》。可核对：macOS 14+（Liquid Glass 需 macOS 26）、`brew install --cask josefchen/tap/muster` 与 `Muster.dmg`、逐代理 Settings → Answer prompts from Muster、Claude Code 支持权限/多选/计划批准、Codex 需 `/hooks` 信任一次、Cursor 只跳转、快捷键表（⌥Tab / ⌥↩ / ⌥⌫ / ⌥1–9 / ⌥↓ / ⌥↑ / ⌃⌥Space）、URL scheme（`muster://search` 等）、`~/Library/Application Support/Muster/pricing.json`、`./build.sh` / `./test.sh` / `scripts/e2e.sh [--soak] [--ui]`、`.muster-original` / `.muster-backup` 与符号链接/解析失败不动、hooks 走 `127.0.0.1` 带每安装 token、只读读取 `~/.claude/projects` / `~/.codex/state_*.sqlite` / Cursor Agents 窗口、重扫最多每秒一次且增量读取、2 MB 下载与十个代理约 0.4% CPU / 20 MB 内存、计价口径（Claude 按消息含子代理并区分 5 分钟/1 小时缓存写入；Codex 为下限；Cursor 无 token 数据）、MIT、73 stars。属于作者主张：「通知不够用、要能就地回答」、改善幅度；README 没有「节省多少等待时间」的对照数据。重要限制：仅 macOS 14+、仅三家代理、Cursor 只能跳转、项目小且迭代快、原文是仓库 README 而非实测报告。
+- **做法 P** 依据调研《Cleveland-RD/hivehouse》。可核对：安装命令（`claude plugin marketplace add Cleveland-RD/hivehouse`、`claude plugin install hivehouse@hivehouse`）、依赖版本（tmux ≥3.2、git ≥2.31 且 `hh-gate-verify commits` 需 ≥2.38、bash、jq、perl、shasum、Claude Code ≥2.1.291、远程需 ssh/rsync）、`claude plugin list --json` 检查、`userConfig` 键（models、efforts、permission mode、files per commit、rotation level、overnight ceiling、`hub_auto_start`）、`<installPath>/bin/hh-hub init` 与 `start`、九条技能表与一个 docs-health-check 工作流、`<installPath>/bin/hh-slot status`、delegate 模式规则（root 文件、最多 7 天、`permission_mode_local=auto` 才 bypassPermissions、hook 拒绝 push/发布/上传/改设置、`hh-push` fast-forward only 且不在 delegate 模式运行、ssh/scp/rsync 每次请求许可、delegate 模式拒绝）、`docs/away-mode.md`、清理范围、`tests/test_docs_health.sh`、30 stars。属于作者主张：`bin/` 中每个机械动作是经过测试的 bash 可执行文件；「docs-health-check」工作流是 Unverified here（只通过 stand-in 工作流运行时测试，尚未通过真实 Claude Code 会话运行）；没有任务完成率、成本节约或质量提升数据。重要限制：idle check 依赖 Claude Code 终端 UI 文本，版本更新可能需改 `HH_DIALOG_TEXT` 和 `hh_pane_idle_text`；`hh-*` 只在启用插件的 Claude 会话中在 PATH 上；delegate 模式涉及 bypassPermissions 与复制 secret 文件到远程的风险。
+- **新增做法 Q** 依据调研《@Klonzu: 天哪。5 个代理，20 秒内 4.18 美元。别再添加你无法定价的代理了。》。可核对：作者主张「别再添加你无法定价的代理了」、动作「在下一个阶段开始前检查每个阶段的成本」、可复制的检查 `/cost`（原文给的具体动作就是运行它），以及一组演示面板数据：5 个代理、20 秒、4.18 美元；M-01 到 M-05，最后一帧 19 次转移；工作 token 从 198,628 增加到 233,055。属于作者主张：这些数据来自一次演示面板，原文没有给基线、阈值或对照；`/cost` 属于哪个具体工具、M-01 到 M-05 代表什么任务、4.18 美元是否合理，原文都没有说明。重要限制：这是推文级材料、不是完整教程；本手册只采用「在阶段边界做一次成本检查」这一个习惯，不补造定价方法或阈值。
 
 ## 依据的调研
 
@@ -1676,3 +1722,4 @@ delegate 模式配置：前提：你离开，且愿意用 root 文件开启。�
 - [nateherkai/roast-room](../research/radar/2026-10-13/2908-nateherkai-roast-room.md)：值得一试，可以照 README 的步骤在 Claude Code 里跑一次 `--quick` 版决策辩论，用真实但可逆的商业决策做小范围试；因为原文给了完整的安装命令、斜杠命令、输入清单和校验脚本，但没有任何关于结论质量的实测数据，且全量会议要消耗 21 次子代理调用，只适合先低成本验证。
 - [josefchen/muster](../research/radar/2026-10-14/3134-josefchen-muster.md)：值得一试，建议小范围试用：在 macOS 14+ 上用 `brew install --cask josefchen/tap/muster` 装好，只对 Claude Code 开启「Answer prompts from Muster」，用「代理开始等待→人察觉→回答完成」的耗时和是否需要切换窗口来判断收益；理由是原文给出了可直接照做的安装命令、逐代理开关、Codex 信任 hook、快捷键与自测脚本，但它只覆盖 macOS 和 Claude Code/Codex/Cursor 三家，改善幅度是作者主张、没有对照数据。
 - [Cleveland-RD/hivehouse](../research/radar/2026-10-14/3136-cleveland-rd-hivehouse.md)：值得一试，建议小范围试：在满足依赖的本地环境按 README 安装 hivehouse，先用默认 relay 模式对单个非关键项目运行一个任务，验证多代理编排、门禁、评审与清理流程，再考虑过夜或 delegate 模式；理由是它给出了可复制的安装、配置和权限边界步骤，但项目较新且部分工作流未在真实 Claude Code 会话验证，需控制风险。
+- [@Klonzu: 天哪。5 个代理，20 秒内 4.18 美元。别再添加你无法定价的代理了。](../research/radar/2026-10-14/3143-5-20-4-18.md)：值得一试，建议在多代理、分阶段流程中尝试“进入下一阶段前运行 /cost 检查成本”的习惯；理由是原文给出了可照做的检查动作和一组成本/token 观测数据，但工具环境与完整流程不清晰，只适合小范围验证，不能直接 adopt。
