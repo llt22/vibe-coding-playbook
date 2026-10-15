@@ -4,6 +4,7 @@
 
 | 手册 | 解决的问题 | 先试这一步 | 最近修订 |
 |---|---|---|---|
+| [让跨境电商 Listing 从生成到复测走一条可自检的闭环](cross-border-ecommerce-with-agents.md) | 把有明确 SOP、可模板化输入、可清单自检的跨境电商运营环节，拆成可复用 Agent 工作流，并用广告/评论数据回流复测 Listing。 | 选 1 个 Shopee 或 Mercado Livre 产品，只跑 01 市场分析→02 产品策略→03 Listing→自检 这条短闭环。 | 2026-10-15 |
 | [让 AI 代理的并行工作有验证、门禁和成本账](orchestrate-multiple-agents.md) | 把单个 AI 回答或并行代理的产出，变成经过验证、可观察、有成本账的工作流，而不是只看它自称完成。 | 先挑一个真实、可逆的小任务，按做法 R 只开一个 triage-github loop 跑一天，确认“先复现、先写失败测试、再修”能否产出可 review 的 PR；若你已有并行代理，先按做法 O/L 把“谁在等我”路由出来。 | 2026-10-15 |
 | [给代理接第三方工具前，先隔离、核对、冒烟、对照再决定](add-mcp-servers-to-agents.md) | 把第三方工具集以 MCP 或 CLI 形式接给代理时，怎么不被一句注册命令带走，用隔离、清单核对、冒烟和对照验证决定继续试还是只当思路参考。 | 在隔离环境里选一个真实重复任务，先用 `pip install cli-anything-hub` + `cli-hub install/launch` 跑通一个现成 CLI harness，或对 MCP 工具先跑 `uvx jevcrawl doctor` 确认通路，并留下未接入时的基线。 | 2026-10-15 |
 | [别靠感觉判断 AI 改动有没有变好：建评测、加回归闸门、做对照实验](build-and-run-evals.md) | 怎么用可复核的证据（评测集、回归闸门、元评估、上线口径、配对对照实验）判断 AI 的每次改动到底有没有变好，而不是靠感觉。 | 先按第 1 步在 Claude Code 里跑一次 `/claude-api build-eval`，给手头能反复跑的文本类对象（system prompt、skill、tool 描述、模型与参数）建起评测并跑出 baseline。 | 2026-10-15 |
