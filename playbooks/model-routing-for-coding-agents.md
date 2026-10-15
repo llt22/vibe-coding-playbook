@@ -1,18 +1,18 @@
-# 让编码 agent 自动换模型、贵模型只做判断，并在宣布完成前拿出证据
+# 让编码 agent 只在需要时用贵模型，并在完成前拿出证据
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：在一堆供应商配额、限流、死 key 和 token 消耗面前，怎么把多个模型按难度和成本分好工、自动回退，并在宣布完成前用确定性证据验收。
-> 先试这一步：先在本机起一个 OpenAI 兼容网关（如 OmniRoute），用 curl 打 model=auto 确认零凭证能返回；再只把一个你已经在用的工具指过去，保留一条直连原供应商的对照路径。
-> 最近修订：2026-10-14
+> 解决的问题：解决多供应商/多模型编码时配额闲置、限流与死 key 中断、贵模型全程主持、以及 agent 未经验收就宣布完成的问题。
+> 先试这一步：如果你用 Claude Code，先在终端运行 `claude --help` 确认存在 `--advisor`，再用一个真实中等复杂度任务做 A/B：默认方式跑一遍，`claude --model sonnet --advisor opus` 跑一遍；参数不存在就退回“贵模型只用在决策点”，或先做做法 A 的本地网关最小验证。
+> 最近修订：2026-10-16
 
 ## 解决什么问题
 
-编码过程中经常遇到几种中断：某个供应商的订阅配额到期没用完、编码到一半被限流、某个 key 死掉导致整条流程卡住、工具输出烧 token。这些事本身没有谁专门负责，于是变成你手动换模型、换 key。另一类问题是模型选择：要么一直用最重最贵的模型，要么靠手动切换；agent 宣布完成时，也可能只看进程退出，不看任务是否真的通过确定性检查。还有一种浪费是：主力模型已经成为日常，另一个模型的配额一直闲置，却没有把它挂进当前会话。
+编码过程中经常遇到几种中断：某个供应商的订阅配额到期没用完、编码到一半被限流、某个 key 死掉导致整条流程卡住、工具输出烧 token。这些事本身没有谁专门负责，于是变成你手动换模型、换 key。另一类问题是模型选择：要么一直用最重最贵的模型，要么靠手动切换；agent 宣布完成时，也可能只看进程退出，不看任务是否真的通过确定性检查。还有一种浪费是：主力模型已经成为日常，另一个模型的配额一直闲置，却没有把它挂进当前会话。本次新增一条同层做法：在 Claude Code 启动时用 `--model` / `--advisor` 做多模型分层，让 Sonnet 主跑、Opus 只在决策点介入、Haiku 承担只读杂活；但原文在“→ 只读 haiku 5.5”处被截断，Haiku 配置待核对。
 
-本手册给出一套本地可试的做法：用 OpenAI 兼容网关统一接多个供应商，并在配额耗尽、供应商失败或成本上升时自动回退；在 Codex 内用 Adaptive Router 按本地难度启发式选择轻/重模型；用“有证据的验收”判断是否真的完成；再用一层控制平台，为每次会话选择 harness × model × effort 并观察成本与上下文；以及用 LiteLLM 的 SDK 或网关把 100+ 供应商统一成 OpenAI 格式，并做按项目/用户的成本追踪。Claude Code 内还有一条线：把次要模型挂成顾问，避免贵模型全程主持。目前材料里有两种挂法，目的不同：一种是主模型用重模型（原文称 Opus 5.5）、把另一个闲置配额模型（原文称 Fable 5.1）挂成顾问；另一种是反过来，让轻模型（原文称 Sonnet）主跑并改代码，把重模型（原文称 Opus）挂在顾问位，只在需要判断/兜底时调用——后者的主张是“你不再为不需要 Opus 的工作支付 Opus 的价格”。两种挂法的模型名与命令语法在给定材料里都无法核实，先分开小范围试。
+本手册给出一套本地可试的做法：用 OpenAI 兼容网关统一接多个供应商，并在配额耗尽、供应商失败或成本上升时自动回退；在 Codex 内用 Adaptive Router 按本地难度启发式选择轻/重模型；用“有证据的验收”判断是否真的完成；再用一层控制平台，为每次会话选择 harness × model × effort 并观察成本与上下文；以及用 LiteLLM 的 SDK 或网关把 100+ 供应商统一成 OpenAI 格式，并做按项目/用户的成本追踪。Claude Code 内还有一条线：把次要模型挂成顾问，避免贵模型全程主持。目前材料里有三种挂法：F1 是主模型用重模型（原文称 Opus 5.5）、把另一个闲置配额模型（原文称 Fable 5.1）挂成顾问；F2a 是用会话内命令让轻模型（原文称 Sonnet）主跑并改代码，把重模型（原文称 Opus）挂在顾问位；F2b 是本次新增的启动参数写法 `claude --model sonnet --advisor opus`，并提到只读 Haiku 承担杂活。三者的模型名与命令语法在给定材料里都无法核实，先分开小范围试。
 
-OmniRoute 调研把四类痛点明确列为可接管项：订阅配额到期未用完、编码中途被限流、工具输出烧 token、死 key 导致阻塞。agent-smith 的核心主张是：常规工作交给更轻的模型，困难任务才动用重型模型，路由依据是一个本地、未校准的 1.0–10.0 难度启发式。FlagshipRouter 是同一层的另一种接法：本地 OpenAI 兼容网关，把 Claude Code、Cline 等工具接到多家免费供应商的模型表上，用面板统一改配置。Gluon 在会话层：把 Claude Code、Codex、Antigravity、Grok Build、OpenCode、Kimi Code 并排跑在同一个终端框架里，把 agent 定义为 harness × model × effort，先和你确定 spec 再按可配置规则路由，并提供成本与上下文可观测性。LiteLLM 提供 SDK 和 AI Gateway 两种用法：SDK 侧一个 `completion()` 换 `model` 字符串就能调不同供应商；网关侧在本机 4000 端口起服务，README 列出的能力包括虚拟密钥与鉴权授权、按项目/用户的多租户成本追踪与花费管理、按项目的日志/guardrails/缓存定制、管理后台 UI，以及把 Claude Code / Codex / OpenCode / Deep Agents 跑在任意模型上的 harness 抽象。Claude Code 的 `/advisor` 是另一条线：原文称主模型继续工作，顾问模型在旁待命，用来不浪费另一个模型的配额；但原文在关键处被截断，模型名与文档地址都无法核实。第二种挂法（Sonnet 主跑 + Opus 顾问）同样只给了一行箭头写法，命令语法、Haiku 那一环和文档链接都缺失。七个项目的材料都未说明可以互相集成，先分别试。
+OmniRoute 调研把四类痛点明确列为可接管项：订阅配额到期未用完、编码中途被限流、工具输出烧 token、死 key 导致阻塞。agent-smith 的核心主张是：常规工作交给更轻的模型，困难任务才动用重型模型，路由依据是一个本地、未校准的 1.0–10.0 难度启发式。FlagshipRouter 是同一层的另一种接法：本地 OpenAI 兼容网关，把 Claude Code、Cline 等工具接到多家免费供应商的模型表上，用面板统一改配置。Gluon 在会话层：把 Claude Code、Codex、Antigravity、Grok Build、OpenCode、Kimi Code 并排跑在同一个终端框架里，把 agent 定义为 harness × model × effort，先和你确定 spec 再按可配置规则路由，并提供成本与上下文可观测性。LiteLLM 提供 SDK 和 AI Gateway 两种用法。Claude Code 的 `/advisor` 是另一条线；F2b 的新材料只给出一条启动命令和三条分工，正文在“→ 只读 haiku 5.5”处截断。七个项目的材料都未说明可以互相集成，先分别试。
 
 ## 适用与不适用
 
@@ -26,42 +26,40 @@ OmniRoute 调研把四类痛点明确列为可接管项：订阅配额到期未�
 - 你已经装了多个编码 agent（Claude Code、Codex、Antigravity、Grok Build、OpenCode、Kimi Code 中至少一个），想在同一终端框架里并排开会话，并为每次会话选 harness/model/effort。
 - 你想按会话看到成本与上下文占用，用来比较不同选择；并且能在 Linux/macOS/WSL/Windows 的本地 git 仓库里跑终端命令。
 - 你想先在 Python 代码里用同一个函数调不同供应商（换模型只改 `model` 字符串），再决定要不要上网关。
-- 你需要在本地网关侧做按项目/用户的成本追踪与虚拟密钥，或想把 Claude Code / Codex / OpenCode / Deep Agents 作为 harness 跑在自己的网关上，并拿到每次调用的 cost 与产出文件。
-- 你使用 Claude Code，且你所用的版本确实支持 `/advisor`，主模型已设为日常主力，同时还有另一个模型的可用配额（对应做法 F1）。
-- 你使用 Claude Code，账号/计划允许在 Sonnet、Opus 等模型之间切换，额度允许调用 Opus，主要任务是代码编辑、对成本敏感，并愿意先在一个中等复杂度改动上做 A/B 对照（对应做法 F2）。
+- 你需要在本地网关侧做按项目/用户的成本追踪与虚拟密钥，或想把 Claude Code / Codex / OpenCode / Deep Agents 作为 harness 跑在自己的网关上。
+- 你使用 Claude Code，且版本支持 `/advisor` 或 `--advisor`；主模型已设为日常主力，同时还有另一个模型的可用配额（F1）。
+- 你使用 Claude Code，账号/计划允许在 Sonnet、Opus、Haiku 等模型之间切换，主要任务是代码编辑、对成本敏感，并愿意先在一个 1–2 小时的中等复杂度改动上做 A/B（F2a/F2b）。
 - 你只想先在非敏感、非生产任务上小范围试。
 
 不适用或需要谨慎：
 
 - 有合规或数据敏感要求：接入前先看清请求是否会经过第三方免费层。OmniRoute README 自己披露有 13 家供应商因条款风险被标记为 avoid。
-- 想直接采信 README 的效果数字：OmniRoute 原文没有给出测量方法、测试集或对照实验；agent-smith 也只有 6 个合成任务、单次尝试的小规模试点；FlagshipRouter 只有 37 stars 这类仓库元信息，没有任何性能、成本或质量数据；Gluon 同样没有效果数据、对比实验或用户案例；LiteLLM 是特性索引 + 宣传，实际收益需自测。
+- 想直接采信 README 的效果数字：OmniRoute 原文没有给出测量方法、测试集或对照实验；agent-smith 只有 6 个合成任务、单次尝试；FlagshipRouter 只有仓库元信息；Gluon 没有效果数据；LiteLLM 是特性索引 + 宣传。
 - 想用 OmniRoute 的“生产级”能力（MCP、A2A、guardrails、evals、TLS stealth、key pools 等）：给定材料里只有名词，没有配置步骤。
-- 想用 FlagshipRouter 的 Media Models（embedding、image、video、speech、transcription、web fetch & search）和 Agent Skills 页面：README 只提到存在，没有给用法。
-- 想直接照抄 Gluon 的路由规则：`routing.yaml` 的具体写法、权限与工具供给、安全隐私、成本分析示例、故障排查都在其文档站点，给定材料（README landing page）没有展开。
-- 不放心把代码库交给多个第三方 agent：Gluon 会在同一框架里并排接入多个 harness，各自用自己的 key 或订阅；原文没有展开权限与数据边界配置。
-- Codex Float 仅 macOS 14+；非 macOS 不能用 Float。agent-smith 的 router 执行需要已有 Codex 登录。
-- FlagshipRouter 的默认面板密码是 `123456`，且默认监听 20128；在把它暴露到 localhost 之外以前必须先在 Settings 改密码。
-- 想在同一个 Python 环境里同时装 litellm 和 litellm-core：两者会写重叠的 Python 文件，只能装一个。
-- 想照 LiteLLM README 一次做完云部署：抓到的原文在 Terraform 输出段被截断，云部署只有前半段可依据。
-- 想让 LiteLLM 的 MCP OAuth 一路走通：上游可能宣称支持动态客户端注册，但实际用 HTTP 401/403 拒绝，需要预注册 OAuth app 并在该 MCP server 上配 `credentials.client_id`（必要时 `credentials.client_secret`），且 provider 必须批准该 app 用于 MCP 访问。
-- 生产环境想用明文 ALB 长跑：`allow_plaintext_alb = true` 按 README 只限 dev/trial，生产要提供 ACM 证书。
-- 想要完整的 MCP 登记步骤、Docker 快速上手、E2E 教程：LiteLLM README 指向 docs，本页未展开。
-- 想直接照抄 Claude Code 的 `/advisor`（F1）：原文唯一依据是文档地址 `code.claude.com/docs/en/advisor`，且该链接在原文中被截断；模型名（Opus 5.5、Fable 5.1）也无法从给定材料核实。执行前先确认你的 Claude Code 版本确实存在该命令，否则不要写进长期流程。
-- 想用 `/advisor` 改善结果但没有任何观察指标：原文没有说明顾问在什么时机、以什么形式产出，也没有效果数据；只能先观察是否真介入。
-- 想直接照抄 Sonnet 主跑 + Opus 顾问（F2）：原文只有一行箭头写法 `claude -> model sonnet -> advisor opus`，没有给出 Anthropic 文档链接、版本号或确切命令语法；推文正文还在「Haiku 5.5」处被截断，Haiku 承担什么、怎么配置都不清楚。在官方文档核对之前，不要把这条写进团队默认流程。
-- 想把“不为不需要 Opus 的工作付 Opus 的价格”当结论：这是作者主张，原文没有给出数据、基准、案例或成本对比。
-- 想把 F1 与 F2 混着抄，或把 `/advisor` 与 A–E 的网关/路由自动叠加：材料都未说明可集成，先分开试。
+- 想用 FlagshipRouter 的 Media Models 和 Agent Skills 页面：README 只提到存在，没有给用法。
+- 想直接照抄 Gluon 的 `routing.yaml`：具体写法、权限与工具供给、安全隐私、成本分析示例、故障排查都在文档站点，给定材料没展开。
+- Codex Float 仅 macOS 14+；agent-smith 的 router 执行需要已有 Codex 登录。
+- FlagshipRouter 默认面板密码是 `123456`，默认监听 20128；暴露到 localhost 之外前必须改密码。
+- 想在同一个 Python 环境里同时装 litellm 和 litellm-core：只能装一个。
+- 想让 LiteLLM 的 MCP OAuth 一路走通：可能需要预注册 OAuth app 并配置 credentials。
+- 生产环境想用明文 ALB 长跑：`allow_plaintext_alb = true` 按 README 只限 dev/trial。
+- 想直接照抄 Claude Code 的 `/advisor`（F1）：原文唯一依据是文档地址，且被截断；模型名无法核实。
+- 想直接照抄 Sonnet 主跑 + Opus 顾问（F2a）：原文只有一行箭头写法 `claude -> model sonnet -> advisor opus`，没有给出文档链接、版本号或确切命令语法。
+- 想直接照抄 F2b 的 `claude --model sonnet --advisor opus`：原文没有说明 `--advisor` 从哪个版本起可用；执行前必须用 `claude --help` 或 `/help` 确认参数存在。参数不存在就停止照抄命令。
+- 想把 Haiku 只读那一环当现成配置：F2b 原文在“→ 只读 haiku 5.5”处截断，怎么在 Claude Code 里指定 Haiku 只读、给什么权限，原文没有给出。
+- 想把“停止支付 opus 来做 haiku 的家庭作业”“简直是黄金”“不为不需要 Opus 的工作付 Opus 的价格”当结论：都是作者主张，原文没有数据、基准、案例或成本对比。
+- 想把 F1、F2a、F2b 混着抄，或把 `/advisor`、`--advisor` 与 A–E 的网关/路由自动叠加：材料都未说明可集成，先分开试。
 
 ## 前置条件
 
-- OmniRoute：本机可安装 npm 全局包（有 Node.js/npm 环境）；能长期运行一个本地服务；零凭证也能先跑，README 称全新安装无需任何凭证即可先用 auto；要接自有供应商时需要有对应的 API key 或订阅凭证；被接入的工具本身支持自定义 OpenAI 兼容 base URL。README 点名的可接工具包括 Claude Code、Codex、Cursor、Cline、Copilot、Antigravity。README 还提到 Docker、源码、pnpm、Arch 等安装方式，但给定文本未给出对应命令。
+- OmniRoute：本机可安装 npm 全局包；能长期运行一个本地服务；零凭证也能先跑；要接自有供应商时需要有对应的 API key 或订阅凭证；被接入的工具支持自定义 OpenAI 兼容 base URL。README 点名的可接工具包括 Claude Code、Codex、Cursor、Cline、Copilot、Antigravity。Docker、源码、pnpm、Arch 等安装方式在给定文本未给出命令。
 - agent-smith：Python 部分只用标准库；路由执行需要已有的 Codex 登录；Float 需要 macOS 14+、/usr/bin/python3 和 Xcode Command Line Tools。以下命令均在克隆后的仓库根目录执行（Float 相关除外）。
-- agent-smith 的分发是源码优先，没有预打包 DMG，构建使用 ad-hoc 签名。
-- FlagshipRouter：Node.js 20.9 或更高（README 建议 22）；git 与 npm 可用；本地端口 20128 空闲——注意这与 OmniRoute 的默认端口相同，两者不能按默认端口同时启动；要接自有供应商时需要相应凭证，不想注册时可先只用 OpenCode Free 的免注册模型。
-- Gluon：至少一个受支持编程智能体的 API key 或订阅（Claude Code、Codex、Antigravity、Grok Build、OpenCode、Kimi Code）；Linux、macOS、WSL 或 Windows；在本地 git 仓库目录中操作。安装需要能访问 GitHub release，或用 Bun 从 release tarball 安装。仓库为 Apache-2.0，有 CI 和 release，原文显示 35 stars。
-- LiteLLM：Python 环境 + `uv`；装 SDK 用 `uv add litellm`，注意同一环境只能装 litellm 或 litellm-core 之一（两者写重叠的 Python 文件），要用 proxy/CLI/可选 extras 就装 litellm；起网关用 `uv tool install 'litellm[proxy]'`，需要本机 4000 端口可用；接 MCP 需要 master key 或虚拟 key，且 MCP server 已可用；跑 harness 需要 `starlette`、`uvicorn` 以及对应 agent 的 CLI（`claude`、`codex` 或 `opencode`），用 Deep Agents 则装 `deepagents langchain-litellm`；走 A2A SDK 需 `a2a-sdk>=1.1.0`；从源码构建 core 包需要 Git、`uv` 和 Rust 工具链，且要在没有 litellm 的全新环境里装。
-- Claude Code `/advisor`（F1，原有记录）：原文只给出两个命令，未给出更完整流程。执行前先确认你所用的 Claude Code 版本确实存在 `/advisor`（原文唯一依据是文档地址，且被截断）；已把主力模型设为原文所称的 Opus 5.5；另有一个模型的可用配额（原文称 Fable 5.1）；某些计划下需要先执行 `/model fable` 接受按使用信用计费的确认。上述模型名与文档地址均无法从给定材料验证。
-- Claude Code “Sonnet 主跑 + Opus 顾问”（F2，本次新增）：本机已安装并可运行 Claude Code CLI；账号/方案支持在 Sonnet、Opus 等模型之间切换；额度允许调用 Opus；已对照 Anthropic 官方文档核对 `/model`、advisor 相关开关以及 Haiku 的用法（原文未给文档链接与版本号）。原文只给出一行箭头写法 `claude -> model sonnet -> advisor opus`，未给出确切命令语法。
+- FlagshipRouter：Node.js 20.9 或更高（README 建议 22）；git 与 npm 可用；本地端口 20128 空闲——与 OmniRoute 默认端口相同，不能按默认端口同时启动；要接自有供应商时需要相应凭证，不想注册时可先只用 OpenCode Free 的免注册模型。
+- Gluon：至少一个受支持编程智能体的 API key 或订阅；Linux、macOS、WSL 或 Windows；在本地 git 仓库目录中操作。安装需要能访问 GitHub release，或用 Bun 从 release tarball 安装。
+- LiteLLM：Python 环境 + `uv`；装 SDK 用 `uv add litellm`，同一环境只能装 litellm 或 litellm-core 之一；起网关用 `uv tool install 'litellm[proxy]'`，本机 4000 端口可用；接 MCP 需要 master key 或虚拟 key；跑 harness 需要 `starlette`、`uvicorn` 以及对应 agent 的 CLI；走 A2A SDK 需 `a2a-sdk>=1.1.0`；从源码构建 core 包需要 Git、`uv` 和 Rust 工具链。
+- Claude Code `/advisor`（F1）：原文只给出两个命令；执行前先确认版本存在 `/advisor`；已把主力模型设为原文所称的 Opus 5.5；另有一个模型的可用配额（原文称 Fable 5.1）；某些计划下需要先执行 `/model fable` 接受按使用信用计费的确认。
+- Claude Code “Sonnet 主跑 + Opus 顾问”（F2a）：本机已安装并可运行 Claude Code CLI；账号/方案支持在 Sonnet、Opus 等模型之间切换；额度允许调用 Opus；已对照官方文档核对 `/model`、advisor 相关开关以及 Haiku 的用法。原文只给出一行箭头写法。
+- Claude Code 启动参数分层（F2b，本次新增）：本机已安装并可运行 Claude Code CLI；先在终端运行 `claude --help`，或在会话内用 `/help`，确认存在 `--model` 与 `--advisor`；账号/方案允许在 sonnet、opus、haiku 等模型之间切换；额度允许调用 opus；原文没有给出支持该参数的版本号。
 
 ## 操作步骤
 
@@ -85,7 +83,7 @@ curl http://localhost:20128/v1/chat/completions -H "Content-Type: application/js
 
 3. 只把一个工具指向这个端点。前提：该工具支持自定义 OpenAI 兼容 base URL。把 base URL 设为 http://localhost:20128/v1，模型名填第 4 步的别名。建议先接一个你已经在用的工具，不要一次全换。
 
-4. 按任务选模型别名。原文给出的映射可直接用，这是最可照做的一步：
+4. 按任务选模型别名。原文给出的映射可直接用：
 
 | 模型 ID | 用途 |
 | --- | --- |
@@ -294,7 +292,7 @@ cd your-repo && gluon
 uv add litellm
 ```
 
-预期结果：`import litellm` 可用。README 明确提示：另有一个独立的 `litellm-core` 发行版，提供相同 `import litellm` API 但没有可选 extras、CLI 入口和内置 dashboard；**同一环境只能装一个 SDK 发行版**，因为两者会写重叠的 Python 文件。要用 proxy/CLI/可选 extras 就装 `litellm`。
+预期结果：`import litellm` 可用。README 明确提示：另有一个独立的 `litellm-core` 发行版，提供相同 `import litellm` API 但没有可选 extras、CLI 入口和内置 dashboard；同一环境只能装一个 SDK 发行版，因为两者会写重叠的 Python 文件。要用 proxy/CLI/可选 extras 就装 `litellm`。
 
 （可选，从源码构建 core 包；前提是装了 Git、`uv` 和 Rust 工具链，且要在没有 `litellm` 的全新环境里安装：）
 
@@ -475,15 +473,15 @@ response = await client.send_message(request)
 
 前提：网关侧已把 agent 加入（按 agent 设 `protocolVersion` 为 `1.0` 或 `0.3`）；走 A2A SDK 需 `a2a-sdk>=1.1.0`。支持的 agent 来源：LangGraph、Vertex AI Agent Engine、Azure AI Foundry、Bedrock AgentCore、Pydantic AI。注意：抓到的原文在这里（`from mcp import ClientSessio`）被截断，MCP Bridge 部分没有可依据的内容。
 
-**做法 F：在 Claude Code 里把次要模型挂成顾问——两种挂法（Claude Code `/advisor`）**
+**做法 F：在 Claude Code 里做多模型分层——先确认命令，再小范围 A/B（Claude Code）**
 
-两个变体都只动 Claude Code 会话内的命令，不碰网关；两者的模型名与命令语法在给定材料里都无法核实。执行前先确认你所用的 Claude Code 版本确实存在 `/advisor`，否则以下步骤不成立。
+三个变体都只动 Claude Code 会话或启动参数，不碰网关；模型名与命令语法在给定材料里都无法核实。执行前先确认你所用的 Claude Code 版本确实存在相应命令或参数，否则以下步骤不成立。
 
 *变体 F1（原有记录）：主模型 Opus，顾问挂另一个闲置配额模型*
 
 前提：Claude Code 中已把主力模型设为原文所称的 Opus 5.5，且你还有另一个模型的可用配额（原文称 Fable 5.1）。
 
-1. 仅在“某些计划”下需要这一步——先执行一次 `/model fable`，以接受按使用信用（usage credit）计费的确认。若你的计划没有该提示，可跳过。
+1. 仅在“某些计划”下需要这一步——先执行一次 `/model fable`，以接受按使用信用计费的确认。若你的计划没有该提示，可跳过。
 
 ```text
 /model fable
@@ -503,7 +501,7 @@ response = await client.send_message(request)
 
 4. 做一次 A/B：同一任务开顾问 vs. 不开顾问。前提：在单个项目、单个会话里试。记录返工次数、被采纳的评审意见数、最终产出差异，以及多出的计费额度与响应延迟。放弃条件：`/advisor` 不存在、顾问全程不介入，或多次任务中没有可观察差异。
 
-*变体 F2（本次新增）：Sonnet 主跑，Opus 做顾问*
+*变体 F2a（原有记录）：Sonnet 主跑，Opus 做顾问（会话内命令写法）*
 
 原文给出的配置是一行箭头写法：
 
@@ -526,10 +524,39 @@ claude
 5. （材料不明，先不要自己补）把轻量任务交给 Haiku：原文只剩「Haiku 5.5」几个字，负责哪类任务、怎么配置都没写清。去官方文档核对后再决定是否使用。
 6. 跑一个真实任务，观察实际触发了几次 Opus，再决定是否把这个配置固化成默认。
 
-*F1 与 F2 怎么选*
+*变体 F2b（本次新增）：用启动参数 `claude --model sonnet --advisor opus` 做分层*
 
-- 目标不同：F1 是“别让另一份闲置配额白白浪费”，主模型仍是重模型；F2 是“不为不需要 Opus 的工作付 Opus 的价格”，主模型换成轻模型。不要混着抄。
-- 两者的模型名（Opus 5.5、Fable 5.1、Sonnet、Haiku 5.5）与命令语法在给定材料里都无法核实；F2 的原文还在「Haiku 5.5」处被截断。先确认命令存在，再按 F2 的 A/B 方式小范围试。
+原文只给出一条启动命令和三条分工，没有更多配置步骤。原文给出的部分（可原样复制，但执行前必须先核对参数）：
+
+```bash
+claude --model sonnet --advisor opus
+```
+
+原文给出的分工（照抄原文表述）：
+
+- sonnet 5.5 运行主会话并编辑代码
+- 只读 haiku 5.5（此处原文被截断，后续内容缺失）
+- 只有在真正需要决策时才引入 opus
+
+要照做，按这个核对顺序走（以下步骤是核对顺序，不是原文内容）：
+
+1. 先确认本机 Claude Code 版本是否真的支持 `--advisor`：终端运行 `claude --help`（或在会话内用 `/help`）查找该参数。原文没有说明它从哪个版本起可用；如果不存在，这条命令无法照抄，只能退回到“贵模型只用于决策点”的分配原则。
+2. 确认参数可用后，在项目目录用原文命令启动：
+
+```bash
+claude --model sonnet --advisor opus
+```
+
+3. 按原文分工，把文件阅读、检索、批量机械修改这类只读/低判断量的活交给 haiku。**具体怎么在 Claude Code 里指定 haiku 只读，原文被截断没有给出**，需要自己在你的版本里找等价做法（例如子代理配置或权限只读设置），不要凭猜测写进流程。
+4. 决策点才切 opus：原文只说“只有在真正需要决策时才引入 opus”，没有给出切换判据，需自行定义（例如架构选型、跨模块改动方案、反复失败后的重新规划）。
+5. 做一个 1–2 小时能做完的真实小任务，用默认模型跑一遍，再用 `claude --model sonnet --advisor opus` 跑一遍同类任务；任务、提示词、仓库状态保持一致。
+6. 每次记录：账单/token 消耗、完成所需的重试次数、你手动接手修改的次数、以及“后悔没用 opus”的次数（决策被顾问模型纠正或放行的次数）。
+
+*F1、F2a、F2b 怎么选*
+
+- 目标不同：F1 是“别让另一份闲置配额白白浪费”，主模型仍是重模型；F2a/F2b 是“不为不需要 Opus 的工作付 Opus 的价格”，主模型换成轻模型。不要混着抄。
+- 入口不同：F2a 是会话内命令，F2b 是启动参数。先运行 `claude --help`：如果 `--advisor` 存在，优先按 F2b 的最小对照试；如果只有 `/advisor` 存在，退回 F2a；如果两者都不存在，只保留“贵模型只用在决策点”这一条分配原则。
+- 三者模型名（Opus 5.5、Fable 5.1、Sonnet、Haiku 5.5）与命令语法在给定材料里都无法核实；F2a/F2b 的原文都在关键处被截断。先确认命令存在，再小范围试。
 - 材料未说明它们能与 A–E 的网关/路由自动集成；先分开试。
 
 **做法 A / B / C / D / E / F 怎么选**
@@ -540,14 +567,14 @@ claude
 - 痛点是“同一任务不知道该交给哪个 harness/模型/effort”，或者想按会话看成本与上下文：先做 D。
 - 想先在 Python 代码里把多 provider 的调用收敛成一个函数，或者需要按项目/用户的成本追踪、虚拟密钥、Terraform 云部署：做 E。E1 只动代码、零运维，E2 起网关后才会碰端口和密钥。
 - 日常用 Claude Code、主模型已就位、另有闲置模型配额：先做 F1。F1 只动 Claude Code 会话内的两个命令，不碰网关；但必须先确认命令真实存在。
-- 日常用 Claude Code、对成本敏感、主要任务是代码编辑，想让贵模型只出现在判断点上：试 F2。它同样只动会话内命令，但原文语法与 Haiku 那一环都没写全，必须先核对官方文档。
+- 日常用 Claude Code、对成本敏感、主要任务是代码编辑，想让贵模型只出现在判断点上：先试 F2b（启动参数），用 `claude --help` 确认 `--advisor`；不存在则试 F2a（会话内命令）。两者都必须先核对官方文档或 help。
 - A 和 C 是同一层的本地 OpenAI 兼容网关，功能重叠，且默认端口都是 20128：先选一个跑通，不要同时按默认端口启动。E 也是请求层网关，但默认 4000 端口，与 A/C 不撞；端口不撞不代表能自动叠加，材料没有说明它们可以集成。
 - A/C/E 与 D 不是同一层：A/C/E 在请求层按供应商/模型别名路由；D 在会话层把已有 harness 并排跑起来，按 harness × model × effort 路由。E 的 harness 抽象能在自己的网关上跑 Claude Code / Codex / OpenCode / Deep Agents，与 D 的“并排多个 harness”语义不同。两者材料都未说明可互相集成。
 - B 与 D 都涉及 Codex：B 是在 Codex 内装插件按难度选模型，D 是把 Codex 当作可并排的一个 harness；材料未说明两者关系。
-- F（F1/F2）与 A–E 不是同一层：F 是 Claude Code 内部命令，材料未说明能与网关/路由自动集成；先单独试。
+- F（F1/F2a/F2b）与 A–E 不是同一层：F 是 Claude Code 内部命令或启动参数，材料未说明能与网关/路由自动集成；先单独试。
 - 七个项目的材料都未说明可以集成。如果确实要同时装，先把各自跑通，再自行验证请求实际走哪条路径；不要默认叠加。D 会把多个 harness 接到同一框架里，建议先在一个非关键、已纳入版本控制的仓库里试。
 
-**暂时不要碰的部分**：OmniRoute README 提到的 MCP（110 个工具）、A2A、memory、guardrails、evals、TLS stealth、key pools 公平配额、AES-256-GCM 加密存 key，在给定材料里只有名词，没有配置步骤。agent-smith 的“多 agent 协作、重试、失败升级带来的收益”需要单独实验，材料未给步骤。FlagshipRouter 的 Media Models 页面和 Agent Skills 页面同样只有存在性描述，没有用法。Gluon 的 `routing.yaml`、权限与工具供给、安全隐私、成本分析示例、故障排查都不在给定材料里。LiteLLM 的 MCP 登记细节、Docker 快速上手、E2E 教程都在 README 指向的 docs 里，本页未展开；A2A 与 MCP Bridge 的原文被截断。Claude Code `/advisor` 的顾问介入方式、效果说明、与网关集成都未在原文中展开；其中 F2 那一支的原文连命令语法和 Haiku 那一环都没写全。
+**暂时不要碰的部分**：OmniRoute README 提到的 MCP（110 个工具）、A2A、memory、guardrails、evals、TLS stealth、key pools 公平配额、AES-256-GCM 加密存 key，在给定材料里只有名词，没有配置步骤。agent-smith 的“多 agent 协作、重试、失败升级带来的收益”需要单独实验，材料未给步骤。FlagshipRouter 的 Media Models 页面和 Agent Skills 页面同样只有存在性描述，没有用法。Gluon 的 `routing.yaml`、权限与工具供给、安全隐私、成本分析示例、故障排查都不在给定材料里。LiteLLM 的 MCP 登记细节、Docker 快速上手、E2E 教程都在 README 指向的 docs 里，本页未展开；A2A 与 MCP Bridge 的原文被截断。Claude Code `/advisor` 的顾问介入方式、效果说明、与网关集成都未在原文中展开；F2b 那一支的原文连 Haiku 只读怎么配都没写全。
 
 ## 怎么判断变好了
 
@@ -559,12 +586,14 @@ claude
 - Gluon（非关键、已纳入版本控制的仓库）：按做法 D 的安装命令装好，`cd your-repo && gluon` 启动；选一个边界清晰的小任务，先用默认/交互方式让 intake agent 推荐 agent/model/effort，记录它给出的 spec；再手动用第二个 harness 或模型做同一任务，比较结果。如果要从路由规则开始，先查文档中的 `routing.yaml` 写法，不要照搬本文。
 - LiteLLM（分两半，先 SDK 后网关）：先用 `uv add litellm`，用同一个 `completion()` 分别调 `openai/gpt-4o` 和 `anthropic/claude-sonnet-4-20250514`，确认换模型只改一个字符串；再用 `uv tool install 'litellm[proxy]'` + `litellm --model gpt-4o`，用上面的 OpenAI SDK 片段把 base_url 指向 `http://0.0.0.0:4000` 打通一条请求；只接 1–2 个模型，连续几天看成本追踪与失败率，而不是看 README 的能力清单。如果 SDK 层就够用（不需要虚拟密钥、多租户成本追踪、管理后台），不必起网关。
 - Claude Code `/advisor`（F1，单个项目、单个会话）：按做法 F1 执行 `/model fable`（如提示计费则确认）与 `/advisor fable`，然后照常完成一个日常任务（例如修一个 bug 或做一次代码审查），全程记录顾问模型是否真的产出了可见内容。原文未给试用时长建议；先按单个任务/单会话判断，若 `/advisor` 不存在、顾问不介入，或多次任务中没有可观察差异，就停用并把结论降为 study。
-- Claude Code “Sonnet 主跑 + Opus 顾问”（F2，单个真实的中等复杂度代码改动）：先在官方文档核对命令语法，再挑一个真实的中等复杂度改动任务跑两次——A 组按本配置（Sonnet 主跑 + Opus 顾问），B 组全程用 Opus（或你原本的默认方式）；任务、提示词、仓库状态保持一致。要记录的指标：
+- Claude Code “Sonnet 主跑 + Opus 顾问”（F2a/F2b，单个真实的中等复杂度代码改动）：先在官方文档或 `claude --help` 核对命令语法，再挑一个真实的中等复杂度改动任务跑两次——A 组按本配置（Sonnet 主跑 + Opus 顾问），B 组全程用 Opus（或你原本的默认方式）；任务、提示词、仓库状态保持一致。F2b 的具体操作：先用 `claude --help` 确认 `--advisor`，再挑一个 1–2 小时能做完的真实小任务，用默认模型跑一遍，再用 `claude --model sonnet --advisor opus` 跑一遍同类任务。
+- 要记录的指标：
   1. 任务是否完成、需不需要人工返工；
   2. 返工/追问的轮数；
   3. 该次会话的 token 消耗与费用（用 Claude Code 自带的用量/费用查看方式，具体命令以文档为准）；
-  4. 复杂决策点上 Opus 被实际调用的次数与效果（是帮上忙，还是白花钱）。
-  判断改善的标准：在完成质量和返工轮数不明显变差的前提下，费用明显下降；或同等质量下花更少轮次。若质量下降，或顾问调用次数高到费用接近全程 Opus，说明这个配置在你当前的工作类型上不成立，先退回原方式。原文没有给试用时长建议，先按单个任务/单会话判断。
+  4. 复杂决策点上 Opus 被实际调用的次数与效果（是帮上忙，还是白花钱）；
+  5. “后悔没用 opus”的次数（决策被顾问模型纠正或放行的次数）。
+- 判断改善的标准：在完成质量和返工轮数不明显变差的前提下，费用明显下降；或同等质量下花更少轮次。若质量下降，或顾问调用次数高到费用接近全程 Opus，说明这个配置在你当前的工作类型上不成立，先退回原方式。若 `--advisor` 不可用，只保留“贵模型只用在决策点”这一条分配原则单独验证。原文没有给试用时长建议，先按单个任务/单会话判断。
 
 指标（都自己测，不采信 README 的百分比）：
 
@@ -576,7 +605,7 @@ claude
 - unknown 比例：缺失用量或价格会被记为 unknown；unknown 占比过高说明计量覆盖不足，此时成本对比不可信。
 - 延迟：自己记录 p95，别只信 dashboard 的 savings 卡片。
 - 配额真实性：把 /dashboard/free-tiers 显示的 used/remaining 与供应商后台账单对照，这直接决定“配额感知回退”是否可信。
-- 首次跑通耗时（FlagshipRouter）：从 clone 到第一条成功请求的分钟数，用来判断这个网关本身是否好装好用。
+- 首次跑通耗时（FlagshipRouter）：从 clone 到第一条成功请求的分钟数。
 - 切换成本（FlagshipRouter）：按任务换模型是否真的生效（看工具里是否显示 `flagshiprouter/<model>`），以及换一次要几步。
 - 稳定性（FlagshipRouter）：Console Log 里的失败请求数、触发限流/额度耗尽的次数；面板另有 Usage 与 Quota 页 `/dashboard/usage`、`/dashboard/quota`。
 - 副作用与可回滚（FlagshipRouter）：原工具有没有出现行为变化或配置被覆盖，能否一条命令回滚掉 CLI Tools 写入的配置。
@@ -588,7 +617,7 @@ claude
 - 失败率与重试/回退次数（LiteLLM）：SDK 侧 Router 支持跨多个部署（如 Azure/OpenAI）重试与回退，但需自测触发条件和成功率。
 - 质量不下降：用你既有的评测方式（或同一组任务的人工打分）确认换模型后结果没有变差；auto/chaos 并行面板会成倍消耗上游调用，试用时单独计费观察。
 - 顾问是否真实介入（Claude Code `/advisor`，F1）：命令是否真实存在、是否报错；顾问模型是否在会话中实际介入并给出可读建议，而不是只挂名；开顾问 vs. 不开顾问的返工次数、被采纳的评审意见数、最终产出差异；多出的计费额度与响应延迟是否值得换来上述差异。
-- 贵模型实际被调用几次（Claude Code，F2）：复杂决策点上 Opus 被实际调用的次数与效果；这个数字过高会把成本优势吃掉，过低则复杂改动的质量可能下降。
+- 贵模型实际被调用几次（Claude Code，F2a/F2b）：复杂决策点上 Opus 被实际调用的次数与效果；这个数字过高会把成本优势吃掉，过低则复杂改动的质量可能下降。
 
 试多久、什么情况下停：
 
@@ -598,7 +627,7 @@ claude
 - Gluon：材料没有给出试用时长建议，只建议小范围试。在非关键仓库试到你能判断“推荐是否真的更省钱或更省上下文”为止；若质量明显下降，或成本/上下文没有可见改善，就停用并把结论降为 study。
 - LiteLLM：SDK 最小验证半天内做完，网关最小验证再半天。若两天内你还说不清“换 provider 省了几步、成本数字是否可信”，就停在 SDK 层，不要上网关和 Terraform。
 - Claude Code `/advisor`（F1）：原文没有试用时长建议。先按单个项目、单个会话判断；若 `/advisor` 不存在、顾问全程不介入，或多次任务中开/不开顾问没有可观察差异，就停用并把结论降为 study。
-- Claude Code “Sonnet 主跑 + Opus 顾问”（F2）：原文没有试用时长建议，先按单个任务、单个会话、单个中等复杂度改动判断；若命令不存在或语法对不上、质量下降、或顾问调用次数高到费用接近全程 Opus，就退回原方式并把结论降为 study。
+- Claude Code “Sonnet 主跑 + Opus 顾问”（F2a/F2b）：原文没有试用时长建议，先按单个任务、单个会话、单个中等复杂度改动判断；若命令或参数不存在、语法对不上、质量下降、或顾问调用次数高到费用接近全程 Opus，就退回原方式并把结论降为 study。
 
 ## 常见坑
 
@@ -627,15 +656,16 @@ claude
 - 照抄 `/advisor fable` 和 `/model fable` 里的模型名。原文称 Opus 5.5、Fable 5.1，但给定材料无法核实这些模型名和文档地址；不同计划的计费确认方式可能不同，不要把这套命令当成跨版本通用。
 - 以为挂上顾问就会自动介入。原文正文在关键处中断，未说明顾问在什么时机、以什么形式产出内容；必须观察它是否真的给出可读建议。
 - 把 `claude -> model sonnet -> advisor opus` 当一条 shell 命令抄。原文用箭头书写，很可能表示会话内依次执行的命令；调研给出的 `/model sonnet`、`/advisor opus` 只是按箭头还原的写法，原文未给确切语法，执行前必须对照 Anthropic 官方文档核对。
-- 照抄 F2 里的模型名。Sonnet、Opus、Fable 5.1、Haiku 5.5 都无法从给定材料核实；「Haiku 5.5」指的是模型版本还是别的，也确认不了。
-- 自己脑补 Haiku 那一环的配置。原文在「Haiku 5.5」处被截断，它负责哪类任务、怎么配都没写；先去文档确认，不要自行加配置。
-- 把“不为不需要 Opus 的工作付 Opus 的价格”当成效果结论。原文只有这一句成本主张，没有数据、基准、案例或成本对比；可核实的互动量只有 120 赞、13 次转发、17 条回复。
-- 以为 F2 一定省钱。顾问触发过于频繁会把成本优势吃掉；触发过少，复杂改动的质量可能下降。原文没有给阈值，先自己记录 Opus 被实际调用的次数。
-- 把 F2 写进团队默认流程。原文被截断、没有文档链接和版本号，先在个人、单项目、单会话里试。
-- 把 F1 与 F2 混着抄。两者目标不同（消耗闲置配额 vs. 不为不需要 Opus 的工作付费），模型分工正好相反；材料未说明两者可叠加。
+- 把 `claude --model sonnet --advisor opus` 当跨版本通用命令。本次新增材料没有说明 `--advisor` 从哪个版本起可用；执行前必须用 `claude --help` 或 `/help` 确认参数存在。参数不存在就停止照抄命令，退回“贵模型只用在决策点”或 F2a。
+- 照抄 F2a/F2b 里的模型名。Sonnet、Opus、Fable 5.1、Haiku 5.5，以及新材料里的 “sonnet 5.5 / haiku 5.5”，都无法从给定材料核实；「Haiku 5.5」指的是模型版本还是别的，也确认不了。
+- 自己脑补 Haiku 那一环的配置。F2a/F2b 原文都在「Haiku 5.5」或“→ 只读 haiku 5.5”处被截断，它负责哪类任务、怎么配、给什么只读权限都没写；先去文档确认，不要自行加配置。
+- 把“不为不需要 Opus 的工作付 Opus 的价格”或“停止支付 opus 来做 haiku 的家庭作业”当成效果结论。原文只有这些成本主张，没有数据、基准、案例或成本对比；F2a 可核实的互动量只有 120 赞、13 次转发、17 条回复，F2b 只有 37 赞、5 转发、10 回复。
+- 以为 F2a/F2b 一定省钱。顾问触发过于频繁会把成本优势吃掉；触发过少，复杂改动的质量可能下降。原文没有给阈值，先自己记录 Opus 被实际调用的次数。
+- 把 F2a/F2b 写进团队默认流程。原文被截断、没有文档链接和版本号，先在个人、单项目、单会话里试。
+- 把 F1、F2a、F2b 混着抄。三者目标不同，模型分工和入口也不同；材料未说明可叠加。
 - 把“别让配额白白浪费”当成效果结论。F1 的原文没有给出任何成本、效果或对比数据；可核实的互动量只有 70 赞、8 次转发、14 条回复。
-- 把 `/advisor` 与 A–E 的网关/路由混为一谈。前者是 Claude Code 内部命令，材料未说明能与本地网关、Adaptive Router、Gluon 或 LiteLLM 集成；先分开试。
-- 材料本身是截断的。OmniRoute 原文正文在 19 种路由策略表格第 12 行处被截断，Docker/pnpm 等安装方式、MCP/A2A/guardrails/evals 的配置步骤都不在材料内。Gluon 的给定文本也只是 README landing page。Claude Code 的两支原文都在关键处中断：F1 停在“Opus 5.5 继续工作 / Fable 5.1”，链接也只剩半截；F2 停在「Haiku 5.5」，没有文档链接、版本号和确切命令语法。
+- 把 `/advisor` 或 `--advisor` 与 A–E 的网关/路由混为一谈。前者是 Claude Code 内部命令或启动参数，材料未说明能与本地网关、Adaptive Router、Gluon 或 LiteLLM 集成；先分开试。
+- 材料本身是截断的。OmniRoute 原文正文在 19 种路由策略表格第 12 行处被截断。Gluon 的给定文本也只是 README landing page。Claude Code 的三支原文都在关键处中断：F1 停在“Opus 5.5 继续工作 / Fable 5.1”；F2a 停在「Haiku 5.5」；F2b 停在“→ 只读 haiku 5.5”，没有文档链接、版本号和确切命令语法。
 - 名称相近但关系不明。OmniRoute 材料里作为 keyless 免费后端的 “OpenCode Free”（oc/…）与别处提到的 OpenCode 名称相近，但原文没有说明两者是否同一项目，不能确认；FlagshipRouter 也把 OpenCode Free 列为免注册可用模型来源，同样没有说明它与 OmniRoute 那边的 OpenCode Free 是不是同一回事。
 - agent-smith 的 USD 数值是“实测用量 × 冻结的 API Standard 参考价”，不是 Codex 订阅账单。
 - agent-smith 的难度打分是本地、未校准的启发式；缓存效应与用量覆盖不全（partial usage coverage）会如何影响成本对比，作者自己列为待解决问题。
@@ -727,7 +757,7 @@ claude
 
 原文自己给出的限制说明与材料局限：
 
-- 本次输入只有仓库 README（source_note 标注“依据仓库 README”），没有实际跑过，所有步骤均为未经验证的转述。
+- 本次输入只有仓库 README，没有实际跑过，所有步骤均为未经验证的转述。
 - 测试套件带已知失败：live-provider 测试、缺失的 cloud/ worker、对时序敏感的 DB 测试；README 建议与上一个 commit 的运行结果对比，而不是期待全绿；引擎测试在 tests/setup/providerPolicy.js 里把 free-only 策略关掉。
 - 依赖免费的第三方供应商及其额度政策，可用性和限流会随上游变化；README 中的示例模型名（如 gpt-6-astra）不能当作真实可用模型。
 - 需要 Node.js 20.9+，README 建议 22。
@@ -805,7 +835,7 @@ claude
 - 适用条件：仅在你所使用的 Claude Code 版本支持 `/advisor`、且你的订阅计划允许挂载第二个模型时成立；不同计划的计费确认方式可能不同。
 - 调研结论：可以小范围试——先用 `/model fable`（如提示计费则确认）与 `/advisor fable` 确认命令真实存在，再观察顾问是否实际介入；若不存在、不介入或多次任务无可观察差异，则不写进长期流程。
 
-**Claude Code 顾问模式的第二种挂法（调研《@rvaniaaaa: 这太他妈的棒了。Anthropic 的文档描述了运行 Opus 最聪明的方法之一》，对应做法 F2）**
+**Claude Code 顾问模式的第二种挂法（调研《@rvaniaaaa: 这太他妈的棒了。Anthropic 的文档描述了运行 Opus 最聪明的方法之一》，对应做法 F2a）**
 
 可当证据、可照做的操作性内容：
 
@@ -828,6 +858,34 @@ claude
 - 可核实的互动量：120 赞、13 次转发、17 条回复。
 - 调研结论：建议在 Claude Code 里小范围试一遍“Sonnet 主跑 + Opus 顾问”的分工，用成本和质量双指标对比后再常规化；理由是原文给出了可直接照做的模型分工配置思路，但推文被截断、命令确切语法和 Haiku 那一环都没写全，不足以直接采纳。在确认真实语法前，不要把这条写进团队默认流程。
 
+**Claude Code 多模型分层的第三种挂法（调研《@sector_sol: 停止支付 opus 来做 haiku 的家庭作业。这个 claude 代码设置简直是黄金。》，对应做法 F2b）**
+
+可当证据、可照做的操作性内容：
+
+- 原文只给出一条启动命令和三条分工，没有更多配置步骤。原文命令：`claude --model sonnet --advisor opus`。
+- 原文给出的分工：sonnet 5.5 运行主会话并编辑代码；只读 haiku 5.5（此处原文被截断，后续内容缺失）；只有在真正需要决策时才引入 opus。
+- 要照做，先核对 `--advisor` 是否存在：终端运行 `claude --help`（或在会话内用 `/help`）查找该参数；原文没有说明它从哪个版本起可用。
+- 若参数存在，在项目目录用原文命令启动；再按“文件阅读、检索、批量机械修改这类只读/低判断量的活交给 haiku”的方向找等价做法——具体怎么在 Claude Code 里指定 haiku 只读，原文未给出，需自行在版本里找子代理配置或权限只读设置等。
+- 决策点才切 opus；原文只说“只有在真正需要决策时才引入 opus”，没有给出切换判据，需自行定义，例如架构选型、跨模块改动方案、反复失败后的重新规划。
+- 最小试用：挑一个 1–2 小时能做完的真实小任务，用默认模型跑一遍，再用 `claude --model sonnet --advisor opus` 跑一遍同类任务；每次记录账单/token 消耗、完成所需的重试次数、你手动接手修改的次数、以及“后悔没用 opus”的次数（决策被顾问模型纠正或放行的次数）。
+
+只是作者主张、未经验证：
+
+- 标题“停止支付 opus 来做 haiku 的家庭作业”和“这个 claude 代码设置简直是黄金”都是作者主张，没有数据、案例、账单对比或前后测。
+- 社区验证弱：该条互动为 37 赞、5 转发、10 回复，不足以视为被验证的做法。
+
+原文自己给出的限制说明与材料局限：
+
+- 内容不完整：正文被截断，“围绕这个分工构建其余设置”的后续内容（尤其是 haiku 只读怎么配）缺失，无法据此完整复现。
+- 可核实性存疑：`--advisor` 参数以及 “sonnet 5.5 / haiku 5.5” 的命名，在给出的材料内都无法核实；若参数不存在，命令不可执行。
+- 隐含前提：成本敏感、按量计费、且 opus 单价明显高于 sonnet/haiku 的 Claude Code 使用场景。这个价格关系在常识层面成立，但原文未给出任何数字。
+- 调研结论：先在本地确认 Claude Code 是否支持 `--advisor`，再用 `claude --model sonnet --advisor opus` 做一次分层对照（sonnet 主会话、opus 只在决策点介入、haiku 承担只读杂活），验证成本与返工率是否改善；思路明确可试，但原文只有一条命令加几句分工、正文还被截断，没有任何成本或质量数据，参数与模型名也无法从材料内核实。
+
+**材料边界**
+
+- 七个项目的材料都未说明可以互相集成；同时安装时不要假设请求一定经过你以为的那一层。
+- 所有效果数字都需要自测；本手册只把可复制的命令、配置和提示词当作操作依据，把项目自述数字和作者主张当作待验证信息。
+
 ## 依据的调研
 
 - [diegosouzapw/OmniRoute](../research/radar/2026-10-02/531-diegosouzapw-omniroute.md)：值得一试，可以小范围试：先把 OmniRoute 当作本地 OpenAI 兼容网关装起来（npm i -g omniroute → localhost:20128 → 用 model=auto 打通），再把一个编码工具指向它，用它验证「按任务选模型别名 + 配额耗尽自动回退」这一套是否真能减少中断；理由是原文给出了可照抄的安装与调用命令和模型别名清单，但节省比例、免费额度等数字都是项目自述，且原文截断、缺少配置细节，不宜直接采纳。
@@ -837,3 +895,4 @@ claude
 - [BerriAI/litellm](../research/radar/2026-10-10/2267-berriai-litellm.md)：值得一试，值得小范围试：照 README 给的命令先在本地起一个 LiteLLM 网关（uv tool install 'litellm[proxy]' + litellm --model gpt-4o），把 1–2 个模型统一成 OpenAI 格式并开启花费追踪，用自己的成本和失败率数据决定是否推广；它给出了可复制的安装与调用步骤，但整体是特性索引+宣传，实际收益需自测。
 - [@polydao: Claude Code 提示：一旦 Opus 5.5 成为你的主要模型，就别让你的 Fable 5.1 配额白白浪费了](../research/radar/2026-10-12/2641-claude-code-opus-5-5-fable-5-1.md)：值得一试，可以小范围试：在支持 /advisor 的 Claude Code 里先用 /model fable 接受计费、再 /advisor fable 把次要模型挂成顾问，让主模型继续干活；理由是原文给了可照抄的命令，但正文在关键处被截断、模型名与文档地址都无法核实，只能先自测确认命令真实存在再考虑写进手册。
 - [@rvaniaaaa: 这太他妈的棒了。Anthropic 的文档描述了运行 Opus 最聪明的方法之一](../research/radar/2026-10-14/3029-anthropic-opus.md)：值得一试，建议在 Claude Code 里小范围试一遍「Sonnet 主跑 + Opus 顾问」的分工，用成本和质量双指标对比后再常规化；理由是原文给出了可直接照做的模型分工配置思路，但推文被截断、命令确切语法和 Haiku 那一环都没写全，不足以直接采纳。
+- [@sector_sol: 停止支付 opus 来做 haiku 的家庭作业。这个 claude 代码设置简直是黄金。](../research/radar/2026-10-16/3761-opus-haiku-claude.md)：值得一试，先在本地确认 Claude Code 是否支持 --advisor，再用 `claude --model sonnet --advisor opus` 做一次分层对照（sonnet 主会话、opus 只在决策点介入、haiku 承担只读杂活），验证成本与返工率是否改善；思路明确可试，但原文只有一条命令加几句分工、正文还被截断，没有任何成本或质量数据，参数与模型名也无法从材料内核实。
