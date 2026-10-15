@@ -4,10 +4,10 @@
 
 | 手册 | 解决的问题 | 先试这一步 | 最近修订 |
 |---|---|---|---|
+| [在采信 AI 的改动之前，先让它拿出可核验的证据](build-and-run-evals.md) | 手工搭评测、靠感觉判断改动有没有变好、AI 改完代码没人能验收——这篇手册给「怎么让 AI 的每一条改动和每一次重写都拿出可核验证据」配一套能落地的尺子、闸门和验收流程。 | 先在 Claude Code 里跑 `/claude-api build-eval`，用 5–10 个真实用例建一套最小评测并跑出带置信区间的 baseline——后面几乎所有做法都建立在这把尺子上。 | 2026-10-15 |
 | [让跨境电商 Listing 从生成到复测走一条可自检的闭环](cross-border-ecommerce-with-agents.md) | 把有明确 SOP、可模板化输入、可清单自检的跨境电商运营环节，拆成可复用 Agent 工作流，并用广告/评论数据回流复测 Listing。 | 选 1 个 Shopee 或 Mercado Livre 产品，只跑 01 市场分析→02 产品策略→03 Listing→自检 这条短闭环。 | 2026-10-15 |
 | [让 AI 代理的并行工作有验证、门禁和成本账](orchestrate-multiple-agents.md) | 把单个 AI 回答或并行代理的产出，变成经过验证、可观察、有成本账的工作流，而不是只看它自称完成。 | 先挑一个真实、可逆的小任务，按做法 R 只开一个 triage-github loop 跑一天，确认“先复现、先写失败测试、再修”能否产出可 review 的 PR；若你已有并行代理，先按做法 O/L 把“谁在等我”路由出来。 | 2026-10-15 |
 | [给代理接第三方工具前，先隔离、核对、冒烟、对照再决定](add-mcp-servers-to-agents.md) | 把第三方工具集以 MCP 或 CLI 形式接给代理时，怎么不被一句注册命令带走，用隔离、清单核对、冒烟和对照验证决定继续试还是只当思路参考。 | 在隔离环境里选一个真实重复任务，先用 `pip install cli-anything-hub` + `cli-hub install/launch` 跑通一个现成 CLI harness，或对 MCP 工具先跑 `uvx jevcrawl doctor` 确认通路，并留下未接入时的基线。 | 2026-10-15 |
-| [别靠感觉判断 AI 改动有没有变好：建评测、加回归闸门、做对照实验](build-and-run-evals.md) | 怎么用可复核的证据（评测集、回归闸门、元评估、上线口径、配对对照实验）判断 AI 的每次改动到底有没有变好，而不是靠感觉。 | 先按第 1 步在 Claude Code 里跑一次 `/claude-api build-eval`，给手头能反复跑的文本类对象（system prompt、skill、tool 描述、模型与参数）建起评测并跑出 baseline。 | 2026-10-15 |
 | [复盘 AI 编码会话：先回放取证，再导出备份](review-agent-conversation-logs.md) | 本机 AI 编码助手的对话散落在各自存储里，你既说不清 AI 这次到底干了什么、错在哪、产出了什么，也无法把它们统一导出用于备份、微调或使用分析。 | 先跑 `uvx agentplay agents` 看本机有哪些会话可读，再 `AGENTPLAY_NO_NETWORK=1 uvx agentplay` 打开本地 viewer 回放一次。 | 2026-10-15 |
 | [让编码 agent 在陌生代码库里用一次查询或图谱定位实现位置](code-search-for-agents.md) | 编码 agent 在陌生代码库里定位实现位置时，如何用语义检索、本地代码图谱、项目记忆和知识图谱把逐文件摸索变成一次查询或图谱探索，并知道每种做法的边界和验证方式。 | 挑一个可回滚的真实仓库，按做法 E 跑通 `graphicle setup`、`graphicle doctor` 和 `graphicle ask "where is tax added to prices?"`，人工核对返回摘录的文件与行号后再决定是否常驻。 | 2026-10-15 |
 | [在换模型、调配置前，先量出速度、成本和长对话等待时间的基线](benchmark-agent-model-serving.md) | 换模型、改服务配置或调 effort 时，缺一条可对比的基线，只能凭感觉判断快慢、贵贱和长对话是否被重复重读。 | 先选一条最贴近你当前工作流的路径：本地服务做一次 `agentperf-local run` 拿基线，Claude 任务跑完敲 `/usage` 记三项数字，Strata 编码代理把 `--prompt-cache` 从 0 改成 6 再重跑同一长回合。 | 2026-10-15 |
