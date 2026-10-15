@@ -1,14 +1,14 @@
-# 换模型、换框架或改配置之前，先量出一条可对比的基线
+# 在换模型、调配置前，先量出速度、成本和长对话等待时间的基线
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：换模型、换推理框架、改服务配置或调 effort 时，缺一条可对比的基线，只能凭感觉判断快了、便宜了还是只是变了。
-> 先试这一步：先不动环境，对自己已经在跑的服务跑一次 attached 回放（或在一次真实 Claude Code 任务结束后敲 /usage 记下三项数字），拿到基线再谈改动。
-> 最近修订：2026-10-13
+> 解决的问题：换模型、改服务配置或调 effort 时，缺一条可对比的基线，只能凭感觉判断快慢、贵贱和长对话是否被重复重读。
+> 先试这一步：先选一条最贴近你当前工作流的路径：本地服务做一次 `agentperf-local run` 拿基线，Claude 任务跑完敲 `/usage` 记三项数字，Strata 编码代理把 `--prompt-cache` 从 0 改成 6 再重跑同一长回合。
+> 最近修订：2026-10-15
 
 ## 解决什么问题
 
-换模型、换推理框架、改服务配置或调 effort 时，缺一条可对比的基线，只能凭感觉判断快慢和贵贱。本手册给三条互补的测量路径：agentperf-local 把录制好的 agent 对话逐轮回放给一个 OpenAI 兼容的模型服务，每个请求都带上截至该轮的完整对话（和真实 agent 一样），最后报告吞吐与延迟；Claude Code 的 `/usage` 给出一次真实任务的 turn 数、cache 占比与 token 成本；Janas 把「内存装不下」的大 MoE 模型权重留在磁盘、按 token 从 NVMe 流式读专家，用 `--cache` 给内存加硬上限，再用 `janas-bench` 取本机数字并与同机 llama.cpp 对照。三条路径都只覆盖验证链条里的性能与成本那一环，输出质量必须另外评估。
+换模型、换推理框架、改服务配置或调 effort 时，缺一条可对比的基线，只能凭感觉判断快慢和贵贱。本手册给四条互补的测量路径：agentperf-local 把录制好的 agent 对话逐轮回放给一个 OpenAI 兼容的模型服务，每个请求都带上截至该轮的完整对话（和真实 agent 一样），最后报告吞吐与延迟；Claude Code 的 `/usage` 给出一次真实任务的 turn 数、cache 占比与 token 成本；Janas 把「内存装不下」的大 MoE 模型权重留在磁盘、按 token 从 NVMe 流式读专家，用 `--cache` 给内存加硬上限，再用 `janas-bench` 取本机数字并与同机 llama.cpp 对照；Strata 上把 Qwen 3.8 Flash Next 当编码代理时，原文个案说 94% 等待时间用于重读对话，把 `--prompt-cache` 从 0 改为 6 后同一 14K 令牌回合从 94.8 秒降到 6.9 秒再到 4.1 秒。四条路径都只覆盖验证链条里的性能、成本与等待时间，输出质量必须另外评估；Strata 这条还是单条推文转述，不能直接当结论。
 
 ## 适用与不适用
 
@@ -24,10 +24,11 @@
 - 从 Sonnet 5 迁到 Sonnet 5.5：有 5 个破坏性变更和一个响应结构变更，原文给了前后对比代码。
 - 调 effort / thinking：档位被重新校准，为旧模型选的等级不可迁移，需要重跑 sweep。
 - 给一次真实任务建成本基线，用来判断该不该升 effort、该不该切模型、该不该压缩上下文。
+- 编码代理 + 多轮长对话 + 重复前缀：在 Strata 上运行 Qwen 3.8 Flash Next 作为编码代理时，检查并调整 `--prompt-cache`（原文把 0 改成 6）来减少重复重读对话的等待时间。
 
 不适用：
 
-- 判断「AI 干得更好没有」：agentperf-local 不测输出质量；成本 playbook 也只算钱和 token，不判对错；Janas 跑的模型和别的路径是同一个模型，差异应只体现在速度上。三者都不能替代对输出结果的评估。
+- 判断「AI 干得更好没有」：agentperf-local 不测输出质量；成本 playbook 也只算钱和 token，不判对错；Janas 跑的模型和别的路径是同一个模型，差异应只体现在速度上；Strata 的 prompt cache 改动也要另测输出质量。这些都不能替代对输出结果的评估。
 - 判断任务完成度、正确性、输出质量。
 - 自动持续运行或监控：材料未描述任何按时间、事件或状态自动持续运行的机制。`janas-chat` 是交互式的、`janas-bench` 按需跑，唯一沾边的常驻用法是 `janas-server` / `janas-mcp` 被调用方每次请求触发，触发来自调用方而不是工具自身。
 - 测单次短 prompt 聊天：agentperf-local 默认回放是 agent 形状的多轮负载。
@@ -35,6 +36,7 @@
 - 没有 NVMe、或机器不能独占时用 Janas：它会刻意吃满空闲内存并以 `O_DIRECT` 全速读盘，余量不足的机器可能被推进 swap、桌面变慢甚至无响应。
 - 把 Janas 当产品依赖：作者自称这是实验而不是产品，API 和命令行每周都在变，稳定性标为 “Not verified”。
 - 把原文的价格、省钱比例和 effort 档位收益当结论照抄：所有金额与 token 数要么是 list price，要么是作者声明的示意值。
+- 环境不支持 `--prompt-cache` 参数、或工作流里没有重复前缀时，改 Strata 这条不值得；原文没有给出模型权重版本、Strata 版本、量化方式、上下文长度设置和完整命令行，不能直接当作完整部署手册。94.8 秒到 4.1 秒是单条推文转述的个案，不能保证在其他环境复现。
 
 ## 前置条件
 
@@ -63,6 +65,11 @@
 - Anthropic API key，装好 anthropic SDK；要用 `between_tools`，先确认 SDK 版本已定义该字段，否则先升级。
 - 按成本 playbook 在 Opus 5 与 Opus 5.5 之间做对比，需要 Claude Code v2.1.280 或更高。
 - 在 Amazon Bedrock、Google Cloud 的 Agent Platform 或 Claude apps gateway 上改 effort 会清掉缓存会话，下一次请求要为全部内容付 cache-write 价，这类环境只能在休息点改档位。
+
+编码代理的 prompt cache（Strata）：
+
+- 已经能在 Strata 上运行 Qwen 3.8 Flash Next 作为编码代理，并且能改启动参数。硬件条件是 RTX 5070 + RTX 5060（原文给出的配置）。
+- 原文没有给出完整安装/启动命令、模型权重版本、Strata 版本、量化方式、上下文长度设置，不能直接当作完整部署手册。
 
 agentperf-local 会在回放前主动检查自己的前提，不满足就停止并指出要改哪个开关；Janas 不做这类检查，安全阀（`--cache`、`JANAS_GPU=0`）要自己先设。
 
@@ -581,6 +588,36 @@ fast mode 让 Opus 5.5 快最多 2.5 倍、价格翻倍（$8/M input、$40/M out
 - 被拒请求返回 HTTP 200 + `stop_reason: "refusal"`，`stop_details` 给出五类之一：cyber、bio、frontier_llm、reasoning_extraction、general_harms。
 - 服务端回退 `fallbacks: "default"`（beta，Claude API）只对 cyber 和 frontier_llm 重试到 Sonnet 5，其余三类不重试；也可以自己写回退逻辑（原文在此处截断，未给出完整示例）。
 
+### 第七部分：减少编码代理重复重读对话（Strata 的 --prompt-cache）
+
+**34. 确认当前 --prompt-cache 取值**
+
+前提：已经在 Strata 上能运行 Qwen 3.8 Flash Next 作为编码代理，并且能改启动参数。预期结果：找到当前编码代理的启动命令，看到 `--prompt-cache` 的值。
+
+**35. 把 --prompt-cache 从 0 改为 6**
+
+前提：当前值为 0，且你希望优先验证长对话回合的等待时间。预期结果：启动参数改成原文给出的取值。
+
+```text
+--prompt-cache 6
+```
+
+而不是：
+
+```text
+--prompt-cache 0
+```
+
+**36. 用同一段对话、同一任务重跑一次长回合**
+
+前提：固定提示和对话历史。预期结果：拿到改动前后的回合耗时对比。优先选约 14K 令牌的回合；记录总耗时和等待阶段。原文个案：同一 14K 令牌回合从 94.8 秒降到 6.9 秒，再到 4.1 秒（原文未说明中间步骤）。
+
+**37. 不生效或变差就恢复原值**
+
+前提：参数在你的 Strata 版本中不生效或性能反而变差。预期结果：恢复原值。原文未给出版本兼容说明。
+
+注意：原文没有给出模型权重版本、Strata 版本、量化方式、上下文长度设置和完整命令行，不能直接当作完整部署手册。
+
 ## 怎么判断变好了
 
 本机服务速度，可观察指标：
@@ -608,6 +645,17 @@ fast mode 让 Opus 5.5 快最多 2.5 倍、价格翻倍（$8/M input、$40/M out
 
 方法上：同一个真实任务在两个模型上各跑一次，做三到四个任务再下结论；团队层面用 Claude Code Analytics API 看每用户估算成本，用 Usage and Cost API 按模型和缓存/非缓存 token 拆分开支。原文给的参照基线是：企业部署平均约 $13/开发者/活跃日，90% 用户在 $30/活跃日以下（作者数据，不是你的数字）。
 
+编码代理重复重读对话（Strata），可观察指标：
+
+- 同一回合总耗时是否明显下降，重点看从 94.8 秒量级降到秒级。
+- 等待时间中“重读对话/重复前缀”的占比是否下降（原文说 94% 等待时间用于重读对话）。
+- tok/s 或首 token 延迟是否改善。
+- 输出答案正确性和编码任务结果是否不变；若质量下降，则不能采用。
+- 显存占用和稳定性是否可接受。
+
+最小试用：在已有可运行的 Strata 编码代理上，选一个多轮、历史较长、接近 14K 令牌的任务，固定提示和对话历史。分别用 `--prompt-cache 0` 和 `--prompt-cache 6` 跑同一回合。
+试多久：原文未给时长，以同一回合对比跑完为准。
+
 最小试用方式：先对自己已经在跑的服务做一次 attached 回放，不动环境拿到基线：
 
 ```console
@@ -619,7 +667,7 @@ uv run agentperf-local run \
 
 或者在 Claude Code 里挑一个真实任务，跑完敲 `/usage` 记下三项数字，改一个设置（比如 effort）再用同一任务跑一次。
 
-试多久：agentperf-local 材料未给时长，以一次完整默认回放（8 个录制 agent 任务、168 个模型轮次）跑完并写出 `summary.json` 为一次基线；做出改动后用同机同 replay 再跑一次做对照。成本对比按原文要求做三到四个真实任务。Janas 侧按三轮均值取值，并留出首轮更慢、±10% 噪声的余量。这三条路径都只说明「服务变快/变慢了没有」「任务变便宜了没有」「模型跑得起来没有」，不能说明「AI 干得更好没有」；要判断效果，仍需另外评估输出质量。
+试多久：agentperf-local 材料未给时长，以一次完整默认回放（8 个录制 agent 任务、168 个模型轮次）跑完并写出 `summary.json` 为一次基线；做出改动后用同机同 replay 再跑一次做对照。成本对比按原文要求做三到四个真实任务。Janas 侧按三轮均值取值，并留出首轮更慢、±10% 噪声的余量。这三条路径都只说明「服务变快/变慢了没有」「任务变便宜了没有」「模型跑得起来没有」，不能说明「AI 干得更好没有」；要判断效果，仍需另外评估输出质量。Strata 这条只说明长对话回合是否不再反复重读，质量仍需另测。
 
 ## 常见坑
 
@@ -648,10 +696,12 @@ uv run agentperf-local run \
 - fast mode 跑到一半开，第一次请求要为整个对话付 fast-mode input 价且不走缓存。
 - 为旧模型写的 workaround（refusal steering、tool-call 重试垫片、「do not be lazy」补丁）不删掉，会把新模型的收益吃掉；原文案例里 prompt-audit 再省的那 9% 就来自删这类仪式性指令。
 - 把原文的示意金额、降价比例、effort 档位收益当结论照抄。作者明说大量 token 数是示意值、省钱比例是团队估计，必须自己量。
+- Strata 的 `--prompt-cache` 改动来自单条推文：未给出完整命令、版本、模型标识、并发设置、显存占用、输出质量对比和可复现实验脚本。94.8 秒到 4.1 秒是作者转述的个案，不能保证在其他环境复现。
+- 环境不支持该参数或没有重复前缀时，不值得改；若质量下降，则不能采用。
 
 ## 证据与来源
 
-本手册做法来自本次调研报告《ArtificialAnalysis/aa-agentperf-local》《Building with Claude Sonnet 5.5》《What a task costs on Opus 5.5》以及本次新增的《Janas: Run LLMs larger than RAM by streaming experts from SSD》。第一篇描述的命令、参数与边界来自该工具 README；后两篇来自 claude.dev，作者 Addy Osmani（分别发布于 2026-09-28 与 2026-09-25）；Janas 一篇描述的命令、开关与基准表来自该项目 README。
+本手册做法来自本次调研报告《ArtificialAnalysis/aa-agentperf-local》《Building with Claude Sonnet 5.5》《What a task costs on Opus 5.5》以及本次新增的《Janas: Run LLMs larger than RAM by streaming experts from SSD》《@VRAMCalculator: 在 Strata 上运行 Qwen 3.8 Flash Next 作为编码代理？在你追逐 tok/s 之前，先检查提示缓存。》。第一篇描述的命令、参数与边界来自该工具 README；后两篇来自 claude.dev，作者 Addy Osmani（分别发布于 2026-09-28 与 2026-09-25）；Janas 一篇描述的命令、开关与基准表来自该项目 README；Strata 一篇是单条推文转述，来源是 @murasametech 的发现。
 
 有具体依据的部分：
 
@@ -666,6 +716,7 @@ uv run agentperf-local run \
 - Sonnet 5.5 的任务-模型对照表、模型 ID、`between_tools` / strict tool_choice / computer use toolset / advisor 配对这几条破坏性变更，以及最小调用示例、低 effort 的「真实检查」系统提示词、拒答五分类与 `fallbacks: "default"` 的重试范围。
 - 成本侧的 list price：Opus 5.5 $4/M input、$20/M output、$0.20/M cache read；Fable 5.1 $10/M input、$50/M output；fast mode $8/M input、$40/M output；cache write 为 input 价 1.25 倍（5 分钟）/ 2 倍（1 小时）；Opus 5.5 的 cache read 是 input 价的二十分之一（Opus 5 是十分之一）。
 - 成本侧命令与规则：`/usage`、`/cost`、`/effort`、`/model`、`/clear`、`/compact`、`/rewind`、`/autocompact`、`/mcp`、`/claude-api prompt-audit`、`claude update`、`CLAUDE_CODE_SUBAGENT_MODEL`、subagent 定义里的 `model:` 字段、CLAUDE.md 控制在 200 行以内、Opus 5.5 需 Claude Code v2.1.280 或更高。
+- Strata 的 `--prompt-cache` 从 0 改为 6 后，同一 14K 令牌回合从 94.8 秒降到 6.9 秒，再到 4.1 秒；原文说 94% 等待时间用于重读对话；硬件配置为 RTX 5070 + RTX 5060。
 
 只是作者主张、没有数据支撑的部分：
 
@@ -674,6 +725,7 @@ uv run agentperf-local run \
 - 成本 playbook 里大量 token 数是作者自己声明的示意值；「Opus 5.5 比 Opus 5 便宜 40%」是作者团队的估计，建立在「默认设置下每任务用更少 token」这个假设上，不是 token 单价降 40%；Opus 5.5 每任务用更多还是更少 token，作者明说要自己量。
 - 44 张工单客服基准的 −18% / −9% / 合计 −25%、示意会话省下的 $242/月、企业平均 $13/开发者/活跃日、90% 低于 $30，这些数字都出自原文，属于作者方数据。
 - Sonnet 5.5 篇的「effort 档位被重新校准」「删掉 workaround 再重跑 eval」是作者建议，没有给出对照数据。
+- Strata 那条是单条推文，未给出完整命令、版本、模型标识、并发设置、显存占用、输出质量对比和可复现实验脚本；94.8 秒到 4.1 秒是转述个案，不能保证在其他环境复现。
 
 ## 依据的调研
 
@@ -681,3 +733,4 @@ uv run agentperf-local run \
 - [Building with Claude Sonnet 5.5](../research/radar/2026-10-02/390-building-with-claude-sonnet-5-5.md)：值得一试，把这篇当作 Sonnet 5.5 的选型与迁移操作手册来小范围试用：先按任务类型选模型、再按原文步骤迁移和调 effort，因为原文给了可直接照做的代码、参数和提示词；但所有档位和收益都需要用自己的 eval 重新验证，不能直接照抄当结论。
 - [What a task costs on Opus 5.5](../research/radar/2026-10-02/392-what-a-task-costs-on-opus-5-5.md)：值得一试，按文章给的方法（用 /usage 建基线 → 默认 medium effort → 优先给模型自检手段 → 模型分层 → 管好缓存与压缩）在自己的真实任务上小范围试验，并用同一任务跑两遍对比每任务成本与 turn 数；因为其中的命令和判断规则可以直接照做，但文章反复声明所有金额与 token 数都是示意值，只有你自己 /usage 出来的数才算。
 - [Janas: Run LLMs larger than RAM by streaming experts from SSD](../research/radar/2026-10-13/2847-janas-run-llms-larger-than-ram-by-streaming-expert.md)：值得一试，在一台空闲的 x86-64 机器上用官方预编译包跑 `janas-chat`，先用 `--cache` 限制内存、必要时 `JANAS_GPU=0`，再用 `janas-bench` 记录本机数字并和同机 llama.cpp 对比后再决定是否纳入工作流；理由是它给出了可复制的安装命令、安全开关和测速工具，并把“内存装不下的大 MoE 模型”变成能跑（48.4 GB 模型在 32 GB 笔记本上读写 62/24 tok/s，对照 llama.cpp 的 16/2.8），但项目自称实验品、只在一台机器上验证过，所以只能小范围试。
+- [@VRAMCalculator: 在 Strata 上运行 Qwen 3.8 Flash Next 作为编码代理？在你追逐 tok/s 之前，先检查提示缓存。](../research/radar/2026-10-15/3533-strata-qwen-3-8-flash-next-tok-s.md)：值得一试，建议小范围试：在 Strata 编码代理中把 --prompt-cache 从 0 改为 6，优先验证长对话回合的等待时间是否大幅下降；原文给出了这一具体参数和 14K 令牌耗时对比，但缺少完整命令和版本条件，不能直接全量采用。
