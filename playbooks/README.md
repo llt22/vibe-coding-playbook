@@ -4,6 +4,7 @@
 
 | 手册 | 解决的问题 | 先试这一步 | 最近修订 |
 |---|---|---|---|
+| [让 AI 改动拿出可核验的证据：建评测、爬坡与各类验收（附听觉评审试用）](build-and-run-evals.md) | 手工搭评测、靠感觉判断改动有没有变好，以及给 AI 写的代码和重写的老代码做验收，都缺一套可核验的证据；这篇手册给出从建评测、爬坡到上线闸门和各类验收的完整操作，并附一条给编码代理接听觉评审的待验证试用。 | 先在 Claude Code 里运行 `/claude-api build-eval`，用你手上的一点真实数据把第一套评测建起来；只有手头是音频生成/评审任务时，才再按 I 组执行 `claude mcp add earshot -- python -m earshot mcp` 做一次待验证的试用。 | 2026-10-16 |
 | [把周期性重复工作交给常驻 AI 队友：从安装到两周验收](self-hosted-agent-automation.md) | 面对周期性重复工作，如何选一条本地/托管 agent 路线，只接一个模型、一个技能、一个定时任务，用两周指标判断它是否值得纳入日常工作流。 | 今天先选一条路线（如做法 H 的 touri，或 A–G 任一），只配一个模型和一个定时任务，手动触发一次并记录结果。 | 2026-10-16 |
 | [给 AI 代理装职能技能，并用数字和交接确认它真的减少了返工](install-and-customize-agent-plugins.md) | 这篇手册解决：如何把职能插件或 Agent Skills 装进 Claude Code/Cowork，按团队真实流程改一条，并用收口、观测和长任务交接确认它真的减少了返工、漏事和盯守。 | 先挑一个与你当前工作最贴近的技能包（如 PM 或 Blender），在非敏感小项目上只装 1–2 个技能跑一个真实任务，同时记录完成时间、人工干预次数、补齐上下文次数和漏事次数。 | 2026-10-16 |
 | [并行跑 AI 编码代理时，别让结果绕过测试和验证](orchestrate-multiple-agents.md) | 把“不满意就重问一次”升级成可执行流程，解决单个 AI 回答或串行 agent 交付不可验证、不可追踪、成本失控的问题。 | 先在一个非关键小仓库里，对同一任务做一次有无 CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 的 30 分钟对照，确认多代理是否真的生效、成本与质量是否不劣于基线；无效或变差就只记录为 watch。 | 2026-10-16 |
@@ -14,7 +15,6 @@
 | [让编码 agent 只在需要时用贵模型，并在完成前拿出证据](model-routing-for-coding-agents.md) | 解决多供应商/多模型编码时配额闲置、限流与死 key 中断、贵模型全程主持、以及 agent 未经验收就宣布完成的问题。 | 如果你用 Claude Code，先在终端运行 `claude --help` 确认存在 `--advisor`，再用一个真实中等复杂度任务做 A/B：默认方式跑一遍，`claude --model sonnet --advisor opus` 跑一遍；参数不存在就退回“贵模型只用在决策点”，或先做做法 A 的本地网关最小验证。 | 2026-10-16 |
 | [让团队每个编码代理自动同步同一套 SKILL.md 规范](build-and-install-agent-skills.md) | 把团队共同的 SKILL.md 规范分发给每个开发者、每种 AI 编程代理，并在技能更新或下架时自动生效，而不是靠手工复制、各自分叉和记得更新。 | 在一个私有 Git 仓库里用 `skillcrew registry init --org <你的组织>` 建注册表，先加一个 `required` 技能，再让一位同事用 `skillcrew init <registry-url> --team <团队>` 加入并新开 agent 会话验证。 | 2026-10-16 |
 | [做陌生领域调研时，让 AI 交原文和行号而不是摘要](literature-review-with-agents.md) | 让 AI 在你完全不熟的领域做调研时，不把判断交给摘要，而是先定要答的主张，再顺引用链把原文落到本地并指到行，由你读原文下判断。 | 先为题目写下 3～6 条『要答的主张』（至少 1 条用委托原词、一半以上写成不读原文答不出的形式），再按下面的安装命令装 imozuru 跑一遍。 | 2026-10-15 |
-| [在采信 AI 的改动之前，先让它拿出可核验的证据](build-and-run-evals.md) | 手工搭评测、靠感觉判断改动有没有变好、AI 改完代码没人能验收——这篇手册给「怎么让 AI 的每一条改动和每一次重写都拿出可核验证据」配一套能落地的尺子、闸门和验收流程。 | 先在 Claude Code 里跑 `/claude-api build-eval`，用 5–10 个真实用例建一套最小评测并跑出带置信区间的 baseline——后面几乎所有做法都建立在这把尺子上。 | 2026-10-15 |
 | [让跨境电商 Listing 从生成到复测走一条可自检的闭环](cross-border-ecommerce-with-agents.md) | 把有明确 SOP、可模板化输入、可清单自检的跨境电商运营环节，拆成可复用 Agent 工作流，并用广告/评论数据回流复测 Listing。 | 选 1 个 Shopee 或 Mercado Livre 产品，只跑 01 市场分析→02 产品策略→03 Listing→自检 这条短闭环。 | 2026-10-15 |
 | [给代理接第三方工具前，先隔离、核对、冒烟、对照再决定](add-mcp-servers-to-agents.md) | 把第三方工具集以 MCP 或 CLI 形式接给代理时，怎么不被一句注册命令带走，用隔离、清单核对、冒烟和对照验证决定继续试还是只当思路参考。 | 在隔离环境里选一个真实重复任务，先用 `pip install cli-anything-hub` + `cli-hub install/launch` 跑通一个现成 CLI harness，或对 MCP 工具先跑 `uvx jevcrawl doctor` 确认通路，并留下未接入时的基线。 | 2026-10-15 |
 | [复盘 AI 编码会话：先回放取证，再导出备份](review-agent-conversation-logs.md) | 本机 AI 编码助手的对话散落在各自存储里，你既说不清 AI 这次到底干了什么、错在哪、产出了什么，也无法把它们统一导出用于备份、微调或使用分析。 | 先跑 `uvx agentplay agents` 看本机有哪些会话可读，再 `AGENTPLAY_NO_NETWORK=1 uvx agentplay` 打开本地 viewer 回放一次。 | 2026-10-15 |
