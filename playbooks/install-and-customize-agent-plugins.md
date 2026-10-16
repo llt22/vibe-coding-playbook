@@ -1,28 +1,42 @@
-# 让 AI 按团队真实流程干活，并用数字证明它有没有变好
+# 给 Claude Code 加装能力时，先走官方插件市场并验证有没有用
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：解决四件事：如何让 AI 复用某个职能的领域知识并按你团队的真实流程干活、如何让会话里冒出的问题与失败测试不漏掉、如何用数字判断这次改造到底有没有效果、以及长跑任务跨上下文窗口时交接/等待/拍板都不掉线。
-> 先试这一步：挑一个和你当前工作最贴近的职能插件（如 data、sales、legal），装上并跑通一个斜杠命令；然后打开它的 skills/ 目录，把其中一条指令改成你团队的真实流程，再跑同一个任务。
-> 最近修订：2026-10-14
+> 解决的问题：如何从官方插件市场或职能插件集合中选装插件、按团队真实流程改一条、用数字判断有没有变好，并让长跑任务跨上下文时交接、等待和拍板不掉线。
+> 先试这一步：打开 Claude Code 的 `/plugin > Discover`，从官方插件市场挑 1 个与当前工作最贴合的插件，检查其主页和来源后安装到低风险任务上试一周。
+> 最近修订：2026-10-16
 
 ## 解决什么问题
 
 你已经在用 Claude Code 或 Cowork，但每次让 AI 做某个职能的活（写 SQL、准备客户通话、审合同、对账等），都要重新解释领域知识、反复交代公司上下文、手动把外部工具的数据贴进去，而且 AI 给出的流程往往是教科书做法，不是你团队实际的做法。另外两个常见缺口：AI 在会话中途问你的问题、顺手发现的 bug、失败的测试，过一会儿就淹没在对话里，要你自己翻回去捞；以及装完一堆插件后，你说不清「到底有没有变好」。第三个缺口在长任务上最扎眼：一个编码任务跑得比一个上下文窗口更久时，交接由谁做、交接后新上下文有没有接住前面的进度、你离开两小时后 run 怎么被唤醒、需要你拍板的选择会不会把整个 run 卡住——过去这些都靠人守着。
 
+如果你不确定该给 Claude Code 装什么能力，官方维护的插件市场 `anthropics/claude-plugins-official` 给出了一个标准入口：`/plugin > Discover` 浏览、`/plugin install {plugin-name}@claude-plugins-official` 安装，并定义了插件目录结构、marketplace 条目的不可变 slug、以及只有 SKILL.md 的 skill 包如何被声明。但原文没有列出任何具体插件，所以它解决的是「从哪装、按什么格式打包」，不保证装了就有效果。
+
 本手册用四层叠加来补：
 
+- **官方插件市场层**：`anthropics/claude-plugins-official` 是 Anthropic 官方维护的 Claude Code 插件目录，分 `/plugins`（内部团队开发维护）和 `/external_plugins`（合作伙伴和社区第三方）。它既是安装入口，也定义插件规范。
 - **职能层**：Anthropic 开源了 11 个知识工作插件（`anthropics/knowledge-work-plugins`），把某个职能需要的 **skills**（Claude 在相关时自动调用的领域知识、最佳实践、分步工作流）、**commands**（你显式触发的斜杠命令）、**connectors**（通过 MCP server 连接的外部工具）和 sub-agents 预先打包。
 - **收口层**：`petekp/inbox` 把会话里散落的问题、任务、议题和机会收进一个与会话并排的面板，并在 Claude 声称测试通过、但上次运行失败或改动后没再跑过时叫停。
 - **观测层（广）**：Claude Code mod（`whyashthakker/awesome-claude-code-mods`）里的 Session 观测类 mod，能把上下文占用、工具失败次数、工具延迟、每轮时长变成会话里可对比的数字。
 - **观测层（深）**：`YeonwooSung/my-claude-code-mods`（486 stars，6 个 mod）走另一条路——`agent-profiler` 看一次会话的时间去向（模型等待、工具调用、子代理、重复读取）并可导出 OTLP trace 给 Jaeger/Tempo；`context-inspector` 分析上下文浪费（窗口被什么占满、重复读取、近乎重复的输出、compaction 保留了哪些内容）；`time-machine` 用 shadow-git 快照在分叉时间线上记录每一次工具调用，能回看任意步骤时文件的原貌、定位哪次编辑弄坏了测试、恢复、分支、比较不同运行、重跑某一步；`loop-detective` 检测重复的 Bash 失败和 edit/retry 循环，附证据、调查提示词、实时案例面板和有界历史；`pin-memo` 把备忘和可点击的 todo 固定在输入框上方、同文件夹/会话恢复时自动还原；`model-effort-band` 在提示框上方显示当前模型与观察到的主线程 effort。它还给出了一套量自己开销的四配置对照实验。
 - **交接层**：`Arjun0014/project-sentinel`（1.4.0 前叫 Control Room，面板名和 `/cr` 命令保留）是「长时间 Claude Code 运行的任务控制台」。提示框上方的状态栏 HUD 用文字说清 run 在做什么或等什么；对话旁的 Control Room 面板分 Overview / Context / Behavior / Guardrails / Activity / Setup 六节；Autopilot 在上下文到阈值时自动交接（记录 run 的里程碑、更新项目文档、CLAUDE.md 只留持久指令、跑一次最小验证、用自己的话写 `NEXT_SESSION_PROMPT.md`，然后 `/clear` 并用里程碑和目标播种新上下文，Claude 自行继续）；Watchers 把 run 停到某个时间再唤醒；Mission Queue 投递「以后再做」的工作；Decision Inbox 收需要你拍板的选择；另有 Cache Guardian、Cold Resume Guard、Run Budget、Machine load 等护栏。
 
-要解决的问题因此是四件事叠加：如何选一个职能插件、装好、跑通、按团队真实流程改一条；如何让 AI 把没收口的事交出来；如何用数字判断这次改造到底有没有效果（观测层现在有两个来源可选，还要决定选哪个、以及怎么量它自身的开销）；以及长跑任务跨上下文窗口时，如何让交接、等待和拍板都不掉线，并且你能看出它是不是真的少让你盯了。
+要解决的问题因此是五件事叠加：如何从官方插件市场发现并安装插件、如何选一个职能插件、装好、跑通、按团队真实流程改一条；如何让 AI 把没收口的事交出来；如何用数字判断这次改造到底有没有效果（观测层现在有两个来源可选，还要决定选哪个、以及怎么量它自身的开销）；以及长跑任务跨上下文窗口时，如何让交接、等待和拍板都不掉线，并且你能看出它是不是真的少让你盯了。
 
 ## 适用与不适用
 
-**适用**：
+**适用（官方插件市场）**：
+- 本机已安装并运行 Claude Code，且能访问该 marketplace。
+- 想先浏览可安装的插件，再决定装哪个；或想把自己团队的能力按官方规范打包成可复用扩展并对外分发。
+- 愿意在安装前检查插件主页和来源，确认信任其包含的 MCP server 和文件访问。
+
+**不适用（官方插件市场）**：
+- 没在用 Claude Code 的场景无法直接套用。
+- 需要先看到具体插件名单、评价或效果数据再决定：原文只有 README，没有收录任何具体插件的名称、功能或评价。
+- 期望 Anthropic 替你审核插件行为：原文明确不控制插件里包含哪些 MCP server、文件或其他软件，也无法验证它们会按预期工作、或不会变化。
+- 不能接受插件访问文件与外部服务：应从单机、非敏感任务开始，不要一上手就接入生产凭据。
+
+**适用（其余各层）**：
 - 团队已用 Claude Code（有 `claude` CLI）或可用 claude.com/plugins 的 Cowork。
 - 所需外部工具能通过 MCP 接入（或你已有 MCP server）。
 - 有人愿意花时间读插件的 `skills/` 文件，并按本团队流程改写。
@@ -33,7 +47,7 @@
 - 你的编码任务会跑得比一个上下文窗口更久，需要跨交接保持进度，并且愿意接受一个建立在仍处 early access 的 function-hooks 插件 API 上的插件。用交接层的额外前提：Claude Code 2.1.289 或更新、且带 function-hooks 插件 API（mods）；运行面为终端 CLI，或 Claude Desktop 的 Code tab 本地会话；README 只在 Windows 11 和 Claude Code 2.1.289 / 2.1.293 / 2.1.295 上验证过。
 - 你愿意先在一两个非敏感、小体量的现有项目上试，而不是全公司铺开。
 
-**不适用**：
+**不适用（其余各层）**：
 - 不具备上述条件时，只能停在「看看」。
 - 期望开箱即用、不做任何定制就大幅改善。职能插件原文自称 these plugins are generic starting points，价值取决于你是否投入定制。
 - 需要先看到官方效果数据、案例或 benchmark 才决定采用。职能插件原文只有「更好更一致」的主张；收口层原文只给了成本数据，没有「减少了多少遗漏」的效果数据；交接层原文只给了机制描述，没有「减少了多少上下文溢出和人工盯守」的量化数据；「观测层（深）」的 6 个 mod 也都只有一句话功能概括，原文没有实测数据、成功率或案例数字。
@@ -66,8 +80,89 @@
 15. 「观测层（深）」的本地开发/测试路径另有前提：Node 22.19.0 或更高（需要 TypeScript transformation flag）；依赖已用 `package-lock.json` 锁定；`npm run typecheck` 需要每个 `.claude-plugin/types` 下由引擎生成的声明（本地生成、不入版本库）；测试引擎侧需要 `CLAUDE_BIN` 指向 claude 可执行文件。
 16. 要做开销对照实验：用一个一次性的大型代表性仓库并固定在一个 commit，保持相同的 Claude 引擎/模型/权限设置，用 `--plugin-dir` 显式加载这些 mod，同时禁用其他已安装插件。
 17. 「观测层（深）」的兼容版本口径（原文对照表）：原始三套 engine 测试套件、Pin Memo、Model Effort Band 在 Claude Code 2.1.292 验证过；Loop Detective 在 2.1.280 验证过（TypeScript 检查用本地 2.1.292 的声明）。2.1.280 早期访问版下 profiler 可用，但 Context Inspector 缺少 `session.append`，Time Machine 的 per-test 选项会被忽略——不同版本下的行为不要混着比较。
+18. 官方插件市场：本机已安装并运行 Claude Code，且能访问该 marketplace。安装/更新/使用前先确认你信任这个插件；原文明确 Anthropic 不控制插件里包含哪些 MCP server、文件或其他软件，也无法验证它们会按预期工作、或不会变化；细节看每个插件自己的主页。
+19. 如果你是插件作者：发布前定好 `name`，之后不要改——marketplace 条目里的 `name` 是不可变 slug，用户按这个 slug 安装，改名会让他们的安装报 `plugin-not-found`；要改 UI 显示名改 `displayName`；确实必须改名时在 `.claude-plugin/marketplace.json` 顶层加 `renames` 映射。
+20. 如果源仓库只有 `SKILL.md`、没有 `.claude-plugin/plugin.json`，就在 marketplace 条目里用 `strict: false` + 显式 `skills` 数组声明这些 skill；每个路径相对 `source.path`，指向包含 `SKILL.md` 的目录；注册为 `<plugin-name>:<skill-name>`。
 
 ## 操作步骤
+
+### 第 0 步：用官方插件市场发现并安装插件（做法 A / 做法 B）
+
+**做法 A：作为使用者，先浏览再装**
+
+前提：本机已安装并运行 Claude Code，且能访问该 marketplace。
+
+1. 在 Claude Code 里进入插件入口的 Discover 页面挑选：
+
+```text
+/plugin > Discover
+```
+
+2. 选定插件后，用 marketplace 限定名安装：
+
+```text
+/plugin install {plugin-name}@claude-plugins-official
+```
+
+3. 安装/更新/使用前先确认自己信任这个插件。原文明确警告：Anthropic 不控制插件里包含哪些 MCP server、文件或其他软件，也无法验证它们会按预期工作、或不会变化；细节要看每个插件自己的主页。这一步不是可选步骤，而是安装前的前置检查。
+
+**预期结果**：插件安装成功，可在低风险任务上试用。**失败处理**：若安装后调用失败/报错，先检查插件主页和来源；若一周内没有任何指标变好，卸载，并把结论记为「该插件无实质增益」而非「插件机制无效」。
+
+**做法 B：作为插件作者，按标准结构组织**
+
+4. 每个插件遵循统一目录结构（原文给出的参考实现在 `/plugins/example-plugin`）：
+
+```
+plugin-name/
+├── .claude-plugin/
+│   └── plugin.json      # Plugin metadata (required)
+├── .mcp.json            # MCP server configuration (optional)
+├── commands/            # Slash commands (optional)
+├── agents/              # Agent definitions (optional)
+├── skills/              # Skill definitions (optional)
+└── README.md            # Documentation
+```
+
+5. 如果源仓库只有 `SKILL.md`、没有 `.claude-plugin/plugin.json`，就在 marketplace 条目里用 `strict: false` + 显式 `skills` 数组直接声明这些 skill：
+
+```json
+{
+  "name": "example-bundle",
+  "description": "Brief description of the bundled skills.",
+  "author": { "name": "Author Name" },
+  "category": "development",
+  "source": {
+    "source": "git-subdir",
+    "url": "https://github.com/example-org/sdk.git",
+    "path": "packages/agent-skills",
+    "ref": "main",
+    "sha": "<commit sha>"
+  },
+  "strict": false,
+  "skills": [
+    "./skill-a",
+    "./skill-b",
+    "./skill-c"
+  ],
+  "homepage": "https://github.com/example-org/sdk"
+}
+```
+
+`skills` 里每个路径都相对于 `source.path`，指向一个包含 `SKILL.md` 的目录；路径可以更深（如 `["./libA/skill-1", "./libB/skill-2"]`），用于跨多个库子目录挑选一组 skill。每个 skill 在 Claude Code 中注册为 `<plugin-name>:<skill-name>`。schema 细节见官方 marketplace 文档的 Strict mode 一节。
+
+6. 发布前定好 `name`，之后不要改。marketplace 条目里的 `name` 是不可变 slug：一旦发布就不能变，用户是按这个 slug 安装的，改名会让他们的安装报 `plugin-not-found`。要改 UI 上显示的名字，改 `displayName`。确实必须改名时，在 `.claude-plugin/marketplace.json` 顶层加 `renames` 映射，让已有安装自动迁移：
+
+```json
+"renames": {
+  "old-name": "new-name"
+}
+```
+
+Claude Code 插件加载器会读这个映射，在用户下次同步时把旧 slug 透明改写成新 slug。
+
+（第三方想收录，走原文给出的 plugin directory submission form；外部插件需通过质量与安全标准审核。但原文未给出标准内容、审核流程或通过率。）
+
+**怎么选**：只想发现和安装插件、不想先动职能插件 → 做法 A；要自己打包团队能力并分发 → 做法 B。官方市场与下面的 knowledge-work-plugins 职能插件是并列入口：官方市场是标准发现与安装入口，knowledge-work-plugins 是一批具体职能插件的来源；原文没有说明 knowledge-work-plugins 是否在官方市场中，因此两者都写，按你的入口选择。
 
 ### 第 1 步：选一个与你当前工作最接近的职能插件
 
@@ -134,7 +229,7 @@ plugin-name/
 3. **调工作流**：改 skill 指令，让流程匹配你团队的实际做法，而不是教科书做法。
 4. **建新插件**：用 `cowork-plugin-management` 插件，或直接照上面的目录结构为未覆盖的角色/流程新建。
 
-**注意**：原文只给了总体步骤和目录结构，**没有**收录任何单个插件的具体 skill 内容、提示词全文或命令清单。要照做必须自己打开仓库对应目录去读。
+**注意**：原文只给了总体步骤和目录结构，**没有**收录任何单个插件的具体 skill 内容、提示词全文或命令清单。要照做必须自己打开仓库对应目录去读。官方市场也定义了统一结构（见第 0 步做法 B），并额外给出 `strict: false`、`renames`、`displayName` 等发布约束；两者结构相似，具体以各自仓库为准。
 
 **预期结果**：Claude 在相关交互中自动取用你改过的知识和流程；你用斜杠命令触发时，输出更贴近团队实际做法。这一步是价值所在——开箱插件只是通用起点。
 
@@ -497,9 +592,23 @@ Activity → Operations 的 *Add work for later*（并指定何时投递），�
 
 ### 第 11 步：贡献回仓库（可选）
 
-职能层原文说插件就是 markdown 文件，fork 后改，提 PR。交接层是 MIT、无构建步骤的 TypeScript，Claude Code 直接加载，所以按做法 B 在本地 clone 里改、用 `/reload-plugins` 热加载即可。
+职能层原文说插件就是 markdown 文件，fork 后改，提 PR。交接层是 MIT、无构建步骤的 TypeScript，Claude Code 直接加载，所以按做法 B 在本地 clone 里改、用 `/reload-plugins` 热加载即可。官方市场层如果是自己打包插件，按第 0 步做法 B 的目录结构与发布约束组织；第三方想收录，走原文给出的 plugin directory submission form，外部插件需通过质量与安全标准审核（标准内容、审核流程或通过率原文未给出）。
 
 ## 怎么判断变好了
+
+**官方插件市场的最小试用（约 1–2 小时 + 一周观察）**
+1. 在 Claude Code 里执行 `/plugin > Discover`，从 marketplace 里挑 **1 个**和当前日常工作最贴合的插件（例如与你常在的命令行/代码库/数据源相关的那个）。
+2. 安装前按原文要求检查它的主页和来源，确认你信任它包含的 MCP server 和文件访问。
+3. 用 `/plugin install {plugin-name}@claude-plugins-official` 安装，先只在低风险任务上跑。
+4. 记录一周内该任务的使用情况。
+
+**判断有没有改善的指标（官方市场）**
+- 同一任务完成时间、来回轮次是否下降；
+- 原本需要手工在工具之间切换的步骤是否被插件替代；
+- 插件调用失败/报错的比例，以及是否出现需要额外人工复核的意外行为；
+- 是否出现了「以前根本不会交给 AI、现在会交」的新任务——这是能力发现层面最直接的改善信号。若一周内没有任何一项变好，就卸载，并把结论记为「该插件无实质增益」而非「插件机制无效」。
+
+**风险控制**：插件可访问文件与外部服务，务必从单机、非敏感任务开始，不要一上手就接入生产凭据。
 
 先分清来源：职能插件原文**没有**给出任何验证方法或指标，只有 better and more consistent outcomes、spend less time enforcing processes 这类主张，属作者主张、无数据支撑；收口层原文只给了成本口径，同样没有效果数据；交接层原文只有机制描述，同样没有「减少了多少上下文溢出和人工盯守」的数据；「观测层（深）」的原文明确声明没有给出四配置的性能结果，6 个 mod 的功能描述都只是一句话。下面第一组是职能插件层的自测指标，第二组是收口层的自测指标，第三组是「观测层（广）」能直接采集的数字，第四组是「观测层（深）」能产出的指标与对照方法，第五组是交接层要自己看的判据。
 
@@ -556,6 +665,14 @@ Activity → Operations 的 *Add work for later*（并指定何时投递），�
 
 ## 常见坑
 
+- **官方市场原文没有收录任何具体插件**：只有 README，没有插件名称、功能或评价，无法据此判断插件生态的实际价值密度。
+- **官方市场没有效果数据**：全篇没有使用者案例、前后对比数据或效果指标，不能证明装插件真的改善了工作结果。
+- **Anthropic 不控制也不验证插件内容**：原文明确表示不控制插件里包含哪些 MCP server、文件或其他软件，也无法验证它们会按预期工作、或不会变化；安装前必须自己检查插件主页和来源。
+- **marketplace 条目的 `name` 是不可变 slug**：一旦发布就不能变；改名会让用户安装报 `plugin-not-found`；要改显示名改 `displayName`，必须改名时用 `renames` 映射。
+- **`strict: false` 声明 skill 包时路径相对于 `source.path`**：每个路径指向包含 `SKILL.md` 的目录，注册为 `<plugin-name>:<skill-name>`；schema 细节看官方 marketplace 文档。
+- **外部插件审核标准未给出**：原文说外部插件需通过质量与安全标准审核，但没有标准内容、审核流程或通过率。
+- **仓库热度不是效果**：39,182 stars、当日 +307 只反映关注度，不反映实际工作效果。
+- **材料可能被截断**：抓取内容只有 README，没有插件列表本身，以上判断建立在这份文本上。
 - **职能插件原文只有 README**：不含任何单个插件的 skill 正文、提示词、命令清单，因此无法从这份材料判断实际质量，也无法照抄具体提示词。要照做必须自己打开仓库对应目录去读。
 - **开箱效果有限**：原文自称 these plugins are generic starting points，价值取决于你是否投入定制（换 connector、补公司上下文、改工作流）。
 - **没有官方效果数据**：职能插件原文只有「更好、更一致」「少花时间执行流程、多花时间改进流程」等主张，没有数据、案例、benchmark 或对比支撑；收口层原文只有成本表，没有遗漏率、误报漏报率或前后对比；交接层原文只有机制描述，没有「减少了多少上下文溢出和人工盯守」的量化数据。
@@ -583,6 +700,16 @@ Activity → Operations 的 *Add work for later*（并指定何时投递），�
 - **别把观测当目标**：观测面板不改变 Claude Code 的基本用法，它只是在既有的插件层之上叠加一层「给你对比用的底座」。
 
 ## 证据与来源
+
+**官方插件市场层（来自调研《anthropics/claude-plugins-official》所引原文 README）**
+- 安装与发现命令（`/plugin > Discover`、`/plugin install {plugin-name}@claude-plugins-official`）：来自原文 README。
+- 插件统一目录结构、参考实现 `/plugins/example-plugin`：来自原文 README。
+- `strict: false` + 显式 `skills` 数组声明 skill 包的 marketplace 条目示例、路径相对 `source.path`、注册为 `<plugin-name>:<skill-name>`：来自原文 README。
+- `name` 不可变 slug、`displayName`、`renames` 映射：来自原文 README。
+- 仓库热度 39,182 stars、当日 +307：来自抓取指标。
+- 第三方收录走 plugin directory submission form、外部插件需通过质量与安全标准审核：来自原文，但标准内容、审核流程、通过率未给出。
+- Anthropic 不控制插件里包含哪些 MCP server、文件或其他软件，也无法验证它们会按预期工作、或不会变化：来自原文明确警告。
+- 没有收录任何具体插件的名称、功能或评价；没有使用者案例、前后对比数据或效果指标；抓取内容可能被截断：来自调研报告对原文的解读与局限说明。
 
 **职能插件层（来自调研《anthropics/knowledge-work-plugins》所引原文 README）**
 - 安装命令、统一目录结构、Making Them Yours 的四个定制方向：来自原文。原文给出两条 Claude Code 安装命令（`claude plugin marketplace add anthropics/knowledge-work-plugins`、`claude plugin install sales@knowledge-work-plugins`）。
@@ -628,6 +755,7 @@ Activity → Operations 的 *Add work for later*（并指定何时投递），�
 - 材料在 Lazy-exit guard 处被截断，相关行为不完整，本手册只保留可见部分。
 
 **属于本次调研作者建议、非原文数据**
+- 官方市场的最小试用路径（1–2 小时 + 一周观察，只挑 1 个插件、检查来源、低风险任务、记录完成时间/轮次/手工切换/失败比例/新任务，一周无改善则卸载并记为「该插件无实质增益」而非「插件机制无效」）：来自调研报告建议，不是原文数据。
 - 职能插件层的自测指标（完成时间、返工次数、补齐上下文次数、命令可用性）：原文没有官方指标，这些是调研报告在「怎么试、怎么验证」中建议的自测方式。
 - 收口层的自测指标（漏掉的待办数、手动追问测试是否通过的次数、切换窗口次数）与最小试用步骤：原文没有效果验证，这是调研报告建议的自测方式。
 - 观测层「广」的最小试用路径（只装 1–2 个观测类 mod、先一周基线再一周开面板做同类任务对比、比较失败次数/平均延迟/上下文重述次数）：调研报告给出的试用与验证建议。
@@ -642,3 +770,4 @@ Activity → Operations 的 *Add work for later*（并指定何时投递），�
 - [petekp/inbox](../research/radar/2026-10-11/2454-petekp-inbox.md)：值得一试，可以小范围装上试：在 Claude Code 里用 `/plugin install inbox --marketplace petekp/inbox` 安装后跑 `/inbox demo` 观察它能否捕获你本来会漏的待办与失败测试，理由是原文给出了可直接照做的安装、更新、面板操作与成本数据，但除作者自述外没有任何效果验证，且每轮回复都会产生额外 Sonnet 调用成本。
 - [Arjun0014/project-sentinel](../research/radar/2026-10-11/2568-arjun0014-project-sentinel.md)：值得一试，先用 `claude --plugin-dir` 不安装地在单个长任务会话里试跑，打开 Autopilot、状态栏和 Activity，用 Handoff Health 与跨交接的里程碑连续性判断是否真的减少了上下文溢出和人工盯守。理由是 README 给出了可直接复制的安装、Desktop 配置和斜杠命令，但它建立在仍处 early access 的 function-hooks 插件 API 上、只在 Windows 11 和 Claude Code 2.1.289/2.1.293/2.1.295 上验证过，不宜直接定为团队标准。
 - [YeonwooSung/my-claude-code-mods](../research/radar/2026-10-14/3008-yeonwoosung-my-claude-code-mods.md)：值得一试，建议在 Claude Code 上小范围试装并验证，优先从单个 mod（如 loop-detective 或 context-inspector）入手，并用原文给出的四配置对照法测开销；理由是这份 README 给出了 6 个可安装的真实 mod、统一的安装路径（plugin@marketplace）和一套可照做的验证方法，但每个 mod 的具体安装与配置细节要进各自 README，且原文明确声明尚未给出多 mod 合并的性能结论。
+- [anthropics/claude-plugins-official](../research/radar/2026-10-16/3896-anthropics-claude-plugins-official.md)：值得一试，把 Claude Code 的官方插件市场作为扩展 AI 能力的标准入口用起来——先用 `/plugin` 浏览并安装与当前工作直接相关的插件，理由是该仓库给出了可直接复制的安装命令和插件/marketplace 条目的完整声明结构，是目前少见的、可照做的扩展配置入口。

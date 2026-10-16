@@ -1,10 +1,10 @@
-# 让逆向重建 agent 在宣布完成前通过机器验收
+# 搞懂别人的软件并重建时，让 agent 拿出可核验的证据
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：当目标没有源码、需要搞懂并重建某个功能时，如何让 agent 产出可回溯的证据，并在有 ground truth 时用机器可判定的 PASS/FAIL 守住正确性。
-> 先试这一步：先选一个存在可机器比对 ground truth 的最小逆向/重建任务，写一个让 agent 提交前自己跑的 PASS/FAIL 验收脚本；没有 ground truth 时，先用 REA 对已提取的 JS/Electron 目录跑一次静态分析，检查 Evidence 与 limitations。
-> 最近修订：2026-10-11
+> 解决的问题：当目标没有源码、你需要在自家项目里重建它的某个功能时，怎样让 agent 走完“反编译取证据 → 搞懂 → 按规格重建 → 机器可判定地验收”，而不是给你一份看着合理、无法核验的猜测。
+> 先试这一步：先做做法 B：对一个已提取的 JS/Electron 目录跑一次 `npx -y rea-agents@latest analyze-javascript-application /absolute/path/to/app --json`，看它返回的 Evidence、恢复出的图和 unknowns 是否可信，再决定要不要上 MCP、Hopper/Ghidra 或多 agent 验收器。
+> 最近修订：2026-10-16
 
 ## 解决什么问题
 
@@ -13,6 +13,8 @@
 REA 给出的是一条可以照做的主线：**Decompile（反编译取回可读代码、字符串、符号）→ Understand（顺着调用关系把功能搞懂）→ Recreate（按自己的技术栈、界面和需求重建这个特性）**，并让每条结论带上 Evidence 与 limitations。
 
 但调研报告 **500B Tokens Later** 给出了一个更硬的前提：如果没有机器可判定的 PASS/FAIL 验收标准，reviewer agent 会被 worker 写在 commit/代码里的理由说服（作者称之为非故意的 prompt injection）；第一月代码“极其可读但语义错误”。因此，只要存在可机器比对的 ground truth，就应在 REA 的 Evidence 之上再加一个客观验收器（Oracle）；没有 ground truth 时，至少保留 Evidence/limitations 口径，把 unknown 标出来，不把猜测当结论。
+
+**REA-Reconstruction-Companion** 补的是“拿到证据之后”这一段：把证据转成可执行的规格、架构、实现计划和验证流程，作用范围由你指定（整个应用、一个功能、一个函数、一个接口或一种数据格式）。它与 REA 在同一任务内同时生效，不是第二个后台 agent，也不含 REA 本体。
 
 注意 REA 的边界：这是一个 agent + MCP 的逆向调查流程，不是通用工作方法；作者明确不声称恢复原始源码，也不自动克隆应用。做法 E 的字节比对也有边界：反编译天然有 ground truth 是因为保留原始二进制与原始编译器，大多数工作流没有这种奢侈条件。
 
@@ -32,6 +34,10 @@ REA 给出的是一条可以照做的主线：**Decompile（反编译取回可�
 **机器验收器（Oracle）适用**：存在可机器比对的 ground truth 时，例如保留原始 EXE/PDB 与原始编译器、用参考实现/旧二进制做等价重构、在有完整测试用例的模块上做重写。原文条件：反编译天然有 ground truth（原始二进制 + 原始编译器）。
 
 **机器验收器不适用**：不能机械验证的架构决策、语义正确性不能只靠 reviewer agent。字节比对本身有代价：寄存器选择、内联决策、调用约定很难精确复现，极少数情况下相同输入会产生不同编译输出；独立指令被重排这类语义等价差异也会被判 FAIL；引入后 agent 反编译耗时明显变长，且不必然带来更好结果。剩余函数多为非确定性特征或受链接器 COMDAT 折叠影响而无法稳定复现，继续比对会“消耗更多 token 而不会实质改善结果”。
+
+**REA-Reconstruction-Companion 适用**：已经拿到 REA 工具或用户提供的 REA 证据，需要把它变成规格、契约、验收标准、架构选择与实现计划；需要在连贯增量中指导开发并做集成与端到端验证；需要在有助于验证重建时选用有界差分模糊测试、定向变异测试、可执行接口契约；需要记录密码学互操作参数并验证独立向量与拒绝用例。它对模型无关，纯 Markdown，Codex 与 Claude Code 都能用，其他 agent 可通过显式 skills 目录使用同一套核心文件。
+
+**REA-Reconstruction-Companion 不适用**：它不含 REA，也不含模型 SDK、付费 API 要求、Python 依赖、遥测或后台服务；宿主 agent 不能读写本地文件、不能执行命令时，纯对话客户端只能给你指引，不能代装；本次只拿到 README，全部示例都是维护者自写、无独立评测，不要假定它已经过验证。
 
 REA 的分析在本地运行，不上传到托管分析服务。
 
@@ -54,6 +60,14 @@ REA 的分析在本地运行，不上传到托管分析服务。
 - 建一个 Discord 频道并让所有 agent 都能读写；再配一个 GitHub webhook，把 CI 失败推进频道。
 - 一份指令文档；一个每小时执行的 cron job；一个验证脚本；CI 能对验证脚本做哈希并与 GitHub Actions secret 比对。
 - 存在可机器比对的 ground truth：原始 EXE/PDB、原始编译器（有 PDB 更省事，但没有 PDB 流程同样能跑）。
+
+**做法 F / companion 侧**：
+
+- 宿主 agent 能读写本地文件并执行命令（纯对话客户端只能给指引、不能代装）
+- Node.js 20 或更新（安装器只用 Node 标准库，不 npm install、不联网）
+- REA 已安装并针对你的客户端配置好；真正做调查还需要 REA 工具或用户提供的 REA 证据
+- 明确的技能目录：用客户端默认路径，或用 `--skills-dir` / `--rea-skill` 覆盖
+- 决定联动开或关；做实际调查时 REA 及目标专用引擎各有自己的依赖，需单独安装配置
 
 ## 操作步骤
 
@@ -260,11 +274,108 @@ agent 数（末期）: 14 × Luna + 2 × Opus 5.5
 
 26. 规模化时的组织调整。到 14+ agent 时：worker 用**独立分支**、通过 **pull request** 提交改动；Discord 不再扩展良好，于是把消息限制到“认领哪个 issue”和 CI 协调，其他一律少说；项目越往后越不需要人机沟通，最终完全自主运行。作者对同规模的其他项目建议不要用 Discord。
 
+### 做法 F：用 REA-Reconstruction-Companion 把证据接成“规格→实现→验证”
+
+前提：宿主 agent 能读写本地文件并执行命令；Node.js 20 或更新；REA 已装并针对你的客户端配好。差异：做法 A/B 止于“搞懂一个功能并自己重建一个特性”，做法 F 把它接成有规格、契约、验收标准的重建流程；做法 E 的字节级 PASS/FAIL 是更强的机器验收器，做法 F 的“与证据挂钩的验收标准”介于两者之间——可核验，但不一定逐字节。两者不冲突，可同时用。
+
+27. 先装 REA（按你所用的客户端配置，见 github.com/morluto/rea），再决定是否开启联动。预期结果：REA 工具与证据工作流可用。
+
+28. 取包：从 Releases 下载解压 ZIP，或 clone 仓库。所有命令在解压目录或仓库根目录执行（Windows/macOS/Linux 命令相同）。
+
+29. 选安装模式并安装（三选一）：
+
+```sh
+# Claude Code，带可选联动
+node install.mjs --client claude-code --integration on
+
+# Codex，带可选联动
+node install.mjs --client codex --integration on
+
+# 只装 companion，不改 REA
+node install.mjs --client claude-code --integration off
+```
+
+30. 先预演再落地：任意安装命令加 `--dry-run` 查看路径与改动但不写文件；输出里的 `companionChanges` 会列出相对 companion 目录新增/修改/删除的文件，包含会被移入备份的本地文件。确认后再执行同一命令。
+
+31. 安装后校验：同一命令加 `--check`。集成安装时，REA skill 缺失或选择有歧义，会在装 companion 之前中止。大小写不同但指向同一个 REA 文件视作同一候选；真正独立的多个安装仍需显式选择。
+
+32. 自定义路径（已有安装、项目级 skill、其他 agent）：
+
+```sh
+node install.mjs --client generic --integration on --skills-dir "/path/to/skills" --rea-skill "/path/to/reverse-engineer-anything/SKILL.md"
+```
+
+`--skills-dir` 接受父级 skills 目录，安装器会在其下创建 `rea-reconstruction-companion`；它优先于客户端默认路径和环境变量；REA 路径必须指向该客户端实际加载的 skill；用了覆盖就关闭广泛自动查找；含空格的路径要加引号；如果安装器运行在 agent 环境之外，必须显式给出该 agent 的真实目录。下载包/检出目录要与安装目标分开，安装器会拒绝源与目标目录重叠、以及 REA 文件落在 companion 目标目录内（含在视作同一位置的文件系统上仅大小写不同的路径）。
+
+默认用户位置：Claude Code 为 `~/.claude/skills/rea-reconstruction-companion/`，设了自定义配置目录时为 `$CLAUDE_CONFIG_DIR/skills/rea-reconstruction-companion/`，REA 查找也停留在该 profile 内，除非用 `--rea-skill` 另指；Codex 为 `~/.agents/skills/rea-reconstruction-companion/`，设了 `CODEX_HOME` 时为 `$CODEX_HOME/skills/rea-reconstruction-companion/`，定位 REA 时还会查旧的 `~/.codex/skills/`；通用客户端用 `--skills-dir` 指定其文档化的 skills 目录。装完刷新宿主技能或新开一个会话，看不到技能就再查。
+
+33. 让 AI agent 代装：把下面这段原文提示词交给有本地文件与命令权限的 agent，它会自行识别客户端与 skills 目录，并询问联动与更新检查偏好（不需要填任何占位符）：
+
+```text
+Install REA-Reconstruction-Companion from:
+https://github.com/ShadowSwaps/REA-Reconstruction-Companion
+
+Read README.md and INSTALL.md, identify my AI client and its skills
+directory, and follow the documented installation workflow.
+
+Before making installation changes, explain the optional REA integration
+rule and ask me to choose:
+- Enable: relevant REA reconstruction requests also load the companion,
+  sharing evidence, requirements, and validation work.
+- Skip: install the companion without changing REA; I can invoke it
+  explicitly. This does not remove an integration rule already installed.
+
+Wait for my choice unless I have already provided it. Then install using
+that setting, preview changes with --dry-run, preserve existing work and
+backups, and verify with --check. Explain any missing prerequisites or
+access limitations. Report what was installed, where, and whether the
+integration was enabled. Do not claim success unless verified.
+Also explain the optional weekly update check (included since v1.2.0)
+and ask whether I want it enabled. Keep it off unless I choose it.
+This checks on skill use and still asks me before installing an update.
+Do not incur additional charges: use existing local tools and do not
+activate billing, paid services, metered APIs, or automatic paid usage.
+If a step could incur a charge and that cannot be ruled out, stop that
+step and explain a no-charge alternative.
+```
+
+也可以在这段话里直接带 “Enable integration” 或 “Skip integration” 预先选定。注意 `off` 的含义是“不管理 REA”，不是“移除已装的规则”；要关掉早先的联动，需在所选 REA 的 `SKILL.md` 里删掉 `<!-- rea-reconstruction-companion:begin -->` 与 `<!-- rea-reconstruction-companion:end -->` 之间（含标记）的块，其余保持原样。
+
+34. 用起来（原文给的三个自然语言示例，可直接改用）：
+
+```text
+Use REA-Reconstruction-Companion with REA on this application so I can eventually build a similar local tool. Infer the target type and give me an evidence-backed specification and roadmap.
+```
+
+```text
+Reimplement the decodeFrame function in this library and make it faster for large inputs. Recover its contract, then compare correctness and performance.
+```
+
+```text
+Continue implementing the app from this project's REA reconstruction specification.
+```
+
+在 Codex 里可显式写 `$rea-reconstruction-companion`，在 Claude Code 里写 `/rea-reconstruction-companion`。开启联动后，一个相关的 REA 请求也会让 agent 加载 companion。“理解这个应用以便日后做个类似的”只产出规格与路线图；“现在就做个类似的应用”同时授权实现流程；只问一个函数就只聚焦那个函数。
+
+35. （可选）每周更新检查：v1.2.0 起内置，默认关闭，装完后想用就手动开一次（早于此版本不会自动获得，要先手动装一个 v1.2.0+ 的包）。宿主在 skill 被使用时调用一个本地小助手，满 7 天才联系 GitHub；skill 闲置则什么都不跑。发现新稳定版时 agent 给出“立即更新 / 下周提醒 / 跳过此版本 / 关闭检查”；不回答就不更新；批准绑定到具体 release 和 asset，asset 变了要重新征得同意；本地有自定义改动则不自动替换；更新成功保留备份、验证结果并保留你选定的客户端与 REA 联动设置。不需要 npm 依赖、模型/API key、付费服务、额外模型调用、后台守护进程或调度型 AI 任务。
+
+36. 备份与回滚：重复同一安装是安全的，不会重复写入联动块。companion 文件有差异需加 `--replace`，替换前会整目录备份。REA 的改动只动标记块，块外内容原样保留；更早的预发布规则也能迁移，自定义过的无标记规则需要人工复核。备份与回执放在父级 skills 目录旁的 `.rea-reconstruction-companion-installer/`，安装器会打印确切事务路径。提交失败会分别尝试恢复 REA 与 companion，所以 REA 文件不可读或缺失不会阻碍恢复 companion；检测到并发编辑会保留并报告，而不是覆盖。手工恢复用回执定位路径，把 `companion-before` 恢复到 companion 原位；`rea-before.md` 仅当 REA 没有你需要保留的后续改动时才恢复，否则只移除或修复联动块。若进程被杀留下 `install.lock`，先确认没有安装器在运行，再删掉那个锁文件重试。更新 REA 可能覆盖其技能指令，重跑带 `--check` 的集成命令，需要就重装；没有任何后台监控或改写 REA 的东西。
+
+37. （维护者/自测）开发命令，仅维护者需要，安装和使用不需要：
+
+```sh
+node scripts/manifest.mjs
+node --test
+python scripts/build_release.py
+```
+
+发布构建用 Python 3.10+ 标准库。
+
 ### 怎么选
 
 原文对照表：想让 agent 自己调查并实现特性 → 做法 A；想在终端里查/反编译某个部分 → `rea analyze` / `rea decompile`；想校验、规范化、比较 Evidence → `rea evidence-import` / `evidence-export` / `compare`；想不执行应用就映射本地 JS/Electron 应用 → `rea analyze PATH` 或 `analyze-javascript-application`；想复用不可变分析结果 → 给深层分析命令传 `--snapshot /path/to/analysis.json`；想导入历史源码 → `rea import-reference-source`；想抓取或比较受控进程行为 → 受控浏览器场景 / V8 Inspector。
 
-再按本次合并补充：单点搞懂并重建一个功能，先用做法 A；不想配 MCP/分析引擎，先用做法 B；只想要 agent 指令，做法 C；要 CLI、诊断、快照、证据、浏览器/V8 观察，做法 D；要长期多 agent 反编译且存在 ground truth，做法 E。REA 的 Evidence/limitations 与做法 E 的字节级 PASS/FAIL 不冲突但不等价：能比对时，把做法 E 的验收器作为提交门；不能比对时，至少按 REA 口径标 unknown。
+再按本次合并补充：单点搞懂并重建一个功能，先用做法 A；不想配 MCP/分析引擎，先用做法 B；只想要 agent 指令，做法 C；要 CLI、诊断、快照、证据、浏览器/V8 观察，做法 D；要长期多 agent 反编译且存在 ground truth，做法 E；要把 REA 证据接成规格、路线图、实现计划与验证流程，做法 F。REA 的 Evidence/limitations 与做法 E 的字节级 PASS/FAIL 不冲突但不等价：能比对时，把做法 E 的验收器作为提交门；不能比对时，至少按 REA 口径标 unknown，或用做法 F 的“与证据挂钩的验收标准”兜底。
 
 ## 怎么判断变好了
 
@@ -278,8 +389,10 @@ agent 数（末期）: 14 × Luna + 2 × Opus 5.5
   3. 把“什么是正确”“必须避免什么（内联汇编、打补丁、内嵌字节这类绕过手段）”“遇到具体情形怎么办”写进一份指令文档，并挂一个定时（如每小时）注入重读请求的 cron。
   4. 把 compaction 阈值默认的 90% 下调到 42%，跑一周，观察失焦类错误与 token 消耗的变化。
   5. 先用 1 worker + 1 reviewer 起步，再引入一个廉价小模型做 worker，检验“严格反馈是否让弱模型可用”。
+- **做法 F 的可观察指标**：产出的规格是否把需求、契约、期望行为与证据挂钩；是否给出可被检查的验收标准；重建是否按规格走通并做了集成与端到端验证；恢复出的指令是否被当作不可信证据、最终决定权是否留在人手里。
+- **做法 F 最小试用**：在本地、项目作用域内小范围试装——先 `--integration off`，并用 `--dry-run`/`--check` 确认改动；再用它自带的 Pocket Tasks 参考流程加一个真实小目标，跑通“证据→需求→实现→验证”闭环。判断依据是闭环能否跑完、验收标准是否真的能被检查，而不是装了多少文件。
 - **判定方式**：同一任务做引入 oracle 前后的对照；若通过率明显上升、返工下降，即为改善；若通过率不变但同等质量下 token 成本与所用模型等级下降，也按改善计（这正是原文观察到的主要收益）。
-- **原文数据**：第一月 4 个 agent 完成约 80% 的游戏反编译，游戏能启动、主菜单可见、地图能加载；末期 99% 函数存在、83% 逐字节精确。REA 调研没有给出时长建议或量化收益数字，因此不要假定成功率、节省时间之类的指标；建议以“一次完整小调查（一个功能点，走完六步）”为观察单位，再决定是否扩大使用范围。
+- **原文数据**：第一月 4 个 agent 完成约 80% 的游戏反编译，游戏能启动、主菜单可见、地图能加载；末期 99% 函数存在、83% 逐字节精确。REA 调研没有给出时长建议或量化收益数字，做法 F 的调研也只拿到 README、没有独立评测，因此不要假定成功率、节省时间之类的指标；建议以“一次完整小调查（一个功能点，走完六步）”或“一个真实小目标的证据→需求→实现→验证闭环”为观察单位，再决定是否扩大使用范围。
 
 ## 常见坑
 
@@ -301,6 +414,14 @@ agent 数（末期）: 14 × Luna + 2 × Opus 5.5
 - 15+ agent 时，agent 用畸形命令周期性地把 VM 清空；作者认为现有 Windows 沙箱方案都不合用，已着手扩展自己的用户态模拟器 Sogen，但离生产可用还很远。
 - 规模上，共享频道适合小规模；14+ agent 应改为分支 + PR，并把 Discord 消息限制到“认领哪个 issue”和 CI 协调。作者对同规模的其他项目建议不要用 Discord。
 - 指令文档、验证脚本、全部代码都不公开，游戏也未具名，无法直接照抄原文的具体脚本或提示词，只能照抄其结构与参数。
+- 把 companion 当成 REA 的替代品：它不含 REA，REA 及目标专用引擎各有自己的依赖，需单独安装配置；本次也只拿到 README，示例全为维护者自写、无独立评测。
+- 以为 `--integration off` 会移除已装的联动规则：它的含义是“不管理 REA”，要关掉早先的联动，得手动删掉 `SKILL.md` 里 `<!-- rea-reconstruction-companion:begin -->` 与 `<!-- rea-reconstruction-companion:end -->` 之间（含标记）的块。
+- 用了 `--skills-dir` / `--rea-skill` 覆盖后仍开着广泛自动查找；或安装器跑在 agent 环境之外却没显式给出该 agent 的真实目录；或 REA 路径没指向该客户端实际加载的那个 skill。
+- 下载包/检出目录与安装目标重叠，或 REA 文件落在 companion 目标目录内（含仅大小写不同的同一路径）：安装器会直接拒绝，先把两者分开。
+- 装了技能却在当前会话看不到：刷新宿主技能或新开一个会话再查。
+- 进程被杀留下 `install.lock`：先确认没有安装器在运行，再删掉锁文件重试，不要在安装器还在跑时删。
+- 更新 REA 可能覆盖其技能指令，导致联动失效；重跑带 `--check` 的集成命令，需要就重装。
+- 把恢复出来的指令当可信输入：原文要求把它当作不可信证据，保留用户最终决定权。
 
 ## 证据与来源
 
@@ -312,9 +433,14 @@ agent 数（末期）: 14 × Luna + 2 × Opus 5.5
 - 该报告的具体参数：默认 compaction 阈值 90%，作者下调到 42%；第一月 3 worker + 1 reviewer；末期 14 × Luna + 2 × Opus 5.5。
 - 该报告中属于作者主张、没有数据支撑的内容：“每个项目都有可能通过足够创造力做到接近机器可验证的验收”（未给方法）；“生成代码现在很便宜，坏了就扔掉”（作者经验，非普适测量）；“正确性远比生产力重要”。
 - 该报告的适用条件与代价：字节比对之所以可行，是因为反编译天然有 ground truth（原始二进制 + 原始编译器），大多数工作流没有这种奢侈条件；字节比对本身有代价；指令文档、验证脚本、全部代码都不公开，游戏也未具名，无法直接照抄具体脚本或提示词，只能照抄结构与参数。
+- 做法 F 与 companion 的全部命令、路径、默认位置、`--dry-run`/`--check`/`--replace` 行为、每周更新检查、备份回滚机制：来自调研报告 **ShadowSwaps/REA-Reconstruction-Companion**（仓库 README）。
+- 该报告对能力的描述（把“读懂现有软件”变成可交给 agent 的活、把证据转成需求/契约/验收标准、区分原架构与新实现的设计选择、用代表性负载与实测做性能调查、把恢复出的指令当作不可信证据）是维护者自述，本次只拿到 README，没有独立评测，也没有量化数据。
+- 该报告的试用建议（本地、项目作用域内小范围试装，先 `--integration off` 并用 `--dry-run`/`--check` 确认改动，用自带 Pocket Tasks 参考流程加一个真实小目标跑通“证据→需求→实现→验证”闭环）是调研作者的判断，不是实测收益。
+- 该报告明确的功能边界：纯 Markdown、MIT 许可、不含模型 SDK / 付费 API / Python 依赖 / 遥测 / 后台服务；与模型无关，Codex 与 Claude Code 均支持，其他 agent 走显式 skills 目录；REA 需单独安装。
 - 材料没有给出成功率、时间节省等任何量化收益数字，本文也不据此做承诺。
 
 ## 依据的调研
 
 - [morluto/rea](../research/radar/2026-10-07/1608-morluto-rea.md)：值得一试，如果确实存在“要搞懂无源码的应用/二进制/前端包”这类任务，可以按 README 的 `npx rea-agents setup` + 六步调查流程小范围试，并用 Evidence/limitations 与 reconstruction check 的 pass/fail/unknown 作为验收口径；它给出的是可直接照做的 agent+MCP 逆向调查流程（含命令、提示词、工具链和验证语义），但应用面局限在逆向与互操作场景，不适合当作通用工作方法推广。
 - [500B Tokens Later: Letting AI Agents Decompile a First-Person Shooter](../research/radar/2026-10-11/2476-500b-tokens-later-letting-ai-agents-decompile-a-fi.md)：值得一试，先给智能体任务配一个「机器可判定的 PASS/FAIL 验收器」，再配合定时重读指令文档和更早的上下文压缩来维持长期自主运行；理由是作者用三个月、约 600–700B token 的实践发现，没有客观验收标准时评审 agent 会被 worker 的注释说服而放行语义错误（第一月代码可读但语义错误），引入字节级比对后 83% 函数达到逐字节一致、连廉价小模型也能胜任。
+- [ShadowSwaps/REA-Reconstruction-Companion](../research/radar/2026-10-16/3893-shadowswaps-rea-reconstruction-companion.md)：值得一试，建议在本地、项目作用域内小范围试装（先 --integration off 并用 --dry-run/--check 确认改动），用它自带的 Pocket Tasks 参考流程加一个真实小目标跑通“证据→需求→实现→验证”闭环；理由是原文给出了可直接复制的安装命令、安装提示词和成套验证机制，但依赖独立的 REA、全部示例均为维护者自写、无独立评测，且本次只拿到 README。

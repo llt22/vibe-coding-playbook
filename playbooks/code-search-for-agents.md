@@ -1,21 +1,22 @@
-# 让编码 agent 在陌生代码库里用一次查询或图谱定位实现位置
+# 让编码 agent 在陌生代码库里先检索再写码
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：编码 agent 在陌生代码库里定位实现位置时，如何用语义检索、本地代码图谱、项目记忆和知识图谱把逐文件摸索变成一次查询或图谱探索，并知道每种做法的边界和验证方式。
-> 先试这一步：挑一个可回滚的真实仓库，按做法 E 跑通 `graphicle setup`、`graphicle doctor` 和 `graphicle ask "where is tax added to prices?"`，人工核对返回摘录的文件与行号后再决定是否常驻。
-> 最近修订：2026-10-15
+> 解决的问题：编码 agent 在陌生的私有代码库里定位实现位置时，如何用一次检索或一张本地图谱拿到带 file:line 的证据，而不是靠逐文件 grep 试错。
+> 先试这一步：选一个你熟悉、敏感度可控的中等规模仓库和 5–10 个“知道行为不知道位置”的真实问题，先用不装任何检索工具的方式跑一遍并记录工具调用数与 token，作为对照基线。
+> 最近修订：2026-10-16
 
 ## 解决什么问题
-编码 agent 在陌生代码库里定位实现位置时，常常要靠 grep/glob/Read 一个文件一个文件地重建调用链和依赖。当你知道要理解什么行为、但不知道代码在哪（认证检查在哪、数据库连接怎么建/池化/关闭、哪个测试覆盖超时重试、扩展宿主怎么和主进程通信、改动会影响哪些调用者），逐文件摸索是试错式探索。本手册合并五种把这类定位变成一次查询、检索或图谱探索的做法：
+编码 agent 在陌生代码库里定位实现位置时，常常要靠 grep/glob/Read 一个文件一个文件地重建调用链和依赖。当你知道要理解什么行为、但不知道代码在哪（认证检查在哪、数据库连接怎么建/池化/关闭、哪个测试覆盖超时重试、扩展宿主怎么和主进程通信、改动会影响哪些调用者），逐文件摸索是试错式探索。本手册合并六种把这类定位变成一次查询、检索或图谱探索的做法：
 
 - 做法 A：jg（命令 `jg`）语义检索。把“描述行为”的问题发给检索，输出相关文件路径、阅读线索和逐字源码片段，stdout 一次性返回，作为 agent 的起点。检索会通过认证时选择的 provider 把符合条件的源码内容发给 Jev；输出是证据，不是答案，也不保证找全。
 - 做法 B：CodeGraph 本地代码知识图谱。用 Rust 内核预索引符号、调用边、依赖关系和框架路由到本地 SQLite，通过 MCP server 暴露给编码代理；用一次 `codegraph_explore` 拿回相关源码、调用路径和改动波及范围。README 称索引 100% 本地、无 API key、无外部服务。
 - 做法 C：Understand Anything 多智能体知识图谱插件。用 Tree-sitter 做确定性结构抽取、LLM 做语义层，把整库解析成可交互知识图谱，产物落在 `.ua/knowledge-graph.json`（老项目沿用 `.understand-anything/`）。支持 Claude Code 及十余个 AI 编码平台，图谱可提交、可 git-lfs 跟踪，也可用无 LLM 的只读 viewer 打开。
 - 做法 D：Pensieve 本地语义检索层。把本机文件、文件夹、git 仓库和 AI agent 会话记录（Claude Code / Codex / Qwen Code 的 transcripts）统一索引到 `~/.pensieve`，向人和 agent 提供「按语义找文件/代码片段」而不是让 agent 满盘 grep。人类侧是 macOS 搜索面板；agent 侧以 MCP server 形式接入，每个连接有一个 scope（索引切片，默认是 agent 所在仓库），并附带一组「谁懂这块」「知识缺口」「未被探索区域」的工具。索引用 `Qwen3-Embedding-0.6B` 做嵌入，SQLite（trigram 全文索引做精确匹配）加 turbovec 做向量索引；文本/Markdown/Office/PDF/邮件/代码按内容索引，图片、音视频只按文件名索引且不上图。
 - 做法 E：Graphicle 本地代码图谱 + 项目记忆 MCP。用 Rust 单程序（Apache-2.0）把仓库映射成代码图谱（文件、函数、类、调用、导入，tree-sitter 解析，不调用模型），同时记住项目记忆（Markdown/PDF/Office/HTML 文档、审阅过的决策与流程、过去的 Claude Code 与 Codex 会话），通过一个 MCP server 把两边的带引用摘录（精确到文件和行号，受 token 预算限制）提供给编码智能体。本地运行，无需 API key、无需账号、无遥测；数据存在单个 SQLite 文件里，默认监听 127.0.0.1。官方声明可用客户端：Claude Code、Cursor、Codex、VS Code、Claude Desktop、任何 MCP 客户端。
+- 做法 F：XERJ 本地搜索引擎（对外说 Elasticsearch REST API）。单静态二进制、本地部署（Apache-2.0、Rust），默认 `localhost:9200`。`xerj autoindex` 把项目源码自动索引成 AST 感知（tree-sitter，带符号和行号）的索引，agent 用一次查询拿到精确段落（file:line），而不是把整个文件读进上下文；同一个原语 `xerj autoindex <folder>` 也能索引文档、日志、PDF、SQLite、CSV、Office/EPUB/Jupyter/man page/mail，用于代码库问答、安全审计、日志分析与 agent 长期记忆（`/_memory/{namespace}`）。`xerj init` 一条命令把 XERJ 接进 Claude Code / Cursor（MCP + skill）；只能函数调用的 host 走 `xerj mcp`（13 个工具）。可选重排默认关闭，开了才把 top 结果发给 TypeSafe 的 Jev。
 
-五者都不替代编码 agent 的实现与测试，只提供上下文和证据。
+六者都不替代编码 agent 的实现与测试，只提供上下文和证据；差别主要在外发范围与产物形态：做法 A 每次检索都会把符合条件的源码发给 provider，做法 F 默认本地、只有开了 rerank 才外发。
 
 ## 适用与不适用
 适用：
@@ -27,19 +28,25 @@
 - Understand Anything 适合：需要整库结构、按架构层分组、依赖顺序导览、业务域映射、当前改动影响分析、新成员 onboarding 指南，或把 Karpathy 式 LLM wiki 解析成带社区聚类的知识图时。
 - Pensieve 适合：本地（数据存 `~/.pensieve`）语义检索代码、文档、邮件和过去的 agent 会话；人和 agent 复用同一份索引；需要按 scope 限制某个 agent 能看到哪些来源；想把「谁懂这块」「知识缺口」「未被探索区域」这类团队知识查询也交给 agent 时。`pensieve integrate recommended` 能自动登记 Claude Code、Codex、Cursor、Gemini CLI、Qwen Code、Windsurf、Claude Desktop、VS Code 为 MCP server。
 - Graphicle 适合：想把代码图谱、项目文档/决策/流程、历史会话三类上下文一起供给 agent；希望用一次 `graphicle setup` 接入 Claude Code/Codex/Cursor/VS Code/Claude Desktop 等现有客户端；需要带文件行号的引用摘录（`graphicle ask`、MCP tools、`graphicle context`）、符号级影响面查询（`graphicle graph affected "retry()"`）、符号解释与路径追踪、导出可交互 HTML 图谱（`graphicle graph`）；需要跨仓库检索（`graphicle context --workspace`）；希望记忆由智能体提出、人工在 app 中批准后才生效。
+- XERJ 适合：模型没见过的私有、内部、小众、训练截止之后的代码——README 说收益按“模型是否见过”分档，这类才有正收益（模型已熟知的流行公开库中性甚至有害）；想用一次查询拿 file:line 精确段落，把“读文件”这个动作整体换成“查索引”；想把同一个原语用在代码之外（文档、日志、PDF、SQLite、CSV、Office/EPUB/Jupyter/man page/mail）做代码库问答、安全审计、日志分析与 agent 长期记忆（`/_memory`）；想小模型 + 检索去替代靠记忆的贵模型（README 主张）；想走参考编码循环——clone 相似开源项目、索引它、写码前先检索它怎么解决、引用出处、遵守许可证。
+- XERJ 的接入方式按 host 能力分档：能跑 shell 的用 CLI（`xerj init`、`xerj search`、`xerj def`）；只能函数调用的桌面助手走 MCP（`xerj mcp` + 13 个工具）。它同时提供 Linux / macOS / Windows 的 x86-64 或 arm64 安装方式。
 
 不适用或应避免：
 - 已经知道精确符号或路径时，直接读文件或用 `rg` 就够了；jg 最有价值的是“跨不熟悉文件”的问题。
-- 不允许把源码发往外部 provider 的仓库：jg 会把符合条件的源码内容通过认证时选择的 provider 发给 Jev。CodeGraph 仅本地运行，代码不出机器。Understand Anything 默认走平台自带模型，隐私或企业场景可把平台指向本地模型（原文只指向 Ollama 集成指南，未给具体配置）；其 viewer 只从本地磁盘只读服务，不调用 LLM，数据不出本机。Pensieve 把索引存在本机 `~/.pensieve`，但要先确认你愿意让默认的 `~/Documents`、`~/Desktop`、`~/Downloads` 以及 `sweep_roots`（默认 `~`、深度 4）进入索引。Graphicle 本地运行，数据在 macOS `~/Library/Application Support/Graphicle` 或 Linux `~/.local/share/graphicle`；`sync` 尊重 `.gitignore`、跳过 `.env`/密钥/凭据，会话捕获丢弃 `<private>…</private>` 片段并脱敏凭据；但 `graphicle graph extract` 不带 `--code-only` 时会把文档和图片发给它找到的 LLM API key 对应的服务。
-- Windows：jg README 提的是 macOS 或 Linux，未提 Windows 支持。CodeGraph 提供 macOS / Linux 安装脚本和 Windows PowerShell 安装脚本。Understand Anything 也提供 Windows PowerShell 安装脚本。Pensieve 的完整功能仅限 Apple Silicon Mac，Linux / Intel Mac 只能装后端、没有搜索面板，原文未给出 Windows 支持。Graphicle README 明确 Windows 无原生构建；WSL2 下 Linux 安装“理应可行但尚未测试”。
-- 没有可用 provider key 的团队：jg 的环境变量凭证不被支持，必须先跑 `jg auth`；CodeGraph 不需要 API key；Pensieve 不需要外部 API key，但要下载本地嵌入模型；Graphicle 无需 API key、无需账号、无遥测。
+- 不允许把源码发往外部 provider 的仓库：jg 会把符合条件的源码内容通过认证时选择的 provider 发给 Jev。CodeGraph 仅本地运行，代码不出机器。Understand Anything 默认走平台自带模型，隐私或企业场景可把平台指向本地模型（原文只指向 Ollama 集成指南，未给具体配置）；其 viewer 只从本地磁盘只读服务，不调用 LLM，数据不出本机。Pensieve 把索引存在本机 `~/.pensieve`，但要先确认你愿意让默认的 `~/Documents`、`~/Desktop`、`~/Downloads` 以及 `sweep_roots`（默认 `~`、深度 4）进入索引。Graphicle 本地运行，数据在 macOS `~/Library/Application Support/Graphicle` 或 Linux `~/.local/share/graphicle`；`sync` 尊重 `.gitignore`、跳过 `.env`/密钥/凭据，会话捕获丢弃 `<private>…</private>` 片段并脱敏凭据；但 `graphicle graph extract` 不带 `--code-only` 时会把文档和图片发给它找到的 LLM API key 对应的服务。XERJ 默认本地、默认关闭重排，但 `_search` 里加 `"rerank": {}` 会把 top 结果发给 TypeSafe 的 Jev 服务（需 operator 配好 provider key），`[rerank] enabled = false` 可完全禁止；`POST /v1/systemone`、`POST /_decide` 是本地替代（用已标注的相似文档投票，数据不出机器、不需要 key，但必须有标注样本）；神经嵌入 `--embed-mode neural` 用的是本地模型文件。
+- Windows：jg README 提的是 macOS 或 Linux，未提 Windows 支持。CodeGraph 提供 macOS / Linux 安装脚本和 Windows PowerShell 安装脚本。Understand Anything 也提供 Windows PowerShell 安装脚本。Pensieve 的完整功能仅限 Apple Silicon Mac，Linux / Intel Mac 只能装后端、没有搜索面板，原文未给出 Windows 支持。Graphicle README 明确 Windows 无原生构建；WSL2 下 Linux 安装“理应可行但尚未测试”。XERJ 提供 Windows PowerShell 安装脚本（`irm https://xerj.org/get.ps1 | iex`），平台声明覆盖 Windows 的 x86-64 或 arm64。
+- 没有可用 provider key 的团队：jg 的环境变量凭证不被支持，必须先跑 `jg auth`；CodeGraph 不需要 API key；Pensieve 不需要外部 API key，但要下载本地嵌入模型；Graphicle 无需 API key、无需账号、无遥测；XERJ 的 `--insecure` 开发节点不需要 key，开启认证的节点必须把 key 交给 autoindex（`--api-key` 或 `XERJ_API_KEY`，它不读 `xerj.toml`），rerank 才需要 provider key。
 - CodeGraph 只有在被直接查询时才有收益；如果代理把探索任务委派给会读文件的子代理，CodeGraph 会变成纯开销。
 - CodeGraph 在上下文占用这一轴上更贵：同一批 7 个仓库的多轮会话里，会话结束时残留检索上下文比读文件式代理多约 80%，VS Code 上是 67k token 对 18k token。窗口不大的环境跑长会话要为此留预算。
 - Understand Anything 全库首跑会消耗大量 token；大 monorepo 应先限定子目录。原文全篇没有成功率、成本或速度效果数据，不能把“补上编码智能体缺失的代码上下文”当作已证结论。
 - Pensieve 的 setup 不做完索引为空，此时 MCP 连接会额外拿到 setup 工具；首次运行还要下载约 1.2 GB 嵌入模型，搜索和 Map 随索引进度逐步可用。
 - Pensieve 的 HTTP 连接看不到 agent 工作目录，必须显式指定 scope（不写 `?scope` = 全部）；在 Pensieve 未索引的仓库里，搜索会告诉 agent 改用 grep，不会把别的仓库代码返回给它。
 - Graphicle 版本仅 0.1.0，团队版还在私有预览；平台仅 macOS 与 Linux。`setup` 会改动仓库内与家目录多个配置（虽会先备份并可用 `graphicle disconnect` 撤销）。默认单项目上限 100,000 个文本文件、1 GiB 文本，可调。`graphicle ask` 未配置模型时只显示证据，要生成成文答案需另配 anthropic/openai/ollama；本地模型可行但未给质量数据。
-- 样本都小且来自作者自测，不能直接外推到你的仓库和语言。Pensieve 同样只有命令、配置和 bench 脚本，没有效果数据。Graphicle 的速度与记忆基准多为单次探索性运行或正文未给具体分数，证据弱。
+- XERJ 的 `--insecure` 是明确的信任边界：它关闭 TLS 和 API key 认证，任何能访问该端口的人都是超级用户，可读取和删除所有索引（含 `/_memory` 命名空间）。新节点只绑 127.0.0.1，非本机接口的明文绑定会拒绝启动；只在单用户开发机上这么用。
+- XERJ 的收益与“模型是否见过”强相关：私有、内部、小众、训练截止之后的代码有收益；模型已熟知的流行公开库中性甚至有害。别在模型背得滚瓜烂熟的库上指望它提速。
+- XERJ 原文没有给出定时/事件触发的持续编排步骤；“每次编辑后自动重索引”要自己搭。它只给了一条状态触发机制：重索引是增量的，内容字节级未变的文件跳过解析、顺延上次结果，所以改几个文件后重跑的工作量正比于改动量（常见的编辑-重跑/CI 场景通常 >95% 文件未变），总时长由内容哈希而非解析兜底。
+- XERJ 的收益数字全部来自项目自报的案例研究与用户反馈，无法独立复核；README 自己声明“任何你无法复现的数字，包括我们的，都该存疑”。
+- 样本都小且来自作者自测，不能直接外推到你的仓库和语言。Pensieve 同样只有命令、配置和 bench 脚本，没有效果数据。Graphicle 的速度与记忆基准多为单次探索性运行或正文未给具体分数，证据弱。XERJ 的受控研究与 `xerj gain` 也全是自报口径。
 
 ## 前置条件
 公共：
@@ -89,8 +96,17 @@
 - `graphicle graph extract . --code-only` 不需要模型；不带 `--code-only` 的完整提取会把文档和图片发给它找到的 LLM API key 对应的服务。
 - `graphicle ask` 未配置模型时只显示证据；要生成成文答案需 `graphicle config set model anthropic`（或 `openai`、`ollama`；本地模型走 Ollama 或任何 OpenAI 兼容服务）。
 
+做法 F（XERJ）：
+- 平台：Linux / macOS / Windows 的 x86-64 或 arm64；能跑本地进程；建议先在一台单人开发机上做。
+- 本地数据目录和一个可用端口（默认 9200）。
+- 要索引的语料目录（源码，或文档、日志、PDF 等）。
+- 认证开启时的 API key：`--api-key` 或 `XERJ_API_KEY`；autoindex 不会从 `xerj.toml` 读取 key。
+- MCP 场景：绝对路径的二进制、`XERJ_URL`（默认 `http://localhost:9200`），节点开了认证再加 `XERJ_AUTH`。
+- rerank 需要 operator 配好 provider key（会把结果文本发到外部）；`POST /v1/systemone`、`POST /_decide` 需要已标注样例；`--embed-mode neural` 需要本地预置三个模型文件（约 90 MB），气隙环境按仓库里的 air-gapped 配方走；反馈侧要能提供一份 field report。
+- 复现代码索引基准需要稳定版 Rust 工具链。
+
 ## 操作步骤
-下面把五种做法分开写。做法 A 会外发源码给 provider；做法 B 本地索引；做法 C 默认走平台自带模型并生成可提交图谱，隐私/企业可指向本地模型（原文只指向 Ollama 集成指南，未给具体配置）；做法 D 把索引留在本机 `~/.pensieve`；做法 E 本地运行，但 `graphicle graph extract` 不带 `--code-only` 时会把文档和图片发给配置的 LLM。先选一种，不要一次接满所有代理。
+下面把六种做法分开写。做法 A 会外发源码给 provider；做法 B 本地索引；做法 C 默认走平台自带模型并生成可提交图谱，隐私/企业可指向本地模型（原文只指向 Ollama 集成指南，未给具体配置）；做法 D 把索引留在本机 `~/.pensieve`；做法 E 本地运行，但 `graphicle graph extract` 不带 `--code-only` 时会把文档和图片发给配置的 LLM；做法 F 默认本地，只有 `_search` 里开 `"rerank": {}` 才把 top 结果发给 TypeSafe 的 Jev。先选一种，不要一次接满所有代理。
 
 ### 做法 A：jg 语义检索（外发 provider）
 1. 前提检查。确认 Node.js 22+、macOS 或 Linux，并准备好所选 provider 的 key。选一个你愿意发送给 provider 的搜索根。预期：满足前置条件后才继续；不满足就不要把源码发出去。
@@ -171,7 +187,7 @@ codegraph init
 ```bash
 codegraph status
 ```
-预期：如果有待同步内容，会看到 `### Pending sync:` 小节，列出文件名和编辑时间。
+预期：如果有待同步内容，会看到 `### Pending sync:` 小节， 列出文件名和编辑时间。
 5. 依赖自动同步。之后不需要手动同步。自动同步默认开启：文件 watcher 监听项目的每次文件变更并更新图谱。三层机制：原生 watcher（FSEvents / inotify / ReadDirectoryChangesW）+ 防抖，默认 `2000ms`，可用环境变量 `CODEGRAPH_WATCH_DEBOUNCE_MS` 调整，范围被限制在 `[100ms, 60s]`，连续编辑会合并成一次同步；防抖窗口内若 MCP 响应引用了尚未同步的文件，会在响应前面加 `⚠️` 横幅并让代理直接 `Read` 该文件；MCP server 重连时，先用 `(size, mtime)` + 内容哈希和工作区对账，再回答第一个查询，把服务没运行时发生的改动吸收进来。预期：正常编辑不需要手动同步。
 6. 只有这几种情况才需要手动同步——watcher 被禁用（沙箱环境，或设了 `CODEGRAPH_NO_DAEMON=1`），或者你在代理会话之外写脚本、想在脚本开头做一次预检：
 ```bash
@@ -465,23 +481,121 @@ graphicle disconnect
 12. 数据位置与边界。数据文件夹：macOS `~/Library/Application Support/Graphicle`，Linux `~/.local/share/graphicle`；`graphicle graph extract` 把图谱文件写到项目的 `.graphicle/`。默认项目上限 100,000 个文本文件、1 GiB 文本，可调（docs/configuration.md#limits）。`sync` 尊重 `.gitignore`、跳过 `.env`/密钥/凭据；会话捕获丢弃 `<private>…</private>` 片段并脱敏凭据。
 13. 主动推进机制。Git hooks 在每次 commit、merge、checkout 后同步；每次回答前同步你刚改动的少数文件；会话捕获自动保存每个已完成的 turn；新会话以你审阅过的记忆加最近若干 turn 开场（“无需重新解释”）。
 
-### 做法 A / 做法 B / 做法 C / 做法 D / 做法 E 怎么选
-- 代码不能出机器：选做法 B（CodeGraph）或做法 C 的本地 viewer，或做法 D（Pensieve，索引存本机 `~/.pensieve`），或做法 E（Graphicle，本地运行，但注意不带 `--code-only` 的 `graphicle graph extract` 会把文档和图片发给配置的 LLM）；做法 C 默认走平台自带模型，隐私/企业可把平台指向 Ollama 等本地模型提供方（原文只指向 Ollama 集成指南，未给具体配置）。jg 会把符合条件的源码内容通过认证时选择的 provider 发给 Jev。
+### 做法 F：XERJ 本地搜索引擎（重排默认关闭，开了才外发）
+1. 安装。安装器会打印 xerj 落地路径，默认 `~/.local/bin`，必要时加进 PATH。
+```sh
+curl -fsSL https://xerj.org/get | sh
+```
+Windows PowerShell：
+```powershell
+irm https://xerj.org/get.ps1 | iex
+```
+预期：`xerj` 命令可用（若不在 PATH 里，按安装器打印的路径加进去）。
+2. 起一个本地开发节点（前提：单用户开发机）。
+```sh
+xerj --insecure --data-dir ./data &
+```
+预期：确认 http://localhost:9200 有响应后再继续。注意：`--insecure` 关闭 TLS 和 API key 认证，任何能访问该端口的人都是超级用户，可读取和删除所有索引（含 `/_memory` 命名空间）；新节点只绑 127.0.0.1，非本机接口的明文绑定会拒绝启动。
+3. 如果用的是开启认证的节点（不带 `--insecure` 的默认启动，包括从配置文件启动），必须把同一个 key 交给 autoindex——它不会从 `xerj.toml` 读取 key，否则所有请求返回 401 Unauthorized。
+```sh
+xerj --data-dir ./data &
+export XERJ_API_KEY="$(cat ./data/admin.key)"
+xerj autoindex ~/my-project
+```
+预期：autoindex 带着同一个 key 访问节点。
+4. 索引任意文件夹。不写 schema、不配 pipeline；XERJ 嗅探每个文件并按其类型建索引，源码经 tree-sitter 解析成带符号和行号的记录。
+```sh
+xerj autoindex ~/my-project
+```
+预期：输出形如（原文示例）：
+```
+phase A: 593 datasets inferred, 1955 junk/skipped files
+phase B: indexing 25329 files with 8 workers
+done in 158.1s, 593 datasets, 83103 records live, 790 junk records
+```
+5. 一条命令把 XERJ 接进 Claude Code / Cursor（MCP + skill）：
+```sh
+xerj init
+```
+预期：对应 host 的 MCP 配置与 skill 就位，之后 agent 会走检索而不是满盘读文件。
+6. 用命令行查询。
+```sh
+xerj search "how do we rotate the WAL segment"   # ranked passages, file:line
+xerj def "euler_to_rotationmatrix"               # go-to-definition: file:line + signature
+```
+预期：`search` 返回排序段落与 file:line；`def` 返回定义位置与签名。把这些摘录交回编码 agent 作为起点，并逐个核对行号是否真的包含答案。
+7. 或者直接用 Elasticsearch 客户端 / DSL 查询。
+```sh
+curl localhost:9200/_cat/indices
+curl "localhost:9200/ax-*/_search?q=checkout+error"
+curl localhost:9200/ax-orders/_search -H 'content-type: application/json' -d '{
+  "query": { "range": { "total": { "gte": 100 } } },
+  "aggs":  { "by_status": { "terms": { "field": "status" } } }
+}'
+```
+预期：用你熟悉的 ES 工具链做过滤与聚合；索引名形如 `ax-*`。
+8. 给不能执行 shell 的桌面助手 / 函数调用型 host 接 MCP。前提：先跑第 2 步的节点；`xerj mcp` 自己不起节点，它用 stdio 跟客户端说话、用普通 HTTP 连 `XERJ_URL`（默认 http://localhost:9200）。用绝对路径，因为从桌面图标启动的 MCP host 不继承 shell 的 PATH；节点开了认证就再加 `XERJ_AUTH`。
+```json
+{
+  "mcpServers": {
+    "xerj": {
+      "command": "/home/you/.local/bin/xerj",
+      "args": ["mcp"],
+      "env": { "XERJ_URL": "http://localhost:9200" }
+    }
+  }
+}
+```
+预期：MCP 暴露 13 个工具：`xerj_search`、`xerj_semantic_search`、`xerj_vector_search`、`xerj_hybrid_search`、`xerj_memory_store`/`xerj_memory_recall`、`xerj_brain_overview`/`xerj_brain_ego`/`xerj_brain_link`/`xerj_brain_unlink`、`xerj_plan`（纯规则、非 LLM 的自然语言→查询 DSL）、`xerj_map`、`xerj_code_search`（跑 `xerj code` 参考编码流水线）。工具 schema 发布在 `xerj.org/docs/agents/schemas/mcp-tools.json`。
+9. 一键提示词（可直接粘给 agent）：
+```text
+Install XERJ (docs: https://xerj.org/llms.txt), index this project's sources, and set up
+reference coding: clone and index the open-source repos closest to what we're building,
+and search how they solved a problem before writing code.
+```
+README 另给三个可用提示词：读 llms.txt 并把 XERJ 设为搜索后端、索引 `./docs`、展示每个索引一个示例查询；跑 `xerj autoindex map` 报告数据类型/数量/记录到的坑，再改用搜索回答；用 `/_memory/notes` 作为项目长期记忆，下次会话按语义召回。
+10. 参考编码循环（README 说 llms.txt 给的就是这个顺序）：安装 → 起服务 → `xerj autoindex .` → 用任意 Elasticsearch 客户端查询 → clone 相似开源项目、索引它、写代码前先检索它怎么解决、引用出处、遵守许可证。前提：这类检索对模型没见过的代码才有正收益，别拿模型已熟知的流行公开库当目标。
+11. 核对收益。
+```sh
+xerj gain
+```
+预期：输出它自己统计的收益（counted, not estimated）。注意这是工具自报口径，不是独立评测。
+12. 复现代码索引基准（前提：稳定版 Rust 工具链）：
+```sh
+XERJ_EXTRACT_BENCH=/path/to/repo cargo test -p xerj-autoindex --release \
+  extract_bench -- --nocapture --ignored
+```
+从源码构建：
+```sh
+git clone https://github.com/xerj-org/xerj
+cd xerj/engine
+cargo build --release -p xerj-server
+./target/release/xerj --insecure --data-dir ./data
+```
+预期：能自己跑出索引基准数字，去对照 README 的自报口径。
+13. （可选）重排——默认关闭，开了才发数据：在 `_search` 里加 `"rerank": {}`，XERJ 把 top 结果发给 TypeSafe 的 Jev 服务，需要 operator 配好 provider key；这会把这些结果的文本发到外部服务器，`[rerank] enabled = false` 可完全禁止。本地版本 `POST /v1/systemone`、`POST /_decide` 用你已标注的相似文档投票，数据不出机器、不需要 key，但必须有标注样本。
+14. 反馈（README 把这当成加入社区的唯一要求）：`xerj feedback` 起草报告并填入版本/OS/索引内容，`xerj feedback --open-pr` 直接开 PR；或手动 `gh pr create`，diff 里只加 `user-feedback/16-agent-field-reports/` 下的一个 markdown 文件。
+15. 判断什么时候不要用它。README 说收益按“模型是否见过”分档——私有、内部、小众、训练截止之后的代码有收益；模型已熟知的流行公开库中性甚至有害。别在模型背得滚瓜烂熟的库上指望它提速；也别指望它替你做定时重索引编排（原文没有这类步骤）。
+
+### 做法 A / B / C / D / E / F 怎么选
+- 代码不能出机器：选做法 B（CodeGraph）或做法 C 的本地 viewer，或做法 D（Pensieve，索引存本机 `~/.pensieve`），或做法 E（Graphicle，本地运行，但注意不带 `--code-only` 的 `graphicle graph extract` 会把文档和图片发给配置的 LLM），或做法 F（XERJ 默认本地，只有 `_search` 里开 `"rerank": {}` 才把 top 结果发给 TypeSafe 的 Jev，`[rerank] enabled = false` 可完全禁止；`systemone`/`_decide` 是本地替代但要标注样本）；做法 C 默认走平台自带模型，隐私/企业可把平台指向 Ollama 等本地模型提供方（原文只指向 Ollama 集成指南，未给具体配置）。jg 会把符合条件的源码内容通过认证时选择的 provider 发给 Jev。
 - 可以把符合条件的源码发往外部 provider，并且想要一次性语义检索回文件路径、阅读线索和逐字源码片段：选做法 A（jg）。
+- 想把“读文件”这个动作整体换成“查索引”，一次查询拿 file:line 精确段落，并且目标代码是模型没见过的私有/内部/小众代码：试做法 F（XERJ）。它同一个原语还能索引文档、日志、PDF、SQLite、CSV、Office/EPUB/Jupyter/man page/mail，可做代码库问答、安全审计、日志分析和 `/_memory` 长期记忆；也有 Windows 安装脚本。
 - 大仓库、多语言、调用链、框架路由、改动影响面：做法 B 的预索引图谱可能更匹配，但效果数据全部来自作者自测，且作者自己承认多轮会话的上下文占用反而更高；做法 C 也面向整库理解/架构导览/业务域/onboarding，且图谱 JSON 可提交共享、可用无 LLM viewer 打开，但全篇没有效果数据，首跑 token 贵。
 - 想在本地用自然语言同时检索代码、文档和过去的 agent 会话，并且希望人和 agent 共用同一份索引：试做法 D。但它完整功能（搜索面板）仅 Apple Silicon Mac，Linux / Intel Mac 只有后端。
 - 想把代码图谱、项目文档/决策/流程、历史 Claude Code/Codex 会话一起供给 agent，并希望一次 `setup` 接入多个现有客户端，且需要带文件行号的引用摘录和符号影响面查询：试做法 E。它仅 macOS/Linux、版本 0.1.0，`setup` 会改动仓库内与家目录配置，先开分支并记录备份。
-- 想给团队复用一张可点选、可提交的图谱，或需要 onboarding 导览、业务域映射、当前 diff 影响分析：试做法 C。想给编码代理在查询时提供本地调用路径和影响面：试做法 B。想用自然语言一次性检索陌生文件：试做法 A。想让人和 agent 都能按语义找文件、并顺带回答「谁懂这块」「知识缺口在哪」：试做法 D。想把代码图谱和项目记忆合并到一个 MCP server：试做法 E。
+- 想给团队复用一张可点选、可提交的图谱，或需要 onboarding 导览、业务域映射、当前 diff 影响分析：试做法 C。想给编码代理在查询时提供本地调用路径和影响面：试做法 B。想用自然语言一次性检索陌生文件：试做法 A。想让人和 agent 都能按语义找文件、并顺带回答「谁懂这块」「知识缺口在哪」：试做法 D。想把代码图谱和项目记忆合并到一个 MCP server：试做法 E。想用检索替换读文件、并让 host 只靠函数调用就能用上：试做法 F 的 MCP 路径。
 - 问题很窄、无图谱臂只用 7 次工具调用就能答出：CodeGraph README 的对照数据显示成本收益接近持平（Gin、Django），不一定值得上图谱。
-- Windows 且不想折腾 jg 的 macOS/Linux 限制：做法 B 提供 Windows PowerShell 安装脚本；做法 C 提供 PowerShell 安装脚本。做法 E 明确 Windows 无原生构建。
-- 五者可以分别试，不建议一次接满所有代理。先在一个仓库、一个代理上做对照。
+- 目标代码是模型已经熟知的流行公开库：XERJ README 自己说这类场景中性甚至有害，优先考虑“模型没见过”的语料。
+- Windows 且不想折腾 jg 的 macOS/Linux 限制：做法 B 提供 Windows PowerShell 安装脚本；做法 C 提供 PowerShell 安装脚本；做法 F 也提供 PowerShell 安装脚本。做法 E 明确 Windows 无原生构建。
+- 六者可以分别试，不建议一次接满所有代理。先在一个仓库、一个代理上做对照。
 
 ### 共同的最小试用
 1. 选一个中等规模、你自己熟悉的仓库（几百到几千文件，最好跨语言或多模块），并挑一个你已知正确答案的架构问题，例如“某模块的请求是怎么经过中间件链路的”。
-2. 做法 A：按 A 第 2–4 步安装、`jg auth`、项目内 `jg skill`；先 `jg files <root>` 核查外发范围。做法 B：按 B 第 1–3 步安装、`codegraph install`、`codegraph init`，用 `codegraph status` 确认索引完成、无 pending。做法 C：按 C 第 1–4 步安装插件，先跑 `/understand src/frontend` 这类子目录范围，再用 `/understand-chat` 和 `/understand-diff` 验证上下文是否补齐。做法 D：按 D 第 1–3 步安装、`pensieve integrate recommended`、`pensieve setup recommended`，再用 `pensieve integrate recommended` 装上 instructions block 和钩子；用 `pensieve integrate` 确认已装项。做法 E：开新分支，按 E 第 2–3 步安装、`graphicle setup`，记录它列出的每一次文件改动与备份位置，跑 `graphicle doctor`，再跑 `graphicle ask "where is tax added to prices?"` 或你自己的问题。
-3. 挑 5–10 个“知道要理解什么行为、但不知道代码在哪”的真实问题，写成自然语言。jg 示例：`jg "Where is authentication checked before a request reaches a handler?" .`。做法 C 示例：`/understand-chat How does the payment flow work?`。做法 D 示例：直接让 agent 用 Pensieve 的 `search` 找代码片段，或让它在对话里用 `index_path` 索引新目录。做法 E 示例：`graphicle ask "where is tax added to prices?"`，并逐个核对返回摘录的文件与行号是否真的包含答案。
-4. 对同一批任务做 A/B（或五臂）：A 组 agent 不装 skill / 空 MCP 配置，B 组装 skill / 开启 CodeGraph MCP / 装 Understand Anything / 开 Pensieve MCP / 开 Graphicle MCP，各组用同样的模型和同样的任务描述，各跑 3–5 次取中位数。CodeGraph README 的做法是每臂 4 次取中位数，并在两臂都屏蔽 `codegraph` CLI，防止对照组从 PATH 上找到 CLI 绕过 MCP 导致污染。做法 D 可直接用仓库自带 bench 的 `--arms grep,guided`。做法 E 可先跑 `graphicle graph extract . --code-only` 与 `graphicle graph affected "<某个你已知的核心函数>()"`，再让智能体回答同一批问题，比较接入前后。
-5. 长会话另做一次：连续问 5–10 个问题，会话结束时记录上下文占用，观察是否出现 CodeGraph 提到的残留上下文放大；做法 C 由于首跑和 Dashboard 交互的 token 消耗，另记首次分析成本；做法 D 另记首次索引（含约 1.2 GB 模型下载）和每次编辑钩子带来的约 50 ms 开销；做法 E 另记 `setup` 改动文件、`doctor` 通过/警告项、`ask` 摘录行号准确性和 `disconnect` 后 `git status` 是否干净。
+2. 做法 A：按 A 第 2–4 步安装、`jg auth`、项目内 `jg skill`；先 `jg files <root>` 核查外发范围。做法 B：按 B 第 1–3 步安装、`codegraph install`、`codegraph init`，用 `codegraph status` 确认索引完成、无 pending。做法 C：按 C 第 1–4 步安装插件，先跑 `/understand src/frontend` 这类子目录范围，再用 `/understand-chat` 和 `/understand-diff` 验证上下文是否补齐。做法 D：按 D 第 1–3 步安装、`pensieve integrate recommended`、`pensieve setup recommended`，再用 `pensieve integrate recommended` 装上 instructions block 和钩子；用 `pensieve integrate` 确认已装项。做法 E：开新分支，按 E 第 2–3 步安装、`graphicle setup`，记录它列出的每一次文件改动与备份位置，跑 `graphicle doctor`，再跑 `graphicle ask "where is tax added to prices?"` 或你自己的问题。做法 F：按 F 第 1–4 步装、起节点、`xerj autoindex ~/my-project`，再按第 5 步 `xerj init`（或第 8 步 MCP 配置）接入，用 `xerj search` 和 `xerj gain` 各自核对一次。
+3. 挑 5–10 个“知道要理解什么行为、但不知道代码在哪”的真实问题，写成自然语言。jg 示例：`jg "Where is authentication checked before a request reaches a handler?" .`。做法 C 示例：`/understand-chat How does the payment flow work?`。做法 D 示例：直接让 agent 用 Pensieve 的 `search` 找代码片段，或让它在对话里用 `index_path` 索引新目录。做法 E 示例：`graphicle ask "where is tax added to prices?"`，并逐个核对返回摘录的文件与行号是否真的包含答案。做法 F 示例：`xerj search "how do we rotate the WAL segment"` 或 `xerj def "<某个你已知的函数名>"`，同样核对 file:line。
+4. 对同一批任务做 A/B（或六臂）：A 组 agent 不装 skill / 空 MCP 配置，B 组装 skill / 开启 CodeGraph MCP / 装 Understand Anything / 开 Pensieve MCP / 开 Graphicle MCP / 开 XERJ（`xerj init` 或 MCP），各组用同样的模型和同样的任务描述，各跑 3–5 次取中位数。CodeGraph README 的做法是每臂 4 次取中位数，并在两臂都屏蔽 `codegraph` CLI，防止对照组从 PATH 上找到 CLI 绕过 MCP 导致污染。做法 D 可直接用仓库自带 bench 的 `--arms grep,guided`。做法 E 可先跑 `graphicle graph extract . --code-only` 与 `graphicle graph affected "<某个你已知的核心函数>()"`，再让智能体回答同一批问题，比较接入前后。做法 F 可用 `xerj gain` 看它自报的收益，并注意对照臂别让 agent 从 PATH 上摸到 `xerj`。
+5. 长会话另做一次：连续问 5–10 个问题，会话结束时记录上下文占用，观察是否出现 CodeGraph 提到的残留上下文放大；做法 C 由于首跑和 Dashboard 交互的 token 消耗，另记首次分析成本；做法 D 另记首次索引（含约 1.2 GB 模型下载）和每次编辑钩子带来的约 50 ms 开销；做法 E 另记 `setup` 改动文件、`doctor` 通过/警告项、`ask` 摘录行号准确性和 `disconnect` 后 `git status` 是否干净；做法 F 另记 `xerj autoindex` 的耗时（原文示例 25329 文件 158.1s）、`xerj gain` 的自报数字、以及重排是否开启。
 
 ## 怎么判断变好了
 可观察的指标：
@@ -498,65 +612,76 @@ graphicle disconnect
 - 做法 C 额外记录：首次分析 token 消耗、图谱生成/更新时间、`/understand-chat` 答案是否引用图节点、`/understand-diff` 是否列出改动波及范围、队友用 viewer 打开是否需要重跑流水线。
 - 做法 D 额外记录：bench（`bench/agent_search.py run --arms grep,guided`）里能否答出正确文件的解决率、工具调用数、token 消耗；首次索引耗时与嵌入模型下载时间；agent 是否真的调用了 Pensieve 的 `search` 而不是回落 grep。
 - 做法 E 额外记录：`graphicle doctor` 通过项与警告项；`graphicle ask` 返回摘录的文件与行号是否真的包含答案、是否漏掉了你已知的相关文件；`graphicle graph affected "<已知核心函数>()"` 是否列出你已知的调用者；同一批问题接入前后智能体回答是否变好；`graphicle disconnect` 后用 `git status` 确认工作区回到干净状态。
+- 做法 F 额外记录：受控口径的三列（output tokens / 花费 / 解决率），以及 `xerj gain` 自报的数字；`xerj search`、`xerj def` 返回的 file:line 是否真的包含答案、是否漏掉你已知的相关文件；`xerj autoindex` 的索引耗时与 records 数（原文示例 25329 文件、158.1s、83103 records）；重排是否开启（开了会把 top 结果外发）。
 
-参考基线（都来自作者自测，未独立复核）：
+参考基线（除 XERJ 外都来自作者自测，未独立复核；XERJ 的数字同样出自 README 自身）：
 - jg：十个调优过的 Python SWE-bench 任务、一个冻结的已安装包、仓库内的公开 skill 做对比。Jevgrep 与无 Jev 基线同样解决 8/10 题；Sol 成本从 $7.62 降到 $5.44，降幅 28.6%（四舍五入 ~30%），该口径包含失败尝试、不含 Jev 成本；0.4.3 的总成本重跑（含 Jev）总成本降低 25.8%，同样解决 8/10 题；0.5.0 评估保持 8/10 解决，原生 Jev 成本相比 0.4.3 那次下降约 59%，合并 Sol+Jev 成本高出 2–3%，作者接受为小折衷。
-- CodeGraph：7 个真实开源仓库、7 种语言的对照测试（VS Code / Excalidraw / Django / Tokio / OkHttp / Gin / Alamofire），口径为每臂 4 次取中位数，模型标注为 `claude-opus-4-8`，复测日期标注 2026-08-05。汇总数字：工具调用减少 88%、快 53%、token 少 62%、成本低 44%，七个仓库的文件读取都降到 0。逐仓库数据在 README 的表格里（例如 Excalidraw 2 vs 43 次工具调用、45s vs 2m42s、token 少 84%、便宜 78%；Django 只便宜 13%、Gin 成本基本持平）。
+- CodeGraph：7 个真实开源仓库、7 种语言的对照测试（VS Code / Excalidraw / Django / Tokio / OkHttp / Gin / Alamofire），口径为每臂 4 次取中位数，模型标注为 `claude-opus-4-8`，复测日期标注 2026-08-05。汇总数字：工具调用减少 88%、快 53%、token 少 62%、成本低 44%，七个仓库的文件读取都降到 0。逐仓库数据在 README 的表格里（例如 Excalidraw 2 vs 43 次工具调用、45s vs 2m42s、token 少 84%、便宜 78%；Django 只便宜 13%、Gin 成本基本持平）。索引性能：Swift 编译器仓库 27k 文件约 100 秒全量索引、单文件改动约 4 秒重同步。
 - CodeGraph 反向事实：同一批 7 个仓库的多轮会话里，CodeGraph 在会话结束时留下的检索上下文比读文件式代理多约 80%，VS Code 上是 67k token 对 18k token。
 - Understand Anything：原文全篇没有效果数据，不能给出成功率、成本或速度基线；只有安装、运行、增量更新和团队共享步骤，以及“全库首跑会消耗大量 token、大 monorepo 先限定子目录”的警告。把“补上编码智能体缺失的代码上下文”当作待验证主张。
 - Pensieve：该调研没有给出任何成功率、成本或速度基线；README 提供的是自测工具而不是已完成的评测——用自己的仓库生成任务、Claude Sonnet 无头运行、比开/关 Pensieve 能否答出正确文件。作者自己的建议也是小范围试用后再决定。
 - Graphicle：原文给出的实证包括一段真实终端输出（`graphicle ask` 返回 4 条摘录、598/3000 tokens，第一条定位到 `shop/pricing.py:1-7` 的 `price_with_tax()`）；一个 setup 演示 GIF 的描述（同步、建图、发现 5 个客户端、连接并列出改动文件；`doctor` 18 项通过 + 1 项警告）；性能侧给出 Kubernetes（31k 文件）代码提取 3 分 18 秒 vs Graphify 0.9.88 的 26 分 38 秒（各一次探索性运行、同一台 16 CPU Linux、8 workers，两者建成同一张图：256,329 节点、1,400,392 边）、Django 上预发布版 7.5 秒 vs Graphify 0.9.77 的 72.8 秒（五次交替运行取中位数）；记忆侧与七个记忆系统对比，注册先于评分、用同一个开源模型作所有系统的 reader 和 judge，预发布版在三个开发集上“不落后”。这些主要是作者主张，速度对比是各一次探索性运行，且 0.1.0 引擎用的是 release 源码的 Linux 测试构建，与 Graphify 0.9.88 不是同一构建路径；记忆对比正文没有给出具体分数、数据集名称和读者/评判模型，细节被推到 docs/benchmarks.md。
+- XERJ：受控研究——8 个任务、4 种语言、每臂 16 次运行、真实 `claude -p` token 计数：纯记忆 260,916 output tokens / $11.18 / 11/16；grep agent 26,477 / $3.27 / 16/16；XERJ 9,982 / $1.58 / 16/16，即比 grep 少 2.7x output token、比纯记忆少 26x、便宜 2.1x，解决率相同；单个 Java 任务上最多少 278x。另一组：模型没见过的 Rust 库，带检索 9/9、纯记忆 0/9。另有重排的公开 FiQA nDCG@10 与总花费、本地决策在 AG News（12 万标注样本）上的准确率。这些数字全部出自 README 自身的表格、案例研究和仓库内链接，README 自己声明“任何你无法复现的数字，包括我们的，都该存疑”，未独立复核；原文的输入侧小节在现有材料中被截断（只到“输入侧：gr”），更细的输入侧数据无法照抄。
 
-试多久：最小试用半天内可完成。记录基线，并注意五份材料都强调样本小、单次运行不足以说明等价或提速；你的样本也要多次运行，避免拿一次结果下结论。做法 C 无效果数据，做法 D 只有自测脚本，做法 E 的速度与记忆基准多为探索性运行或细节不足，更要先限定子目录或子范围、小范围验证。
+试多久：最小试用半天内可完成。记录基线，并注意六份材料都强调样本小、单次运行不足以说明等价或提速；你的样本也要多次运行，避免拿一次结果下结论。做法 C 无效果数据，做法 D 只有自测脚本，做法 E 的速度与记忆基准多为探索性运行或细节不足，做法 F 的收益数字全部是项目自报，更要先限定子目录或子范围、小范围验证。
 
 ## 常见坑
-- **jg 环境变量凭证不被采用。** 搜索始终使用 `jg auth` 保存的 provider；此前依赖环境变量的要重新跑 `jg auth`；没有 provider 的旧 key 仍按 Vercel key 处理。
-- **jg 只装 CLI 没装 skill。** agent 不知道该怎么用；要在 agent 工作的项目里执行 `jg skill`。
-- **jg 升级 npm 包不会覆盖项目里的 skill 文件。** 要单独重跑 `jg skill` 更新 skill。
-- **jg 版本坑。** provider 选择需要 0.3.0+；0.1.0 的 `jg skill` 只打印 skill 文本，那个版本要用 `npx skills`。
-- **jg 隐私。** 检索会把符合条件的源码内容通过认证时选择的 provider 发给 Jev；默认过滤不保证所有敏感信息都已被移除；要用你愿意发送的搜索根，可先用 `jg files` 核查。
-- **jg 平台限制。** Node.js 22+、macOS 或 Linux，未提 Windows 支持。
-- **jg 已知精确符号或路径时不要用它。** 直接读或 `rg`。
-- **jg 输出是证据而非答案。** 不保证找全所有相关文件；需要 agent 侧自己判断。
-- **jg 没有 `jg upgrade`。** 升级 CLI 与 skill 要分两步。
-- **CodeGraph 安装器不修改当前 shell。** 安装后必须新开终端再执行 `codegraph install` 等命令。
-- **CodeGraph 接线不等于建索引。** `codegraph install` 只写代理 MCP 配置；每个项目还要 `codegraph init`。
-- **CodeGraph 只在被直接查询时有收益。** 如果让子代理去读文件，CodeGraph 变成纯开销。
-- **CodeGraph 上下文占用更贵。** 它一次返回一大块密集原文，答完还留在窗口里；多轮会话残留检索上下文比读文件式代理多约 80%。窗口不大的环境跑长会话要留预算。
-- **CodeGraph 自动同步不覆盖所有环境。** watcher 被禁用（沙箱或 `CODEGRAPH_NO_DAEMON=1`）时要手动 `codegraph sync`。
-- **CodeGraph 卸载会从所有已配置代理移除并卸载 CLI。** 用 `codegraph uninit` 逐项目删除索引；可选 `--keep-cli`、`--target`、`--yes`。卸载会先展示将要删除的内容。
-- **CodeGraph 数据是作者自测。** 性能与成本数字没有第三方复现，README 还有产品推广成分；Rust 内核“逐字节一致”“比最快竞品快 2–7 倍”等说法只有作者陈述。
-- **CodeGraph 文档截断。** CLI Reference、Configuration、MCP Tools、Library Usage 正文在现有材料中被截断；能确认的只有 `codegraph_explore` 和 `codegraph serve --mcp`，更细配置无法照抄。
-- **Understand Anything 全库首跑会消耗大量 token。** 大 monorepo 先用 `/understand src/frontend` 这类子目录范围。
-- **Understand Anything 原文没有效果数据。** 不能把“补上上下文”当作已证结论；先小范围试装再决定是否铺开。
-- **Understand Anything 调用前缀。** 多数平台 `/understand`，Codex 用 `$understand`；不认前缀时直接说白话："Use the understand skill to analyze this project."
-- **Understand Anything 非 Claude Code 平台脚本会克隆到 `~/.understand-anything/repo` 并创建符号链接。** 装完要重启 CLI/IDE。
-- **Understand Anything 提交 `.ua/` 要排除本地草稿。** 排除 `intermediate/` 和 `diff-overlay.json`；图谱 10 MB+ 用 git-lfs 跟踪。
-- **Understand Anything viewer 只读本地磁盘、不调用 LLM、不需要 API key。** 前提是 Node.js >= 18 和已提交数据目录；它不等于重新生成了图谱。
-- **Understand Anything 本地模型配置未给全。** 原文只指向 Ollama 集成指南，未给具体配置；隐私/企业场景需要自己补齐。
-- **Understand Anything 老项目目录名是 `.understand-anything/`。** 不用迁移，继续用即可。
-- **Pensieve 完整功能仅 Apple Silicon Mac。** Linux / Intel Mac 只装后端、没有搜索面板；原文未提 Windows 支持。
-- **Pensieve setup 不做完索引为空。** MCP 连接此时会额外拿到 `setup_guide`、`setup_scan`、`setup_add_source`、`setup_start` 工具；先跑 `pensieve setup recommended` 或走完 App 向导。
-- **Pensieve 首次运行要下载约 1.2 GB 嵌入模型。** 之后后台索引，搜索和 Map 随索引进度逐步可用；别在索引没跑完时就下结论。
-- **Pensieve 的 HTTP 连接必须显式指定 scope。** 它看不到 agent 工作目录，不写 `?scope` 等于全部；stdio 的 `auto` 才会按 agent 工作目录收窄。
-- **Pensieve 在未索引的仓库里会告诉 agent 改用 grep。** 不会把别的仓库代码返回给它；`claude-repo-check` 钩子只会问一次是否索引。
-- **Pensieve 的默认索引范围很宽。** `folders` 默认含 `~/Documents`、`~/Desktop`、`~/Downloads`，`sweep_roots` 默认 `~`、深度 4；密钥类文件由 `exclude_files` 控制永不索引，但要先确认你愿意把这些来源进索引。所有数据在 `~/.pensieve`，删掉该目录即重来。
-- **Pensieve 默认只暴露 11 个工具，但工具描述每轮都发给 agent。** 需要 agent 管理 Pensieve 自己时才用 `?tools=all` 或 `pensieve mcp --all-tools`。
-- **Pensieve 的编辑钩子有成本。** `claude-hook` 每次 Edit/Write 增加约 50 ms；不需要时用 `pensieve integrate claude --remove` 精确移除。
-- **Pensieve 没有效果数据。** 只有安装、scope、配置和 bench 脚本；把「先搜索再 grep」当作待验证主张，别当已证结论。
-- **Graphicle 平台仅 macOS 与 Linux。** Windows 原生无构建；WSL2 下 Linux 安装“理应可行但尚未测试”。
-- **Graphicle 版本仅 0.1.0，团队版还在私有预览。** 速度与记忆基准多为作者自测、探索性运行或正文未给具体分数，不能当已证结论。
-- **Graphicle `setup` 会改动多个文件。** 会改 `.mcp.json`、`.claude/settings.local.json`、`AGENTS.md`、Git hooks、`~/.codex/config.toml` 等，并先各自备份；用 `graphicle disconnect` 撤销，撤销后用 `git status` 核对。
-- **Graphicle `graphicle graph extract` 不带 `--code-only` 会外发。** 完整提取会把文档和图片发给它找到的 LLM API key 对应的服务；只做代码图谱时用 `--code-only`。
-- **Graphicle `ask` 未配模型只显示证据。** 要成文答案需 `graphicle config set model anthropic`（或 `openai`、`ollama`）；本地模型可行但未给质量数据。
-- **Graphicle 记忆需要人工批准。** 智能体提出的记忆要在 `graphicle open` 里批准；记忆与所属函数绑定，代码改了记忆会过期。
-- **Graphicle 客户端接入位置不同。** Claude Code → 仓库内 `.mcp.json`，会话捕获 hooks 在 `.claude/settings.local.json`；Codex → `~/.codex/config.toml`，hooks 在 `~/.codex/hooks.json`（需信任）；Cursor → `~/.cursor/mcp.json`（无会话捕获）；VS Code → 仓库内 `.vscode/mcp.json`；Claude Desktop → `claude_desktop_config.json`。
-- **Graphicle 与 Graphify 是叠加迁移关系。** 代码图谱引擎是 Graphify 的 Rust 移植；`graphicle setup` 会询问是否切换某个仓库，逐文件备份，且从不删除 `graphify-out/`。
-- **样本小。** jg 只覆盖 10 个 Python SWE-bench 任务、一个冻结安装包和该仓库自带 skill，样本极小、单一语言、单次运行；CodeGraph 是 7 个仓库的作者自测；Understand Anything 没有效果数据；Pensieve 没有效果数据；Graphicle 速度与记忆基准证据弱。都不能直接外推。
-- **不要一次接满所有代理。** 先在一个代理上试，便于回退和判断污染。
+- **jg 环境变量凭证不被采用。**搜索始终使用 `jg auth` 保存的 provider；此前依赖环境变量的要重新跑 `jg auth`；没有 provider 的旧 key 仍按 Vercel key 处理。
+- **jg 只装 CLI 没装 skill。**agent 不知道该怎么用；要在 agent 工作的项目里执行 `jg skill`。
+- **jg 升级 npm 包不会覆盖项目里的 skill 文件。**要单独重跑 `jg skill` 更新 skill。
+- **jg 版本坑。**provider 选择需要 0.3.0+；0.1.0 的 `jg skill` 只打印 skill 文本，那个版本要用 `npx skills`。
+- **jg 隐私。**检索会把符合条件的源码内容通过认证时选择的 provider 发给 Jev；默认过滤不保证所有敏感信息都已被移除；要用你愿意发送的搜索根，可先用 `jg files` 核查。
+- **jg 平台限制。**Node.js 22+、macOS 或 Linux，未提 Windows 支持。
+- **jg 已知精确符号或路径时不要用它。**直接读或 `rg`。
+- **jg 输出是证据而非答案。**不保证找全所有相关文件；需要 agent 侧自己判断。
+- **jg 没有 `jg upgrade`。**升级 CLI 与 skill 要分两步。
+- **CodeGraph 安装器不修改当前 shell。**安装后必须新开终端再执行 `codegraph install` 等命令。
+- **CodeGraph 接线不等于建索引。**`codegraph install` 只写代理 MCP 配置；每个项目还要 `codegraph init`。
+- **CodeGraph 只在被直接查询时有收益。**如果让子代理去读文件，CodeGraph 变成纯开销。
+- **CodeGraph 上下文占用更贵。**它一次返回一大块密集原文，答完还留在窗口里；多轮会话残留检索上下文比读文件式代理多约 80%。窗口不大的环境跑长会话要留预算。
+- **CodeGraph 自动同步不覆盖所有环境。**watcher 被禁用（沙箱或 `CODEGRAPH_NO_DAEMON=1`）时要手动 `codegraph sync`。
+- **CodeGraph 卸载会从所有已配置代理移除并卸载 CLI。**用 `codegraph uninit` 逐项目删除索引；可选 `--keep-cli`、`--target`、`--yes`。卸载会先展示将要删除的内容。
+- **CodeGraph 数据是作者自测。**性能与成本数字没有第三方复现，README 还有产品推广成分；Rust 内核“逐字节一致”“比最快竞品快 2–7 倍”等说法只有作者陈述。
+- **CodeGraph 文档截断。**CLI Reference、Configuration、MCP Tools、Library Usage 正文在现有材料中被截断；能确认的只有 `codegraph_explore` 和 `codegraph serve --mcp`，更细配置无法照抄。
+- **Understand Anything 全库首跑会消耗大量 token。**大 monorepo 先用 `/understand src/frontend` 这类子目录范围。
+- **Understand Anything 原文没有效果数据。**不能把“补上上下文”当作已证结论；先小范围试装再决定是否铺开。
+- **Understand Anything 调用前缀。**多数平台 `/understand`，Codex 用 `$understand`；不认前缀时直接说白话："Use the understand skill to analyze this project."
+- **Understand Anything 非 Claude Code 平台脚本会克隆到 `~/.understand-anything/repo` 并创建符号链接。**装完要重启 CLI/IDE。
+- **Understand Anything 提交 `.ua/` 要排除本地草稿。**排除 `intermediate/` 和 `diff-overlay.json`；图谱 10 MB+ 用 git-lfs 跟踪。
+- **Understand Anything viewer 只读本地磁盘、不调用 LLM、不需要 API key。**前提是 Node.js >= 18 和已提交数据目录；它不等于重新生成了图谱。
+- **Understand Anything 本地模型配置未给全。**原文只指向 Ollama 集成指南，未给具体配置；隐私/企业场景需要自己补齐。
+- **Understand Anything 老项目目录名是 `.understand-anything/`。**不用迁移，继续用即可。
+- **Pensieve 完整功能仅 Apple Silicon Mac。**Linux / Intel Mac 只装后端、没有搜索面板；原文未提 Windows 支持。
+- **Pensieve setup 不做完索引为空。**MCP 连接此时会额外拿到 `setup_guide`、`setup_scan`、`setup_add_source`、`setup_start` 工具；先跑 `pensieve setup recommended` 或走完 App 向导。
+- **Pensieve 首次运行要下载约 1.2 GB 嵌入模型。**之后后台索引，搜索和 Map 随索引进度逐步可用；别在索引没跑完时就下结论。
+- **Pensieve 的 HTTP 连接必须显式指定 scope。**它看不到 agent 工作目录，不写 `?scope` 等于全部；stdio 的 `auto` 才会按 agent 工作目录收窄。
+- **Pensieve 在未索引的仓库里会告诉 agent 改用 grep。**不会把别的仓库代码返回给它；`claude-repo-check` 钩子只会问一次是否索引。
+- **Pensieve 的默认索引范围很宽。**`folders` 默认含 `~/Documents`、`~/Desktop`、`~/Downloads`，`sweep_roots` 默认 `~`、深度 4；密钥类文件由 `exclude_files` 控制永不索引，但要先确认你愿意把这些来源进索引。所有数据在 `~/.pensieve`，删掉该目录即重来。
+- **Pensieve 默认只暴露 11 个工具，但工具描述每轮都发给 agent。**需要 agent 管理 Pensieve 自己时才用 `?tools=all` 或 `pensieve mcp --all-tools`。
+- **Pensieve 的编辑钩子有成本。**`claude-hook` 每次 Edit/Write 增加约 50 ms；不需要时用 `pensieve integrate claude --remove` 精确移除。
+- **Pensieve 没有效果数据。**只有安装、scope、配置和 bench 脚本；把「先搜索再 grep」当作待验证主张，别当已证结论。
+- **Graphicle 平台仅 macOS 与 Linux。**Windows 原生无构建；WSL2 下 Linux 安装“理应可行但尚未测试”。
+- **Graphicle 版本仅 0.1.0，团队版还在私有预览。**速度与记忆基准多为作者自测、探索性运行或正文未给具体分数，不能当已证结论。
+- **Graphicle `setup` 会改动多个文件。**会改 `.mcp.json`、`.claude/settings.local.json`、`AGENTS.md`、Git hooks、`~/.codex/config.toml` 等，并先各自备份；用 `graphicle disconnect` 撤销，撤销后用 `git status` 核对。
+- **Graphicle `graphicle graph extract` 不带 `--code-only` 会外发。**完整提取会把文档和图片发给它找到的 LLM API key 对应的服务；只做代码图谱时用 `--code-only`。
+- **Graphicle `ask` 未配模型只显示证据。**要成文答案需 `graphicle config set model anthropic`（或 `openai`、`ollama`）；本地模型可行但未给质量数据。
+- **Graphicle 记忆需要人工批准。**智能体提出的记忆要在 `graphicle open` 里批准；记忆与所属函数绑定，代码改了记忆会过期。
+- **Graphicle 客户端接入位置不同。**Claude Code → 仓库内 `.mcp.json`，会话捕获 hooks 在 `.claude/settings.local.json`；Codex → `~/.codex/config.toml`，hooks 在 `~/.codex/hooks.json`（需信任）；Cursor → `~/.cursor/mcp.json`（无会话捕获）；VS Code → 仓库内 `.vscode/mcp.json`；Claude Desktop → `claude_desktop_config.json`。
+- **Graphicle 与 Graphify 是叠加迁移关系。**代码图谱引擎是 Graphify 的 Rust 移植；`graphicle setup` 会询问是否切换某个仓库，逐文件备份，且从不删除 `graphify-out/`。
+- **XERJ 的 `--insecure` 是明确的信任边界。**它关闭 TLS 和 API key 认证，任何能访问该端口的人都是超级用户，可读取和删除所有索引（含 `/_memory` 命名空间）；新节点只绑 127.0.0.1，非本机接口的明文绑定会拒绝启动。只在单用户开发机上这么用。
+- **XERJ 的 autoindex 不读 `xerj.toml` 里的 key。**开启认证的节点必须把同一个 key 通过 `--api-key` 或 `XERJ_API_KEY` 交给 autoindex，否则所有请求返回 401 Unauthorized。
+- **XERJ 的 rerank 默认关闭，开了才外发。**`_search` 里加 `"rerank": {}` 会把 top 结果发给 TypeSafe 的 Jev，需要 operator 配好 provider key；`[rerank] enabled = false` 可完全禁止。要数据不出机器就用 `POST /v1/systemone`、`POST /_decide`，但必须有标注样本。
+- **XERJ 的 `xerj mcp` 自己不起节点。**先跑 `xerj --insecure --data-dir ./data &`（或带认证的节点）；从桌面图标启动的 MCP host 不继承 shell 的 PATH，`command` 要用绝对路径；认证时再加 `XERJ_AUTH`。
+- **XERJ 没有内置的定时/事件触发编排。**原文只给了增量重索引这一条状态触发机制（内容字节级未变的文件跳过解析，常见编辑-重跑/CI 场景通常 >95% 文件未变）；“每次编辑后自动重索引”要自己搭。
+- **XERJ 的收益数字全部是自报。**受控研究、`xerj gain` 都是工具/项目方口径，没有独立复核；README 自己都说“任何你无法复现的数字，包括我们的，都该存疑”。
+- **XERJ 的收益与“模型是否见过”强相关。**README 说私有、内部、小众、训练截止之后的代码有收益；模型已熟知的流行公开库中性甚至有害。
+- **XERJ 神经嵌入要预置模型文件。**默认嵌入器是 lexical feature-hashing（离线）；`--embed-mode neural` 需要本地先放好三个模型文件（约 90 MB），气隙环境按仓库里的 air-gapped 配方走。
+- **XERJ 的部分工具说明在仓库外。**13 个工具的 schema 发布在 `xerj.org/docs/agents/schemas/mcp-tools.json`，要自己去取；原文的输入侧小节在现有材料中被截断。
+- **样本小。**jg 只覆盖 10 个 Python SWE-bench 任务、一个冻结安装包和该仓库自带 skill，样本极小、单一语言、单次运行；CodeGraph 是 7 个仓库的作者自测；Understand Anything 没有效果数据；Pensieve 没有效果数据；Graphicle 速度与记忆基准证据弱；XERJ 的受控研究与收益统计同样是项目自报、无法独立复核。都不能直接外推。
+- **不要一次接满所有代理。**先在一个代理上试，便于回退和判断污染。
 
 ## 证据与来源
-本篇合并四份调研报告：《dzhng/jevgrep》、《colbymchenry/codegraph》、《Egonex-AI/Understand-Anything》与《Graphicle-AI/graphicle》。
+本篇合并六份调研报告：《dzhng/jevgrep》、《colbymchenry/codegraph》、《Egonex-AI/Understand-Anything》、《TedHaley/pensieve》、《Graphicle-AI/graphicle》与《xerj-org/xerj》。
 
 jg 部分：安装、认证、`jg skill`、`jg files`、提问检索、`--exclude`、升级步骤来自《dzhng/jevgrep》正文中 README 给出的可复制命令与说明。成功率与成本数据来自 README 的 self-report，未独立复核：十个调优过的 Python SWE-bench 任务、一个冻结的已安装包、仓库内的公开 skill 做对比，Jevgrep 与无 Jev 基线同样解决 8/10 题；Sol 成本从 $7.62 降到 $5.44，降幅 28.6%（四舍五入 ~30%），该口径包含失败尝试、不含 Jev 成本；0.4.3 的总成本重跑（含 Jev）总成本降低 25.8%，同样解决 8/10 题；0.5.0 评估保持 8/10 解决，原生 Jev 成本相比 0.4.3 那次下降约 59%，合并 Sol+Jev 成本高出 2–3%，作者接受为小折衷。另有独立的速度研究文件（`speed-2026-09-28.md`），衡量后续本地优化配合 Jev 原生 TypeSafe endpoint。作者自己的限定：这是单次运行观察，不构成统计等价，也不构成速度改善的证明；它衡量的是任务成功率和成本，不保证在每个仓库上都省钱；封面图的“~30% lower cost”是较旧的 Sol-only 口径，README 后面已修正为总成本 25.8%，并说明未来基准统计会包含 Jev；“Same intelligence”是营销式表述，实际含义只是这 10 题里两边都是 8/10。适用条件与风险：评测只覆盖 10 个 Python SWE-bench 任务、一个冻结安装包和该仓库自带 skill，样本极小、单一语言、单次运行，不能外推到你的仓库和语言。隐私：检索会把符合条件的源码内容通过认证时选择的 provider 发给 Jev；默认文件系统过滤会尊重 ignore 文件并排除隐藏、依赖/构建、二进制和明显的凭证文件，但 README 明确这些过滤不保证所有敏感信息都已被移除。平台限制：Node.js 22+、macOS 或 Linux。凭证限制：搜索始终使用 `jg auth` 保存的 provider；环境变量凭证和 endpoint 覆盖不被使用。版本坑：provider 选择需要 0.3.0+；0.1.0 的 `jg skill` 只打印 skill 文本。输出是证据而非答案，也不保证找全所有相关文件。可复现的方法学文件路径：README 公开了 `evals/results/relevance-threshold-2026-09-27.md`、`total-cost-2026-09-28.md`、`combined-cost-research-2026-09-28.md`、`speed-2026-09-28.md`，可据此复现或改造成自己的任务集对比。哪些只是作者主张：把“在陌生代码库里定位实现位置”从 agent 的试错式探索变成一次语义检索、能减少定位步数，是调研报告/README 的定位与主张；可复现的只有上述方法学文件与对比口径。
 
@@ -568,6 +693,8 @@ Pensieve 部分：安装脚本、手动安装、`pensieve integrate` 系列、`c
 
 Graphicle 部分：安装、`graphicle setup`、`graphicle doctor`、`graphicle ask`、`graphicle config set model`、`graphicle graph extract . --code-only`、`graphicle graph affected`、`graphicle open`、`graphicle context --workspace`、`graphicle disconnect`、各客户端接入位置、数据位置与边界，均来自《Graphicle-AI/graphicle》正文给出的可复制命令与说明。技术路线：Rust 单程序、tree-sitter 解析代码图谱、不调用模型；项目记忆和会话捕获；一个 MCP server 返回带引用摘录（精确到文件和行号，受 token 预算限制）。效果证据：`graphicle ask` 真实终端输出（4 条摘录、598/3000 tokens，第一条定位到 `shop/pricing.py:1-7` 的 `price_with_tax()`）；setup 演示 GIF 描述（同步、建图、发现 5 个客户端、连接并列出改动文件；`doctor` 18 项通过 + 1 项警告）；Kubernetes（31k 文件）代码提取 3 分 18 秒 vs Graphify 0.9.88 的 26 分 38 秒（各一次探索性运行、同一台 16 CPU Linux、8 workers，建成同一张图：256,329 节点、1,400,392 边）；Django 上预发布版 7.5 秒 vs Graphify 0.9.77 的 72.8 秒（五次交替运行取中位数）；记忆侧与七个记忆系统对比，注册先于评分、用同一个开源模型作所有系统的 reader 和 judge，预发布版在三个开发集上“不落后”。哪些只是作者主张：速度对比是各一次探索性运行，且 0.1.0 引擎用的是 release 源码的 Linux 测试构建，与 Graphify 0.9.88 不是同一构建路径；记忆对比正文没有给出具体分数、数据集名称和读者/评判模型，细节被推到 docs/benchmarks.md；“记忆绑定到代码符号、其他地方编辑通常不影响”给了规则链接但正文未展开。适用条件与风险：平台仅 macOS 与 Linux（Windows 原生无构建，WSL2 未测试）；版本仅 0.1.0，团队版还在私有预览；默认单项目 10 万文件 / 1 GiB 文本上限；`setup` 会写多个仓库内与家目录配置（虽备份并可用 `disconnect` 撤销）；`ask` 的成文答案需要另配模型，本地模型可行但未给质量数据；`graphicle graph extract` 不限于本地时会把文档和图片发给配置的 LLM。与已有做法的关系：Claude Code 的 `setup` 会往仓库 `.mcp.json` 接上 Graphicle，并在 `.claude/settings.local.json` 装 hooks 做会话捕获，同时把 Claude Code 的搜索优先指向代码图谱；Cursor 接 `~/.cursor/mcp.json`，但不做会话捕获；Graphicle 的代码图谱引擎是 Graphify 的 Rust 移植，随 Graphify 版本保持同步并在文件头与 NOTICE 中署名，`graphicle setup` 会主动询问是否切换某个仓库，逐文件备份，且从不删除 `graphify-out/`。
 
+XERJ 部分：安装、起本地节点、`xerj autoindex`、`xerj init`、`xerj search` / `xerj def`、Elasticsearch DSL 查询、`xerj mcp` 与那段 JSON 配置、13 个工具清单、一键提示词与另外三个 README 提示词、参考编码循环、`xerj gain`、基准复现命令与源码构建、rerank 与 `systemone`/`_decide`、`xerj feedback`，均来自《xerj-org/xerj》正文给出的可复制命令与说明。技术路线：单静态二进制、本地部署（Apache-2.0、Rust），对外说 Elasticsearch REST API，默认 `localhost:9200`；`xerj autoindex` 用 tree-sitter 做 AST 感知解析，产出带符号和行号的记录，也按类型索引文档、日志、PDF、SQLite、CSV、Office/EPUB/Jupyter/man page/mail。效果证据全部出自 README 自身的表格、案例研究和仓库内链接，未独立复核：受控研究 8 个任务、4 种语言、每臂 16 次运行、真实 `claude -p` token 计数——纯记忆 260,916 output tokens / $11.18 / 11/16；grep agent 26,477 / $3.27 / 16/16；XERJ 9,982 / $1.58 / 16/16（比 grep 少 2.7x output token、比纯记忆少 26x、便宜 2.1x，解决率相同；单个 Java 任务上最多少 278x）；另一组：模型没见过的 Rust 库，带检索 9/9、纯记忆 0/9。另有重排的公开 FiQA nDCG@10 与总花费、本地决策在 AG News（12 万标注样本）上的准确率。索引示例输出（593 datasets、25329 files、158.1s、83103 records live、790 junk records）来自 README。README 自己声明“任何你无法复现的数字，包括我们的，都该存疑”；原文的输入侧小节在现有材料中被截断（只到“输入侧：gr”），更细的输入侧数据无法照抄。可复现的只有安装/启动/索引/MCP 配置/提示词/基准命令，以及 `xerj gain` 这个自统计口径；`xerj.org/docs/agents/schemas/mcp-tools.json` 是工具 schema 的发布位置。哪些只是作者主张：把“读文件”换成“先查索引”能减少 agent 的 output token、并让小模型 + 检索超过靠记忆的贵模型，来自 README 的定位与主张，收益数字全部是自报。风险：`--insecure` 关闭 TLS 与 API key 认证，任何能访问该端口的人都是超级用户，可读取和删除所有索引（含 `/_memory` 命名空间）；新节点只绑 127.0.0.1，非本机接口的明文绑定会拒绝启动。rerank 默认关闭，开了会把 top 结果文本发给 TypeSafe 的 Jev 服务；`systemone`/`_decide` 是本地替代但需要标注样本。原文没有给出定时/事件触发的持续编排步骤，只给了增量重索引这一条状态触发机制（内容字节级未变的文件跳过解析，常见的编辑-重跑/CI 场景通常 >95% 文件未变）。平台：Linux / macOS / Windows 的 x86-64 或 arm64。与已有做法的关系：`xerj init` 明确就是“wire XERJ into Claude Code / Cursor (MCP + skill)”——Claude Code 已 adopt、Cursor 在 watch；它给这些 host 补的是一个“外部语料检索后端”，与文件读取/grep 是替代关系而非叠加。Trendshift 只是 README 顶部 trending 徽章的来源，与做法无关。
+
 ## 依据的调研
 
 - [dzhng/jevgrep](../research/radar/2026-10-01/31-dzhng-jevgrep.md)：值得一试，在编码智能体所在的仓库里装 jevgrep CLI 与配套 skill（npm install -g @dzhng/jevgrep → jg auth → jg skill），把"知道要理解什么行为但不知道代码在哪"这类定位工作交给 jg，已知精确符号或路径时仍用直接读/rg；理由是它给出了可复制的安装、认证、排除与调用步骤，并有单次 SWE-bench 对比数据（10 题中同样解决 8 题、成本下降约 25%–29%），但证据是单次运行且会把源码发往外部 provider，所以先小范围试。
@@ -575,3 +702,4 @@ Graphicle 部分：安装、`graphicle setup`、`graphicle doctor`、`graphicle 
 - [Egonex-AI/Understand-Anything](../research/radar/2026-10-02/524-egonex-ai-understand-anything.md)：值得一试，在一个中等规模、你已有正确答案可对照的代码库上小范围试装这个 Claude Code 插件：先用子目录范围跑一次 `/understand`，再用 `/understand-chat` 和 `/understand-diff` 验证它是否真的补上了编码智能体缺失的代码上下文；理由是原文给出了完整可复制的安装、运行、增量更新和团队共享步骤，但全篇没有效果数据，且明确警告全库首跑会消耗大量 token，所以要控制规模再决定是否铺开。
 - [TedHaley/pensieve](../research/radar/2026-10-12/2730-tedhaley-pensieve.md)：值得一试，建议小范围试用：在 1–2 个中型以上代码库上装 Pensieve，把 Claude Code/Cursor 等通过 MCP 接上并加上 instructions block 与两个 hook，再用仓库自带的 bench 对比 grep 与 guided 两臂的任务解决率、工具调用数和 token 消耗；原因是 README 给出了完整的安装、MCP 连接、作用域、钩子和评测命令，可照做，但全部效果数据都是作者自测，且完整能力（搜索面板）仅限 Apple Silicon Mac。
 - [Graphicle-AI/graphicle](../research/radar/2026-10-15/3434-graphicle-ai-graphicle.md)：值得一试，先在一个可回滚的真实仓库里照 README 跑通 brew 安装、`graphicle setup`、`graphicle doctor` 和 `graphicle ask`，人工核对返回摘录的文件行号是否准确，再决定是否常驻；理由是它把代码图谱与项目记忆用标准 MCP 一次性接进 Claude Code/Codex/Cursor 等现有智能体，安装、接入、自检、撤销的步骤在原文中完整可照做，但项目仅 0.1.0、只支持 macOS/Linux，速度与记忆的基准多为单次探索性运行。
+- [xerj-org/xerj](../research/radar/2026-10-16/3898-xerj-org-xerj.md)：值得一试，建议在一台单人开发机上小范围试：装单二进制、起本地节点、对模型没见过的私有/内部代码库 autoindex 后接入 Claude Code 的 MCP，用“先检索同类解法再写码”的流程和 grep 对照跑 3-5 个任务；之所以给 try 而不是 adopt，是因为原文确实给了可直接复制的安装、启动、索引、MCP 配置和提示词，但全部收益数字都来自项目自报的案例研究与用户反馈，无法独立复核，且 --insecure 有明确信任边界。
