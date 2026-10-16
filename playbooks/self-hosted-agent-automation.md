@@ -1,28 +1,28 @@
-# 把周期性重复工作交给 AI：先单条试跑，再用两周数字决定是否转正
+# 把周期性重复工作交给常驻 AI 队友：从安装到两周验收
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：面对一批常驻/桌面/编排/托管 agent 方案，怎么在不白花钱、不踩托管边界的前提下，选一条路线把一件周期性重复工作交出去，并用自己测出来的数字决定它能不能进日常工作流。
-> 先试这一步：选一条路线（A–G 任选一条），只开本地访问、只配一个模型、只装一个技能、只建一个定时任务，连续跑 5–10 次同类任务，从第一次运行就开始记指标。
-> 最近修订：2026-10-13
+> 解决的问题：面对周期性重复工作，如何选一条本地/托管 agent 路线，只接一个模型、一个技能、一个定时任务，用两周指标判断它是否值得纳入日常工作流。
+> 先试这一步：今天先选一条路线（如做法 H 的 touri，或 A–G 任一），只配一个模型和一个定时任务，手动触发一次并记录结果。
+> 最近修订：2026-10-16
 
 ## 解决什么问题
 
 周期性重复的工作——按固定时间汇总某个信息源、每周重复读同一批文件、跑同一批命令、查同一类网页——看起来很适合交给一个常驻的本地/服务器端 AI agent、一个桌面端的多 agent 应用，或者一个跑在模型厂商基础设施上的托管定时 agent。但这类项目的 README 只给安装和配置步骤，不给效果数据、对比案例或评估方法。
 
-这份手册给出一条可执行的试跑路径：起一个实例 → 只接一个模型 → 配一个定时任务 → 跑两周 → 用「按时投递成功率 + 人工返工时间 + token 成本」决定它是否进入你的日常工作流。七条路线（nanobot / CowAgent / Eigent / NanoClaw / Comma / Claude Managed Agents / Claude Code + instagram-research-tool）共用同一套判断标准，选一条走完即可。
+这份手册给出一条可执行的试跑路径：起一个实例 → 只接一个模型 → 配一个定时任务 → 跑两周 → 用「按时投递成功率 + 人工返工时间 + token 成本」决定它是否进入你的日常工作流。八条路线（A nanobot / B CowAgent / C Eigent / D NanoClaw / E Comma / F Claude Managed Agents / G Claude Code + instagram-research-tool / H touri）共用同一套判断标准，选一条走完即可。
 
-其中三条和另外四条不是同一层东西：Comma 不是又一个编码 agent，而是上层编排 + 持久 Task 状态 + 事件/时间触发 + 权限边界，它把 Codex、Claude Code 这类已有 agent 当应用调用，或注册为 Worker / Sub-agent；Claude Managed Agents（做法 F）不是自托管 harness，而是把 agent 跑在 Anthropic 基础设施上，你本机不需要常驻任何进程，代价是依赖一个处于 beta 的托管平台，且信息源与凭据要按它的 vault 机制放；做法 G 不是长驻 harness 也不是托管平台，而是「系统定时器 + 一次性 `claude -p` 命令」唤醒你本机已有的 Claude Code，状态落在它自己 clone 下来的仓库文件里。如果你只是想要一个编码 agent，沿用原来的四条路线更直接。
+其中几条不是同一层东西：Comma 不是又一个编码 agent，而是上层编排 + 持久 Task 状态 + 事件/时间触发 + 权限边界，它把 Codex、Claude Code 这类已有 agent 当应用调用，或注册为 Worker / Sub-agent；Claude Managed Agents（做法 F）不是自托管 harness，而是把 agent 跑在 Anthropic 基础设施上，你本机不需要常驻任何进程，代价是依赖一个处于 beta 的托管平台，且信息源与凭据要按它的 vault 机制放；做法 G 不是长驻 harness 也不是托管平台，而是「系统定时器 + 一次性 `claude -p` 命令」唤醒你本机已有的 Claude Code，状态落在它自己 clone 下来的仓库文件里；做法 H 的 touri 是 local-first 的 macOS 桌面应用，把 Codex、Claude Code、OpenCode 这类 CLI 变成常驻 bot，用 cron routines 触发，凭据放 macOS Keychain，数据默认留在本机 SQLite。如果你只是想要一个编码 agent，沿用原来的四条路线更直接。
 
 ## 适用与不适用
 
 **适用**
 
 - 你手上有明确的周期性重复工作，形态落在「读文件 / 跑命令 / 查网 / 按计划重复 / 拆给多个子代理 / 盯收件箱或仓库的事件」里。
-- 有一台可联网、且你信得过的 Linux / macOS / Windows 机器或服务器；如果你想试 Eigent，还需要桌面环境；如果你想试 NanoClaw，需要 macOS 或 Linux（Windows 走 WSL2）以及 Docker；如果你想试 Comma 的自建实例，需要 Docker Engine + Compose v2.24 以上，以及足够磁盘容纳构建层；如果你想试做法 F，本机只要有 Claude Code 即可，运行本身不占本机资源；如果你想试做法 G，本机要有 Claude Code 和 Node.js 18+，macOS / Linux 均可（iPhone / Mac 只对分享按钮必需）。
-- 至少有一个模型厂商的 API key，或者能在本机跑起一个本地推理服务（Eigent 支持 Ollama / vLLM / LM Studio 一类；NanoClaw 可以通过 `/add-ollama-provider` 接本地开源权重模型；Comma 自带模型即 BYO API key，或使用 ChatGPT / Claude 套餐，也可登录后在 Settings 里配私有模型）；做法 F 需要一个 Claude API workspace；做法 G 复用的是你已经在用的 Claude Code。
-- 想先拿到「可复制的目录结构 + 配置 + 失败模式清单」再动手——六条路线里只有做法 F 的调研给出了参考实现的完整文件结构和规则清单；做法 G 同样给了一套可照抄的 skill 套装、`config.json` 字段表和日常命令表，是第二条「有结构可抄」的路线，但它的截图是合成样本，不是实测产出。
-- 你的重复工作不是「读文件 / 跑命令 / 查网」这类通用形态，而是「盯一个内容源、按固定标准筛出异常、产出可读报告」——做法 G 给了一个完整实例：把任意 reel 交给 Claude Code 做拆解（transcript、hook、格式节奏、逐帧视觉、scroll stoppers、用你自己语气重写的 "My version"），并按 `niche.json` 每天跑约 70 次搜索筛出过去 24 小时的 outlier 排名。
+- 有一台可联网、且你信得过的 Linux / macOS / Windows 机器或服务器；如果你想试 Eigent，还需要桌面环境；如果你想试 NanoClaw，需要 macOS 或 Linux（Windows 走 WSL2）以及 Docker；如果你想试 Comma 的自建实例，需要 Docker Engine + Compose v2.24 以上，以及足够磁盘容纳构建层；如果你想试做法 F，本机只要有 Claude Code 即可，运行本身不占本机资源；如果你想试做法 G，本机要有 Claude Code 和 Node.js 18+，macOS / Linux 均可（iPhone / Mac 只对分享按钮必需）；如果你想试做法 H 的 touri，需要 macOS 14 或更新版本、Apple Silicon，且本机已安装并登录 Codex 或 Claude Code CLI。
+- 至少有一个模型厂商的 API key，或者能在本机跑起一个本地推理服务（Eigent 支持 Ollama / vLLM / LM Studio 一类；NanoClaw 可以通过 `/add-ollama-provider` 接本地开源权重模型；Comma 自带模型即 BYO API key，或使用 ChatGPT / Claude 套餐，也可登录后在 Settings 里配私有模型）；做法 F 需要一个 Claude API workspace；做法 G 复用的是你已经在用的 Claude Code；做法 H 复用的是你已登录的 Codex 或 Claude Code CLI。
+- 想先拿到「可复制的目录结构 + 配置 + 失败模式清单」再动手——六条路线里只有做法 F 的调研给出了参考实现的完整文件结构和规则清单；做法 G 同样给了一套可照抄的 skill 套装、`config.json` 字段表和日常命令表，是第二条「有结构可抄」的路线，但它的截图是合成样本，不是实测产出；做法 H 的 touri 给了一整套构建、验证、导入与 sidecar/MCP 命令，但 README 没有展开 UI 新建 bot、routine 调度配置与 overlap/catch-up 参数。
+- 你的重复工作不是「读文件 / 跑命令 / 查网」这类通用形态，而是「盯一个内容源、按固定标准筛出异常、产出可读报告」——做法 G 给了一个完整实例；做法 H 的 touri 更适合把已有 Codex / Claude Code CLI 变成常驻 bot，用 routines 跑低风险重复任务。
 - 能接受先花 1–2 周观察期，而不是马上全量切换。
 
 **不适用**
@@ -30,14 +30,17 @@
 - 没有重复性工作，只是想试个新工具。
 - 必须部署在不受信任的环境——CowAgent 的 README 明确说 Agent 能访问本机操作系统，只能在可信环境部署。
 - 承担不了 token 成本——同一份 README 明确警告 Agent 模式消耗显著多于普通对话。做法 F 的 `deployment.md` 里有一个 budget 字段，但原文没给成本上限的配置方式和数值。
-- 期待有现成效果数据可抄——七份调研都指出各自原文没有任何效果数据、对比案例或指标（Eigent 只有 stars 数，NanoClaw 的 30866 stars 同理，Comma 的 172 stars 和运行时形式化验证同样不构成任务效果证据；做法 F 只有一套参考实现，没有成功率或成本对比；做法 G 只有 31 stars，README 截图明确标注为合成样本）。
+- 期待有现成效果数据可抄——八份调研都指出各自原文没有任何效果数据、对比案例或指标（Eigent 只有 stars 数，NanoClaw 的 30866 stars 同理，Comma 的 172 stars 和运行时形式化验证同样不构成任务效果证据；做法 F 只有一套参考实现，没有成功率或成本对比；做法 G 只有 31 stars，README 截图明确标注为合成样本；做法 H 只有 35 stars，功能声明无截图、演示、案例或效果数据）。
 - 不愿意为数据源付费、又需要完整的每日雷达——做法 G 的每日搜索要用 Sandcastles（付费计划起 $49/月）或 Apify（有每月 $5 免费额度，一次完整每日搜索约 $1.70，每条 reel 不到 1 美分）；免费路线 yt-dlp 只支持单条公开链接，且 IG 通常拿不到播放量、还可能被拦截。
 - 不接受让工具的状态落在一个 clone 下来的仓库里、并由 Claude Code 在该目录内执行——做法 G 的供给物就是仓库文件：`config.json`、`niche.json`、`voice.md`、`inbox.txt`，凭证放 `.env`。
 - 不想动代码：NanoClaw 的定制哲学是「Customization = code changes」，README 也承认主干只接受安全修复、bug 修复和明确改进，其余一律以 skill 形式自带，不想改代码的人上手成本高。
 - 不想维护重栈：Comma 的运行时主要为 Elixir/OTP，关键系统组件用 Lean，核心分布式协议用 TLA+ 模型检查；首次构建会下载 Lean、Elixir、Go、Node 等公共工具链。如果你不打算长期维护这套栈，别把它当首选。
 - 需要 Comma 的会议（Meetings）或 Agent VMM host——这两者需要的运行时**不包含在本仓库内**。
 - 不能接受 beta 阶段的托管平台，或不愿意把信息源与凭据交给模型厂商的托管环境——做法 F 的凭据存在 vault 里、由平台在请求离开沙箱时注入，这套机制本身就是托管平台的一部分。
-- 需要照着一份完整命令走到底——做法 F 的调研原文在「部署」一节被截断，没有可照抄的部署命令；要走到那一步得回原文补全。做法 G 的 cron / launchd 具体写法在 `docs/iphone-shortcut.md`，本次材料也没包含该文档正文。
+- 需要照着一份完整命令走到底——做法 F 的调研原文在「部署」一节被截断，没有可照抄的部署命令；做法 G 的 cron / launchd 具体写法在 `docs/iphone-shortcut.md`，本次材料也没包含该文档正文；做法 H 的 touri README 没有说明在 UI 里如何新建 bot、如何写 routine 的调度配置、overlap 与 catch-up 的具体参数怎么填。
+- 用 Windows / Linux：做法 H 的 touri 仅 macOS、仅 Apple Silicon，其他平台完全用不上。
+- 企业环境禁止绕过 Gatekeeper：touri 的 Release 构建目前未签名、未公证，首次启动必须手动绕过。
+- 需要 bot-machine（隔离 Linux VM）开箱可用：touri 要求 macOS 26 与 Apple `container` >= 1.5.0；低于此版本本机 bot 仍可用，machine 功能会自报为不可用。
 
 ## 前置条件
 
@@ -48,23 +51,25 @@
 - **用 Comma**：自建实例需要 Docker Engine + Compose v2.24 或更高、足够磁盘容纳构建层、一个可用的模型服务商账号（默认栈**不含** mock 模型，不配就没有真实模型调用）；不需要 Comma 账号，也不需要私有仓库 token。本地开发模式需要 pnpm（先跑一次 `pnpm install`）。要让它操作你自己的电脑，需要连接这台机器（Salix），并在设备设置里手动连接；群组云电脑需要 Cloudflare 配置。
 - **用 Claude Managed Agents（做法 F）**：一个 Claude API workspace（Managed Agents 处于 beta）；已安装 Claude Code，并能跑 `claude-api` skill；一个 Slack app（按文中提供的 manifest 创建）和一个 GitHub token。凭据按源分别放进 vault（GitHub 走 MCP 由沙箱外 proxy 调用，Slack 走沙箱内 bash + curl），不写进 agent 配置。
 - **用 Claude Code + skill 套装（做法 G）**：已安装 Claude Code；Node.js 18+（README 说 npm 零依赖，不需要 `npm install`）；至少一个数据源（Sandcastles MCP / Apify / yt-dlp / 任意自带源）；数据源凭证放 `.env`（例如 Apify token），不要提交。可选：ffmpeg（逐帧拆解用）、Whisper（无源字幕时转写，如 `pipx install openai-whisper`）、iPhone（分享按钮，只对这一步必需）。
-- **常驻前提**：nanobot 的定时投递要生效，网关必须一直运行；CowAgent 本身定位就是可 7×24 跑在个人电脑或服务器上；Eigent 的 Automation 定位是「人离开时任务继续跑」，但前提是应用/服务在跑；NanoClaw 是「Node 宿主进程 + 每个 agent group 一个 Docker 容器」，只要宿主和容器在跑，定时任务就由宿主唤醒；Comma 的 Task 被自动转成独立的 agent loop，只要实例在跑就继续 plan → execute → review → verify；做法 F 不需要本机常驻进程，排期由托管平台执行；做法 G 也不需要常驻网关或常驻容器——自动化是 cron / launchd 定时调用一次性 `claude -p` 命令，材料里没有提到要常驻任何进程。
-- **试用期约定**：Docker 优先（便于清理），只开本地访问，先不要把控制台暴露到外网。注意例外：**Eigent 的快速开始模式会连接 Eigent 云端服务、需要注册账号，不是完全本地**；如果你的目标是「数据不出本机」，别把 Quick Start 当成最终形态。NanoClaw 的安装默认在本地构建镜像、不联网、不需要账号，但**匿名安装诊断默认开启**，可用 `NANOCLAW_NO_DIAGNOSTICS=1` 关闭；可选账号只用于拉取预构建加固镜像和托管 Slack app（会看到你的邮箱和拉取时间）。Comma 自建实例首次启动会生成持久密钥并初始化空存储，默认所有公开端口只绑定 loopback，这正好适合试用期。做法 F 对应的是 `environment.yaml` 里的网络 allowlist：只放这个 brief 真正需要访问的主机。做法 G 对应的是：工具声明从不登录 Instagram、不用 cookies 或 session、不用你的账号抓取；下载的视频仅本地分析、不得重发；"My version" 保存前会检查抄袭短语。
+- **用 touri（做法 H）**：macOS 14 或更新版本、Apple Silicon；本机已安装并登录 Codex 或 Claude Code CLI；若要用可选的 bot-machine（隔离 VM）功能，需要 macOS 26 与 Apple `container` >= 1.5.0，低于此版本本机 bot 仍可用，machine 功能会自报为不可用。源码构建需要 Bun 1.2.21 或更新、Rust 1.90 或更新并带 `aarch64-apple-darwin` target。Release 构建目前未签名、未公证，首次启动会被 Gatekeeper 拦截。
+- **常驻前提**：nanobot 的定时投递要生效，网关必须一直运行；CowAgent 本身定位就是可 7×24 跑在个人电脑或服务器上；Eigent 的 Automation 定位是「人离开时任务继续跑」，但前提是应用/服务在跑；NanoClaw 是「Node 宿主进程 + 每个 agent group 一个 Docker 容器」，只要宿主和容器在跑，定时任务就由宿主唤醒；Comma 的 Task 被自动转成独立的 agent loop，只要实例在跑就继续 plan → execute → review → verify；做法 F 不需要本机常驻进程，排期由托管平台执行；做法 G 也不需要常驻网关或常驻容器——自动化是 cron / launchd 定时调用一次性 `claude -p` 命令，材料里没有提到要常驻任何进程；做法 H 的 touri 是桌面应用，bot 和 routines 的常驻取决于应用与 sidecar 是否在运行。
+- **试用期约定**：Docker 优先（便于清理），只开本地访问，先不要把控制台暴露到外网。注意例外：**Eigent 的快速开始模式会连接 Eigent 云端服务、需要注册账号，不是完全本地**；如果你的目标是「数据不出本机」，别把 Quick Start 当成最终形态。NanoClaw 的安装默认在本地构建镜像、不联网、不需要账号，但**匿名安装诊断默认开启**，可用 `NANOCLAW_NO_DIAGNOSTICS=1` 关闭；可选账号只用于拉取预构建加固镜像和托管 Slack app（会看到你的邮箱和拉取时间）。Comma 自建实例首次启动会生成持久密钥并初始化空存储，默认所有公开端口只绑定 loopback，这正好适合试用期。做法 F 对应的是 `environment.yaml` 里的网络 allowlist：只放这个 brief 真正需要访问的主机。做法 G 对应的是：工具声明从不登录 Instagram、不用 cookies 或 session、不用你的账号抓取；下载的视频仅本地分析、不得重发；"My version" 保存前会检查抄袭短语。做法 H 对应的是：数据存在 `~/Library/Application Support/touri` 下的 SQLite，无遥测、无需账号；凭据放在 macOS Keychain，不进数据库、日志或导出；可选云托管是单独 opt-in 协议（`docs/protocol/cloud-v1.md`）。
 
 ## 操作步骤
 
 ### 第 1 步：先选一种做法，别同时上多个
 
-A、B、C、D、E 属于同一类「长驻 / 桌面 / 编排 agent harness」，能力清单高度重叠（本地文件与 shell、网页搜索与抓取、MCP 工具、cron/调度、长期记忆、子代理委派、多模型路由）。区别只在形态与侧重，且这些侧重全部来自各自的 README 自述，没有第三方对比测试，也没有效果数据。F 是托管执行、本机不留进程。G 是第三种形态：由系统定时器唤醒一次性 Claude Code 会话，复用你本机已有的 Claude Code，分析全部在本地做，状态落在仓库文件里。
+A、B、C、D、E 属于同一类「长驻 / 桌面 / 编排 agent harness」，能力清单高度重叠（本地文件与 shell、网页搜索与抓取、MCP 工具、cron/调度、长期记忆、子代理委派、多模型路由）。区别只在形态与侧重，且这些侧重全部来自各自的 README 自述，没有第三方对比测试，也没有效果数据。F 是托管执行、本机不留进程。G 是第三种形态：由系统定时器唤醒一次性 Claude Code 会话，复用你本机已有的 Claude Code，分析全部在本地做，状态落在仓库文件里。H 是第四种形态：local-first 的 macOS 桌面应用，把 Codex / Claude Code CLI 变成常驻 bot，用 cron routines 触发，凭据放 Keychain，数据默认本机 SQLite。
 
 - 想接主流 IM 渠道（微信、飞书、钉钉、企微、QQ、公众号、Telegram、Slack、Discord 等）、想用现成技能市场、想要对话式技能生成 → **做法 B：CowAgent**。
 - 想要更小的内核、WebUI + 终端 workbench、OpenAI 兼容 API / Python SDK、可自托管的 Python 包 → **做法 A：nanobot**。
 - 想要桌面图形界面、要在一个任务里并行跑多个 agent 分工、要接本地推理模型让数据不出本机、要内置浏览器与终端工具包 → **做法 C：Eigent**。
 - 想要容器级文件系统隔离（容器只挂载你显式允许的目录）、不想让 agent 持有原始 API key（出站请求经凭据网关在请求时注入，支持按 agent 的策略和限流）、想按频道选择「各自独立 agent / 共享一个 agent / 折叠成单一共享会话」、且能接受「定制即改代码」→ **做法 D：NanoClaw**。它原生跑 Anthropic 官方 Claude Agent SDK，等于 Claude Code 的容器化 + 常驻化外壳，所以 Claude Code 必须在手边；换后端可以装 `/add-codex`、`/add-opencode`、`/add-ollama-provider`，provider 粒度是 per agent group。
 - 想要「会话只是界面、Task 才是持久执行状态」，想让已有的 Codex / Claude Code 被当成应用调用或注册为 Worker / Sub-agent，想让 agent 自己写一个小 Loop 去盯收件箱 / 仓库 / 信息流、只在有事时才唤醒主 agent，能接受自建一整套栈（Docker Compose，默认五个界面端口）→ **做法 E：Comma**。它和 NanoClaw 的区别值得先说清：NanoClaw 是「给 Claude Code 套一个容器化常驻外壳」，Comma 是「在上层编排多个已有 agent，并把 Task 变成跨设备、跨对话、跨界面延续的持久状态」；两者可以并存，Comma 调研原文也把 Claude Code 列为它可调用的对象之一。
-- 想跑在厂商托管的基础设施上、本机不留常驻进程、已经在用 Claude Code 和 Anthropic API、且能接受 beta 和托管平台的边界 → **做法 F：Claude Managed Agents 的 daily-brief 参考实现**。它的价值不在能力清单，而在给出了一套可直接复制的目录结构、配置文件和失败模式规则（bookmark、漏读上报、幂等记账），是七条路线里唯一把「怎么不悄悄出错」写进配置的；但它强依赖 Anthropic 托管平台，幂等性、漏读上报和成本上限都要自己实测。
+- 想跑在厂商托管的基础设施上、本机不留常驻进程、已经在用 Claude Code 和 Anthropic API、且能接受 beta 和托管平台的边界 → **做法 F：Claude Managed Agents 的 daily-brief 参考实现**。它的价值不在能力清单，而在给出了一套可直接复制的目录结构、配置文件和失败模式规则（bookmark、漏读上报、幂等记账），是八条路线里唯一把「怎么不悄悄出错」写进配置的；但它强依赖 Anthropic 托管平台，幂等性、漏读上报和成本上限都要自己实测。
 - 已经在用 Claude Code、要盯的是一个内容源（社交 / 媒体），想要「拆解流程 + inbox + 每日雷达 + 用自己语气重写」这套可迁移骨架，且能接受付费数据源 → **做法 G：Claude Code + instagram-research-tool**。它的关键设计是职责分离：数据源只负责取原始事实（数字、caption、视频），**所有分析由 Claude Code 自己做**，所以换数据源不影响拆解质量。工具以 Claude Code skill 形式组织（`.claude/skills/reel-research`、`outliers`、`research-setup`），用斜杠命令触发；自动化靠 cron / launchd 调 `claude -p`，不需要常驻网关。它和做法 F 的区别：F 跑在托管平台上、用配置文件定义 agent 和排期；G 跑在你本机的 Claude Code 里、用仓库文件定义数据源、口径和语气。
-- 如果团队里已经在用 OpenClaw 一类做法：nanobot 的 `nanobot gateway` 被作者描述为「从 OpenClaw 过来、把 agent 当长驻服务跑的人熟悉的入口」；CowAgent 的 Skill Hub 声明技能格式与 OpenClaw、Claude Code 互通，可共用同一套技能资产；NanoClaw 则反过来把 OpenClaw 当对比对象——README 自述对方近 50 万行代码、53 个配置文件、70+ 依赖、应用层权限校验、单 Node 进程共享内存，自己定位为「同样核心功能、但代码小到能读懂 + 容器隔离」，这些数字全部是作者主张、原文无法核实；Eigent 只声明定位与 Claude Cowork / Codex 相似，没有给对比数据、迁移路径或兼容性说明，不能当作已验证的替代方案。Comma 的调研没有提到 OpenClaw。
+- 你在 macOS 14+ Apple Silicon 上，已登录 Codex 或 Claude Code CLI，想把这些 CLI 变成常驻的 AI 队友（bot），要 cron 调度的 routines、按风险选的审批模式、逐线程 MCP token、可选的隔离 Linux VM，且能接受未签名 Release、README 未展开 UI 配置细节 → **做法 H：touri**。它把 Claude Code CLI 作为 runtime 接入，并在其上加常驻 bot、记忆、routines、逐线程 MCP token 与 VM 隔离；两者是叠加关系，不是替代。OpenCode 在 README 正文标题与 Features 里依据较弱，先别把它当成已支持。
+- 如果团队里已经在用 OpenClaw 一类做法：nanobot 的 `nanobot gateway` 被作者描述为「从 OpenClaw 过来、把 agent 当长驻服务跑的人熟悉的入口」；CowAgent 的 Skill Hub 声明技能格式与 OpenClaw、Claude Code 互通，可共用同一套技能资产；NanoClaw 则反过来把 OpenClaw 当对比对象——README 自述对方近 50 万行代码、53 个配置文件、70+ 依赖、应用层权限校验、单 Node 进程共享内存，自己定位为「同样核心功能、但代码小到能读懂 + 容器隔离」，这些数字全部是作者主张、原文无法核实；Eigent 只声明定位与 Claude Cowork / Codex 相似，没有给对比数据、迁移路径或兼容性说明，不能当作已验证的替代方案。Comma 的调研没有提到 OpenClaw。touri 的调研没有提到 OpenClaw。
 
 任选其一即可。同时开两个以上，两周后你分不清是哪个在起作用。
 
@@ -563,7 +568,7 @@ tools:
 第 4 条（压住篇幅，只有值得今天行动的条目才成一行）：
 
 ```text
-4. Decide. An item earns a line when the reader would act on it today, or it changes a decision they are about to make. When unsure, leave it out. Most days that is a few items, sometimes none. A count ("12 open reviews") is not an item; link the ones that are blocked. An item already in the ledger and still open is carried as one marked line ("still waiting, day 3"), not re-reported; a closed item is dropped without comment. Do not bring back a topic the preferences file has retired.
+4. Decide. An item earns a line when the reader would act on it today, or it changes a decision they are about to make. When unsure, leave it out. Most days that is a few items, sometimes none. A count ("12 open reviews") is not an item; link the ones that are blocked. An item already in the ledger and still open is carried as one marked line ("still waiting, day 3"), not re-reported; a closed item is dropped. Do not bring back a topic the preferences file has retired.
 ```
 
 第 5 条（发帖前复核，宁缺勿虚）：
@@ -685,15 +690,96 @@ claude -p "/outliers"
 
 **G-9 迁移到你的领域**：把同一套「数据源只取数 + Claude Code 分析 + 定时命令」结构换到你的场景（例如把 niche 换成你的关键词），看骨架是否仍成立。这一步是做法 G 对整篇手册的主要贡献——它示范了一个可迁移范式，而不是只教你做 Instagram。
 
-### 第 9 步：无论 A / B / C / D / E / F / G，都收敛到同一个最小闭环
+### 第 9 步（做法 H）：安装 touri，把 Codex / Claude Code CLI 变成常驻 bot
+
+前提：macOS 14 或更新版本，Apple Silicon；本机已安装并登录 Codex 或 Claude Code CLI；若要用可选的 bot-machine（隔离 VM）功能，需要 macOS 26 与 Apple `container` >= 1.5.0，低于此版本本机 bot 仍可用，machine 功能会自报为不可用。源码构建需要 Bun 1.2.21 或更新、Rust 1.90 或更新并带 `aarch64-apple-darwin` target。Release 构建目前未签名、未公证。
+
+**H-1 安装 Release（前提：macOS 14+、Apple Silicon，已登录 Codex 或 Claude Code CLI）。** 从 Releases 页面下载最新 `.dmg`，把 `touri.app` 拖进 `/Applications`。Release 构建未签名、未公证，首次启动会被 Gatekeeper 拦截。按原文三步走：
+
+1. 打开 `touri.app`，macOS 弹出警告并拒绝打开。
+2. 打开 System Settings > Privacy & Security，滚动到关于 touri 的提示，点 "Open Anyway"。
+3. 用密码确认。之后启动正常。
+
+macOS 15 及以后，Control-click > Open 不再能绕过 Gatekeeper，必须用上面这套步骤。或者用终端去掉隔离标记：
+
+```sh
+xattr -dr com.apple.quarantine /Applications/touri.app
+```
+
+**H-2 从源码构建（前提：Bun 1.2.21+；Rust 1.90+ 并带 `aarch64-apple-darwin` target）。**
+
+```sh
+bun install
+bun run build:sidecar
+bun run tauri build --bundles app
+open src-tauri/target/release/bundle/macos/touri.app
+```
+
+开发模式运行：
+
+```sh
+bun run build:sidecar && TOURI_SIDECAR_BIN="$PWD/src-tauri/binaries/touri-sidecar-aarch64-apple-darwin" bun run tauri dev
+```
+
+注意原文说明：签名、公证和 updater 已接线但被关闭（见 `docs/DECISIONS.md`）。
+
+**H-3 验证安装/构建是否真的可用。**
+
+```sh
+bun run typecheck
+bun run lint
+TOURI_BROWSER_HEADLESS=1 bun test sidecar/test
+(cd ui && bunx vitest run && bunx vite build && bunx playwright test)
+(cd src-tauri && cargo test && cargo clippy --all-targets -- -D warnings)
+```
+
+可选的、打真实 CLI 的冒烟测试：
+
+```sh
+TOURI_E2E_REAL_CLI=1 bun test sidecar/test/runtime/real-cli.test.ts
+```
+
+**H-4 从旧设置导入（先 dry run）。** 前提：有一份早期 bot 设置的数据目录，可在本机路径或通过 SSH 访问。导入器是幂等的，routine 以 disabled 状态导入，且从不读取凭据文件；SSH 源在远端只读（仅白名单文件，不写远端）。
+
+```sh
+TOURI_APP_DATA="$HOME/Library/Application Support/touri-dev" bun sidecar/src/importer/legacy/cli.ts --source ssh --host user@host.example --root '~/.legacy-app' --dry-run --all
+```
+
+去掉 `--dry-run` 才真正导入；`--bot <name>` 选择 bot；`--cwd-map <from>=<to>` 映射路径。
+
+**H-5 直接运行 sidecar / 接 MCP。**
+
+```sh
+TOURI_UI_TOKEN=dev-ui-token bun run sidecar/src/main.ts serve
+```
+
+该命令会往 stdout 打印一行 `SidecarHandshake` JSON。MCP stdio 模式只是连接运行中的 sidecar 的字节管道，只读逐线程 token 文件，不打开 SQLite：
+
+```sh
+bun run sidecar/src/main.ts mcp-stdio --thread <thread-id>
+```
+
+**H-6 运行时要留意的配置面**（README 只给了名称，未给字段级配置步骤）：
+
+- 审批模式：`on-request`、`workspace-write`、`full`——按任务风险选档。
+- MCP gateway 使用逐线程 token，并带审批提示。
+- computer use 是 opt-in，必须依赖可见指示器与 kill switch。
+- bot machine 通过 Apple `container` 起隔离 Linux VM；系统不满足条件时该功能报不可用。
+- 仓库规则：`packages/contracts/` 放共享类型、SQL schema 与 MCP tool schema，改这里必须先有 contract change；凭据从不被导入或存入 SQLite。
+
+**H-7 缺口提示**（原文未覆盖，试用时需自己摸索）：README 没有说明在 UI 里如何新建一个 bot、如何写 routine 的调度配置、overlap 与 catch-up 的具体参数怎么填。要照着手册用，需要补上 `docs/` 目录与界面内的说明。
+
+预期结果：验证链通过后，你能在 macOS 上跑起 touri，让 Codex 或 Claude Code CLI 变成常驻 bot；routines 可按 cron 调度运行，审批模式、逐线程 MCP token 与可选隔离 VM 提供权限和数据边界控制。
+
+### 第 10 步：无论 A / B / C / D / E / F / G / H，都收敛到同一个最小闭环
 
 这一步是整篇手册的核心，各份调研给出的建议一致：
 
-1. **实例只开本地访问**。Docker 优先；先不要把控制台暴露到外网（CowAgent 调研的建议就是先不要把 `web_host` 设为 `0.0.0.0`；Eigent 的 Quick Start 会连云端，要「不出本机」必须走 C-3 的本地部署；NanoClaw 默认本地构建、不联网，但要显式关掉匿名诊断并核对容器挂载清单；Comma 默认所有公开端口只绑 loopback，别急着按 E-5 暴露）。做法 F 没有本机实例，对应的是收紧 `environment.yaml` 的网络 allowlist——只放这个 brief 真正要访问的主机。做法 G 对应的是：数据源凭证只放 `.env` 且不提交，工具声明从不登录 Instagram、不用 cookies 或 session、不用你的账号抓取，下载的视频仅本地分析。
-2. **只配一个 Chat 模型**，不接多渠道，先把「模型能用」这一步单独确认掉。NanoClaw 对应的是：只配一个 provider（默认 Anthropic），装别的 provider skill 留到跑通之后。Comma 对应的是：先用 E-1 的 mock 模型跑通界面与登录，再用 E-2 配一个真实 provider，不要一上来就调 `COMMA_LLM_*` 全套参数。做法 F 对应的是：只接一个 GitHub MCP + 一个 Slack 目的地，别一上来就加第二个源。做法 G 对应的是：先跑一条 reel 或先看合成样本，别一上来就把 `provider` 和 `searchProvider` 都切到付费数据源。
-3. **只装 / 建一个技能或工具，范围严格限定在「一件你每周都要重复做的小事」**。装不到合适技能，就退回让 agent 用对话生成一个最小技能（CowAgent 用 `skill-creator`；NanoClaw 用自然语言直接对 Claude Code 改，或 `/customize`）。Comma 上对应的是：只给它一个 Task，并把 Allow operations 当总开关按需打开。做法 G 上对应的是：先用 `reel-research` 这一个 skill 把单条拆解跑顺，`outliers` 留到下一步。
-4. **建一个定时任务**，例如固定时间汇总某个信息源并推送，观察它能否在无人干预下完成（nanobot 用 Automations / Tasks，前提是网关常驻；CowAgent 用内置 `scheduler`，在 Web console 里管理；Eigent 用 Automation；NanoClaw 用触发词让 agent 建 recurring job，用 `list all scheduled tasks across groups` 核对、`pause` 暂停；Comma 用 Routines 做时间触发、用 Loops 做事件触发，用看板核对它有没有真的推进；做法 F 用 `deployment.md` 里的 cron + timezone；做法 G 用 cron / launchd 调 `claude -p "/outliers"`）。**做法 F 的做法值得在这里单独强调：先把场景缩到「单一来源 + 单一收件人 + 每日一次」，并用手动触发而不是等排期来验证第一次运行。** 做法 G 同理：先手动跑 `/outliers`，确认产出结构对了，再挂到 cron 上。
-5. **让它连续处理同一类任务 5–10 次**，每次都检查两件事：一是任务是否完成，二是后续对话里它是否自动检索到了之前的记忆 / 知识，而不需要你重新交代背景。
+1. **实例只开本地访问**。Docker 优先；先不要把控制台暴露到外网（CowAgent 调研的建议就是先不要把 `web_host` 设为 `0.0.0.0`；Eigent 的 Quick Start 会连云端，要「不出本机」必须走 C-3 的本地部署；NanoClaw 默认本地构建、不联网，但要显式关掉匿名诊断并核对容器挂载清单；Comma 默认所有公开端口只绑 loopback，别急着按 E-5 暴露）。做法 F 没有本机实例，对应的是收紧 `environment.yaml` 的网络 allowlist——只放这个 brief 真正要访问的主机。做法 G 对应的是：数据源凭证只放 `.env` 且不提交，工具声明从不登录 Instagram、不用 cookies 或 session、不用你的账号抓取，下载的视频仅本地分析。做法 H 对应的是：数据默认存 `~/Library/Application Support/touri` 下的 SQLite，无遥测、无需账号；凭据放 macOS Keychain，不进数据库、日志或导出；可选云托管是单独 opt-in 协议，试用期别开。
+2. **只配一个 Chat 模型**，不接多渠道，先把「模型能用」这一步单独确认掉。NanoClaw 对应的是：只配一个 provider（默认 Anthropic），装别的 provider skill 留到跑通之后。Comma 对应的是：先用 E-1 的 mock 模型跑通界面与登录，再用 E-2 配一个真实 provider，不要一上来就调 `COMMA_LLM_*` 全套参数。做法 F 对应的是：只接一个 GitHub MCP + 一个 Slack 目的地，别一上来就加第二个源。做法 G 对应的是：先跑一条 reel 或先看合成样本，别一上来就把 `provider` 和 `searchProvider` 都切到付费数据源。做法 H 对应的是：先只配一个 runtime（Codex 或 Claude Code），别同时接两个；审批模式先用 `on-request`，别一上来用 `full`。
+3. **只装 / 建一个技能或工具，范围严格限定在「一件你每周都要重复做的小事」**。装不到合适技能，就退回让 agent 用对话生成一个最小技能（CowAgent 用 `skill-creator`；NanoClaw 用自然语言直接对 Claude Code 改，或 `/customize`）。Comma 上对应的是：只给它一个 Task，并把 Allow operations 当总开关按需打开。做法 G 上对应的是：先用 `reel-research` 这一个 skill 把单条拆解跑顺，`outliers` 留到下一步。做法 H 上对应的是：先只建一个 routine 跑低风险重复任务，先别开 computer use，也先别管 bot machine。
+4. **建一个定时任务**，例如固定时间汇总某个信息源并推送，观察它能否在无人干预下完成（nanobot 用 Automations / Tasks，前提是网关常驻；CowAgent 用内置 `scheduler`，在 Web console 里管理；Eigent 用 Automation；NanoClaw 用触发词让 agent 建 recurring job，用 `list all scheduled tasks across groups` 核对、`pause` 暂停；Comma 用 Routines 做时间触发、用 Loops 做事件触发，用看板核对它有没有真的推进；做法 F 用 `deployment.md` 里的 cron + timezone；做法 G 用 cron / launchd 调 `claude -p "/outliers"`；做法 H 用 touri 的 routines，按 cron 调度 bot 运行，带 overlap 与 catch-up 控制，但原文没给具体参数写法，需要你自己在界面或 `docs/` 里补）。**做法 F 的做法值得在这里单独强调：先把场景缩到「单一来源 + 单一收件人 + 每日一次」，并用手动触发而不是等排期来验证第一次运行。** 做法 G 同理：先手动跑 `/outliers`，确认产出结构对了，再挂到 cron 上。做法 H 同理：先手动或临时触发一次 routine，确认 bot 能跑完，再让它按 cron 常驻。
+5. **让它连续处理同一类任务 5–10 次**，每次都检查两件事：一是任务是否完成，二是后续对话里它是否自动检索到了之前的记忆 / 知识，而不需要你重新交代背景。touri 的 persistent bots 声明每个 bot 有自己的指令、记忆、技能和可分支对话历史，但这是功能声明，需要你自己抽查。
 6. **从第一次运行就开始记录指标**（见下一节）。否则两周后你只有印象，没有依据。
 7. **给有副作用的动作定一条幂等规则**：先说清楚「怎么算发出去了」，再让它动手，否则你会在几周后发现自己收到了重复的简报，或者根本不知道某天到底发没发。
 
@@ -719,6 +805,8 @@ claude -p "/outliers"
 
 **如果选的是做法 G，按这个顺序收敛**：G-1 克隆进 Claude Code → G-3 跑 `npm run selftest`（期望 exit 0）并打开合成样本，判断产出结构合不合用 → G-2 跑 `/research-setup`，把你的 niche 和三条 caption 喂进去 → 用免费的 yt-dlp 路线对一条公开 reel 跑 `/reel-research <link>`，确认八个板块都出、缺失数字留空 → 想要每日雷达再切到 Apify，跑一次 `/outliers` 并核对 24h / 2000 / 去重 / 排名规则 → **最后**才挂 cron / launchd 做自动化。顺序反了的话，一旦报告出问题，你分不清是数据源取不到数、查询写得不对，还是分析步骤本身有毛病。
 
+**如果选的是做法 H，按这个顺序收敛**：先确认 macOS 14+ Apple Silicon 与 Codex / Claude Code CLI 登录 → 按 H-1 装 Release 并处理 Gatekeeper，或按 H-2 从源码构建 → 跑 H-3 的验证链，确认 typecheck、lint、sidecar 测试、UI 测试、Rust 测试与 clippy 都过 → 只配一个 runtime，只建一个 routine 跑低风险重复任务，审批模式先用 `on-request` → 用 MCP gateway 的逐线程 token 与审批提示核对工具权限 → **最后**才考虑 computer use（必须确认可见指示器与 kill switch）和 bot machine（需 macOS 26 + Apple `container` >= 1.5.0）。顺序反了的话，一旦 bot 行为异常，你分不清是 runtime、routine 配置、审批模式还是隔离 VM 的问题。
+
 预期结果：两周内你拿到一组自己的数字，而不是一份 README 的承诺。
 
 ## 怎么判断变好了
@@ -728,25 +816,25 @@ claude -p "/outliers"
 **可观察的指标**
 
 - **定时任务按时完成率**，以及需要你人工介入的次数（按次记录）。
-- **单次任务的实际耗时与返工次数**，对比「你自己做」或「用普通对话式 AI 做」的基线。Eigent 调研把它拆成两条：人工耗时差（从全程自己做变成只审核产出物）和首次通过率（产出需要返工或重做的比例）。做法 G 上同样要自测这条基线：手工拆解一条 reel 需要多久、能产出哪些字段，用工具后耗时和字段覆盖怎么变。
+- **单次任务的实际耗时与返工次数**，对比「你自己做」或「用普通对话式 AI 做」的基线。Eigent 调研把它拆成两条：人工耗时差（从全程自己做变成只审核产出物）和首次通过率（产出需要返工或重做的比例）。做法 G 上同样要自测这条基线：手工拆解一条 reel 需要多久、能产出哪些字段，用工具后耗时和字段覆盖怎么变。做法 H 上要测：以前手动跑 Codex / Claude Code CLI 的耗时，和交给 touri bot + routine 后的耗时、返工次数对比。
 - **产出字段完整率**（做法 G 可直接观察的一项）：八个板块里哪些因数据源缺失而为空，哪些是实际产出的；以及缺失的数字有没有被留空，而不是被编造。
 - **筛选规则可复现性**（做法 G）：`/outliers` 报告是否稳定生成，24h 窗口 / 48h 上限 / `minViews` 2000 / 去重合并 / 排名这几条规则是否每次一致。
-- **Token 成本**：算清每完成一件任务花多少钱。CowAgent README 明确警告 Agent 模式消耗显著多于普通对话，这是最容易失控的一项。NanoClaw 的定时任务可配 script gates，无活时不唤醒 agent；Comma 的 Loops 同理——只在有事时唤醒 agent，安静的一小时不消耗大模型 token（两处具体写法原文都只给了链接或描述，没有正文）。做法 F 的 `deployment.md` 里有一个 budget 字段，说明成本上限是它的配置项之一，但**原文没给这个字段的配置方式和数值**，需要你自己在试用里定死。做法 G 的成本不在 token，而在数据源：一次完整每日搜索约 $1.70、Sandcastles 起 $49/月，要单独记账。
+- **Token 成本**：算清每完成一件任务花多少钱。CowAgent README 明确警告 Agent 模式消耗显著多于普通对话，这是最容易失控的一项。NanoClaw 的定时任务可配 script gates，无活时不唤醒 agent；Comma 的 Loops 同理——只在有事时唤醒 agent，安静的一小时不消耗大模型 token（两处具体写法原文都只给了链接或描述，没有正文）。做法 F 的 `deployment.md` 里有一个 budget 字段，说明成本上限是它的配置项之一，但**原文没给这个字段的配置方式和数值**，需要你自己在试用里定死。做法 G 的成本不在 token，而在数据源：一次完整每日搜索约 $1.70、Sandcastles 起 $49/月，要单独记账。做法 H 的成本取决于你接入的 Codex / Claude Code CLI 的用量，touri 本身没有给出成本上限配置或成本数据，需要你按 runtime 用量自测。
 - **技能复用次数**：同一个技能被稳定调用多少次；如果一周内没有被重复调用，说明它没有固化成产能。
-- **记忆有效性**：随机抽查后续会话，看它是否引用了正确的历史结论，而不是要你重新交代背景。
+- **记忆有效性**：随机抽查后续会话，看它是否引用了正确的历史结论，而不是要你重新交代背景。做法 H 的 persistent bots 声明每个 bot 有自己的记忆和可分支对话历史，但这是功能声明，需要你抽查验证。
 - **重发与漏读上报**（做法 F 调研给出的两个可观察失败模式）：同一个 brief 有没有被重复发出去；某个源读不到时，产出里有没有点名没读到的东西，而不是报「nothing new」。调研明确说**幂等性和漏读上报都需要你自己实测**，它是规则，不是已验证的结果。
-- **数据边界**（Eigent 调研建议）：在本地部署模式下，能否确认文件、凭据、上下文没有被送出本机。NanoClaw 上这一项最容易做成可检查项——容器只挂载你显式允许的目录，且 agent 不持有原始 API key（由凭据网关在请求时注入），你可以直接拿挂载清单和出站策略来核对；但它同样没有第三方验证，别把「设计如此」当成「实测成立」。Comma 上的对应说法是「云端干活、设备管身份」——长任务跑在它自己的环境，敏感身份、会话、支付和私密数据留在你自己的设备；这是 README 的定位描述，需要你自己在试用里核实。做法 F 上对应的是 `environment.yaml` 的 allowlist 加 vault 的 `networking.allowed_hosts`：沙箱里只有占位符，真 token 在请求离开沙箱时才注入，同样需要你自己核对实际放行了哪些主机。做法 G 上对应的是：`.env` 里的数据源凭证有没有被提交，以及工具声明的「不用 cookies / session、不用你的账号抓取」是否在实际运行中成立。
-- **失败可诊断性**（Eigent 调研建议）：任务失败时能否从日志 / 步骤回放定位原因。NanoClaw 的路径是把排障直接交给 Claude Code（问它为什么调度没跑、日志里有什么），或 `/debug`；Comma 的路径是看板四态——卡在 Needs Review 说明在等你决定，长期停在 Backlog / In progress 说明 loop 没有推进；做法 F 的路径是 session log（源失败的错误在这里，agent 那侧看不到）加 memory store 里的 `runs/<date>.md`；做法 G 的路径是 `npm run selftest` 的退出码和单条命令的即时输出。
+- **数据边界**（Eigent 调研建议）：在本地部署模式下，能否确认文件、凭据、上下文没有被送出本机。NanoClaw 上这一项最容易做成可检查项——容器只挂载你显式允许的目录，且 agent 不持有原始 API key（由凭据网关在请求时注入），你可以直接拿挂载清单和出站策略来核对；但它同样没有第三方验证，别把「设计如此」当成「实测成立」。Comma 上的对应说法是「云端干活、设备管身份」——长任务跑在它自己的环境，敏感身份、会话、支付和私密数据留在你自己的设备；这是 README 的定位描述，需要你自己在试用里核实。做法 F 上对应的是 `environment.yaml` 的 allowlist 加 vault 的 `networking.allowed_hosts`：沙箱里只有占位符，真 token 在请求离开沙箱时才注入，同样需要你自己核对实际放行了哪些主机。做法 G 上对应的是：`.env` 里的数据源凭证有没有被提交，以及工具声明的「不用 cookies / session、不用你的账号抓取」是否在实际运行中成立。做法 H 上对应的是：数据是否留在 `~/Library/Application Support/touri` 下的 SQLite、凭据是否只进 macOS Keychain 而不进数据库/日志/导出、可选云托管是否保持关闭。
+- **失败可诊断性**（Eigent 调研建议）：任务失败时能否从日志 / 步骤回放定位原因。NanoClaw 的路径是把排障直接交给 Claude Code（问它为什么调度没跑、日志里有什么），或 `/debug`；Comma 的路径是看板四态——卡在 Needs Review 说明在等你决定，长期停在 Backlog / In progress 说明 loop 没有推进；做法 F 的路径是 session log（源失败的错误在这里，agent 那侧看不到）加 memory store 里的 `runs/<date>.md`；做法 G 的路径是 `npm run selftest` 的退出码和单条命令的即时输出；做法 H 的路径是 H-3 的验证链（typecheck、lint、sidecar 测试、UI 测试、Rust 测试与 clippy）以及 `TOURI_E2E_REAL_CLI=1` 的真实 CLI 冒烟测试。
 
-**注意区分「可观测」和「有效果」**：nanobot 的 WebUI 可以展开查看推理过程、工具调用、文件改动、差分、命令输出和产出物，输入区的上下文指示器显示上下文大小、每轮输入 token 和 provider 上报的缓存复用，还有上下文压缩（compaction）时间线，配置里可接 Langfuse；CowAgent 有上下文用量可视化、`/compact` 上下文压缩、模型缓存命中率提升；NanoClaw 有 per-checkout id、可逐组确认的卸载清单、可关闭的匿名诊断、容器与凭据网关；做法 F 有 session log、run record 和 ledger；做法 G 有 `selftest` 退出码和每条的互动率。这些说明「用了多少」「装在哪」，不说明「是否改善」，不能拿来当效果证据。同理，Eigent 的 15,457 stars、NanoClaw 的 30866 stars、做法 G 的 31 stars 只反映热度，不是效果证据；Comma 的 172 stars 同理。
+**注意区分「可观测」和「有效果」**：nanobot 的 WebUI 可以展开查看推理过程、工具调用、文件改动、差分、命令输出和产出物，输入区的上下文指示器显示上下文大小、每轮输入 token 和 provider 上报的缓存复用，还有上下文压缩（compaction）时间线，配置里可接 Langfuse；CowAgent 有上下文用量可视化、`/compact` 上下文压缩、模型缓存命中率提升；NanoClaw 有 per-checkout id、可逐组确认的卸载清单、可关闭的匿名诊断、容器与凭据网关；做法 F 有 session log、run record 和 ledger；做法 G 有 `selftest` 退出码和每条的互动率；做法 H 有构建、验证、导入与 sidecar/MCP 命令，但这些只说明「软件正常工作」，不说明「工作产出改善」。同理，Eigent 的 15,457 stars、NanoClaw 的 30866 stars、做法 G 的 31 stars、做法 H 的 35 stars 只反映热度，不是效果证据；Comma 的 172 stars 同理。
 
 **Comma 独有的「运行时可靠性」怎么用**：原文列出六条被检查的性质——已接受的工作在失败和重启后不会静默丢失；失败的回复不算已完成工作；有副作用的操作在开始前先记录；被中断的变更操作不会被意外执行两次；过期 worker 不能覆盖更新的 agent 状态；数据只在策略允许的边界间流动。这些性质由 Lean 机器检查和 TLA+ 模型检查覆盖，可以作为「它不会悄悄把事情丢掉」的观察项。但原文**明确声明：形式化验证不证明模型判断或任务成功**，它只验证「即使出错，运行时仍按我们设计的规则行事」。不要把运行时可靠误读成结果可靠。
 
-**最小试用方式**：单机跑通一个实例，只开本地访问（Eigent 若走 Quick Start 会连云端；做法 F 没有本机实例，对应的是收紧 allowlist），只配一个模型，装 1 个技能，建 1 个定时任务，连续跑 5–10 次同类任务。Comma 的零成本入口是 E-1 的 `make dev` + mock 模型。做法 F 的最小场景是「单一来源 + 单一收件人 + 每日一次」，并且第一次用手动触发而不是等排期。做法 G 的最小场景是：不花一分钱，`selftest` + 合成样本 + 一条用 yt-dlp 跑的公开 reel，先判断产出结构合不合用。
+**最小试用方式**：单机跑通一个实例，只开本地访问（Eigent 若走 Quick Start 会连云端；做法 F 没有本机实例，对应的是收紧 allowlist；做法 H 是 local-first macOS 应用，数据默认本机 SQLite、凭据 Keychain，但 Release 未签名），只配一个模型，装 1 个技能，建 1 个定时任务，连续跑 5–10 次同类任务。Comma 的零成本入口是 E-1 的 `make dev` + mock 模型。做法 F 的最小场景是「单一来源 + 单一收件人 + 每日一次」，并且第一次用手动触发而不是等排期。做法 G 的最小场景是：不花一分钱，`selftest` + 合成样本 + 一条用 yt-dlp 跑的公开 reel，先判断产出结构合不合用。做法 H 的最小场景是：只配一个 runtime（Codex 或 Claude Code），跑通 H-3 验证链，只建一个 routine 跑低风险重复任务，审批模式先用 `on-request`，先不开 computer use 和 bot machine。
 
-**试多久**：nanobot 调研建议把这件周期性工作配成 automation 跑两周；CowAgent 调研建议 1–2 周；Eigent 调研未给观察期长度，沿用两周作为默认观察期；NanoClaw 调研建议 1 天内搭完、2 周判断；Comma 调研建议把一个真实长周期任务交给 Task + Loop 跑一两周；做法 F 的调研没给观察期，沿用两周；做法 G 的调研也没给观察期，沿用两周。统一按两周执行。
+**试多久**：nanobot 调研建议把这件周期性工作配成 automation 跑两周；CowAgent 调研建议 1–2 周；Eigent 调研未给观察期长度，沿用两周作为默认观察期；NanoClaw 调研建议 1 天内搭完、2 周判断；Comma 调研建议把一个真实长周期任务交给 Task + Loop 跑一两周；做法 F 的调研没给观察期，沿用两周；做法 G 的调研也没给观察期，沿用两周；做法 H 的调研没给观察期，沿用两周。统一按两周执行。
 
-**降级 / 放弃条件**（出现任一即可停）：一周内跑不出任何可复用的稳定产出；或 token 成本明显高于人工 / 普通对话方案；或必须开放外网与高权限才能用；或反复出现重发 / 漏发却查不出原因。Eigent 上的等价说法是：只有在那个周期任务上做到「人工时间明显下降且返工比例可接受」，才考虑纳入日常工作流，在此之前保持 try 状态。NanoClaw 上还可以加一条：如果为了让它跑起来必须持续改代码而你又不想维护这份 fork，直接停。Comma 上再加两条：如果你不打算长期维护 Elixir/Lean/TLA+ 这套重栈，别把它留在日常工作流；除运行时形式化验证外它没有任何任务成功率或效果数据，不宜直接采用。做法 F 上再加一条：它仍处于 beta、强依赖 Anthropic 托管平台，如果幂等性、漏读上报或成本上限中任何一项在两周期内没测清楚，就不要把它接到真实的信息源和真实收件人上。做法 G 上再加两条：如果拆解产出的 "My version" 从没被真正用于创作、或从选题到出稿的周期没有缩短，那它只是好看；如果每月数据源花费（Apify 约 $1.70/次搜索，或 Sandcastles $49/月起）换不回对应的产出，直接停。出现任一情况，把项目从 try 降为 watch，只在观察清单里跟踪；NanoClaw 可以直接用 `bash nanoclaw.sh --uninstall` 干净回滚，不需要留一台挂着的机器，Comma 用 `docker compose down` 停栈即可（记得不要加 `-v`，除非确实要删实例），做法 F 停掉排期即可、本机不留东西，做法 G 停掉 cron / launchd 任务、删掉 clone 下来的目录即可。
+**降级 / 放弃条件**（出现任一即可停）：一周内跑不出任何可复用的稳定产出；或 token 成本明显高于人工 / 普通对话方案；或必须开放外网与高权限才能用；或反复出现重发 / 漏发却查不出原因。Eigent 上的等价说法是：只有在那个周期任务上做到「人工时间明显下降且返工比例可接受」，才考虑纳入日常工作流，在此之前保持 try 状态。NanoClaw 上还可以加一条：如果为了让它跑起来必须持续改代码而你又不想维护这份 fork，直接停。Comma 上再加两条：如果你不打算长期维护 Elixir/Lean/TLA+ 这套重栈，别把它留在日常工作流；除运行时形式化验证外它没有任何任务成功率或效果数据，不宜直接采用。做法 F 上再加一条：它仍处于 beta、强依赖 Anthropic 托管平台，如果幂等性、漏读上报或成本上限中任何一项在两周期内没测清楚，就不要把它接到真实的信息源和真实收件人上。做法 G 上再加两条：如果拆解产出的 "My version" 从没被真正用于创作、或从选题到出稿的周期没有缩短，那它只是好看；如果每月数据源花费（Apify 约 $1.70/次搜索，或 Sandcastles $49/月起）换不回对应的产出，直接停。做法 H 上再加两条：如果 Windows / Linux 是你的主环境，或者企业策略禁止绕过 Gatekeeper，直接停；如果 README 没给 UI 新建 bot、routine 调度、overlap/catch-up 参数，而你又不愿意查 `docs/` 或界面说明，把它降为 watch。出现任一情况，把项目从 try 降为 watch，只在观察清单里跟踪；NanoClaw 可以直接用 `bash nanoclaw.sh --uninstall` 干净回滚，不需要留一台挂着的机器，Comma 用 `docker compose down` 停栈即可（记得不要加 `-v`，除非确实要删实例），做法 F 停掉排期即可、本机不留东西，做法 G 停掉 cron / launchd 任务、删掉 clone 下来的目录即可，做法 H 退出 touri、关闭 sidecar、按需删掉 `/Applications/touri.app` 与 `~/Library/Application Support/touri` 即可。
 
 ## 常见坑
 
@@ -781,15 +869,21 @@ claude -p "/outliers"
 - **以为 NanoClaw 有配置文件可改行为**。它的做法是不用配置文件，直接对 Claude Code 说要什么，或跑 `/customize`；想加频道、换 provider 也只能通过 `/add-<channel>` 这类 skill，而 skill 需要在 Claude Code 里执行。
 - **忘了关匿名安装诊断**。NanoClaw 的匿名诊断默认开启，用 `NANOCLAW_NO_DIAGNOSTICS=1` 关闭；可选账号会看到你的邮箱和拉取时间，只用于预构建加固镜像和托管 Slack app。
 - **卸载时以为会删干净一切**。NanoClaw 的卸载器是 per-checkout 的：只删属于这份拷贝的后台服务、容器与镜像、应用数据与日志、agent 文件和这份拷贝的网关 agent，共享的网关服务、你的凭据、机器上其他拷贝都不动；最后要手动删掉 checkout 目录。先跑 `--dry-run` 看一眼要删什么。
-- **文档有缺口就卡住**。CowAgent 的 MCP 集成只有一句描述、没有 `mcp.json` 示例，技能创作只有「用对话生成」没有演示，需查官方文档页；Eigent 的本地部署命令在 `server/README_EN.md`、MCP / Skill 配置在 `docs.eigent.ai`、用例步骤在官网 guide，都不在 README 正文里；nanobot 的上下文与隐私用法（不同任务用不同 topic、Temporary chat 不写历史或长期记忆、一个 workbench 最多并排四个会话）分散在 README 里；NanoClaw 的定时任务 script gates 具体写法和 `docs/` 里各文档细节，原文只有链接、没有正文；Comma 的公开部署、升级、恢复细节在 `systems/DEPLOYMENT.md#self-hosted-compose`，本次材料只给了这一入口，要照做必须先另行查阅；做法 F 的部署步骤在调研里被截断，运行步骤八条只摘了两条，都需要回原文补；做法 G 的 cron / launchd 示例在 `docs/iphone-shortcut.md`，本次材料未含该文档正文。
-- **把作者自述当事实**。CowAgent 的 stars 数是仓库自报；「proactively plans」「self-evolution」「grows alongside you」「Agent Harness engineering 的参考实现」、记忆分层与 Deep Dream、知识库自动整理与知识图谱、Self-Evolution 的具体效果，全部是自述，没有案例或数据支撑。Eigent 的「boosts productivity」「exceptional productivity」「turn your most complex workflows into automated tasks」同样无任何量化。nanobot 的能力清单同样只是项目自述。NanoClaw 对 OpenClaw 的对比数字（近 50 万行代码、53 个配置文件、70+ 依赖、应用层安全 vs OS 级隔离）以及「Claude 能安全修改这么小的代码库」也都是作者主张，原文无法核实。Comma 的「sessionless / relentless / swarm intelligence」效果性表述（减少上下文压缩、漂移、污染）、7×24 持续完成目标、「你管目标不管 swarm」，同样没有任何成功率、耗时或成本对比数据；示例视频（购物比价与结账、交付工作与生活）在文本中没有对应指标。做法 F 的「一条过期的 still waiting on you 比十条漏掉的条目更伤信任」和那套条目取舍标准同样是作者判断，参考实现本身没给出任何效果数据。做法 G 的所有功能描述、"the breakdown is the same whichever one you pick"、"about 10 minutes" 的设置时长，同样只是 README 陈述。
-- **定时任务不生效**。nanobot 的定时投递要靠网关常驻，`nanobot gateway --background` 是唯一把它提升为持久后台模式的命令；关掉终端就等着收不到结果。NanoClaw 侧则要先确认宿主进程和容器都在跑，再用 `list all scheduled tasks across groups` 确认任务确实登记了。Comma 侧要先确认实例在跑（`docker compose up -d --build` 之后的容器没停），Loops 只在事件触发时才唤醒 agent——如果它一直没动静，先确认你盯的那个信息源真的没有新事件。做法 F 侧要先确认自己不是把「源读不到」当成了「今天没新闻」，去 session log 里找 error。做法 G 侧要先手动跑一次 `claude -p "/outliers"` 看它是否正常输出，再去查 cron / launchd 有没有真的触发（做法 G 没有常驻进程，所以「不生效」几乎总是定时器或环境变量的问题，不是网关掉了）。
-- **试用期就开放外网或高权限**。CowAgent README 明确说 Agent 能访问本机操作系统，只能在可信环境部署；服务器暴露控制台必须设 `web_password` 并限制端口。试用阶段就把实例锁在 localhost。NanoClaw 侧对应的是：先核对容器挂载清单、别急着用 `/manage-channels` 把多个频道折进一个共享会话，也先别让 agent 去改自己的代码。Comma 侧对应的是：默认端口本来就只绑 loopback，先别按 E-5 暴露；Allow operations 先别开。做法 F 侧对应的是：`environment.yaml` 的 allowlist 只放必需主机，vault 里每条凭据都设 `allowed_hosts`。做法 G 侧对应的是：数据源凭证放 `.env` 且不提交，别为了省事把 Instagram 账号密码或 cookies 交给工具——工具自己的声明就是不登录、不用 cookies / session。
+- **把 touri 的未签名 Release 当正常安装**。首次启动会被 Gatekeeper 拦截；要按 System Settings > Privacy & Security 里的 "Open Anyway" 三步走，或用 `xattr -dr com.apple.quarantine /Applications/touri.app`。macOS 15 及以后 Control-click > Open 不再能绕过。
+- **以为 touri 能在 Windows / Linux 上用**。它仅 macOS、仅 Apple Silicon，其他平台完全用不上。
+- **以为 touri 的 bot-machine 开箱可用**。它需要 macOS 26 与 Apple `container` >= 1.5.0；低于此版本本机 bot 仍可用，machine 功能会自报为不可用。
+- **以为 touri README 讲了怎么新建 bot、配 routine**。原文没有说明在 UI 里如何新建 bot、如何写 routine 的调度配置、overlap 与 catch-up 的具体参数怎么填；要照着手册用，需要补 `docs/` 目录与界面内的说明。
+- **把 touri 当 Claude Code 的替代品**。它是编排/外壳层，把 Claude Code CLI 作为 runtime 接入，并在其上加常驻 bot、记忆、routines、逐线程 MCP token 与 VM 隔离；两者是叠加关系。OpenCode 在 README 正文标题与 Features 里依据较弱，先别把它当成已支持。
+- **把 touri 的功能声明当效果数据**。persistent bots、routines 带 overlap 和 catch-up 控制、agent browser 带人工接管、computer use 带可见指示器和 kill switch 都是 README 功能声明，没有截图、演示、案例或效果数据；仓库仅 35 stars，Apache-2.0。
+- **文档有缺口就卡住**。CowAgent 的 MCP 集成只有一句描述、没有 `mcp.json` 示例，技能创作只有「用对话生成」没有演示，需查官方文档页；Eigent 的本地部署命令在 `server/README_EN.md`、MCP / Skill 配置在 `docs.eigent.ai`、用例步骤在官网 guide，都不在 README 正文里；nanobot 的上下文与隐私用法（不同任务用不同 topic、Temporary chat 不写历史或长期记忆、一个 workbench 最多并排四个会话）分散在 README 里；NanoClaw 的定时任务 script gates 具体写法和 `docs/` 里各文档细节，原文只有链接、没有正文；Comma 的公开部署、升级、恢复细节在 `systems/DEPLOYMENT.md#self-hosted-compose`，本次材料只给了这一入口，要照做必须先另行查阅；做法 F 的部署步骤在调研里被截断，运行步骤八条只摘了两条，都需要回原文补；做法 G 的 cron / launchd 示例在 `docs/iphone-shortcut.md`，本次材料未含该文档正文；做法 H 的 UI 新建 bot、routine 调度配置、overlap/catch-up 参数均未展开，需查 `docs/` 或界面说明。
+- **把作者自述当事实**。CowAgent 的 stars 数是仓库自报；「proactively plans」「self-evolution」「grows alongside you」「Agent Harness engineering 的参考实现」、记忆分层与 Deep Dream、知识库自动整理与知识图谱、Self-Evolution 的具体效果，全部是自述，没有案例或数据支撑。Eigent 的「boosts productivity」「exceptional productivity」「turn your most complex workflows into automated tasks」同样无任何量化。nanobot 的能力清单同样只是项目自述。NanoClaw 对 OpenClaw 的对比数字（近 50 万行代码、53 个配置文件、70+ 依赖、应用层安全 vs OS 级隔离）以及「Claude 能安全修改这么小的代码库」也都是作者主张，原文无法核实。Comma 的「sessionless / relentless / swarm intelligence」效果性表述（减少上下文压缩、漂移、污染）、7×24 持续完成目标、「你管目标不管 swarm」，同样没有任何成功率、耗时或成本对比数据；示例视频（购物比价与结账、交付工作与生活）在文本中没有对应指标。做法 F 的「一条过期的 still waiting on you 比十条漏掉的条目更伤信任」和那套条目取舍标准同样是作者判断，参考实现本身没给出任何效果数据。做法 G 的所有功能描述、"the breakdown is the same whichever one you pick"、"about 10 minutes" 的设置时长，同样只是 README 陈述。做法 H 的 persistent bots、routines 带 overlap 和 catch-up 控制、agent browser 带人工接管、computer use 带可见指示器和 kill switch 也都是 README 功能声明，没有截图、演示、案例或效果数据。
+- **定时任务不生效**。nanobot 的定时投递要靠网关常驻，`nanobot gateway --background` 是唯一把它提升为持久后台模式的命令；关掉终端就等着收不到结果。NanoClaw 侧则要先确认宿主进程和容器都在跑，再用 `list all scheduled tasks across groups` 确认任务确实登记了。Comma 侧要先确认实例在跑（`docker compose up -d --build` 之后的容器没停），Loops 只在事件触发时才唤醒 agent——如果它一直没动静，先确认你盯的那个信息源真的没有新事件。做法 F 侧要先确认自己不是把「源读不到」当成了「今天没新闻」，去 session log 里找 error。做法 G 侧要先手动跑一次 `claude -p "/outliers"` 看它是否正常输出，再去查 cron / launchd 有没有真的触发（做法 G 没有常驻进程，所以「不生效」几乎总是定时器或环境变量的问题，不是网关掉了）。做法 H 侧要先确认 touri 应用与 sidecar 在运行、bot 已创建、routine 已启用，再看 H-3 验证链是否通过、MCP gateway 的逐线程 token 是否有效——原文没给 routine 调度配置的字段说明，所以「不生效」也可能是因为参数没写对，需要查 `docs/` 或界面说明。
+- **试用期就开放外网或高权限**。CowAgent README 明确说 Agent 能访问本机操作系统，只能在可信环境部署；服务器暴露控制台必须设 `web_password` 并限制端口。试用阶段就把实例锁在 localhost。NanoClaw 侧对应的是：先核对容器挂载清单、别急着用 `/manage-channels` 把多个频道折进一个共享会话，也先别让 agent 去改自己的代码。Comma 侧对应的是：默认端口本来就只绑 loopback，先别按 E-5 暴露；Allow operations 先别开。做法 F 侧对应的是：`environment.yaml` 的 allowlist 只放必需主机，vault 里每条凭据都设 `allowed_hosts`。做法 G 侧对应的是：数据源凭证放 `.env` 且不提交，别为了省事把 Instagram 账号密码或 cookies 交给工具——工具自己的声明就是不登录、不用 cookies / session。做法 H 侧对应的是：数据默认本机 SQLite、凭据只进 Keychain；审批模式先用 `on-request`，别一上来用 `full`；computer use 先别开，要开也必须确认可见指示器与 kill switch 都在；bot machine 先别用，除非系统满足 macOS 26 + Apple `container` >= 1.5.0。
 - **pip 报 `externally-managed-environment`**：改用一键安装器、`uv tool install nanobot-ai`、`pipx install nanobot-ai`，或装进虚拟环境。
 - **`nanobot` 不在 PATH**：用 `uv tool run --from nanobot-ai nanobot ...` 或 `pipx run --spec nanobot-ai nanobot ...`。
 - **拉完代码忘了同步依赖（Eigent）**：前端要在项目根目录 `npm install`，后端要 `cd backend && uv sync`，两步都做。
 - **技能装不通就放弃**。退回用 `skill-creator` 生成一个最小技能，范围严格限定在「一件你每周都要重复做的小事」。
-- **把所有任务塞进同一个会话**。nanobot 支持按 topic 分开任务，并用 Temporary chat 做临时对话（不写入历史或长期记忆）；混在一起会污染记忆检索，也会让「记忆是否有效」这项指标失效。NanoClaw 上用 `/manage-channels` 决定「各自独立 agent / 共享一个 agent / 折叠成单一共享会话」时同理——共享记忆是便利，也是污染源，先按隔离跑。Comma 上同理：Task 是持久状态、会话只是界面，但一个 Task 里混进太多目标，看板就分不清它到底卡在哪一步。做法 F 上同理：一个 brief 只盯一个来源、只发一个收件人，加第二个源之前先确认第一个不会重发也不会漏报。做法 G 上同理：先把 `niche.json` 写窄一点，别一次塞进五个不相关的关键词簇，否则 outlier 报告会混进你根本不看的领域。
+- **把所有任务塞进同一个会话**。nanobot 支持按 topic 分开任务，并用 Temporary chat 做临时对话（不写入历史或长期记忆）；混在一起会污染记忆检索，也会让「记忆是否有效」这项指标失效。NanoClaw 上用 `/manage-channels` 决定「各自独立 agent / 共享一个 agent / 折叠成单一共享会话」时同理——共享记忆是便利，也是污染源，先按隔离跑。Comma 上同理：Task 是持久状态、会话只是界面，但一个 Task 里混进太多目标，看板就分不清它到底卡在哪一步。做法 F 上同理：一个 brief 只盯一个来源、只发一个收件人，加第二个源之前先确认第一个不会重发也不会漏报。做法 G 上同理：先把 `niche.json` 写窄一点，别一次塞进五个不相关的关键词簇，否则 outlier 报告会混进你根本不看的领域。做法 H 上同理：一个 bot 先只跑一类任务，别把多个 routine 塞进同一个 bot，否则 overlap 与 catch-up 的行为更难判断。
 
 ## 证据与来源
 
@@ -800,9 +894,10 @@ claude -p "/outliers"
 - **做法 E 的全部命令与机制**（`cp .env.example .env`、`docker compose up -d --build`、`pnpm install` + `make dev`、`make dev-electron`、`make test-clients`/`make test-systems`/`make test-policy`、界面端口 8080/8082/8081/4000(dash)/8025、`.env` 环境变量表、五个 named volume `config`/`postgres`/`objects`/`clickhouse`/`redis`、`systems/DEPLOYMENT.md#self-hosted-compose`、mock 模型的 `comma-local@example.com` 登录方式）：来自 AFK-surf/Comma 调研，均为 README 原文。可核事实：AGPL-3.0-only，修改后对外提供服务需保留 `/source.tar.gz` 下载；贡献需签 AFK AI, Inc. CLA；仓库星标 172（来自本次线索 metrics，不构成效果证据）。运行时主要为 Elixir/OTP，关键系统组件用 Lean，核心分布式协议用 TLA+ 模型检查；每个 agent 是 Erlang VM 上一个独立进程，失败即重启、其余 agent 继续跑；Salix 已接受的消息在重启后仍存活；被中断的写操作不会自动重跑。**原文明确声明：形式化验证不证明模型判断或任务成功，它只验证「即使出错，运行时仍按我们设计的规则行事」。**
 - **做法 F 的全部命令与配置**（`claude update`、`/claude-api managed-agents-onboard <文章链接>`、`ant apply vault.yaml`、用 TypeScript SDK 往 vault 里加凭据的片段、`daily-brief/` 的八个文件、`agent.md` 的 frontmatter 与第 4/5 条运行步骤原文、`deployment.md` 的 cron/`timezone`/`vault_ids`/`resources`、bash + curl 发 Slack 的调用、bookmark 与 ledger 存在 `state` memory store 的 `runs/<date>.md`、源失败三条规则、幂等三规则）；来自 claude.dev 的 reference implementation 走查《Building effective agent automations》（作者 Lance Martin、CJ Avilla，2026-10-08），均为原文。参考实现仓库里是**八条**运行步骤，本次材料只摘录了**第 4 条和第 5 条**原文；原文在「部署」一节被截断，**没有可照抄的部署命令**。文章自述这是起点，需要按自己的来源、目的地、偏好改写；Managed Agents 处于 beta。
 - **做法 G 的全部命令与配置**（`git clone https://github.com/manthanpatelll/instagram-research-tool.git` + `cd` + `claude`、`/research-setup`、`npm run library` / `npm run sample-report` / `npm run selftest`、五个日常动作与斜杠命令 `/outliers`、`/reel-research inbox`、`/reel-research <reel link>`、`claude -p "/reel-research inbox"` 与 `claude -p "/outliers"`、`config.json` 八个字段的默认值与作用、`niche.json` / `voice.md` / `inbox.txt` / `.env` 四类供给物、四个数据源的能力与成本对照）：来自 manthanpatelll/instagram-research-tool 调研，均为 README 原文。可核事实：MIT 许可，npm 零依赖，Node 18+，仓库仅 31 stars（不构成效果证据）；产出含八个板块（Numbers / Transcript / Hook / Format / Angle / Visual breakdown / Scroll stoppers / My version）；每日搜索约 70 次；outlier 窗口默认 24 小时、上限 48 小时、合格 reel 少于 15 条才放宽；最低播放量阈值 2000；成本数字（Sandcastles 起 $49/月、每条新 reel 分析 1 credit、Apify 每条不到 1 美分、一次完整每日搜索约 $1.70、Apify 每月 $5 免费额度、yt-dlp 免费）；ffmpeg 用于逐帧拆解（`frames.mjs` 切 contact sheets），Whisper 用于无字幕转写。**局限**：所有功能描述、"the breakdown is the same whichever one you pick"、"about 10 minutes" 的设置时长均为作者主张，未附独立验证；README 截图明确标注 "Screenshots use synthetic sample data"，没有真实使用前后的对比、省时数据或产出质量评估；只依据 README，未看到代码实现，无法确认脚本、skill 提示词与文档一致；cron / launchd 的具体写法在 `docs/iphone-shortcut.md`，本次材料未含该文档正文。合规声明（从不登录 Instagram、不用 cookies/session、不用你的账号抓取；下载视频仅本地分析、不得重发；"My version" 保存前检查抄袭短语）同样来自 README 自述。
-- **最小闭环与判断指标**：「只配一个模型 + 一个技能 + 一个定时任务」「连续处理同类任务 5–10 次」「按时完成率 / 人工介入次数 / 耗时与返工 / token 成本 / 技能复用次数 / 记忆有效性」「1–2 周」「跑两周」「降级为 watch 的条件」，来自 nanobot 与 CowAgent 两份调研的结论与验证建议；「人工耗时对比 / 首次通过率 / 调度可靠性 / 数据边界 / 失败可诊断性」「先 Quick Start → 换本地模型验证数据边界 → 再试 Workforce → 最后试 Automation」「只有人工时间明显下降且返工比例可接受才纳入日常工作流」来自 Eigent 调研的验证建议；「在可丢弃的环境里小范围试、只接一个频道、配一到两个可人工核对的定时任务跑两周」「排障交给 Claude Code 或 `/debug`」「用 `/uninstall` 干净回滚」来自 NanoClaw 调研的验证建议；「先用 `make dev` 跑通，再按 compose.yaml 自建单机实例，把一个真实的长周期任务交给 Task + Loop 跑一两周」「栈很重，不宜直接采用」「除运行时形式化验证外没有任何任务成功率或效果数据」来自 Comma 调研的结论；「在单一来源 + 单一收件人 + 每日一次的最小场景里试跑一个定时 brief」「用手动触发而非等排期来验证」「用 bookmark 而不是固定时间窗口」「源失败时不动 bookmark、其余源照常写、末尾点名没读到的东西」「先查重、确认成功才记账、不明确标 maybe posted」「只用『读者今天会因此行动』这一条标准取舍条目」「发布前复核」「链接从源自己的 link 字段复制」「调度时区与正文时区要分别写清」来自做法 F 的调研；「先跑 `selftest` 与合成样本判断产出结构」「用免费 yt-dlp 验证单条流水线」「想要雷达再上 Apify」「把缺失数字留空而非编造」「先手动跑 `/outliers` 再挂 cron」来自做法 G 的调研。这些都是调研作者给出的自建方法，不是项目官方提供。
-- **只是作者主张**：nanobot 的「小而可读」内核、Dream 长期记忆、多智能体委派的实际效果；CowAgent 的「proactively plans」「self-evolution」「grows alongside you」「Agent Harness engineering 的参考实现」、记忆分层与 Deep Dream 蒸馏、知识库自动整理、Self-Evolution 的具体效果；Eigent 的「boosts productivity」「exceptional productivity」「turn your most complex workflows into automated tasks」「Zero Setup」；NanoClaw 与 OpenClaw 的对比数字（行数、配置文件数、依赖数、安全层级）以及「代码小到 Claude 能安全修改」；Comma 的「sessionless / relentless / swarm intelligence」效果性表述、24/7 持续完成目标、「你管目标不管 swarm」，以及示例视频（购物比价与结账、交付工作与生活）；做法 F 的「一条过期的 still waiting on you 比十条漏掉的条目更伤信任」以及整套条目取舍规则的收益；做法 G 的「数据源只取事实、分析全交给 Claude Code，所以换数据源不改变拆解质量」、"about 10 minutes" 的设置时长、以及整套拆解板块的实际价值——均无案例、基准或第三方评测支撑，各份调研都明确标注为自述、判断或矛盾表述。
-- **项目间关系**：nanobot 的 `nanobot gateway` 自述对 OpenClaw 用户是熟悉的入口；CowAgent 的 Skill Hub 声明技能可用于 CowAgent、OpenClaw、Claude Code 等，两者技能格式互通、可共用技能资产；NanoClaw 原生使用 Anthropic 官方 Claude Agent SDK（是 Claude Code 的容器化 + 常驻化外壳），并把 OpenClaw 作为对比对象，同时可通过 `/add-opencode` 接 OpenRouter / Google / DeepSeek、通过 `/add-ollama-provider` 接本地开源权重模型；Eigent 只声明定位与 Claude Cowork / Codex 相似，无迁移或兼容性说明；Comma 调研明确把 Claude Code（清单中 kind: tool、status: adopt）当作被编排对象——Codex、Claude Code 等可「像应用一样被调用」，也可注册为 Worker / Sub-agent，因此 Comma 与 Claude Code 是互补关系，手册里把它描述为「常驻调度层」而不是又一个编码 agent；做法 F 的调研没有提到清单中其他条目，它与 Claude Code 的关系是「用 Claude Code 里的 `claude-api` skill 生成起点文件」，运行本身在 Anthropic 托管平台上；做法 G 的调研明确说清单中已有 Claude Code（adopt），本工具是建立在它之上的一个具体 skill 套装，可作为把 Claude Code 用于内容 / 媒体分析场景的参考实现，清单中没有其他相关条目。各份调研都没有给出这些项目之间的直接对比测试，因此本手册不比较优劣，只按形态偏好、渠道需求与托管 / 自托管的取舍选一个。
+- **做法 H 的全部命令与机制**（Release 下载 `.dmg` + 拖入 `/Applications`、Gatekeeper 三步、`xattr -dr com.apple.quarantine /Applications/touri.app`、`bun install` / `bun run build:sidecar` / `bun run tauri build --bundles app` / `open src-tauri/target/release/bundle/macos/touri.app`、开发模式 `bun run build:sidecar && TOURI_SIDECAR_BIN="$PWD/src-tauri/binaries/touri-sidecar-aarch64-apple-darwin" bun run tauri dev`、验证链 `bun run typecheck` / `bun run lint` / `TOURI_BROWSER_HEADLESS=1 bun test sidecar/test` / `(cd ui && bunx vitest run && bunx vite build && bunx playwright test)` / `(cd src-tauri && cargo test && cargo clippy --all-targets -- -D warnings)`、真实 CLI 冒烟 `TOURI_E2E_REAL_CLI=1 bun test sidecar/test/runtime/real-cli.test.ts`、导入器 dry-run 命令与 `--bot` / `--cwd-map` 参数、`TOURI_UI_TOKEN=dev-ui-token bun run sidecar/src/main.ts serve`、`bun run sidecar/src/main.ts mcp-stdio --thread <thread-id>`、审批模式 `on-request`/`workspace-write`/`full`、MCP gateway 逐线程 token、computer use 可见指示器与 kill switch、bot machine 通过 Apple `container` 起隔离 Linux VM、`packages/contracts/` 契约规则）：来自 touri-ai/touri 调研，均为 README 原文。可核事实：Apache-2.0，仓库 35 stars（不构成效果证据）；技术栈为 Tauri v2（Rust shell）+ Bun sidecar + React UI；数据存在 `~/Library/Application Support/touri` 下的 SQLite，无遥测、无需账号，凭据放 macOS Keychain，不进数据库、日志或导出，可选云托管是单独 opt-in 协议（`docs/protocol/cloud-v1.md`）；安装要求 macOS 14+、Apple Silicon、已登录 Codex 或 Claude Code CLI；bot machine 需 macOS 26 + Apple `container` >= 1.5.0；源码构建需 Bun 1.2.21+、Rust 1.90+ 带 `aarch64-apple-darwin` target；Release 未签名、未公证，签名、公证和 updater 已接线但被关闭（见 `docs/DECISIONS.md`）。**局限**：README 没有说明在 UI 里如何新建 bot、如何写 routine 的调度配置、overlap 与 catch-up 的具体参数怎么填；所有功能声明（persistent bots、routines 带 overlap 和 catch-up 控制、agent browser 带人工接管、computer use 带可见指示器和 kill switch）均无截图、演示、案例或效果数据；OpenCode 支持在 README 正文标题与 Features 里依据较弱；agent browser 是否基于 Playwright 未知，不能推断。
+- **最小闭环与判断指标**：「只配一个模型 + 一个技能 + 一个定时任务」「连续处理同类任务 5–10 次」「按时完成率 / 人工介入次数 / 耗时与返工 / token 成本 / 技能复用次数 / 记忆有效性」「1–2 周」「跑两周」「降级为 watch 的条件」，来自 nanobot 与 CowAgent 两份调研的结论与验证建议；「人工耗时对比 / 首次通过率 / 调度可靠性 / 数据边界 / 失败可诊断性」「先 Quick Start → 换本地模型验证数据边界 → 再试 Workforce → 最后试 Automation」「只有人工时间明显下降且返工比例可接受才纳入日常工作流」来自 Eigent 调研的验证建议；「在可丢弃的环境里小范围试、只接一个频道、配一到两个可人工核对的定时任务跑两周」「排障交给 Claude Code 或 `/debug`」「用 `/uninstall` 干净回滚」来自 NanoClaw 调研的验证建议；「先用 `make dev` 跑通，再按 compose.yaml 自建单机实例，把一个真实的长周期任务交给 Task + Loop 跑一两周」「栈很重，不宜直接采用」「除运行时形式化验证外没有任何任务成功率或效果数据」来自 Comma 调研的结论；「在单一来源 + 单一收件人 + 每日一次的最小场景里试跑一个定时 brief」「用手动触发而非等排期来验证」「用 bookmark 而不是固定时间窗口」「源失败时不动 bookmark、其余源照常写、末尾点名没读到的东西」「先查重、确认成功才记账、不明确标 maybe posted」「只用『读者今天会因此行动』这一条标准取舍条目」「发布前复核」「链接从源自己的 link 字段复制」「调度时区与正文时区要分别写清」来自做法 F 的调研；「先跑 `selftest` 与合成样本判断产出结构」「用免费 yt-dlp 验证单条流水线」「想要雷达再上 Apify」「把缺失数字留空而非编造」「先手动跑 `/outliers` 再挂 cron」来自做法 G 的调研；「在符合条件的机器上装 touri，用 routines 和审批模式跑一个低风险重复任务做小范围验证」「只配一个 runtime」「只建一个 routine」「审批模式先用 `on-request`」「先不开 computer use 和 bot machine」「用 H-3 验证链判断软件是否正常工作」来自做法 H 的调研。这些都是调研作者给出的自建方法，不是项目官方提供。
+- **只是作者主张**：nanobot 的「小而可读」内核、Dream 长期记忆、多智能体委派的实际效果；CowAgent 的「proactively plans」「self-evolution」「grows alongside you」「Agent Harness engineering 的参考实现」、记忆分层与 Deep Dream 蒸馏、知识库自动整理、Self-Evolution 的具体效果；Eigent 的「boosts productivity」「exceptional productivity」「turn your most complex workflows into automated tasks」「Zero Setup」；NanoClaw 与 OpenClaw 的对比数字（行数、配置文件数、依赖数、安全层级）以及「代码小到 Claude 能安全修改」；Comma 的「sessionless / relentless / swarm intelligence」效果性表述、24/7 持续完成目标、「你管目标不管 swarm」，以及示例视频（购物比价与结账、交付工作与生活）；做法 F 的「一条过期的 still waiting on you 比十条漏掉的条目更伤信任」以及整套条目取舍规则的收益；做法 G 的「数据源只取事实、分析全交给 Claude Code，所以换数据源不改变拆解质量」、"about 10 minutes" 的设置时长、以及整套拆解板块的实际价值；做法 H 的 persistent bots、routines 带 overlap 和 catch-up 控制、agent browser 带人工接管、computer use 带可见指示器和 kill switch——均无案例、基准或第三方评测支撑，各份调研都明确标注为自述、判断或矛盾表述。
+- **项目间关系**：nanobot 的 `nanobot gateway` 自述对 OpenClaw 用户是熟悉的入口；CowAgent 的 Skill Hub 声明技能可用于 CowAgent、OpenClaw、Claude Code 等，两者技能格式互通、可共用技能资产；NanoClaw 原生使用 Anthropic 官方 Claude Agent SDK（是 Claude Code 的容器化 + 常驻化外壳），并把 OpenClaw 作为对比对象，同时可通过 `/add-opencode` 接 OpenRouter / Google / DeepSeek、通过 `/add-ollama-provider` 接本地开源权重模型；Eigent 只声明定位与 Claude Cowork / Codex 相似，无迁移或兼容性说明；Comma 调研明确把 Claude Code（清单中 kind: tool、status: adopt）当作被编排对象——Codex、Claude Code 等可「像应用一样被调用」，也可注册为 Worker / Sub-agent，因此 Comma 与 Claude Code 是互补关系，手册里把它描述为「常驻调度层」而不是又一个编码 agent；做法 F 的调研没有提到清单中其他条目，它与 Claude Code 的关系是「用 Claude Code 里的 `claude-api` skill 生成起点文件」，运行本身在 Anthropic 托管平台上；做法 G 的调研明确说清单中已有 Claude Code（adopt），本工具是建立在它之上的一个具体 skill 套装，可作为把 Claude Code 用于内容 / 媒体分析场景的参考实现；做法 H 的调研明确把 Claude Code 作为 runtime 接入，touri 不是替代品而是编排/外壳层，在其上加常驻 bot、记忆、routines、逐线程 MCP token 与 VM 隔离，两者是叠加关系；OpenCode 在 touri README 正文标题与 Features 里依据较弱，与其 watch 状态一致；Playwright Test 在 touri 仓库验证链里被实际使用，但 agent browser 是否基于 Playwright 未知。各份调研都没有给出这些项目之间的直接对比测试，因此本手册不比较优劣，只按形态偏好、渠道需求与托管 / 自托管的取舍选一个。
 
 ## 依据的调研
 
@@ -813,3 +908,4 @@ claude -p "/outliers"
 - [AFK-surf/Comma](../research/radar/2026-10-05/1312-afk-surf-comma.md)：值得一试，先用 `make dev`（内置确定性 mock 模型、无需 API key）在本机跑通，再按根目录 compose.yaml 自建单机实例，把一个真实的长周期任务（如仓库/收件箱监控）交给它的 Task+Loop 机制跑一两周；README 给出了可直接照做的部署步骤、完整环境变量表和权限开关，适合作为“常驻代理 + 工具权限供给 + 触发式推进”的试点对象，但它除运行时形式化验证外没有任何任务成功率或效果数据，且栈很重，不宜直接采用。
 - [Building effective agent automations](../research/radar/2026-10-09/2065-building-effective-agent-automations.md)：值得一试，先按文中六条规则和参考实现的文件结构，在“单一来源 + 单一收件人 + 每日一次”的最小场景里试跑一个定时 brief（用 /claude-api managed-agents-onboard 起步、用手动触发而非等排期来验证），因为它给出了可复制的配置、命令和失败模式清单，但仍属 beta 且强依赖 Anthropic 托管平台，幂等性、漏读上报和成本上限都需自己实测。
 - [manthanpatelll/instagram-research-tool](../research/radar/2026-10-13/2840-manthanpatelll-instagram-research-tool.md)：值得一试，可以小范围试：它给出了可照做的完整流程（clone、`/research-setup` 向导、日常斜杠命令、`config.json`/`niche.json`、cron/launchd 定时），把「Claude Code + 外部数据源 + skill + inbox + 每日雷达」这套可迁移模式落到具体配置；但依赖付费数据源、效果数据缺失、截图是合成样本，先小范围验证再决定是否写进手册。
+- [touri-ai/touri](../research/radar/2026-10-16/3983-touri-ai-touri.md)：值得一试，在符合条件（macOS 14+ Apple Silicon、已登录 Codex/Claude Code CLI）的机器上装 touri，用它的 routines（cron 调度 bot）和审批模式跑一个低风险重复任务做小范围验证；理由是该仓库给出了可复制的安装、构建、验证与导入命令，且提供了常驻代理、定时触发、逐线程 token 与隔离 VM 这些正对研究问题 3、4 的具体机制，但它未签名、文档未展开配置细节、仅有 35 stars，所以先小范围试而非直接采用。
