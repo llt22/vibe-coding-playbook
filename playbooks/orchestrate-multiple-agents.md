@@ -1,16 +1,16 @@
-# 并行跑 AI 编码代理时，别让结果绕过测试和验证
+# 让多个编码 agent 在服务端并发落库、验证与合入：从并行执行到可审计的版本控制
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：把“不满意就重问一次”升级成可执行流程，解决单个 AI 回答或串行 agent 交付不可验证、不可追踪、成本失控的问题。
-> 先试这一步：先在一个非关键小仓库里，对同一任务做一次有无 CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 的 30 分钟对照，确认多代理是否真的生效、成本与质量是否不劣于基线；无效或变差就只记录为 watch。
-> 最近修订：2026-10-16
+> 解决的问题：手册解决的是：单个或少量 AI 回答/agent 会话缺少独立验证与合入门槛，以及大量 agent 并发时传统 Git 落库、冲突处理与历史计算成为瓶颈的问题。
+> 先试这一步：先固定完成定义（哪条测试通过、谁来复核、在哪里看结果），然后选一条最小路径试：可拆分编码任务用做法 B 的 FARM_VERIFY_CMD，已有大量 agent 则先跑做法 T 的 examples/graft/quickstart.sh 验证服务端链路。
+> 最近修订：2026-10-17
 
 ## 解决什么问题
 
-单个 AI 回答或单条串行 agent 会话，交付的往往是你没有验证过的结果。手册把「不满意就重问一次」升级成一套可执行流程：多子代理并行求解、独立裁判打分淘汰、worktree 隔离、项目记忆、提交前互评、gate + 独立 verifier、跨项目看板、daemon + dashboard、菜单栏就地回答、阶段成本检查、用并行 /loop 持续处理 issue 的 triage-github 流程，以及一个实验性开关：用环境变量尝试开启 Claude Code 内置 agent teams。
+单个 AI 回答或单条串行 agent 会话，交付的往往是你没有验证过的结果。手册把「不满意就重问一次」升级成一套可执行流程：多子代理并行求解、独立裁判打分淘汰、worktree 隔离、项目记忆、提交前互评、gate + 独立 verifier、跨项目看板、daemon + dashboard、菜单栏就地回答、阶段成本检查、用并行 /loop 持续处理 issue 的 triage-github 流程、一个实验性开关：用环境变量尝试开启 Claude Code 内置 agent teams，以及一个服务端版本控制候选：用 git-ai/Graft 承载大量编码 agent 的并发落库与验证。
 
-做法 A–S 概览：
+做法 A–T 概览：
 
 - A：把不满意的回答送进锦标赛（arena-skill）。
 - B：并行子代理 + 测试合入闸门（clodfarm）。
@@ -31,6 +31,7 @@
 - Q：在进入下一阶段前先结一次账（/cost 阶段成本检查）。
 - R：用并行 /loop 做持续 issue 复现与修复（magpie 工作流复刻）。
 - S：用实验性环境变量尝试开启 Claude Code 内置 agent teams，先做基线对照再决定是否采用。
+- T：用 git-ai/Graft 在服务端承载大量编码 agent 的并发落库、冲突解决、落库后验证与 agent 权限（先 quickstart，再 shadow 接入）。
 
 ## 适用与不适用
 
@@ -54,7 +55,8 @@
 - 你想在 Claude Code 里跑有门禁、评审、清理与无人值守的 tmux 会话团队（做法 P）。
 - 你跑多代理 / 分阶段的 agent 流程，能在进入下一阶段前读到阶段成本或运行 /cost（做法 Q）。
 - 你有一个 GitHub 仓库，issue 可处理、有测试体系可写失败测试，并且能持续运行 Claude Code + Opus 的 /loop；想先只跑一个 triage-github loop 处理最近 3 天 issue（做法 R）。
-- 新增：你使用 Claude Code，愿意在非关键小仓库里做一次基线对照，并能接受实验特性随时失效、行为变化或额外 token 消耗，想验证内置 agent teams 是否真的开启多代理并行（做法 S）。
+- 你使用 Claude Code，愿意在非关键小仓库里做一次基线对照，并能接受实验特性随时失效、行为变化或额外 token 消耗，想验证内置 agent teams 是否真的开启多代理并行（做法 S）。
+- 你同时运行大量编码智能体，愿意自托管一套服务端（数据库 + 对象存储），有 Linux 或 macOS 构建环境，能接 Go 1.26 / C 工具链 / Meson / Ninja，想验证「服务端落库 + 缓存 + 两个 agent + 一次 land」整条链路（做法 T）。
 
 **不适用**
 
@@ -78,13 +80,17 @@
 - 不是 macOS 14+；或主力是 Cursor（只能跳转、不能代答）（做法 O）。
 - Claude Code 低于 2.1.291，或缺少 tmux / git / jq / perl / shasum；远程运行还缺 ssh / rsync（做法 P）。
 - 你的流程无法分阶段，或读不到任何成本 / token 数据（做法 Q）。
-- 原文正文被截断，/loop 的完整配置、提示词原文、第三个 loop 均未给出；watch-social 只写到“盯 X /”，具体监控范围和动作不完整（做法 R）。
+- 原文正文被截断，/loop 的完整配置、提示词原文、第三个 loop 均未给出；watch-social 只写到「盯 X /」，具体监控范围和动作不完整（做法 R）。
 - 只想直接复制 3 个 loop 的完整配置：材料不足，不能补写命令（做法 R）。
 - 没有可写失败测试的仓库，或 issue 无法复现：triage-github 的核心顺序会落空（做法 R）。
-- 把“跑了一天，效果很好”当效果证据：这是作者主张，不是对照实验（做法 R）。
-- 新增：需要稳定、可写进团队规范或生产流程：该环境变量含 EXPERIMENTAL，原文无 Anthropic 官方出处，可能随时改名、移除或行为变化（做法 S）。
-- 新增：不能接受额外 token 消耗、实验特性失效、或无法在非关键环境里做对照：不要用做法 S 替代已有验证流程（做法 S）。
-- 新增：只想复制完整 Opus 主导 + Haiku 并行配置：原文没有给出如何指定模型、如何并行、子代理任务、并发数或失败回收，不能补写（做法 S）。
+- 把「跑了一天，效果很好」当效果证据：这是作者主张，不是对照实验（做法 R）。
+- 需要稳定、可写进团队规范或生产流程：该环境变量含 EXPERIMENTAL，原文无 Anthropic 官方出处，可能随时改名、移除或行为变化（做法 S）。
+- 不能接受额外 token 消耗、实验特性失效、或无法在非关键环境里做对照：不要用做法 S 替代已有验证流程（做法 S）。
+- 只想复制完整 Opus 主导 + Haiku 并行配置：原文没有给出如何指定模型、如何并行、子代理任务、并发数或失败回收，不能补写（做法 S）。
+- 只跑一两个 agent 的个人或小团队：为换取秒级并发落库而引入数据库 + 对象存储，收益未经验证（做法 T）。
+- 不愿自托管服务端，或无法接受 0.1.0 接口在 1.0 前可能变动（做法 T）。
+- 想找「用了它比传统 Git 快多少」的量化结论：README 没有给出与传统 Git 或其他方案的对比数字（做法 T）。
+- 已知缺口未解决：LIMITATIONS.md 举例提到存储核心中 pack 的垃圾回收；构建要编译内置 Git，依赖较重（做法 T）。
 
 ## 前置条件
 
@@ -107,7 +113,8 @@
 - 做法 P：tmux ≥ 3.2；git ≥ 2.31；bash；jq；perl；shasum；Claude Code ≥ 2.1.291；远程运行还需 ssh 和 rsync。
 - 做法 Q：一个支持分阶段执行、且能显示成本或提供 /cost 的多代理 / 分阶段流程。
 - 做法 R：Claude Code + Opus；一个 GitHub 仓库；能访问 issue 和 PR；有测试体系可先写会失败的测试；能持续运行 /loop 的会话或调度机制；若跑 watch-social 还需访问 X。原文没有给出具体权限配置、工具清单和反馈回路细节。
-- 新增做法 S：已安装 Claude Code CLI，且能正常在终端里运行 claude 并完成一次普通对话；在同一个 shell 会话中操作，环境变量只对当前会话及其子进程生效；必须能接受实验特性失效、行为变化、以及可能的额外 token 消耗；不适合作为团队规范或生产流程的稳定依赖。
+- 做法 S：已安装 Claude Code CLI，且能正常在终端里运行 claude 并完成一次普通对话；在同一个 shell 会话中操作，环境变量只对当前会话及其子进程生效；必须能接受实验特性失效、行为变化、以及可能的额外 token 消耗；不适合作为团队规范或生产流程的稳定依赖。
+- 做法 T：Linux 或 macOS 机器，能联网拉依赖；Go 1.26；C 工具链；Meson；Ninja；构建过程会编译一份内置的 Git，缺任一项 make build 会失败。若接真实仓库：需要 config.toml（[graft] 段 + 可选 [graft.storage] 段）；数据库（SQLite 或 PostgreSQL）与对象存储（file/S3/GCS/Azure）；给每个 agent 的 token、RPC allowlist、branch policy；一个明确选定的冲突 resolver；存储迁移需要先 shadow 后 authoritative 的两段式操作窗口；要 Slack 汇报则需相应配置。版本 0.1.0，接口在 1.0 前可能变动。
 
 ## 操作步骤
 
@@ -133,7 +140,8 @@
 | 想在 Claude Code 里跑有门禁、评审、清理与无人值守的 tmux 会话团队 | 做法 P（先 relay，后 delegate） |
 | 跑多代理 / 分阶段流程，想进下一阶段前先结一次账 | 做法 Q（先跑 2–3 个阶段） |
 | 想让 Claude Code 用 /loop 持续处理最近 3 天 issue，并按先复现、先写失败测试、再修的顺序做 | 做法 R（先只跑 triage-github） |
-| 新增：使用 Claude Code，想试内置 agent teams 是否真的开启多代理并行，并先确认成本与质量 | 做法 S（先做 30 分钟基线对照，不在关键仓库直接采用） |
+| 使用 Claude Code，想试内置 agent teams 是否真的开启多代理并行，并先确认成本与质量 | 做法 S（先做 30 分钟基线对照，不在关键仓库直接采用） |
+| 同时运行大量编码智能体，想验证服务端落库、缓存、多个 agent、一次 land 的完整链路 | 做法 T（先跑 quickstart，再 shadow 接入） |
 
 ### 做法 A：把不满意的回答送进锦标赛（arena-skill）
 
@@ -522,7 +530,7 @@ claude plugin install hivehouse@hivehouse
 
 ### 做法 R：用并行 /loop 做持续 issue 复现与修复（magpie 工作流复刻）
 
-把这条路径当作小范围可试的候选：它给出了可照做的流程骨架——triage-github 处理最近 3 天 issue、先复现、先写会失败的测试、再修；但原文正文被截断，/loop 的完整配置、提示词原文、第三个 loop 均未给出，watch-social 也只写到“盯 X /”，不能补写命令。
+把这条路径当作小范围可试的候选：它给出了可照做的流程骨架——triage-github 处理最近 3 天 issue、先复现、先写会失败的测试、再修；但原文正文被截断，/loop 的完整配置、提示词原文、第三个 loop 均未给出，watch-social 也只写到「盯 X /」，不能补写命令。
 
 1. 前提：准备 Claude Code，并使用 Opus 模型。原文写的是 Claude Code + Opus 5.5，但 5.5 这个版本号仅在本次上下文的原文中出现，需自行确认可用版本。
 
@@ -536,18 +544,18 @@ claude plugin install hivehouse@hivehouse
 处理最近 3 天的 issue，先复现、先写一个会失败的测试，再修
 ```
 
-5. 跑一天后检查产出的 PR 或提交。判断标准不是“效果很好”这句作者主张，而是最近 3 天 issue 中有多少被真正复现、有多少修复在改代码前存在会失败的测试、这些测试在修复后是否通过、产出的 PR 有多少被合并或至少进入人工 review。
+5. 跑一天后检查产出的 PR 或提交。判断标准不是「效果很好」这句作者主张，而是最近 3 天 issue 中有多少被真正复现、有多少修复在改代码前存在会失败的测试、这些测试在修复后是否通过、产出的 PR 有多少被合并或至少进入人工 review。
 
 6. 第一个 loop 稳定后，再考虑第二个 loop：watch-social，目标是盯 X /。原文在此截断，后续信号源和动作未知，不要照搬。
 
 7. 第三个 loop：原文没有留下名称和职责，无法照搬。
 
-8. 原文没有给出 /loop 的启动命令原文，只有“并行跑 3 个 /loop”这一描述；不要编造命令或配置。
+8. 原文没有给出 /loop 的启动命令原文，只有「并行跑 3 个 /loop」这一描述；不要编造命令或配置。
 
 **与已有做法的差异（照做前先读）**
 
 - 做法 R 是持续型 loop，按时间窗口或外部事件触发；做法 A 是一次性锦标赛；做法 B/G/J 是合入门禁；做法 I/L/O 是注意力路由。
-- 做法 R 的“先写会失败的测试再修”可以与做法 B 的 FARM_VERIFY_CMD、做法 J 的 gate + verifier 叠加：让 loop 产出的 PR 必须过你的测试命令和独立 verifier。
+- 做法 R 的「先写会失败的测试再修」可以与做法 B 的 FARM_VERIFY_CMD、做法 J 的 gate + verifier 叠加：让 loop 产出的 PR 必须过你的测试命令和独立 verifier。
 - 做法 R 不替代验证、记忆和合入门禁；它只把 issue 复现与修复变成一个持续运行的分工。
 
 ### 做法 S：用实验性开关尝试开启 Claude Code 内置 agent teams
@@ -574,13 +582,13 @@ claude
 
 6. 若需要长期生效，需按自己所用 shell 的配置文件方式持久化该变量；原文未提及这一点，属于自行补充。
 
-7. 最小试用建议 30 分钟内完成：选一个非关键小仓库，构造一个包含“多环节”的固定任务，例如“改一个函数 + 补一个测试 + 更新对应文档”。先在**不设置**环境变量的情况下跑一遍，记录基线：完成耗时、消耗的 token/额度（如能看到）、主模型上下文被占用程度、结果质量（测试是否通过、diff 是否需要大幅返工）、需要人工干预的次数。
+7. 最小试用建议 30 分钟内完成：选一个非关键小仓库，构造一个包含「多环节」的固定任务，例如「改一个函数 + 补一个测试 + 更新对应文档」。先在不设置环境变量的情况下跑一遍，记录基线：完成耗时、消耗的 token/额度（如能看到）、主模型上下文被占用程度、结果质量（测试是否通过、diff 是否需要大幅返工）、需要人工干预的次数。
 
 8. 开一个新终端，执行第 3、4 步（export 后 claude），跑同一个任务。
 
 9. 对比：开关是否生效（能否观察到多个 agent 被创建/并行工作；若有内置命令可列出 agents，用它确认）；成本（单位任务总开销是否下降，Opus 侧上下文占用是否明显减少）；质量（测试通过率、diff 规模、返工次数是否不劣于基线）；稳定性（是否报错、是否中途丢失上下文、是否出现重复劳动或互相覆盖改动）。
 
-10. 判定：开关无效、或行为与基线无差别 → 降级为 watch，记录“该环境变量在当前版本无效/已移除”。有并行但质量或成本变差 → 不写入手册，或只作为“谨慎使用”的注记。并行确实存在、成本下降且质量不掉 → 可写入手册，作为 Claude Code 的“可选实验配置”，并注明实验性与验证日期。
+10. 判定：开关无效、或行为与基线无差别 → 降级为 watch，记录「该环境变量在当前版本无效/已移除」。有并行但质量或成本变差 → 不写入手册，或只作为「谨慎使用」的注记。并行确实存在、成本下降且质量不掉 → 可写入手册，作为 Claude Code 的「可选实验配置」，并注明实验性与验证日期。
 
 **与已有做法的差异（照做前先读）**
 
@@ -589,9 +597,66 @@ claude
 - 做法 M 是主 Agent 编排 + 哑子 Agent 只生成，验证集中在主 Agent；做法 S 的概念相似，但原文没有给出任何编排规则、验证边界或失败回收，不能替代做法 M。
 - 做法 S 若将来验证有效，也应与做法 B 的 FARM_VERIFY_CMD、做法 J 的 gate + verifier 叠加；不要因为开了多代理就跳过测试、评审和合入门禁。
 
+### 做法 T：用 git-ai/Graft 在服务端承载大量编码 agent 的并发落库与验证
+
+把这条路径当作 0.1.0 候选：它把「大量短生命周期 agent 在同一分支并发落库」的服务端方案做成了可跑的开源实现，但接口可能变、无与传统 Git 的量化对比，不宜直接上关键仓库。
+
+1. 准备构建环境（前提：Linux 或 macOS 机器，能联网拉依赖）。README 明确要求 Go 1.26、C 工具链、Meson、Ninja，构建过程会编译一份内置的 Git。缺任一项 make build 会失败。
+
+2. 克隆并构建（产出 server、CLI 和工具到 _build/bin）：
+
+```shell
+git clone https://github.com/feder-cr/git-ai.git
+cd git-ai
+make build
+```
+
+3. 跑官方最小端到端示例（前提：上一步构建成功）。这条脚本在临时目录里拉起一个 server、一个 cache daemon、两个 agent 和一次 land：
+
+```shell
+examples/graft/quickstart.sh
+```
+
+4. 查看 CLI 与可用命令：
+
+```shell
+./_build/bin/graft
+```
+
+5. 起自己的 server（前提：已按自己的环境改好配置）。README 的原文做法是改编示例配置后启动：
+
+```text
+To run your own server, adapt examples/graft/config.toml
+and start it with _build/bin/gitaly serve config.toml.
+```
+
+即：编辑 examples/graft/config.toml，然后执行 _build/bin/gitaly serve config.toml。
+
+6. 把仓库状态迁到数据库 + 对象存储（前提：先别直接切生产）。README 要求加一个 [graft.storage] 段，并且两阶段迁移：先以 shadow 模式启动、导入现有仓库，确认无误后再切到 authoritative 模式；细节在 doc/graft/STORAGE.md。
+
+7. 选择冲突解决方式：为自动 conflict resolution 选一个 resolver——任意 LLM provider、确定性工具，或者干脆不解决（none），走的是版本化的、供应商无关协议。细节在 doc/graft/RESOLVE.md。最小试用建议先设为 none，先看清冲突都发生在哪里。
+
+8. 开启落库后验证：用 graft-verify 测当前 tip，失败时 bisect 定位并 revert 掉引入问题的那个 change；细节在 doc/graft/VERIFY.md。
+
+9. 给 agent 配权限（前提：团队要跑多个 agent）：用 per-agent token、RPC allowlist 和 branch policy 决定每个 agent 能做什么，细节在 doc/graft/AGENT-SECURITY.md。
+
+10. 可选接监控与评审：让 agent 跟随 changeset 流、按组件汇报、也可发到 Slack（doc/graft/SUPERFAN.md、SUPERFAN-CHAT.md）；评审侧可配语义审批规则，例如纯注释改动所需的批准人数可以少于逻辑改动（doc/graft/REVIEW.md）。
+
+11. 可选缓存层：graft-cache 在 daemon 层和区域层缓存不可变对象，并逐个对象校验。
+
+12. 以上各步的深入配置分别写在 doc/graft/ 下的 QUICKSTART、CONFIGURATION、ARCHITECTURE、STORAGE、LAND-BATCHING、RESOLVE、DERIVED、REVIEW、SEARCH、VERIFY、SUPERFAN、AGENT-SECURITY、BENCH、FUZZING、LIMITATIONS 等文档中，README 只给了入口。
+
+**与已有做法的差异（照做前先读）**
+
+- 做法 T 不是替代做法 B/J/G 的合入门禁，而是服务端版本控制层：它改的是落库、历史计算、冲突解决和落库后验证，不是评审规则本身。
+- 与做法 B 的 FARM_VERIFY_CMD、做法 J 的 gate + verifier 可以叠加：Graft 侧的 graft-verify 负责落库后测试、bisect、revert，你的合入门禁继续负责「是否接受这次变更」。
+- 与做法 L 的 daemon + dashboard 不同：Graft 是仓库服务端，不解决人在终端里的注意力路由。
+- 与做法 S 的内置 agent teams 不同：Graft 是自托管版本控制实现，不负责 agent 编排；原文没有给出两者能否协同。
+- 只跑一两个 agent 的个人或小团队，引入数据库 + 对象存储的收益未经验证。
+
 ### 通用收尾：不管走哪条路径
 
-- 开始前先固定“完成”的定义：哪条测试通过、谁来复核、在哪里看结果。
+- 开始前先固定「完成」的定义：哪条测试通过、谁来复核、在哪里看结果。
 - 代码类任务一律把测试或 lint 作为合入门槛。
 - 多步流水线要求产物落盘。
 - 带自动合并能力的链路先用人工确认跑过 3–5 个真实 issue。
@@ -600,8 +665,9 @@ claude
 - 做法 M 的禁止项要原样写进子 Agent 拿到的指令；验证移到主 Agent，合入门禁仍然保留。
 - 做法 N 的结论要落盘并在成功时限回看。
 - 做法 Q 的阶段成本检查要落在阶段边界上。
-- 做法 R：先只跑一个 triage-github loop；先写会失败的测试再修；跑一天后按可 review 的产出判断，而不是按“效果很好”判断。
-- 新增做法 S：先做 30 分钟基线与开关后对照；开关无效或质量变差就只记录、不采用；即便并行生效，也要继续用测试、评审和合入门禁。
+- 做法 R：先只跑一个 triage-github loop；先写会失败的测试再修；跑一天后按可 review 的产出判断，而不是按「效果很好」判断。
+- 做法 S：先做 30 分钟基线与开关后对照；开关无效或质量变差就只记录、不采用；即便并行生效，也要继续用测试、评审和合入门禁。
+- 做法 T：先在临时目录跑通 examples/graft/quickstart.sh；再在非关键仓库以 shadow 模式只读导入并核对一致；确认无误后才切 authoritative；resolver 先设 none，稳定后再逐步打开自动 resolver、graft-verify 自动 revert、per-agent token 与 RPC allowlist。
 
 ## 怎么判断变好了
 
@@ -625,7 +691,8 @@ claude
 - 做法 P：安装检查通过；团队是否按计划产出 diff/提交；gate 是否把每一步运行到日志并验证通过；cleanup 是否只移除 manifest 记录的内容。
 - 做法 Q：进入下一阶段前是否真的能看到该阶段成本；实际总成本 vs 你设的预算；token 增长是否与任务复杂度匹配；新增代理前是否能估出边际成本。
 - 做法 R：最近 3 天 issue 中有多少被真正复现；有多少修复在改代码前存在会失败的测试；这些测试在修复后是否通过；产出的 PR 有多少被合并或至少进入人工 review；人工需要返工的比例；是否产生误报、重复处理或无关改动；与人工处理同一批 issue 的时间、返工率对比。
-- 新增做法 S：开关是否真的生效，能否观察到多个 agent 被创建/并行工作；单位任务总开销是否下降；Opus 侧上下文占用是否明显减少；测试通过率、diff 规模、返工次数是否不劣于基线；是否报错、中途丢失上下文、重复劳动或互相覆盖改动。
+- 做法 S：开关是否真的生效，能否观察到多个 agent 被创建/并行工作；单位任务总开销是否下降；Opus 侧上下文占用是否明显减少；测试通过率、diff 规模、返工次数是否不劣于基线；是否报错、中途丢失上下文、重复劳动或互相覆盖改动。
+- 做法 T：单次 land 的端到端耗时（从 agent 想提交到引用更新完成）；同一分支上并发 land 的成功率与需要人工介入的冲突比例；自动冲突解决被接受、且后续没有被 revert 的比例（用来判断 resolver 是否可信）；graft-verify 捕获的回归数量、bisect 定位是否准确、自动 revert 是否误伤；权限控制是否真的挡住越权操作（构造几个越权请求做负向测试）；增加服务节点后横向扩展是否如预期（可测）。README 未给数值目标，需自建基线，与现有 merge queue / PR 流程对比。
 
 **最小试用**
 
@@ -647,7 +714,8 @@ claude
 - 做法 P：非关键项目、本地环境安装；先保持 relay，只对一个项目运行 /hivehouse:start <task>。
 - 做法 Q：下一次多代理任务拆成 2–3 个阶段，每阶段开始前跑一次 /cost，记录成本、token、转移次数和耗时。
 - 做法 R：只选一个自己熟悉的 GitHub 仓库，不要一上来跑 3 个 loop；只启动 triage-github 这一个 loop，处理最近 3 天 issue；强制遵守先复现、写一个会失败的测试、再修；跑一天后检查产出的 PR 或提交。第二个 loop 先不做 watch-social，或只做人工确认过的外部信号源，等第一个 loop 稳定后再加。
-- 新增做法 S：选一个非关键小仓库，构造一个包含“多环节”的固定任务；先在不设置环境变量的情况下跑一遍记录基线；再开新终端执行 export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 后 claude，跑同一任务；30 分钟内完成对照。
+- 做法 S：选一个非关键小仓库，构造一个包含「多环节」的固定任务；先在不设置环境变量的情况下跑一遍记录基线；再开新终端执行 export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 后 claude，跑同一任务；30 分钟内完成对照。
+- 做法 T：不改动现有仓库，先构建，然后跑 examples/graft/quickstart.sh，确认在临时目录里 server、cache daemon、两个 agent、一次 land 能完整走通；用 ./_build/bin/graft 逐个熟悉 land、changeset 列表/watch、verify 相关子命令；拿一个非关键真实仓库按 [graft.storage] 的 shadow 模式做只读导入，核对导入后的仓库状态与源仓库一致；确认无误后再切 authoritative；只让少量 agent 走这套流程，且暂时不开自动冲突解决（resolver 设为 none）；稳定后再逐步打开自动 resolver、graft-verify 的自动 revert、per-agent token 与 RPC allowlist。
 
 **试多久、什么时候升级**
 
@@ -666,7 +734,8 @@ claude
 - 做法 P：先在非关键项目、本地环境用 relay 模式跑一个任务；确认无误后再考虑 overnight 或 delegate。
 - 做法 Q：先在一两次任务上试 2–3 个阶段；只有当事前看见成本真的让你避免了一次异常增长或一次不必要的代理扩容时，才固定成流程里的固定步骤。
 - 做法 R：跑一天后检查产出的 PR 或提交；如果拿不到可合并或可 review 的产出，或大量 PR 无法通过测试，说明该流程在当前仓库还不适合直接采用。第一个 loop 稳定后再加第二个；第三个 loop 原文缺失，不升级。
-- 新增做法 S：只做一次 30 分钟对照不构成采用依据。若开关无效或行为与基线无差别，降级为 watch；若有并行但质量或成本变差，不写入手册或只作谨慎注记；只有并行确实存在、成本下降且质量不掉，才考虑作为可选实验配置，并注明实验性与验证日期。
+- 做法 S：只做一次 30 分钟对照不构成采用依据。若开关无效或行为与基线无差别，降级为 watch；若有并行但质量或成本变差，不写入手册或只作谨慎注记；只有并行确实存在、成本下降且质量不掉，才考虑作为可选实验配置，并注明实验性与验证日期。
+- 做法 T：原文未给数值目标。先以「临时目录 quickstart 跑通 + 非关键仓库 shadow 只读导入 + 少量 agent 且 resolver none」为最小范围；确认单次 land 耗时、并发 land 成功率、人工介入冲突比例、graft-verify 误伤率可接受，再扩大到更多 agent；没有量化对比前不扩大到关键仓库。
 
 ## 常见坑
 
@@ -687,8 +756,9 @@ claude
 - 做法 O：仅 macOS 14+；只覆盖 Claude Code / Codex / Cursor；Cursor 只能跳转、不能代答。
 - 做法 P：工作文件夹绝不能是项目本身；默认 relay 模式每次 start / wake / answer 都等你；delegate 模式涉及 bypassPermissions 和复制 secret 文件到远程的风险。
 - 做法 Q：推文级材料；只有一组单次观测数据，没有基线、阈值或对照；阶段检查依赖你能读到阶段成本。
-- 做法 R：正文被截断，/loop 的完整配置、提示词原文、第三个 loop 均未给出；watch-social 只写到“盯 X /”，不要照不完整片段猜。只有作者主张“跑了一天，效果很好”和一个 PR 链接；PR 6796 只能说明有产出，不能说明 loop 稳定、可迁移到其他仓库。适用条件至少包括：有 GitHub issue 可处理、有测试体系可写失败测试、有 X 访问能力、能长时间运行 Claude Code。先只跑一个 triage-github loop，不要一上来并行 3 个。
-- 新增做法 S：原文只有一行环境变量加启动命令，没有任何效果数据、案例、截图、文档链接或 Anthropic 官方出处；互动量很低（61 赞、3 转发、6 回复），缺少社区验证。模型名 Opus 5.5 / Haiku 5.5 与常见版本号命名习惯不符，无法从材料确认存在该版本；环境变量名 CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS 未在原文之外得到验证，且含 EXPERIMENTAL，说明即使存在也是不稳定、可能随时改名或移除。不要把它当团队规范或生产流程的稳定依赖；不要补写如何指定模型、如何并行、并发数或失败回收；先做对照，再决定是否记录为可选实验配置。
+- 做法 R：正文被截断，/loop 的完整配置、提示词原文、第三个 loop 均未给出；watch-social 只写到「盯 X /」，不要照不完整片段猜。只有作者主张「跑了一天，效果很好」和一个 PR 链接；PR 6796 只能说明有产出，不能说明 loop 稳定、可迁移到其他仓库。适用条件至少包括：有 GitHub issue 可处理、有测试体系可写失败测试、有 X 访问能力、能长时间运行 Claude Code。先只跑一个 triage-github loop，不要一上来并行 3 个。
+- 做法 S：原文只有一行环境变量加启动命令，没有任何效果数据、案例、截图、文档链接或 Anthropic 官方出处；互动量很低（61 赞、3 转发、6 回复），缺少社区验证。模型名 Opus 5.5 / Haiku 5.5 与常见版本号命名习惯不符，无法从材料确认存在该版本；环境变量名 CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS 未在原文之外得到验证，且含 EXPERIMENTAL，说明即使存在也是不稳定、可能随时改名或移除。不要把它当团队规范或生产流程的稳定依赖；不要补写如何指定模型、如何并行、并发数或失败回收；先做对照，再决定是否记录为可选实验配置。
+- 做法 T：0.1.0，自称首个公开版本，接口在 1.0 前可能变动；构建要编译内置 Git，依赖较重；已知缺口写在 LIMITATIONS.md（README 举例提到存储核心中 pack 的垃圾回收）；README 未给出与传统 Git 或其他方案的对比数字；banner 图注里出现「50 agents on one branch retry and fail with push, rebase, retry」「100 against 200 changes landed」是配图说明，不是可核验的基准结果；自述有 unit、端到端、多节点、crash、fuzz 测试覆盖，但未给覆盖率或测试数量；只跑一两个 agent 的个人或小团队，引入数据库 + 对象存储的收益未经验证；存储迁移必须影子模式先导入、确认无误再切 authoritative；resolver 自动解决需评估后续 revert 比例；服务端本身不调用语言模型，冲突解决协议供应商无关；fork 自 Gitaly，保留上游 RPC，非 MIT 的 ee/ 目录未包含。
 
 ## 证据与来源
 
@@ -710,7 +780,8 @@ claude
 - 做法 P 依据调研《Cleveland-RD/hivehouse》。可核对：安装命令、依赖版本、claude plugin list --json 检查、userConfig 键、hh-hub init 与 start、九条技能表与一个 docs-health-check 工作流、hh-slot status、delegate 模式规则、清理范围、tests/test_docs_health.sh、30 stars。属于作者主张：bin/ 中每个机械动作是经过测试的 bash 可执行文件；docs-health-check 工作流是 Unverified here；没有任务完成率、成本节约或质量提升数据。
 - 做法 Q 依据调研《@Klonzu: 天哪。5 个代理，20 秒内 4.18 美元。别再添加你无法定价的代理了。》。可核对：作者主张别再添加你无法定价的代理、动作在下一个阶段开始前检查每个阶段的成本、可复制的检查 /cost，以及一组演示面板数据：5 个代理、20 秒、4.18 美元；M-01 到 M-05，最后一帧 19 次转移；工作 token 从 198,628 增加到 233,055。属于作者主张：这些数据来自一次演示面板，原文没有给基线、阈值或对照。
 - 做法 R 依据调研《@hwangxin: 复刻了 magpie 工作流》。可核对：作者复刻 @yetone 的 magpie 工作流并用在 Readest 项目上跑了一天；核心做法是用 Claude Code + Opus 并行跑 3 个 /loop；可辨认的 loop 有 triage-github（处理最近 3 天 issue，先复现、先写一个会失败的测试，再修）和 watch-social（盯 X /，原文截断）；第三个 loop 原文没有给出；作者称跑了一天，效果很好，并附 readest/readest PR 6796；该推文有 60 likes、8 reposts、6 replies。属于作者主张：效果很好没有可核对的指标、案例细节或对照；PR 6796 只能说明有产出，不能说明该 loop 稳定、可迁移到其他仓库。重要限制：正文被截断，/loop 的完整命令、配置或提示词原文无法直接复制运行；适用条件至少包括有 GitHub issue 可处理、有测试体系可写失败测试、有 X 访问能力、能长时间运行 Claude Code。本手册只采用可见的 triage-github 流程骨架，不补写缺失配置。
-- 新增做法 S 依据调研《@mirku21: 这是绝对他妈的黄金》。可核对：原文只有一行 export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 和 claude；互动量 61 赞、3 转发、6 回复；无效果数据、案例、截图、文档链接或 Anthropic 官方出处。属于作者主张：“每个任务都享有 Opus 级别的架构”“无需在常规轮次中消耗 Opus 上下文”；模型名 Opus 5.5 / Haiku 5.5 无法从材料确认；环境变量含 EXPERIMENTAL，可能随时改名或移除。本手册只把它列为实验性候选，先做 30 分钟基线与开关后对照，再决定是否记录为可选实验配置。
+- 做法 S 依据调研《@mirku21: 这是绝对他妈的黄金》。可核对：原文只有一行 export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 和 claude；互动量 61 赞、3 转发、6 回复；无效果数据、案例、截图、文档链接或 Anthropic 官方出处。属于作者主张：「每个任务都享有 Opus 级别的架构」「无需在常规轮次中消耗 Opus 上下文」；模型名 Opus 5.5 / Haiku 5.5 无法从材料确认；环境变量含 EXPERIMENTAL，可能随时改名或移除。本手册只把它列为实验性候选，先做 30 分钟基线与开关后对照，再决定是否记录为可选实验配置。
+- 做法 T 依据调研《feder-cr/git-ai》。可核对：MIT 许可；fork 自 Gitaly（MIT，Copyright GitLab Inc.），上游 Gitaly RPC 全部保留，非 MIT 的 ee/ 目录未包含；版本 0.1.0，自称首个公开版本；构建依赖 Go 1.26、C 工具链、Meson、Ninja；源码里有 examples/graft/quickstart.sh 和 examples/graft/config.toml 这两个可操作入口；文档列表与文件路径在 README 中逐条列出。属于作者主张（未给数据）：传统 Git 托管对 agent 是瓶颈的论证（全量 clone、merge queue、客户端遍历历史）没有附带任何测量；自述有 unit、端到端、多节点、crash、fuzz 测试覆盖，未给覆盖率或测试数量；banner 图注里出现「50 agents on one branch retry and fail with push, rebase, retry」「100 against 200 changes landed」是配图说明，不是可核验的基准结果。明确的局限：接口在 1.0 前可能变动；已知缺口写在 LIMITATIONS.md（README 举例提到存储核心中 pack 的垃圾回收）；构建要编译内置 Git，依赖较重；README 未给出与传统 Git / 其他方案的对比数字。适用条件：适合同时运行大量编码智能体、且愿意自托管一套服务端（数据库 + 对象存储）的团队；对只跑一两个 agent 的个人或小团队，为换取秒级并发落库而引入这套基础设施的收益未经验证。
 
 ## 依据的调研
 
@@ -733,3 +804,4 @@ claude
 - [@Klonzu: 天哪。5 个代理，20 秒内 4.18 美元。别再添加你无法定价的代理了。](../research/radar/2026-10-14/3143-5-20-4-18.md)：值得一试，建议在多代理、分阶段流程中尝试“进入下一阶段前运行 /cost 检查成本”的习惯；理由是原文给出了可照做的检查动作和一组成本/token 观测数据，但工具环境与完整流程不清晰，只适合小范围验证，不能直接 adopt。
 - [@hwangxin: 复刻了 ](../research/radar/2026-10-15/3598-item.md)：值得一试，可以小范围试：在单个 GitHub 仓库用 Claude Code + Opus 并行跑两个可辨认的 /loop——一个按最近 3 天窗口做 issue 复现、先写会失败的测试再修，一个盯外部信号；理由是原文给出了可照做的流程骨架，但正文被截断，第三个 loop 和 /loop 的具体配置不完整，所以不宜直接 adopt。
 - [@mirku21: 这是绝对他妈的黄金](../research/radar/2026-10-16/3966-item.md)：值得一试，先在一个小仓库里设置该环境变量跑一次同类任务，确认多代理并行是否真的生效、成本是否下降，再决定是否写进手册；理由是可照做的只有一行开关命令，价值可能真实但原文没有任何配置细节和效果证据。
+- [feder-cr/git-ai](../research/radar/2026-10-17/4081-feder-cr-git-ai.md)：值得一试，先在临时目录跑通 `examples/graft/quickstart.sh` 验证「服务端落库 + 缓存 + 两个 agent + 一次 land」整条链路，再在非关键仓库以 shadow 模式接入数据库/对象存储做小范围试点；它把大量编码智能体并发落库、自动冲突解决、落库后验证、agent 权限这些协作痛点做成了可跑的开源实现，但仍是 0.1.0、接口可能变且有已知缺口，不宜直接上关键仓库。
