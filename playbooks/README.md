@@ -4,6 +4,7 @@
 
 | 手册 | 解决的问题 | 先试这一步 | 最近修订 |
 |---|---|---|---|
+| [让 agent 大量写代码时，把代码审查变成分层检查](code-review-with-agents.md) | 当 agent 大量产出代码后，如何把读 diff 主要交给机器、把人的时间留给机器做不好的决策，并用回滚率和事故率做护栏，避免审查变成瓶颈。 | 先在一个仓库写一份简短的 CLAUDE.md，给 agent 一条它能自己跑的验证命令，并在开 PR 前跑 /code-review。 | 2026-10-16 |
 | [让编码 agent 在陌生代码库里先检索再写码](code-search-for-agents.md) | 编码 agent 在陌生的私有代码库里定位实现位置时，如何用一次检索或一张本地图谱拿到带 file:line 的证据，而不是靠逐文件 grep 试错。 | 选一个你熟悉、敏感度可控的中等规模仓库和 5–10 个“知道行为不知道位置”的真实问题，先用不装任何检索工具的方式跑一遍并记录工具调用数与 token，作为对照基线。 | 2026-10-16 |
 | [给 Claude Code 加装能力时，先走官方插件市场并验证有没有用](install-and-customize-agent-plugins.md) | 如何从官方插件市场或职能插件集合中选装插件、按团队真实流程改一条、用数字判断有没有变好，并让长跑任务跨上下文时交接、等待和拍板不掉线。 | 打开 Claude Code 的 `/plugin > Discover`，从官方插件市场挑 1 个与当前工作最贴合的插件，检查其主页和来源后安装到低风险任务上试一周。 | 2026-10-16 |
 | [搞懂别人的软件并重建时，让 agent 拿出可核验的证据](reverse-engineer-software-with-agents.md) | 当目标没有源码、你需要在自家项目里重建它的某个功能时，怎样让 agent 走完“反编译取证据 → 搞懂 → 按规格重建 → 机器可判定地验收”，而不是给你一份看着合理、无法核验的猜测。 | 先做做法 B：对一个已提取的 JS/Electron 目录跑一次 `npx -y rea-agents@latest analyze-javascript-application /absolute/path/to/app --json`，看它返回的 Evidence、恢复出的图和 unknowns 是否可信，再决定要不要上 MCP、Hopper/Ghidra 或多 agent 验收器。 | 2026-10-16 |
@@ -17,7 +18,6 @@
 | [给代理接第三方工具前，先隔离、核对、冒烟、对照再决定](add-mcp-servers-to-agents.md) | 把第三方工具集以 MCP 或 CLI 形式接给代理时，怎么不被一句注册命令带走，用隔离、清单核对、冒烟和对照验证决定继续试还是只当思路参考。 | 在隔离环境里选一个真实重复任务，先用 `pip install cli-anything-hub` + `cli-hub install/launch` 跑通一个现成 CLI harness，或对 MCP 工具先跑 `uvx jevcrawl doctor` 确认通路，并留下未接入时的基线。 | 2026-10-15 |
 | [复盘 AI 编码会话：先回放取证，再导出备份](review-agent-conversation-logs.md) | 本机 AI 编码助手的对话散落在各自存储里，你既说不清 AI 这次到底干了什么、错在哪、产出了什么，也无法把它们统一导出用于备份、微调或使用分析。 | 先跑 `uvx agentplay agents` 看本机有哪些会话可读，再 `AGENTPLAY_NO_NETWORK=1 uvx agentplay` 打开本地 viewer 回放一次。 | 2026-10-15 |
 | [在换模型、调配置前，先量出速度、成本和长对话等待时间的基线](benchmark-agent-model-serving.md) | 换模型、改服务配置或调 effort 时，缺一条可对比的基线，只能凭感觉判断快慢、贵贱和长对话是否被重复重读。 | 先选一条最贴近你当前工作流的路径：本地服务做一次 `agentperf-local run` 拿基线，Claude 任务跑完敲 `/usage` 记三项数字，Strata 编码代理把 `--prompt-cache` 从 0 改成 6 再重跑同一长回合。 | 2026-10-15 |
-| [把 AI 代码评审接进 PR 流程，并验收它是否真的省事](code-review-with-agents.md) | 解决如何把 AI 代码评审接进 PR 流程，并判断它是否真的让评审者看懂改动、减少 push 前漏检、拦住 AI 生成的 TypeScript 模式、主动发现漏洞，同时用可迁移的流程做法（PR 类型打标、简单检查前移、花费额度）度量收益。 | 先给最近 10 个 PR 打上 feature/bugfix/maintenance/testing/docs 标签，并拿其中一个真实 PR 跑一次 Claude Code 内置 `/code-review`，记录真 bug 与误报作为基线。 | 2026-10-15 |
 | [把简单判断交给快脑前，先做一次可回退的小范围验证](route-judgments-to-small-models.md) | 如何用可对照、可回退的小范围实验，验证把简单判断交给 Jev 决策模型或 Claude Code 的 jev-mcp 快脑分流是否真的改善工作流。 | 挑一个你现在用通用 LLM 做的是/否门禁任务，取 100–200 条已知答案的历史样本，按字符串 state 跑一次 Jev 与现有方案的对照。 | 2026-10-14 |
 | [让 AI 每次动手前先读你的知识库，冲突时先问你再改](persistent-memory-for-coding-agents.md) | 第二大脑、memory 或 vault 建好了却没告诉 AI 什么时候读、读到的旧结论和你现在说的话冲突时听谁的，结果这个大脑要么没被用上，要么把旧结论当事实直接施工。 | 在你所用 agent 的常驻指令入口（自定义指令 / 项目说明 / CLAUDE.md 一类位置）写三条规则：每次任务前先读你的知识库、与库里的内容冲突就标出并同时引用两版、你裁决后给出对知识库的确切编辑。 | 2026-10-14 |
 | [把性能优化交给编码 agent：先量准，再让它爬坡并交出证据](performance-optimization-with-agents.md) | 如何把性能优化交给编码 agent：先建立可重复的测量与正确性判据，再让它并行爬坡，同时用 ratchet、独立验证和人工裁决防止收益回退。 | 先手工跑 2–3 次基线、确认任务耗时波动范围，再把同一条可重复的启动命令交给 agent；如果对象只是单个可运行的应用，第一步是先要火焰图和源码热力图，而不是直接让它改代码。 | 2026-10-14 |

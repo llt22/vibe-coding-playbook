@@ -1,59 +1,67 @@
-# 把 AI 代码评审接进 PR 流程，并验收它是否真的省事
+# 让 agent 大量写代码时，把代码审查变成分层检查
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：解决如何把 AI 代码评审接进 PR 流程，并判断它是否真的让评审者看懂改动、减少 push 前漏检、拦住 AI 生成的 TypeScript 模式、主动发现漏洞，同时用可迁移的流程做法（PR 类型打标、简单检查前移、花费额度）度量收益。
-> 先试这一步：先给最近 10 个 PR 打上 feature/bugfix/maintenance/testing/docs 标签，并拿其中一个真实 PR 跑一次 Claude Code 内置 `/code-review`，记录真 bug 与误报作为基线。
-> 最近修订：2026-10-15
+> 解决的问题：当 agent 大量产出代码后，如何把读 diff 主要交给机器、把人的时间留给机器做不好的决策，并用回滚率和事故率做护栏，避免审查变成瓶颈。
+> 先试这一步：先在一个仓库写一份简短的 CLAUDE.md，给 agent 一条它能自己跑的验证命令，并在开 PR 前跑 /code-review。
+> 最近修订：2026-10-16
 
 ## 解决什么问题
 
-代码评审有六个常见缺口：评审者通常只拿到 diff，系统结构怎么变、数据怎么流要靠脑补；push 前又缺少一遍可核对的自动评审，扫描告警是否落在改动行、每条告警是否被处理、每个改动行是否送到 reviewer 面前，容易漏；常规评审是被动等告警，缺少主动的对抗性漏洞寻找；AI 生成的 TypeScript 代码常出现低证据、低信号模式（链式类型断言、把已知值 widened 到 unknown、仅检查 mock 调用的测试等），人工评审容易放过，也缺少确定性的 lint 门；如果你已经在用 Claude Code，它其实内置了 `/code-review`（别名 `/review`）这类专门审代码的命令，可以按强度档位（low 到 max）跑，还能 `--fix` 直接修、`--comment` 发到 PR、`ultra` 走云端深度审查——但这条来源是个人推文且正文截断，参数拼接语法、权限和配置都需要先对照官方 Commands 文档确认；即使有了 AI 评审，如果只按“PR velocity”看速度，agent 可以轻易造出大量没有业务影响的 PR，简单 CI 任务（lint、build、模板规则）仍堆在 CI 排队，AI 花费没有额度和例外审批，评审者拿到 AI 结果时不知道先看哪里。Uber 内部把这几点当成流程问题处理：PR 按 `feature`、`bugfix`、`maintenance`、`testing`、`docs` 打标，简单检查前移到 agent 开 PR 之前，AI 花费走“额度 + 经理例外审批”，评审前先跑 AI 评审并附风险分/截图。素材是播客节目页而非完整文字稿，没有可复制的配置或命令，但流程本身可以照做。
+代码评审有六个常见缺口：评审者通常只拿到 diff，系统结构怎么变、数据怎么流要靠脑补；push 前又缺少一遍可核对的自动评审，扫描告警是否落在改动行、每条告警是否被处理、每个改动行是否送到 reviewer 面前，容易漏；常规评审是被动等告警，缺少主动的对抗性漏洞寻找；AI 生成的 TypeScript 代码常出现低证据、低信号模式，人工评审容易放过，也缺少确定性的 lint 门；如果你已经在用 Claude Code，它内置了 `/code-review`（别名 `/review`）这类专门审代码的命令，但这条来源是个人推文且正文截断，参数拼接语法、权限和配置都需要先对照官方 Commands 文档确认；即使有了 AI 评审，如果只按 PR velocity 看速度，agent 可以轻易造出大量没有业务影响的 PR。Uber 内部把这几点当成流程问题处理：PR 按 `feature`、`bugfix`、`maintenance`、`testing`、`docs` 打标，简单检查前移到 agent 开 PR 之前，AI 花费走额度加经理例外审批，评审前先跑 AI 评审并附风险分和截图。
+
+Claude Code 团队公开的代码审查流程补上了另一条线索：不要问有没有人读过这段代码，要问这个变更可能出什么问题、哪一层检查最适合抓它。审查从路尽头的关卡变成写代码时的拼写检查，大多数变更在人类看之前已被 Claude 至少审过并修过一轮；目标状态是大多数 PR 至多一个人类在环，且回滚率和事故率不上升。原文给出的背景数据是：Claude 写了约 90% 的 Claude Code 自身代码；2026 年 6 月到 9 月，合并进 Claude Code 代码库的 PR 翻了一倍多，而被回滚的比例下降超过 40%；Anthropic monorepo 每天落地的变更从 5 月约 2,500 涨到 9 月超过 30,000。
 
 ## 适用与不适用
 
 适用：
 
 - 想让评审者在读 diff 前先看到系统结构和数据流变化。
-- 有 GitHub / GitLab / Bitbucket 之一，或愿意在本地终端先看图。
+- 有 GitHub、GitLab、Bitbucket 之一，或愿意在本地终端先看图。
 - 想在 push 前先让 AI 做一遍评审，减少漏检、遗漏 suppression 注释和被改动的 scanner 配置。
-- 有 macOS / Linux（Windows 用 WSL）、Node 22+、git，且已登录 Claude Code 或 Codex。
+- 有 macOS、Linux（Windows 用 WSL）、Node 22+、git，且已登录 Claude Code 或 Codex。
 - 愿意用小范围试点验证收益，而不是直接全仓库推开或直接当默认门禁。
-- 想让编码代理主动找漏洞，而不是只等扫描器出告警；所用工具支持子代理/子任务机制；愿意人工逐条复核代理核验过的问题列表。
-- 已经在用 Claude Code，且有代码或 PR 需要审查：可以直接试内置的 `/code-review`（别名 `/review`），它专找正确性 bug，有强度档位（low 到 max），还能 `--fix` 直接修、`--comment` 发到 PR、`ultra` 走云端深度审查。
+- 想让编码代理主动找漏洞，而不是只等扫描器出告警；所用工具支持子代理或子任务机制；愿意人工逐条复核代理核验过的问题列表。
+- 已经在用 Claude Code，且有代码或 PR 需要审查：可以直接试内置的 `/code-review`（别名 `/review`）。
 - 项目使用 TypeScript，并且已经使用 Oxlint，且运行环境支持 oxlint JS 插件（Bun、Deno 或 Node.js）。
-- 想让 AI 生成的 TypeScript 代码在进入人工评审前先过一遍确定性的 lint 检查。
-- 新增：有代码托管平台，PR 系统支持标签，能按标签统计。
-- 新增：能在仓库里提供一条本地校验命令（lint + build + 格式/模板检查的聚合脚本），且这些检查能在本地几分钟内跑完。
-- 新增（可选）：能按用户统计 AI 编码工具的 token 花费；有平台/基础设施团队才考虑模型网关与多 harness 封装。
+- 有代码托管平台，PR 系统支持标签，能按标签统计。
+- 能在仓库里提供一条本地校验命令（lint + build + 格式或模板检查的聚合脚本），且这些检查能在本地几分钟内跑完。
+- 可选：能按用户统计 AI 编码工具的 token 花费；有平台或基础设施团队才考虑模型网关与多 harness 封装。
+- 新增：已有 Claude Code 可用，仓库里有测试、构建、截图等可执行验证手段。
+- 新增：能写简短的 `CLAUDE.md`，能配置 hooks 自动跑 formatter 和 linter。
+- 新增：有 CI、分支保护、CODEOWNERS，能加阻断性检查和安全审查。
+- 新增：具备 merge queue、feature flag、分阶段发布和一键回滚能力。
+- 新增：能收集过去引发事故的 PR 连同修复和回滚，供熟悉代码的工程师逐条确认后做 eval 集。
+- 新增：Claude Code Team 和 Enterprise 计划已 GA 的 Code Review for Claude Code，可按仓库设 Quick、Standard、Deep。
 
 不适用或要谨慎：
 
 - 关键仓库、合规要求高的仓库：几个调研都只建议先在非关键仓库试点。OpenQodex 仍用 Claude Code 或 Codex 作为 reviewer，数据边界要按你对这些 agent 的既有合规判断处理；Claude Code 内置 `/code-review` 同样是在 Claude Code 里跑，代码内容会进入该会话的上下文。
-- 需要“PR 评论随 push 更新”和“复选框切换视图”：PR Lens 只有 GitHub App 版本支持，Action、GitLab、Bitbucket 做不到或受限。
-- Bitbucket 上 fork 来的 PR：PR Lens pipeline 不会触发，pipe 永远画不了这类 PR。
-- 不想把 diff 发给模型 provider：PR Lens CLI 只把 diff 发给所选的 provider，但仍然是外发。OpenQodex 除 Claude Code 或 Codex 外不需要别的 key、账号或服务器，但 reviewer 本身是这两个 agent。Claude Code 内置 `/code-review` 也在 Claude Code 会话内处理代码。
-- 没装 Claude Code 或 Codex：OpenQodex 只能跑 `openqodex scan`（只扫描）或 `review --agent`（让你所在的 agent 自己评审）。不使用 Claude Code 的人也无法用 `/code-review` 这条路。
-- 想用 Cursor 或 Cline 当 OpenQodex reviewer：原文明确“No Cursor reviewer”，理由是 `cursor-agent` 无法把工具限制到只读、也无法跳过你的规则和设置；Cline 也没有被列为 reviewer。
-- OpenQodex 项目自述仍在 1.0 之前、仓库仅 30 stars、单次评审 1–3 分钟且消费你自己的 Claude Code/Codex 额度，还不够格直接当默认门禁。
+- 需要 PR 评论随 push 更新和复选框切换视图：PR Lens 只有 GitHub App 版本支持，Action、GitLab、Bitbucket 做不到或受限。
+- Bitbucket 上 fork 来的 PR：PR Lens pipeline 不会触发。
+- 不想把 diff 发给模型 provider：PR Lens CLI 只把 diff 发给所选的 provider，但仍然是外发。OpenQodex 除 Claude Code 或 Codex 外不需要别的 key、账号或服务器，但 reviewer 本身是这两个 agent。
+- 没装 Claude Code 或 Codex：OpenQodex 只能跑 `openqodex scan` 或 `review --agent`。不使用 Claude Code 的人也无法用 `/code-review`。
+- 想用 Cursor 或 Cline 当 OpenQodex reviewer：原文明确 No Cursor reviewer，理由是 `cursor-agent` 无法把工具限制到只读，也无法跳过你的规则和设置；Cline 也没有被列为 reviewer。
+- OpenQodex 项目自述仍在 1.0 之前、仓库仅 30 stars、单次评审 1 到 3 分钟且消费你自己的 Claude Code 或 Codex 额度，还不够格直接当默认门禁。
 - Claude Code `/code-review` 的来源是个人推文，不是 Anthropic 官方文档；互动数据为 likes 24、reposts 3、replies 2，属于小范围传播，不能作为功能有效性的证据。
-- `/code-review` 正文在“审代码”这一段后就截断了，缺参数拼接语法、缺档位全名、缺权限与配置说明、缺适用版本。实际使用前必须对照官方 `Commands - Claude Code Docs` 页面确认。
-- `/code-review` 的“专找正确性 bug”“走云端深度审查”是作者对行为的概括，未附任何案例、命中率或对比数据。
-- 如果 `/code-review` 的误报率高到需要逐条反驳，或没有明显优于纯人工，就只保留在“知道有这条路”的层面。
-- 原文提示词只有一个完整版本（编号 1），编号 2 在采集时已被截断；没有项目规模、语言、模型配置、子代理数量、运行耗时、成本等参数；不要指望照抄就能复现“震惊”的效果。
-- 对抗审查依赖所用编码代理支持子代理/子任务机制；不支持的话，这条提示词会退化成普通的“找漏洞”指令。
-- “双重检查”由同一个模型完成，存在自我确认偏差的可能；人工抽检或全检是必要的。
-- 原文没有说明“列表”的载体；需要你自己指定输出位置。
-- 非 TypeScript 项目，或没有 Oxlint/JS 插件运行时的项目，不适用 ai-deslop。
-- 团队不接受规则直接拒绝已接受的写法（如 `no-object-parameters`、`no-unknown-parameters`、`no-module-mocking`），不要全量启用 ai-deslop 的 recommended。
-- 期望 lint 规则包自带效果数据：ai-deslop README 没有给出命中率、误报率或代码质量提升数据。
+- `/code-review` 正文在审代码这一段后就截断了，缺参数拼接语法、缺档位全名、缺权限与配置说明、缺适用版本。实际使用前必须对照官方 Commands 页面确认。
+- `/code-review` 的专找正确性 bug 和走云端深度审查是作者对行为的概括，未附任何案例、命中率或对比数据。
+- 如果 `/code-review` 的误报率高到需要逐条反驳，或没有明显优于纯人工，就只保留在知道有这条路的层面。
+- 对抗审查依赖所用编码代理支持子代理或子任务机制；不支持的话，这条提示词会退化成普通的找漏洞指令。
+- 双重检查由同一个模型完成，存在自我确认偏差的可能；人工抽检或全检是必要的。
+- 非 TypeScript 项目，或没有 Oxlint 和 JS 插件运行时的项目，不适用 ai-deslop。
+- 团队不接受规则直接拒绝已接受的写法，如 `no-object-parameters`、`no-unknown-parameters`、`no-module-mocking`，不要全量启用 ai-deslop 的 recommended。
 - ai-deslop 部分标准规则需要 type-aware linting；部分规则没有 fixer，修复需要人工。
-- ai-deslop 的 opt-in 规则完整配置在 `docs/*.md`，输入材料只给了链接。
-- 新增：Uber 路线素材是节目页的 11 条要点，不是完整文字稿；没有任何可复制的配置、提示词或命令；唯一出现的 `afx validate` 是 Uber 内部命令。
-- 新增：所有系统（Model Gateway、AIFX、MCP Gateway、Code Review、CostCheck、Minion、Slate）都是 Uber 内部实现，未给出开源地址或架构细节。
-- 新增：Uber 的“城市作为一等原语”“按城市分片数据库”“每城市绑定云区域并可随时故障转移”等前提，一般组织不具备，直接照搬会失真。
-- 新增：度量口径不完整：知道他们按用户算 token 花费、按类型算 PR 占比，但不知道具体阈值、基线、以及“改善”的判定标准。
-- 新增：如果你不能按用户统计 token 花费，或没有 AI 代码评审能力，就只做 PR 类型打标和本地校验前移这两步。
+- Uber 路线素材是节目页的 11 条要点，不是完整文字稿；没有任何可复制的配置、提示词或命令；唯一出现的 `afx validate` 是 Uber 内部命令。
+- 所有 Uber 系统，包括 Model Gateway、AIFX、MCP Gateway、Code Review、CostCheck、Minion、Slate，都是 Uber 内部实现，未给出开源地址或架构细节。
+- Uber 的城市作为一等原语、按城市分片数据库、每城市绑定云区域并可随时故障转移等前提，一般组织不具备，直接照搬会失真。
+- 新增：Claude Code 团队流程是团队级做法，不是零成本开关；没有 CI、分支保护、merge queue、feature flag 和一键回滚时，只能做其中一部分。
+- 新增：`REVIEW.md` 要由 code owners 写，不是普通文档；如果没人维护，审查者会继续按自己的默认标准判断。
+- 新增：风险分级和只让 trusted list 作者走轻路径会改变团队权限结构，需要先写下来并从严开始。
+- 新增：agent 的审批永远不能算作人类审批，也不能填补一个要求人类的槽位。
+- 新增：审批只覆盖某一个具体 commit；有系统无法担保的新 commit 落地时，审批必须重新给。
+- 新增：原文明确还没有在回滚或事故指标变动时自动收紧审批的 circuit breaker；在更多代码走向零人工合并之前，这是一个已知缺口。
+- 新增：审查噪声对 agent 作者代价更高。人能几秒钟摆手放掉一个 nit，agent 会去修，意味着又一个 commit、又一轮审查。
 
 ## 前置条件
 
@@ -62,30 +70,30 @@ Claude Code 内置 `/code-review` 路线：
 - 已在工作环境里装好并登录 Claude Code。
 - 有需要审查的代码或 PR。
 - 原文未说明所需权限与配置。`--comment` 需要能把结果发到 PR；`ultra` 走云端。这两条是推断，使用前请对照官方文档确认。
-- 官方 `Commands - Claude Code Docs` 页面，用于确认合法档位、参数拼接语法、权限和适用版本。
+- 官方 Commands 页面，用于确认合法档位、参数拼接语法、权限和适用版本。
 
 PR Lens 路线：
 
 - 目标平台有安装权限或 CI 配置权限。
 - 路线 A（GitHub App）：能在目标仓库安装 GitHub App。
-- 路线 B/C（编码代理）：本机有可用的编码代理，以及 `gh` CLI。
-- 自托管 CI 路线（D/E/F）：准备模型 key；示例默认 provider 是 Gemini，所以示例用 `GEMINI_API_KEY`。
-- 本地 CLI 路线（G/H）：Node 20.11+；key 从环境变量读，不走命令行参数。
+- 路线 B 和 C（编码代理）：本机有可用的编码代理，以及 `gh` CLI。
+- 自托管 CI 路线 D、E、F：准备模型 key；示例默认 provider 是 Gemini，所以示例用 `GEMINI_API_KEY`。
+- 本地 CLI 路线 G、H：Node 20.11+；key 从环境变量读，不走命令行参数。
 
 OpenQodex 路线：
 
-- Node 22 或更新 + git；macOS 或 Linux（Windows 用 WSL）。
+- Node 22 或更新加 git；macOS 或 Linux（Windows 用 WSL）。
 - 装好并登录 Claude Code 或 Codex。reviewer 只能是这两个。
-- 要跑 brakeman / rubocop 需要 Ruby 2.7 或更新，golangci-lint 需要 Go。OpenQodex 不替你装语言运行时。
+- 要跑 brakeman 或 rubocop 需要 Ruby 2.7 或更新，golangci-lint 需要 Go。OpenQodex 不替你装语言运行时。
 - 首次运行要下载扫描器；osv-scanner 需要能访问 osv.dev。semgrep 每次运行从 registry 拉规则包。
-- 默认 `auto` 的 reviewer 挑选顺序是：你运行命令时所在的 agent → Claude Code → Codex。
+- 默认 `auto` 的 reviewer 挑选顺序是：你运行命令时所在的 agent、Claude Code、Codex。
 - 关掉 reviewer 的联网工具：在 `~/.openqodex/config.yaml` 里写 `reviewer_web: off`。
 - 自定义扫描器必须经 `npx openqodex trust` 批准。
 
 对抗审查路线：
 
 - 一个代码完整、能运行或至少能被代理读全的仓库。
-- 一个支持“子代理/子任务”机制的编码代理工具（原文只提到在“Ultra”上运行“Astra 6”，未说明具体产品、版本或配置）。
+- 一个支持子代理或子任务机制的编码代理工具。
 - 确认上下文窗口足够装下项目的主要代码结构。
 - 代理需要读全项目的权限、允许自行派生多个子代理，以及一个可持久化的问题列表。
 
@@ -98,29 +106,41 @@ ai-deslop 路线：
 - 项目有 Oxlint 配置入口。
 - 部分标准规则需要 type-aware linting；opt-in 规则的完整配置在 `docs/*.md`。
 
-新增路线五（Uber 内部流程的可迁移部分）：
+Uber 内部流程的可迁移部分：
 
 - PR 系统支持标签，能按标签做统计。
-- 仓库里能提供一条本地校验命令（lint + build + 格式/模板检查的聚合脚本），且能在本地几分钟内跑完。
-- （可选）能按用户统计 AI 编码工具的 token 花费。
-- （可选）已有 AI 代码评审能力，能对 diff 打风险分，能在适用时附功能截图/录屏。
-- （可选）有平台/基础设施团队，才考虑模型网关、AIFX 这类多 harness 封装。
+- 仓库里能提供一条本地校验命令（lint + build + 格式或模板检查的聚合脚本），且能在本地几分钟内跑完。
+- 可选：能按用户统计 AI 编码工具的 token 花费。
+- 可选：已有 AI 代码评审能力，能对 diff 打风险分，能在适用时附功能截图或录屏。
+- 可选：有平台或基础设施团队，才考虑模型网关、AIFX 这类多 harness 封装。
+
+Claude Code 团队流程路线：
+
+- 已有 Claude Code 可用。
+- 仓库里有测试、构建、截图等可执行验证手段，agent 可以自己跑并展示输出。
+- 能写简短的 `CLAUDE.md`，并配置 hooks 自动跑 formatter 和 linter。
+- 有 CI、分支保护、CODEOWNERS，能加阻断性安全审查和常规阻断检查。
+- 有 PR 模板，能加 `Testing`、`Risk`、`How to revert` 三个字段。
+- 具备 merge queue、feature flag、分阶段发布和一键回滚能力。
+- 能收集过去引发事故的 PR 连同修复和回滚，请熟悉那段代码的工程师逐条确认是什么 bug、在哪里。
+- Claude Code Team 和 Enterprise 计划已 GA 的 Code Review for Claude Code，可按仓库设 Quick、Standard、Deep。
 
 ## 操作步骤
 
 先选路线：
 
 - 已经在用 Claude Code，想先试最省事的内置审查：走路线零，做法 S。
-- 只想最省事、不需要自己的模型 key，或想让 PR 评审者先看懂结构和数据流：走 PR Lens，做法 A-I。
-- 想在 push 前先跑可核对的 AI 评审：走 OpenQodex，做法 J-Q。
+- 只想最省事、不需要自己的模型 key，或想让 PR 评审者先看懂结构和数据流：走 PR Lens，做法 A 到 I。
+- 想在 push 前先跑可核对的 AI 评审：走 OpenQodex，做法 J 到 Q。
 - 想让编码代理主动对抗性找漏洞、并先做二次核验：走对抗审查路线，做法 R。
 - 想在 AI 生成的 TypeScript 进入评审前先过一道确定性 lint 门：走 ai-deslop，做法 T。
 - 想在流程层面把简单检查前移、按类型度量 PR、控制 AI 花费：走路线五，做法 U。
-- 六者可叠加，阶段不同。若只能选一个，先按你的主要缺口选。
+- 想按 Claude Code 团队公开的团队级流程，把读 diff 交给机器、人只做关键决策：走路线六，做法 V。
+- 七者可叠加，阶段不同。若只能选一个，先按你的主要缺口选。
 
 ### 路线零：用 Claude Code 内置的 `/code-review`（做法 S，最省事，如果已在用 Claude Code）
 
-前提：已在工作环境里装好并登录 Claude Code；有需要审查的代码或 PR。原文未说明所需权限与配置；`--comment` 需要能把结果发到 PR，`ultra` 走云端，这两条是推断，使用前先查官方 `Commands - Claude Code Docs`。
+前提：已在工作环境里装好并登录 Claude Code；有需要审查的代码或 PR。原文未说明所需权限与配置；`--comment` 需要能把结果发到 PR，`ultra` 走云端，这两条是推断，使用前先查官方 Commands 页面。
 
 1. 在需要审查的代码上打开 Claude Code 会话。
 2. 输入审查命令：
@@ -129,12 +149,12 @@ ai-deslop 路线：
 /code-review
 ```
 
-原文标明它的定位是“专找正确性 bug”，别名是 `/review`，两者等价。
-3. 选择审查强度：原文只给出区间“low 到 max”，未列出完整档位名称，也未给出传参写法。使用前先在官方 Commands 文档里确认合法档位与写法，不要照猜。
+原文标明它的定位是专找正确性 bug，别名是 `/review`，两者等价。
+3. 选择审查强度：原文只给出区间 low 到 max，未列出完整档位名称，也未给出传参写法。使用前先在官方 Commands 文档里确认合法档位与写法，不要照猜。
 4. 想让 AI 直接改代码时加上 `--fix`。
 5. 想让结果发布到 PR 时加上 `--comment`。
-6. 需要更深的审查时用 `ultra`，原文说明它“走云端深度审查”。原文未给 `ultra` 的调用写法，需查文档。
-7. 其余内置命令与完整参数，去原文链接的 `Commands - Claude Code Docs` 页面查。
+6. 需要更深的审查时用 `ultra`，原文说明它走云端深度审查。原文未给 `ultra` 的调用写法，需查文档。
+7. 其余内置命令与完整参数，去原文链接的 Commands 页面查。
 
 预期结果：Claude Code 会针对正确性 bug 给出审查结果；若加了 `--fix`，它会直接改；若加了 `--comment`，结果会发到 PR。但强度档位、`ultra` 写法、权限和配置因原文截断无法确认。
 
@@ -148,13 +168,9 @@ ai-deslop 路线：
 - 想在 PR 之前先在终端看图：做法 H，配合做法 G 的 CLI。
 - 图里名字错了要持续修正：做法 I。
 
-#### 做法 A：装 GitHub App（最省事，不需要自己的模型 key）
+#### 做法 A：装 GitHub App
 
-前提：你有权限在目标仓库安装 GitHub App。
-
-原文描述的三步：在任意仓库安装 App → 开一个 pull request → 图出现，并在每次 push 时更新同一条评论。安装地址 `https://github.com/apps/coldtea-pr-lens`。原文称对开源免费。只有 App 版本支持评论里的复选框（切换视图）。
-
-预期结果：PR 上出现一条评论，包含动画架构/数据流图；每次 push 更新同一条评论。
+在任意仓库安装 App，安装地址 `https://github.com/apps/coldtea-pr-lens`；开一个 pull request，图出现，并在每次 push 时更新同一条评论。原文称对开源免费。只有 App 版本支持评论里的复选框。
 
 #### 做法 B：让编码代理画图并挂到 PR 上
 
@@ -178,11 +194,9 @@ npx @coldtea/pr-lens-cli validate
 
 关键约定：图里名字错了不要改生成的 SVG，改 `.github/pr-lens.yml`。
 
-预期结果：代理把图文件写入 `.pr-lens/`，`validate` 无报错，图被附加到 PR。
-
 #### 做法 C：想让代理把整套装好
 
-前提：同做法 B。原文给出的整段提示词：
+原文给出的整段提示词：
 
 ```text
 Set up PR Lens for me. It draws code changes as moving diagrams of the system and how data flows through it.
@@ -196,11 +210,9 @@ Set up PR Lens for me. It draws code changes as moving diagrams of the system an
 4. Then test it: diagram the latest change in this repository and show me the SVGs or the canvas.
 ```
 
-预期结果：代理按你选的路线装好 skill，并给出 App 或 Action 的选择；最后用当前仓库最近一次改动做演示。
+#### 做法 D：GitHub Action
 
-#### 做法 D：GitHub Action（跑在自己的 CI，用自己的 key）
-
-前提：把模型 key 存成仓库 secret（示例用 `GEMINI_API_KEY`）。提交下面这个文件为 `.github/workflows/pr-lens.yml`：
+提交下面这个文件为 `.github/workflows/pr-lens.yml`：
 
 ```yaml
 name: PR Lens
@@ -209,10 +221,10 @@ on:
   pull_request:
 
 permissions:
-  contents: write # to publish the rendered SVGs
-  pull-requests: write # to post the comment
+  contents: write
+  pull-requests: write
 
-concurrency: # one run per pull request; a push supersedes the last
+concurrency:
   group: pr-lens-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
@@ -222,19 +234,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # the diff is between two commits, so both must be here
+          fetch-depth: 0
       - uses: coldteadotai/pr-lens/packages/action@v0
         with:
           api-key: ${{ secrets.GEMINI_API_KEY }}
 ```
 
-`provider` 可选 `gemini`（默认）、`openai`，或 `openai-compatible` 配 `base-url` 和 `model`。已知限制：Action 在两次运行之间不保留状态，所以评论发出后不会更新，复选框只在 App 里可用。
-
-预期结果：每个 PR 触发一次 Action，评论里贴出图；但同一 PR 后续 push 不会更新那条评论。
+已知限制：Action 在两次运行之间不保留状态，所以评论发出后不会更新，复选框只在 App 里可用。
 
 #### 做法 E：GitLab CI/CD 组件
 
-前提：添加两个 masked 变量——模型 key，以及一个带 `api` scope 的 project access token（`CI_JOB_TOKEN` 不能发评论）。另外 `workflow: rules` 必须写在**你自己的** `.gitlab-ci.yml` 里。
+前提：添加两个 masked 变量：模型 key，以及一个带 `api` scope 的 project access token，`CI_JOB_TOKEN` 不能发评论。另外 `workflow: rules` 必须写在**你自己的** `.gitlab-ci.yml` 里。
 
 ```yaml
 workflow:
@@ -246,17 +256,13 @@ include:
   - component: gitlab.com/coldteadotai/pr-lens/pr-lens@0.1.0
 ```
 
-注意：GitLab.com 上 project access token 需要 Premium 或 Ultimate；Free 档可用带 `api` scope 的 personal access token，但评论会显示你的名字而不是机器人。SVG 以附件形式上传到项目：私有项目里任何拿到附件链接的人都能看到图；若项目开启 **Require authentication to view media files**，图不会加载。
-
-预期结果：merge request 上出现评论和图；若媒体文件要求认证，评论里的图可能不显示，但画布链接可用。
+注意：GitLab.com 上 project access token 需要 Premium 或 Ultimate；Free 档可用带 `api` scope 的 personal access token，但评论会显示你的名字而不是机器人。SVG 以附件形式上传到项目：私有项目里任何拿到附件链接的人都能看到图；若项目开启 Require authentication to view media files，图不会加载。
 
 #### 做法 F：Bitbucket pipe
 
-前提：两个 secured 变量——模型 key，以及带 `pullrequest:write` 和 `repository:write` scope 的仓库访问 token。
-
 ```yaml
 clone:
-  depth: full # the diff needs history back to the merge base
+  depth: full
 
 pipelines:
   pull-requests:
@@ -272,72 +278,46 @@ pipelines:
 
 已知限制：Bitbucket 评论是纯 Markdown，没有折叠段、没有明暗成对图；fork 来的 PR 不会触发 pipeline。
 
-预期结果：同仓库 PR 出现评论和图；fork PR 无输出。
-
-#### 做法 G：本地 CLI 一步步来（只有 `analyze` 会调模型）
+#### 做法 G：本地 CLI 一步步来
 
 前提：Node 20.11+；key 从环境变量读，不走命令行参数。
 
 ```bash
-export GEMINI_API_KEY=…    # the default provider; OPENAI_API_KEY with --provider openai
+export GEMINI_API_KEY=…
 
-# Diff in, graph document out — measured against the merge base, not the branch tip.
 npx @coldtea/pr-lens-cli analyze --base origin/main
-
-# The document as light and dark SVGs, plus the manifest a comment is built from.
 npx @coldtea/pr-lens-cli render .pr-lens/graph.json
-
-# The pull request comment as markdown, on stdout. Posting is your business.
 npx @coldtea/pr-lens-cli comment --graph .pr-lens/<drawing>/drawn.graph.json --manifest .pr-lens/<drawing>/manifest.json --asset-base-url https://raw.githubusercontent.com/owner/repo/pr-lens/42
-
-# Any PR Lens document, checked against the contract.
 npx @coldtea/pr-lens-cli validate .pr-lens/graph.json .github/pr-lens.yml
-
-# After the merge: the pull-request document as a stored map of the system, worth committing.
 npx @coldtea/pr-lens-cli export .pr-lens/graph.json -o .github/pr-lens.map.json
 ```
 
-要点：产物都落在 `.pr-lens/`，CLI 首次写入会自动把它加进 `.gitignore`；**唯一值得提交的是 `export` 写出的 map 文件**。`--out` 可改输出位置；`comment --target gitlab` 或 `--target bitbucket` 可产出对应平台能显示的评论；`analyze` 会从 git remote 自动判断平台。接 Ollama、DeepSeek、OpenRouter 等任何说 `/chat/completions` 的服务用 `--provider openai-compatible --base-url <url>`。
-
-预期结果：`.pr-lens/` 下有 graph.json、明暗两张 SVG、manifest；`validate` 报告所有契约问题；合并后可把 map 文件提交进仓库。
+要点：产物都落在 `.pr-lens/`，CLI 首次写入会自动把它加进 `.gitignore`；唯一值得提交的是 `export` 写出的 map 文件。`--out` 可改输出位置；`comment --target gitlab` 或 `--target bitbucket` 可产出对应平台能显示的评论；`analyze` 会从 git remote 自动判断平台。接 Ollama、DeepSeek、OpenRouter 等任何说 `/chat/completions` 的服务用 `--provider openai-compatible --base-url <url>`。
 
 #### 做法 H：PR 之前先在终端看图
 
 ```bash
 npx @coldtea/pr-lens-cli analyze --base origin/main
 npx @coldtea/pr-lens-cli render .pr-lens/graph.json
-open .pr-lens/*-dark-*.svg    # macOS; the SVGs are self-contained, any browser reads them
+open .pr-lens/*-dark-*.svg
 ```
 
 这条用来审 agent 刚写的代码：让写代码的 agent 把改动画出来，自己对着 diff 看图，比 PR 上出现同一张图早几分钟。
 
-预期结果：在本地浏览器打开自包含 SVG，不用等 PR 评论。
+#### 做法 I：用配置文件做持续修正
 
-#### 做法 I：用配置文件做持续修正（对所有路线都成立）
-
-路径：GitHub 用 `.github/pr-lens.yml`；GitLab/Bitbucket 用 `.gitlab/pr-lens.yml`（调研原文在此处截断，具体键名以官方为准）。图里名字错了不要改生成的 SVG，改这个配置文件。
-
-预期结果：下一次生成图时命名按配置文件修正，而不是每次手工改 SVG。
+路径：GitHub 用 `.github/pr-lens.yml`；GitLab 和 Bitbucket 用 `.gitlab/pr-lens.yml`，具体键名以官方为准。图里名字错了不要改生成的 SVG，改这个配置文件。
 
 ### 路线二：在 push 前做可核对的 AI 评审（OpenQodex）
 
 #### 做法 J：先看 demo，再给当前机器安装
 
-前提：Node 22+、git，macOS 或 Linux（Windows 用 WSL）。第一次建议先看 demo。
-
 ```bash
 npx openqodex demo
-```
-
-它会建一个小仓库、种入已知 bug 并扫描。然后安装：
-
-```bash
 npx openqodex init
 ```
 
-它会找出机器上的 Claude Code、Cursor、Codex CLI 和 Cline，打印它将要写入的每个文件并只问一次。装完直接评审你当前的改动，或在没有改动时问你要评审什么。之后可以对 agent 说“review my change with openqodex”，或自己跑 `openqodex review`。
-
-预期结果：demo 能跑通；`init` 只问一次并列出将写入的文件；装完可评审当前改动。
+它会建一个小仓库、种入已知 bug 并扫描。安装后可以直接评审你当前的改动，或在没有改动时问你要评审什么。之后可以对 agent 说 review my change with openqodex，或自己跑 `openqodex review`。
 
 #### 做法 K：给 agent 装 OpenQodex skill
 
@@ -352,8 +332,6 @@ Install the OpenQodex skill with `npx skills add openqodex/openqodex`.
 Then review my current change with openqodex and tell me the verdict and the findings.
 ```
 
-预期结果：agent 装上 skill，并对当前改动跑一次 OpenQodex，回报 verdict 和 findings。
-
 #### 做法 L：日常评审与选择 reviewer
 
 ```bash
@@ -361,44 +339,29 @@ openqodex review
 openqodex review --all
 openqodex review <branch>
 openqodex review '#42'
-```
-
-`--all` 评审整个仓库；`<branch>` 和 `'#42'` 评审不是当前工作的分支或 PR——OpenQodex 会自己 fetch、checkout 到临时目录，只评审它离开 base 之后新增的内容。
-
-选 reviewer：
-
-```bash
 openqodex review --reviewer codex
 ```
 
-或在 `~/.openqodex/config.yaml` 里写 `reviewer:`。默认 `auto` 的挑选顺序是：你运行命令时所在的 agent → Claude Code → Codex。两个 reviewer 的隔离方式不同：
+`--all` 评审整个仓库；`<branch>` 和 `'#42'` 评审不是当前工作的分支或 PR，OpenQodex 会自己 fetch、checkout 到临时目录，只评审它离开 base 之后新增的内容。
 
-- Claude Code（`claude -p`）：只给 read / search / list 工具，在改动副本内运行，不带你的 settings、hooks、plugins、memory 或 instruction 文件；它的事件流记录每次读取，所以报告会列出它读过哪些文件。
-- Codex（`codex exec`）：在只读沙箱里启动，读权限限制在改动副本和系统目录，命令无网络，不带你的 config、plugins、hooks 或仓库的 instruction 文件；但它仍会加载全局 `~/.codex/AGENTS.md`，而且事件流不显示每条命令，报告会注明“读取未被记录”。
+选 reviewer：默认 `auto` 的挑选顺序是：你运行命令时所在的 agent、Claude Code、Codex。两个 reviewer 的隔离方式不同：
+
+- Claude Code（`claude -p`）：只给 read、search、list 工具，在改动副本内运行，不带你的 settings、hooks、plugins、memory 或 instruction 文件；它的事件流记录每次读取，所以报告会列出它读过哪些文件。
+- Codex（`codex exec`）：在只读沙箱里启动，读权限限制在改动副本和系统目录，命令无网络，不带你的 config、plugins、hooks 或仓库的 instruction 文件；但它仍会加载全局 `~/.codex/AGENTS.md`，而且事件流不显示每条命令，报告会注明读取未被记录。
 
 关掉 reviewer 的联网工具：在 `~/.openqodex/config.yaml` 里写 `reviewer_web: off`。
 
-预期结果：终端打印评审报告，并按配置选择 Claude Code 或 Codex 作为独立 reviewer。
-
 #### 做法 M：读报告，并检查完整性
 
-报告打在终端，同时写 `report.md`、`report.json`、`report.sarif`。判定“评审完成”的条件是三条同时成立：每个阶段都跑了、每条扫描告警都被提升或带理由丢弃、每一行改动都送到了 reviewer 面前（在 brief 里、在 OpenQodex 后来的消息里，或对 Claude Code 而言在它读过的文件里）。任何一条不满足就打“Review incomplete”并列出缺什么，退出码为 2。注意：只删除代码的改动也可能带告警——删除处相邻的行算作改动行。
-
-预期结果：你能同时拿到终端报告和三种文件报告；若三条完整性断言任一条不满足，报告会打“Review incomplete”并给退出码 2，可被 CI 当失败。
+报告打在终端，同时写 `report.md`、`report.json`、`report.sarif`。判定评审完成的条件是三条同时成立：每个阶段都跑了、每条扫描告警都被提升或带理由丢弃、每一行改动都送到了 reviewer 面前。任何一条不满足就打 Review incomplete 并列出缺什么，退出码为 2。注意：只删除代码的改动也可能带告警，删除处相邻的行算作改动行。
 
 #### 做法 N：接门禁与 CI
 
-原文给出：
-
-- push gate（Claude Code 和 Codex 各一套）+ 可选的 git pre-push hook：两者都只去找“正好是这次要推送的内容”的评审；默认 warn，只有 `.openqodex/config.yaml` 里设了 `review.block_on_severity` 才 block。
+- push gate（Claude Code 和 Codex 各一套）加可选的 git pre-push hook：两者都只去找正好是这次要推送的内容的评审；默认 warn，只有 `.openqodex/config.yaml` 里设了 `review.block_on_severity` 才 block。
 - GitHub Action：workflow 给了 Anthropic API key 时对 PR 跑完整评审，没给就只跑 `openqodex scan`。
 - pre-commit hook：只跑扫描器，不是一次评审。
 
-预期结果：默认只 warn；只有显式设置 `review.block_on_severity` 才会 block。GitHub Action 没给 Anthropic API key 时只扫描。
-
 #### 做法 O：加自定义扫描器
-
-在仓库的 `.openqodex/config.yaml` 里写：
 
 ```yaml
 scanners:
@@ -413,9 +376,7 @@ scanners:
 npx openqodex trust
 ```
 
-`trust` 会挑出对应你机器的 release asset 并下载，显示版本、asset、它的 sha256 和 run 行，然后问 yes/no。改过这条配置就要重新批准。
-
-预期结果：自定义扫描器在批准后才会运行；改配置会触发重新批准。
+改过这条配置就要重新批准。
 
 #### 做法 P：扫描器安装与管理
 
@@ -427,19 +388,13 @@ npx openqodex doctor --install
 
 关掉 brakeman：`scanners.disable: [brakeman]`。
 
-预期结果：首次只下载需要的扫描器；超 45 秒的安装转后台并在报告中标为 installing；可一次性安装全部。
-
 #### 做法 Q：离线与自动更新控制
 
-`--offline` 会跳过 osv-scanner 和 semgrep，并关掉扫描器下载、版本检查、以及分支/PR 评审的 fetch 和 `gh` 调用。自动更新用 `openqodex update --off`、`~/.openqodex/config.yaml` 里的 `update: off` 或环境变量 `OPENQODEX_AUTO_UPDATE=0` 关闭；`openqodex update --rollback` 回退。用 `npx openqodex guide <topic>` 可离线看文档页。
-
-预期结果：离线时不跑 osv-scanner 和 semgrep，也不做下载、版本检查和分支/PR fetch；自动更新可按配置关闭或回退。
+`--offline` 会跳过 osv-scanner 和 semgrep，并关掉扫描器下载、版本检查、以及分支和 PR 评审的 fetch 和 `gh` 调用。自动更新用 `openqodex update --off`、`~/.openqodex/config.yaml` 里的 `update: off` 或环境变量 `OPENQODEX_AUTO_UPDATE=0` 关闭；`openqodex update --rollback` 回退。用 `npx openqodex guide <topic>` 可离线看文档页。
 
 ### 路线三：让代理做对抗性漏洞审查（做法 R）
 
-#### 做法 R：原样粘贴提示词，让代理用子代理找漏洞并二次核验
-
-前提：准备一个代码完整、能运行或至少能被代理读全的仓库；使用一个支持“子代理/子任务”机制的编码代理工具；确认该工具的子代理功能已打开；确认上下文窗口足够装下项目的主要代码结构。
+前提：准备一个代码完整、能运行或至少能被代理读全的仓库；使用一个支持子代理或子任务机制的编码代理工具；确认该工具的子代理功能已打开；确认上下文窗口足够装下项目的主要代码结构。
 
 1. 在代理会话中**原样粘贴**下面这条提示词：
 
@@ -447,35 +402,28 @@ npx openqodex doctor --install
 彻底检查这个项目，寻找漏洞。将它视为对抗性审查，使用你想要的任意多子代理。当一个问题返回时，双重检查它是否正确，并将已检查的问题添加到列表中。
 ```
 
-2. **允许代理自行决定子代理数量**。
-3. **要求代理对每条问题做二次核验**。
-4. **把通过核验的问题写入列表**。原文没有说明这个列表是什么载体，需要你自己指定输出位置，例如让代理写入仓库根目录下的一个 Markdown 文件。
-5. **人工复核列表并修复**。逐条判定每个入列问题是“真缺陷 / 误报 / 已知问题 / 风格偏好”，记录数量和时间。
+2. 允许代理自行决定子代理数量。
+3. 要求代理对每条问题做二次核验。
+4. 把通过核验的问题写入列表。原文没有说明这个列表是什么载体，需要你自己指定输出位置，例如让代理写入仓库根目录下的一个 Markdown 文件。
+5. 人工复核列表并修复。逐条判定每个入列问题是真缺陷、误报、已知问题还是风格偏好，记录数量和时间。
 6. 原文中编号 2 的提示词因截断无法还原，不要凭猜测补写。
 
-预期结果：代理用若干子代理并行找漏洞，对返回的问题二次核验后，把通过核验的问题写入你指定的列表；你再逐条复核并修复。
-
 ### 路线四：用 Oxlint 规则包拦截 AI 生成的 TypeScript 模式（ai-deslop，做法 T）
-
-#### 做法 T：接入 ai-deslop 的 recommended 配置
-
-前提：项目使用 TypeScript，并且已经使用 Oxlint，且运行环境支持 oxlint JS 插件。
 
 1. 安装为开发依赖：
 
 ```bash
 npm install --save-dev ai-deslop
-# @oxlint/plugins comes along as a runtime dependency — keep it in sync with your oxlint version
 ```
 
 2. 在 Oxlint 配置入口加入 JS 插件和 recommended 配置：
 
 ```ts
-import { defineConfig } from "oxlint";
-import { configs as deslopConfigs } from "ai-deslop";
+import { defineConfig } from 'oxlint';
+import { configs as deslopConfigs } from 'ai-deslop';
 
 export default defineConfig({
-  jsPlugins: ["ai-deslop"],
+  jsPlugins: ['ai-deslop'],
   options: deslopConfigs.recommended.options,
   rules: deslopConfigs.recommended.rules
 });
@@ -485,28 +433,18 @@ export default defineConfig({
 4. 如需更强检查，再按文档启用 opt-in 规则：`no-duplicate-consts`、`no-duplicate-types`、`no-renamed-imports`、`canonical-class-names`。注意 `no-repeated-expect-call` 和 `no-duplicate-types` 没有 fixer；`no-renamed-imports` 和 `canonical-class-names` 是 Fix 类规则。
 5. 根据项目风格决定是否保留全部 recommended。
 
-预期结果：如果规则大量拒绝团队已接受写法，就只保留子集或放弃；如果误报可接受且能抓住此前漏掉的 AI 代码模式，就保留。
-
 ### 路线五：把简单检查前移、按类型度量 PR、控制 AI 花费（Uber 内部流程的可迁移部分，做法 U）
-
-前提：素材是 The Pragmatic Engineer 播客节目页，只有 11 条要点，没有完整文字稿，也没有可复制的配置或提示词。以下做法可以脱离 Uber 基础设施照做；`afx validate` 是 Uber 内部命令，只作为“开 PR 前先本地校验”的形态参考。
 
 #### 做法 U1：PR 按工作类型打标，用结构占比替代速度指标
 
-前提：PR 系统支持标签，能按标签做统计。
-
 1. 给所有 PR 加五个标签：`feature`、`bugfix`、`maintenance`、`testing`、`docs`。
 2. 先跑两周收集基线，再做趋势对比。
-3. Uber 的观察方向是：feature PR 占比上升，maintenance PR 占比下降。过去度量 “PR velocity”（一个 diff 到生产要多久）在有 agent 后失效，因为可以轻易造出几十上百个 PR，其中很多对产品没有业务影响。
-4. 原文没有给出阈值、基线或“改善”的判定标准，需要自己先建基线。
+3. Uber 的观察方向是：feature PR 占比上升，maintenance PR 占比下降。过去度量 PR velocity 在有 agent 后失效，因为可以轻易造出几十上百个 PR，其中很多对产品没有业务影响。
+4. 原文没有给出阈值、基线或改善的判定标准，需要自己先建基线。
 
-预期结果：你能看到各类型 PR 的占比，而不是只看 PR 数量或速度。
+#### 做法 U2：把 lint、build、模板规则这类简单 CI 任务搬到 agent 的 inner loop
 
-#### 做法 U2：把 lint/build/模板规则这类简单 CI 任务搬到 agent 的 inner loop
-
-前提：agent 能执行这些校验命令，并且能读到工程配置；这些检查能在本地几分钟内跑完。
-
-1. 在仓库里提供一条本地校验命令（lint + build + 格式/模板检查的聚合脚本）。原文只给出 Uber 内部命令形态：
+1. 在仓库里提供一条本地校验命令（lint + build + 格式或模板检查的聚合脚本）。原文只给出 Uber 内部命令形态：
 
 ```text
 afx validate
@@ -514,150 +452,205 @@ afx validate
 
 这是内部命令，不能直接照抄；等价形态是你自己的聚合校验脚本。
 
-2. 在 agent 的工作约定里要求“开 PR 前先跑这条命令”。
-3. 背景：Uber 今年为 CI 系统内部宣布过“code red”，因为 12 个月内 CI 任务量翻倍以上。目标是把简单任务从 CI 排队里移走。
+2. 在 agent 的工作约定里要求开 PR 前先跑这条命令。
+3. 背景：Uber 今年为 CI 系统内部宣布过 code red，因为 12 个月内 CI 任务量翻倍以上。目标是把简单任务从 CI 排队里移走。
 
-预期结果：agent 在开 PR 前先跑校验，减少 CI 排队和失败。
-
-#### 做法 U3（可选）：AI 花费走“额度 + 例外审批”
-
-前提：能按用户统计 token 花费。
+#### 做法 U3（可选）：AI 花费走额度加例外审批
 
 1. 给工程师分配 spend tier。
 2. 达到上限后，经理可以签批当月追加。
 3. 对合适类型的工作不设上限，但避免无意识烧 token。
 4. Uber 配套一个跨会话插件 CostCheck，提示工程师如何改善自己的成本画像。原文没有给出 tier 数值、上限或审批阈值。
 
-预期结果：AI 花费按人可见，超限有例外审批路径。
-
 #### 做法 U4（可选）：评审前先跑 AI 评审，附风险分和截图
 
-前提：已有 AI 代码评审能力，能对 diff 打风险分，能在适用时附功能截图/录屏。
-
 1. 所有 PR 仍由工程师评审。
-2. 工程师开始评审时，AI 代码评审已经跑完，功能截图/视频已附上（适用时），风险分已给出。
+2. 工程师开始评审时，AI 代码评审已经跑完，功能截图或视频已附上，风险分已给出。
 3. 人据此决定花多少时间。
 4. Uday 承认代码评审已成公司内部的大瓶颈，但没有给出量化。这意味着 AI 预评审不是万能，可能把瓶颈转移到评审环节。
 
-预期结果：评审者拿到 AI 评审结果、风险分和截图，再决定投入多少时间。
-
 #### 做法 U5（方向，低可迁移性）：模型网关与多 harness 封装
 
-前提：有平台/基础设施团队；上层有多个 AI 功能要接不同模型；团队里同时有人用 Claude Code、Codex、OpenCode 等多个 harness。
-
-1. 把所有 AI 能力收敛到一个模型网关后面。Uber 2023 年定下原则：所有 AI 功能必须与模型和 harness 解耦，于是建了 Model Gateway，支持在 Anthropic、OpenAI、其他厂商模型以及自托管开源模型之间切换。可挂的中间件包括 AI Guard（安全团队检查请求与响应、度量延迟、标记过慢模型或查询）、Spend tracking（按用户追踪花费）、Visibility（审计日志与会话追踪）。
-2. 在多个 CLI agent 之上做一层统一封装（AIFX 模式）。Uber 的 AIFX 是 Claude Code、Codex、OpenCode 等 harness 之上的一层 wrapper，工程师切换 harness 时，settings、skills、plugins 跟着一起迁移。
+1. 把所有 AI 能力收敛到一个模型网关后面。Uber 2023 年定下原则：所有 AI 功能必须与模型和 harness 解耦，于是建了 Model Gateway，支持在 Anthropic、OpenAI、其他厂商模型以及自托管开源模型之间切换。可挂的中间件包括 AI Guard、Spend tracking、Visibility。
+2. 在多个 CLI agent 之上做一层统一封装，Uber 的 AIFX 是 Claude Code、Codex、OpenCode 等 harness 之上的一层 wrapper，工程师切换 harness 时，settings、skills、plugins 跟着一起迁移。
 3. 认知：Uber 的 AI 工具看起来像一年建成，实际建在十年开发者工具投入之上。先确认你有哪些既有注册表、追踪、环境隔离能力可复用，不要指望从零搭出同等 agent 工具链。
 
-预期结果：如果有多 harness 且配置经常丢，这层封装有价值；否则不要照搬，因为原文没有给出开源地址或架构细节。
+### 路线六：Claude Code 团队流程，把读 diff 交给机器、人只做关键决策（做法 V）
+
+前提：已有 Claude Code 可用；仓库里有测试、构建、截图等可执行验证手段；能写简短的 `CLAUDE.md`，并配置 hooks 自动跑 formatter 和 linter；有 CI、分支保护、CODEOWNERS；具备 merge queue、feature flag、分阶段发布和一键回滚能力；能收集事故和回滚做 eval。原文强调：不要问有没有人读过这段代码，要问这个变更可能出什么问题、哪一层检查最适合抓它。
+
+#### 做法 V1：开 PR 之前，先给 Claude 一个它能自己跑的验证方式
+
+1. 给 Claude 一个它能自己跑的验证方式，并要求它展示输出，而不是说做完了。原文举例：跑 bash 命令、跑测试套件、在浏览器或手机模拟器里试应用、拿截图和设计稿对比。
+2. 写一份简短的 `CLAUDE.md`，说明项目是什么：技术栈、约定、目标和非目标。大代码库里要短，并指向其他文档；每次审查都会加载它。审查者还会标记违反其中约定的代码，以及让其中某一句话过时的改动。
+3. 在 `CLAUDE.md` 之外配置 hooks，自动跑 formatter 和 linter。
+4. 在本地跑轻量审查，或让一个全新上下文的 subagent 审 diff：
+
+```text
+/code-review
+/security-review
+```
+
+前提：`/code-review` 是本地较轻的版本；`/security-review` 对应开源的 security review GitHub Action 的同等能力。
+
+5. 加一份 `REVIEW.md`，由 code owners 写，告诉审查者在这块代码里什么才算重要。按原文，好的 `REVIEW.md` 要：说明该部分代码里失败长什么样，对文档是它在说谎，对配置是它错误路由；限制 nit 的数量；列出应跳过的路径；要求以文件和行号作为证据，而不是凭名字猜；要求摘要以数量开头，并且没什么可修时直说。还要单独检查审查者是否真的遵守了它。
+6. 把重复出现的审查评论搬进 `REVIEW.md`；如果某类问题被反复标记，就在源头修：改 skill、加 lint 规则，或更新指令文件。
+7. 开 PR 前跑内部 skill：一个找 bug，一个简化 diff，一个做端到端行为检查；UI 变更还要对照设计规范检查。原文只描述这三类 skill 的作用，未给出其内容。
+
+#### 做法 V2：每个 PR 上，先让 Claude 审查，再让 agent 验证发现
+
+1. 每个 PR 在人类看之前先过一次 Claude 审查：读 diff，对照整个仓库和 PR 声明的意图，问这个改动是否解决了它的问题、是否契合系统、是否破坏了别的东西；对 bug 修复还要看根因。
+2. 让发现结果先由其他 agent 验证再给人看：多个 agent 同时找 bug，另一组对每条发现投票，足够多同意才发布；只涉及风格、诊断或清理的发现直接丢掉。这些过滤规则在团队自己的 PR 上做过 A/B 测试才保留。留下的按严重度排序为行内评论，并标记 `Important`、`Nit` 或 `Pre-existing`，后者用于区分不是这个 PR 引入的 bug。
+3. 每条发现都必须被回应：要么修，要么用理由 resolve 掉这个 thread。经常由 agent 在夜间接手修复，作者第二天回来时 PR 已经又过了一轮。
+4. 加自动化安全审查，并且让它能阻断合并：bug 审查或安全审查只要有未关闭的发现，PR 就不能合并；修掉或写一句简短理由关闭 thread，这是清除误报的方式；后续 commit 修好了，发现会自动清除。
+5. 上常规阻断性检查：lint、类型检查、所有平台的测试、构建。原文称一个典型 CLI PR 在有人看之前可能跑几十个检查。
+6. 在 PR 模板里加三个字段，Claude 可以代填，但提出变更的人要签字确认：
+
+```text
+## Testing
+## Risk
+## How to revert
+```
+
+#### 做法 V3：审批用风险分级，先严后松
+
+1. 用变更本身而不是作者来定风险等级，由分类器读变更后选择层级；再用第二个分类器判断即使层级说不需要，这个变更是否还需要另一个人。原文的分级表：
+
+| 风险 | 例子 | 需要的人类审批 |
+| --- | --- | --- |
+| 低 | 文档、文案、仅内部功能、flag 后面的增量变更 | 自动审查和安全检查全绿后不需要 |
+| 中 | 普通产品变更，以及缓存、auto-updater、system prompt 等敏感区域的变更 | 一人 |
+| 高 | 最高风险的代码，加上一小批始终需要两人的路径 | 两人 |
+
+2. 有些路径永远需要人：owners 列为敏感的路径，以及任何 CI workflow 文件。用 CODEOWNERS 和分支保护把 auth、billing、CI 和发布流程、安装器固定为始终需要一个人。
+3. 只有仓库 trusted list 上的作者，主要是拥有该仓库的团队，能走轻路径，其他人都需要第二个人审批。agent 的审批永远不能算作人类审批，也不能填补一个要求人类的槽位。
+4. 谁提示了变更，谁就计入必需审查人：agent 写的 PR，指挥 agent 的人算一个审查人，和亲手写代码一样。
+5. 审批只覆盖某一个具体 commit：如果有系统无法担保的新 commit 落地，比如 agent push，或有人手工解的合并，审批必须重新给。
+6. 先严后松：起始从严，有证据再放宽。
+
+#### 做法 V4：合并与之后，用 merge queue、flag、回滚和 eval 收尾
+
+1. 用 merge queue 把每个检查对着 main 重跑一遍，避免两个各自通过的 PR 合起来弄坏 main。
+2. 新行为先放在 flag 后面只发给内部人员使用，公开版本先进 latest channel，stable channel 滞后。
+3. 留最后一层快速发现、快速回滚：flag 不用部署就能关；保持每周 on-call 轮换；事故复盘要问哪一层本该抓到它。原文明确说他们还没有在回滚或事故指标变动时自动收紧审批的 circuit breaker，工程师希望在更多代码走向零人工合并之前有这个东西。
+4. 把事故和回滚变成 eval 集：收集过去引发事故的 PR 连同它们的修复和回滚，请熟悉那段代码的工程师逐条确认是什么 bug、在哪里，然后让审查者每天跑这个集合；审查者的 prompt、工具或模型一变，就用整套 eval 重新打分。
+5. 测噪声，而不是只测召回：把审查者留下的每条评论按当事人的反应分类，他修了、他说这条错了、他说这是有意为之、他觉得不重要；另外在已知干净的 PR 上跑审查者，统计有多少报告会引导人做出有害改动。原文写下的优先级是：先抓真 bug，其次才是减少审查轮次。注意噪声对 agent 作者代价更高，人能几秒钟摆手放掉一个 nit，agent 会去修，意味着又一个 commit、又一轮审查。
+6. 让审查收敛：轮次上限，超过三轮后审查者要求作者退一步重新考虑方案；前几轮之后只复审新 diff；标记 bug 的类别，让作者修掉所有实例而不是一行；不重复已经贴过的发现。
+7. 让审查 agent 每晚在存量代码上跑，在旧 bug 冒出来之前先抓到。
+
+#### 做法 V5：人留在五类决策上
+
+1. 把人力集中在五类决策上，其余交给检查：是否该做这件事，包括方向、品味、范围；高风险代码，包括 billing、auto-updater、CI workflows；会被别人复制的架构模式；读证据，包括测试输出、跑过的命令及其返回、截图、审查者的发现；对结果负责。
+2. 让 Claude 写指定代码切片的解释，需要的话让它生成一个可视化该部分代码的小工具，用来替代靠逐行读同事的 diff 来学代码。原文明确说他们没有正式流程，也没人脑子里装着完整模型。
+3. 采纳你落地、你负责：小到中等变更出问题通常由落地者修，前提是变更小、一切可逆、爆炸半径决定审查门槛、回归能通过遥测和内部使用快速浮现，且事故复盘看系统不追责。原文补充：所有权也是共享的，团队大量在开放 Slack 频道工作。
 
 ## 怎么判断变好了
 
-六条路线都只建议小范围试点，没有给出统一的建议时长，也没有给出检出率、误报率、返工时间等量化效果数据。可以按下面方式自己量。
+七条路线都只建议小范围试点，没有给出统一的建议时长，也没有给出检出率、误报率、返工时间等量化效果数据。可以按下面方式自己量。
 
 Claude Code `/code-review` 最小试用方式：
 1. 选一个已完成、你本来就要人工 review 的真实 PR 或一次提交作为对照样本。
-2. 先原样跑一次 `/code-review`（不带任何参数），记录它报出的问题清单。
+2. 先原样跑一次 `/code-review`，不带任何参数，记录它报出的问题清单。
 3. 对照你自己的人工 review 结论，标记：真 bug、误报、漏掉但人工发现的 bug。
-4. 再对同一处跑一次带 `--fix` 的版本，看它给出的修改是否可以直接采纳（先不提交，只做 diff 对比）。
+4. 再对同一处跑一次带 `--fix` 的版本，看它给出的修改是否可以直接采纳，先不提交，只做 diff 对比。
 5. 只有在上面两步结果可接受时，才试 `--comment` 发到 PR。
-6. 强度档位和 `ultra` 的对比，建议在同一个 PR 上分别跑一次，比较命中数与耗时（原文未给档位写法，需先查文档）。
+6. 强度档位和 `ultra` 的对比，建议在同一个 PR 上分别跑一次，比较命中数与耗时。原文未给档位写法，需先查文档。
 
-PR Lens 最小试用方式：选一个非关键仓库，挑一批中等规模 PR，用 CLI 或 GitHub App 把改动画成架构/数据流图再进入评审。
+PR Lens 最小试用方式：选一个非关键仓库，挑一批中等规模 PR，用 CLI 或 GitHub App 把改动画成架构或数据流图再进入评审。
 
-OpenQodex 最小试用方式：在一台 macOS/Linux 机器上先跑 `npx openqodex demo`，再在一个非关键仓库跑 `npx openqodex init`，按三点验收：报告是否退出码 2、每条扫描告警是否有理由、每个改动行是否送到 reviewer 面前。
+OpenQodex 最小试用方式：在一台 macOS 或 Linux 机器上先跑 `npx openqodex demo`，再在一个非关键仓库跑 `npx openqodex init`，按三点验收：报告是否退出码 2、每条扫描告警是否有理由、每个改动行是否送到 reviewer 面前。
 
-对抗审查最小试用方式：挑一个中等规模、你比较熟悉的代码仓库，用支持子代理的编码代理原样粘贴那条提示词，让它把通过核验的问题写入一个指定文件；人工逐条判定每个入列问题是“真缺陷 / 误报 / 已知问题 / 风格偏好”，记录数量和时间。作为对照，用同一工具、同一条提示词但不启用子代理跑一次。
+对抗审查最小试用方式：挑一个中等规模、你比较熟悉的代码仓库，用支持子代理的编码代理原样粘贴那条提示词，让它把通过核验的问题写入一个指定文件；人工逐条判定每个入列问题是真缺陷、误报、已知问题还是风格偏好，记录数量和时间。作为对照，用同一工具、同一条提示词但不启用子代理跑一次。
 
 ai-deslop 最小试用方式：选一个使用 TypeScript 和 Oxlint 的包，安装 `ai-deslop`，只启用 README 中的 recommended 配置；先跑当前代码库，观察噪音，再跑一段 AI 生成的 diff。
 
-路线五最小试用方式（来自 Uber 调研的试用建议）：不依赖 Uber 基础设施，5–15 人团队两周可做。
-1. PR 类型打标 + 占比基线：加五个标签，先跑两周收集基线。
-2. 把简单检查前移：在仓库里提供一条本地校验命令（lint + build + 格式/模板检查的聚合脚本），并在 agent 的工作约定里要求“开 PR 前先跑这条命令”。
-3. （可选）AI 花费额度 + 例外审批：按人统计 token 花费，设月度额度，超限需负责人签批；对明确类型的任务不设上限。
-4. （可选）评审前信息打包：让 AI 评审先跑、把结果作为评论附在 PR 上，再让人评审。
+路线五最小试用方式：不依赖 Uber 基础设施，5 到 15 人团队两周可做。
+1. PR 类型打标加占比基线：加五个标签，先跑两周收集基线。
+2. 把简单检查前移：在仓库里提供一条本地校验命令，并在 agent 的工作约定里要求开 PR 前先跑这条命令。
+3. 可选：AI 花费额度加例外审批，按人统计 token 花费，设月度额度，超限需负责人签批；对明确类型的任务不设上限。
+4. 可选：评审前信息打包，让 AI 评审先跑、把结果作为评论附在 PR 上，再让人评审。
+
+路线六最小试用方式：先在一个仓库用简短的 `CLAUDE.md`、`REVIEW.md` 和 agent 可运行的检查打底，再接入 AI 审查、用风险分级控制人工审批数量，并以回滚率和事故率作为护栏。原文给出的背景数据是：Claude 写了约 90% 的 Claude Code 自身代码；2026 年 6 月到 9 月，合并进 Claude Code 代码库的 PR 翻了一倍多，而被回滚的比例下降超过 40%；Anthropic monorepo 每天落地的变更从 5 月约 2,500 涨到 9 月超过 30,000。
 
 可观察指标：
-- Claude Code `/code-review`：真实 bug 命中数 / 总报出数；漏检的真实 bug 数；审阅耗时变化；`--fix` 采纳比例；`--comment` 被回应/采纳比例；各强度档位准确率与耗时/成本。
+- Claude Code `/code-review`：真实 bug 命中数除以总报出数；漏检的真实 bug 数；审阅耗时变化；`--fix` 采纳比例；`--comment` 被回应或采纳比例；各强度档位准确率与耗时或成本。
 - PR Lens：命名修正条数；`validate` 通过率；评审中的理解性问题数量。
 - OpenQodex：报告是否退出码 2；每条扫描告警是否有理由；每个改动行是否送到 reviewer 面前；是否同时输出终端和 `report.md`、`report.json`、`report.sarif`。
-- 对抗审查：真阳性数；误报率；重复/已知问题占比；核验有效性（被剔除的问题里有没有本应保留的真缺陷）；人工成本；与“单次扫描、无子代理、无二次核验”的对比。
+- 对抗审查：真阳性数；误报率；重复或已知问题占比；核验有效性，即被剔除的问题里有没有本应保留的真缺陷；人工成本；与单次扫描、无子代理、无二次核验的对比。
 - ai-deslop：按规则统计违规数量与类型；人工判断真正需要修的比例；修复耗时；启用前后同类问题在评审或 CI 中是否减少。
-- 路线五：各类型 PR 占比变化（feature 升、maintenance 降）；CI 排队时长、CI 任务量、失败率；每个 PR 的人工评审时长、评审意见条数、从开 PR 到合并的时长；按人 token 花费、单位功能 PR 的平均花费（而不是总花费）；质量侧回归缺陷数、线上事故数、回滚次数。原文没有给出这些指标的目标值或基线，需要自己先建基线再判断。
+- 路线五：各类型 PR 占比变化，feature 升、maintenance 降；CI 排队时长、CI 任务量、失败率；每个 PR 的人工评审时长、评审意见条数、从开 PR 到合并的时长；按人 token 花费、单位功能 PR 的平均花费，而不是总花费；质量侧回归缺陷数、线上事故数、回滚次数。原文没有给出这些指标的目标值或基线，需要自己先建基线再判断。
+- 路线六：每个 PR 的人类审批数，看中位数和 95 分位；人类评论数；PR 等人等待的时长。护栏指标是回滚率和事故率，原文明确如果它们上升，就没有省下人力时间，只是把它挪走了。审查者质量用历史事故 PR 连同修复和回滚构成的 eval 集每天跑；噪声用当事人的反应分类，以及在已知干净 PR 上统计会误导人做有害改动的报告数。收敛把 rounds-to-pass 和召回率一起追踪。原文给出的一次诊断：对审查者反复标记的内容跑 git blame，约 59% 是审查者第一轮时就已经存在的代码，它在每轮多翻出几个老 bug，而不是在找新 bug。一次对照：研究预览上线后，内部 PR 获得实质性审查评论的比例从 16% 升到 54%；超过 1,000 行的 PR 大多能查出问题，小 PR 大多干净返回。
 
-试多久：Claude Code `/code-review`、PR Lens、OpenQodex、ai-deslop 原文都没给建议时长；至少覆盖一批中等规模 PR 或改动的完整评审周期后再判断，不要只看一个 PR 或一次审查。对抗审查建议连续两三个仓库跑下来。路线五建议先跑两周收集基线，再判断趋势。
+试多久：Claude Code `/code-review`、PR Lens、OpenQodex、ai-deslop 原文都没给建议时长；至少覆盖一批中等规模 PR 或改动的完整评审周期后再判断，不要只看一个 PR 或一次审查。对抗审查建议连续两三个仓库跑下来。路线五建议先跑两周收集基线，再判断趋势。路线六应先严后松，用回滚率和事故率做护栏，在护栏不上升的前提下再放宽审批。
 
 ## 常见坑
 
 - Claude Code `/code-review` 来源是个人推文，不是 Anthropic 官方文档；互动数据 likes 24、reposts 3、replies 2。
-- `/code-review` 原文在“审代码”这一段后就截断了；缺参数拼接语法、缺档位全名、缺权限与配置说明、缺适用版本。不要照猜语法，先查官方 `Commands - Claude Code Docs`。
-- `/code-review` 的“专找正确性 bug”“走云端深度审查”是作者对行为的概括，未附任何案例、命中率或对比数据。
+- `/code-review` 原文在审代码这一段后就截断了；缺参数拼接语法、缺档位全名、缺权限与配置说明、缺适用版本。不要照猜语法，先查官方 Commands 页面。
+- `/code-review` 的专找正确性 bug 和走云端深度审查是作者对行为的概括，未附任何案例、命中率或对比数据。
 - `--comment` 需要 PR 访问路径、`ultra` 需要云端算力，这两条是推断，原文没有明确说明。
-- 收益主张没有量化数据：PR Lens README 给出的安装、CI 配置、CLI 命令和修正文件格式可照做，但所有“省事”“更好理解”的收益都只是作者自述。OpenQodex 也没有给出检出率、误报率、返工时间等效果数据。
-- OpenQodex 成熟度：项目自述仍在 1.0 之前，仓库仅 30 stars，单次评审 1–3 分钟且消耗你自己的 Claude Code/Codex 额度；还不够格直接当默认门禁。
+- 收益主张没有量化数据：PR Lens README 给出的安装、CI 配置、CLI 命令和修正文件格式可照做，但所有省事、更好理解的收益都只是作者自述。OpenQodex 也没有给出检出率、误报率、返工时间等效果数据。
+- OpenQodex 成熟度：项目自述仍在 1.0 之前，仓库仅 30 stars，单次评审 1 到 3 分钟且消耗你自己的 Claude Code 或 Codex 额度；还不够格直接当默认门禁。
 - PR Lens 评论不更新：GitHub Action 在两次运行之间不保留状态，评论发出后不会更新；需要随 push 更新的评论和复选框，只有 GitHub App 版本支持。
 - PR Lens 改错地方：图里名字错了不要改生成的 SVG，改 `.github/pr-lens.yml`。
 - PR Lens GitLab 权限：`CI_JOB_TOKEN` 不能发评论，要带 `api` scope 的 token；GitLab.com 上 project access token 需要 Premium 或 Ultimate；Free 档用 personal access token 会让评论显示你的名字。
-- PR Lens GitLab 媒体文件：私有项目里任何拿到附件链接的人都能看到图；项目开启 **Require authentication to view media files** 后评论里的图不会加载。
+- PR Lens GitLab 媒体文件：私有项目里任何拿到附件链接的人都能看到图；项目开启 Require authentication to view media files 后评论里的图不会加载。
 - PR Lens Bitbucket fork PR：fork 来的 PR 不会触发 pipeline。
 - PR Lens 提交错产物：`.pr-lens/` 是临时目录，CLI 首次写入会自动加进 `.gitignore`；唯一值得提交的是 `export` 写出的 map 文件。
 - PR Lens key 外发：key 只通过环境变量传给 CLI，不上命令行；diff 只发给所选的 provider。
 - PR Lens 默认 provider：示例默认 Gemini，所以示例 secret 名是 `GEMINI_API_KEY`；换 OpenAI 或 `openai-compatible` 时按文档改 `provider`、`base-url`、`model`。
 - OpenQodex 缺 reviewer：没装 Claude Code 或 Codex 时只能跑 `openqodex scan` 或 `review --agent`；Cursor 不能当 reviewer，Cline 也未列为 reviewer。
 - OpenQodex 运行时和网络：OpenQodex 不替你装语言运行时；缺了会在报告里列为未安装并给出原因。首次下载扫描器需要网络；osv-scanner 需要访问 osv.dev；semgrep 每次运行从 registry 拉规则包。
-- OpenQodex Codex 验证缺口：Codex 侧事件流不显示每条命令，报告会注明“读取未被记录”；它仍会加载全局 `~/.codex/AGENTS.md`。
+- OpenQodex Codex 验证缺口：Codex 侧事件流不显示每条命令，报告会注明读取未被记录；它仍会加载全局 `~/.codex/AGENTS.md`。
 - OpenQodex 自定义扫描器：必须经 `npx openqodex trust` 批准；改过配置就要重新批准。
-- OpenQodex 删除改动：只删除代码的改动也可能带告警——删除处相邻的行算作改动行。
+- OpenQodex 删除改动：只删除代码的改动也可能带告警，删除处相邻的行算作改动行。
 - OpenQodex 门禁默认：push gate 和 pre-push hook 默认 warn，只有 `.openqodex/config.yaml` 里设了 `review.block_on_severity` 才 block；pre-commit hook 只跑扫描器；GitHub Action 没给 Anthropic API key 时只跑 `openqodex scan`。
-- OpenQodex 离线：`--offline` 会跳过 osv-scanner 和 semgrep，并关掉扫描器下载、版本检查、以及分支/PR 评审的 fetch 和 `gh` 调用。
+- OpenQodex 离线：`--offline` 会跳过 osv-scanner 和 semgrep，并关掉扫描器下载、版本检查、以及分支和 PR 评审的 fetch 和 `gh` 调用。
 - OpenQodex 自动更新：默认可能每天最多一次后台找新版本并自动更新，且只在 release 至少 24 小时、其 npm provenance 显示由本仓库 release workflow 构建时才装；可用 `openqodex update --off`、`~/.openqodex/config.yaml` 的 `update: off` 或 `OPENQODEX_AUTO_UPDATE=0` 关闭，`openqodex update --rollback` 回退。
 - 对抗审查原文截断：编号 2 的提示词完全丢失；不要凭猜测补写。
 - 对抗审查无参数：原文没有说明项目规模、语言、模型配置、子代理数量、运行耗时、成本。
 - 对抗审查列表载体未说明：需要你自己指定输出位置。
-- 对抗审查自证偏差：“双重检查”由同一个模型完成，存在自我确认偏差的可能，必须人工抽检或全检。
-- 对抗审查能力依赖：仅适合已经有可读代码库、且所用代理工具支持子代理/子任务机制的场景。
-- 对抗审查的“Ultra”“Astra 6”未解释：无法核实，也无法复用其配置；互动数据（约 402 赞、18 次转发、26 条回复）只能说明关注度。
-- 对抗审查的收益表述只是作者主张：“让我震惊”“一些真正令人惊叹的作品”没有输出样例、缺陷清单、修复前后对比或数据支撑。
+- 对抗审查自证偏差：双重检查由同一个模型完成，存在自我确认偏差的可能，必须人工抽检或全检。
+- 对抗审查能力依赖：仅适合已经有可读代码库、且所用代理工具支持子代理或子任务机制的场景。
+- 对抗审查的 Ultra、Astra 6 未解释：无法核实，也无法复用其配置；互动数据约 402 赞、18 次转发、26 条回复，只能说明关注度。
+- 对抗审查的收益表述只是作者主张：让我震惊、一些真正令人惊叹的作品，没有输出样例、缺陷清单、修复前后对比或数据支撑。
 - ai-deslop 原文是仓库 README，没有给出具体代码违规示例、基准数据、误报率或用户案例。
-- ai-deslop “拒绝低证据、低信号、AI-slop 代码模式”是作者的目标主张，不是已被数据验证的结论。
+- ai-deslop 拒绝低证据、低信号、AI-slop 代码模式是作者的目标主张，不是已被数据验证的结论。
 - ai-deslop 规则较 opinionated：例如 `no-object-parameters`、`no-unknown-parameters`、`no-module-mocking` 等会直接拒绝一类写法。
 - ai-deslop 部分标准规则需要 type-aware linting；部分规则没有 fixer；opt-in 规则的完整配置在文档中，输入材料只给了链接。
 - ai-deslop 来源页显示 HN 31 points、7 comments，但没有评论内容或外部验证数据。
-- ai-deslop 适用条件：TypeScript + Oxlint + 可运行 JS 插件的运行时（Bun、Deno、Node.js）。许可证 MIT。
-- 新增：Uber 路线素材是节目页的 11 条要点，不是完整文字稿；大量工具只有名字和时间戳。
-- 新增：没有任何可复制的配置、提示词或命令；唯一出现的 `afx validate` 是 Uber 内部命令。
-- 新增：所有系统（Model Gateway、AIFX、MCP Gateway、Code Review、CostCheck、Minion、Slate）都是 Uber 内部实现，未给出开源地址或架构细节。
-- 新增：Uber 的“城市作为一等原语”“按城市分片数据库”“每城市绑定云区域并可随时故障转移”等前提，一般组织不具备，直接照搬会失真。
-- 新增：度量口径不完整：知道他们按用户算 token 花费、按类型算 PR 占比，但不知道具体阈值、基线、以及“改善”的判定标准。
-- 新增：token 成本近几个月降低约 50% 是嘉宾口述，非可复核的公开数据。
-- 新增：PR velocity 在有 agent 后失效，因为可以轻易造出几十上百个 PR，其中很多对产品没有业务影响；不要再用单一速度指标。
-- 新增：AI 预评审 + 风险分 + 截图是流程做法，但 Uday 承认代码评审已成公司内部的大瓶颈，且没有量化；它可能只是把瓶颈转移到评审环节。
-- 新增：多 harness 并存时，如果没有 AIFX 这类 wrapper，settings、skills、plugins 不跟着人走；但搭建这层封装需要平台/基础设施团队。
-- 新增：AI 花费额度需要按用户统计 token 花费；做不到就只做 PR 类型打标和本地校验前移。
+- ai-deslop 适用条件：TypeScript 加 Oxlint 加可运行 JS 插件的运行时，Bun、Deno、Node.js。许可证 MIT。
+- Uber 路线素材是节目页的 11 条要点，不是完整文字稿；大量工具只有名字和时间戳。
+- 没有任何可复制的配置、提示词或命令；唯一出现的 `afx validate` 是 Uber 内部命令。
+- 所有系统，包括 Model Gateway、AIFX、MCP Gateway、Code Review、CostCheck、Minion、Slate，都是 Uber 内部实现，未给出开源地址或架构细节。
+- Uber 的城市作为一等原语、按城市分片数据库、每城市绑定云区域并可随时故障转移等前提，一般组织不具备，直接照搬会失真。
+- 度量口径不完整：知道他们按用户算 token 花费、按类型算 PR 占比，但不知道具体阈值、基线、以及改善的判定标准。
+- token 成本近几个月降低约 50% 是嘉宾口述，非可复核的公开数据。
+- PR velocity 在有 agent 后失效，因为可以轻易造出几十上百个 PR，其中很多对产品没有业务影响；不要再用单一速度指标。
+- AI 预评审加风险分加截图是流程做法，但 Uday 承认代码评审已成公司内部的大瓶颈，且没有量化；它可能只是把瓶颈转移到评审环节。
+- 多 harness 并存时，如果没有 AIFX 这类 wrapper，settings、skills、plugins 不跟着人走；但搭建这层封装需要平台或基础设施团队。
+- AI 花费额度需要按用户统计 token 花费；做不到就只做 PR 类型打标和本地校验前移。
+- 新增：Claude Code 团队流程的 `CLAUDE.md` 在大代码库里要短，并指向其他文档；太长会每次审查都加载。
+- 新增：`REVIEW.md` 要由 code owners 写；它不是普通文档，而是告诉审查者在这块代码里什么才算重要。
+- 新增：审查噪声对 agent 作者代价更高。人能几秒钟摆手放掉一个 nit，agent 会去修，意味着又一个 commit、又一轮审查。
+- 新增：agent 的审批永远不能算作人类审批，也不能填补一个要求人类的槽位。
+- 新增：审批只覆盖某一个具体 commit；有系统无法担保的新 commit 落地时，审批必须重新给。
+- 新增：原文明确还没有在回滚或事故指标变动时自动收紧审批的 circuit breaker；在更多代码走向零人工合并之前，这是一个已知缺口。
+- 新增：merge queue 是必要的，否则两个各自通过的 PR 合起来可能弄坏 main。
+- 新增：eval 集要请熟悉那段代码的工程师逐条确认是什么 bug、在哪里，不能只把事故 PR 丢进去。
+- 新增：约 59% 是审查者第一轮时就已经存在的代码，说明审查者在多轮里多翻出老 bug，而不是在找新 bug；要把 rounds-to-pass 和召回率一起追踪。
+- 新增：不要把有没有人读过这段代码当成唯一判据；要问这个变更可能出什么问题、哪一层检查最适合抓它。
 
 ## 证据与来源
 
-- 做法 S 依据调研报告 `@riba2534` 推文。报告给出的可照做内容包括：命令名 `/code-review`（别名 `/review`）、可选强度 low 到 max、`--fix` 直接修、`--comment` 发到 PR、`ultra` 走云端深度审查，以及原文附的 `Commands - Claude Code Docs` 链接卡片。
-- 该推文报告明确指出的限制：来源是个人推文，不是 Anthropic 官方文档；互动数据为 likes 24、reposts 3、replies 2；正文在“审代码”这一段后就截断了；缺参数拼接语法、缺档位全名、缺权限与配置说明、缺适用版本；`Commands - Claude Code Docs` 页面在材料中只有链接卡片，未抓取到正文。
-- 做法 S 哪些只是作者主张：“专找正确性 bug”“走云端深度审查”是作者对行为的概括，未附任何案例、命中率或对比数据；`--comment` 需要 PR 访问路径、`ultra` 需要云端算力属于推断。
-- 做法 A-I 依据调研报告 `coldteadotai/pr-lens`。报告给出了可直接照做的安装、CI 配置、CLI 命令和修正文件格式：GitHub App 安装地址、`npx skills add coldteadotai/pr-lens`、`.github/workflows/pr-lens.yml` 的 Action 配置、GitLab CI/CD 组件、Bitbucket pipe、CLI 的 `analyze` / `render` / `comment` / `validate` / `export` 命令、`.pr-lens/` 产物约定、`.github/pr-lens.yml` 改名修正。
-- PR Lens 报告也给出了限制：Action 不保留状态、GitLab token 与媒体文件限制、Bitbucket fork PR 不触发、`.pr-lens/` 是临时目录只提交 map。
-- PR Lens 哪些只是作者主张：README 中“对开源免费”“省事”“更好理解改动”等收益表述均为作者自述，报告没有给出对比或量化效果数据；抓取元数据显示仓库 1821 stars（来自抓取 metrics，非原文内容），只能说明关注度。
-- 做法 J-Q 依据调研报告 `openqodex/openqodex`。报告给出的可照做内容包括：`npx openqodex demo`、`npx openqodex init`、`npx skills add openqodex/openqodex`、`openqodex review` / `--all` / `<branch>` / `'#42'`、`openqodex review --reviewer codex`、`~/.openqodex/config.yaml` 的 `reviewer:` 与 `reviewer_web: off`、`report.md` / `report.json` / `report.sarif`、`.openqodex/config.yaml` 自定义扫描器、`npx openqodex trust`、`npx openqodex doctor --install`、`scanners.disable: [brakeman]`、`--offline`、`openqodex update --off` / `--rollback` / `OPENQODEX_AUTO_UPDATE=0`、`npx openqodex guide <topic>`。
-- OpenQodex 报告给出的数据：13 个内置扫描器各自的版本、触发条件、下载体积（Apple Silicon / Linux x64 两列，例如 gitleaks 2.9 MB / 3.0 MB，osv-scanner 31.8 MB / 32.1 MB，hadolint 102.6 MB / 55.7 MB）。报告还提到首次运行实测条件是 Apple Silicon Mac、空工具目录、2 MB/s 带宽，但材料在此截断，未给出结果。
-- OpenQodex 报告给出的限制：项目自述仍在 1.0 之前、仓库仅 30 stars、单次评审 1–3 分钟且消耗自己的 Claude Code/Codex 额度；没有检出率、误报率、返工时间等效果数据；Codex 侧读取未被记录；Cursor 不能当 reviewer；Cline 也未列为 reviewer。
-- OpenQodex 哪些只是作者主张：README 把它描述成“给 Claude Code 和 Codex 用的开源 AI 代码评审工具”，并给出“一条 `openqodex review` 会……”的流程说明；这些流程可照做，但收益没有量化对比。OpenQodex 的验收标准是流程完整性，不是检出率。
-- 做法 R 依据调研报告 `@twostraws` 推文。报告给出了一条完整的、可复制的提示词（编号 1），提示词中明确规定的两个动作：使用任意多子代理；对返回的问题做双重检查后加入列表。报告明确指出原文截断，编号 2 提示词丢失。
-- 对抗审查哪些只是作者主张：“让我震惊”“一些真正令人惊叹的作品”——没有任何输出样例、缺陷清单、修复前后对比或数据支撑；“在 Ultra 上释放了 Astra 6”——未解释“Ultra”和“Astra 6”具体指什么；互动数据只能说明关注度。
-- 对抗审查主要局限：没有说明项目规模、语言、模型配置、子代理数量、运行耗时、成本；没有说明“列表”的载体和后续处置方式；“双重检查”由同一个模型完成，存在自我确认偏差的可能；适用条件仅适合已经有可读代码库、且所用代理工具支持子代理/子任务机制的场景。
-- 做法 T 依据调研报告 `ai-deslop`（Show HN: Deslop – Oxlint rules for AI-generated TypeScript）。报告给出的可照做内容包括：安装命令 `npm install --save-dev ai-deslop`、Oxlint 配置示例（`jsPlugins: ["ai-deslop"]`、`options: deslopConfigs.recommended.options`、`rules: deslopConfigs.recommended.rules`）、recommended 规则清单、opt-in 规则清单。
-- ai-deslop 报告给出的限制：原文是仓库 README；没有给出具体代码违规示例、基准数据、误报率或用户案例；部分标准规则需要 type-aware linting；`no-repeated-expect-call` 和 `no-duplicate-types` 没有 fixer；opt-in 规则的完整配置在 `docs/*.md`，输入材料只给了链接；来源页显示 HN 31 points、7 comments，但没有评论内容或外部验证数据。
-- ai-deslop 哪些只是作者主张：“拒绝低证据、低信号、AI-slop 代码模式”是作者的目标主张，不是已被数据验证的结论；规则较 opinionated，可能不适合所有团队约定。
-- 做法 U 依据调研报告 `Uber’s AI infra, from the inside`（The Pragmatic Engineer 播客节目页，嘉宾 Uday Kiran Medisetty，负责 Uber agentic AI 方向）。报告给出的可迁移做法：PR 按 `feature`、`bugfix`、`maintenance`、`testing`、`docs` 打标；把 lint/build/模板规则这类简单 CI 任务移到 agent 的 inner loop，命令形态是内部命令 `afx validate`；AI 花费走“额度 + 例外审批”，配套 CostCheck 提示成本画像；所有 PR 仍由工程师评审，但评审前 AI 代码评审已跑完、功能截图/视频已附上、风险分已给出；模型网关 Model Gateway、AI Guard、Spend tracking、Visibility、AIFX 多 harness 封装。
-- Uber 报告给出的数字（均为嘉宾口述，非可复核公开数据）：token 成本近几个月降低约 50%；CI 12 个月内任务量翻倍以上，触发内部 “code red”；2015 年 2 个服务，2019 年数千个，2026 年与 2019 年大致相当而业务规模约为当时 10 倍；M3DB 每秒发出约 5 亿个指标；工程师日常使用 20 多个工具。
-- Uber 报告给出的限制：素材是节目页的 11 条要点，不是完整文字稿；没有任何可复制的配置、提示词或命令；唯一出现的 `afx validate` 是 Uber 内部命令；所有系统都是 Uber 内部实现，未给出开源地址或架构细节；Uber 的“城市作为一等原语”“按城市分片数据库”等前提一般组织不具备；度量口径不完整，不知道具体阈值、基线、改善判定标准。
-- Uber 哪些只是作者/嘉宾主张：“多任务能力、context engineering、审查与验证输出的能力变得更重要”；“为工程师建的工具也让 agent 更好用”是因果判断，没有对照实验；代码评审成为大瓶颈是 Uday 的承认，但没有量化。
-- 新旧做法差异：此前手册已有路线零（Claude Code 内置 `/code-review`）、路线一（PR Lens）、路线二（OpenQodex）、路线三（对抗审查）、路线四（ai-deslop）；本次新增路线五（Uber 内部流程的可迁移部分）。六者阶段不同，可叠加；若只能选一个，先按你的主要缺口选：已经在用 Claude Code 且想快速跑一遍审查用 `/code-review`，看不懂改动用 PR Lens，怕 push 前漏检用 OpenQodex，AI 生成 TypeScript 模式多就用 ai-deslop，想主动找漏洞用对抗审查，想从流程层面减少 PR 数量和 CI 排队并控制 AI 花费就用路线五。
+- 做法 S 依据调研报告 `@riba2534` 推文。报告给出的可照做内容包括：命令名 `/code-review`（别名 `/review`）、可选强度 low 到 max、`--fix` 直接修、`--comment` 发到 PR、`ultra` 走云端深度审查，以及原文附的 Commands 页面链接卡片。该推文报告明确指出的限制：来源是个人推文，不是 Anthropic 官方文档；互动数据为 likes 24、reposts 3、replies 2；正文在审代码这一段后就截断了；缺参数拼接语法、缺档位全名、缺权限与配置说明、缺适用版本；Commands 页面在材料中只有链接卡片，未抓取到正文。专找正确性 bug、走云端深度审查是作者对行为的概括，未附任何案例、命中率或对比数据；`--comment` 需要 PR 访问路径、`ultra` 需要云端算力属于推断。
+- 做法 A 到 I 依据调研报告 `coldteadotai/pr-lens`。报告给出了可直接照做的安装、CI 配置、CLI 命令和修正文件格式：GitHub App 安装地址、`npx skills add coldteadotai/pr-lens`、`.github/workflows/pr-lens.yml` 的 Action 配置、GitLab CI/CD 组件、Bitbucket pipe、CLI 的 `analyze`、`render`、`comment`、`validate`、`export` 命令、`.pr-lens/` 产物约定、`.github/pr-lens.yml` 改名修正。PR Lens 报告也给出了限制：Action 不保留状态、GitLab token 与媒体文件限制、Bitbucket fork PR 不触发、`.pr-lens/` 是临时目录只提交 map。README 中对开源免费、省事、更好理解改动等收益表述均为作者自述，报告没有给出对比或量化效果数据；抓取元数据显示仓库 1821 stars，来自抓取 metrics，非原文内容，只能说明关注度。
+- 做法 J 到 Q 依据调研报告 `openqodex/openqodex`。报告给出的可照做内容包括：`npx openqodex demo`、`npx openqodex init`、`npx skills add openqodex/openqodex`、`openqodex review`、`--all`、`<branch>`、`'#42'`、`openqodex review --reviewer codex`、`~/.openqodex/config.yaml` 的 `reviewer:` 与 `reviewer_web: off`、`report.md`、`report.json`、`report.sarif`、`.openqodex/config.yaml` 自定义扫描器、`npx openqodex trust`、`npx openqodex doctor --install`、`scanners.disable: [brakeman]`、`--offline`、`openqodex update --off`、`--rollback`、`OPENQODEX_AUTO_UPDATE=0`、`npx openqodex guide <topic>`。报告给出的数据：13 个内置扫描器各自的版本、触发条件、下载体积，Apple Silicon 与 Linux x64 两列，例如 gitleaks 2.9 MB 对 3.0 MB，osv-scanner 31.8 MB 对 32.1 MB，hadolint 102.6 MB 对 55.7 MB；首次运行实测条件是 Apple Silicon Mac、空工具目录、2 MB/s 带宽，但材料在此截断，未给出结果。限制：项目自述仍在 1.0 之前、仓库仅 30 stars、单次评审 1 到 3 分钟且消耗自己的 Claude Code 或 Codex 额度；没有检出率、误报率、返工时间等效果数据；Codex 侧读取未被记录；Cursor 不能当 reviewer；Cline 也未列为 reviewer。README 把它描述成给 Claude Code 和 Codex 用的开源 AI 代码评审工具，并给出一条 `openqodex review` 会怎么做的流程说明；这些流程可照做，但收益没有量化对比。OpenQodex 的验收标准是流程完整性，不是检出率。
+- 做法 R 依据调研报告 `@twostraws` 推文。报告给出了一条完整的、可复制的提示词，编号 1，提示词中明确规定的两个动作：使用任意多子代理；对返回的问题做双重检查后加入列表。报告明确指出原文截断，编号 2 提示词丢失。让我震惊、一些真正令人惊叹的作品没有任何输出样例、缺陷清单、修复前后对比或数据支撑；在 Ultra 上释放了 Astra 6 未解释 Ultra 和 Astra 6 具体指什么；互动数据只能说明关注度。主要局限：没有说明项目规模、语言、模型配置、子代理数量、运行耗时、成本；没有说明列表的载体和后续处置方式；双重检查由同一个模型完成，存在自我确认偏差的可能；适用条件仅适合已经有可读代码库、且所用代理工具支持子代理或子任务机制的场景。
+- 做法 T 依据调研报告 `ai-deslop`，Show HN: Deslop – Oxlint rules for AI-generated TypeScript。报告给出的可照做内容包括：安装命令 `npm install --save-dev ai-deslop`、Oxlint 配置示例、recommended 规则清单、opt-in 规则清单。限制：原文是仓库 README；没有给出具体代码违规示例、基准数据、误报率或用户案例；部分标准规则需要 type-aware linting；`no-repeated-expect-call` 和 `no-duplicate-types` 没有 fixer；opt-in 规则的完整配置在 `docs/*.md`，输入材料只给了链接；来源页显示 HN 31 points、7 comments，但没有评论内容或外部验证数据。拒绝低证据、低信号、AI-slop 代码模式是作者的目标主张，不是已被数据验证的结论；规则较 opinionated，可能不适合所有团队约定。
+- 做法 U 依据调研报告 `Uber’s AI infra, from the inside`，The Pragmatic Engineer 播客节目页，嘉宾 Uday Kiran Medisetty，负责 Uber agentic AI 方向。报告给出的可迁移做法：PR 按 `feature`、`bugfix`、`maintenance`、`testing`、`docs` 打标；把 lint、build、模板规则这类简单 CI 任务移到 agent 的 inner loop，命令形态是内部命令 `afx validate`；AI 花费走额度加例外审批，配套 CostCheck 提示成本画像；所有 PR 仍由工程师评审，但评审前 AI 代码评审已跑完、功能截图或视频已附上、风险分已给出；模型网关 Model Gateway、AI Guard、Spend tracking、Visibility、AIFX 多 harness 封装。数字均为嘉宾口述，非可复核公开数据：token 成本近几个月降低约 50%；CI 12 个月内任务量翻倍以上，触发内部 code red；2015 年 2 个服务，2019 年数千个，2026 年与 2019 年大致相当而业务规模约为当时 10 倍；M3DB 每秒发出约 5 亿个指标；工程师日常使用 20 多个工具。限制：素材是节目页的 11 条要点，不是完整文字稿；没有任何可复制的配置、提示词或命令；唯一出现的 `afx validate` 是 Uber 内部命令；所有系统都是 Uber 内部实现，未给出开源地址或架构细节；Uber 的城市作为一等原语、按城市分片数据库等前提一般组织不具备；度量口径不完整，不知道具体阈值、基线、改善判定标准。多任务能力、context engineering、审查与验证输出的能力变得更重要，以及为工程师建的工具也让 agent 更好用，是因果判断，没有对照实验；代码评审成为大瓶颈是 Uday 的承认，但没有量化。
+- 做法 V 依据调研报告 `How the Claude Code team does code review`。报告给出的可照做内容包括：开 PR 前的 `CLAUDE.md`、hooks、`/code-review`、`/security-review`、`REVIEW.md`、三类内部 skill；每个 PR 上的 Claude 审查、多 agent 投票验证、按严重度排序的行内评论与 `Important`、`Nit`、`Pre-existing` 标签、每条发现必须修或 resolve、自动化安全审查阻断合并、常规阻断检查、PR 模板的 `Testing`、`Risk`、`How to revert`；审批的分级表、永远需要人的路径、trusted list、agent 审批不算人类、谁提示谁计入审查人、审批只覆盖具体 commit、先严后松；合并与之后的 merge queue、flag、内部 latest、stable 滞后、快速发现快速回滚、事故复盘问哪一层本该抓到、把事故和回滚变成 eval 集、测噪声、让审查收敛、让审查 agent 每晚扫存量代码；人留在五类决策、让 Claude 写代码切片解释、你落地你负责。报告给出的数据：Claude 写了约 90% 的 Claude Code 自身代码；2026 年 6 月到 9 月，合并进 Claude Code 代码库的 PR 翻了一倍多，而被回滚的比例下降超过 40%；Anthropic monorepo 每天落地的变更从 5 月约 2,500 涨到 9 月超过 30,000；研究预览上线后，内部 PR 获得实质性审查评论的比例从 16% 升到 54%；超过 1,000 行的 PR 大多能查出问题，小 PR 大多干净返回；对审查者反复标记的内容跑 git blame，约 59% 是审查者第一轮时就已经存在的代码。限制与作者主张：目标状态是大多数 PR 至多一个人类在环且回滚率和事故率不上升，这是目标主张；原文明确还没有在回滚或事故指标变动时自动收紧审批的 circuit breaker；噪声对 agent 作者代价更高是原文判断；Claude Code Team 和 Enterprise 计划已 GA 的 Code Review for Claude Code、Quick、Standard、Deep 是产品能力描述，材料未给出各档位的准确率或成本数据。
+- 新旧做法差异：此前手册已有路线零（Claude Code 内置 `/code-review`）、路线一（PR Lens）、路线二（OpenQodex）、路线三（对抗审查）、路线四（ai-deslop）、路线五（Uber 内部流程的可迁移部分）；本次新增路线六（Claude Code 团队代码审查流程）。七者阶段不同，可叠加；若只能选一个，先按你的主要缺口选：已经在用 Claude Code 且想快速跑一遍审查用 `/code-review`，看不懂改动用 PR Lens，怕 push 前漏检用 OpenQodex，AI 生成 TypeScript 模式多就用 ai-deslop，想主动找漏洞用对抗审查，想从流程层面减少 PR 数量和 CI 排队并控制 AI 花费就用路线五，想把读 diff 交给机器、人只做关键决策并用回滚率和事故率做护栏就用路线六。路线零和路线六都涉及 Claude Code 代码审查：路线零来源是个人推文，信息不完整；路线六是团队公开流程，给出 `CLAUDE.md`、`REVIEW.md`、风险分级、merge queue 和 eval 集等更完整的配置与指标。
 
 ## 依据的调研
 
@@ -667,3 +660,4 @@ ai-deslop 最小试用方式：选一个使用 TypeScript 和 Oxlint 的包，�
 - [@riba2534: #claudecode Claude Code 里面内置了很多有用的功能，我以为是人人都知道,但好像很多人不知道。](../research/radar/2026-10-11/2564-claudecode-claude-code.md)：值得一试，下次在 Claude Code 里审代码时，直接用内置的 /code-review（别名 /review）并按其强度档位和 --fix/--comment 开关跑一遍，先小范围试，因为原文给出了可照输入的命令与参数，但正文被截断、具体拼接语法和前置条件缺失，需对照官方文档确认后再正式写入手册。
 - [Show HN: Deslop – Oxlint rules for AI-generated TypeScript](../research/radar/2026-10-14/3159-show-hn-deslop-oxlint-rules-for-ai-generated-types.md)：值得一试，建议在 TypeScript + Oxlint 项目中接入 ai-deslop 的 recommended 配置做小范围试用，用真实 AI 生成 diff 验证命中率和误报；README 给出了可直接复制的安装与配置、规则清单，但没有效果数据，且规则较主观，只有适配的团队才应保留。
 - [Uber’s AI infra, from the inside](../research/radar/2026-10-15/3452-uber-s-ai-infra-from-the-inside.md)：值得一试，建议小范围试其中能脱离 Uber 基础设施复现的流程性做法——给 PR 按类型（feature/bugfix/maintenance/testing/docs）打标以替代速度指标、把 lint/build 等简单检查前移到 agent 开 PR 之前、对 AI 花费设额度加经理例外审批；理由是原文只给出 Uber 内部系统的一句话级描述，没有可复制的配置、命令或提示词，但这几条流程本身可以照做，且有方向性结果（token 成本近几个月降约 50%、feature PR 占比上升、maintenance 占比下降）。
+- [How the Claude Code team does code review](../research/radar/2026-10-16/3934-how-the-claude-code-team-does-code-review.md)：建议采用，按原文「How you can adopt this process」的分阶段清单落地：先在一个仓库用简短的 CLAUDE.md、REVIEW.md 和 agent 可运行的检查打底，再接入 AI 审查、用风险分级控制人工审批数量，并以回滚率和事故率作为护栏；因为这是已在实际团队跑通、给出了具体配置项、命令和度量指标的流程，而不是泛泛观点。
