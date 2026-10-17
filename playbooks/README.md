@@ -4,6 +4,7 @@
 
 | 手册 | 解决的问题 | 先试这一步 | 最近修订 |
 |---|---|---|---|
+| [让编码 agent 先小范围试装技能包补上弱项](build-and-install-agent-skills.md) | 如何在不全量采用、不被 README 宣传带偏的前提下，用有/无技能对照确认一个技能包真的减少返工，再把有效做法沉淀成常规流程。 | 选一个非关键项目，只装一个技能包，对同一任务做 3 次有技能和 3 次无技能对照。 | 2026-10-17 |
 | [把 AI 编码会话变成可复盘、可备份、可接力的资产](review-agent-conversation-logs.md) | 多个 AI 编码助手的会话散落在各自本地存储里，导致你既说不清「这次 AI 到底干了什么」，也没法把对话原文备份下来、或在另一个代理手里接着用。 | 如果你在用 Claude Code，先别装任何工具：在一次有实质内容的会话结束前执行 `/export file_name`，确认导出的纯文本完整可读，再决定拿它接力还是提炼技能。 | 2026-10-17 |
 | [把第三方工具集接给代理时，先验证通路与收益再决定用不用](add-mcp-servers-to-agents.md) | 怎么在隔离环境里完成第三方工具集或团队 agent 网络的接入、工具清单核对、冒烟测试和对照验证，并据证据决定继续试、采用还是只当思路参考。 | 挑一条自带完整命令的路径（如 jevcrawl）在隔离环境跑通 `doctor` 并记录基线；如果团队都在 Reason workspace，先用 `reason network who` 确认能看到彼此 session。 | 2026-10-17 |
 | [让 AI 按你团队的流程干活、不漏事、长任务不掉线，并拿出证据说明有没有变好](install-and-customize-agent-plugins.md) | 你已经在用 Claude Code 或 Cowork，但每次让 AI 做某个职能的活都要重新解释领域知识和公司上下文，AI 中途问的问题、发现的 bug 和失败的测试会淹没在对话里，长任务跨上下文窗口时没人交接、没人唤醒、没人拍板，而且你说不清装了一堆插件到底有没有变好。 | 先记录 2–3 次基线（完成时间、返工次数、补齐上下文的次数），然后只装一个和你当前工作最贴近的职能插件或技能包，跑通一个斜杠命令，再打开它的 skills/ 把一条指令改成你团队的真实流程。 | 2026-10-17 |
@@ -16,7 +17,6 @@
 | [搞懂别人的软件并重建时，让 agent 拿出可核验的证据](reverse-engineer-software-with-agents.md) | 当目标没有源码、你需要在自家项目里重建它的某个功能时，怎样让 agent 走完“反编译取证据 → 搞懂 → 按规格重建 → 机器可判定地验收”，而不是给你一份看着合理、无法核验的猜测。 | 先做做法 B：对一个已提取的 JS/Electron 目录跑一次 `npx -y rea-agents@latest analyze-javascript-application /absolute/path/to/app --json`，看它返回的 Evidence、恢复出的图和 unknowns 是否可信，再决定要不要上 MCP、Hopper/Ghidra 或多 agent 验收器。 | 2026-10-16 |
 | [让编码 agent 动手前先说清任务与需求，再自己跑到完成线](delegate-long-coding-tasks.md) | AI 干活时任务定义太窄、需求理解错、长任务中途停摆、宣布完成时无法确认——这篇手册给出一套「先升维任务、再澄清需求、再跑到完成线」的可照做规程。 | 挑一个你本来就要派出去的真实任务，先只做一步：用 /ambition 看一版升维 brief（做法 0-D），或发一条澄清提示词让模型先反问（做法 0-A / 0-C），确认它没有抢跑。 | 2026-10-16 |
 | [让编码 agent 只在需要时用贵模型，并在完成前拿出证据](model-routing-for-coding-agents.md) | 解决多供应商/多模型编码时配额闲置、限流与死 key 中断、贵模型全程主持、以及 agent 未经验收就宣布完成的问题。 | 如果你用 Claude Code，先在终端运行 `claude --help` 确认存在 `--advisor`，再用一个真实中等复杂度任务做 A/B：默认方式跑一遍，`claude --model sonnet --advisor opus` 跑一遍；参数不存在就退回“贵模型只用在决策点”，或先做做法 A 的本地网关最小验证。 | 2026-10-16 |
-| [让团队每个编码代理自动同步同一套 SKILL.md 规范](build-and-install-agent-skills.md) | 把团队共同的 SKILL.md 规范分发给每个开发者、每种 AI 编程代理，并在技能更新或下架时自动生效，而不是靠手工复制、各自分叉和记得更新。 | 在一个私有 Git 仓库里用 `skillcrew registry init --org <你的组织>` 建注册表，先加一个 `required` 技能，再让一位同事用 `skillcrew init <registry-url> --team <团队>` 加入并新开 agent 会话验证。 | 2026-10-16 |
 | [做陌生领域调研时，让 AI 交原文和行号而不是摘要](literature-review-with-agents.md) | 让 AI 在你完全不熟的领域做调研时，不把判断交给摘要，而是先定要答的主张，再顺引用链把原文落到本地并指到行，由你读原文下判断。 | 先为题目写下 3～6 条『要答的主张』（至少 1 条用委托原词、一半以上写成不读原文答不出的形式），再按下面的安装命令装 imozuru 跑一遍。 | 2026-10-15 |
 | [让跨境电商 Listing 从生成到复测走一条可自检的闭环](cross-border-ecommerce-with-agents.md) | 把有明确 SOP、可模板化输入、可清单自检的跨境电商运营环节，拆成可复用 Agent 工作流，并用广告/评论数据回流复测 Listing。 | 选 1 个 Shopee 或 Mercado Livre 产品，只跑 01 市场分析→02 产品策略→03 Listing→自检 这条短闭环。 | 2026-10-15 |
 | [在换模型、调配置前，先量出速度、成本和长对话等待时间的基线](benchmark-agent-model-serving.md) | 换模型、改服务配置或调 effort 时，缺一条可对比的基线，只能凭感觉判断快慢、贵贱和长对话是否被重复重读。 | 先选一条最贴近你当前工作流的路径：本地服务做一次 `agentperf-local run` 拿基线，Claude 任务跑完敲 `/usage` 记三项数字，Strata 编码代理把 `--prompt-cache` 从 0 改成 6 再重跑同一长回合。 | 2026-10-15 |
