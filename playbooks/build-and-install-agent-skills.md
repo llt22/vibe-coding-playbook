@@ -1,9 +1,9 @@
-# 让编码 agent 先小范围试装技能包补上弱项
+# 给 AI agent 补能力：先小范围试装一个技能包，再用同一任务做有/无对照
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：如何在不全量采用、不被 README 宣传带偏的前提下，用有/无技能对照确认一个技能包真的减少返工，再把有效做法沉淀成常规流程。
-> 先试这一步：选一个非关键项目，只装一个技能包，对同一任务做 3 次有技能和 3 次无技能对照。
+> 解决的问题：装了技能包不知道有没有用、又怕一次装太多把上下文搞乱——这篇手册给出一条可照做的路径：只装一个、用同一任务做有/无对照，确认有效后再写自己的 SKILL.md、转文档或分发给团队。
+> 先试这一步：选一个非关键项目和一类重复任务，只装一个技能包，同一任务在装与不装两种条件下各跑 3 次，记录返工轮数和首稿可用率。
 > 最近修订：2026-10-17
 
 ## 解决什么问题
@@ -13,6 +13,8 @@
 它也覆盖具体场景：让 agent 代理编码 CLI 跑长任务并拿硬证据验收；给 agent 补行业设计知识；把模糊想法写成任务书；让 agent 出可交互架构图、工作流图、时序图、数据流图；检索中国金融市场数据；把移动端模拟器与真机画面接进 Codex 聊天；把多步复杂任务拆成三阶段并加门禁；中英文学术写作去模板化并用命题级核对保住数字、引文与证据强度；路由技能自动选工作流并对 bug 交出失败→通过证据；按职能只装少量 agent 角色；在 T3 Code 里用 p3-stack 按 playbook 路由；审计自己的 `SKILL.md`；让 agent 渲染一页可离线打开的单文件 HTML；校验、打包并分发自己的 `SKILL.md`；补 SwiftUI / Apple 平台知识；工作写作去 AI 腔；把产品经理重复流程交给 agent 跑成命令链；给编码 agent 立四条硬约束；按阶段从零建站并用状态文件续做；补 AI 研究全流程知识；补 Go 终端 UI 的 Charm 生态库用法；把真实 UI 组件拆成绘制层并自动读数验收；给 Elixir/Phoenix 项目补工程规范；用 vercel-labs/skills CLI 安装、临时使用、搜索、列出、更新、卸载并生成 `SKILL.md` 模板；用小团队注册表把团队 `SKILL.md` 分发到每个人的多种编码代理。
 
 新增做法 AT：做 Android 开发时，用 Android 官方维护的 android/skills 给智能体补“评测显示 LLM 表现较弱”的工作流，例如 R8 分析、Wear Compose Material 3、edge-to-edge UI 改造；它只公开安装方式，没有技能全清单和效果数据，所以先按做法 A 小范围试，不要一次装全部。
+
+新增做法 AU：需要把外语论文 PDF 翻成韩语、又要尽量保住图、表、公式位置时，按做法 A 小范围试装 `maenjh/ko-paper`；它把版式解析（BabelDOC）和翻译（本地已登录的 Claude Code 或 Codex）封装成一个 skill，输出语言固定为韩语，效果描述全部来自作者自述，先拿一篇 2 页公开论文验证版式、公式、术语一致性与 token 消耗，再决定是否把这类流程纳入自己的文档处理链路。
 
 ## 适用与不适用
 
@@ -48,6 +50,7 @@
 - 需要自己写技能模板，或想用 `metadata: internal: true` 隐藏内部技能、用 `INSTALL_INTERNAL_SKILLS=1` 临时安装。
 - 有一个小团队、多个人用不同 AI 编程代理，需要把团队共同的 `SKILL.md` 规范同步到每个人机器上，并希望技能更新或下架自动生效。
 - 做 Android 开发，且任务属于 README 点名的方向之一，例如 R8 分析、Wear Compose Material 3、edge-to-edge UI 改造。
+- 需要把英语、德语、法语、日语等外语论文 PDF 翻成韩语 PDF，并希望图、表、公式尽量留在原位；本机已登录 Claude Code 或 Codex，且已装 `uv` 与 `git`。
 
 不适用：
 
@@ -59,6 +62,7 @@
 - 把 android/skills 的 README 当完整技能清单：它只举例了 `r8-analyzer`、`wear-compose-m3`、`android-cli`，完整清单要装完自己看。
 - 把它的“evaluations”当成公开评测数据：README 没有给评测集、指标或对比结果，效果必须自测。
 - 其他各做法的边界见对应小节：E 只针对中文技术文档；F 只针对生物医学论文；M 不适用于无合法访问权的书或打算再分发第三方版权书生成的 skill；O 只在 Postgres / TimescaleDB / PostGIS 任务上有用；P 只对自有或书面授权资产；Q 的领域内容不通用；T 不支持直接驱动交易或投顾建议；U 需要 Apple Silicon Mac + Codex desktop + 私有仓库访问权；X 面向全栈开发；Y 需要能加载完整 Skill 文件夹的环境，且 DOCX 抽取保留不了复杂样式、批注、修订记录、脚注与文本框；AF 只覆盖 SwiftUI / Apple 平台开发；AG 的材料没有覆盖合同或其他法律文件，也不承诺通过 AI 检测器；AH 主要面向数学/理论科学/算法类开放式研究；AI 的材料只有 README；AJ 只面向会读 CLAUDE.md 的编码智能体；AK 的材料只有 README，单个技能的 `SKILL.md` 正文没随材料给出；AL 的材料只有 README；AM 的素材涉及他人聊天记录与个人信息而原文完全没有讨论授权与隐私；AN 的材料只有 README，且属进攻性安全领域；AO 只对 Go + Charm 生态的终端 UI 开发有用；AP 只对基于 DOM/CSS 的组件有效；AQ 只对 Elixir/Phoenix 项目有用；AR 是安装/分发 CLI，不是效果证明工具；AS 是团队分发/治理工具，不是效果证明工具。
+- AU 的输出语言固定为韩语，目标语言不是韩语就别用；原文只有作者自述的演示，没有第三方评测、基准或前后对比数据；Windows 上被 Smart App Control 拦截时，要么走简易模式（不保版式、不含图片），要么装 WSL，不要关 SAC。
 
 ## 前置条件
 
@@ -72,11 +76,11 @@
 
 各做法额外前置（压缩保留）：
 
-- A：无额外。B：一件每周重复、有明文规范的工作。C：`pip install skill-seekers`。D：你的提供商端点与 key，以及你网关实际提供的模型名。E：可用的 `npx` 或 `git`；可选装 autocorrect。F：宿主能读 PDF/图像。G：Claude Code 2.1.287 或更高。H：Cline CLI；Python 3；支持 Agent Skills 规范的宿主。I：Node/npm 装 CLI；本机 Python 3.x。J：本地 Node 环境。K：一个受支持的 Agent Skills 宿主。L：Claude Code 或 `gh`/可用 `npx`。M：本机 Python 并能安装抽取器。N：支持 Agent Skills 的 Agent；git、`CLAUDE.md`/`AGENTS.md`、`docs/`。O：本机 `npx`；目标 agent 支持 Agent Skills 或 MCP。P：已装 Claude Code；只对自有或书面授权资产使用。Q：支持本地 Skills 的宿主；可写的 `PROJECT_ROOT` 与只读的 `SKILL_ROOT` 分开。R：支持 agent skills 的编码 agent。S：Node.js/npx；Google Cloud 账号、项目和权限。T：Node.js 22.20+ / npm；Python 3.9+。U：Codex desktop + Apple Silicon Mac；Xcode 26+ 与 simulator runtime。V：本机已安装 Claude Code。W：Node.js；`SKILL.md`、`references/`、`scripts/` 三部分放在一起。X：已安装并使用 Claude Code。Y：Python 3.10+；PDF 文本抽取需 Poppler。Z：先装好对应 harness；Codex 需先通过 `/hooks` 信任路由 hook。AA：本地有 git 与 bash。AB：一台能跑 T3 Code 的机器。AC：Claude Code 环境或 claude.ai 账号；本地 Python 3.8+。AD：Node.js ≥ 20；agent 能执行 shell 命令。AE：用现成技能需要 Claude Code 或支持 Agent Skills 的 agent；用这套流程分发自己的技能，只需 Claude Code + Python 3。AF：用支持 Agent Skills 的编程助手；安装需要 Node/npx，或用 Claude Code 插件市场。AG：一个能加载 skills 的 agent；要处理的文本；最好有作者自己的笔记、语音转写或自写粗稿；跑 `check.py` 需要 Python 和能执行代码的 agent 环境。AH：装有 Codex 或 Claude Code；Python 3.9 或更新；一个浏览器；可选获授权的 Slurm 集群、LaTeX、私有 dashboard 目的地。AI：能访问 GitHub；Cowork 路线需要桌面端 Claude；Claude Code / Codex 路线需要先装好对应 CLI 并登录；其它助手路线只需对目标 skills 目录有写权限。AJ：Claude Code 或 Cursor；一个非琐碎的代码任务；项目级写入 CLAUDE.md 的权限，或能装 Claude Code 插件。AK：本地有 Node.js 才能用 `npx`；至少一个被支持的编码智能体；能访问 npm 与 GitHub；有权限写入 `~/.orchestra/skills/` 并把技能 symlink 到各 agent 目录。AL：一个支持 skill 机制的编程智能体；一个空的项目文件夹；设计插件 `impeccable`；DataForSEO 账号与 webhosting 由 skill 在真正需要它们的阶段才来配置。AM：一个受支持的本地 agent host；Python 3.9+；知道该 host 的 Skills 目录；素材可能涉及他人聊天记录与个人信息，实际试用前须自行解决授权与隐私。AN：一个 Claude 使用环境；使用范围合法合规；对 `~/.claude/skills` 有写权限。AO：本机有 Node/npx；目标代理被 skills CLI 支持；想跑通示例验证可用性需要本机 Go 环境。AP：一个能读 skills 的代理；组件在本地可运行，且 CSS 与页面同源；有 Chrome。AQ：项目为 Elixir/Phoenix 应用；客户端为 Cursor、Claude Code 或 Codex 之一；本机有 Node.js 22.20.0+ 和 npm。AR：本机有 Node.js 与 `npx`；目标 agent 已安装；私有仓库需可用的 Git / gh / SSH 凭据，或显式设置 `GITHUB_TOKEN` / `GH_TOKEN`。AS：macOS 或 Linux（Windows 走 WSL2）；已安装 `git`；`propose` 用到 `gh` 或 `glab`；一个私有 Git 仓库作为注册表；对 `~/.agents/skills` 和 `~/.claude/skills` 有写权限。AT：Android CLI 已安装，或 Claude Code / Codex 可用插件市场；做 Android 开发；有一个真实、范围小的 Android 任务可对照。
+- A：无额外。B：一件每周重复、有明文规范的工作。C：`pip install skill-seekers`。D：你的提供商端点与 key，以及你网关实际提供的模型名。E：可用的 `npx` 或 `git`；可选装 autocorrect。F：宿主能读 PDF/图像。G：Claude Code 2.1.287 或更高。H：Cline CLI；Python 3；支持 Agent Skills 规范的宿主。I：Node/npm 装 CLI；本机 Python 3.x。J：本地 Node 环境。K：一个受支持的 Agent Skills 宿主。L：Claude Code 或 `gh`/可用 `npx`。M：本机 Python 并能安装抽取器。N：支持 Agent Skills 的 Agent；git、`CLAUDE.md`/`AGENTS.md`、`docs/`。O：本机 `npx`；目标 agent 支持 Agent Skills 或 MCP。P：已装 Claude Code；只对自有或书面授权资产使用。Q：支持本地 Skills 的宿主；可写的 `PROJECT_ROOT` 与只读的 `SKILL_ROOT` 分开。R：支持 agent skills 的编码 agent。S：Node.js/npx；Google Cloud 账号、项目和权限。T：Node.js 22.20+ / npm；Python 3.9+。U：Codex desktop + Apple Silicon Mac；Xcode 26+ 与 simulator runtime。V：本机已安装 Claude Code。W：Node.js；`SKILL.md`、`references/`、`scripts/` 三部分放在一起。X：已安装并使用 Claude Code。Y：Python 3.10+；PDF 文本抽取需 Poppler。Z：先装好对应 harness；Codex 需先通过 `/hooks` 信任路由 hook。AA：本地有 git 与 bash。AB：一台能跑 T3 Code 的机器。AC：Claude Code 环境或 claude.ai 账号；本地 Python 3.8+。AD：Node.js ≥ 20；agent 能执行 shell 命令。AE：用现成技能需要 Claude Code 或支持 Agent Skills 的 agent；用这套流程分发自己的技能，只需 Claude Code + Python 3。AF：用支持 Agent Skills 的编程助手；安装需要 Node/npx，或用 Claude Code 插件市场。AG：一个能加载 skills 的 agent；要处理的文本；最好有作者自己的笔记、语音转写或自写粗稿；跑 `check.py` 需要 Python 和能执行代码的 agent 环境。AH：装有 Codex 或 Claude Code；Python 3.9 或更新；一个浏览器；可选获授权的 Slurm 集群、LaTeX、私有 dashboard 目的地。AI：能访问 GitHub；Cowork 路线需要桌面端 Claude；Claude Code / Codex 路线需要先装好对应 CLI 并登录；其它助手路线只需对目标 skills 目录有写权限。AJ：Claude Code 或 Cursor；一个非琐碎的代码任务；项目级写入 CLAUDE.md 的权限，或能装 Claude Code 插件。AK：本地有 Node.js 才能用 `npx`；至少一个被支持的编码智能体；能访问 npm 与 GitHub；有权限写入 `~/.orchestra/skills/` 并把技能 symlink 到各 agent 目录。AL：一个支持 skill 机制的编程智能体；一个空的项目文件夹；设计插件 `impeccable`；DataForSEO 账号与 webhosting 由 skill 在真正需要它们的阶段才来配置。AM：一个受支持的本地 agent host；Python 3.9+；知道该 host 的 Skills 目录；素材可能涉及他人聊天记录与个人信息，实际试用前须自行解决授权与隐私。AN：一个 Claude 使用环境；使用范围合法合规；对 `~/.claude/skills` 有写权限。AO：本机有 Node/npx；目标代理被 skills CLI 支持；想跑通示例验证可用性需要本机 Go 环境。AP：一个能读 skills 的代理；组件在本地可运行，且 CSS 与页面同源；有 Chrome。AQ：项目为 Elixir/Phoenix 应用；客户端为 Cursor、Claude Code 或 Codex 之一；本机有 Node.js 22.20.0+ 和 npm。AR：本机有 Node.js 与 `npx`；目标 agent 已安装；私有仓库需可用的 Git / gh / SSH 凭据，或显式设置 `GITHUB_TOKEN` / `GH_TOKEN`。AS：macOS 或 Linux（Windows 走 WSL2）；已安装 `git`；`propose` 用到 `gh` 或 `glab`；一个私有 Git 仓库作为注册表；对 `~/.agents/skills` 和 `~/.claude/skills` 有写权限。AT：Android CLI 已安装，或 Claude Code / Codex 可用插件市场；做 Android 开发；有一个真实、范围小的 Android 任务可对照。AU：已登录的 Claude Code（`claude`）或 Codex，二选一；已安装 `uv`；已安装 `git`；Windows 上没有 git 时先 `winget install --id Git.Git -e`；BabelDOC 与 Python 依赖在第一次运行时自动安装；翻译后端自动选择：有 `claude` 用 Claude Code，只有 `codex` 才用 Codex。
 
 ## 操作步骤
 
-怎么选：先做做法 A；A 里某个技能确实有效、且你有一件每周重复且规范明确的工作，再做做法 B。其余按场景选：C 多来源知识打包；D 补模型端点/权限/搜索；E 中文技术文档写作与审稿；F 单篇论文精读；G 写一个 Claude Code mod；H 用 Cline CLI 代理长任务拿硬证据验收；I 补 UI/UX 设计知识；J 出带交互的单文件 HTML 图；K 出品牌一致的静态 HTML+SVG 图；L 从大插件市场只装一个单元并按任务档位选模型；M 把书或内部文档转成按需加载技能；N 把模糊想法写成任务书并给破坏性操作加闸门；O 补 Postgres 领域知识与版本化文档检索；P 在授权安全场景按主题加载安全技能库；Q 把多步任务拆成三阶段加门禁；R 装一套小而可组合的工程技能集；S 从 google/skills 按任务只装一个；T 让 agent 检索中国金融市场数据并核对来源与时间戳；U 把移动端模拟器与真机画面接进 Codex 聊天；V 用一行 curl 装单个 Markdown 技能；W 用元技能观察你怎么用技能；X 装一套全栈开发技能包按请求自动激活；Y 把中英文学术写作去模板化改写并用命题核对保住事实；Z 用路由技能自动选工作流并对 bug 交出失败→通过证据；AA 按职能只装少量 agent 角色并用真实任务与默认提示对照；AB 在 T3 Code 里用 p3-stack 按 playbook 路由并用 worktree/PR 监视减少等待和冲突；AC 审计并改进自己的 SKILL.md；AD 让 agent 把结论、方案对比与流程解释渲染成一页可离线打开的 HTML；AE 把自己的 SKILL.md 校验、打包并分发到多端；AF 给 agent 补一块 SwiftUI 领域知识并按需触发审查；AG 给工作写作去 AI 腔并保住事实与承诺强度；AH 把开放式研究做成迷宫地图、证据分级与独立裁判循环；AI 装 1–2 个 PM 插件并用 `/discover` 跑一个真实想法；AJ 给编码 agent 立四条行为约束并把任务改写成带验证标准的目标；AK 给 agent 补 AI 研究全流程知识，按类别只装一个技能并用真实研究任务对照；AL 把多阶段、跨天的长流程打包成 skill，用状态文件断点续做、按阶段按需接外部工具；AM 把某个人的工作方式蒸馏成可复用 Person Profile 技能；AN 把一套领域方法论拆成细粒度、按对话触发词按需加载的技能文件；AO 给写 Go 终端 UI 的编码 agent 补 Charm 生态各库的用法；AP 把真实 UI 组件拆成绘制层、自动读出测量值与 token 并跑审计验收；AQ 给 Elixir/Phoenix 项目补 Phoenix 工程规范；AR 用 vercel-labs/skills 安装、临时使用、列出、更新、卸载和生成 SKILL.md 模板；AS 用小团队、私有 Git 仓库和 Skillcrew 把团队 SKILL.md 注册表分发到每个人的多种编码代理；AT 给 Android 开发 agent 补官方弱项技能。
+怎么选：先做做法 A；A 里某个技能确实有效、且你有一件每周重复且规范明确的工作，再做做法 B。其余按场景选：C 多来源知识打包；D 补模型端点/权限/搜索；E 中文技术文档写作与审稿；F 单篇论文精读；G 写一个 Claude Code mod；H 用 Cline CLI 代理长任务拿硬证据验收；I 补 UI/UX 设计知识；J 出带交互的单文件 HTML 图；K 出品牌一致的静态 HTML+SVG 图；L 从大插件市场只装一个单元并按任务档位选模型；M 把书或内部文档转成按需加载技能；N 把模糊想法写成任务书并给破坏性操作加闸门；O 补 Postgres 领域知识与版本化文档检索；P 在授权安全场景按主题加载安全技能库；Q 把多步任务拆成三阶段加门禁；R 装一套小而可组合的工程技能集；S 从 google/skills 按任务只装一个；T 让 agent 检索中国金融市场数据并核对来源与时间戳；U 把移动端模拟器与真机画面接进 Codex 聊天；V 用一行 curl 装单个 Markdown 技能；W 用元技能观察你怎么用技能；X 装一套全栈开发技能包按请求自动激活；Y 把中英文学术写作去模板化改写并用命题核对保住事实；Z 用路由技能自动选工作流并对 bug 交出失败→通过证据；AA 按职能只装少量 agent 角色并用真实任务与默认提示对照；AB 在 T3 Code 里用 p3-stack 按 playbook 路由并用 worktree/PR 监视减少等待和冲突；AC 审计并改进自己的 SKILL.md；AD 让 agent 把结论、方案对比与流程解释渲染成一页可离线打开的 HTML；AE 把自己的 SKILL.md 校验、打包并分发到多端；AF 给 agent 补一块 SwiftUI 领域知识并按需触发审查；AG 给工作写作去 AI 腔并保住事实与承诺强度；AH 把开放式研究做成迷宫地图、证据分级与独立裁判循环；AI 装 1–2 个 PM 插件并用 `/discover` 跑一个真实想法；AJ 给编码 agent 立四条行为约束并把任务改写成带验证标准的目标；AK 给 agent 补 AI 研究全流程知识，按类别只装一个技能并用真实研究任务对照；AL 把多阶段、跨天的长流程打包成 skill，用状态文件断点续做、按阶段按需接外部工具；AM 把某个人的工作方式蒸馏成可复用 Person Profile 技能；AN 把一套领域方法论拆成细粒度、按对话触发词按需加载的技能文件；AO 给写 Go 终端 UI 的编码 agent 补 Charm 生态各库的用法；AP 把真实 UI 组件拆成绘制层、自动读出测量值与 token 并跑审计验收；AQ 给 Elixir/Phoenix 项目补 Phoenix 工程规范；AR 用 vercel-labs/skills 安装、临时使用、列出、更新、卸载和生成 SKILL.md 模板；AS 用小团队、私有 Git 仓库和 Skillcrew 把团队 SKILL.md 注册表分发到每个人的多种编码代理；AT 给 Android 开发 agent 补官方弱项技能；AU 把外语论文 PDF 翻成韩语并尽量保住版式。
 
 几组容易混的：
 
@@ -108,8 +112,10 @@
 - AT 与 A：AT 是 Android 官方技能仓库，必须先套用 A 的对照方法。它只公开安装方式，没有技能全清单和效果数据。
 - AT 与 AO / AQ / AF：都是给编码 agent 补领域知识。AT 针对 Android，AO 针对 Go 终端 UI，AQ 针对 Elixir/Phoenix，AF 针对 SwiftUI。
 - AT 与 V：V 是用一行 curl 装单个 Markdown 技能；AT 是用 Android CLI 或插件市场装 Android 官方技能包。
+- AU 与 F / M / Y：F 是把单篇（生物医学）论文读进来做精读；M 是把书或内部文档转成按需加载技能；Y 是中英文学术写作去模板化改写；AU 是把外语论文 PDF 翻成韩语 PDF 并尽量保住版式。
+- AU 与 A / V：AU 同样是「按 A 小范围试装」，走安装脚本或插件市场；V 是用一行 curl 装单个 Markdown 技能。AU 的产出是 PDF，不是技能目录。
 
-E、F、G、H、I、J、K、L、M、N、O、P、Q、R、S、T、U、V、W、X、Y、Z、AA、AB、AC、AD、AE、AF、AG、AH、AI、AJ、AK、AL、AM、AN、AO、AP、AQ、AR、AS、AT 都必须套用 A 的对照方法，不要跳过验证直接纳入常规流程。
+E、F、G、H、I、J、K、L、M、N、O、P、Q、R、S、T、U、V、W、X、Y、Z、AA、AB、AC、AD、AE、AF、AG、AH、AI、AJ、AK、AL、AM、AN、AO、AP、AQ、AR、AS、AT、AU 都必须套用 A 的对照方法，不要跳过验证直接纳入常规流程。
 
 ### 做法 A：先用现成技能包做小范围试装（推荐先做）
 
@@ -994,6 +1000,170 @@ codex plugin add android-skills@android-skills
 9. 反馈路径：通过提交 GitHub issue 反馈问题、报告 bug、申请新技能或提出修改；当前不接受公开 PR。
 10. 做对照。选一个真实、范围小的 Android 任务，且该任务对应 README 点名的方向之一，例如 R8 相关分析，或“把 UI 改成 edge-to-edge”。先记录基线：在不装技能的情况下让智能体做同一任务，保存输出和你的返工次数。安装技能：项目级用 `android skills add r8-analyzer --project=.`，或全量用 `android skills add --all`（注意不指定 `--agent` 时会装到 `~/.gemini/antigravity/skills`）。用同一句提示语再跑一遍，确认智能体确实自动调用到了技能而不是靠猜。之后定期 `android skills update --all` 保持技能与官方指南同步。
 
+### 做法 AU：把外语论文 PDF 翻成韩语并尽量保住版式，用 doctor 自检、术语表复用控制一致性（新增，按 A 的对照法验证）
+
+定位：`maenjh/ko-paper`（AGPL-3.0-or-later）是一个把外语论文 PDF（默认英语，另支持德语、法语、日语等 10 种）翻译成韩语 PDF、并尽量保留图、表、公式原有位置的工具。分工是：版式处理交给 BabelDOC（负责解析 PDF 结构、定位图/表/公式、回填译文），翻译交给本地已登录的 Claude Code（`claude -p`）或 Codex（`codex exec`），两者封装成一个 Claude Code / Codex skill。说一句「이 논문 번역해줘（帮我翻译这篇论文）」即可触发，另提供网页 UI（固定监听 `127.0.0.1:8787`）和 CLI 两条入口。
+
+1. 确认前提：已登录的 Claude Code（`claude`）或 Codex，二选一即可；已安装 `uv`；已安装 `git`。Windows 上若没有 git，先执行：
+
+```powershell
+winget install --id Git.Git -e
+```
+
+BabelDOC 和 Python 依赖在第一次运行时自动安装。翻译后端自动选择：有 `claude` 就用 Claude Code，只有 `codex` 才用 Codex。
+
+2. 安装成 skill，四条路线选一条。
+
+2a. 把安装这件事直接交给 agent——原文给了一段可原样粘贴到 Claude Code 或 Codex 的提示词，明确要求「不要问我，直接装完」：
+
+```text
+ko-paper(https://github.com/maenjh/ko-paper)를 이 컴퓨터에 설치해 줘. 나에게 질문하지 말고 끝까지 진행해.
+1. 운영체제를 직접 확인해(uname 또는 $env:OS). 사용자에게 묻지 않는다.
+2. macOS·Linux면 실행:
+   curl -fsSL https://raw.githubusercontent.com/maenjh/ko-paper/main/install.sh | bash
+   Windows PowerShell이면 실행:
+   irm https://raw.githubusercontent.com/maenjh/ko-paper/main/install.ps1 | iex
+3. 네트워크나 샌드박스 때문에 막히면 권한 상승을 요청해 같은 명령을 다시 실행해.
+4. 출력 끝에 "kopaper ready"가 나오면 성공. 실패 줄(✗ 또는 [x])이 있으면 그 안내대로 직접 고치고
+   ko-paper doctor 로 다시 확인해. 로그인처럼 내가 브라우저에서 해야 하는 일만 마지막에 한 줄로 알려 줘.
+5. 끝나면 설치된 위치와 "에이전트를 다시 시작하면 '이 논문 번역해줘'로 쓸 수 있다"만 짧게 알려 줘.
+```
+
+这段提示词本身是可复用的模板：让 agent 自己探测系统、装完、自检，只把需要人工做的事（登录）回抛给你。
+
+2b. 用插件市场装（Claude Code）：
+
+```text
+/plugin marketplace add maenjh/ko-paper
+/plugin install ko-paper@ko-paper
+```
+
+2c. 用脚本装（下载到 `~/.ko-paper/src`，并给找到的每个 agent 各复制一份 skill）：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/maenjh/ko-paper/main/install.sh | bash
+# 只装一个：  ... | bash -s -- --claude   或   ... | bash -s -- --codex
+```
+
+2d. Windows（PowerShell）：
+
+```powershell
+irm https://raw.githubusercontent.com/maenjh/ko-paper/main/install.ps1 | iex
+# 同时装 Claude Code：  $env:KOPAPER_WITH="claude-code"; irm .../install.ps1 | iex
+# 同时装 Codex：        $env:KOPAPER_WITH="codex"; irm .../install.ps1 | iex   （需要 Node.js）
+# 只装一个：            $env:KOPAPER_AGENTS="claude"  或  "codex"
+```
+
+Windows 上 Claude Code 通过 Git Bash 执行命令，因此 skill 用 `kopaper.sh`；Codex / PowerShell 下用 `kopaper.ps1`。
+
+2e. 更新：`ko-paper update`，或重跑安装命令（只重装最初安装的那个 agent）。
+
+3. 自检：
+
+```bash
+ko-paper doctor
+```
+
+输出末尾出现 `kopaper ready` 即成功；出现 `✗` 或 `[x]` 按提示修复后重新 doctor。doctor 会实际尝试加载编译好的模块，被系统策略拦截时会直接报出拦截事实，而不是谎报 ready。
+
+4. 使用，三种入口。
+
+4a. 在 Claude Code / Codex 里用自然语言（skill 方式）：
+
+```text
+~/Downloads/attention.pdf 이 논문 번역해줘
+1~3쪽만 한글본으로 뽑아줘
+~/Downloads/aufsatz.pdf 독일어 논문인데 한글로 번역해줘
+```
+
+结果生成在输入文件旁边：`<文件名>.ko.pdf`（韩语本）与 `<文件名>.ko.dual.pdf`（原文对照本）。以 skill 方式运行时，缓存、术语表、任务日志落在 `~/.ko-paper/data`。
+
+4b. 命令行：
+
+```bash
+ko-paper                                   # 打开网页 UI
+ko-paper translate ~/Downloads/paper.pdf   # 终端直接翻译
+```
+
+手动安装后的 CLI 示例（原文给的完整参数）：
+
+```bash
+.venv/bin/kopaper translate paper.pdf                # paper.ko.pdf + paper.ko.dual.pdf（生成在输入旁边）
+.venv/bin/kopaper translate a.pdf b.pdf -o out/      # 多篇，指定输出目录
+.venv/bin/kopaper translate paper.pdf -p 1-3 --mono-only
+.venv/bin/kopaper translate paper.pdf -m opus        # 换模型（默认 sonnet）
+.venv/bin/kopaper translate aufsatz.pdf -l de        # 德语论文（原文语言，默认 en）
+.venv/bin/kopaper translate paper.pdf -g my_terms.csv  # 用自己的术语表（优先级最高）
+.venv/bin/kopaper serve --proxy-only                 # 只起代理（127.0.0.1:8787）
+```
+
+代理没起时 `translate` 会自动拉起。
+
+4c. 网页 UI：
+
+```bash
+.venv/bin/kopaper serve --open    # 打开 http://127.0.0.1:8787/
+```
+
+拖入 PDF 进队列，一次翻译一篇；可选手写原文语言，输出固定为韩语；实时显示阶段名、进度、已用时间与剩余时间估计；完成后可看韩语本、下载韩语本/对照本/术语表，进行中可取消，完成可删除、重译。术语表编辑：在已完成任务里打开该论文术语表，改完点「保存后重译」，只重译受影响的段落。顶部显示最近 5 小时内 ko-paper 发出的 Claude 调用次数与 token 数；触限时告警并自动重试。服务只监听 `127.0.0.1`，并通过 Host / Origin 检查阻止其他站点调用；任务记录在 `data/web_jobs.sqlite`，文件在 `data/web/<任务 ID>/`；重启服务会把进行中的任务标记为失败。
+
+5. 术语表格式与冲突优先级。CSV 列为 `source,target,tgt_lng`。优先级从高到低：
+
+1. `-g` 传入的用户术语表；
+2. 网页上改过的论文级术语表 `data/glossaries/<paper_id>.user.csv`（存在时替代自动抽取的术语表）；
+3. 领域术语表 `glossary/<domain>.csv`（`-d` 选择，默认 `cs_ml`）；
+4. 论文级自动抽取术语表 `data/glossaries/<paper_id>.csv`。
+
+首次整篇翻译时 BabelDOC 自动抽术语并存下来；同一文件再翻会复用并跳过抽取步骤，术语不会每次变，原文称 token 约省 30%。只翻部分页面的那次运行不保存术语。自动抽取会过滤掉会议/机构/出版社名等应保持原文的专有名词。
+
+6. 关键环境变量（照抄即用）：
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `KOPAPER_BACKEND` | `claude-code` | `claude-code`、`codex`、`anthropic-api`（skill 按已装 CLI 自动选） |
+| `KOPAPER_CODEX_MODEL` | Codex 默认模型 | `codex` 后端的模型 |
+| `KOPAPER_CODEX_EFFORT` | `low`（选 opus 时 `medium`） | `codex` 后端的推理强度 |
+| `KOPAPER_PORT` | `8787` | 代理端口 |
+| `KOPAPER_MAX_CONCURRENCY` | `4` | 并发 Claude 调用数 |
+| `KOPAPER_EFFORT` | `medium` | API 后端的 effort |
+| `KOPAPER_EXTRA_MATH_FONTS` | Cambria Math | 视为公式的字体名正则 |
+| `KOPAPER_DATA` | `./data`（skill 为 `~/.ko-paper/data`） | 任务、缓存、日志位置 |
+| `KOPAPER_MERGE_TABLE_CELLS` | `1` | 设 `0` 关闭表格单元格合并 |
+| `KOPAPER_TABLE_LINE_SKIP` | `1.15` | 表格单元格内行距 |
+
+7. 手动安装（不用 skill，走 CLI / 网页）。前提：已登录 Claude Code（运行 `claude` 后 `/login`）。
+
+```bash
+uv tool install --python 3.12 "babeldoc==0.5.24" --with "bitstring<5"   # 版式修正对应这个版本
+uv sync                                                                  # 在本仓库内
+uv sync --extra api                                                      # 需要 API 后端时
+```
+
+8. Windows 遇到 Smart App Control（SAC）拦截时。症状：
+
+```text
+ImportError: DLL load failed while importing _mupdf: 애플리케이션 제어 정책에서 이 파일을 차단했습니다.
+```
+
+原文的建议是不要关 SAC，二选一：
+
+- 简易模式（免安装）：在 Claude Code / Codex 里以 skill 请求翻译，doctor 检测到拦截时 agent 不走 BabelDOC 直接翻译，产出 `<文件名>.ko.lite.pdf`（用 Edge 生成）。保留原文结构（标题、段落、表格、图注、公式），但不保留原始版式（双栏、页面位置）与图片。说「간단히 번역해줘 / 설치 없이 번역해줘」也可在其他系统触发。
+- WSL（保版式，推荐）：
+
+```powershell
+wsl --install          # 在管理员 PowerShell 里执行，结束后重启
+```
+
+重启后打开 Ubuntu，执行 macOS/Linux 安装命令并登录：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/maenjh/ko-paper/main/install.sh | bash -s -- --with-codex   # Claude 订阅则 --with-cl…
+```
+
+注意：材料里 `--with-cl…` 这个选项名被截断，照抄前先打开原文确认完整写法。
+
+9. 做对照。挑一篇 2 页的公开论文（自己已读过、知道正确译法），先记录基线：手工翻译或不用 skill 时，图、表、公式的位置如何、术语是否一致、花了多少时间。装好后用 `ko-paper doctor` 确认输出末尾出现 `kopaper ready`，再用 skill 或 CLI 翻同一篇，逐项对比。然后同一文件再翻一次，确认复用缓存与术语抽取、token 消耗下降。同一篇论文至少跑 3 次，或换 2–3 篇再下结论。
+
 ## 怎么判断变好了
 
 最小试用方式：
@@ -1040,11 +1210,13 @@ codex plugin add android-skills@android-skills
 - 技能安装/分发包类（做法 AR）：在一个真实代码仓库里用 `npx skills add vercel-labs/agent-skills --list` 先看清单；用 `npx skills add ... --skill ... -a ...` 按项目作用域安装 1–2 个到你实际使用的 agent；确认它们落到 `./.claude/skills/` 或 `./.agents/skills/` 等项目路径并随仓库提交。只想试一次时用 `npx skills use ... | claude`。然后按 A 的对照方法，对同一类任务比较安装前/后的首稿可用率、人工修改次数、返工轮数、命令/配置正确率。
 - 团队注册表分发类（做法 AS）：在一个小团队、一个私有 Git 仓库上，先按第 3–6 步建注册表并只加一个 `required` 技能；让一位同事按第 7 步加入，新开会话确认技能出现在 `~/.agents/skills/<skill>` 和 `~/.claude/skills/<skill>`；改一次技能并提交，观察 session 启动 hook 或每小时定时器是否自动同步；把该技能设为 `blocked`，确认下次同步从机器上移除。记录手工分发次数、版本漂移次数、忘 update 次数、`skillcrew doctor` 报错次数。
 - Android 技能类（做法 AT）：选一个真实、范围小的 Android 任务，且该任务对应 README 点名的方向之一，例如 R8 相关分析，或“把 UI 改成 edge-to-edge”。先在不装技能的情况下让智能体做同一任务，保存输出和你的返工次数。项目级用 `android skills add r8-analyzer --project=.`，或全量用 `android skills add --all`。再用同一句提示语跑一遍，例如 `Make my app UI edge-to-edge.`，确认智能体确实自动调用到了技能而不是靠猜。之后定期 `android skills update --all`。
+- 论文翻译类（做法 AU）：挑一篇 2 页公开论文（自己已读过、知道正确译法），先记录手工翻译或用其他方式的基线；装好后用 `ko-paper doctor` 确认输出末尾出现 `kopaper ready`，再用 skill 或 CLI 翻一次，检查图、表、公式位置是否保留、术语是否前后一致、`<文件名>.ko.pdf` 与 `<文件名>.ko.dual.pdf` 是否都生成；同一文件再翻一次，确认复用缓存与术语抽取、token 消耗下降（原文称约省 30%）。同一篇论文至少跑 3 次，或换 2–3 篇再下结论。
 
 可观察的指标：
 
 - 通用：人工修改次数 / 返工轮数是否下降；首稿可用率；背景重述次数；输出一致性；单次任务耗时；规则类返工次数。
 - 做法 AT：一次通过率：输出是否直接可编译/可提交，无需你手工修改；返工轮数：从提出任务到可用结果之间，你要求智能体修改的次数（A/B 对比，装与不装技能）；事实正确性：产出的做法是否与 developer.android.com 上的官方指引一致；触发可靠性：多次同类任务中，智能体自发使用技能的比率；成本：完成同一任务消耗的 token/时间是否上升。判定门槛：如果在 3~5 个真实任务上，一次通过率或返工轮数相对基线有稳定改善、且触发可靠，则把该项目对应的接入方式沉淀进手册；否则只保留“技能包按 LLM 弱项选题 + 放入 agent 目录自动激活”这一条方法论，不写具体命令。
+- 做法 AU：`ko-paper doctor` 是否输出 `kopaper ready`（只证明装得上）；译文里图、表、公式的位置是否保留；术语是否前后一致；同一文件第二次翻译时是否跳过术语抽取、token 是否下降；韩语本与对照本是否都生成在输入文件旁边；网页 UI 顶部显示的 Claude 调用次数与 token 数；同一任务上人工修补译文的时间是否下降。
 - 做法 AS：技能是否按预期同步到 `~/.agents/skills/<skill>` 和 `~/.claude/skills/<skill>`；`skillcrew status` 是否显示正确组织、团队、已安装技能及状态；`skillcrew list --available` 是否列出可自行添加的技能；`skillcrew doctor` 是否报告 hooks、定时器、注册表和已安装技能正常；改一次技能后，开发者端是否无需人工动作就拿到新版本；把技能设为 `blocked` 后，下次同步是否从每台机器移除；本地改动是否被备份到 `~/.skillcrew/backups/<skill>/` 并恢复团队版本；`skillcrew propose` 是否能把本地改动转成 PR；CI 是否在 PR 上跑 `skillcrew validate`。不要拿安装成功、`doctor` 通过或 README 支持多种 agent 当效果证据。
 - 其余做法指标保留：H 看测试是否通过、非空文件、git 改动；I 看交付前 8 条检查清单；J 看按 `diagnostics[]` 修的轮数；K 看品牌 onboarding 后是否还需手动改配色字体；L 看完成时间与返工次数；M 看 8 个已知答案题命中数与 0 幻觉；N 看七问是否全有答案；O 看约束数量与 PG 版本匹配；P 看 7-Question Gate；Q 看五道门禁通过/失败记录；R 看 `GLOSSARY.md` 与 ADR 是否更新；S 看任务完成时间与权限收敛；T 看数据来源、行情时间、抓取时间；U 看从描述问题到 Codex 指到具体元素的耗时；V 看是否自动触发；W 看观察条数与被接受改动数；X 看激活命中与返工轮次；Y 看模板化表达减少与事实不变；Z 看失败→通过证据；AA 看角色激活命中与返工；AB 看 playbook 是否走完与冲突次数；AC 看 validator 退出码与 warning 数；AD 看输出 token 与页面可读性；AE 看校验是否 0 错误与分发效率；AF 看弃用 API 检出数量与误报率；AG 看「愿意发出」比例与意义改动条数；AH 看 tier 计数与 frontier 已解决比例；AI 看 `/discover` 是否产出假设清单与实验设计；AJ 看 diff 是否只含被请求改动；AL 看到「可用初稿」的墙钟时间与人工返工次数、断点续做能否恢复上下文、调研数据是否来自外部搜索源；AQ 看 `estack-doctor` 是否只读并给出带证据的三项改进、`estack-review` 是否发现缺陷、`estack-debug` 是否复现并验证修复、`estack-quality` 是否运行真实质量门并诚实报告失败、`estack-pr` 是否给出与检查一致的验证证据、`estack-eval` 的配对任务盲 worker 与独立评审是否按描述执行；AR 看技能是否按预期作用域安装、`npx skills list` / `ls -g` / `ls -a` 是否能列出、团队拉仓库后是否可用、`skills use` 是否只临时生效、`update` / `remove` 是否按预期工作、技能发现是否符合三层规则、私有仓库安装是否用对凭据。
 
@@ -1094,8 +1266,9 @@ codex plugin add android-skills@android-skills
 - 做法 AR：把 `npx skills list` 能看到技能或安装成功当成效果证据；不确认目标 agent 是否被探测到就硬装；项目级和全局作用域混用导致同一技能两份；忘了 `-g` 而以为装到全局；私有仓库没配 Git / gh / SSH 或 `GITHUB_TOKEN` / `GH_TOKEN` 就硬拉；技能名含空格没加引号；`skills use` 输出没接给目标 agent；内部技能忘了 `metadata: internal: true` 或 `INSTALL_INTERNAL_SKILLS=1`；在标准位置之外期待被自动发现；开了遥测却不知道如何关闭。
 - 做法 AS：把安装成功或 `skillcrew doctor` 通过当成效果证据；不保护注册表默认分支和 tag；pin 用分支而不是完整 commit 或 tag；把 Skillcrew 当执行器——它只复制文件，但技能自带脚本仍会在 agent 使用时执行，必须 PR 审查；在注册表里存密钥或内嵌密码的 URL；把项目级技能交给它；在 Windows 非 WSL2 上硬装；把 early development、MVP 端到端可用当成 v1 稳定；以为所有 agent 的 session hook 同步都已实测；把 `blocked` 当立即从正在运行的会话移除，而不是下次同步移除；忽略本地改动会被备份并恢复团队版本，想改要跑 `skillcrew propose`；忘了 `skillcrew uninstall` 会移除 hooks、定时器和团队技能，但保留本地改动备份。
 - 做法 AT：把 android/skills 的“evaluations show LLMs underperform”当成公开评测集、指标或对比结果——README 没有给；把 8096 stars 或当日 +36 当效果证据；只装 `android-cli` 就以为装上了完整 Android 技能；不指定 `--agent` 却发现装到了 `~/.gemini/antigravity/skills`，先确认目标 agent 目录；一次 `android skills add --all` 后不逐项看技能；等智能体自动触发却从不检查它是否真的用了技能；更新后不跑 `android skills update --all`。
+- 做法 AU：把 `ko-paper doctor` 输出 `kopaper ready` 当成翻译质量证据；把作者自述的演示或 AGPL 许可证当成效果数据；在目标语言不是韩语的任务上硬用；只翻部分页面却期待术语表被保存（原文说只翻部分页面的那次运行不保存术语）；Windows 上被 Smart App Control 拦截时去关 SAC，而不是走简易模式或 WSL；把「支持 10 种原文语言」误当成「支持 10 种输出语言」（输出固定为韩语）；照抄被材料截断的 `--with-cl…` 选项名。
 
-注意：`doctor`、`validate`、`npm test`、`claude plugin validate`、`npx @anthropics/skills-ref validate`、`archify doctor`、`validate --json`、`python -m unittest discover -s tests`、`validate_skill.py`、`check.py`、`skillforge validate` / `skillforge check` 这类检查只能证明「技能或 mod 装得上、格式合法、不带危险命令、图能通过校验、回归测试能过、技能符合规则表」，不能证明「产出更好」。效果必须自己对照。做法 AK 的 `npx @orchestra-research/ai-research-skills list` 同理；做法 AM 里「host 能发现该 Skill」也只证明装上了；做法 AO 里 `go run ./charmed-bubbletea/counter` 跑通只证明环境没问题；做法 AQ 里安装成功、`estack-doctor` 能跑、`doctor.py` 能输出 JSON 也只证明装上了和工具能动；做法 AR 里 `npx skills list` 能看到技能也一样；做法 AS 里 `skillcrew doctor` 通过也只证明 hooks、定时器、注册表和已安装技能没坏，不证明团队工作变好；做法 AT 里 `android skills add` 装成功也只证明技能文件落了盘。
+注意：`doctor`、`validate`、`npm test`、`claude plugin validate`、`npx @anthropics/skills-ref validate`、`archify doctor`、`validate --json`、`python -m unittest discover -s tests`、`validate_skill.py`、`check.py`、`skillforge validate` / `skillforge check` 这类检查只能证明「技能或 mod 装得上、格式合法、不带危险命令、图能通过校验、回归测试能过、技能符合规则表」，不能证明「产出更好」。效果必须自己对照。做法 AK 的 `npx @orchestra-research/ai-research-skills list` 同理；做法 AM 里「host 能发现该 Skill」也只证明装上了；做法 AO 里 `go run ./charmed-bubbletea/counter` 跑通只证明环境没问题；做法 AQ 里安装成功、`estack-doctor` 能跑、`doctor.py` 能输出 JSON 也只证明装上了和工具能动；做法 AR 里 `npx skills list` 能看到技能也一样；做法 AS 里 `skillcrew doctor` 通过也只证明 hooks、定时器、注册表和已安装技能没坏，不证明团队工作变好；做法 AT 里 `android skills add` 装成功也只证明技能文件落了盘；做法 AU 里 `ko-paper doctor` 输出 `kopaper ready` 同样只证明依赖与 CLI 装得上。
 
 ## 常见坑
 
@@ -1146,6 +1319,7 @@ codex plugin add android-skills@android-skills
 - 做法 AR：把安装成功或 `npx skills list` 能看到技能当成效果证据；不确认目标 agent 是否被探测到就硬装；项目级和全局作用域混用导致同一技能两份；忘了 `-g` 而以为装到全局；私有仓库没配 Git / gh / SSH 或 `GITHUB_TOKEN` / `GH_TOKEN` 就硬拉；技能名含空格没加引号；`skills use` 输出没接给目标 agent；内部技能忘了 `metadata: internal: true` 或 `INSTALL_INTERNAL_SKILLS=1`；在标准位置之外期待被自动发现；开了遥测却不知道如何关闭；把 README 支持 75+ agent 当成技能自动激活准确率证据。
 - 做法 AS：把安装成功或 `skillcrew doctor` 通过当成效果证据；不保护注册表默认分支和 tag；pin 用分支而不是完整 commit 或 tag；把 Skillcrew 当执行器——它只复制文件，但技能自带脚本仍会在 agent 使用时执行，必须 PR 审查；在注册表里存密钥或内嵌密码的 URL；把项目级技能交给它；在 Windows 非 WSL2 上硬装；把 early development、MVP 端到端可用当成 v1 稳定；以为所有 agent 的 session hook 同步都已实测；把 `blocked` 当立即从正在运行的会话移除，而不是下次同步移除。
 - 做法 AT：把 README 的“evaluations show LLMs underperform”当成公开评测集、指标或对比结果；把 8096 stars 或当日 +36 当效果证据；只装 `android-cli` 就以为装上了完整 Android 技能；不指定 `--agent` 却发现装到了 `~/.gemini/antigravity/skills`，先确认目标 agent 目录；一次 `android skills add --all` 后不逐项看技能；等智能体自动触发却从不检查它是否真的用了技能；更新后不跑 `android skills update --all`；把 Android 技能命令搬到非 Android 项目上。
+- 做法 AU：把 `ko-paper doctor` 输出 `kopaper ready` 当成翻译质量证据；把作者自述的演示当效果数据；目标语言不是韩语却硬用；只翻部分页面却发现术语表没有保存；Windows 上被 Smart App Control 拦截时去关 SAC，而不是走简易模式或 WSL；把「支持 10 种原文语言」误当成支持 10 种输出语言；忘了 `KOPAPER_CODEX_EFFORT` 默认是 `low`（选 opus 时才是 `medium`）；照抄材料里被截断的 `--with-cl…` 选项名；只装 `SKILL.md` 而不给 `references/`。
 
 ## 证据与来源
 
@@ -1158,6 +1332,7 @@ codex plugin add android-skills@android-skills
 - vercel-labs/skills 路线：全部来自调研《vercel-labs/skills》，即该仓库 README。可核查信息：完整安装命令与来源格式、作用域与路径表、`-g` 与 `--copy`、`skills use` 临时使用、`skills find` / `list` / `update` / `remove`、`init` 生成的 `SKILL.md` 模板、`metadata: internal: true` 与 `INSTALL_INTERNAL_SKILLS=1`、技能发现最多三层与浅层遮蔽深层、`--full-depth`、私有仓库认证方式、`GITHUB_TOKEN` / `GH_TOKEN`、遥测开关 `DISABLE_TELEMETRY=1` / `DO_NOT_TRACK=1`、下载限制环境变量。README 称支持 OpenCode、Claude Code、Codex、Cursor 以及另外 75 个 agent。效果验证方面：README 未给任何基准、指标或前后对比数据；唯一涉及的「度量」是匿名使用遥测，属于工具使用统计，不是效果验证。
 - Skillcrew 路线：全部来自调研《yoanbernabeu/skillcrew》，即该仓库 README。可核查信息：安装方式、`cosign` 校验发布包、`skillcrew registry init` 生成 marketplace + `skillcrew.yaml` + CI + `AGENTS.md`、`skillcrew skill new` 创建 `plugins/<plugin>/skills/<skill>/SKILL.md` 并登记插件和状态、五种状态、按组织与团队配置、`skillcrew validate` 检查、`skillcrew init` 加入、`sync` / `status` / `list` / `install` / `remove` / `disable` / `enable` / `propose` / `doctor` / `uninstall` 命令、`--json` 支持、安全模型、本地改动备份、个人技能备份与还原、项目级技能不要交给它。原文自述状态：early development、MVP 端到端可用、v1 前预期有 breaking change。局限：多数 agent 的同步触发尚未实测；README 没有给出任何基准、指标或前后对比数据；安装成功或 `skillcrew doctor` 通过只证明 hooks、定时器、注册表和已安装技能没坏，不证明团队工作变好。
 - android/skills 路线：全部来自调研《android/skills》，即该仓库 README。原文实际给出的、可核查的信息：Android 官方维护，遵循 agentskills.io，技能是 markdown 文件 `SKILL.md`，用来让智能体按 developer.android.com 最佳实践执行特定开发模式。README 举例技能名 `r8-analyzer`、`wear-compose-m3`、`android-cli`，并说 `android-cli` 是默认安装的那个。安装与更新命令：`android skills add r8-analyzer --project=.`、`android skills add --all`、`android skills update --all`、`android skills update wear-compose-m3`。选项：`--all`、`--agent`、`--project`。默认安装位置：没有已存在智能体目录、也没指定 agent 时，装到 Gemini 和 Antigravity 的 `~/.gemini/antigravity/skills`。插件安装：Claude Code 的 `/plugin install android-skills --marketplace android/skills`；Codex 的 `codex plugin marketplace add android/skills` 和 `codex plugin add android-skills@android-skills`。触发方式：不要手动调用，直接描述相关任务，例如 `Make my app UI edge-to-edge.`。反馈路径：GitHub issue；当前不接受公开 PR。授权 Apache License 2.0。效果验证方面：README 提到选题基于 evaluations，但没有给出评测集、指标或对比结果；没有任何案例、前后对比、用户反馈或性能数字。仓库元信息约 8096 stars、当日 +36，来自抓取指标，不构成有效性证据。局限：只依据 README，看不到技能全清单、每个 `SKILL.md` 的实际内容，也无法判断质量与覆盖面；强绑定 Android 开发与 Android CLI；能否稳定触发是运行时的未知数；仓库不接受公开贡献。因此本手册只把它列为「按做法 A 小范围试装」，并把“技能包按 LLM 弱项选题 + 放入 agent 目录自动激活”作为可借鉴的方法论。
+- ko-paper 路线：全部来自调研《maenjh/ko-paper》，即该仓库 README。可核查信息：安装脚本与 Windows PowerShell 命令、Claude Code 插件市场两步、`ko-paper doctor` 自检与 `kopaper ready` 判据、`ko-paper update`、三种使用入口（skill 自然语言、`ko-paper` CLI、固定监听 `127.0.0.1:8787` 的网页 UI）、输出文件名 `<文件名>.ko.pdf` 与 `<文件名>.ko.dual.pdf`、术语表 CSV 列 `source,target,tgt_lng` 与四级冲突优先级、关键环境变量表、手动安装用 `babeldoc==0.5.24` 加 `bitstring<5`、Windows Smart App Control 拦截时的简易模式（产出 `<文件名>.ko.lite.pdf`）与 WSL 两条出路、网页 UI 的 Host / Origin 检查与 `data/web_jobs.sqlite` 任务记录。原文自述：同一文件再翻会复用术语并跳过抽取步骤、token 约省 30%；自动抽取会过滤掉会议/机构/出版社名等应保持原文的专有名词；网页 UI 顶部显示最近 5 小时内发出的 Claude 调用次数与 token 数；只翻部分页面的那次运行不保存术语。局限：输出语言固定为韩语；没有第三方评测、基准或前后对比数据，全部效果描述来自作者自述；许可证为 AGPL-3.0-or-later；材料里 Claude 订阅对应的 `--with-cl…` 选项名被截断，本手册未补全。因此只把它列为「按做法 A 小范围试装」。
 - 文中提到的 star 数来自 metrics，不构成有效性证据。
 
 ## 依据的调研
@@ -1213,3 +1388,4 @@ codex plugin add android-skills@android-skills
 - [vercel-labs/skills](../research/radar/2026-10-14/3077-vercel-labs-skills.md)：值得一试，建议在一个真实代码仓库里小范围试：用 `npx skills add` 把 1–2 个技能按项目作用域安装到你实际使用的 agent（默认落到 `./.claude/skills/` 等目录），随仓库提交给团队共用。理由是 README 给出了完整可复制的命令、作用域/路径表、SKILL.md 模板与环境变量，能立刻照做；但文中没有任何效果数据，技能是否真的改善结果必须自己对照验证。
 - [yoanbernabeu/skillcrew](../research/radar/2026-10-16/3745-yoanbernabeu-skillcrew.md)：值得一试，Skillcrew 用一条命令把团队的 SKILL.md 注册表分发到每个人、每种 AI 编程代理，并用 session 启动 hook + 每小时定时器做到无需人工更新，值得在一个小团队、一个私有 Git 仓库上小范围试；但它自述处于 early development（v1 前会有 breaking change），且多数 agent 的同步触发尚未实测，所以先试不建议直接采用。
 - [android/skills](../research/radar/2026-10-17/4228-android-skills.md)：值得一试，做 Android 开发的话，可按 README 给出的命令在当前项目或全局安装部分 skill（如 r8-analyzer），让智能体在相关任务中自动调用；理由是原文给出了可直接执行的安装、更新、激活流程，并把技能范围明确限定在“评估显示 LLM 表现较弱”的工作流上，但仓库只公开了安装方式，没有技能全清单和效果数据，所以先小范围试、用自己项目的结果来判断。
+- [maenjh/ko-paper](../research/radar/2026-10-17/4354-maenjh-ko-paper.md)：值得一试，先小范围试：按 README 把 ko-paper 装成 Claude Code / Codex 的 skill，用一篇 2 页公开论文验证版式、公式、术语一致性与 token 消耗，再决定是否把「PDF 版式保持翻译」这类流程纳入自己的文档处理链路。理由：原文给出了可直接复制的安装命令、CLI/网页用法、术语表 CSV 格式和缓存/并发等参数，属于可照做的具体流程，但输出语言固定为韩语、证据全部来自作者自述，因此不宜直接 adopt。
