@@ -1,34 +1,38 @@
-# 让 AI 按你团队的流程干活、不漏事、长任务不掉线，并拿出证据说明有没有变好
+# 把 Claude Code 按职能/收口/观测/交接装起来，中大型编码变更交给子代理流水线
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：你已经在用 Claude Code 或 Cowork，但每次让 AI 做某个职能的活都要重新解释领域知识和公司上下文，AI 中途问的问题、发现的 bug 和失败的测试会淹没在对话里，长任务跨上下文窗口时没人交接、没人唤醒、没人拍板，而且你说不清装了一堆插件到底有没有变好。
-> 先试这一步：先记录 2–3 次基线（完成时间、返工次数、补齐上下文的次数），然后只装一个和你当前工作最贴近的职能插件或技能包，跑通一个斜杠命令，再打开它的 skills/ 把一条指令改成你团队的真实流程。
-> 最近修订：2026-10-17
+> 解决的问题：用 Claude Code 做实际工作时，怎么按职能装载领域能力、把没收口的事和需要拍板的事交出来、用数字判断有没有变好、让长跑任务不掉线，并在中大型代码库上把一次变更交给带计划、两轮 review 与可审计 landing 的子代理流水线。
+> 先试这一步：先按第 4 步之三做法 A 只装 `studio-core`、跑一次 `/studio-core:studio-init`，再用一个中等以上变更执行 `Plan and build X with studio-core:plan-then-build`，看第二遍独立 review 和 guard/audit 是否真的抓到东西。
+> 最近修订：2026-10-18
 
 ## 解决什么问题
 
-你已经在用 Claude Code 或 Cowork，但每次让 AI 做某个职能的活（写 SQL、准备客户通话、审合同、对账、做 3D 资产、写 PRD、画论文示意图等），都要重新解释领域知识、反复交代公司上下文、手动把外部工具的数据贴进去，而且 AI 给出的流程往往是教科书做法，不是你团队实际的做法。另外两个常见缺口：AI 在会话中途问你的问题、顺手发现的 bug、失败的测试，过一会儿就淹没在对话里，要你自己翻回去捞；装完一堆插件后，你说不清到底有没有变好。第三个缺口在长任务上最扎眼：任务跑得比一个上下文窗口更久时，交接由谁做、新上下文有没有接住前面的进度、你离开两小时后 run 怎么被唤醒、需要你拍板的选择会不会把整个 run 卡住——过去都靠人守着。
+你已经在用 Claude Code 或 Cowork，但每次让 AI 做某个职能的活（写 SQL、准备客户通话、审合同、对账、做 3D 资产、写 PRD、画论文示意图等），都要重新解释领域知识、反复交代公司上下文、手动把外部工具的数据贴进去，而且 AI 给出的流程往往是教科书做法，不是你团队实际的做法。另外两个常见缺口：AI 在会话中途问你的问题、顺手发现的 bug、失败的测试，过一会儿就淹没在对话里，要你自己翻回去捞；装完一堆插件后，你说不清到底有没有变好。第三个缺口在长任务上最扎眼：任务跑得比一个上下文窗口更久时，交接由谁做、新上下文有没有接住前面的进度、你离开两小时后 run 怎么被唤醒、需要你拍板的选择会不会把整个 run 卡住——过去都靠人守着。第四个缺口出现在真正做一次中大型编码变更时：一次改多个文件、有真实用户、代码要维护多年，但单个会话往往一口气写到底，没有计划、没有独立审查，landing 之前没人核对，出了问题说不清是哪一步引入的。
 
-本手册用四层叠加来补：官方插件市场层、职能层、收口层、观测层（广/深）、交接层。官方市场 `anthropics/claude-plugins-official` 给出标准入口：`/plugin > Discover` 浏览、`/plugin install {plugin-name}@claude-plugins-official` 安装，并定义插件目录结构、marketplace 条目的不可变 slug、以及只有 SKILL.md 的 skill 包如何声明。但原文没有列出任何具体插件——它解决的是从哪装、按什么格式打包，不保证装了就有效果。
+本手册用五层叠加来补：官方插件市场层、职能层（含独立 Agent Skills 与编码变更编排）、收口层、观测层（广/深）、交接层。官方市场 `anthropics/claude-plugins-official` 给出标准入口：`/plugin > Discover` 浏览、`/plugin install {plugin-name}@claude-plugins-official` 安装，并定义插件目录结构、marketplace 条目的不可变 slug、以及只有 SKILL.md 的 skill 包如何声明。但原文没有列出任何具体插件——它解决的是从哪装、按什么格式打包，不保证装了就有效果。
 
 职能层除了 Anthropic 的 11 个知识工作插件（`anthropics/knowledge-work-plugins`），还有独立 Agent Skills 仓库，目前三个实例：
 
 - `EL4CTEO/blender-skills`：20 个 Blender 工作流（建模、UV、PBR、烘焙、绑定、动画、优化、导出、渲染、模拟、资产 QA）。
 - `deanpeters/Product-Manager-Skills`：77 个 PM 技能 + 6 个命令式工作流，可被能读结构化 Markdown 的多种代理使用。
-- `lgwrightlab/schematic-figure`（本次新增）：科研论文示意图与专利附图。产出可逐处编辑的矢量图（SVG、PDF）并同时给出绘制代码；用 look（风格：flat / in 3D / render it in Blender / photoreal）、size（Width 89 mm 单栏、183 mm 双栏）、depth（draft / standard / full 三档检查强度）三个旋钮控制出图；可并行跑三个 agent 出三种设计再合并。原文明确它不替代设计图的人，科学内容与细节仍需人工检查与微调。
+- `lgwrightlab/schematic-figure`：科研论文示意图与专利附图。产出可逐处编辑的矢量图（SVG、PDF）并同时给出绘制代码；用 look（风格：flat / in 3D / render it in Blender / photoreal）、size（Width 89 mm 单栏、183 mm 双栏）、depth（draft / standard / full 三档检查强度）三个旋钮控制出图；可并行跑三个 agent 出三种设计再合并。原文明确它不替代设计图的人，科学内容与细节仍需人工检查与微调。
 
 三者与 knowledge-work-plugins 解决同一类问题：把领域知识、工具连接和固定动作预打包，让代理在相关时自动取用。但三个仓库的材料都只到 README，技能内部提示词、脚本与 QA 规则未展示，必须先小范围实测。
 
+编码变更编排层是本次新增的一层：`priyanshujha/subagent-studio` 是一组 Claude Code 插件，把一次会话变成协调者（orchestrator），调度一组精简、单职责子代理完成编码变更：先计划、在 worktree 里构建、两轮 review、受守卫的 landing。分四个模块——`studio-core`（agents：builder、builder-sonnet、reviewer、reviewer-pass-one、planner、planner-max、searcher；skills：plan-then-build、self-review、orchestrator-rules、studio-init、effort-low/medium/high/xhigh；scripts：review_guard.sh、review_path.py、worktree_sweep.sh；可选 push hook）、`studio-context`（skill context-budget 与 context_budget.py、check_moved_text.py、token_usage.py、effort_check.py、my_context.py）、`studio-unattended`（skills wake-up、task-queue、journal、usage-guard、notify；scripts wake_lock.sh、notify.sh；权限 gate 和 prompt alarm hook）、`studio-research`（agents research-lead、gatherer、gatherer-browser；skill research-run）。它的六条主张是：一个角色一个 agent 类型；orchestrator 不碰代码；大工作先计划；两轮 review 后强制 landing；便宜模型只读取不判断；上下文是预算。作者称它来自一个真实项目，该项目主要靠定时 Claude Code 会话跑了约五周；这是作者单项目自述，不是效果数据。
+
 收口层 `petekp/inbox` 把会话里散落的问题、任务、议题和机会收进一个与会话并排的面板，并在 Claude 声称测试通过、但上次运行失败或改动后没再跑过时叫停。观测层（广）`whyashthakker/awesome-claude-code-mods` 里的 Session 观测类 mod，能把上下文占用、工具失败次数、工具延迟、每轮时长变成会话里可对比的数字。观测层（深）`YeonwooSung/my-claude-code-mods`：`agent-profiler` 看一次会话的时间去向并可导出 OTLP trace；`context-inspector` 分析上下文浪费；`time-machine` 用 shadow-git 快照记录每一次工具调用；`loop-detective` 检测重复失败和 edit/retry 循环；`pin-memo` 固定备忘和 todo；`model-effort-band` 显示模型与 effort。交接层 `Arjun0014/project-sentinel` 是长时间 Claude Code 运行的任务控制台：状态栏 HUD、Control Room 面板、Autopilot 自动交接、Watchers 定时唤醒、Mission Queue 边界投递、Decision Inbox 收集需要你拍板的选择，以及 Cache Guardian、Cold Resume Guard、Run Budget、Machine load 等护栏。
 
-要解决的问题因此是七件事叠加：如何从官方插件市场发现并安装插件；如何选一个职能插件或独立 Agent Skills 包（Blender、PM、科研示意图等）、装好、跑通、按团队真实流程改一条；如何让 AI 把没收口的事交出来；如何用数字判断改造有没有效果（观测层有两个来源，还要决定选哪个、怎么量它自身开销）；长跑任务跨上下文窗口时如何让交接、等待和拍板都不掉线；以及三个技能包都只到 README 时，怎么用最小试用判断它们值不值得留。
+要解决的问题因此是八件事叠加：如何从官方插件市场发现并安装插件；如何选一个职能插件或独立 Agent Skills 包（Blender、PM、科研示意图等）、装好、跑通、按团队真实流程改一条；中大型代码库上的一次变更如何拆成带计划、每步 check、两轮 review 和可审计 landing 的子代理流水线；如何让 AI 把没收口的事交出来；如何用数字判断改造有没有效果（观测层有两个来源，还要决定选哪个、怎么量它自身开销）；长跑任务跨上下文窗口时如何让交接、等待和拍板都不掉线；三个技能包都只到 README 时怎么用最小试用判断它们值不值得留；以及多代理流水线的 token 成本与上下文预算怎么管。
 
 ## 适用与不适用
 
 **官方插件市场**：适用——本机已安装并运行 Claude Code、能访问该 marketplace；想先浏览再决定装哪个；想按官方规范打包团队能力并分发；愿意安装前检查插件主页和来源，确认信任其包含的 MCP server 和文件访问。不适用——没在用 Claude Code；需要先看到具体插件名单、评价或效果数据（原文只有 README，未收录任何具体插件）；期望 Anthropic 替你审核插件行为（原文明确不控制插件里的 MCP server、文件或其他软件，也无法验证它们会按预期工作或不会变化）；不能接受插件访问文件与外部服务（应从单机、非敏感任务开始，不要一上手就接入生产凭据）。
 
 **其余各层（职能、收口、观测、交接）**：适用前提是团队已用 Claude Code（有 `claude` CLI）或可用 claude.com/plugins 的 Cowork；所需外部工具能通过 MCP 接入；有人愿意读插件的 `skills/` 并按本团队流程改写；你希望把某职能的领域知识、工具连接和固定动作预打包复用；你愿意多花一步装观测类 mod 来让「有没有变好」有数字支撑。逐层额外前提：观测层（广）Claude Code 2.1.287+，在 CLI 或 Claude Desktop 的 Code tab 里用；观测层（深）具备官方 Mods 机制环境，并接受每个 mod 的安装命令与配置项要进各自 README 读；收口层 Claude Code 2.1.292，PRs 标签页还需已安装并登录的 `gh`；交接层 Claude Code 2.1.289 或更新且带 function-hooks 插件 API，运行面为终端 CLI 或 Claude Desktop 的 Code tab 本地会话，README 只在 Windows 11 和 Claude Code 2.1.289 / 2.1.293 / 2.1.295 上验证过。
+
+**编码变更编排层（subagent-studio）**：适用——中大型代码库、复杂变更：每次改多个文件、有真实用户、代码要维护多年；或无人值守的定时运行（没人看着时改变事物）；Claude Code 构建支持 plugin 和 marketplace；能用 git 和 worktree、能定义 check commands。不适用——小而明确的工作：原文说单个 Claude Code 会话处理小脚本或小代码库里描述精确的功能更便宜，本套件在小变更上很少买到东西，而每个变更要加 planner、builders、step checks 和两个 reviewer，token 是单会话的数倍（原文图中低于 50 行的严重 bug 发现率为 9%）；需要先看到效果证据（材料只有作者单项目自述、仓库仅 30 星，关键证据细节在本次材料未包含的 `docs/evidence.md` 中）；不能运行 shell 脚本（想用 copy-in 做法 B 时）；不接受为了一次变更多付数倍 token。
 
 **独立 Agent Skills 实例**：
 
@@ -42,6 +46,7 @@
 - Blender：没有 Blender 5.2+ 或无法确认 MCP server 可用性；无法接受 42 stars 的单仓库风险；需要先看到性能数据、前后对比案例或失败模式。
 - PM：需要先看到 77 技能正文质量与效果数据；不能接受 CC BY-NC-SA 4.0 许可限制（尤其商用）；指望 README 直接给效果验证方法。
 - 示意图：指望它替你做设计（原文明确不替代设计图的人，只提供快速初稿与设计想法，科学内容与细节仍需人工检查与微调）；只看作者自制的五篇论文对比演示（发表版图 / Opus 5.5 无技能 / Opus 5.5 有技能）就当作效果数据（没有量化评分、盲评或通过率，也没有定义「更好」的标准）；要它自己按时间或事件持续推进（原文未给出这类机制，只有在同一文件夹里人工接续改图）；商用发布前不确认字体授权（内置 Latin Modern 字体是 GUST 字体许可，不同于代码的 MIT）。
+- subagent-studio：小而明确的工作（小脚本、小代码库里描述精确的功能）；需要先看到结果证据才采用；不能接受每个变更的数倍 token；无法确认 `docs/evidence.md` 里的证据细节（本次材料未包含）。
 - 其余各层：不具备上述条件只能停在看看；期望开箱即用、不做定制就大幅改善（职能插件原文自称 these plugins are generic starting points）；需要先看到官方效果数据、案例或 benchmark 才决定采用；无头或非面板场景（VS Code 聊天面板和 `claude -p` 会执行 hooks，但不显示 mod 面板）；敏感项目上装第三方 mod；会话很短且你本来就很少漏事（收口层每轮一次的额外调用摊得更重）；任务在单个上下文窗口内就做完（交接层的状态栏和 Autopilot 阈值用不上）；用远程（云）会话（交接层 README 明示尚未测试）；机器不是 Windows 11 或 Claude Code 版本不在作者验证过的范围里（先按「未在你的环境验证」对待）。
 
 ## 前置条件
@@ -74,6 +79,11 @@
 26. 示意图技能的 agent 在它被启动的目录工作，图写到 `figure/out/`，格式为 SVG、PDF、PNG，有时放在以图名命名的子文件夹里。先建好项目文件夹，再在其中启动 agent。
 27. 在 Codex 中使用示意图技能，需要在提示里写出 `SKILL.md` 的路径。
 28. 用示意图技能前先备好：详细技术描述（新概念必须给详细描述，短请求只对众所周知的概念有效）、一张同风格样例图（可选，作者推荐用于对齐配色/线宽/细节度）、目标宽度。
+29. 编码变更编排层（subagent-studio）：前提是 Claude Code 构建支持 plugin 和 marketplace；想用 copy-in 做法 B 还要能运行 shell 脚本、目标项目路径可用；要用七步流程，需要能建分支和 `git worktree`，并先定义好 check commands。
+30. 装 `studio-core` 后运行 `studio-init` 会检测你的 check commands、提议 reviewed paths、询问 review passes、landing 和 push hook，写 `.claude/studio.json`，并向 `CLAUDE.md` 加一个短块——先接受它的检测结果再改配置，不要跳过。
+31. 配置 key 可选且有默认值；schema 在 `config/studio.schema.json`，示例在 `config/studio.example.json`，各模块页面在 `docs/modules/` 下列出 key。要用 `roles.<role>` 设置某角色的 model 或 effort level，前提是 Claude Code v2.1.292 或更新；老版本把 `roles` 留空，由各 agent 文件 frontmatter 决定。
+32. landing 的审计链依赖 commit message 里的 trailers，且团队用 `core.review.land: pr` 时，合并必须用保留 trailers 的 merge commit，否则 audit 失效。
+33. 本层的证据细节在本次材料未包含的 `docs/evidence.md` 中；材料末尾被截断在 “每个 agent 文件在 frontmatter 里固定 model、”，未给出的行为不要照抄。
 
 ## 操作步骤
 
@@ -159,7 +169,7 @@ Claude Code 插件加载器会读这个映射，在用户下次同步时把旧 s
 
 **做法**：数据岗选 data，销售选 sales，法务选 legal，以此类推。只挑一个，不要一次装多个。
 
-**如果你的职能不在上面，或需要跨运行时使用**：去看独立 Agent Skills 仓库，例如 Blender、PM、科研示意图。具体在第 4 步之二。
+**如果你的职能不在上面，或需要跨运行时使用**：去看独立 Agent Skills 仓库，例如 Blender、PM、科研示意图。具体在第 4 步之二。**如果你要动的是中大型代码库上的一次变更**：看第 4 步之三。
 
 **预期结果**：你有一个明确的插件名或技能包名，后面命令里会替换。
 
@@ -405,6 +415,110 @@ Use the schematic-figure skill. Draw a lithium-ion cell while charging, in 3D. W
 
 **怎么选（独立技能包之间）**：3D/Blender 任务 → 做法 A；产品管理任务 → 做法 B；科研论文示意图或专利附图 → 做法 C；如果 knowledge-work-plugins 已有对应职能（sales、legal、finance、data 等），优先用第 1–4 步的职能插件；如果要在 Codex、Gemini CLI、Copilot、Cursor 等运行时之间复用同一套技能，优先看支持 `.agents/skills` 的包。
 
+### 第 4 步之三：把一次中大型编码变更拆成多子代理流水线（subagent-studio，做法 A / 做法 B）
+
+**什么时候用**：中大型代码库、复杂变更——每次改多个文件、有真实用户、代码要维护多年；或无人值守的定时运行。**什么时候跳过**：小而明确的工作，单个 Claude Code 会话处理小脚本或小代码库里描述精确的功能更便宜；本套件每个变更要加 planner、builders、step checks 和两个 reviewer，token 是单会话的数倍，原文图里低于 50 行的严重 bug 发现率为 9%。
+
+**四个模块**（原文表格，按需装，不是一次全装）：
+
+| 插件 | 增加内容 | 依赖 | 配置段 |
+|---|---|---|---|
+| `studio-core` | agents：`builder`、`builder-sonnet`、`reviewer`、`reviewer-pass-one`、`planner`、`planner-max`、`searcher`；skills：`plan-then-build`、`self-review`、`orchestrator-rules`、`studio-init`、`effort-low/medium/high/xhigh`；scripts：`review_guard.sh`、`review_path.py`、`worktree_sweep.sh`；可选 push hook | 无 | `core`、`roles` |
+| `studio-context` | skill `context-budget`；scripts `context_budget.py`、`check_moved_text.py`、`token_usage.py`、`effort_check.py`、`my_context.py` | 无 | `context` |
+| `studio-unattended` | skills `wake-up`、`task-queue`、`journal`、`usage-guard`、`notify`；scripts `wake_lock.sh`、`notify.sh`；权限 gate 和 prompt alarm hook | `studio-core` | `unattended` |
+| `studio-research` | agents `research-lead`、`gatherer`、`gatherer-browser`；skill `research-run` | `studio-core` | `research` |
+
+**做法 A：插件市场安装（决定长期用；建议先做这一步）**
+
+前提：Claude Code 构建支持 plugin 和 marketplace。
+
+```text
+/plugin marketplace add priyanshujha/subagent-studio
+/plugin install studio-core@subagent-studio
+/studio-core:studio-init
+```
+
+`studio-init` 会检测你的 check commands、提议 reviewed paths、询问 review passes、landing 和 push hook，写 `.claude/studio.json`，并向 `CLAUDE.md` 加一个短块。
+
+可选安装其他模块：
+
+```text
+/plugin install studio-context@subagent-studio
+/plugin install studio-unattended@subagent-studio
+/plugin install studio-research@subagent-studio
+```
+
+**做法 B：copy-in（无插件支持，或想把它放进自己仓库）**
+
+前提：能运行 shell 脚本，目标项目路径可用。
+
+```bash
+git clone https://github.com/priyanshujha/subagent-studio && cd subagent-studio
+./install.sh --modules core --target /path/to/project
+```
+
+`install.sh` 会把 agents 和 skills 复制进 `.claude/`，scripts 进 `scripts/studio/`，hooks 合并进 `.claude/settings.json`（合并，不覆盖）。它会重写命名空间名称（`studio-core:builder` 变成 `builder`）。选项：`--modules core[,context,unattended,research]`、`--dry-run`、`--force`、`--uninstall`。然后在项目里运行 `studio-init` skill。
+
+**怎么选**：能装插件、想长期用 → 做法 A；不能装插件，或要把这套东西收进自己仓库 → 做法 B。想先验证收益 → 先按做法 A 只装 `studio-core`，跑通一个变更再考虑其他模块。
+
+**发起第一个任务**（前提：已装 `studio-core` 并跑过 `studio-init`）：
+
+```text
+Plan and build X with studio-core:plan-then-build
+```
+
+**按需要配置**（每个 key 可选且有默认值；schema 是 `config/studio.schema.json`，示例是 `config/studio.example.json`，各模块页面在 `docs/modules/` 下列出 key）：
+
+- `core.review.reviewed_paths`：把 scratch 目录和一次性脚本排除在 reviewed paths 外，避免多付 review 成本。
+- `core.review.land`：默认 `merge-no-ff`，由会话自己把已审工作落进 main，适合单人跑 Claude Code；团队让人类合并则设 `core.review.land: pr`，会话开 pull request，PR body 带同样 trailers，合并时必须用保留 trailers 的 merge commit，这样 audit 仍有效。
+- `roles.<role>`：设置某角色的 model 或 effort level 时，会话在对应角色的 Agent 调用上传递。前提是 Claude Code v2.1.292 或更新；老版本把 `roles` 留空，由各 agent 文件 frontmatter 决定。
+
+**按七步流程跑一个变更**（以 “add CSV export” 为例；前提：已有计划、分支和工作区，已配置 check commands）：
+
+```text
+1. Agent { subagent_type: "studio-core:planner", description: "Plan T-12",
+           prompt: <task, constraints, files to read, the plan shape> }
+   -> saves plans/t-12-csv-export.md, commits and pushes it
+
+2. git worktree add -b review/2026-10-13-t-12-csv ../project-review/t-12-csv origin/main
+
+3. Agent { subagent_type: "studio-core:builder", description: "Build T-12 step 1",
+           prompt: <step 1 verbatim, goal, worktree path, ci_commands> }
+   Agent { subagent_type: "studio-core:reviewer", description: "Check T-12 step 1",
+           prompt: <acceptance line, builder report, the five checks> }
+   ... one fresh builder and one fresh check per step
+
+4. commit by path, push the branch, write down BASE and HEAD
+
+5. Agent { subagent_type: "studio-core:reviewer-pass-one", description: "Pass one T-12",
+           prompt: <branch, BASE..HEAD, paths, the author's checklist> }
+   -> a fresh builder fixes what it found; new HEAD
+
+6. Agent { subagent_type: "studio-core:reviewer", description: "Review T-12 before main",
+           prompt: <reviewer-prompt.md, every placeholder filled> }
+   -> a fresh builder fixes blockers and majors, each with a test; tip FIX
+
+7. git merge --no-ff from a detached origin/main in the worktree, push HEAD:main,
+   remove the worktree, delete the branch on both sides
+```
+
+原文未给出 plan 的固定 shape、`reviewer-prompt.md` 的具体检查项，也未给出 `<...>` 占位符的完整内容，需要自己补。
+
+**写 landing commit message 的 trailers**（原文示例）：
+
+```
+Reviewed-by: fresh reviewer agent, 3f1c2a9..8be04d1, 1 round (0 blocker, 1 major, 2 minor; 2 fixed, 1 queued)
+Fixed-after-review: author, 8be04d1..c47e9f0, 2 fixes (major: empty file gave a header-only CSV; minor: column order)
+```
+
+**用守卫和审计兜底**：`review_guard.sh audit` 读取这两个 range，检查 merge 是否恰好带入了它们覆盖的内容。guard script 拒绝把未审查工作 push 到 main；可选 hook 自动运行该 guard；audit 遍历 main 历史找漏掉的 landing。`examples/` 会构建一个 toy repo，带一个可离线审计的 landing。
+
+**成本预期**（原文明确提示）：每个变更的 agent 调用更多。小变更需要一个 builder、一个 pass-one reviewer 和一个 fresh reviewer；有计划的变更再加 planner 和每步 check。
+
+**和已有层的关系（重叠；材料未说明同时装会不会互相干扰，先只在一层用一个）**：`studio-context` 的 `context-budget` 与观测层（深）的 `context-inspector` 都在看上下文占用与浪费；`studio-unattended` 的 `wake-up` / `task-queue` / `usage-guard` / `notify` 与交接层 Project Sentinel 的 Watchers / Mission Queue / Run Budget 都在做定时唤醒、排队和用量上限。
+
+**预期结果**：一次变更走完计划 → worktree 构建 → 每步 check → 两轮 review → 带 trailers 的 landing；landing commit 里能看到 `Reviewed-by` / `Fixed-after-review`；`review_guard.sh audit` 能判定 merge 是否恰好带入被审查内容。
+
 ### 第 5 步：加一层收口，让 AI 把没收口的事交出来（inbox）
 
 职能层解决知识复用，观测层解决有没有变好，中间夹着一个缺口：AI 在会话中途问你的问题、顺手发现的 bug、失败的测试和构建、当前分支上等你处理的 PR review 评论——这些散在对话里，过一会儿就得你翻回去找。`petekp/inbox` 把它们收进一个和会话并排的面板。
@@ -509,8 +623,7 @@ claude plugin install task-board@awesome-claude-code-mods
 /task-board
 ```
 
-**做法 B：不注册 marketplace，直接从源码试单个 mod**
-
+**做法 B：不注册 marketplace，直接从源码试单个 mod**\n
 ```sh
 git clone https://github.com/whyashthakker/awesome-claude-code-mods.git
 cd awesome-claude-code-mods
@@ -632,7 +745,7 @@ claude plugin install project-sentinel@control-room
 claude plugin marketplace add /path/to/project-sentinel
 ```
 
-终端会直接从该文件夹读已安装的 folder marketplace，所以拉取改动后在会话里运行 `/reload-plugins` 即可。注意 Desktop 的 Code tab 可能加载安装时 Claude Code 复制的那一份，因此新版本后要 `claude plugin update project-sentinel@control-room`，再开新会话。
+终端会直接从该文件夹读已安装的 folder marketplace，所以拉取改动后在会话里运行 `/reload-plugins` 即可。注意 Desktop 的 Code tab 可能加载安装时 Claude Code 复制的那一份，因此新版本后要 `claude plugin update project-sentinel\@control-room`，再开新会话。
 
 **做法 C：不安装地试一个会话（建议先做这一步）**
 
@@ -664,7 +777,7 @@ claude plugin marketplace update control-room
 
 marketplace 会把旧名映射到新名，更新会连带移动你的安装（含 `enabledPlugins` 项）；下次会话加载 Project Sentinel 时，它会一次性读取旧 store（多个时取最后写入的那个），把设置、运行、Quest log 和学到的提示缓存信息复制过去，旧文件保持原样。更新期间开着的会话继续用 Control Room，Project Sentinel 在旁边待命，两者不会同时动作。
 
-**更新**：`claude plugin update project-sentinel@control-room`；或打开 `/plugin` 里的 Marketplaces，选中 `control-room`，选 Enable auto-update（对自行添加的 marketplace 默认关闭）。
+**更新**：`claude plugin update project-sentinel\@control-room`；或打开 `/plugin` 里的 Marketplaces，选中 `control-room`，选 Enable auto-update（对自行添加的 marketplace 默认关闭）。
 
 **卸载**：
 
@@ -760,7 +873,7 @@ Activity → Operations 的 Add work for later（并指定何时投递），或�
 
 ## 怎么判断变好了
 
-先分清来源：职能插件原文没有给出任何验证方法或指标，只有 better and more consistent outcomes、spend less time enforcing processes 这类主张，属作者主张、无数据支撑；收口层原文只给了成本口径，同样没有效果数据；交接层原文只有机制描述，同样没有「减少了多少上下文溢出和人工盯守」的数据；观测层（深）的原文明确声明没有给出四配置的性能结果，6 个 mod 的功能描述都只是一句话；Blender、PM、示意图三个技能包的材料也都只到 README，没有效果验证数据。下面按层列出可用的最小试用与指标。
+先分清来源：职能插件原文没有给出任何验证方法或指标，只有 better and more consistent outcomes、spend less time enforcing processes 这类主张，属作者主张、无数据支撑；收口层原文只给了成本口径，同样没有效果数据；交接层原文只有机制描述，同样没有「减少了多少上下文溢出和人工盯守」的数据；观测层（深）的原文明确声明没有给出四配置的性能结果，6 个 mod 的功能描述都只是一句话；Blender、PM、示意图三个技能包的材料也都只到 README，没有效果验证数据；编码变更编排层只有作者单项目自述、仓库仅 30 星，关键证据细节在本次材料未包含的 `docs/evidence.md` 里。下面按层列出可用的最小试用与指标。
 
 **官方插件市场的最小试用（约 1–2 小时 + 一周观察）**
 1. 在 Claude Code 里执行 `/plugin > Discover`，从 marketplace 里挑 1 个和当前日常工作最贴合的插件。
@@ -771,6 +884,8 @@ Activity → Operations 的 Add work for later（并指定何时投递），或�
 **判断有没有改善的指标（官方市场）**：同一任务完成时间、来回轮次是否下降；原本需要手工在工具之间切换的步骤是否被插件替代；插件调用失败/报错的比例，以及是否出现需要额外人工复核的意外行为；是否出现了「以前根本不会交给 AI、现在会交」的新任务——这是能力发现层面最直接的改善信号。若一周内没有任何一项变好，就卸载，并把结论记为「该插件无实质增益」而非「插件机制无效」。**风险控制**：插件可访问文件与外部服务，务必从单机、非敏感任务开始，不要一上手就接入生产凭据。
 
 **可观察的指标（职能插件层，装插件前后各记一次）**：同一任务的完成时间；返工次数（你需要手动修正、重写输出的次数是否下降）；补齐上下文的次数（是否还需要反复解释同样背景）；命令是否真的可用——`/xxx:yyy` 在会话中是否出现并成功执行，这是最硬的通过/不通过信号。
+
+**可观察的指标（编码变更编排层，本次调研建议的最小试用）**：在中大型代码库上按做法 A 装 `studio-core`，先跑 `/studio-core:studio-init`，再用 `Plan and build X with studio-core:plan-then-build` 跑一个中等以上变更，验证第二遍 review、guard/audit 是否真的带来质量收益。可观察：landing commit 里是否有 `Reviewed-by` / `Fixed-after-review` trailers，数字（blocker / major / minor、修了几条、几条 queued）是否真实；`review_guard.sh audit` 是否判定 merge 恰好带入了被审查的内容，有没有漏掉的 landing；两轮 review 分别抓到了什么、fresh builder 是否修掉 blocker 和 major 并各带一个测试；`roles` 配置是否按 v2.1.292+ 生效；token 用量相对单会话是否落在你能接受的倍数量级（原文明确每个变更的 agent 调用更多）；上下文预算是否被 skill 加载数顶住（原文称一次 run 约 31 个 skill 中加载约 6 个）。判据：若第二遍独立 review 抓不到东西、guard/audit 从不拦停、landing trailers 记不出真实数字，说明这套流水线在你的仓库上没有买到质量收益，回到单会话或只留 `plan-then-build` 一项。
 
 **可观察的指标（收口层，原文没有提供，需自测）**：每个会话里被你漏掉、事后才发现的待办/问题数量是否下降；你手动追问 Claude「刚才那个测试过了吗」的次数是否下降；会话中途切换窗口/翻记录的次数是否下降；成本侧对照 API 账单或用量限额，看每会话新增开销占比是否可接受（作者示例：长会话约占总成本 1%，会话越短或越便宜占比越高）。若几轮下来「漏掉的待办数」和「手动追问测试是否通过的次数」都没有改善，说明价值抵不过每轮一次的额外调用，直接卸载回原生 Claude Code。
 
@@ -794,10 +909,11 @@ Activity → Operations 的 Add work for later（并指定何时投递），或�
 5. 如果你想先弄清「时间花在哪」「上下文被什么占满」，按第 6 步之二做法 A 只装一个深度观测 mod（反复同类失败选 `loop-detective`，上下文被塞满选 `context-inspector`），在单个真实任务上用，不要一次装全部。
 6. 如果你的任务跑得比一个上下文窗口更久：按第 7 步做法 C，用 `claude --plugin-dir` 不安装地跑一个长任务会话，打开 `/cr`、设 Autopilot 阈值，看一次交接前后的 Handoff Health 与里程碑连续性。
 7. 如果你的职能是 Blender、PM 或科研示意图：按第 4 步之二只装 1–2 个技能，用一个真实任务和裸提示对照，记录完成时间、人工干预、导出检查或 QA 报错；示意图按上面的最小试用方式走一遍。
+8. 如果你要动的是中大型代码库上的一次变更：按第 4 步之三做法 A 只装 `studio-core`，跑 `/studio-core:studio-init`，再对一个中等以上变更执行 `Plan and build X with studio-core:plan-then-build`，走完七步流程后看 landing trailers 与 `review_guard.sh audit` 的判定。
 
-**对照试用（建议一两周）**：先用一周不开观测 mod 正常干活，记下同类任务上的工具失败次数、平均延迟、上下文溢出/压缩次数；再开一周用面板（第 6 步做法 A 或 C），比较同一类任务上的同一批数字。收口层可以在同一周里对比：开着 inbox 的一周，漏掉的待办数和手动追问测试是否通过的次数是否比之前少。交接层在同一周里做同类长任务，比较交接前后的 Handoff Health、跨交接里程碑连续性，以及你手动守时/手动清理上下文的次数。若你想量「观测 mod 本身要不要花代价」，按第 6 步之二做法 B 的四配置对照实验跑一遍。
+**对照试用（建议一两周）**：先用一周不开观测 mod 正常干活，记下同类任务上的工具失败次数、平均延迟、上下文溢出/压缩次数；再开一周用面板（第 6 步做法 A 或 C），比较同一类任务上的同一批数字。收口层可以在同一周里对比：开着 inbox 的一周，漏掉的待办数和手动追问测试是否通过的次数是否比之前少。交接层在同一周里做同类长任务，比较交接前后的 Handoff Health、跨交接里程碑连续性，以及你手动守时/手动清理上下文的次数。编码变更编排层则在同类变更上比较：单会话做完 vs 走完七步流水线，各自的完成时间、review 命中的问题数和 token 用量。若你想量「观测 mod 本身要不要花代价」，按第 6 步之二做法 B 的四配置对照实验跑一遍。
 
-**判断**：若职能插件层指标没有可感知改善，说明开箱插件对你不合适，价值在定制，应把精力放到第 4 步而不是继续试更多插件。若观测数据里工具失败次数、平均延迟、中断次数、上下文重述次数在同类任务上下降，或单位任务的 token 更可预测，才算真的变好；用深度观测时，如果 `context-inspector` 报的重复读取与窗口占用构成没有改善、`loop-detective` 报的重复失败仍在同类任务上反复出现，说明你装的那个 mod 没带来实际收益，换一个或卸掉。
+**判断**：若职能插件层指标没有可感知改善，说明开箱插件对你不合适，价值在定制，应把精力放到第 4 步而不是继续试更多插件。若观测数据里工具失败次数、平均延迟、中断次数、上下文重述次数在同类任务上下降，或单位任务的 token 更可预测，才算真的变好；用深度观测时，如果 `context-inspector` 报的重复读取与窗口占用构成没有改善、`loop-detective` 报的重复失败仍在同类任务上反复出现，说明你装的那个 mod 没带来实际收益，换一个或卸掉。编码变更编排层同理：若第二遍独立 review 抓不到东西、guard/audit 从不拦停、landing trailers 记不出真实数字，就说明数倍 token 没换来质量收益。
 
 ## 常见坑
 
@@ -807,22 +923,31 @@ Activity → Operations 的 Add work for later（并指定何时投递），或�
 - marketplace 条目的 `name` 是不可变 slug：一旦发布就不能变；改名会让用户安装报 `plugin-not-found`；要改显示名改 `displayName`，必须改名时用 `renames` 映射。
 - `strict: false` 声明 skill 包时路径相对于 `source.path`：每个路径指向包含 `SKILL.md` 的目录，注册为 `<plugin-name>:<skill-name>`；schema 细节看官方 marketplace 文档。
 - 外部插件审核标准未给出：原文说需通过质量与安全标准审核，但没有标准内容、审核流程或通过率。
-- 仓库热度不是效果：39,182 stars、当日 +307 只反映关注度；Blender 的 42 stars、PM 的 7421 stars、schematic-figure 的 31 stars 同样只反映关注度。
-- 材料可能被截断：抓取内容只有 README，没有插件列表本身；PM 仓库 README 末尾被截断在 “worth a bookmark if you work”；交接层材料在 Lazy-exit guard（默认 Off）处被截断，未给出的行为不要照抄。
+- 仓库热度不是效果：39,182 stars、当日 +307 只反映关注度；Blender 的 42 stars、PM 的 7421 stars、schematic-figure 的 31 stars、subagent-studio 的 30 stars 同样只反映关注度。
+- 材料可能被截断：抓取内容只有 README，没有插件列表本身；PM 仓库 README 末尾被截断在 “worth a bookmark if you work”；交接层材料在 Lazy-exit guard（默认 Off）处被截断；subagent-studio 材料末尾被截断在 “每个 agent 文件在 frontmatter 里固定 model、”。未给出的行为不要照抄。
 - 职能插件原文只有 README：不含任何单个插件的 skill 正文、提示词、命令清单，无法据此判断实际质量，也无法照抄具体提示词。要照做必须自己打开仓库对应目录去读。
 - 三个独立 Agent Skills 实例也都只到 README：Blender 未展示技能内部的提示词、脚本、配置文件或 QA 规则；PM 的 77 个技能正文质量无从验证；示意图只有 README 和作者自制演示。
 - 开箱效果有限：原文自称 these plugins are generic starting points，价值取决于你是否投入定制。
-- 没有官方效果数据：职能插件原文只有「更好、更一致」等主张；收口层只有成本表；交接层只有机制描述；观测层（深）没有四配置性能结果；Blender、PM、示意图都没有效果验证数据。
+- 没有官方效果数据：职能插件原文只有「更好、更一致」等主张；收口层只有成本表；交接层只有机制描述；观测层（深）没有四配置性能结果；Blender、PM、示意图都没有效果验证数据；subagent-studio 只有作者单项目自述。
 - 命令不出现 = 未生效：先回到第 2 步检查 marketplace，不要继续往下做。
 - 可用性与许可未说明：Cowork 的开放范围、价格、区域限制原文未说明；各仓库许可协议都要自行确认后再用于生产。Blender 是 MIT；PM 是 CC BY-NC-SA 4.0；schematic-figure 代码是 MIT，内置 Latin Modern 字体是 GUST 字体许可。
-- 不要一次装多个职能插件或技能：先挑一个跑通、改一条，再考虑扩展。Blender/PM/示意图也建议只装 1–2 个技能。
+- 不要一次装多个职能插件或技能：先挑一个跑通、改一条，再考虑扩展。Blender/PM/示意图也建议只装 1–2 个技能。subagent-studio 同理——先只装 `studio-core`，跑通一个变更再考虑 `studio-context` / `studio-unattended` / `studio-research`。
+- 小而明确的编码工作不要上流水线：原文明确单会话处理小脚本或小代码库里描述精确的功能更便宜；本套件每个变更要加 planner、builders、step checks 和两个 reviewer，token 是单会话的数倍，小变更上很少买到东西（原文图里低于 50 行的严重 bug 发现率 9%）。
+- subagent-studio 的关键证据细节不在材料里：证据只有作者单项目自述（约五周定时 Claude Code 会话）、仓库仅 30 星，具体证据在未包含的 `docs/evidence.md` 中；不要把它当作已验证的质量收益。
+- 七步流程有关键留白：原文未给出 plan 的固定 shape、`reviewer-prompt.md` 的具体检查项，也未给出 `<...>` 占位符的完整内容，需要自己补；照抄骨架不等于照抄流程。
+- copy-in 的两个副作用：`install.sh` 会把 hooks **合并**进 `.claude/settings.json`（不覆盖），并重写命名空间名称（`studio-core:builder` 变成 `builder`）——改完命令里的子代理名要跟着换。
+- reviewed_paths 不排除 scratch 会多花钱：把 scratch 目录和一次性脚本排除在 reviewed paths 外，避免多付 review 成本。
+- `core.review.land: pr` 要保住 trailers：团队让人类合并时，合并必须用保留 trailers 的 merge commit，否则 audit 失效。
+- `roles` 有版本门槛：设置某角色的 model 或 effort level 需要 Claude Code v2.1.292 或更新；老版本把 `roles` 留空，由各 agent 文件 frontmatter 决定。
+- guard 不是装饰：`review_guard.sh` 拒绝把未审查工作 push 到 main，`review_guard.sh audit` 会读取 trailers 里的 range 检查 merge 是否恰好带入被审查内容，并遍历 main 历史找漏掉的 landing——如果它从不拦停，先怀疑配置没接上。
+- 与已有层职能重叠：`studio-context` 的 `context-budget` 与观测层（深）的 `context-inspector` 都在看上下文；`studio-unattended` 的 `wake-up` / `task-queue` / `usage-guard` / `notify` 与交接层 Project Sentinel 的 Watchers / Mission Queue / Run Budget 都在做唤醒、排队与用量上限。材料未说明同时装会不会互相干扰，先只在一层用一个。
 - 观测面板有硬边界：必须在 CLI 或 Claude Desktop 的 Code tab 里用；VS Code 聊天面板和 `claude -p` 会执行 hooks 但不显示面板；版本要在 2.1.287+，作者只在 2.1.288 上测试过。
 - 装 mod = 在会话里跑第三方代码：mods 仓库的社区部分作者自己声明未安装、未运行、未做安全审计；要装只从各作者自己的 marketplace 装，别把整个社区列表照单全收。inbox 是单作者仓库（33 stars），无第三方评测、无用户案例；Project Sentinel 也是单作者插件，建立在仍处 early access 的 function-hooks 插件 API 上；YeonwooSung/my-claude-code-mods 也是第三方扩展，按未审计的第三方代码对待。
 - 观测层（深）的 README 只有概览：每个 mod 的具体安装命令与配置项要进各自 README；原文对 marketplace 只给了「Add this marketplace once」的机制描述，没有给出命令行——不要照抄一份「看起来像」的命令。
 - 观测层（深）没有合并开销数据：原文明确 no four-mode performance result is claimed here；20k span/item 的测试只界定分析成本上限。单元测试通过 ≠ UI 兼容 ≠ 性能可接受；多 mod 同时运行要另做一次交互式集成运行，Model Effort Band 的 live pixels 未验证。
 - 观测层（深）对引擎版本敏感：2.1.280 早期访问版下 profiler 可用，但 Context Inspector 缺少 `session.append`、Time Machine 的 per-test 选项会被忽略；原始三套 engine 测试套件 / Pin Memo / Model Effort Band 是在 2.1.292 验证的，Loop Detective 是在 2.1.280 验证的。别把不同版本下的行为混着比较。
 - 收口层每轮都要花钱：每次 Claude 回复后触发一次轻量调用，短会话的额外开销占比会明显更高；没减少遗漏就卸载。
-- 各层版本口径错开：观测层（广）2.1.287+、收口层在 2.1.292 上构建、交接层 ≥2.1.289 且要带 function-hooks API。同时用多层前先 `claude --version` 核对；升级 Claude Code 后先跑 `/reload-plugins`。
+- 各层版本口径错开：观测层（广）2.1.287+、收口层在 2.1.292 上构建、交接层 ≥2.1.289 且要带 function-hooks API、子代理流水线的 `roles` 配置要 v2.1.292+。同时用多层前先 `claude --version` 核对；升级 Claude Code 后先跑 `/reload-plugins`。
 - 交接层的验证范围很窄：只在 Windows 11 和 Claude Code 2.1.289 / 2.1.293 / 2.1.295 上验证过，远程（云）会话尚未测试；它建立在 early access 的插件 API 上，不宜直接定为团队标准。
 - 重命名迁移有副作用：从 1.4.0 之前的 Control Room 升上来，`Allow` 权限状态被移除（已保存的 Allow 读作 Default），点 Kit 不再打开面板。
 - Autopilot 不是定时器：每一步都在下一轮开始或结束时推进；交接轮结束时若后台工作还在跑，会等 Claude Code 报告的结果再清空并继续。
@@ -851,6 +976,8 @@ Activity → Operations 的 Add work for later（并指定何时投递），或�
 
 **职能插件层（来自调研《anthropics/knowledge-work-plugins》所引原文 README）**：安装命令、统一目录结构、Making Them Yours 的四个定制方向、11 个插件及用途来自原文；插件自动激活、Skills fire when relevant 是原文主张；Star 数据 27360、今日 +309 为可核信息，只反映关注度；效果主张（「更好、更一致」「少花时间执行流程」等）是原文作者主张，无数据、案例、benchmark 或对比支撑；适用条件与局限（README 不含单个插件具体内容；Cowork 开放范围/价格/区域限制未说明；仓库许可未说明；原文自称通用起点；材料可能被截断）来自调研报告对原文的解读。
 
+**编码变更编排层（来自调研《priyanshujha/subagent-studio》所引原文 README）**：四个模块及其 agents / skills / scripts 内容、六条核心主张、三条安装命令、`studio-init` 的行为、copy-in 的 `install.sh` 行为与选项（`--modules` / `--dry-run` / `--force` / `--uninstall`、hooks 合并不覆盖、重写命名空间）、七步流程示例、landing commit 的 `Reviewed-by` / `Fixed-after-review` trailers 示例、`review_guard.sh audit` 的读取与检查行为、`core.review.reviewed_paths` / `core.review.land` / `roles.<role>` 三个配置 key 与默认值、`roles` 需要 Claude Code v2.1.292 或更新、成本提示（每个变更 agent 调用更多）、一次 run 约 31 个 skill 中加载约 6 个、`CLAUDE.md`/state file/task index/每个 skill/每个 agent 文件都有 byte budget 且超预算时把文本逐字移到 stub 后面并有脚本证明没丢内容、低于 50 行的严重 bug 发现率 9% 的图，均来自原文；仓库仅 30 星、作者自述约五周定时 Claude Code 会话的真实项目背景、关键证据细节在未包含的 `docs/evidence.md` 中，属可核声明与调研报告的局限说明；plan 的固定 shape、`reviewer-prompt.md` 的具体检查项、`<...>` 占位符的完整内容原文未给出；材料末尾在 “每个 agent 文件在 frontmatter 里固定 model、” 处被截断。
+
 **收口层（来自调研《petekp/inbox》所引原文 README）**：安装与更新命令、源码调试方式、检查脚本来自原文，可直接照做；三个标签页、面板快捷键、自动切换、空闲摘要来自原文；测试/构建核对行为来自原文描述，实际可靠性没有数据支撑；成本表来自原文自述数字，未经第三方验证；版本依赖（作者在 Claude Code 2.1.292 上构建和测试）、33 stars、单作者仓库来自原文与调研报告；intelligently manages 属作者主张，原文没有说明分类准确率、误报漏报情况。
 
 **观测层「广」（来自调研《whyashthakker/awesome-claude-code-mods》所引原文 README）**：可执行命令、7 个分类与各类 mod 名单、版本前提 2.1.287+、作者在 2.1.288 测试、mod 默认启用、VS Code 聊天面板与 `claude -p` 不显示面板、无运行时依赖无构建步骤、Git 类与包类 mod 的依赖均来自原文 README 明示的前提；可采集的量化指标来自原文 README 的 Session 类 mod 说明；仓库 33 stars、声称 70 个 MIT 打包插件、社区 14 条于 2026-10-03 对照作者文档核查、截图是测试套件用 fixture 数据捕获的渲染树而非原生 app 截图、社区条目未经安装运行与安全审计来自原文的可核声明与明确限制；各 mod 的准确性（forecast 与 token 计算为估算、Desktop Usage Strip 的 USD 不是订阅账单、缺失值只标注不补全）属作者主张或作者自认的局限。
@@ -865,7 +992,7 @@ Activity → Operations 的 Add work for later（并指定何时投递），或�
 
 **示意图技能包（来自调研《lgwrightlab/schematic-figure》所引原文 README）**：安装命令、两个 skill 文件夹与 `patent-drawing` 复用 `schematic-figure` 引擎、四条提示词模板、look / size / depth 三个旋钮及各自取值、输出写到 `figure/out/`（SVG、PDF、PNG）、Codex 需写 `SKILL.md` 路径、Node.js 22+ 与 Chromium 前提、Blender 与 RDKit 可选、导出其他格式的 Python 依赖与 `pdftops`/Ghostscript、MIT 许可与内置 Latin Modern 字体的 GUST 字体许可来自原文；仓库 31 stars 来自抓取指标；证据只有 README 顶部幻灯片里五篇论文的发表版图 / Opus 5.5 无技能 / Opus 5.5 有技能对比、作者博客《Automating schematic figure making》、五篇均为 CC BY 授权，均为定性证据；没有量化评测、盲评、失败率或返工率；"publication-quality"、「提供快速初稿和大量设计想法」、「并行三个 agent 再合并取优」属作者主张；原文自述局限：不替代设计图的人，仍需检查科学与细调细节；原文未给出由时间、事件或状态触发并持续执行的机制，只有人工接续的迭代方式；原文完全没有提到 Mole，无法判断二者关系。
 
-**属于本次调研作者建议、非原文数据**：官方市场的最小试用路径（1–2 小时 + 一周观察，只挑 1 个插件、检查来源、低风险任务、记录完成时间/轮次/手工切换/失败比例/新任务，一周无改善则卸载并记为「该插件无实质增益」）来自调研报告建议；职能插件层的自测指标（完成时间、返工次数、补齐上下文次数、命令可用性）原文没有官方指标，是调研报告建议的自测方式；收口层的自测指标（漏掉的待办数、手动追问测试是否通过的次数、切换窗口次数）与最小试用步骤是调研报告建议的自测方式；观测层「广」的最小试用路径（只装 1–2 个观测类 mod、先一周基线再一周开面板做同类任务对比）是调研报告给出的建议；观测层「深」的试用路径（先装单个 mod、优先 loop-detective 或 context-inspector、按其四配置方法量开销、不要在单元测试通过后就下性能结论）来自调研结论；两个观测集合之间的选择建议（要广度用 awesome-claude-code-mods，要深度用 YeonwooSung/my-claude-code-mods）来自调研结论的整理；交接层的试用路径（不安装试跑、只在单个长任务会话里试、用 Handoff Health 与跨交接的里程碑连续性判断）来自调研结论；Blender、PM 与示意图的最小试用与指标（隔离环境、安装、示例任务、记录完成时间与人工干预、导出检查、QA 报错、validate/run_tests、示意图按 standard 口径复核与字体授权检查）来自三篇调研报告的「怎么试、怎么验证」部分，不是原文效果数据。
+**属于本次调研作者建议、非原文数据**：官方市场的最小试用路径（1–2 小时 + 一周观察，只挑 1 个插件、检查来源、低风险任务、记录完成时间/轮次/手工切换/失败比例/新任务，一周无改善则卸载并记为「该插件无实质增益」）来自调研报告建议；职能插件层的自测指标（完成时间、返工次数、补齐上下文次数、命令可用性）原文没有官方指标，是调研报告建议的自测方式；编码变更编排层的最小试用建议（在中大型代码库上装 `studio-core`，用 plan-then-build 跑一个中等以上变更，验证第二遍 review、guard/audit 是否真的带来质量收益）来自本次调研结论，不是原文效果数据；收口层的自测指标（漏掉的待办数、手动追问测试是否通过的次数、切换窗口次数）与最小试用步骤是调研报告建议的自测方式；观测层「广」的最小试用路径（只装 1–2 个观测类 mod、先一周基线再一周开面板做同类任务对比）是调研报告给出的建议；观测层「深」的试用路径（先装单个 mod、优先 loop-detective 或 context-inspector、按其四配置方法量开销、不要在单元测试通过后就下性能结论）来自调研结论；两个观测集合之间的选择建议（要广度用 awesome-claude-code-mods，要深度用 YeonwooSung/my-claude-code-mods）来自调研结论的整理；交接层的试用路径（不安装试跑、只在单个长任务会话里试、用 Handoff Health 与跨交接的里程碑连续性判断）来自调研结论；Blender、PM 与示意图的最小试用与指标（隔离环境、安装、示例任务、记录完成时间与人工干预、导出检查、QA 报错、validate/run_tests、示意图按 standard 口径复核与字体授权检查）来自三篇调研报告的「怎么试、怎么验证」部分，不是原文效果数据。
 
 ## 依据的调研
 
@@ -878,3 +1005,4 @@ Activity → Operations 的 Add work for later（并指定何时投递），或�
 - [EL4CTEO/blender-skills](../research/radar/2026-10-16/3982-el4cteo-blender-skills.md)：值得一试，建议小范围试用：按 README 给出的安装步骤把 blender-skills 装到 Claude Code 或通用 agents 目录，用示例提示词驱动 Blender 任务，验证其 20 个技能是否真能减少手工步骤。理由是仓库提供了可复制的安装、调用和测试命令，但 README 未展示各技能内部的具体提示词、脚本和 QA 规则，需实测确认效果。
 - [deanpeters/Product-Manager-Skills](../research/radar/2026-10-16/3987-deanpeters-product-manager-skills.md)：值得一试，按 README 给出的安装命令装入 1-2 个技能，用你自己手上的真实 PM 任务跑一遍并与裸提示做对照——仓库给出了可直接复制的安装命令、技能文件结构和按情境的可粘贴起始提示词，具备小范围试的条件；但材料只到 README，77 个技能正文的实际质量无从验证，所以先试不宜直接采用。
 - [lgwrightlab/schematic-figure](../research/radar/2026-10-17/4172-lgwrightlab-schematic-figure.md)：值得一试，按 README 给出的安装命令和提示词模板，在自己论文里挑一张真实示意图小范围试用该技能（含 look/size/depth 参数与三 agent 并行出多版设计），因为它提供了可直接复制的安装步骤、提示模板和输出目录约定；但证据只有作者自制的对比演示、无量化评测，且原文明确仍需人工把关科学性与细节，故先试不直接采用。
+- [priyanshujha/subagent-studio](../research/radar/2026-10-18/4433-priyanshujha-subagent-studio.md)：值得一试，建议小范围试：在中大型代码库上按 README 的 quickstart 安装 studio-core，并用 plan-then-build 跑一个中等以上变更，验证第二遍 review、guard/audit 是否真的带来质量收益；理由是原文给出了可直接复制的安装命令、七步落地流程、landing trailers 和审查守卫，具体到可以照做，但证据只有作者单项目自述、仓库仅 30 星，且关键证据细节在未包含的 docs/evidence.md 中。
