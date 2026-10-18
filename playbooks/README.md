@@ -4,6 +4,7 @@
 
 | 手册 | 解决的问题 | 先试这一步 | 最近修订 |
 |---|---|---|---|
+| [让编码 agent 跨会话记住项目，但先核对事实再动手](persistent-memory-for-coding-agents.md) | 如何让 AI 跨会话、跨机器、跨 agent 记住项目背景和长期知识，同时避免把旧笔记、旧结论或上一会话的交接当成事实继续施工。 | 先在最轻路线和二选一：在非敏感目录建 second-brain 并写一条“先读 memory”规则；如果主要痛点是跨 agent/跨机器记忆，再在单机单仓库只接一个 agent 的情况下按 ai-memory README 装好并验证一次捕获—回顾—交接。 | 2026-10-18 |
 | [让编码 agent 用可复测的测量闭环做性能优化](performance-optimization-with-agents.md) | 如何让编码 agent 在性能优化中先建立可重复的测量、再爬坡，并用复测数字证明收益，而不是把波动当收益。 | 先选一个可重复测量的窄目标（一个旅程、一个单 job 或一个慢页面），手工跑 2–3 次基线记下波动，再让 agent 动手。 | 2026-10-18 |
 | [给代理接入第三方工具集：先隔离试用，再用回执、清单和对照决定去留](add-mcp-servers-to-agents.md) | 面对一条“安装/注册命令就完事”的第三方工具供给路径，怎么在不污染主力环境的前提下完成接入、核对真实工具清单、冒烟测试和对照验证，并据证据决定“继续试”还是“只当思路参考”。 | 挑一条有现成安装命令的路径（做法 A 的 jevcrawl，或做法 D1 的 `pip install cli-anything-hub`，或做法 G 的 `npx github:fzn0x/idx stocks quote BBCA`），在隔离环境里先跑通安装与通路自检，再核对工具清单，最后和现有做法做一次对照。 | 2026-10-18 |
 | [把 Claude Code 按职能/收口/观测/交接装起来，中大型编码变更交给子代理流水线](install-and-customize-agent-plugins.md) | 用 Claude Code 做实际工作时，怎么按职能装载领域能力、把没收口的事和需要拍板的事交出来、用数字判断有没有变好、让长跑任务不掉线，并在中大型代码库上把一次变更交给带计划、两轮 review 与可审计 landing 的子代理流水线。 | 先按第 4 步之三做法 A 只装 `studio-core`、跑一次 `/studio-core:studio-init`，再用一个中等以上变更执行 `Plan and build X with studio-core:plan-then-build`，看第二遍独立 review 和 guard/audit 是否真的抓到东西。 | 2026-10-18 |
@@ -23,7 +24,6 @@
 | [让跨境电商 Listing 从生成到复测走一条可自检的闭环](cross-border-ecommerce-with-agents.md) | 把有明确 SOP、可模板化输入、可清单自检的跨境电商运营环节，拆成可复用 Agent 工作流，并用广告/评论数据回流复测 Listing。 | 选 1 个 Shopee 或 Mercado Livre 产品，只跑 01 市场分析→02 产品策略→03 Listing→自检 这条短闭环。 | 2026-10-15 |
 | [在换模型、调配置前，先量出速度、成本和长对话等待时间的基线](benchmark-agent-model-serving.md) | 换模型、改服务配置或调 effort 时，缺一条可对比的基线，只能凭感觉判断快慢、贵贱和长对话是否被重复重读。 | 先选一条最贴近你当前工作流的路径：本地服务做一次 `agentperf-local run` 拿基线，Claude 任务跑完敲 `/usage` 记三项数字，Strata 编码代理把 `--prompt-cache` 从 0 改成 6 再重跑同一长回合。 | 2026-10-15 |
 | [把简单判断交给快脑前，先做一次可回退的小范围验证](route-judgments-to-small-models.md) | 如何用可对照、可回退的小范围实验，验证把简单判断交给 Jev 决策模型或 Claude Code 的 jev-mcp 快脑分流是否真的改善工作流。 | 挑一个你现在用通用 LLM 做的是/否门禁任务，取 100–200 条已知答案的历史样本，按字符串 state 跑一次 Jev 与现有方案的对照。 | 2026-10-14 |
-| [让 AI 每次动手前先读你的知识库，冲突时先问你再改](persistent-memory-for-coding-agents.md) | 第二大脑、memory 或 vault 建好了却没告诉 AI 什么时候读、读到的旧结论和你现在说的话冲突时听谁的，结果这个大脑要么没被用上，要么把旧结论当事实直接施工。 | 在你所用 agent 的常驻指令入口（自定义指令 / 项目说明 / CLAUDE.md 一类位置）写三条规则：每次任务前先读你的知识库、与库里的内容冲突就标出并同时引用两版、你裁决后给出对知识库的确切编辑。 | 2026-10-14 |
 | [为 AI 功能和关键服务准备可演练的降级与备援](resilience-and-disaster-recovery.md) | 当第三方模型不可用、被限流、涨价或基础设施故障时，如何事先定目标、准备降级/备援路径，并用演练与 eval 验证，而不是等故障发生。 | 选一个最依赖模型的 AI 功能，先加模型调用抽象和一条备用供应商通道，补上按 token 数动态超时与流式首字节监控，并为它整理一小组功能测试 + eval 回归用例。 | 2026-10-14 |
 | [让 agent 在游戏项目里能自己验证改动：确定性状态、可寻址命令、截图 diff](build-game-agent-harness.md) | 当 AI 在非网页的游戏项目上反复失败时，怎样把游戏改造成 agent 能直接寻址、状态可复现、效果可量化的形态，从而缩短它的验证回路。 | 在一个新模块或新小项目上（先别动既有大项目），只做两件事：接入单一带种子的随机源和一条最小可用的“保存/加载指定状态”路径，再给产出物接上截图入口和图层开关，然后用命令行图像 diff 工具算出相似度数值交给 agent，要求它每轮报告该数值并朝着提升它迭代。 | 2026-10-14 |
 | [给 AI 代理一套改不坏、能整体回退的操作接口](agent-operation-interfaces.md) | 当 AI 代理要直接改文档、图纸这类结构化文件时，怎么把它的动作收敛到可校验的结构化操作上，做到改不坏、一次撤销整体回退。 | clone OpenCalque 仓库后，用 `pnpm opencalque new` 建一个空文档，手写一个两三条 operation 的 ops.json，跑通 apply → describe → validate 这个最小闭环。 | 2026-10-14 |

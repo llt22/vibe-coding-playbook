@@ -1,16 +1,16 @@
-# 让 AI 每次动手前先读你的知识库，冲突时先问你再改
+# 让编码 agent 跨会话记住项目，但先核对事实再动手
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：第二大脑、memory 或 vault 建好了却没告诉 AI 什么时候读、读到的旧结论和你现在说的话冲突时听谁的，结果这个大脑要么没被用上，要么把旧结论当事实直接施工。
-> 先试这一步：在你所用 agent 的常驻指令入口（自定义指令 / 项目说明 / CLAUDE.md 一类位置）写三条规则：每次任务前先读你的知识库、与库里的内容冲突就标出并同时引用两版、你裁决后给出对知识库的确切编辑。
-> 最近修订：2026-10-14
+> 解决的问题：如何让 AI 跨会话、跨机器、跨 agent 记住项目背景和长期知识，同时避免把旧笔记、旧结论或上一会话的交接当成事实继续施工。
+> 先试这一步：先在最轻路线和二选一：在非敏感目录建 second-brain 并写一条“先读 memory”规则；如果主要痛点是跨 agent/跨机器记忆，再在单机单仓库只接一个 agent 的情况下按 ai-memory README 装好并验证一次捕获—回顾—交接。
+> 最近修订：2026-10-18
 
 ## 解决什么问题
 
 AI 每次开新会话都要重新交代背景，跨会话的资料和结论无法沉淀；更糟的是，上次的笔记、handoff 或 memory 只是“主张”，如果直接当作事实继续施工，会把已失败的后台任务、未推送的分支、已完成的待办带进新会话。还有一种反向失败：第二大脑（memory、vault、公司/个人知识库）已经建好，却从没告诉 AI 什么时候读它、读到的旧结论和用户当下说的话冲突时该听谁的，于是这个大脑要么没被用上，要么被原样沿用。
 
-这套做法分五层：先让长期信息在本地 Markdown 文件夹落盘（做法 A/B/C）；再用常驻指令让 agent 每次任务前先读知识库、发现冲突就标记并同时引用两版、等用户裁决后给出对知识库的确切编辑（做法 E）；最后用 truongfelix/workflow 在两个会话边界跑同一个事实采集脚本，报告主张与 git/GitHub/本机事实的不一致，然后才决定当天做什么（做法 D）。
+这套做法分六层。先让长期信息在本地 Markdown 文件夹落盘（做法 A/B/C）；再用常驻指令让 agent 每次任务前先读知识库、发现冲突就标记并同时引用两版、等用户裁决后给出对知识库的确切编辑（做法 E）；再用 truongfelix/workflow 在两个会话边界跑同一个事实采集脚本，报告主张与 git/GitHub/本机事实的不一致，然后才决定当天做什么（做法 D）。如果跨 agent、跨机器、跨项目的记忆需求更强，可以加做法 F：用 akitaonrails/ai-memory 把捕获、汇总、召回、交接做成一条常驻管线；它的真相源仍是 git 托管的 Markdown，数据库可重建，默认路径零 LLM 调用，但所有收益说法目前只有项目自述，需要先小范围试。
 
 ## 适用与不适用
 
@@ -21,15 +21,17 @@ AI 每次开新会话都要重新交代背景，跨会话的资料和结论无�
 - 想把散落材料变成可提问、带引用、可清洗的库，或找回“叫不出名字的历史会话结论”，走做法 C。
 - 长期项目有多个会话、跨天跨机器，上一次笔记可能失真；或有多仓库工作区，需要每次先核对 git/机器事实，走做法 D。
 - 已经有一个可被 AI 读取的知识库（文件、仓库、笔记库，或通过 MCP/连接器接入的资料），但 AI 不会主动去读它，或把库里的旧结论当事实沿用；所用工具支持“自定义指令 / 项目指令 / 常驻说明”这类每次对话生效的入口，并允许 AI 提出对知识库的写回编辑（至少是给出编辑内容），走做法 E。
+- 想跨 agent（二十多个 harness 共用一个记忆）、跨项目（一份工作习惯 profile 带到每个新仓库）、跨机器（记忆存在自己跑的服务器上），甚至团队共享（多用户认证、按人归属、审计日志，且不是付费档），并且能接受常驻服务和采集提示词与工具调用，走做法 F。
 
 不适用：
 - 还没有安装 Claude Code 或任何可读 Markdown 的 agent，或没有本地文件系统写权限。
 - 不能接受把 Gmail、日历、云端硬盘的读取权限交给本地工具，或工作内容高度敏感且没有隔离账号可用。
-- 期待原文给出逐字可抄的命令、配置和规则全文：second-brain 原文第 4 步截断；做法 D 本次材料只到 README，脚本实现与效果未经验证。
+- 期待原文给出逐字可抄的命令、配置和规则全文：second-brain 原文第 4 步截断；做法 D 本次材料只到 README，脚本实现与效果未经验证；做法 F 的 `ai-memory run --f` 处截断。
 - 想用做法 C 全面替换现有做法：作者自评项目“early”，效果数据只有 n=2 的小样本。
-- 想用做法 D 完全替代人工判断：它只推荐，每天做什么、每次 push/PR/merge 是否批准，由你决定。
-- 没有稳定的知识库，或知识库里本来就是不可信内容：做法 E 只会把不可信内容引用得更正式。
+- 想用做法 D 或做法 F 完全替代人工判断：它们只推荐或提供记忆层，每天做什么、每次 push/PR/merge 是否批准，由你决定。
+- 没有稳定的知识库，或知识库里本来就是不可信内容：做法 E 只会把不可信内容引用得更正式；做法 F 也会把不可信内容捕获、汇总并交接下去。
 - 工具不会稳定遵守常驻指令，或你不愿让 AI 提议改写知识库，或不能接受每次任务前读库带来的 token/时间开销：先别把做法 E 当成默认配置。
+- 不能接受常驻服务、采集提示词与工具调用，或必须先有独立效果验证：先别把做法 F 当默认配置。
 
 ## 前置条件
 
@@ -38,16 +40,18 @@ AI 每次开新会话都要重新交代背景，跨会话的资料和结论无�
 - 做法 C：本机有 Python 环境（pip / uv / pipx 任一路线）；若走 Claude Code 插件路线则不需要 Python。不需要 API key、embedding 模型、向量库或联网。
 - 做法 D：需要 bash 和 git。可选：GitHub CLI `gh`（读开着的 PR 和 CI）、systemd（后台任务，仅 Linux）。支持 Linux、macOS 和 Windows（在 Git Bash 或 WSL 里跑，CI 三种都测）。开始前先读 `PRINCIPLES.md`。适用形态：单仓库，或一个装着多个 repo 的工作区文件夹，根目录自身是一个只放文档的 repo；工作区形态的 remote 必须是 PRIVATE。
 - 做法 E：已经有一个可被 AI 工具读取的知识库（本地文件、仓库、笔记库，或通过 MCP/连接器接入的资料）；所用工具支持常驻指令入口，且允许 AI 提出对知识库的写回编辑（至少给出编辑内容）；你本人愿意做冲突裁决——原文明确把这一环留给人。
-- 涉及隐私与凭据安全：先用非敏感账号或受限范围试，不要一上来就接真实收件箱。
+- 做法 F：能访问 GitHub releases 和 curl（Linux/macOS）；Windows 用 PowerShell，无需管理员，或只考虑 WSL2；Arch/Fedora 走包管理器；macOS 菜单栏 App 需要 Rust 工具链 + Xcode / Swift 6；Docker 路线需要 Docker 或 Podman + 一个支持 MCP 的 agent CLI。先在测试机、单仓库、只接一个 agent 上做第 1 步，确认有效再推到主力环境。要常驻服务并采集提示词与工具调用，先用非敏感账号或受限范围试。
+- 涉及隐私与凭据安全：先用非敏感账号或受限范围试，不要一上来就接真实收件箱或公司级知识库。
 
 ## 操作步骤
 
-先选路线，五条路线可以叠加：
+先选路线，六条路线可以叠加：
 - 只需要跨会话记住项目背景，先做做法 A（最轻，一条手写规则 + 一个 memory 目录）。
 - 还需要 AI 读取 Gmail、日历、云端硬盘，在 A 之上做做法 B。原文缺安装与授权细节，必须先查证再操作。
 - 想把材料变成可摄入、可提问、可引用、可清洗的库，或想找回想不起名字的历史会话，做做法 C。C 可以独立于 A，也可以直接建在 A 的 second-brain 目录上。
-- 如果新会话经常把上次笔记当事实、需要跨天跨机器接续长期项目，做做法 D。D 可以叠加在 A/B/C 上：A 的 memory 和 C 的 vault 都只是“主张”来源，D 负责在会话边界拿 git/机器事实核对。
-- 如果知识库已经存在、但 AI 不主动用、或你说的话和库里记录打架时它自作主张，做做法 E。E 只写常驻指令，改动成本极低；可以叠加在 A/B/C 上，也可以直接用于你已有的公司/个人知识库。E 与 D 分工不同：E 管“你说的话 vs 知识库记录”，D 管“笔记/记忆 vs git、GitHub、本机事实”，两者都要。
+- 如果新会话经常把上次笔记当事实、需要跨天跨机器接续长期项目，做做法 D。D 可以叠加在 A/B/C/F 上：A 的 memory、C 的 vault、F 的 wiki/handoff 都只是“主张”来源，D 负责在会话边界拿 git/机器事实核对。
+- 如果知识库已经存在、但 AI 不主动用、或你说的话和库里记录打架时它自作主张，做做法 E。E 只写常驻指令，改动成本极低；可以叠加在 A/B/C/F 上，也可以直接用于你已有的公司/个人知识库。E 管“你说的话 vs 知识库记录”，D 管“笔记/记忆 vs git、GitHub、本机事实”，两者都要。
+- 如果主要痛点是跨 agent、跨项目、跨机器的长期记忆，并且能接受常驻服务和采集提示词与工具调用，试做法 F。F 可以替代 A 的 memory 骨架和 C 的部分 vault/query 能力，但不能替代 D 的事实核对；E 的冲突裁决指令也可以和 F 叠加。
 
 ### 做法 A：只搭本地记忆骨架
 
@@ -147,7 +151,6 @@ obsidian-wiki sessions-query "the auth bug with the weird retry loop"
 ```text
 /wiki-lint            # broken links, orphans, contradictions
 /wiki-dedup           # "RSC" and "React Server Components" are one page now
-/cross-linker         # weave new pages into the graph
 /wiki-status          # what's ingested, what's pending, where the hubs are
 ```
 
@@ -245,7 +248,7 @@ bash .claude/skills/session-start/ground-truth.sh
 - 没被点名的东西，不算只存在于一块盘上：死在笔记本上的未提交工作等于不存在。
 - 先建议，再等：会话只推荐；当天做什么、每次 push/PR/merge 是否批准，由你决定。
 
-与做法 A/B/C 的差异：A 的 memory 规则是“开始新任务前先读取 memory”，但 memory 本身仍是笔记/主张；D 要求在读笔记之外先跑事实脚本，报告不一致后再行动。C 的 vault 是知识库，适合摄入与查询；D 是项目状态核对，二者可叠加，但不要让 vault 里的旧结论替代 git/机器事实。
+与做法 A/B/C/F 的差异：A 的 memory 规则是“开始新任务前先读取 memory”，但 memory 本身仍是笔记/主张；D 要求在读笔记之外先跑事实脚本，报告不一致后再行动。C 的 vault 和 F 的 wiki/handoff 是知识库或记忆层，适合摄入、查询与交接；D 是项目状态核对，二者可叠加，但不要让 vault 或记忆服务里的旧结论替代 git/机器事实。
 
 ### 做法 E：用常驻指令让 agent 每次任务前先读知识库，冲突先问你（@coreyganim）
 
@@ -275,13 +278,99 @@ bash .claude/skills/session-start/ground-truth.sh
 
 与做法 A 的差异：A 第 3 步的规则只说“开始新任务前先读取 memory / 把确认过的长期信息追加到 memory”，没有规定发现冲突怎么办，也没有要求给出对 memory 的确切编辑；做法 E 把这两条补上。两者可叠加：把 E 的指令写进 A 的 `CLAUDE.md` 也能生效（前提是你用的工具读这个文件）。
 
-与做法 C 的差异：C 提供知识库本体和 `/wiki-query` 这类主动查询命令；E 是“怎么用这个库”的常驻指令，触发时机不同——C 是你主动提问，E 是每次任务自动先查。
+与做法 C/F 的差异：C 提供知识库本体和 `/wiki-query` 这类主动查询命令，F 提供捕获、汇总、召回、交接管线；E 是“怎么用这个库/这层记忆”的常驻指令，触发时机不同——C 是你主动提问，F 是钩子捕获与会话注入，E 是每次任务自动先查。
 
 与做法 D 的差异：E 处理“你说的话 vs 知识库记录”的冲突，裁决权在你；D 处理“笔记/记忆 vs git、GitHub、本机事实”的冲突，靠脚本采集事实。E 的通过标准里没有 ground truth 脚本这一环，所以做了 E 不等于可以省掉 D——库里的旧结论同样不能替代 git/机器事实。
 
+### 做法 F：用 akitaonrails/ai-memory 做跨会话长期记忆层
+
+针对的问题是：跨 agent、跨项目、跨机器的长期记忆需要一条固定管线，而手写 memory 或 vault 容易只覆盖单个项目、单个工具、单台机器。ai-memory（akitaonrails/ai-memory，MIT，Rust 单二进制）的 README 管线是：
+
+```text
+capture ──▶ consolidate ──▶ recall ──▶ handoff
+ hooks        session-end      search     next agent,
+ observe      summaries as     + brief    any harness
+ silently     wiki pages       injection
+```
+
+agent 在工作时通过生命周期钩子发出经过清洗（sanitize）的观察；会话结束时这些观察变成项目 wiki 里的 Markdown 页面（可选由 LLM 撰写，但不配 LLM 也有用）；下一次会话在任何 agent、任何机器上，先收到一段有长度上限的 brief，并且可以检索全部历史（全文、实体、链接，可选向量，融合成一个排序）。跨 agent 交接是显式的、带类型的 claim-once 协议：每个 handoff 有 owner，只会被领取一次。真相源是 git 托管的普通 `.md` 文件（可以 grep、用 Obsidian 打开、手工编辑、rsync），数据库只是可随时从文件重建的派生索引。默认路径零 LLM 调用：捕获、搜索、handoff 都不需要 API key。
+
+主要卖点（README 自称）：跨 agent（二十多个 harness 共用一个记忆）、跨项目（一份工作习惯 profile 带到每个新仓库）、跨机器（记忆存在你自己跑的服务器上）、团队共享（多用户认证、按人归属、审计日志，且不是付费档）、记忆是纯 Markdown、静默捕获、无 LLM 的记忆老化（按 tier 衰减、被用得越多衰减越慢、冷笔记压成持久事实、近似重复合并、疑似矛盾标记）、可选的 LLM“dream”后台重写、以及自陈的诚实性（写入上限约 700/s 是实测的）。这些收益说法目前只有项目自述，没有独立验证。
+
+40. 先在测试机上做 Linux / macOS 原生安装。前提：能访问 GitHub releases 和 curl，无需 root。预期：下载对应 release、用发布页公布的 SHA-256 校验、把 `~/.local/bin/ai-memory` 链接好；`setup` 创建带 bearer token、权限为 owner-only 的数据目录，启动 per-user 服务（systemd `--user` 或 launchd LaunchAgent），为它发现的每个 agent 接好 MCP、hooks 和 Agent Skills。它会先打印计划、显示每个 agent 是在哪里被找到的，然后询问：答 `y`，或输入要接线的 agent 编号。
+
+```bash
+curl -fsSL https://github.com/akitaonrails/ai-memory/releases/latest/download/install.sh | sh
+ai-memory setup
+```
+
+相关开关：`--plan` 只打印计划不做任何改动；`--web` 把计划显示成浏览器页面、勾选后应用；`--yes` 跳过询问；再次运行不会改动任何东西；`--agent` 指定要接的 agent。装完后重启你的 agent，问它一句 “What do you remember about this project?”，如果它通过 ai-memory 回答，就说明接线成功。
+
+41. Windows 走 PowerShell。前提：Windows 环境，或只考虑 WSL2。预期：校验 release zip 的 SHA-256，解到 `%LOCALAPPDATA%\Programs\ai-memory` 并加进用户 `PATH`；`setup` 做的事与 Linux/macOS 相同，只是用登录项代替系统服务：登录时启动服务器、无控制台窗口、失败会重启。README 把“原生 Windows”标为 Experimental，更稳的路子是 WSL2 或 Docker Desktop（见 `docs/windows.md`）。
+
+```powershell
+irm https://github.com/akitaonrails/ai-memory/releases/latest/download/install.ps1 | iex
+ai-memory setup
+```
+
+42. Arch Linux / Fedora 走包管理器。前提：对应发行版。预期：安装预编译或源码包，再跑 `setup` 做数据目录、用户服务、agent 接线和自检。系统级服务装法用 `/var/lib/ai-memory` 与 `/etc/ai-memory/`，细节在 `docs/install.md#arch-linux-native-packages-aur`。
+
+```bash
+yay -S ai-memory-bin    # 预编译 Linux x86_64/aarch64 二进制
+yay -S ai-memory        # 从源码构建
+ai-memory setup         # 数据目录、用户服务、agent、自检
+```
+
+```bash
+sudo dnf install ./ai-memory-*.rpm
+ai-memory setup
+```
+
+43. macOS 菜单栏 App。前提：Rust 工具链 + Xcode / Swift 6。预期：构建 App，把它拖到 `/Applications`，在菜单项里点 **Install & Start Server**（无 Dock 图标）。App 会读取 `init` 写进数据目录的 bearer token，状态图标自行变绿。再接 agent 时用 App 自带的二进制，并用 `--no-service` 把服务交给 App 的 LaunchAgent。Wiki、SQLite、config、模型都放在 `~/Library/Application Support/ai-memory`，替换 App 只是更新，不会重写这棵目录树。
+
+```bash
+git clone https://github.com/akitaonrails/ai-memory
+cd ai-memory
+./companions/ai-memory-macos/build.sh
+open "companions/ai-memory-macos/dist/AI Memory.app"
+```
+
+```bash
+BIN="/Applications/AI Memory.app/Contents/Resources/runtime/ai-memory"
+"$BIN" setup --no-service
+```
+
+44. Docker 路线。前提：Docker 或 Podman + 一个支持 MCP 的 agent CLI。注意：这段官方 quick-start 没有认证——容器没跑 `init`，所以不带 token 启动；服务只绑 loopback（`127.0.0.1:49374`），机器外面的东西够不着，但本机进程和浏览器页面可以。想要零 LLM 模式就删掉 LLM / EMBEDDING 那几行——没有 key，FTS5 搜索照样能用。完整 wrapper 安装、checksum 校验、`docker run` 和环境变量命令较长，按 README 的 Docker quick-start 原样执行；在 Linux/macOS 上，Docker wrapper 会通过校验过 checksum 的原生宿主客户端去跑 `install-hooks`，所以装上的 hook 会在事件进入 spool 或网络之前就执行客户端的捕获策略（如 `[capture] ignore_paths`、allowlist 模式）。只有当确实需要旧的 shell 兼容路径时，才显式设 `AI_MEMORY_HOOK_PLATFORM=posix`——安装器会警告那条路径无法强制 capture policy v1。用 Podman 就把 `docker` 换成 `podman`；wrapper 在没装 Docker 时会自动用 Podman，两者都有时用 `AI_MEMORY_DOCKER=podman` 强制。两条接线命令：
+
+```bash
+ai-memory install-mcp   --client claude-code --apply
+ai-memory install-hooks --agent  claude-code --apply
+```
+
+可把 `claude-code` 换成 `codex`、`command-code`、`devin`、`opencode`、`opencode2`、`gemini-cli`、`grok`、`kimi-code`、`kiro-cli`、`copilot-cli`、`droid`、`muse`、`omp`、`oh-my-pi` 等；完整列表在 `docs/install.md`。
+
+45. 首选启动方式：用 `ai-memory run` 启动 harness。前提：先完成上面的安装。预期：同一个 workstream、本地 Claude 历史 dossier、可复用 profile、恢复最新 managed checkout 都走这条入口。注意：原文在 `ai-memory run --f` 处截断，不能补全；遇到启动器死掉留下 lease 的问题，先查 README 原文。
+
+```bash
+ai-memory run claude
+ai-memory run codex --yolo   # 同一 workstream + 本地 Claude 历史 dossier
+ai-memory run --profile work claude  # 可复用的 config.toml env/account 预设
+ai-memory continue           # 恢复最新的 managed checkout
+# 启动器死掉留下 lease 时（仅限同一操作者）
+# 原文在 ai-memory run --f 处截断，不能照抄补全
+```
+
+46. 与现有做法 A-E 的关系：
+- F 与 A：A 是手写规则 + `memory` 目录；F 是常驻服务 + 钩子捕获 + wiki 页面 + 召回 + handoff。F 可以替代 A 的骨架，但更重，且要常驻服务并采集提示词与工具调用。
+- F 与 C：C 是主动 ingest/query/lint 的 vault；F 是自动捕获、会话结束汇总、下次会话注入 brief，并支持跨 agent/机器 handoff。知识都可以是纯 Markdown，可以共存。
+- F 与 D：F 的 handoff 仍是 agent 交接协议，仍是“主张”来源；D 的 `ground-truth.sh` 才拿 git/GitHub/本机事实核对。做了 F 不等于省掉 D。
+- F 与 E：E 是常驻指令，要求每次任务前读库、冲突先问、给出确切编辑；F 提供被读的记忆层。两者可叠加，但 F 不会自动替你裁决你与知识库的冲突。
+
+47. 试用与回滚：先在单机、单仓库、只接一个 agent（Claude Code 或 Codex）的情况下按 README 的两条命令装上并跑一到两周，用“新会话是否还要重新交代背景”来判断是否值得留下。因为原文确实给出了可直接复制的安装、接线、启动和回滚命令，但所有收益说法都只有项目自述、没有独立验证，且要常驻服务并采集提示词与工具调用，必须先小范围试。不要一上来推到主力环境或团队共享。
+
 ## 怎么判断变好了
 
-最小试用方式（做法 A/B/C/D）：
+最小试用方式（做法 A/B/C/D/F）：
 1. 建一个 `second-brain` 目录，只放入少量非敏感材料，不要一上来就接真实收件箱。
 2. 在本机装好并授权 GWS CLI（做法 B），先只开一项权限（例如日历只读）跑通；安装与授权命令原文未给，需自行查文档确认后再执行。
 3. 在目录下建 `memory` 子目录。
@@ -289,6 +378,7 @@ bash .claude/skills/session-start/ground-truth.sh
 5. 连续使用 1～2 周，每天在同一目录下开 Claude Code 做真实工作。
 6. 想验证做法 C，按原文的对照方式跑：同一模型、同一 vault、同一批问题，唯一变量是有没有装 obsidian-wiki；ground truth 用 networkx 而不是本项目自己的代码（betweenness 每个节点吻合到 3.5e-18，630 组最短路全部一致）。
 7. 想验证做法 D，在长期项目上小范围试：clone 仓库后运行 `bin/adopt.sh`，先填好 `.claude/ground-truth.conf` 并把 `ground-truth.sh` 跑到 `GROUND TRUTH: complete`，再用 `/session-start` 和 `/handoff` 包住每天的工作。观察脚本报出的“handoff 与事实不一致”条目数是否下降。
+8. 想验证做法 F，先在测试机、单仓库、只接一个 agent 的情况下按 README 装上并 `ai-memory setup`，重启 agent 后问 “What do you remember about this project?”；如果它通过 ai-memory 回答，说明接线成功。然后连续 1～2 周在同一仓库用 `ai-memory run claude` 或 `ai-memory run codex --yolo` 工作，对比“新会话是否还要重新交代背景”。
 
 最小试用方式（做法 E，一次就能跑完）：
 1. 按上面的草稿写好常驻指令，只挂在你自己一个人的日常任务上，不要一上来就推给团队或改公司级知识库。
@@ -316,7 +406,7 @@ bash .claude/skills/session-start/ground-truth.sh
 观察指标（做法 D）：
 - 脚本是否以 `GROUND TRUTH: complete` 结束；出现 UNKNOWN 或退出码 2 时，当作没通过。
 - `/session-start` 报告的主张与事实不一致条目数；README 样例一次暴露 3 条 ⚠，并指出只信周五笔记的会话会要求合并一个红灯 PR、报告 backfill 已完成、重写已经存在的代码。
-- 每个任务的“done when”是否可执行，样例写法："Done when CI is green and you have merged it""Done when the unit exits 0 and 20 recipes check out on staging"。
+- 每个任务的“done when”是否可执行，样例写法："Done when CI is green and you have merged it"、"Done when the unit exits 0 and 20 recipes check out on staging"。
 - 后台任务、PR 的 CI 状态、未推送提交是否在下一次 `/session-start` 被翻出来。
 - 注意：README 没有描述无人值守的后台自动运行，推进发生在会话边界，由脚本采集 + 会话报告驱动。
 
@@ -327,7 +417,15 @@ bash .claude/skills/session-start/ground-truth.sh
 - 编辑可采纳率：它给出的“对大脑的确切编辑”中，你能直接照改、不改写就用的比例。
 - 成本：每个任务额外的耗时和 token 消耗，是否值得。
 
-试多久：做法 A/B 用 1～2 周。如果重复交代率与召回成功率没有可观察的改善，或噪声清理成本高于收益，则放弃这条做法，退回到把 Claude Code 当作单次会话工具使用。做法 C 作者自评 early、样本 n=2，先小范围试再谈全面采用。做法 D 本次材料只到 README，脚本实现与效果未经验证，先小范围试，再谈全面采用。做法 E 一次就能跑完（5 个任务），判定标准是：冲突召回高、误报低、编辑可采纳率高，且额外成本可接受，就把这组指令固化为默认配置，再考虑推广到团队；如果误报频繁或给的编辑基本用不上，降级为“只在明确要求核对大脑时才启用”。
+观察指标（做法 F）：
+- 接线是否成功：重启 agent 后问 “What do you remember about this project?”，它是否通过 ai-memory 回答。
+- 重复交代率：新会话是否还要重新交代项目背景；跨 agent、跨机器时是否仍要重新交代。
+- 记忆文件质量：wiki 页面是否可 grep、可用 Obsidian 打开、可手工编辑、可 rsync；数据库是否可从文件重建。
+- 越权与泄漏：捕获、搜索、handoff 会采集提示词与工具调用，此项是红线指标，出现即停。
+- 对照组：同期在未装 ai-memory 的仓库或另一个 agent 上做同类任务，比较重复交代率和召回成功率。
+- 注意：默认路径零 LLM 调用，捕获、搜索、handoff 都不需要 API key；可选 LLM“dream”后台重写。写入上限约 700/s 是 README 自称的实测值，不是独立验证。
+
+试多久：做法 A/B 用 1～2 周。如果重复交代率与召回成功率没有可观察的改善，或噪声清理成本高于收益，则放弃这条做法，退回到把 Claude Code 当作单次会话工具使用。做法 C 作者自评 early、样本 n=2，先小范围试再谈全面采用。做法 D 本次材料只到 README，脚本实现与效果未经验证，先小范围试，再谈全面采用。做法 E 一次就能跑完（5 个任务），判定标准是：冲突召回高、误报低、编辑可采纳率高，且额外成本可接受，就把这组指令固化为默认配置，再考虑推广到团队；如果误报频繁或给的编辑基本用不上，降级为“只在明确要求核对大脑时才启用”。做法 F 先单机、单仓库、只接一个 agent 跑 1～2 周；收益说法只有项目自述，没有独立验证，若“新会话是否还要重新交代背景”没有改善，就不要推到主力环境或团队。
 
 ## 常见坑
 
@@ -347,12 +445,19 @@ bash .claude/skills/session-start/ground-truth.sh
 - 做法 D 本次材料只到 README，脚本实现与效果未经验证；不要把它当作已经证明能减少所有记忆失真。
 - 做法 D 的推进发生在会话边界，不是无人值守后台；README 没有描述自动调度。
 - 做法 D 的工作区形态要求根目录 remote 必须是 PRIVATE，首次提交前要检查 `git status --ignored`、扫密钥，且绝不追踪 datadir、密钥或二进制。
-- 主张和事实的优先级：A 的 memory 和 C 的 vault 都可读，但先跑 ground truth；否则可能把旧笔记当事实继续施工。
+- 主张和事实的优先级：A 的 memory、C 的 vault、F 的 wiki/handoff 都可读，但先跑 ground truth；否则可能把旧笔记当事实继续施工。
 - 做法 E 最大的材料缺口：原文写“完整提示如下”，但采集到的正文里没有这段完整提示，本手册中的提示词是按三条要点重写的草稿；照做后若行为不符合预期，先怀疑草稿与作者实际使用的提示有差异。
 - 做法 E 的“不告诉 AI 怎么用第二大脑，它就毫无用处”“修复只要 90 秒”都只是作者主张，没有任何对照、案例或数据支撑；101 赞、6 次转发、14 条回复是传播指标，不是效果指标。
 - 做法 E 没提的成本与风险：每次任务前读库带来的 token/时间开销、冲突误报造成的打断、以及让 AI 直接改写知识库的出错风险。误报频繁时先收紧指令，而不是继续让它改库。
 - 做法 E 与 A 的规则可能叠在一起：A 只规定“读和追加”，E 要求“冲突标记 + 裁决 + 确切编辑”。两条规则写在同一处时注意不要互相矛盾，也别把 E 的写回编辑当成自动生效的改动。
 - 做法 E 假设工具会稳定遵守常驻指令、知识库在冲突时确实可能更对，这两点在原文里没有证据；先用 5 个已知答案任务验证再固化。
+- 做法 F 的所有收益说法都只有项目自述、没有独立验证；不要因为 README 写得完整就当作已证明有效。
+- 做法 F 要常驻服务并采集提示词与工具调用；先单机、单仓库、只接一个 agent，用非敏感材料试，确认可接受再扩大。
+- 做法 F 的 Docker quick-start 没有认证——容器没跑 `init`，不带 token 启动；服务只绑 loopback，机器外部够不着，但本机进程和浏览器页面可以。不要把该端口暴露到外网。
+- 做法 F 的 Windows 原生支持被 README 标为 Experimental，更稳的路子是 WSL2 或 Docker Desktop。
+- 做法 F 的原文在 `ai-memory run --f` 处截断，不能补全；遇到 lease 问题先查 README。
+- 做法 F 的“跨 20 多个 harness、跨项目 profile、跨机器、团队共享、多用户认证、审计日志、不是付费档、无 LLM 记忆老化、写入上限约 700/s”都是 README 自称，缺少独立验证。
+- 做法 F 不能替代做法 D：它的 handoff 仍是 agent 交接协议，仍是主张；git/GitHub/本机事实仍要用 `ground-truth.sh` 这类脚本核对。
 
 ## 证据与来源
 
@@ -361,10 +466,11 @@ bash .claude/skills/session-start/ground-truth.sh
 - 对照数据来源：上表与逐题数据出自该 README。方法细节为 Claude Sonnet、headless、真实 38 页 vault；问题用自然语言、不提供图定义。报告在“普通智能体有”处截断，那一侧的细节无法引用。ground truth 用 networkx（betweenness 每个节点吻合到 3.5e-18，630 组最短路全部一致）。
 - truongfelix/workflow 侧：来源是该仓库 README（MIT，32 stars）。本次材料只到 README，脚本实现与效果未经验证。README 给出一份完整的 Monday morning `/session-start` 输出样例（含 3 条与上周五 handoff 的不一致告警、当天 3 项带完成判据的任务、2 条等待裁决的问题），并称这套场景的全部文件与脚本输出都在 `example/`。仓库自身有 CI 徽章，`test/run.sh` 测 `adopt.sh` 与 `ground-truth.sh`，CI 在 Linux/macOS/Windows 三种系统上跑。
 - @coreyganim 侧：来源是一条推文（101 赞、6 次转发、14 条回复）。原文给出三条指令要点：任务前先读公司大脑与个人大脑、与大脑冲突就标记并同时引用两版、等用户裁决后给出对大脑的确切编辑；并主张“建了第二大脑却不告诉 AI 怎么用，它就毫无用处”“修复只要 90 秒”。这些判断没有对照、案例或数据支撑。关键材料缺口：原文写“完整提示如下”，但采集到的正文未包含该完整提示，本手册中的提示词是按这三条要点整理的草稿，效果可能与作者实际使用的提示不同。
-- 证据强度提示：做法 A、B 只有步骤清单和传播数据，没有效果验证；做法 C 有对照实验数据，但样本极小且作者自评 early；做法 D 只有 README、样例输出和模板自身 CI，缺少独立效果验证；做法 E 只有一条推文和三条指令要点，推广、成本和风险均无数据。所有数据都不能当作“这套做法一定有效”的证明。
-- 作者主张（缺少支撑）：建独立文件夹、接入 GWS CLI 打通 Gmail/日历/云端硬盘、单开 `memory` 子目录、在 `CLAUDE.md` 写死记忆规则；obsidian-wiki 的“知识是编译而非堆积”、manifest 增量摄入、每条主张打标 extracted / inferred / ambiguous、查询成本随规模基本不变；workflow 的“主张和事实是两回事”“做完删除不打勾”“UNKNOWN 绝不算通过”“没被点名的东西不算只存在一块盘上”“先建议再等”；@coreyganim 的“不告诉 AI 怎么用第二大脑就毫无用处”“90 秒修复”。
-- 调研报告给出的建议（不是原文）：规则示例“把每次会话中确认的长期有效信息追加到 `memory` 下的文件中；开始新任务前先读取 `memory`”；先只开一项权限跑通；重复交代率、召回成功率、记忆文件质量、越权与泄漏、对照组等指标；1～2 周试用期；用同一模型、同一 vault、同一批问题做对照验证；在长期项目上小范围试做法 D；做法 E 的提示词草稿、5 个已知答案任务的试用方式，以及读取命中率、冲突召回、误报数、编辑可采纳率、成本五项指标，先只挂在自己日常任务上，不要推给团队或改公司级知识库。
-- 仅为推测的部分：second-brain 第 4 步规则的目标位置推测指向 `memory` 目录；原文未界定“重要细节”；未说明记忆召回机制、GWS CLI 授权范围、凭证存储与撤销方式；obsidian-wiki 的 Cursor / Hermes / OpenClaw 支持细节也尚未证实；workflow 的脚本实现与效果未验证；做法 E 中“具体在哪个入口写常驻指令”原文只说要“添加一组自定义指令”，落点需按你手头的工具确认。
+- akitaonrails/ai-memory 侧：来源是该仓库 README（MIT，Rust 单二进制）。README 给出 capture→consolidate→recall→handoff 管线、Linux/macOS 两条安装命令、Windows PowerShell、Arch/Fedora 包管理器、macOS 菜单栏 App、Docker quick-start、`ai-memory run` 启动方式；并称默认路径零 LLM 调用，捕获、搜索、handoff 都不需要 API key，真相源是 git 托管的普通 `.md` 文件，数据库只是可随时从文件重建的派生索引，跨 agent 交接是显式的、带类型的 claim-once 协议。收益说法（跨二十多个 harness、跨项目、跨机器、团队共享、多用户认证、审计日志不是付费档、纯 Markdown、静默捕获、无 LLM 记忆老化、可选 LLM dream、写入上限约 700/s）目前只有项目自述，没有独立验证。本次调研结论明确建议：先在单机、单仓库、只接一个 agent（Claude Code 或 Codex）的情况下按 README 的两条命令装上并跑一到两周，用“新会话是否还要重新交代背景”来判断是否值得留下。
+- 证据强度提示：做法 A、B 只有步骤清单和传播数据，没有效果验证；做法 C 有对照实验数据，但样本极小且作者自评 early；做法 D 只有 README、样例输出和模板自身 CI，缺少独立效果验证；做法 E 只有一条推文和三条指令要点，推广、成本和风险均无数据；做法 F 只有 README 和可复制命令，收益只有项目自述，缺少独立效果验证。所有数据都不能当作“这套做法一定有效”的证明。
+- 作者主张（缺少支撑）：建独立文件夹、接入 GWS CLI 打通 Gmail/日历/云端硬盘、单开 `memory` 子目录、在 `CLAUDE.md` 写死记忆规则；obsidian-wiki 的“知识是编译而非堆积”、manifest 增量摄入、每条主张打标 extracted / inferred / ambiguous、查询成本随规模基本不变；workflow 的“主张和事实是两回事”“做完删除不打勾”“UNKNOWN 绝不算通过”“没被点名的东西不算只存在一块盘上”“先建议再等”；@coreyganim 的“不告诉 AI 怎么用第二大脑就毫无用处”“90 秒修复”；ai-memory 的跨 agent/项目/机器、团队共享、无 LLM 记忆老化、写入上限约 700/s 等。
+- 调研报告给出的建议（不是原文）：规则示例“把每次会话中确认的长期有效信息追加到 `memory` 下的文件中；开始新任务前先读取 `memory`”；先只开一项权限跑通；重复交代率、召回成功率、记忆文件质量、越权与泄漏、对照组等指标；1～2 周试用期；用同一模型、同一 vault、同一批问题做对照验证；在长期项目上小范围试做法 D；做法 E 的提示词草稿、5 个已知答案任务的试用方式，以及读取命中率、冲突召回、误报数、编辑可采纳率、成本五项指标，先只挂在自己日常任务上，不要推给团队或改公司级知识库；做法 F 先单机、单仓库、只接一个 agent 跑 1～2 周，用“新会话是否还要重新交代背景”判断是否留下。
+- 仅为推测的部分：second-brain 第 4 步规则的目标位置推测指向 `memory` 目录；原文未界定“重要细节”；未说明记忆召回机制、GWS CLI 授权范围、凭证存储与撤销方式；obsidian-wiki 的 Cursor / Hermes / OpenClaw 支持细节也尚未证实；workflow 的脚本实现与效果未验证；做法 E 中“具体在哪个入口写常驻指令”原文只说要“添加一组自定义指令”，落点需按你手头的工具确认；做法 F 的 `ai-memory run --f` 处原文截断，Docker quick-start 未包含认证步骤。
 
 ## 依据的调研
 
@@ -372,3 +478,4 @@ bash .claude/skills/session-start/ground-truth.sh
 - [Ar9av/obsidian-wiki](../research/radar/2026-10-03/1004-ar9av-obsidian-wiki.md)：值得一试，可以直接照 README 的安装和斜杠命令小范围试一遍：把常用工作目录设成 vault、跑 ingest/query/lint 三步，验证跨会话记忆和结构性提问是否真的省时；但作者自评项目「early」，效果数据只有 n=2 的小样本，先试再谈全面采用。
 - [truongfelix/workflow](../research/radar/2026-10-11/2508-truongfelix-workflow.md)：值得一试，在一个有多会话、跨天跨机器的长期项目上小范围试：clone 仓库后运行 bin/adopt.sh，先填好 .claude/ground-truth.conf 并把 ground-truth.sh 跑到 GROUND TRUTH: complete，再用 /session-start 和 /handoff 包住每天的工作；理由是它把“上次会话的笔记只是主张、git 与机器状态才是事实”这条规则做成两个技能共用同一个采集脚本的机制，直接针对跨会话记忆失真，但本次材料只到 README，脚本实现与效果未经验证。
 - [@coreyganim: 如果你构建了一个第二大脑，但没有告诉 Claude/Codex 如何使用它，它就毫无用处。](../research/radar/2026-10-14/3145-claude-codex.md)：值得一试，先照原文那三条规则，给 Claude/Codex 加一组自定义指令（任务前读公司大脑与个人大脑、与大脑冲突就标记并引用两版、让你裁决后给出大脑的确切编辑），小范围试跑若干任务；因为这三条规则本身可以直接落地、改动成本极低，但原文承诺的“完整提示”并未出现在采集到的正文里，也没有任何效果数据，是否真有效必须自己验证。
+- [akitaonrails/ai-memory](../research/radar/2026-10-18/4553-akitaonrails-ai-memory.md)：值得一试，先在单机、单仓库、只接一个 agent（Claude Code 或 Codex）的情况下按 README 的两条命令装上并跑一到两周，用「新会话是否还要重新交代背景」来判断是否值得留下；因为原文确实给出了可直接复制的安装、接线、启动和回滚命令，但所有收益说法都只有项目自述、没有独立验证，且要常驻服务并采集提示词与工具调用，必须先小范围试。
