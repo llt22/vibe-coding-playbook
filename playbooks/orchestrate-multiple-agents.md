@@ -1,16 +1,16 @@
-# 让多个 AI 代理并行干活，并在宣布完成前拿出证据
+# 把多个 AI 代理编成一支有人盯、有闸门、有分工的队伍
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：怎么把「不满意就重问一次」升级成一套多代理并行、带独立验证与合入门禁、并且每引入一种新编排方式都先做对照再决定是否采用的可执行流程。
-> 先试这一步：先在一处非关键仓库里把「完成」写死（哪条测试通过、谁来复核、在哪里看结果），再挑一个能拆成 2–3 个独立子任务的任务试一次并行（做法 V 或做法 H），并留下串行做一遍的对照。
-> 最近修订：2026-10-18
+> 解决的问题：单个 AI 回答和一堆并行 agent 交付的常是你没验证过的结果；这篇手册给出一套可照做的流程——分工、隔离、门禁、独立验证、可见性与成本控制——把「不满意就重问一次」变成可复核的交付。
+> 先试这一步：先挑一个可回滚的小仓库，只加一件事：给并行 agent 一条可执行的验证命令（例如 FARM_VERIFY_CMD='pytest -q'）或一个没参与构建的独立 verifier，跑一两个任务看返工是否下降。
+> 最近修订：2026-10-19
 
 ## 解决什么问题
 
-单个 AI 回答或单条串行 agent 会话，交付的往往是你没有验证过的结果。手册把「不满意就重问一次」升级成一套可执行流程：多子代理并行求解、独立裁判打分淘汰、worktree 隔离、项目记忆、提交前互评、gate + 独立 verifier、跨项目看板、daemon + dashboard、菜单栏就地回答、阶段成本检查、用并行 /loop 持续处理 issue 的 triage-github 流程、一个实验性开关：用环境变量尝试开启 Claude Code 内置 agent teams、一个服务端版本控制候选：用 git-ai/Graft 承载大量编码 agent 的并发落库与验证、一个待自测的并行协作用法：用 claude --worktree 给每个并行代理一份独立工作树副本，以及一条把小范围编排试起来的路径：用 orchestrator skill 把主会话变成不阻塞的调度器、任务全派后台子代理、用账本文件跟踪状态。
+单个 AI 回答或单条串行 agent 会话，交付的往往是你没有验证过的结果。手册把「不满意就重问一次」升级成一套可执行流程：多子代理并行求解、独立裁判打分淘汰、worktree 隔离、项目记忆、提交前互评、gate + 独立 verifier、跨项目看板、daemon + dashboard、菜单栏就地回答、阶段成本检查、用并行 /loop 持续处理 issue 的 triage-github 流程、一个实验性开关：用环境变量尝试开启 Claude Code 内置 agent teams、一个服务端版本控制候选：用 git-ai/Graft 承载大量编码 agent 的并发落库与验证、一个待自测的并行协作用法：用 claude --worktree 给每个并行代理一份独立工作树副本、一条把小范围编排试起来的路径：用 orchestrator skill 把主会话变成不阻塞的调度器、任务全派后台子代理、用账本文件跟踪状态，以及本次新增的两条：一个是把 Bot 团队当成「编排 + 路由 + 守门」层、真正产出交回 Claude Code/Codex（做法 W），一个是用本地控制台统一看住并行 agent 的状态、排队与危机开关（做法 X）。
 
-做法 A–V 概览：
+做法 A–X 概览：
 
 - A：把不满意的回答送进锦标赛（arena-skill）。
 - B：并行子代理 + 测试合入闸门（clodfarm）。
@@ -34,6 +34,8 @@
 - T：用 git-ai/Graft 在服务端承载大量编码 agent 的并发落库、冲突解决、落库后验证与 agent 权限（先 quickstart，再 shadow 接入）。
 - U：用 claude --worktree 给每个并行代理一份独立工作树副本（原文只有一句话加一个命令，先自测再决定是否采用）。
 - V：把主会话变成不阻塞的调度器，任务全派后台子代理，用账本文件跟踪状态（orchestrator skill，先在分支上试）。
+- W：用 Bot 团队做编排、路由与守门，真正产出交回 Claude Code/Codex（grokbot-gtm-team；先只建 3 个 Bot、先不接执行层）。
+- X：用本地控制台看住并调度 Herdr 下的并行 agent，带指令排队、优先级与危机室总断路器（MyTeam；先跑演示安装器与自检）。
 
 ## 适用与不适用
 
@@ -61,6 +63,8 @@
 - 你同时运行大量编码智能体，愿意自托管一套服务端（数据库 + 对象存储），有 Linux 或 macOS 构建环境，能接 Go 1.26 / C 工具链 / Meson / Ninja，想验证「服务端落库 + 缓存 + 两个 agent + 一次 land」整条链路（做法 T）。
 - 你在 git 仓库里用 Claude Code，确实有多个代理要同时改同一份代码，想先消除编辑期互相覆盖，再看整体合并成本是否真的下降（做法 U）。
 - 你用 Claude Code，想在同一会话里边聊边让后台子代理并行干活，并愿意为每个 agent 手写一份完整 brief（目标、事实、负责文件、禁止事项、完成定义），先在分支上小范围试（做法 V）。
+- 你做 B2B/GTM 外呼或内容营销，已经在用 Grok Bot（或类似聊天机器人），想让「一个 Bot 一件事 + 部门负责人路由守门」当编排层，把真正产出交给 Claude Code/Codex，并愿意自己进仓库取提示词正文（做法 W）。
+- 你已经用 Herdr 在 Windows / macOS / Linux 上并行跑多个 AI 智能体，想在本地 Web 控制台里看工位与状态、排队发指令、必要时一键冻结（做法 X）。
 
 **不适用**
 
@@ -101,6 +105,14 @@
 - 不用 Claude Code，或项目目录不能写 .claude/（做法 V）。
 - 把做法 V 当成熟方案：效果描述（never blocks、3-5 agents、survives context compaction、follow-up 保留上下文）全部来自 README 自述，没有 benchmark、对比实验、真实项目案例、失败模式或成本数据（做法 V）。
 - 并发上限、token 成本、多个 agent 同时改同一文件时的冲突处理、失败回收，原文均未交代；这几项没自己测清楚前，不要用在关键仓库、也不要当常规做法（做法 V）。
+- 只想照抄提示词就跑：本次材料只抓到 README，setup-prompt.md 与 agents/*.md 的实际提示词正文没有给到，第 2 步和第 4 步无法照抄，必须自己进仓库取（做法 W）。
+- 你不是 B2B/GTM 外呼或内容营销场景、不是单人规模、或不用 LinkedIn / X / YouTube / 冷邮件这类英文平台：迁移成本原文未讨论（做法 W）。
+- 你不想被绑定到某个供应商：外呼几个 Bot 是按 OXYGEN 及其 CLI 写的，README 里还带 OXYGEN 推广链接，作者是 OXYGEN 联合创始人（做法 W）。
+- 你需要成本（token、订阅）与安全/权限边界的说明：原文只有「搭建过程中不会发送或花费任何东西」这一句（做法 W）。
+- 没有 Herdr：MyTeam 是 Herdr 之上的控制/监控层，强依赖它，没有 Herdr 就跑不起来（做法 X）。
+- 你想让所有 agent 都有「读懂它说了什么」的能力：24 款工具里只有 Claude Code、Codex、OpenCode 有增强遥测（只读解析本地日志），其余显示「该工具未暴露」（做法 X）。
+- 你要的是能力层或合入门禁：MyTeam 本身是监控层而非能力层，不判断一次变更能不能被接受（做法 X）。
+- 想直接引用文档里的模型名或端口/变量名：本次材料在原文「只是作者主张」一段被截断，出现的模型名无法核对；环境变量名在文档里也不一致，需先自己实测（做法 X）。
 
 ## 前置条件
 
@@ -127,6 +139,8 @@
 - 做法 T：Linux 或 macOS 机器，能联网拉依赖；Go 1.26；C 工具链；Meson；Ninja；构建过程会编译一份内置的 Git，缺任一项 make build 会失败。若接真实仓库：需要 config.toml（[graft] 段 + 可选 [graft.storage] 段）；数据库（SQLite 或 PostgreSQL）与对象存储（file/S3/GCS/Azure）；给每个 agent 的 token、RPC allowlist、branch policy；一个明确选定的冲突 resolver；存储迁移需要先 shadow 后 authoritative 的两段式操作窗口；要 Slack 汇报则需相应配置。版本 0.1.0，接口在 1.0 前可能变动。
 - 做法 U：处在 git 仓库中（worktree 是 git 的概念）；已装 Claude Code 并且能正常在终端里运行 claude；确实有多个代理要同时改同一份代码。--worktree 在当前版本是否存在、有无版本或环境要求，原文未给，需自测确认。
 - 做法 V：已安装并可使用 Claude Code；环境能运行 npx；项目目录可写 .claude/（账本文件路径为 .claude/orchestrator.md）。原文未交代并行 agent 数量上限、token 成本、多个 agent 同时改同一文件时的冲突处理与失败回收流程；本次材料只有 README，仓库内其他文件内容未包含，可能存在 README 未写明的配置或限制。
+- 做法 W：一个 Grok Bot 账号（README 明确说 That is enough to start，单这一个就够起步）；事先想清楚 5 项答案——你的公司、你的 ICP、你的 GTM 工具、你的第二大脑、Claude Code 和 Codex 跑在哪里；各 Bot 的连接器与权限（按每个 Bot 的 instructions 逐一授予）；一个含语气、素材证据、受众画像的第二大脑与内容 skills；一个 GTM 平台（外呼那几个 Bot 是按 OXYGEN 及其 CLI 写的）。要接执行层还需 Claude Code 或 Codex。
+- 做法 X：Node.js ≥ 22；已安装 Herdr，并在 PATH 上或用 BUREAU_HERDR_PATH 指定绝对路径；Windows / macOS / Linux 均可；无需 npm install；各智能体的工作目录，以及 CHEF.md / AGENTS.md / TODO.md / LESSONS.md 等 Markdown 支柱文件；若要给排队指令带附件，还需准备文件（上限 2 个、每个 20 MB）。
 
 ## 操作步骤
 
@@ -156,6 +170,8 @@
 | 同时运行大量编码智能体，想验证服务端落库、缓存、多个 agent、一次 land 的完整链路 | 做法 T（先跑 quickstart，再 shadow 接入） |
 | 有多个 Claude Code 代理要同时改同一仓库，编辑期互相覆盖、想先隔离 | 做法 U（先自测，再决定是否写进流程） |
 | 用 Claude Code，想主会话不阻塞、把 2–3 个独立子任务派给后台子代理并用账本跟踪 | 做法 V（先在新分支上试一次） |
+| 做 B2B/GTM 外呼或内容营销，想让「一个 Bot 一件事 + 负责人守门 + Claude Code/Codex 执行」跑起来 | 做法 W（先只建 3 个 Bot、先不接执行层） |
+| 已用 Herdr 并行跑多个 agent，想把监控、排队、冻结收进一个本地控制台 | 做法 X（先跑演示安装器，再用 npm test / npm run check 自检） |
 
 ### 做法 A：把不满意的回答送进锦标赛（arena-skill）
 
@@ -754,6 +770,168 @@ redirect <name> to ...
 - 与做法 I/L/O 的差别：那些解决注意力路由（谁在等我、在哪回答）；做法 V 的 status 只是账本查询，不能替代看板或通知。
 - 与做法 D/S 的差别：D 是同一 agent 内的关键字升档，S 是实验性环境变量；做法 V 是 skill 层的调度改造，原文没有给出三者能否叠加。
 
+### 做法 W：把 Bot 团队当编排层，真正产出交回 Claude Code/Codex（grokbot-gtm-team）
+
+把这条路径当作小范围可试的候选：它给出了完整的角色表、汇报关系、四步导入流程和交接格式，但真正的提示词正文（setup-prompt.md、agents/*.md）没有随材料给出，第 2 步和第 4 步无法照抄，必须自己去仓库取，并把 OXYGEN 等专有名词替换掉。
+
+1. 前提：有一个 Grok Bot 账号。README 明确说 That is enough to start: the team works without the rest。
+
+2. 在 Grok Bot 里新建一个 Bot，命名为 Chief of Staff。
+
+3. 打开仓库 https://github.com/timscheuerai/grokbot-gtm-team 的 setup-prompt.md，把其中的 prompt 粘贴进这个 Bot 的对话。（本次材料只抓到 README，这段提示词正文未提供。）
+
+4. 回答它的问题清单（README 列出的 5 项），回答后它会自动创建其余 Bot、Content Room（群聊）和那 1 个 routine，并告诉你 App 里还剩什么要手动做。README 强调：搭建过程中不会发送或花费任何东西。
+- 你的公司
+- 你的 ICP
+- 你的 GTM 工具
+- 你的第二大脑（second brain）
+- Claude Code 和 Codex 跑在哪里
+
+5. 连工具与权限：到 Grok Bot 的 settings 里连接对应工具的连接器（前提：各 Bot 的 instructions 里已写明它可以/不可以调哪些）。若不想用自动导入，改手工：打开仓库 agents/ 下每个文件，里面都有可直接粘贴的 instructions block。
+
+6. 可选，把执行层接上（前提：有 Claude Code 或 Codex）。任何 Bot 都可以往执行层发一个「工作单元」，格式固定为四要素：
+
+```text
+outcome / inputs / skill / limits
+```
+
+配套约定（来自 guides/claude-code-and-codex.md 的说明）：持久终端会话、每个任务一个 worktree、内容类任务跑在你自己的 Mac 上而代码类任务跑在 dev server 上。如果不接 Claude Code/Codex：把某个 Bot instructions 里的 handoff 那一行删掉，它就自己干。
+
+7. 可选但影响效果的前置：一个第二大脑（含你的语气、素材证据、受众画像）+ 写手们用的内容技能；一个 GTM 平台（表、富化、序列、收件箱）。外呼那几个 Bot 是按 OXYGEN 及其 CLI 写的，用别的平台就把名字换掉。
+
+8. 照抄作者的取舍原则（这是他踩过坑后砍出来的）：定时例程从 10 个砍到 1 个，只留 Outbound Lead 每工作日 08:20 的 rollup；不再用「一个 Bot 干所有事」，Outbound 从 1 个 Bot 拆成 1 个 lead 路由 + 4 个专才；文案、图形、视频不在 Grok Bot 里做，改交 Claude Code/Codex + 已有 skills。
+
+9. 最小试用（建议 2 周，先不接执行层）：只建 3 个 Bot——Chief of Staff + 一个部门负责人（选 Outbound Lead）+ 一个专才（选 Lead Sourcer），用 agents/ 里对应文件的 instructions block 手工粘贴，避免自动导入一次建太多；按 README 的说法把 handoff 那行删掉，让 Bot 自己干，先测出「编排层本身值不值」；只保留那 1 个例程，第二周再把一个真实工作单元用四要素派给 Claude Code。
+
+**与已有做法的差异（照做前先读）**
+
+- 做法 W 不是替代做法 B/J/T 的合入门禁，而是更上游的编排/派工层：它决定「谁给执行层派活、谁守门」。
+- 与做法 F（crewAI）不同：F 是你自己写代码、改 JSONC 搭出来的多步流水线；W 是一套现成的 Bot 团队配置，且明确规定质量不达标的工种外迁到执行层。
+- 与做法 V（orchestrator skill）不同：V 是 Claude Code 内的调度改造；W 是在 Claude Code 之外再加一层 Bot 团队，用四要素把工作单元推进来。原文没有给出两者能否叠加。
+- 与做法 I/L/K/O/X 的可见性与注意力路由不同：W 负责派工与守门，不解决「谁在等我、在哪回答」。
+- 接上执行层后，合入门禁照样要保留：W 不提供任何测试、评审或验证机制。
+
+### 做法 X：用本地控制台看住并调度并行 agent（MyTeam，依赖 Herdr）
+
+把这条路径当作监控与调度层的候选：它给出了可直接照做的安装命令、端口、环境变量与操作流程，本身不是能力层，且原文存在若干可疑的模型名称，需先小范围验证可信度。
+
+**A. 安装（前提：Node.js ≥ 22，且已安装 Herdr；Windows / macOS / Linux 均可；无需 npm install）**
+
+1. 方式一（推荐，无需 Git）：到 GitHub Releases 下载最新 ZIP → 解压到任意目录。
+- Windows：双击 Installer MyTeam.bat（Node ≥ 22 时启动动画安装器；否则退化为文本模式，可用 winget 安装 Node 后重跑）。
+- macOS / Linux：
+
+```bash
+bash scripts/installer.sh
+```
+
+若已有 Node.js：
+
+```bash
+node scripts/installateur-anime.mjs
+```
+
+2. 方式二（开发者，克隆仓库）：
+
+```powershell
+git clone https://github.com/BlackAngel242/MyTeam.git
+cd MyTeam
+powershell -ExecutionPolicy Bypass -File scripts\installer.ps1
+```
+
+或 macOS / Linux：
+
+```bash
+git clone https://github.com/BlackAngel242/MyTeam.git
+cd MyTeam
+bash scripts/installer.sh
+```
+
+3. 想先看动画安装器而不改动机器，跑演示模式：
+
+```bash
+node scripts/installateur-anime.mjs --demo
+```
+
+4. 知道安装脚本会做什么（前提：Herdr 在 PATH 或已指定路径）：校验 Node ≥ 22 与 Herdr → 创建 Herdr 2×2 网格（Chef、Agent 2、Agent 3、Agent 4）→ 检测 24 种兼容工具 → Windows 下可选装 Clink → 执行 herdr integration install → 安装主控技能（herdr --skill 或 CHEF.md）→ 写方向指引 → 建 3 个桌面快捷方式（含「Herdr 和桌面」组合）→ 运行 node scripts/init-kit.mjs 初始化团队工具包。明确不会：装 npm 依赖、索取或存 API key、静默安装（-Oui / --oui 也不会自动批准，仍需逐个 o/n 确认）。可用参数：-DryRun / --dry-run（演练）、-Lang fr|en / --lang fr|en、-Port / --port、-HerdrChemin / --herdr-chemin、-SansRaccourci / --sans-raccourci。Windows SmartScreen 拦截时：右键 .bat（或解压前的 .zip）→ 属性 → 勾选「解除锁定」→ 确定；或点「更多信息」→「仍要运行」。
+
+5. 启动本地服务：
+
+```powershell
+node server.mjs
+```
+
+浏览器打开：
+
+```text
+http://127.0.0.1:4317
+```
+
+6. 首次使用的 6 步路径（README 原文顺序）：
+   1. 打开「Herdr 和桌面」快捷方式（或先开 Herdr 再 node server.mjs）。
+   2. 确认 Herdr 里 4 个面板按 2×2 打开，并在 http://127.0.0.1:4317 看到实时工位。
+   3. 主控面板里，队长读 CHEF.md 和 AGENTS.md，用 herdr agent list 列出队友待命。
+   4. 从控制台给队长发第一条指令，观察它「走到」队员工位递交任务文件夹。
+   5. 打开「任务」标签，核对 TODO.md 勾选状态与已发布行动计划的真实进度（无编造百分比）。
+   6. 找到「危机室」按钮（Ctrl+Maj+C），用于瞬间冻结所有指令发送并请求礼貌中断（Esc）。
+
+**B. 关键操作机制（可照做的用法）**
+
+7. 排队与优先级：目标智能体忙或处于配额暂停时，按钮变为「加入队列」，指令被安全延后；勾选「优先」（priority: haute）可插队到该智能体的普通指令之前；点「提到队首」可把等待中的普通指令升级；等待超过 30 分钟的普通指令会被自动提升为高优先级（防饥饿）；每条指令可一键撤回，绝不强推给忙碌的智能体。
+
+8. 危机室（总断路器）：按 Ctrl+Maj+C 或从命令面板触发，所有指令下发立即冻结（HTTP 423）并挂起队列而不改动任何内容；可用 POST /api/crise/arret 请求礼貌中断——它发送 Herdr 的标准 esc 键，从不用 kill 强杀；状态原子写入 .bureau/crise.json（文件损坏时按「危机激活」的安全侧处理）。
+
+9. 群发（两段式武装发送）：勾选可用智能体（或「全选可用」）→ 第一次点「发送」进入武装状态并列出收件人 → 第二次点确认，逐个经 Herdr 发送。
+
+10. 队长监听中继：在 .bureau/relais.json 中开启（默认关闭），一旦有队员完成任务，就向队长队列投递一条中性消息：
+
+```text
+{名} vient de terminer. Lis son panneau avant de lui confier la suite.
+```
+
+危机室激活时不发送，也不会发给队长本人。
+
+11. 队长交接：可在「团队」标签指定任意在线智能体当队长，或恢复默认（第一个面板）；选择持久化在 .bureau/direction.json（不在 Git 内）。队长进入配额暂停时，界面会主动建议交接给可用替补，交接消息经确认后才发出。
+
+12. 文件附件：给排队指令附带本地文件（上限 2 个、每个 20 MB），发送前以不覆盖方式复制进智能体工作目录；处理过程记录在「团队」标签的「已托付文件」区。
+
+13. 事实化任务跟踪：不要依赖百分比估算——「任务」标签的进度条严格按项目 Markdown（如 TODO.md）里已勾选任务的比值计算；没有已发布计划时如实显示「暂无智能体发布计划」。
+
+14. 失败留档：每遇到一个错误就写进 LESSONS.md，作为团队防回归记录（README 的工程原则第 5 条）。
+
+**C. 配置与运维**
+
+15. 环境变量：BBUREAU_PORT 改 HTTP 端口（默认 4317）——原文此处写作 BUREAU_PORT，名称不一致，照抄前先自己确认；BUREAU_HERDR_PATH 在 Herdr 不在 PATH 时指定其绝对路径。
+
+16. 页面底部自定义（本地、不发布）：创建 .bureau/pied.json：
+
+```json
+{"gauche": "votre texte", "droite": "un contact", "enseigne": "BUREAU DE MON EQUIPE"}
+```
+
+17. 自检与关闭：
+
+```bash
+npm test
+npm run check
+```
+
+停止服务：在运行 node server.mjs 的终端按 Ctrl+C。
+
+**D. 界面侧的可用开关（用于降低监控成本）**
+
+18. 键盘优先：Ctrl+K 命令面板（找智能体、开工位、写指令、开团队看板、切标签）；? 打开 7 步引导、图例、完整快捷键表与信号设置。
+
+19. 降低打扰/省资源：画布「暂停」按钮；系统开启 prefers-reduced-motion 时场景默认静止（仍每分钟刷新时间与光照）；后台标签页每 15 秒轮询并出 Windows 通知；终端刷新 3 秒一次、标签隐藏时暂停、每块磁贴一次只读一次；鼠标选中文本时自动暂停刷新以免选区消失。
+
+**与已有做法的差异（照做前先读）**
+
+- 与做法 I/L/K/O 的差别：那些是通知、终端 dashboard、跨项目看板或菜单栏；做法 X 是本地 Web 控制台，多了像素工位、指令排队与优先级、群发两段式确认、危机室总断路器和只读日志遥测。
+- 与做法 B/J/T 的差别：那些管「这次变更能不能被接受」；做法 X 不判断合入，只是监控与调度层。
+- 与做法 V 的差别：V 的 status 来自 agent 自己写的账本文件；X 的状态来自 Herdr 与本机日志的只读解析（且只有 Claude Code / Codex / OpenCode 有增强遥测），来源不同，可靠性要分别验证。
+- 与做法 W 的差别：W 是编排层（谁派活、谁守门），X 是运行期观察层（谁在跑、谁需要你、能不能一键冻结）。原文没有给出两者能否协同。
+- 危机室只冻结下发并请求礼貌中断，不替代测试、评审与合入门禁。
+
 ### 通用收尾：不管走哪条路径
 
 - 开始前先固定「完成」的定义：哪条测试通过、谁来复核、在哪里看结果。
@@ -770,6 +948,8 @@ redirect <name> to ...
 - 做法 T：先在临时目录跑通 examples/graft/quickstart.sh；再在非关键仓库以 shadow 模式只读导入并核对一致；确认无误后才切 authoritative；resolver 先设 none，稳定后再逐步打开自动 resolver、graft-verify 自动 revert、per-agent token 与 RPC allowlist。
 - 做法 U：只在 git 仓库里、且确实有多个代理并行改同一份代码时用；主工作树留给人；副本位置、合并方式、清理时机、是否自动提交都要自己实测后写进流程；不要把它当安全边界，也不要用它替代测试、评审与合入门禁。
 - 做法 V：先在干净分支上试；每个 agent 的 brief 要写全目标、事实、负责文件、禁止事项与「完成」的定义；status 与账本要能和实际执行对上，对不上就不要升级为常规做法；做法 V 不替代测试、评审与合入门禁。
+- 做法 W：先只建 3 个 Bot、先不接执行层、只留 1 个例程；接执行层时把 outcome / inputs / skill / limits 四要素写全；质量不达标的工种（作者点名文案、图形、视频）换到执行层做，而不是给 Bot 打补丁式加规则；某个 Bot 的产出你从不采用，按作者的取舍原则直接删掉它。
+- 做法 X：把控制台当监控与调度层，不当能力层；先确认 Node ≥ 22 与 Herdr 到位，用 npm test / npm run check 自检后再说；指令排队、优先级与危机室只是人工闸门的加强，不替代测试、评审与合入门禁；环境变量名与界面上出现的模型名以自己实测为准。
 
 ## 怎么判断变好了
 
@@ -797,6 +977,8 @@ redirect <name> to ...
 - 做法 T：单次 land 的端到端耗时（从 agent 想提交到引用更新完成）；同一分支上并发 land 的成功率与需要人工介入的冲突比例；自动冲突解决被接受、且后续没有被 revert 的比例（用来判断 resolver 是否可信）；graft-verify 捕获的回归数量、bisect 定位是否准确、自动 revert 是否误伤；权限控制是否真的挡住越权操作（构造几个越权请求做负向测试）；增加服务节点后横向扩展是否如预期（可测）。README 未给数值目标，需自建基线，与现有 merge queue / PR 流程对比。
 - 做法 U：并行期间是否出现互相覆盖、需要人工解冲突的次数；把各自结果合并回主线所花的时间（对照组：不用 --worktree，两个代理直接在同一工作树里改同样的东西）；主工作树是否被代理污染、副本能否一键丢弃回退；副本目录是否按预期自动创建和清理，是否留下需要手动收拾的垃圾。
 - 做法 V：主会话被阻塞的时间——编排前后对比，是否减少；同一批任务的墙上时间——与串行做一遍相比；返工率——产出需要人工纠正的比例，尤其是文件冲突（两个 agent 改同一文件）导致的返工；状态可信度——status 报告的 agent 数量/状态与实际执行是否一致、账本在长会话 compaction 后是否仍然可用；成本——多 agent 并行带来的 token 消耗增量（原文无数据，需自行记录）。
+- 做法 W：你每天亲自处理 GTM/内容事务的时间（对比使用前两周）；rollup 里「需要你自己动手改」的条目占比——持续偏高说明守门/gate 没起作用，或该工种本就该交给执行层；派给 Claude Code 的工作单元一次通过 review 的比例，以及失败案例里有多少能定位到 outcome / inputs / skill / limits 缺了哪一项；专才 Bot 与负责人 Bot 之间的往返轮次（轮次高说明路由规则没写清）；反向信号——你在给 Bot 打补丁式加规则，或某个 Bot 的产出你从不采用，按作者取舍原则直接删掉它。以下指标是本次调研建议、原文未给。
+- 做法 X：从 agent 需要你到人响应的时间；因并发抢同一工位导致的手工干预次数；队列里自动升为高优先级后是否仍出现长时间等待或饥饿；危机室触发到全部指令真的冻结（HTTP 423）所需的操作次数，以及期间是否发生越权发送；TODO.md 勾选比例与实际完成是否对得上（这是它承诺的「不发明百分比」）；npm test 与 npm run check 是否稳定通过；后台标签页轮询与通知是否按预期工作、是否反而更打扰。这些指标中，界面行为部分只有 README 描述，没有第三方数据。
 
 **最小试用**
 
@@ -822,6 +1004,8 @@ redirect <name> to ...
 - 做法 T：不改动现有仓库，先构建，然后跑 examples/graft/quickstart.sh，确认在临时目录里 server、cache daemon、两个 agent、一次 land 能完整走通；用 ./_build/bin/graft 逐个熟悉 land、changeset 列表/watch、verify 相关子命令；拿一个非关键真实仓库按 [graft.storage] 的 shadow 模式做只读导入，核对导入后的仓库状态与源仓库一致；确认无误后再切 authoritative；只让少量 agent 走这套流程，且暂时不开自动冲突解决（resolver 设为 none）；稳定后再逐步打开自动 resolver、graft-verify 的自动 revert、per-agent token 与 RPC allowlist。
 - 做法 U：挑一个不关键的 git 仓库，开两个代理，都用 claude --worktree 启动，各派一个改动任务——先试改不同文件，再试改同一文件的不同区域，全程人工记录；对照组是不用 --worktree，两个代理直接在同一工作树里改同样的东西。
 - 做法 V：在一个 git 仓库上新建分支（便于回滚）、确保没有未提交改动；执行 npx skills add olivieropinotti/orchestrator-skill，在 Claude Code 中输入 /orchestrator；提一个含 2–3 个彼此独立子任务的需求，例如分别处理不同目录/不同模块的修改，并明确各自负责的文件；观察主会话是否仍可继续对话、子任务是否真的并行、status 的条目是否与实际 agent 一致、stop/redirect 是否生效；结束前查看 .claude/orchestrator.md 核对账本记录是否完整，最后说 stop orchestrating 关闭。
+- 做法 W：先不接执行层，只建 3 个 Bot（Chief of Staff + Outbound Lead + Lead Sourcer），用 agents/ 里对应文件的 instructions block 手工粘贴，只保留那 1 个例程，跑两周；第二周再把一个真实工作单元按 outcome / inputs / skill / limits 四要素派给 Claude Code，观察给全四要素是否比平时随口下指令产出更好。
+- 做法 X：先跑 node scripts/installateur-anime.mjs --demo 看安装器会不会改动你的机器；再用 Releases ZIP 装一遍并确认 SmartScreen 解除锁定流程；起 node server.mjs，在 Herdr 里按 2×2 开四个面板，用控制台给队长发一条指令、制造一次目标忙碌看是否自动入队、按一次 Ctrl+Maj+C 看是否真的冻结下发（HTTP 423）；用 npm test 与 npm run check 自检；结束时 Ctrl+C 停服。
 
 **试多久、什么时候升级**
 
@@ -843,7 +1027,9 @@ redirect <name> to ...
 - 做法 S：只做一次 30 分钟对照不构成采用依据。若开关无效或行为与基线无差别，降级为 watch；若有并行但质量或成本变差，不写入手册或只作谨慎注记；只有并行确实存在、成本下降且质量不掉，才考虑作为可选实验配置，并注明实验性与验证日期。
 - 做法 T：原文未给数值目标。先以「临时目录 quickstart 跑通 + 非关键仓库 shadow 只读导入 + 少量 agent 且 resolver none」为最小范围；确认单次 land 耗时、并发 land 成功率、人工介入冲突比例、graft-verify 误伤率可接受，再扩大到更多 agent；没有量化对比前不扩大到关键仓库。
 - 做法 U：先在一个不关键仓库、两个代理、一两个任务上试半天到一天。如果编辑期冲突减少，但合并耗时和人工成本持平甚至更高，那只是把问题挪了个位置，不足以改进工作方式；只有在整体耗时或返工明显下降时，才值得写进手册。若 --worktree 在当前版本不存在、或行为与推文描述不符，则降级为 watch/study。
-- 做法 V：先在 1 个仓库、2–3 个独立子任务上试一次。如果返工率或成本明显上升、或 status 与账本不可信，则不宜升级为常规做法；只有主会话阻塞时间下降、墙上时间不劣于串行、且返工没有变多，才考虑重复使用。原文没有给出任何效果数据，不构成采用依据。
+- 做法 V：先在 1 个仓库、2–3 个独立子任务上试一次。如果返工率或成本明显上升、或 status 与账本不可信，则不宜升级为常规做法；只有主会话阻塞时间下降、墙上时间不劣于串行、且返工没有变多，才可能重复使用。原文没有给出任何效果数据，不构成采用依据。
+- 做法 W：建议 2 周两阶段——第一周只建 3 个 Bot 且不接执行层、只留 1 个例程，先测出「编排层本身值不值」；第二周再接一个真实工作单元。若删掉 handoff、只靠 Bot 自己干，产出质量就让你无法接受，那这个方案对你只剩编排层的价值，必须配套执行层才成立；反之如果你根本没有 Claude Code/Codex，先评估是否要引入。
+- 做法 X：先半天到一天，跑通安装、一轮指令队列和一次危机室冻结即可判断「它对你的可见性有没有帮助」。若你要的只是状态可见而不用排队/冻结，先看它是否比现有看板/通知更省事；若 npm test / npm run check 通不过、或界面行为与描述不符，降级为 watch，不要接进日常调度。
 
 ## 常见坑
 
@@ -869,6 +1055,8 @@ redirect <name> to ...
 - 做法 T：0.1.0，自称首个公开版本，接口在 1.0 前可能变动；构建要编译内置 Git，依赖较重；已知缺口写在 LIMITATIONS.md（README 举例提到存储核心中 pack 的垃圾回收）；README 未给出与传统 Git 或其他方案的对比数字；banner 图注里出现「50 agents on one branch retry and fail with push, rebase, retry」「100 against 200 changes landed」是配图说明，不是可核验的基准结果；自述有 unit、端到端、多节点、crash、fuzz 测试覆盖，但未给覆盖率或测试数量；只跑一两个 agent 的个人或小团队，引入数据库 + 对象存储的收益未经验证；存储迁移必须影子模式先导入、确认无误再切 authoritative；resolver 自动解决需评估后续 revert 比例；服务端本身不调用语言模型，冲突解决协议供应商无关；fork 自 Gitaly，保留上游 RPC，非 MIT 的 ee/ 目录未包含。
 - 做法 U：原文只有一句话加一个命令，没有截图、命令输出、版本号；作者称方法来自 Anthropic 的分享但没有给出出处，本手册无法核对；「让三个代理可以同时编辑同一个代码库而不会冲突」是作者主张，「三个代理」是举例不是实测结论；只在多代理并行编辑时才有意义，单代理串行场景收益不明；原文未涉及合并成本，存在把冲突从「编辑时」推迟到「合并时」的可能——若编辑期冲突减少但合并耗时和人工成本持平甚至更高，那只是把问题挪了个位置；社交指标（101 赞、15 转发、8 回复）只反映传播度，不反映效果；不要拿它当安全边界，也不要补写原文没给的版本要求、副本位置、合并与清理方式。
 - 做法 V：本次材料只有 README，不是完整文档，仓库内其他文件内容未包含，可能存在 README 未写明的配置或限制（仓库 stars ≈ 38）。never blocks、3-5 agents work、survives context compaction、follow-up 发给同一主题 agent 以保留上下文，全部是作者自述，没有任何 benchmark、对比实验、真实项目案例、失败模式或成本数据。必须使用 Claude Code，且项目需可写 .claude/ 目录。并发 agent 数量上限、token 成本、多个 agent 同时改同一文件时的冲突处理、失败回收流程，原文均未交代；brief 没有提示词模板，只能自己写。不要把它当团队规范；也不要因为它不阻塞主会话，就跳过测试、评审与合入门禁。
+- 做法 W：本次材料只抓到 README，setup-prompt.md 与 agents/*.md 的实际提示词正文没有出现在输入里，所以第 3 步（粘贴导入提示词）和第 5 步（手工粘贴 instructions block）的核心内容无法照抄，必须自己进仓库取——不要凭角色表猜提示词。README 依赖 OXYGEN 及其 CLI，且带 OXYGEN 推广链接、作者是 OXYGEN 联合创始人，选型时当参考而不是标准答案。适用条件偏具体：B2B/GTM 外呼 + 内容营销、单人（Me 直接收两个 Bot 汇报）、英文平台（LinkedIn / X / YouTube / 冷邮件）；中文或非 GTM 团队的迁移成本未讨论。没有任何成本（token、订阅）与安全/权限边界说明，只有一句「搭建过程中不会发送或花费任何东西」。属于作者个人经验判断、无对照数据的有：「让 Bot 带队而不是让它干活」更有效、文案/图形/视频在 Grok Bot 里质量不够、晨报是 slop、例程从 10 个减到 1 个更好。不要一上来就建 13 个 Bot、铺开多个定时任务，那正是作者踩过并砍掉的坑。
+- 做法 X：没有 Herdr 就跑不起来——它是强依赖，不是可选组件。24 款工具里只有 Claude Code、Codex、OpenCode 有增强遥测（只读解析本地日志），其余 21 款只有「自动检测 + 工位 + 原始 Herdr 状态 + 发指令 + 排队 + 读原始终端」，需要读懂「它说了什么」的场合不能指望它们。环境变量名在文档里不一致：一处写作 BUREAU_PORT、另一处写作 BBUREAU_PORT，默认端口 4317，照抄前先自己确认。README 中出现的模型名（材料最后停在 Gemini 之后的半个词，原文在此被截断）本次无法核对，选型时不要引用，需先小范围验证可信度。「100% 本地、零 npm 依赖、无出网、不存 key」「事实真实、不模拟智能体、不发明百分比」都是设计声明，本次材料中没有第三方审计或测试报告；界面行为只有描述，没有运行证据与用户案例；stars 仅 32、单人作者。危机室冻结的是指令下发并请求礼貌中断（发 esc，从不用 kill），它不替代测试、评审与合入门禁。
 
 ## 证据与来源
 
@@ -894,6 +1082,8 @@ redirect <name> to ...
 - 做法 T 依据调研《feder-cr/git-ai》。可核对：MIT 许可；fork 自 Gitaly（MIT，Copyright GitLab Inc.），上游 Gitaly RPC 全部保留，非 MIT 的 ee/ 目录未包含；版本 0.1.0，自称首个公开版本；构建依赖 Go 1.26、C 工具链、Meson、Ninja；源码里有 examples/graft/quickstart.sh 和 examples/graft/config.toml 这两个可操作入口；文档列表与文件路径在 README 中逐条列出。属于作者主张（未给数据）：传统 Git 托管对 agent 是瓶颈的论证（全量 clone、merge queue、客户端遍历历史）没有附带任何测量；自述有 unit、端到端、多节点、crash、fuzz 测试覆盖，未给覆盖率或测试数量；banner 图注里出现「50 agents on one branch retry and fail with push, rebase, retry」「100 against 200 changes landed」是配图说明，不是可核验的基准结果。明确的局限：接口在 1.0 前可能变动；已知缺口写在 LIMITATIONS.md（README 举例提到存储核心中 pack 的垃圾回收）；构建要编译内置 Git，依赖较重；README 未给出与传统 Git / 其他方案的对比数字。适用条件：适合同时运行大量编码智能体、且愿意自托管一套服务端（数据库 + 对象存储）的团队；对只跑一两个 agent 的个人或小团队，为换取秒级并发落库而引入这套基础设施的收益未经验证。
 - 做法 U 依据调研《@thedelost: 这是绝对他妈的绝妙》。可核对：唯一给出的操作是启动命令 claude --worktree，以及社交指标 101 赞 / 15 转发 / 8 回复。属于作者主张、无佐证：「让三个代理可以同时编辑同一个代码库而不会冲突」「工作树不再是它们争夺的对象，因为它们完全不被允许触碰它」；其中「三个代理」是举例，不是实测结论。二手转述：作者称方法来自 Anthropic 的分享，但未给出出处，本手册无法核对；命令在当前版本是否存在也未经核实。适用条件：必须处在 git 仓库中；只在多代理并行编辑时才有意义，单代理串行场景收益不明；原文未涉及合并成本，存在把冲突从「编辑时」推迟到「合并时」的可能。本手册只把它列为待自测候选，先自测再决定是否写进流程；版本要求、副本位置、合并回主线与清理方式，材料里都没有，不补写。
 - 做法 V 依据调研《olivieropinotti/orchestrator-skill》。可核对：安装命令 npx skills add olivieropinotti/orchestrator-skill、启用命令 /orchestrator、控制命令 status / stop <name> / stop all / redirect <name> to ...、关闭方式 stop orchestrating、账本文件路径 .claude/orchestrator.md、模型选择规则（判断类用 Opus、紧凑可核对任务用 Sonnet）、MIT 许可、仓库 stars ≈ 38。属于作者主张、无外部验证：never blocks、3-5 agents work、账本能在 context compaction 之后存活、follow-up 发给已在做该主题的 agent 以保留其上下文；原文没有 benchmark、对比实验、真实项目案例、失败模式或成本数据。适用条件与风险：必须使用 Claude Code，项目需可写 .claude/ 目录；并行 agent 数量、token 成本、多个 agent 同时改同一文件时的冲突处理，原文均未交代；本次材料只有 README，仓库内其他文件内容未包含。本手册只把它列为小范围可试的候选，先在一个干净分支上用 2–3 个独立子任务做一次对照，再决定是否重复使用。
+- 做法 W 依据调研《timscheuerai/grokbot-gtm-team》。可核对：13 个 Bot + 1 个群聊 + 1 个例程的角色表与汇报关系、四步导入流程、setup 会问的 5 个问题、agents/ 下每个文件含可粘贴的 instructions block、guides/rules.md 与 guides/claude-code-and-codex.md 存在、交接四要素 outcome / inputs / skill / limits、每个任务 1 个 worktree、内容跑本机而代码跑 dev server、MIT 许可、stars 30。属于作者主张、无数据支撑：让 Bot 带队而不是让它干活更有效；文案、图形、视频在 Grok Bot 里质量不够（所以外迁到执行层）；晨报是 slop（所以暂停 Head of Content 的晨报）；routine 从 10 个减到 1 个更好。这些都是个人经验判断，没有对照数据、耗时或产出的量化结果。重要缺口（直接影响可复用度）：本次材料只抓到 README，setup-prompt.md 和 agents/*.md 的实际提示词正文没有出现在输入里，第 3 步与第 5 步的核心内容无法照抄，必须自行去仓库取；README 明确依赖 OXYGEN 及其 CLI，且带 OXYGEN 推广链接、作者是 OXYGEN 联合创始人，存在商业动机。本手册只采用其中可迁移的结构（一个 Bot 一件事、负责人只做路由与守门、执行层四要素交接、例程做减法），不补写缺失提示词。
+- 做法 X 依据调研《BlackAngel242/MyTeam》。可核对：安装命令与参数（-DryRun / --dry-run、-Lang fr|en / --lang fr|en、-Port / --port、-HerdrChemin / --herdr-chemin、-SansRaccourci / --sans-raccourci）、演示模式 node scripts/installateur-anime.mjs --demo、默认端口 4317、环境变量、Ctrl+K / Ctrl+Maj+C / ? 快捷键、HTTP 423 冻结与 POST /api/crise/arret、.bureau/ 下 crise.json / direction.json / relais.json / pied.json 的持久化路径、24 款工具清单与三款增强遥测、npm test / npm run check、MIT 许可、stars 32。属于作者主张、无外部佐证：100% 本地、零 npm 依赖、无出网请求、不存 API key；事实真实、不模拟智能体、不发明百分比。重要缺口：本次材料在「只是作者主张」一段被截断（最后停在 Gemini 之后的半个词），其中出现的模型名本次无法核对；界面行为只有描述，没有截图以外的运行证据与用户案例，没有第三方审计或测试报告；环境变量名在文档内也不一致（BUREAU_PORT 与 BBUREAU_PORT）。本手册只把它列为监控与调度层的候选，先跑演示安装器、自检并小范围验证可信度，不补写材料未给出的模型与配置细节。
 
 ## 依据的调研
 
@@ -919,3 +1109,5 @@ redirect <name> to ...
 - [feder-cr/git-ai](../research/radar/2026-10-17/4081-feder-cr-git-ai.md)：值得一试，先在临时目录跑通 `examples/graft/quickstart.sh` 验证「服务端落库 + 缓存 + 两个 agent + 一次 land」整条链路，再在非关键仓库以 shadow 模式接入数据库/对象存储做小范围试点；它把大量编码智能体并发落库、自动冲突解决、落库后验证、agent 权限这些协作痛点做成了可跑的开源实现，但仍是 0.1.0、接口可能变且有已知缺口，不宜直接上关键仓库。
 - [@thedelost: 这是绝对他妈的绝妙](../research/radar/2026-10-17/4412-item.md)：值得一试，可以小范围试：在 git 仓库里用 `claude --worktree` 给每个并行代理开独立工作树，观察编辑期冲突是否消失、整体合并成本是否下降；理由是命令具体、风险低，但原文只有一句话加一个命令，副本位置、合并回主线、清理方式和版本要求都没写，必须先自测再决定是否写进手册。
 - [olivieropinotti/orchestrator-skill](../research/radar/2026-10-18/4625-olivieropinotti-orchestrator-skill.md)：值得一试，可以在 Claude Code 里小范围试装这个 orchestrator skill，用它的“主会话只调度、任务全派后台子代理 + 账本文件跟踪”模式跑 2-3 个可并行的子任务；因为它给出了可照做的安装命令和控制命令，但效果全凭作者自述、无任何数据或案例，所以先试不直接采用。
+- [timscheuerai/grokbot-gtm-team](../research/radar/2026-10-19/4708-timscheuerai-grokbot-gtm-team.md)：值得一试，可以小范围试：照 README 的四步（建 Chief of Staff → 粘贴 setup-prompt.md → 回答 5 个问题 → 连工具）搭起「一个 Bot 一件事 + 部门负责人路由守门 + 具体执行交给 Claude Code/Codex」的分工。理由是原文给出了完整的角色表、汇报关系、工作流和四要素交接格式，但真正的提示词正文在 setup-prompt.md/agents/*.md 里没有随材料给出，需自行取用并把 OXYGEN 等专有名词替换掉。
+- [BlackAngel242/MyTeam](../research/radar/2026-10-19/4712-blackangel242-myteam.md)：值得一试，若你已经在用 Herdr 并行跑多个 AI 智能体，值得小范围装一套 MyTeam 本地控制台试用，按 README 给出的安装/启动/队列/危机开关流程跑通一轮；理由是本仓库给出了可直接照做的安装命令、端口、环境变量和操作流程，且把「监控—排队—干预—事实核验」做成了具体界面与接口，但它本身是监控层而非能力层，且原文存在若干可疑的模型名称，需先小范围验证可信度。
