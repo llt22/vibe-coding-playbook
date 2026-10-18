@@ -1,16 +1,18 @@
-# 让 agent 大量写代码时，把代码审查变成分层检查
+# 让 agent 写的代码在 push 前先过一遍理解检查
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：当 agent 大量产出代码后，如何把读 diff 主要交给机器、把人的时间留给机器做不好的决策，并用回滚率和事故率做护栏，避免审查变成瓶颈。
-> 先试这一步：先在一个仓库写一份简短的 CLAUDE.md，给 agent 一条它能自己跑的验证命令，并在开 PR 前跑 /code-review。
-> 最近修订：2026-10-16
+> 解决的问题：agent 写代码越来越快，但 push 之前没有人确认提交者本人是否真的读懂了这份改动会带来什么后果。
+> 先试这一步：挑一个非关键的 Git 仓库，跑 `npm install -g sphinx-understand` 和 `sphinx install`，让 agent 改一小段逻辑后在有保护的分支上 `git push`，完整回答一次 Sphinx 的提问，先不要用 `sphinx yolo`。
+> 最近修订：2026-10-18
 
 ## 解决什么问题
 
 代码评审有六个常见缺口：评审者通常只拿到 diff，系统结构怎么变、数据怎么流要靠脑补；push 前又缺少一遍可核对的自动评审，扫描告警是否落在改动行、每条告警是否被处理、每个改动行是否送到 reviewer 面前，容易漏；常规评审是被动等告警，缺少主动的对抗性漏洞寻找；AI 生成的 TypeScript 代码常出现低证据、低信号模式，人工评审容易放过，也缺少确定性的 lint 门；如果你已经在用 Claude Code，它内置了 `/code-review`（别名 `/review`）这类专门审代码的命令，但这条来源是个人推文且正文截断，参数拼接语法、权限和配置都需要先对照官方 Commands 文档确认；即使有了 AI 评审，如果只按 PR velocity 看速度，agent 可以轻易造出大量没有业务影响的 PR。Uber 内部把这几点当成流程问题处理：PR 按 `feature`、`bugfix`、`maintenance`、`testing`、`docs` 打标，简单检查前移到 agent 开 PR 之前，AI 花费走额度加经理例外审批，评审前先跑 AI 评审并附风险分和截图。
 
 Claude Code 团队公开的代码审查流程补上了另一条线索：不要问有没有人读过这段代码，要问这个变更可能出什么问题、哪一层检查最适合抓它。审查从路尽头的关卡变成写代码时的拼写检查，大多数变更在人类看之前已被 Claude 至少审过并修过一轮；目标状态是大多数 PR 至多一个人类在环，且回滚率和事故率不上升。原文给出的背景数据是：Claude 写了约 90% 的 Claude Code 自身代码；2026 年 6 月到 9 月，合并进 Claude Code 代码库的 PR 翻了一倍多，而被回滚的比例下降超过 40%；Anthropic monorepo 每天落地的变更从 5 月约 2,500 涨到 9 月超过 30,000。
+
+还有一个更靠前的缺口：agent 写得越来越快，但 push 之前没有人确认提交者本人是否真的读懂了这份改动。Sphinx 把这件事做成一个 Git hook——在 agent 生成的代码被 push（尤其是受保护分支）之前，它读 diff，向你提一个关于「这段改动的某个部分在出问题时会发生什么」的问题，答对才放行 push，答错会解释原因并换一个场景重试。它补的是「提交者是否理解」这一层，而不是「代码是否正确」这一层。
 
 ## 适用与不适用
 
@@ -27,19 +29,22 @@ Claude Code 团队公开的代码审查流程补上了另一条线索：不要�
 - 有代码托管平台，PR 系统支持标签，能按标签统计。
 - 能在仓库里提供一条本地校验命令（lint + build + 格式或模板检查的聚合脚本），且这些检查能在本地几分钟内跑完。
 - 可选：能按用户统计 AI 编码工具的 token 花费；有平台或基础设施团队才考虑模型网关与多 harness 封装。
-- 新增：已有 Claude Code 可用，仓库里有测试、构建、截图等可执行验证手段。
-- 新增：能写简短的 `CLAUDE.md`，能配置 hooks 自动跑 formatter 和 linter。
-- 新增：有 CI、分支保护、CODEOWNERS，能加阻断性检查和安全审查。
-- 新增：具备 merge queue、feature flag、分阶段发布和一键回滚能力。
-- 新增：能收集过去引发事故的 PR 连同修复和回滚，供熟悉代码的工程师逐条确认后做 eval 集。
-- 新增：Claude Code Team 和 Enterprise 计划已 GA 的 Code Review for Claude Code，可按仓库设 Quick、Standard、Deep。
+- 已有 Claude Code 可用，仓库里有测试、构建、截图等可执行验证手段。
+- 能写简短的 `CLAUDE.md`，能配置 hooks 自动跑 formatter 和 linter。
+- 有 CI、分支保护、CODEOWNERS，能加阻断性检查和安全审查。
+- 具备 merge queue、feature flag、分阶段发布和一键回滚能力。
+- 能收集过去引发事故的 PR 连同修复和回滚，供熟悉代码的工程师逐条确认后做 eval 集。
+- Claude Code Team 和 Enterprise 计划已 GA 的 Code Review for Claude Code，可按仓库设 Quick、Standard、Deep。
+- 新增：想让「提交者本人是否读懂这份 agent 写的改动」变成 push 前必须回答的问题，而不只是确认代码对不对。
+- 新增：有一个能设置受保护分支的 Git 仓库，运行环境是 macOS、Linux 或 WSL，Node 22.19+。
+- 新增：愿意先在一个非关键的个人仓库或小团队非主干分支上试一个新项目，能接受它长期维护状况未知。
 
 不适用或要谨慎：
 
 - 关键仓库、合规要求高的仓库：几个调研都只建议先在非关键仓库试点。OpenQodex 仍用 Claude Code 或 Codex 作为 reviewer，数据边界要按你对这些 agent 的既有合规判断处理；Claude Code 内置 `/code-review` 同样是在 Claude Code 里跑，代码内容会进入该会话的上下文。
 - 需要 PR 评论随 push 更新和复选框切换视图：PR Lens 只有 GitHub App 版本支持，Action、GitLab、Bitbucket 做不到或受限。
 - Bitbucket 上 fork 来的 PR：PR Lens pipeline 不会触发。
-- 不想把 diff 发给模型 provider：PR Lens CLI 只把 diff 发给所选的 provider，但仍然是外发。OpenQodex 除 Claude Code 或 Codex 外不需要别的 key、账号或服务器，但 reviewer 本身是这两个 agent。
+- 不想把 diff 发给模型 provider：PR Lens CLI 只把 diff 发给所选的 provider，但仍然是外发。OpenQodex 除 Claude Code 或 Codex 外不需要别的 key、账号或服务器，但 reviewer 本身是这两个 agent。Sphinx 也需要选一个审查模型，diff 会进入该模型的上下文。
 - 没装 Claude Code 或 Codex：OpenQodex 只能跑 `openqodex scan` 或 `review --agent`。不使用 Claude Code 的人也无法用 `/code-review`。
 - 想用 Cursor 或 Cline 当 OpenQodex reviewer：原文明确 No Cursor reviewer，理由是 `cursor-agent` 无法把工具限制到只读，也无法跳过你的规则和设置；Cline 也没有被列为 reviewer。
 - OpenQodex 项目自述仍在 1.0 之前、仓库仅 30 stars、单次评审 1 到 3 分钟且消费你自己的 Claude Code 或 Codex 额度，还不够格直接当默认门禁。
@@ -55,13 +60,18 @@ Claude Code 团队公开的代码审查流程补上了另一条线索：不要�
 - Uber 路线素材是节目页的 11 条要点，不是完整文字稿；没有任何可复制的配置、提示词或命令；唯一出现的 `afx validate` 是 Uber 内部命令。
 - 所有 Uber 系统，包括 Model Gateway、AIFX、MCP Gateway、Code Review、CostCheck、Minion、Slate，都是 Uber 内部实现，未给出开源地址或架构细节。
 - Uber 的城市作为一等原语、按城市分片数据库、每城市绑定云区域并可随时故障转移等前提，一般组织不具备，直接照搬会失真。
-- 新增：Claude Code 团队流程是团队级做法，不是零成本开关；没有 CI、分支保护、merge queue、feature flag 和一键回滚时，只能做其中一部分。
-- 新增：`REVIEW.md` 要由 code owners 写，不是普通文档；如果没人维护，审查者会继续按自己的默认标准判断。
-- 新增：风险分级和只让 trusted list 作者走轻路径会改变团队权限结构，需要先写下来并从严开始。
-- 新增：agent 的审批永远不能算作人类审批，也不能填补一个要求人类的槽位。
-- 新增：审批只覆盖某一个具体 commit；有系统无法担保的新 commit 落地时，审批必须重新给。
-- 新增：原文明确还没有在回滚或事故指标变动时自动收紧审批的 circuit breaker；在更多代码走向零人工合并之前，这是一个已知缺口。
-- 新增：审查噪声对 agent 作者代价更高。人能几秒钟摆手放掉一个 nit，agent 会去修，意味着又一个 commit、又一轮审查。
+- Claude Code 团队流程是团队级做法，不是零成本开关；没有 CI、分支保护、merge queue、feature flag 和一键回滚时，只能做其中一部分。
+- `REVIEW.md` 要由 code owners 写，不是普通文档；如果没人维护，审查者会继续按自己的默认标准判断。
+- 风险分级和只让 trusted list 作者走轻路径会改变团队权限结构，需要先写下来并从严开始。
+- agent 的审批永远不能算作人类审批，也不能填补一个要求人类的槽位。
+- 审批只覆盖某一个具体 commit；有系统无法担保的新 commit 落地时，审批必须重新给。
+- 原文明确还没有在回滚或事故指标变动时自动收紧审批的 circuit breaker；在更多代码走向零人工合并之前，这是一个已知缺口。
+- 审查噪声对 agent 作者代价更高。人能几秒钟摆手放掉一个 nit，agent 会去修，意味着又一个 commit、又一轮审查。
+- 新增：Sphinx 是刚在 Show HN 发布的新项目（FOSS、Free），长期维护与稳定性未知；只适合小范围试，不建议直接接到团队主干仓库或当成默认门禁。
+- 新增：Sphinx 原文只有产品页级说明；文中那段 Sphinx 与用户的对话被明确标注为 "An illustrative exchange. Real questions come from your diff."，即举例是虚构的，不能当作实测案例。
+- 新增：Sphinx 只对「提交者本人是否理解」有效，无法验证代码本身的正确性；它不是 `/code-review`、OpenQodex 这类 bug 审查的替代品。
+- 新增：`sphinx yolo` 是全局逃生阀，存在被习惯性使用而架空检查的风险；原文说会记录日志，但没说日志是否强制可见或告警。
+- 新增：Sphinx 需要 Node 22.19+，原文未提 Windows 原生；提问质量和 token 消耗都只有作者自述，没有评测数据。
 
 ## 前置条件
 
@@ -125,6 +135,13 @@ Claude Code 团队流程路线：
 - 能收集过去引发事故的 PR 连同修复和回滚，请熟悉那段代码的工程师逐条确认是什么 bug、在哪里。
 - Claude Code Team 和 Enterprise 计划已 GA 的 Code Review for Claude Code，可按仓库设 Quick、Standard、Deep。
 
+Sphinx 路线：
+
+- Node 22.19+；macOS、Linux 或 WSL（原文未提 Windows 原生）。
+- 一个 Git 仓库，且能对目标分支设置保护。
+- 在 `sphinx install` 时选定一个审查模型：可以复用你现有的编码 agent，也可以走 OpenRouter 或任何 OpenAI 兼容端点。
+- 愿意先在一个非关键仓库试，不接团队主干。
+
 ## 操作步骤
 
 先选路线：
@@ -136,7 +153,8 @@ Claude Code 团队流程路线：
 - 想在 AI 生成的 TypeScript 进入评审前先过一道确定性 lint 门：走 ai-deslop，做法 T。
 - 想在流程层面把简单检查前移、按类型度量 PR、控制 AI 花费：走路线五，做法 U。
 - 想按 Claude Code 团队公开的团队级流程，把读 diff 交给机器、人只做关键决策：走路线六，做法 V。
-- 七者可叠加，阶段不同。若只能选一个，先按你的主要缺口选。
+- 想在 push 前确认自己真的读懂了 agent 写的改动，而不只是确认代码对不对：走路线七，做法 W。
+- 八者可叠加，阶段不同。若只能选一个，先按你的主要缺口选。
 
 ### 路线零：用 Claude Code 内置的 `/code-review`（做法 S，最省事，如果已在用 Claude Code）
 
@@ -477,7 +495,7 @@ afx validate
 
 ### 路线六：Claude Code 团队流程，把读 diff 交给机器、人只做关键决策（做法 V）
 
-前提：已有 Claude Code 可用；仓库里有测试、构建、截图等可执行验证手段；能写简短的 `CLAUDE.md`，并配置 hooks 自动跑 formatter 和 linter；有 CI、分支保护、CODEOWNERS；具备 merge queue、feature flag、分阶段发布和一键回滚能力；能收集事故和回滚做 eval。原文强调：不要问有没有人读过这段代码，要问这个变更可能出什么问题、哪一层检查最适合抓它。
+前提：已有 Claude Code 可用；仓库里有测试、构建、截图等可执行验证手段；能写简短的 `CLAUDED.md`，并配置 hooks 自动跑 formatter 和 linter；有 CI、分支保护、CODEOWNERS；具备 merge queue、feature flag、分阶段发布和一键回滚能力；能收集事故和回滚做 eval。原文强调：不要问有没有人读过这段代码，要问这个变更可能出什么问题、哪一层检查最适合抓它。
 
 #### 做法 V1：开 PR 之前，先给 Claude 一个它能自己跑的验证方式
 
@@ -544,9 +562,58 @@ afx validate
 2. 让 Claude 写指定代码切片的解释，需要的话让它生成一个可视化该部分代码的小工具，用来替代靠逐行读同事的 diff 来学代码。原文明确说他们没有正式流程，也没人脑子里装着完整模型。
 3. 采纳你落地、你负责：小到中等变更出问题通常由落地者修，前提是变更小、一切可逆、爆炸半径决定审查门槛、回归能通过遥测和内部使用快速浮现，且事故复盘看系统不追责。原文补充：所有权也是共享的，团队大量在开放 Slack 频道工作。
 
+### 路线七：push 前先确认你真的读懂了 agent 写的代码（Sphinx，做法 W）
+
+前提：Node 22.19+；macOS、Linux 或 WSL（原文未提 Windows 原生）；一个 Git 仓库，且能对目标分支设置保护；在 `sphinx install` 时选定一个审查模型——可以复用你现有的编码 agent，也可以走 OpenRouter 或任何 OpenAI 兼容端点。先在一个非关键仓库试，不要接团队主干。
+
+这条路线和前面几条不冲突：`/code-review`、OpenQodex 回答的是「代码对不对」，Sphinx 回答的是「提交的人有没有读懂」。要理解一个改动在出错时会怎样，两者都需要。
+
+#### 做法 W1：装好并接上 Git
+
+1. 全局安装：
+
+```bash
+npm install -g sphinx-understand
+```
+
+2. 在仓库里初始化，连接 Git 与你的编码 agent（会问你要用哪个模型来审查）：
+
+```bash
+sphinx install
+```
+
+预期结果：Sphinx 接上这个仓库的 Git hook，并记住你选的审查模型。
+
+#### 做法 W2：正常 push，回答提问
+
+1. 正常推送，在被保护的分支上 Git 会暂停：
+
+```bash
+git push
+```
+
+2. 回答 Sphinx 的提问。原文流程是三步：01 你（或你的 agent）push；02 Sphinx 读 diff 并针对「改动出错时会发生什么」提问；03 你回答——答错它会解释为什么，然后换一个新场景再问；答对 push 继续。它的口号是 "Outsource your thinking, not your understanding."。
+
+预期结果：答对才放行 push；答错会换场景重问。审题者由一个从没看过你聊天记录的审查者充当，提问用的模型可以从你现有的编码 agent、OpenRouter 或任何 OpenAI 兼容端点来，原文称 built to run on minimal tokens。
+
+#### 做法 W3：应急放行
+
+原文给出的逃生阀，每次跳过都会记录日志：
+
+```bash
+sphinx yolo
+```
+
+它适合真的赶时间、且你准备好在事后回看日志的场景；不要把它当日常路径，否则这条检查会被架空。
+
+#### 做法 W4：边界与后端选择
+
+1. 模型后端可选：你的现有编码 agent、OpenRouter，或任何 OpenAI 兼容端点。原文声称兼容 Codex、Claude Code、Cursor、OpenCode、Pi，或纯 Git。
+2. 隐私边界（原文明确声明）：你的回答不会传给编码 agent；`.env` 文件和密钥 never opened。更多配置原文指向其文档（"Read the docs for everything else"），输入材料未提供。
+
 ## 怎么判断变好了
 
-七条路线都只建议小范围试点，没有给出统一的建议时长，也没有给出检出率、误报率、返工时间等量化效果数据。可以按下面方式自己量。
+八条路线都只建议小范围试点，没有给出统一的建议时长，也没有给出检出率、误报率、返工时间等量化效果数据。可以按下面方式自己量。
 
 Claude Code `/code-review` 最小试用方式：
 1. 选一个已完成、你本来就要人工 review 的真实 PR 或一次提交作为对照样本。
@@ -572,6 +639,8 @@ ai-deslop 最小试用方式：选一个使用 TypeScript 和 Oxlint 的包，�
 
 路线六最小试用方式：先在一个仓库用简短的 `CLAUDE.md`、`REVIEW.md` 和 agent 可运行的检查打底，再接入 AI 审查、用风险分级控制人工审批数量，并以回滚率和事故率作为护栏。原文给出的背景数据是：Claude 写了约 90% 的 Claude Code 自身代码；2026 年 6 月到 9 月，合并进 Claude Code 代码库的 PR 翻了一倍多，而被回滚的比例下降超过 40%；Anthropic monorepo 每天落地的变更从 5 月约 2,500 涨到 9 月超过 30,000。
 
+Sphinx 最小试用方式（约几分钟）：挑一个非关键的个人仓库，走完一次安装 → `sphinx install` → 让某个 agent（如 Claude Code）改一小段逻辑 → 在有保护的分支上 `git push` → 完整回答一次提问。先不要开 `sphinx yolo`，也不要接到团队主干仓库上。
+
 可观察指标：
 - Claude Code `/code-review`：真实 bug 命中数除以总报出数；漏检的真实 bug 数；审阅耗时变化；`--fix` 采纳比例；`--comment` 被回应或采纳比例；各强度档位准确率与耗时或成本。
 - PR Lens：命名修正条数；`validate` 通过率；评审中的理解性问题数量。
@@ -580,8 +649,9 @@ ai-deslop 最小试用方式：选一个使用 TypeScript 和 Oxlint 的包，�
 - ai-deslop：按规则统计违规数量与类型；人工判断真正需要修的比例；修复耗时；启用前后同类问题在评审或 CI 中是否减少。
 - 路线五：各类型 PR 占比变化，feature 升、maintenance 降；CI 排队时长、CI 任务量、失败率；每个 PR 的人工评审时长、评审意见条数、从开 PR 到合并的时长；按人 token 花费、单位功能 PR 的平均花费，而不是总花费；质量侧回归缺陷数、线上事故数、回滚次数。原文没有给出这些指标的目标值或基线，需要自己先建基线再判断。
 - 路线六：每个 PR 的人类审批数，看中位数和 95 分位；人类评论数；PR 等人等待的时长。护栏指标是回滚率和事故率，原文明确如果它们上升，就没有省下人力时间，只是把它挪走了。审查者质量用历史事故 PR 连同修复和回滚构成的 eval 集每天跑；噪声用当事人的反应分类，以及在已知干净 PR 上统计会误导人做有害改动的报告数。收敛把 rounds-to-pass 和召回率一起追踪。原文给出的一次诊断：对审查者反复标记的内容跑 git blame，约 59% 是审查者第一轮时就已经存在的代码，它在每轮多翻出几个老 bug，而不是在找新 bug。一次对照：研究预览上线后，内部 PR 获得实质性审查评论的比例从 16% 升到 54%；超过 1,000 行的 PR 大多能查出问题，小 PR 大多干净返回。
+- 路线七（Sphinx，全部为自测指标，原文没有任何效果数据）：有效拦截率，即这次提问是否指向了 diff 里你原本没意识到的行为，每次 push 记 0/1，连续记两周；提问质量，把 Sphinx 的问题和你的回答人工打分 1 到 5，看它问的是「出问题时会发生什么」这类真问题还是流于表面；跳过率，`sphinx yolo` 次数除以总 push 次数，长期偏高说明阻力大于价值；时间成本，每次 push 平均多花的分钟数；误判，出现「你答对了却被判错」或「问题本身有误」的次数；模型开销，审查模型的实际 token 花费，用来验证作者 minimal tokens 的说法。
 
-试多久：Claude Code `/code-review`、PR Lens、OpenQodex、ai-deslop 原文都没给建议时长；至少覆盖一批中等规模 PR 或改动的完整评审周期后再判断，不要只看一个 PR 或一次审查。对抗审查建议连续两三个仓库跑下来。路线五建议先跑两周收集基线，再判断趋势。路线六应先严后松，用回滚率和事故率做护栏，在护栏不上升的前提下再放宽审批。
+试多久：Claude Code `/code-review`、PR Lens、OpenQodex、ai-deslop 原文都没给建议时长；至少覆盖一批中等规模 PR 或改动的完整评审周期后再判断，不要只看一个 PR 或一次审查。对抗审查建议连续两三个仓库跑下来。路线五建议先跑两周收集基线，再判断趋势。路线六应先严后松，用回滚率和事故率做护栏，在护栏不上升的前提下再放宽审批。路线七建议先在一个个人仓库连续记两周的有效拦截率、跳过率和时间成本，只有有效拦截率稳定命中、时间成本和误判都可接受，才扩到小团队的一个非主干分支。
 
 ## 常见坑
 
@@ -630,16 +700,21 @@ ai-deslop 最小试用方式：选一个使用 TypeScript 和 Oxlint 的包，�
 - AI 预评审加风险分加截图是流程做法，但 Uday 承认代码评审已成公司内部的大瓶颈，且没有量化；它可能只是把瓶颈转移到评审环节。
 - 多 harness 并存时，如果没有 AIFX 这类 wrapper，settings、skills、plugins 不跟着人走；但搭建这层封装需要平台或基础设施团队。
 - AI 花费额度需要按用户统计 token 花费；做不到就只做 PR 类型打标和本地校验前移。
-- 新增：Claude Code 团队流程的 `CLAUDE.md` 在大代码库里要短，并指向其他文档；太长会每次审查都加载。
-- 新增：`REVIEW.md` 要由 code owners 写；它不是普通文档，而是告诉审查者在这块代码里什么才算重要。
-- 新增：审查噪声对 agent 作者代价更高。人能几秒钟摆手放掉一个 nit，agent 会去修，意味着又一个 commit、又一轮审查。
-- 新增：agent 的审批永远不能算作人类审批，也不能填补一个要求人类的槽位。
-- 新增：审批只覆盖某一个具体 commit；有系统无法担保的新 commit 落地时，审批必须重新给。
-- 新增：原文明确还没有在回滚或事故指标变动时自动收紧审批的 circuit breaker；在更多代码走向零人工合并之前，这是一个已知缺口。
-- 新增：merge queue 是必要的，否则两个各自通过的 PR 合起来可能弄坏 main。
-- 新增：eval 集要请熟悉那段代码的工程师逐条确认是什么 bug、在哪里，不能只把事故 PR 丢进去。
-- 新增：约 59% 是审查者第一轮时就已经存在的代码，说明审查者在多轮里多翻出老 bug，而不是在找新 bug；要把 rounds-to-pass 和召回率一起追踪。
-- 新增：不要把有没有人读过这段代码当成唯一判据；要问这个变更可能出什么问题、哪一层检查最适合抓它。
+- Claude Code 团队流程的 `CLAUDE.md` 在大代码库里要短，并指向其他文档；太长会每次审查都加载。
+- `REVIEW.md` 要由 code owners 写；它不是普通文档，而是告诉审查者在这块代码里什么才算重要。
+- 审查噪声对 agent 作者代价更高。人能几秒钟摆手放掉一个 nit，agent 会去修，意味着又一个 commit、又一轮审查。
+- agent 的审批永远不能算作人类审批，也不能填补一个要求人类的槽位。
+- 审批只覆盖某一个具体 commit；有系统无法担保的新 commit 落地时，审批必须重新给。
+- 原文明确还没有在回滚或事故指标变动时自动收紧审批的 circuit breaker；在更多代码走向零人工合并之前，这是一个已知缺口。
+- merge queue 是必要的，否则两个各自通过的 PR 合起来可能弄坏 main。
+- eval 集要请熟悉那段代码的工程师逐条确认是什么 bug、在哪里，不能只把事故 PR 丢进去。
+- 约 59% 是审查者第一轮时就已经存在的代码，说明审查者在多轮里多翻出老 bug，而不是在找新 bug；要把 rounds-to-pass 和召回率一起追踪。
+- 不要把有没有人读过这段代码当成唯一判据；要问这个变更可能出什么问题、哪一层检查最适合抓它。
+- 新增：Sphinx 是刚在 Show HN 发布的新项目（FOSS、Free），长期维护与稳定性未知；先别接团队主干，也别当默认门禁。
+- 新增：Sphinx 原文里的示例对话被明确标注为 "An illustrative exchange. Real questions come from your diff."，即举例是虚构的，不能当作实测案例；"minimal tokens" 和提问质量也没有任何数字或评测。
+- 新增：Sphinx 只对「你自己是否理解」有效，无法验证代码本身的正确性；不要拿它替掉 bug 审查和扫描。
+- 新增：`sphinx yolo` 是全局逃生阀，有被习惯性使用而架空检查的风险；原文说会记录日志，但没说日志是否强制可见或告警。
+- 新增：Sphinx 需要 Node 22.19+，原文未提 Windows 原生；模型后端要另选一个，diff 会进入该模型上下文。
 
 ## 证据与来源
 
@@ -650,7 +725,8 @@ ai-deslop 最小试用方式：选一个使用 TypeScript 和 Oxlint 的包，�
 - 做法 T 依据调研报告 `ai-deslop`，Show HN: Deslop – Oxlint rules for AI-generated TypeScript。报告给出的可照做内容包括：安装命令 `npm install --save-dev ai-deslop`、Oxlint 配置示例、recommended 规则清单、opt-in 规则清单。限制：原文是仓库 README；没有给出具体代码违规示例、基准数据、误报率或用户案例；部分标准规则需要 type-aware linting；`no-repeated-expect-call` 和 `no-duplicate-types` 没有 fixer；opt-in 规则的完整配置在 `docs/*.md`，输入材料只给了链接；来源页显示 HN 31 points、7 comments，但没有评论内容或外部验证数据。拒绝低证据、低信号、AI-slop 代码模式是作者的目标主张，不是已被数据验证的结论；规则较 opinionated，可能不适合所有团队约定。
 - 做法 U 依据调研报告 `Uber’s AI infra, from the inside`，The Pragmatic Engineer 播客节目页，嘉宾 Uday Kiran Medisetty，负责 Uber agentic AI 方向。报告给出的可迁移做法：PR 按 `feature`、`bugfix`、`maintenance`、`testing`、`docs` 打标；把 lint、build、模板规则这类简单 CI 任务移到 agent 的 inner loop，命令形态是内部命令 `afx validate`；AI 花费走额度加例外审批，配套 CostCheck 提示成本画像；所有 PR 仍由工程师评审，但评审前 AI 代码评审已跑完、功能截图或视频已附上、风险分已给出；模型网关 Model Gateway、AI Guard、Spend tracking、Visibility、AIFX 多 harness 封装。数字均为嘉宾口述，非可复核公开数据：token 成本近几个月降低约 50%；CI 12 个月内任务量翻倍以上，触发内部 code red；2015 年 2 个服务，2019 年数千个，2026 年与 2019 年大致相当而业务规模约为当时 10 倍；M3DB 每秒发出约 5 亿个指标；工程师日常使用 20 多个工具。限制：素材是节目页的 11 条要点，不是完整文字稿；没有任何可复制的配置、提示词或命令；唯一出现的 `afx validate` 是 Uber 内部命令；所有系统都是 Uber 内部实现，未给出开源地址或架构细节；Uber 的城市作为一等原语、按城市分片数据库等前提一般组织不具备；度量口径不完整，不知道具体阈值、基线、改善判定标准。多任务能力、context engineering、审查与验证输出的能力变得更重要，以及为工程师建的工具也让 agent 更好用，是因果判断，没有对照实验；代码评审成为大瓶颈是 Uday 的承认，但没有量化。
 - 做法 V 依据调研报告 `How the Claude Code team does code review`。报告给出的可照做内容包括：开 PR 前的 `CLAUDE.md`、hooks、`/code-review`、`/security-review`、`REVIEW.md`、三类内部 skill；每个 PR 上的 Claude 审查、多 agent 投票验证、按严重度排序的行内评论与 `Important`、`Nit`、`Pre-existing` 标签、每条发现必须修或 resolve、自动化安全审查阻断合并、常规阻断检查、PR 模板的 `Testing`、`Risk`、`How to revert`；审批的分级表、永远需要人的路径、trusted list、agent 审批不算人类、谁提示谁计入审查人、审批只覆盖具体 commit、先严后松；合并与之后的 merge queue、flag、内部 latest、stable 滞后、快速发现快速回滚、事故复盘问哪一层本该抓到、把事故和回滚变成 eval 集、测噪声、让审查收敛、让审查 agent 每晚扫存量代码；人留在五类决策、让 Claude 写代码切片解释、你落地你负责。报告给出的数据：Claude 写了约 90% 的 Claude Code 自身代码；2026 年 6 月到 9 月，合并进 Claude Code 代码库的 PR 翻了一倍多，而被回滚的比例下降超过 40%；Anthropic monorepo 每天落地的变更从 5 月约 2,500 涨到 9 月超过 30,000；研究预览上线后，内部 PR 获得实质性审查评论的比例从 16% 升到 54%；超过 1,000 行的 PR 大多能查出问题，小 PR 大多干净返回；对审查者反复标记的内容跑 git blame，约 59% 是审查者第一轮时就已经存在的代码。限制与作者主张：目标状态是大多数 PR 至多一个人类在环且回滚率和事故率不上升，这是目标主张；原文明确还没有在回滚或事故指标变动时自动收紧审批的 circuit breaker；噪声对 agent 作者代价更高是原文判断；Claude Code Team 和 Enterprise 计划已 GA 的 Code Review for Claude Code、Quick、Standard、Deep 是产品能力描述，材料未给出各档位的准确率或成本数据。
-- 新旧做法差异：此前手册已有路线零（Claude Code 内置 `/code-review`）、路线一（PR Lens）、路线二（OpenQodex）、路线三（对抗审查）、路线四（ai-deslop）、路线五（Uber 内部流程的可迁移部分）；本次新增路线六（Claude Code 团队代码审查流程）。七者阶段不同，可叠加；若只能选一个，先按你的主要缺口选：已经在用 Claude Code 且想快速跑一遍审查用 `/code-review`，看不懂改动用 PR Lens，怕 push 前漏检用 OpenQodex，AI 生成 TypeScript 模式多就用 ai-deslop，想主动找漏洞用对抗审查，想从流程层面减少 PR 数量和 CI 排队并控制 AI 花费就用路线五，想把读 diff 交给机器、人只做关键决策并用回滚率和事故率做护栏就用路线六。路线零和路线六都涉及 Claude Code 代码审查：路线零来源是个人推文，信息不完整；路线六是团队公开流程，给出 `CLAUDE.md`、`REVIEW.md`、风险分级、merge queue 和 eval 集等更完整的配置与指标。
+- 做法 W 依据调研报告 `Show HN: Sphinx – A hook that quizzes you on your AI's code before shipping`。报告给出的可照做内容包括：`npm install -g sphinx-understand`、`sphinx install`、`git push`、`sphinx yolo`；运行前提 Node 22.19+、macOS/Linux/WSL；兼容列表 Codex、Claude Code、Cursor、OpenCode、Pi 或纯 Git，模型来源支持现有 agent、OpenRouter 或任意 OpenAI 兼容端点；隐私声明：答案不进入编码 agent，`.env` 与密钥不被打开；HN 热度 74 points、20 comments（评论正文未提供）。局限与作者主张：`minimal tokens` 没有具体消耗数字；「提问质量足够好、能逼出真正的理解」没有评测数据；没有误拦截率、漏检率、平均增加耗时、通过率等任何指标；文中那段 Sphinx 与用户的对话被明确标注为 "An illustrative exchange. Real questions come from your diff."，是虚构举例，不能当实测案例；它是刚在 Show HN 发布的新项目（FOSS、Free），长期维护与稳定性未知；`sphinx yolo` 存在被习惯性使用而架空检查的风险，原文说会记录日志但没说是否强制可见或告警；它只对「你本人是否理解」有效，无法验证代码本身的正确性。
+- 新旧做法差异：现有路线零（Claude Code 内置 `/code-review`）、路线一（PR Lens）、路线二（OpenQodex）、路线三（对抗审查）、路线四（ai-deslop）、路线五（Uber 内部流程的可迁移部分）、路线六（Claude Code 团队代码审查流程）；本次新增路线七（Sphinx）。八者阶段不同，可叠加；若只能选一个，先按你的主要缺口选：已经在用 Claude Code 且想快速跑一遍审查用 `/code-review`，看不懂改动用 PR Lens，怕 push 前漏检用 OpenQodex，AI 生成 TypeScript 模式多就用 ai-deslop，想主动找漏洞用对抗审查，想从流程层面减少 PR 数量和 CI 排队并控制 AI 花费就用路线五，想把读 diff 交给机器、人只做关键决策并用回滚率和事故率做护栏就用路线六，想确认提交的人自己读懂了改动就用路线七。路线零和路线六都涉及 Claude Code 代码审查：路线零来源是个人推文，信息不完整；路线六是团队公开流程，给出 `CLAUDE.md`、`REVIEW.md`、风险分级、merge queue 和 eval 集等更完整的配置与指标。路线七与路线零、路线二不是替代关系：后两者判代码对不对，路线七判人有没有读懂，三者的输出可以同时挂在一个 PR 上。
 
 ## 依据的调研
 
@@ -661,3 +737,4 @@ ai-deslop 最小试用方式：选一个使用 TypeScript 和 Oxlint 的包，�
 - [Show HN: Deslop – Oxlint rules for AI-generated TypeScript](../research/radar/2026-10-14/3159-show-hn-deslop-oxlint-rules-for-ai-generated-types.md)：值得一试，建议在 TypeScript + Oxlint 项目中接入 ai-deslop 的 recommended 配置做小范围试用，用真实 AI 生成 diff 验证命中率和误报；README 给出了可直接复制的安装与配置、规则清单，但没有效果数据，且规则较主观，只有适配的团队才应保留。
 - [Uber’s AI infra, from the inside](../research/radar/2026-10-15/3452-uber-s-ai-infra-from-the-inside.md)：值得一试，建议小范围试其中能脱离 Uber 基础设施复现的流程性做法——给 PR 按类型（feature/bugfix/maintenance/testing/docs）打标以替代速度指标、把 lint/build 等简单检查前移到 agent 开 PR 之前、对 AI 花费设额度加经理例外审批；理由是原文只给出 Uber 内部系统的一句话级描述，没有可复制的配置、命令或提示词，但这几条流程本身可以照做，且有方向性结果（token 成本近几个月降约 50%、feature PR 占比上升、maintenance 占比下降）。
 - [How the Claude Code team does code review](../research/radar/2026-10-16/3934-how-the-claude-code-team-does-code-review.md)：建议采用，按原文「How you can adopt this process」的分阶段清单落地：先在一个仓库用简短的 CLAUDE.md、REVIEW.md 和 agent 可运行的检查打底，再接入 AI 审查、用风险分级控制人工审批数量，并以回滚率和事故率作为护栏；因为这是已在实际团队跑通、给出了具体配置项、命令和度量指标的流程，而不是泛泛观点。
+- [Show HN: Sphinx – A hook that quizzes you on your AI's code before shipping](../research/radar/2026-10-18/4593-show-hn-sphinx-a-hook-that-quizzes-you-on-your-ai-.md)：值得一试，可以在非关键的 Git 仓库里安装 Sphinx 跑一遍完整流程（npm install -g sphinx-understand → sphinx install → git push 并在被保护分支上回答提问），因为它把「提交前是否真的理解 agent 写的代码」做成了一个有安装命令和明确触发点的可执行检查；但原文只有产品页级说明、示例对话还自标为虚构，且是刚发布的 Show HN 项目，所以只适合小范围试，不建议直接写进手册。
