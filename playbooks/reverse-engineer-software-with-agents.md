@@ -1,10 +1,10 @@
-# 搞懂别人的软件并重建时，让 agent 拿出可核验的证据
+# 在重建陌生系统前，让 agent 交出可核验的证据与交接规格
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：当目标没有源码、你需要在自家项目里重建它的某个功能时，怎样让 agent 走完“反编译取证据 → 搞懂 → 按规格重建 → 机器可判定地验收”，而不是给你一份看着合理、无法核验的猜测。
-> 先试这一步：先做做法 B：对一个已提取的 JS/Electron 目录跑一次 `npx -y rea-agents@latest analyze-javascript-application /absolute/path/to/app --json`，看它返回的 Evidence、恢复出的图和 unknowns 是否可信，再决定要不要上 MCP、Hopper/Ghidra 或多 agent 验收器。
-> 最近修订：2026-10-16
+> 解决的问题：当你要重建一个没有源码或只有 Web 界面的系统时，让 agent 不只“看懂”，而是产出带证据、可校验、能交接给编码 agent 的规格，并用机器验收挡住语义错误。
+> 先试这一步：先选一个单特性小目标跑通闭环：有现成二进制/JS 包就用做法 B 跑一次静态分析并检查 Evidence/limitations；是 Web 产品就按 RES 的 L1 单特性研究，最后跑 `check-kb` 看知识库是否完整。
+> 最近修订：2026-10-20
 
 ## 解决什么问题
 
@@ -16,7 +16,9 @@ REA 给出的是一条可以照做的主线：**Decompile（反编译取回可�
 
 **REA-Reconstruction-Companion** 补的是“拿到证据之后”这一段：把证据转成可执行的规格、架构、实现计划和验证流程，作用范围由你指定（整个应用、一个功能、一个函数、一个接口或一种数据格式）。它与 REA 在同一任务内同时生效，不是第二个后台 agent，也不含 REA 本体。
 
-注意 REA 的边界：这是一个 agent + MCP 的逆向调查流程，不是通用工作方法；作者明确不声称恢复原始源码，也不自动克隆应用。做法 E 的字节比对也有边界：反编译天然有 ground truth 是因为保留原始二进制与原始编译器，大多数工作流没有这种奢侈条件。
+**RES（Reverse Engineering SaaS）** 补的是另一类目标：当你要研究的不是二进制，而是一个正在运行的 Web 产品/SaaS，agent 可以用真实浏览器在你控制的试用账号里逐屏研究，把屏幕与状态、业务规则、数据模型、API 形状、设计 token、上线障碍写成磁盘上的结构化知识库，最后产出人读的 `REPORT.html` 与交给编码智能体的交接 zip。它把“先摸清一个陌生系统，再产出别人能照着重建的结构化知识”拆成可执行、可校验、可交接的七阶段流程；但只适用于 Web 产品（需要 DOM 和网络），二进制、Electron 内部、桌面/移动应用仍用 REA。
+
+注意 REA 的边界：这是一个 agent + MCP 的逆向调查流程，不是通用工作方法；作者明确不声称恢复原始源码，也不自动克隆应用。做法 E 的字节比对也有边界：反编译天然有 ground truth 是因为保留原始二进制与原始编译器，大多数工作流没有这种奢侈条件。RES 的边界同样明确：需要你自己拥有或被授权研究的账号，很多产品条款禁止逆向工程或竞品用途，用前要自行确认；它产出的是行为等价的设计与规则，不是代码，也明确禁止复制素材。
 
 ## 适用与不适用
 
@@ -38,6 +40,20 @@ REA 给出的是一条可以照做的主线：**Decompile（反编译取回可�
 **REA-Reconstruction-Companion 适用**：已经拿到 REA 工具或用户提供的 REA 证据，需要把它变成规格、契约、验收标准、架构选择与实现计划；需要在连贯增量中指导开发并做集成与端到端验证；需要在有助于验证重建时选用有界差分模糊测试、定向变异测试、可执行接口契约；需要记录密码学互操作参数并验证独立向量与拒绝用例。它对模型无关，纯 Markdown，Codex 与 Claude Code 都能用，其他 agent 可通过显式 skills 目录使用同一套核心文件。
 
 **REA-Reconstruction-Companion 不适用**：它不含 REA，也不含模型 SDK、付费 API 要求、Python 依赖、遥测或后台服务；宿主 agent 不能读写本地文件、不能执行命令时，纯对话客户端只能给你指引，不能代装；本次只拿到 README，全部示例都是维护者自写、无独立评测，不要假定它已经过验证。
+
+**RES 适用**：
+
+- Web 产品/SaaS，智能体能驱动浏览器、能在页面内执行 JavaScript；已知组合是 Claude Code + Claude in Chrome / Playwright MCP / Chrome DevTools MCP。
+- 你有试用账号或获授权研究的账号，并愿意在独立浏览器 profile 里按 L1–L4 分级授权。
+- 目标需要“先摸清界面、规则、数据模型、API 形状，再产出可交接的重建规格”，而不是直接复制代码。
+- 适合拆成“一次一个特性、写盘后再下一个”的长任务，可跨会话续跑。
+
+**RES 不适用**：
+
+- 桌面与移动应用不行，因为需要 DOM 和网络；二进制和 Electron 内部要用 REA。
+- 没有可控账号，或产品条款/司法辖区不允许逆向工程、竞品研究。
+- 想复制素材或直接产出代码：RES 产出行为等价的设计与规则，复制素材被明确禁止。
+- 把它当成熟平台：版本 0.4.0，32 stars，小规模早期项目，方法仍在逐版本补漏；安全承诺与“可整夜跑”目前只有作者自述和设计文档，没有第三方复现。
 
 REA 的分析在本地运行，不上传到托管分析服务。
 
@@ -68,6 +84,15 @@ REA 的分析在本地运行，不上传到托管分析服务。
 - REA 已安装并针对你的客户端配置好；真正做调查还需要 REA 工具或用户提供的 REA 证据
 - 明确的技能目录：用客户端默认路径，或用 `--skills-dir` / `--rea-skill` 覆盖
 - 决定联动开或关；做实际调查时 REA 及目标专用引擎各有自己的依赖，需单独安装配置
+
+**做法 G / RES 侧**：
+
+- Node.js 22 或更高。
+- 一个能从磁盘读技能、能驱动浏览器、能在页面里执行 JavaScript 的智能体；已知可用 Claude Code + Claude in Chrome / Playwright MCP / Chrome DevTools MCP。
+- 自己持有的邮箱注册的产品试用账号；独立 Chrome profile；把智能体的浏览器工具连接到这个 profile。
+- 选定 L1–L4 授权级别（见做法 G 第 40 步）。
+- 产品的公开文档、API 参考、定价、集成清单和条款（用 web fetch 读取）。
+- 明确写入范围；所有级别一律禁止发消息或邀请、指派或 @ 他人、碰账单、创建账号、输入密码；自动保存、已读回执、关闭横幅、持久的视图变更都算“写”。
 
 ## 操作步骤
 
@@ -114,7 +139,7 @@ and build a version for my project using TypeScript and SQLite.
 npx -y rea-agents@latest analyze-javascript-application /absolute/path/to/app --json
 ```
 
-（Windows 上路径形如 `"D:/apps/example"`。原生应用要先配好对应引擎，再用 `analyze` 传该应用路径。）
+（Windows 上路径形如 `D:/apps/example`。原生应用要先配好对应引擎，再用 `analyze` 传该应用路径。）
 
 ### 做法 C：只装 skill、不注册 MCP
 
@@ -371,11 +396,134 @@ python scripts/build_release.py
 
 发布构建用 Python 3.10+ 标准库。
 
+### 做法 G：用 RES 研究一个 Web 产品，产出带证据的知识库与交接 zip
+
+前提：Node.js 22+；智能体能读磁盘技能、驱动浏览器、在页面内执行 JavaScript；你有可控试用账号并选定 L1–L4。差异：做法 A–F 面向二进制/JS/APK/固件等逆向与重建；做法 G 只面向运行中的 Web 产品/SaaS。它产出行为等价的设计与规则，不复制素材，也不直接产出代码。
+
+38. 安装 RES 技能（Claude Code 内）。前提：Node.js 22+，Claude Code 可用。安装后需新开一个会话。预期结果：技能出现在 Claude Code 的 plugin/skill 列表里，新会话能加载。
+
+```bash
+claude plugin marketplace add alextnetto/res
+```
+
+```bash
+claude plugin install res@res
+```
+
+会话内等价命令是 `/plugin marketplace add alextnetto/res` 和 `/plugin install res@res`。
+
+39. 其他从磁盘读技能的智能体，直接拷贝技能目录。前提：已 clone 仓库。预期结果：`~/.claude/skills/reverse-engineering-saas` 存在，宿主能读到该技能。
+
+```bash
+git clone https://github.com/alextnetto/res.git && mkdir -p ~/.claude/skills && cp -R res/skills/reverse-engineering-saas ~/.claude/skills/
+```
+
+40. 准备安全环境并选定授权级别。前提：你有可研究的账号。用自己持有的邮箱注册产品的**试用账号**，在**独立的 Chrome profile** 里登录，把智能体的浏览器工具连接到这个 profile。原文称这是最安全的配置，智能体即使出错也碰不到生产账号。预期结果：智能体只在选定级别内动作；每次写之前检查位置、受众、可撤销路径和账本。
+
+| 级别 | 环境 | 允许改什么 |
+|---|---|---|
+| L1 | 独立 browser profile 里的试用账号 | 除对外发送与不可逆动作外的一切 |
+| L2 | 你登录状态下的新建空 workspace | 该 workspace 内的测试数据与配置 |
+| L3 | 生产账号内的一个沙箱 list / project / pipeline | 仅该容器内的测试数据 |
+| L4 | 生产环境 | 只观察，不改 |
+
+所有级别一律禁止：发消息或邀请、指派或 @ 他人、碰账单、创建账号、输入密码。自动保存、已读回执、关闭横幅、持久的视图变更都算“写”。每次写之前要检查位置、受众、可撤销路径和账本。
+
+41. 下指令。前提：环境与级别已定。原文提示词（替换产品、市场、范围）：
+
+```text
+Study Pipedrive so my team can rebuild it for the Brazilian market.
+Use the trial profile, and don't ask me anything until you're done.
+```
+
+预期结果：智能体在其工作目录创建 `re-<product>/`，按七阶段推进，结束时交付 `REPORT.html` 与 `re-<product>-handoff-<date>.zip`。不让它问时，需要人处理的事写入 `STATUS.md` 的 “Needs human” 段落，继续做其余部分，停下前先还原自己改过的东西。
+
+42. 按七阶段流程推进（这是 RES 的核心，也可迁移到任何“摸清未知系统”的任务）：
+
+| 阶段 | 做什么 |
+|---|---|
+| 1 Charter | 目标、范围、优先级、重建目标市场 |
+| 2 Environment | 选最安全的环境；检查可能被触发的自动化、webhook、集成 |
+| 3 Recon | 用 web fetch 读公开文档、API 参考、定价、集成清单和条款；首轮障碍扫描 |
+| 4 Map | 全部屏幕与路由；技术栈与设计 token |
+| 5 Deep dive | 一次一个特性：构造测试数据、状态、规则、持久化、网络，**写盘之后再进下一个特性** |
+| 6 Synthesis | 数据模型、设计 token、障碍、PRD、parity 测试 |
+| 7 Close | 还原改动、过 `check-kb`、发送 `REPORT.html` 与交接 zip |
+
+预期结果：每个阶段有落盘产物；Deep dive 一次一个特性，写盘之后再进下一个特性；Close 阶段还原改动、过 `check-kb`、发送报告与交接 zip。
+
+43. 每条陈述必须带证据标签。规则写成 Given/When/Then 并附证据 ID。示例：
+
+```markdown
+### R-014 Completing the last open activity prompts for the next one
+- Given a deal with exactly one open activity
+- When the user marks that activity done
+- Then a "Schedule next activity" dialog opens; Cancel closes it and the deal shows a warning icon
+- Evidence: [obs EV-031, EV-032]
+```
+
+证据标签规则：
+
+- `[obs]` 在产品里亲眼所见
+- `[net]` 从网络请求捕获
+- `[doc]` 来自公开文档
+- `[inf]` 推断，并附一个开放问题
+
+上线障碍单独建档，带严重度、市场权重、前置时间和缓解方案。示例：
+
+```markdown
+### BR-003 WhatsApp messages need Meta business verification
+- Category: permissioned integration
+- Blocks: F-014 (WhatsApp notifications)
+- Gatekeeper: Meta, WhatsApp Business Platform
+- Severity: blocks feature
+- Market weight: required to sell
+- Lead time and cost: [doc SRC-021]
+- Mitigation: start verification in month one; launch with email notifications
+- Evidence: [doc SRC-021]
+```
+
+预期结果：知识库里没有无标签结论；`[inf]` 必须挂开放问题；规则可直接派生为 parity tests。
+
+44. 不用智能体、直接跑脚本检查或重新打包已有知识库。前提：已有 `re-<product>/` 目录；`--help` 看参数。预期结果：`check-kb` 做知识库完整性校验；`build-report` 生成 `REPORT.html`；`pack-kb` 生成交接 zip。
+
+```bash
+node skills/reverse-engineering-saas/scripts/init-kb.mjs --product "Acme CRM" --git
+```
+
+```bash
+node skills/reverse-engineering-saas/scripts/check-kb.mjs re-acme-crm
+```
+
+```bash
+node skills/reverse-engineering-saas/scripts/build-report.mjs re-acme-crm
+```
+
+```bash
+node skills/reverse-engineering-saas/scripts/pack-kb.mjs re-acme-crm
+```
+
+zip 内不含 `sandbox/`、`log/`，只保留一份去掉了对象 ID、位置和 URL 的变更账本。`sandbox/ledger.csv` 里的每一条改动，结束时要么还原、要么删除、要么列出来给你处理。
+
+45. 跨会话续跑与长任务托管。前提：在同一目录。新开会话说：
+
+```text
+Continue the Pipedrive study.
+```
+
+预期结果：磁盘知识库作为智能体唯一记忆，可跨会话、扛住上下文上限；不让它问时，遇阻转 `STATUS.md` 继续做别的。原文称可以整夜跑（作者自述，未第三方复现）。
+
+46. 交付：`REPORT.html` 给人，`re-<product>-handoff-<date>.zip` 给编码智能体；从 zip 里的 `BUILD.md` 开始。预期结果：编码智能体拿到的是行为等价的设计与规则、证据 ID、障碍清单和 parity tests，而不是复制素材。
+
+47. 安全与法律核对（不能跳过）。前提：用前确认产品条款与司法辖区是否允许逆向工程/竞品研究。原文明确不提供法律建议：工具只记录相关条款、按行为重建而不复制素材、并把法律问题标记给法务。预期结果：你明确知道这次研究的授权级别、可写范围、退出与还原方式；不确定就停。
+
 ### 怎么选
 
 原文对照表：想让 agent 自己调查并实现特性 → 做法 A；想在终端里查/反编译某个部分 → `rea analyze` / `rea decompile`；想校验、规范化、比较 Evidence → `rea evidence-import` / `evidence-export` / `compare`；想不执行应用就映射本地 JS/Electron 应用 → `rea analyze PATH` 或 `analyze-javascript-application`；想复用不可变分析结果 → 给深层分析命令传 `--snapshot /path/to/analysis.json`；想导入历史源码 → `rea import-reference-source`；想抓取或比较受控进程行为 → 受控浏览器场景 / V8 Inspector。
 
-再按本次合并补充：单点搞懂并重建一个功能，先用做法 A；不想配 MCP/分析引擎，先用做法 B；只想要 agent 指令，做法 C；要 CLI、诊断、快照、证据、浏览器/V8 观察，做法 D；要长期多 agent 反编译且存在 ground truth，做法 E；要把 REA 证据接成规格、路线图、实现计划与验证流程，做法 F。REA 的 Evidence/limitations 与做法 E 的字节级 PASS/FAIL 不冲突但不等价：能比对时，把做法 E 的验收器作为提交门；不能比对时，至少按 REA 口径标 unknown，或用做法 F 的“与证据挂钩的验收标准”兜底。
+再按本次合并补充：单点搞懂并重建一个功能，先用做法 A；不想配 MCP/分析引擎，先用做法 B；只想要 agent 指令，做法 C；要 CLI、诊断、快照、证据、浏览器/V8 观察，做法 D；要长期多 agent 反编译且存在 ground truth，做法 E；要把 REA 证据接成规格、路线图、实现计划与验证流程，做法 F；目标是运行中的 Web 产品/SaaS，且你有可控试用账号，用做法 G；如果目标是二进制、Electron 内部、桌面/移动应用，回到 REA（做法 A–F），不要用 RES。
+
+REA 的 Evidence/limitations 与做法 E 的字节级 PASS/FAIL 不冲突但不等价：能比对时，把做法 E 的验收器作为提交门；不能比对时，至少按 REA 口径标 unknown，或用做法 F 的“与证据挂钩的验收标准”兜底。RES 的 `check-kb` 和证据标签是“知识库完整性 + 可追溯”级别的校验，不等同于机器 PASS/FAIL；它能防止无标签结论和丢失证据，但不能证明重建后的行为与目标一致，后者要靠 parity tests 或 Oracle。
 
 ## 怎么判断变好了
 
@@ -391,8 +539,14 @@ python scripts/build_release.py
   5. 先用 1 worker + 1 reviewer 起步，再引入一个廉价小模型做 worker，检验“严格反馈是否让弱模型可用”。
 - **做法 F 的可观察指标**：产出的规格是否把需求、契约、期望行为与证据挂钩；是否给出可被检查的验收标准；重建是否按规格走通并做了集成与端到端验证；恢复出的指令是否被当作不可信证据、最终决定权是否留在人手里。
 - **做法 F 最小试用**：在本地、项目作用域内小范围试装——先 `--integration off`，并用 `--dry-run`/`--check` 确认改动；再用它自带的 Pocket Tasks 参考流程加一个真实小目标，跑通“证据→需求→实现→验证”闭环。判断依据是闭环能否跑完、验收标准是否真的能被检查，而不是装了多少文件。
+- **做法 G / RES 的可观察指标**：`check-kb` 是否通过；知识库里是否每条规则都带 `[obs]`/`[net]`/`[doc]`/`[inf]` 标签，`[inf]` 是否挂开放问题；规则是否写成 Given/When/Then 并带证据 ID，能否直接派生 parity tests；`sandbox/ledger.csv` 的每条改动是否在结束时还原、删除或列出待处理；交接 zip 是否只含去掉对象 ID、位置和 URL 的变更账本；障碍清单是否带严重度、市场权重、前置时间和缓解方案；是否出现越级写入、对外发送、邀请、碰账单、输入密码等禁止动作。
+- **做法 G 最小试用（半天量级，不要一上来研究整产品）**：
+  1. 选一个你有试用账号、且条款不禁止研究的 SaaS 产品。
+  2. 走 L1：独立 browser profile + 试用账号，只研究一个特性，不让它问，要求它把需人工事项写进 `STATUS.md`。
+  3. 结束时跑 `check-kb`，看知识库是否完整、证据标签是否齐全、ledger 是否清点干净；再看交接 zip 能否让编码智能体从 `BUILD.md` 开始开工。
+  4. 通过后再考虑扩大到一个完整产品；原文的端到端案例是 ClickUp（L2，55 规则 / 19 组件 / 14 障碍）和 Pipedrive（L3，46 规则 / 8 组件 / 15 障碍），均为作者自述、仓库 `examples/` 可查，未第三方复现。
 - **判定方式**：同一任务做引入 oracle 前后的对照；若通过率明显上升、返工下降，即为改善；若通过率不变但同等质量下 token 成本与所用模型等级下降，也按改善计（这正是原文观察到的主要收益）。
-- **原文数据**：第一月 4 个 agent 完成约 80% 的游戏反编译，游戏能启动、主菜单可见、地图能加载；末期 99% 函数存在、83% 逐字节精确。REA 调研没有给出时长建议或量化收益数字，做法 F 的调研也只拿到 README、没有独立评测，因此不要假定成功率、节省时间之类的指标；建议以“一次完整小调查（一个功能点，走完六步）”或“一个真实小目标的证据→需求→实现→验证闭环”为观察单位，再决定是否扩大使用范围。
+- **原文数据**：做法 E 项目约 3 个月；token 消耗为作者估算的 600–700B（因为 agent 用畸形命令周期性地把 VM 清空，丢了一批 session log，作者不知道确切数字）；第一月 4 个 agent 完成约 80% 的游戏反编译，游戏能启动、主菜单可见、地图能加载；末期 99% 函数存在、83% 逐字节精确；末期 14 个 Luna 与 2 个 Opus 5.5 agent。RES 每次会话约增加 130 token，运行时约 4600 token（用 `claude plugin details` 测得，作者自述）；版本 0.4.0。材料没有给出成功率、时间节省等任何量化收益数字，本文也不据此做承诺。
 
 ## 常见坑
 
@@ -422,6 +576,13 @@ python scripts/build_release.py
 - 进程被杀留下 `install.lock`：先确认没有安装器在运行，再删掉锁文件重试，不要在安装器还在跑时删。
 - 更新 REA 可能覆盖其技能指令，导致联动失效；重跑带 `--check` 的集成命令，需要就重装。
 - 把恢复出来的指令当可信输入：原文要求把它当作不可信证据，保留用户最终决定权。
+- 把 RES 用到二进制/Electron/桌面/移动应用：它只适用于 Web 产品，需要 DOM 和网络；这些目标用 REA。
+- 没有可控账号或条款不允许逆向就开工：先用前确认产品条款与司法辖区；RES 不提供法律建议。
+- 越级写入：所有级别一律禁止发消息/邀请、指派/@、碰账单、创建账号、输入密码；自动保存、已读回执、关闭横幅、持久的视图变更都算“写”。
+- 把 `[inf]` 当结论：必须挂开放问题；知识库里不能有无标签结论。
+- 交接 zip 里带 `sandbox/`、`log/` 或未脱敏的对象 ID/URL：打包脚本应排除，变更账本要去掉对象 ID、位置和 URL。
+- 以为 RES 安全承诺已被第三方验证：目前只有作者自述和设计文档；“可以整夜跑”同理。
+- 把 RES 当成熟平台：0.4.0、32 stars，方法仍在逐版本补漏；ClickUp 研究暴露的缺口仍挂在 issue #5。
 
 ## 证据与来源
 
@@ -437,6 +598,9 @@ python scripts/build_release.py
 - 该报告对能力的描述（把“读懂现有软件”变成可交给 agent 的活、把证据转成需求/契约/验收标准、区分原架构与新实现的设计选择、用代表性负载与实测做性能调查、把恢复出的指令当作不可信证据）是维护者自述，本次只拿到 README，没有独立评测，也没有量化数据。
 - 该报告的试用建议（本地、项目作用域内小范围试装，先 `--integration off` 并用 `--dry-run`/`--check` 确认改动，用自带 Pocket Tasks 参考流程加一个真实小目标跑通“证据→需求→实现→验证”闭环）是调研作者的判断，不是实测收益。
 - 该报告明确的功能边界：纯 Markdown、MIT 许可、不含模型 SDK / 付费 API / Python 依赖 / 遥测 / 后台服务；与模型无关，Codex 与 Claude Code 均支持，其他 agent 走显式 skills 目录；REA 需单独安装。
+- RES 部分：来自调研报告 **alextnetto/res**（仓库 README）。安装命令、提示词、七阶段、证据标签、L1–L4、四个脚本、`STATUS.md`、交接 zip、token 数、ClickUp/Pipedrive 案例条数均来自该 README；报告只依据 README，未获取 `SKILL.md`、`references/safety.md`、`references/exploration.md` 等细节文件，也未复现任何一次研究；所有条数、token 数均为原文自述。
+- RES 属于作者主张、需自行核实：安全性承诺（各级别不碰生产、不输密码、不触账单、写入可全部还原）目前只有作者自述和设计文档，没有第三方复现；“可以整夜跑”同理；法律问题作者明确甩锅，不提供法律建议。
+- RES 适用条件与硬限制：只适用于 Web 产品（要 DOM + 网络）；必须有你自己拥有或被授权研究的账号；很多产品条款禁止逆向工程或竞品用途；32 stars，小规模早期项目，方法仍在逐版本补漏；重建产出是行为等价的设计与规则，不是代码，复制素材被明确禁止。
 - 材料没有给出成功率、时间节省等任何量化收益数字，本文也不据此做承诺。
 
 ## 依据的调研
@@ -444,3 +608,4 @@ python scripts/build_release.py
 - [morluto/rea](../research/radar/2026-10-07/1608-morluto-rea.md)：值得一试，如果确实存在“要搞懂无源码的应用/二进制/前端包”这类任务，可以按 README 的 `npx rea-agents setup` + 六步调查流程小范围试，并用 Evidence/limitations 与 reconstruction check 的 pass/fail/unknown 作为验收口径；它给出的是可直接照做的 agent+MCP 逆向调查流程（含命令、提示词、工具链和验证语义），但应用面局限在逆向与互操作场景，不适合当作通用工作方法推广。
 - [500B Tokens Later: Letting AI Agents Decompile a First-Person Shooter](../research/radar/2026-10-11/2476-500b-tokens-later-letting-ai-agents-decompile-a-fi.md)：值得一试，先给智能体任务配一个「机器可判定的 PASS/FAIL 验收器」，再配合定时重读指令文档和更早的上下文压缩来维持长期自主运行；理由是作者用三个月、约 600–700B token 的实践发现，没有客观验收标准时评审 agent 会被 worker 的注释说服而放行语义错误（第一月代码可读但语义错误），引入字节级比对后 83% 函数达到逐字节一致、连廉价小模型也能胜任。
 - [ShadowSwaps/REA-Reconstruction-Companion](../research/radar/2026-10-16/3893-shadowswaps-rea-reconstruction-companion.md)：值得一试，建议在本地、项目作用域内小范围试装（先 --integration off 并用 --dry-run/--check 确认改动），用它自带的 Pocket Tasks 参考流程加一个真实小目标跑通“证据→需求→实现→验证”闭环；理由是原文给出了可直接复制的安装命令、安装提示词和成套验证机制，但依赖独立的 REA、全部示例均为维护者自写、无独立评测，且本次只拿到 README。
+- [alextnetto/res](../research/radar/2026-10-20/5013-alextnetto-res.md)：值得一试，建议小范围试一次：用 Claude Code 安装 RES 技能，在独立浏览器 profile 的试用账号上只研究一个特性，检查它产出的带证据知识库（含 `check-kb` 校验）和交接 zip 能否直接交给编码智能体开工。理由是原文给出了安装命令、提示词、七阶段流程、证据标注规则、沙箱分级和四个可直接运行的脚本，属于可照做的流程；但适用范围只限 Web 产品、方法仍在 0.4.x 迭代、且需要你自己拥有可研究的账号，因此先试再定。
