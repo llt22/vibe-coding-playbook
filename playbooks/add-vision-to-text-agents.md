@@ -1,20 +1,21 @@
-# 把屏幕上的视觉信息变成 agent 能用的证据
+# 把屏幕上的视觉信息变成 agent 能读的证据
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：工作流里的视觉信息经常卡在人看得到、模型或编码 agent 吃不到，本篇把图片、模拟器 UI 缺陷和长按反馈转成结构化证据，交给 text-only 模型或编码 agent。
-> 先试这一步：如果你已经在 iOS 模拟器上用 Claude Code，先在 FixKit 自带 Tally 示例上跑通“长按 → 一句话 → agent 改代码”闭环；否则按痛点选路线 A（图片）或路线 B（模拟器批注）。
-> 最近修订：2026-10-08
+> 解决的问题：屏幕上的视觉信息人看得见、模型或编码 agent 却拿不到结构化证据，导致工作靠口述、OCR 或猜测推进。
+> 先试这一步：先按痛点选路线：图片给 text-only 模型走 A，模拟器 UI 批注走 B，长按反馈走 C，操作过程录屏口述走 D；只做对应路线的最小试用。
+> 最近修订：2026-10-20
 
 ## 解决什么问题
 
-工作流里的视觉信息经常卡在同一个地方：屏幕上看得到，模型吃不到。三种典型情形：
+工作流里的视觉信息经常卡在同一个地方：屏幕上看得到，模型和编码 agent 吃不到。四种典型情形：
 
-- 情形一：手上有图片（UI 截图、带数字的图表、幻灯片、推文截图），但模型没有视觉通道——原生 text-only 的 DeepSeek、GLM、MiMo Pro，或 Claude Code 里跑的纯文本配置。现在的替代做法是人先把图 OCR 或口述成文字，再喂给模型。
+- 情形一：手上有图片（UI 截图、带数字的图表、幻灯片、推文截图），但模型没有视觉通道——原生 text-only 的 DeepSeek、GLM、MiMo Pro，或 Claude Code 里跑的纯文本配置。替代做法是人先把图 OCR 或口述成文字，再喂给模型。
 - 情形二：在 iOS 模拟器上走查 UI，看到哪里不对，却只能用自然语言描述，编码 agent 得自己猜是哪个文件、哪一行。
 - 情形三：在 iOS / React Native 模拟器里长按出问题的界面元素，用一句话说哪里不对，希望报告自动落到项目里正在运行的 Claude Code（或 Codex）会话中，附带元素定位、截图和你的原话；agent 改代码并重启应用，横幅跟着走 queued → fixing → rebuilding → live。
+- 情形四：要说明一个操作流程、交互问题、UI bug 复现或 dev site 上的问题，纯文字描述容易丢上下文；希望把屏幕、语音和标注录下来，打包成 agent 可读的 bundle，让 agent 看关键帧、读时间对齐的转写和交互时间线。
 
-本篇解决的是：把屏幕上的视觉信息转成结构化证据再交出去——图片走「全文转录 + 按阅读顺序的版面区域 + 实体与关系列表」；模拟器界面走「元素 accessibility 树信息 + 所在屏幕 + 可用于搜索源码的字符串 + 两张截图（整屏带红框、框选区特写）」；FixKit 走「长按元素 + 一句话 + accessibility tree / UIKit 属性名 / RN source map + 截图 + 原话」。前两条路线不改动 harness 配置（ModLens 无 hook、无 wrapper、无本地代理守护进程，卸载就是删一个文件夹）；FixKit 走插件/hooks，报告写进 `.fixkit/`，由会话内接收器消费。
+本篇解决的是：把屏幕上的视觉信息转成结构化证据再交出去——图片走「全文转录 + 按阅读顺序的版面区域 + 实体与关系列表」；模拟器界面走「元素 accessibility 树信息 + 所在屏幕 + 可用于搜索源码的字符串 + 两张截图（整屏带红框、框选区特写）」；FixKit 走「长按元素 + 一句话 + accessibility tree / UIKit 属性名 / RN source map + 截图 + 原话」；Scrawl 走「屏幕录制 + 语音转写 + 标注关键帧 + 交互时间线」，产出 `contact-sheet.png`、`frames/frame-XX.png`、`summary.md` 和 `scrawl.json`。路线 A 不改动 harness 配置（ModLens 无 hook、无 wrapper、无本地代理守护进程，卸载就是删一个文件夹）；路线 B 走插件或 MCP；路线 C 走插件/hooks，报告写进 `.fixkit/`，由会话内接收器消费；路线 D 装一个菜单栏应用和 agent skill，由录制结束事件把 bundle 交给 agent。
 
 ## 适用与不适用
 
@@ -39,12 +40,21 @@
 - Xcode 与 iOS 17+ 模拟器；React Native 路线额外需要 React Native 0.80+（React 19.1，新架构）。
 - 想要「长按 → 说哪里不对 → agent 改代码并重启 → 横幅跟状态」的闭环。
 
+路线 D（Scrawl 录屏 + 口述 + 标注 → agent bundle）
+
+- 任务需要视觉或交互上下文：UI bug 复现、交互流程评审、dev site 问题说明、iPhone/iOS 应用操作演示，以及口头描述容易丢上下文的 GUI 任务。
+- 开发机是 Apple silicon Mac、macOS 26 或更高；iOS 端另有 ScrawlKit（iOS 18+）可选。
+- 目标 agent 支持 skill：README 点名 Claude Code、OpenCode、Codex 及其他 agent。想把 dev site 捕获自动送到 OpenCode session 时，还需要浏览器在前台、授予 macOS 控制浏览器的权限，且目标项目有 OpenCode session。
+- 你愿意配置屏幕/麦克风/辅助功能权限，并接受录制和整理有一定成本。
+
 **不适用**
 
 - 已经在用原生多模态模型的场景装 ModLens 没有收益；插件只在「元数据明确确认是 text-only」时才接管，未确认的一律不碰，原生视觉模型保持自己的粘贴路径。
 - 不是 iOS、不是 Apple Silicon、Xcode 版本不满足的，路线 B 用不了：它依赖 Xcode 的私有框架，只支持单一开发环境，项目仅 34 stars，不适合直接定为团队标准流程。
 - FixKit 只在 iOS 模拟器工作，不覆盖 Android、原生 Modal、原生呈现的页面、嵌套 `<FixKitHost>`；版本 0.1.0，适用面窄。
-- 不要指望任何一条路线主动推进。ModLens 原文没有给出任何基于时间、事件或状态的持续触发机制，唯一沾边的是会话内「同一张图粘贴一次、后续追问不用再粘」以及引擎自动 failover；SimAgentation 是你在 Design Mode 里提了批注它才动；FixKit 触发方式是用户长按（0.5 秒，与应用自身手势并行）。
+- Scrawl 不适用于非 Apple silicon、macOS 26 以下的机器；纯文本、无需视觉上下文的任务也不适合。若任务可用几行文字说清，录制和整理成本可能抵不过收益。
+- Scrawl 的 dev-site 自动发送依赖浏览器控制权限和 OpenCode session；非 loopback 页面还需要 token。agent skill 依赖目标 agent 支持；Cline、Cursor 只被笼统归入 other agents，README 没有给出这两个工具的具体集成命令或验证过的流程，不能据此认定已适配。
+- 不要指望任何一条路线主动推进。ModLens 原文没有给出任何基于时间、事件或状态的持续触发机制，唯一沾边的是会话内「同一张图粘贴一次、后续追问不用再粘」以及引擎自动 failover；SimAgentation 是你在 Design Mode 里提了批注它才动；FixKit 触发方式是用户长按（0.5 秒，与应用自身手势并行）；Scrawl 有捕获结束、发送失败等事件/状态触发的自动化（dev-site 捕获自动送 OpenCode、排队 bundle 重试、每日清理旧捕获），但不是通用自主规划。
 
 **风险与局限**
 
@@ -57,10 +67,13 @@
 - SimAgentation 的 channel 模式是 Claude Code research preview，未被 Anthropic 加入 allowlist 前必须带 flag 并在启动时确认，不带 flag 推送会被丢弃（工具本身仍照常可用）。
 - FixKit 版本 0.1.0，只支持 iOS 模拟器，适用面窄；Claude Code 需放开 `Read(./.fixkit/**)` 权限；Codex 需信任 hooks 并在首轮前发一条消息。
 - FixKit 的 AXe 决定能否判断触点落在哪个元素；XcodeBuildMCP 决定能否一次调用完成重建重启；RN 需要 Metro 常驻。
+- Scrawl 的内容主要是项目自述，没有独立 benchmark、用户研究或工作结果数据；「减少口头描述和来回澄清」是作者主张，不是已证实的量化结论。
+- Scrawl 的自动裁剪调参证据来自模拟捕获和手工标注的理想裁剪，评估的是裁剪质量，不是工作任务效果。
+- Scrawl 的排队 bundle 每 15 秒重试，退避到 30 分钟，持续一天；应用每天自动清理旧捕获，不要把它当长期存储。
 
 ## 前置条件
 
-共用：Node.js。
+共用：Node.js。路线 D 另需 Homebrew（或直接下载 DMG）与 `bunx`（装 skill 时）。
 
 **路线 A（ModLens）**
 
@@ -86,9 +99,19 @@
 - 推荐装 XcodeBuildMCP，让 Claude 一次调用完成重建与重启。
 - React Native 路线额外需要 React Native 0.80+（React 19.1，新架构）。
 
+**路线 D（Scrawl）**
+
+- Apple silicon Mac、macOS 26 或更高。
+- 安装方式二选一：Homebrew cask，或从 `scrawl.kitlangton.com` 下载 DMG。
+- 装 agent skill 需要 `bunx`，且目标 agent 支持 skill（README 点名 Claude Code、OpenCode、Codex 及其他 agent）。
+- 首次启动要在 onboarding 里授予 Screen & System Audio Recording、Microphone、Accessibility；Camera 只在首次选择 iPhone 时询问。README 说明 Screen Recording 和 Accessibility 需要把 Scrawl 拖进权限列表，Microphone 和 Camera 走 macOS 弹窗。
+- `scrawl` 命令是 Scrawl.app 内的二进制；Homebrew cask 会把它链接到 PATH，也可在 Settings › Agents 点 Install，链接到 `/opt/homebrew/bin`、`/usr/local/bin` 或 `~/.local/bin`。
+- 可选 iPhone 录制：插上解锁并信任的 iPhone；iOS 应用内录制需要 ScrawlKit（iOS 18+）。
+- 可选 dev-site 自动发送：浏览器在前台、已授予 macOS 控制浏览器的权限、目标项目有 OpenCode session；支持 Brave、Chrome、Arc、Edge、Vivaldi、Chromium、Safari。非 loopback 页面还需要 token。
+
 ## 操作步骤
 
-先选路线：你要解决的是「模型看不到粘贴进来的图片」，走路线 A；你要解决的是「模拟器上的 UI 问题说不清楚、agent 定位不到代码」，走路线 B；你要的是在模拟器里长按元素写一句话、报告自动落进 Claude Code/Codex 会话并让 agent 改代码，走路线 C。三条路线互不冲突，可以都装。
+先选路线：你要解决的是「模型看不到粘贴进来的图片」，走路线 A；你要解决的是「模拟器上的 UI 问题说不清楚、agent 定位不到代码」，走路线 B；你要的是在模拟器里长按元素写一句话、报告自动落进 Claude Code/Codex 会话并让 agent 改代码，走路线 C；你要说明的是一段操作流程、交互问题或 dev site 问题，纯文字容易丢上下文，走路线 D。四条路线互不冲突，可以都装。
 
 ### 路线 A：把粘贴的图片变成结构化文字证据（ModLens）
 
@@ -490,6 +513,111 @@ xcrun simctl spawn booted defaults write <bundle id> FixKitDirector -bool YES
 
 `press` 会在 `.fixable` 元素或坐标点上打开 composer、输入文本并发送；`defaults` 存的值为应用下次启动准备。
 
+### 路线 D：把录屏、口述和标注变成 agent 可读的 bundle（Scrawl）
+
+25. 安装 Scrawl 与 agent skill。
+
+前提：Apple silicon Mac、macOS 26+；装 skill 需要 `bunx`。
+
+Homebrew 安装：
+
+```sh
+brew install --cask kitlangton/tap/scrawl
+```
+
+也可从 `scrawl.kitlangton.com` 下载 DMG。应用通过 Sparkle 自更新，Homebrew 把更新交给应用本身。
+
+装 agent skill：
+
+```sh
+bunx skills add kitlangton/scrawl
+```
+
+`scrawl` 命令是 Scrawl.app 内的二进制；Homebrew cask 会把它链接到 PATH，也可在 Settings › Agents 点 Install，链接到 `/opt/homebrew/bin`、`/usr/local/bin` 或 `~/.local/bin`。不想安装 skill 时可用 `scrawl skill` 打印 skill 内容。
+
+预期：`scrawl` 在 PATH 里可用，目标 agent 能读到 Scrawl skill。
+
+26. 授予权限并录制。
+
+首次启动有 onboarding。必需权限是 Screen & System Audio Recording、Microphone、Accessibility；Camera 只在首次选择 iPhone 时询问。README 说明 Screen Recording 和 Accessibility 需要把 Scrawl 拖进权限列表，Microphone 和 Camera 走 macOS 弹窗。若权限授予后未生效，按 README 的 Quit & Reopen 或自动重启逻辑处理。要重放 onboarding：
+
+```sh
+tccutil reset All dev.kitlangton.scrawl
+jq 'del(.onboarding)' ~/.config/scrawl/config.json > /tmp/c.json && mv /tmp/c.json ~/.config/scrawl/config.json
+```
+
+然后退出并重开 Scrawl。
+
+录制：轻按 `⌥⇧S`（0.25 秒内释放）立即录制指针所在显示器，并自动裁剪；再按一次结束。按住 `⌥⇧` 再按 `S` 可像 `⌘Tab` 一样切换 Screen → Window → iPhone；拖动鼠标可选择区域。录制中 `⇧`+移动可画红色标记，`⇧`-点击可放编号 pin，`⌘Z` 撤销上一笔，`Esc` 取消。Screen 捕获会记录窗口和光标时间线，结束后自动裁剪每个关键帧。
+
+预期：生成一个 bundle，内含 `contact-sheet.png`、`frames/frame-XX.png`、`summary.md`（时间对齐的转写和交互时间线）以及 `scrawl.json`。
+
+27. 把 bundle 交给 agent。
+
+录制结束后可用 `⌥⇧V` 把 `contact-sheet.png` 和 `summary.md` 粘贴到当前应用或终端；也可用命令复制或发送：
+
+```sh
+scrawl send <bundle> --clipboard
+scrawl send <bundle> --session ses_...
+scrawl inspect <bundle>
+scrawl zoom <bundle> --at 0:12
+scrawl zoom <bundle> --at "a phrase you said"
+scrawl frames <bundle> --from 0:02 --to 0:07
+```
+
+装了 skill 的 agent 会读 contact sheet 和转写，按口述指向打开关键帧，并用 `scrawl zoom` 或 `scrawl frames` 拉近查看。
+
+预期：agent 能按时间点或口述短语找到对应关键帧，而不是只读一段文字摘要。
+
+28. 可选：把 dev site 的捕获自动送到 OpenCode session。
+
+前提：浏览器在前台、已授予 macOS 控制浏览器的权限，且目标项目有 OpenCode session。支持 Brave、Chrome、Arc、Edge、Vivaldi、Chromium、Safari。
+
+localhost 零配置时，Scrawl 用 `lsof` 找端口进程、工作目录和 git root，再送到仓库里最近活跃的 root session。也可在页面加 dev-only 注册脚本：
+
+```html
+<script src="http://127.0.0.1:47777/sdk.js" data-session="ses_…"></script>
+```
+
+或用 `data-directory="/abs/path/to/project"` 指向项目。非 loopback 页面还需 `data-token`。查看某 URL 会送到哪里：
+
+```sh
+scrawl route --url http://localhost:5173/
+```
+
+关闭自动发送：在 `~/.config/scrawl/config.json` 设 `"autoSend": false`，或设环境变量 `SCRAWL_NO_OPENCODE=1`。
+
+预期：捕获结束后，若前台是受支持的 dev site 浏览器，bundle 自动进入对应 OpenCode session；发送失败的 bundle 排队重试。
+
+29. 可选：iPhone 录制与 ScrawlKit。
+
+插上解锁并信任的 iPhone，选择 iPhone；也可从终端：
+
+```sh
+scrawl record --iphone --duration 8
+scrawl devices
+```
+
+iOS 应用内录制可用 ScrawlKit：把仓库加为 Swift package，给根视图加 `.scrawl()`，三指长按开始/结束，`Scrawl.event("Done tapped")` 可把应用事件写入时间线。
+
+预期：iPhone 画面和口述进入同一个 bundle；应用内事件会出现在交互时间线里。
+
+30. 可选：调自动裁剪。
+
+若自动裁剪切得不好，可用：
+
+```sh
+scrawl autocrop <bundle|latest> --serve --open
+```
+
+调参，或在 `~/.config/scrawl/config.json` 设 `{ "autocrop": false }` 或 `{ "autocrop": { "padding": 24, "minW": 480 } }`。
+
+预期：关键帧裁剪覆盖更完整、可读性更好；这是裁剪质量调参，不等于工作任务效果提升。
+
+31. 验证 bundle 是否完整。
+
+用 `scrawl inspect <bundle>` 检查 summary 和 manifest，用 `scrawl zoom`、`scrawl frames` 确认 agent 能取到口述所指的细节。若 agent 拿不到关键帧，先查 bundle 是否完整，再查 skill 是否装好。
+
 ## 怎么判断变好了
 
 **最小试用（路线 A，约 15 分钟，先在一台机器上做）**
@@ -512,6 +640,14 @@ xcrun simctl spawn booted defaults write <bundle id> FixKitDirector -bool YES
 3. 看 agent 是否按报告改代码并重启，横幅是否从 `queued` 推进到 `fixing`、`rebuilding`、`live`。
 4. 用于自己项目前，先检查报告行 `[fix rn]` 是否指对元素/文件/行；不标记时看字符串能否搜到源码；加 `.fixable`/`.fixScreen` 后看是否带文件与行号；UIKit 看属性名；RN 看 Metro source map 给出的 JSX 行号与使用处。
 
+**最小试用（路线 D，先在 3–5 个任务上做对照）**
+
+1. 选 3–5 个「文字描述容易漏上下文」的任务，例如 UI bug 复现、交互流程评审、dev site 问题说明、iPhone 应用操作演示。
+2. 对同一任务、同一 agent/模型，先做文字描述基线：只用文字交代问题和步骤，记录澄清轮次、首次正确复现时间、任务解决时间、agent 误读次数、人工返工次数。
+3. 再用 Scrawl 录制同一任务：按 `⌥⇧S` 录屏、口述、标注，结束后把 bundle 交给 agent；记录录制和标注耗时，避免只比较 agent 侧时间。
+4. 看 agent 是否实际打开了关键帧，或使用了 `scrawl zoom` / `scrawl frames`；用 `scrawl inspect <bundle>` 检查 summary 和 manifest。
+5. 若这些指标没有稳定改善，或录制整理成本明显抵消收益，应把结论降为 study/watch，而不是 adopt。
+
 **可观察的指标**
 
 - 定位准确率（路线 B / C）：agent 能否不经人工补充就找到正确的文件与代码行。路线 B 没接 SDK 时只能靠批注里的字符串搜索源码；接了 SDK 后应能直接拿到文件与行号。路线 C 不标记时靠 accessibility tree 和旁边文案搜索源码，加 `.fixable`/`.fixScreen` 后应带文件与行号。
@@ -519,12 +655,14 @@ xcrun simctl spawn booted defaults write <bundle id> FixKitDirector -bool YES
 - 读取延迟（路线 A）：与作者声称的 5-10 秒（API）/ 15-45 秒（CLI）区间比较，是否可接受。
 - 准确率（路线 A）：关键数字和文字的逐项正确率，对比「人读完口述给模型」这条基线。
 - 无回退率（路线 A）：`meta.attempts` 长度为 1 的比例，以及 `meta.warnings` 里出现配额复用告警的频率——回退是否在被记录。原文称 `meta.attempts` 记录每次尝试，使回退从不静默。
-- 交互成本：从「截图 / 提批注 / 长按」到「模型或 agent 答出内容」需要几步人工操作；对比「手动 OCR 再贴文字」或「口述 UI 问题」的步骤数。
+- 交互成本：从「截图 / 提批注 / 长按 / 录屏」到「模型或 agent 答出内容」需要几步人工操作；对比「手动 OCR 再贴文字」「口述 UI 问题」或「纯文字描述流程」的步骤数。
 - 可逆性（路线 A）：卸载后 harness 是否确实恢复原状。
 - 仲裁是否正常（路线 B，多会话时）：同一条批注是否只有最先 acknowledge 的会话接管，其余是否被告知让开。
 - 队列与恢复（路线 C）：agent 忙时报告是否排队；会话关闭后报告是否留在队列里等恢复。
+- bundle 使用情况（路线 D）：agent 是否打开了关键帧、是否用了 `scrawl zoom` / `scrawl frames`。
+- 沟通效率（路线 D）：澄清轮次、首次正确复现时间、任务解决时间、agent 误读次数、人工返工次数，以及录制和标注耗时。
 
-**试多久、什么时候升级**：三篇原文都没有给出时长门槛。ModLens 那篇给的判断标准是——上面几项都过得去、且确实替代了「手工把图片转成文字再喂给模型」这条现有工序，才考虑把它从 try 提升为写进手册的 adopt。路线 B 同理：先在一台 Apple Silicon Mac + Xcode 26 上小范围验证，看它能否稳定定位到文件与代码行，再决定是否推广；考虑到它依赖 Xcode 私有框架、只支持单一开发环境、项目仅 34 stars，不建议直接定为团队标准流程。路线 C 的调研结论是「值得小范围试」：先在仓库自带的 Tally 示例上跑通，再用于自己项目的模拟器 UI 缺陷；但版本 0.1.0、只支持 iOS 模拟器，适用面窄，也不建议直接定为团队标准流程。
+**试多久、什么时候升级**：四篇原文都没有给出明确的时长门槛。ModLens 那篇给的判断标准是——上面几项都过得去、且确实替代了「手工把图片转成文字再喂给模型」这条现有工序，才考虑把它从 try 提升为写进手册的 adopt。路线 B 同理：先在一台 Apple Silicon Mac + Xcode 26 上小范围验证，看它能否稳定定位到文件与代码行，再决定是否推广；考虑到它依赖 Xcode 私有框架、只支持单一开发环境、项目仅 34 stars，不建议直接定为团队标准流程。路线 C 的调研结论是「值得小范围试」：先在仓库自带的 Tally 示例上跑通，再用于自己项目的模拟器 UI 缺陷；但版本 0.1.0、只支持 iOS 模拟器，适用面窄，也不建议直接定为团队标准流程。路线 D 的调研结论是以 try 级别在 Apple silicon + macOS 26 以上的小范围视觉/交互任务中试用：先跑 3–5 个任务的对照，若澄清轮次、首次正确复现时间、任务解决时间、agent 误读次数、人工返工次数没有稳定改善，或录制整理成本明显抵消收益，就降为 study/watch，而不是 adopt。
 
 ## 常见坑
 
@@ -535,7 +673,7 @@ xcrun simctl spawn booted defaults write <bundle id> FixKitDirector -bool YES
 - ModLens 项目单人维护、不接受 PR，长期可持续性未知。
 - 图片内容按不可信输入处理（docs/security.md），远程 URL 抓取行为需要核对。
 - 本次输入里读不到 cli.md、output-schema.md、security.md、harness-setup.md，细节准确性无法判断。
-- 不要期待持续触发：ModLens 原文没有基于时间、事件或状态的持续触发机制；SimAgentation 也只在你提批注时才产生内容；FixKit 触发方式是用户长按（0.5 秒，与应用自身手势并行）。
+- 不要期待持续触发：ModLens 原文没有基于时间、事件或状态的持续触发机制；SimAgentation 也只在你提批注时才产生内容；FixKit 触发方式是用户长按（0.5 秒，与应用自身手势并行）；Scrawl 只有捕获结束、发送失败等事件/状态触发的自动化，不是通用自主规划。
 - SimAgentation 依赖 Xcode 私有框架（CoreSimulator、SimulatorKit、AccessibilityPlatformTranslation），Xcode 升级可能让它失效直到项目跟进。
 - 不满足 Apple Silicon + Xcode 26（iPhone Duo 要 27.1）就别指望路线 B；它只支持这一套开发环境。
 - channel 模式不带 `--dangerously-load-development-channels` 时推送会被静默丢弃——工具还在，但批注不会自动落进会话；多会话同时在线时先 acknowledge 的接管，其余会话要让开。
@@ -547,31 +685,43 @@ xcrun simctl spawn booted defaults write <bundle id> FixKitDirector -bool YES
 - FixKit 没装 XcodeBuildMCP，重建与重启不能一次调用完成；RN 的 JS 改动靠 Fast Refresh，不需要重建，但 Metro 必须常驻。
 - FixKit 只在 iOS 模拟器工作，不覆盖 Android、原生 Modal、原生呈现的页面、嵌套 `<FixKitHost>`；版本 0.1.0，适用面窄。
 - FixKit 录屏脚本要写 `FixKitDirector` defaults 并从 `http://127.0.0.1:4748/next` 喂 JSON；没有更多对象返回 204。
+- Scrawl 的硬件和系统门槛窄：Apple silicon Mac、macOS 26+；权限配置有摩擦，Screen Recording 和 Accessibility 需要把 Scrawl 拖进权限列表。
+- Scrawl 的 dev-site 自动发送依赖浏览器控制权限和 OpenCode session；非 loopback 页面还需要 token。
+- Scrawl 的 agent skill 依赖目标 agent 支持；Cline、Cursor 只被笼统说成 other agents，没有具体集成命令或验证过的流程，不能据此认定已适配。
+- Scrawl 的「减少口头描述和来回澄清」是作者主张，没有独立 benchmark、用户研究或工作结果数据；要用对照试用自行验证。
+- Scrawl 的自动裁剪调参证据来自模拟捕获和手工标注的理想裁剪，评估的是裁剪质量，不是工作任务效果。
+- Scrawl 的排队 bundle 每 15 秒重试，退避到 30 分钟，持续一天；应用每天自动清理旧捕获，不要把它当长期存储。
+- Scrawl 的 `scrawl` 命令是 Scrawl.app 内的二进制；若 PATH 里没有，去 Homebrew cask 的链接位置或 Settings › Agents 点 Install。
+- Scrawl 的 iPhone 录制需要解锁并信任的 iPhone；首次选择 iPhone 会询问 Camera 权限；ScrawlKit 需要 iOS 18+。
 
 ## 证据与来源
 
-路线 A 的全部内容来自调研报告《liustack/modlens》，路线 B 的全部内容来自调研报告《lcandy2/sim-agentation》，路线 C 的全部内容来自调研报告《ostiums/fixkit》。
+路线 A 的全部内容来自调研报告《liustack/modlens》，路线 B 的全部内容来自调研报告《lcandy2/sim-agentation》，路线 C 的全部内容来自调研报告《ostiums/fixkit》，路线 D 的全部内容来自调研报告《kitlangton/scrawl》。
 
 **可核对的事实（有原文、命令或仓库数据支撑）**
 
 - 路线 A：仓库 4101 stars；npm 包 `@liustack/modlens` 版本号 3.26.5；MIT 许可；完整的安装命令、配置命令、provider 对照表、CLI 复用对照表；五组「未剪辑」演示截图（dsh 内粘贴、Codex 桌面读推文截图、三图批量、128 模型散点图、Claude Code 终端读幻灯片）。
 - 路线 B：README 给出了可照抄的安装命令、MCP 接入命令、SDK 代码片段和配置项；项目 34 stars；原生侧使用 Xcode 私有框架；只支持单一开发环境（这几条同时构成「不适合直接定为团队标准流程」这一判断的依据，该判断出自调研者而非原文）。
 - 路线 C：README 给出了 Quick start 四步接入（marketplace 装 mod、加 Swift/npm 包、根视图加 `.fixKitHost()`、放开读 `.fixkit/` 权限）；仓库自带 Tally 示例和四个种子 bug；报告落盘 `.fixkit/`，接收器在 `127.0.0.1:4747`；状态机 `queued → fixing → rebuilding → live`；版本 0.1.0，只支持 iOS 模拟器。
+- 路线 D：README 给出了较完整的安装、权限、快捷键、CLI 命令、bundle 结构、自动裁剪逻辑、dev-site 路由、iPhone/ScrawlKit 用法和自动裁剪评估脚本；仓库显示 447 stars。这些足以支撑「可照做的小范围试用」。
 
 **只是作者主张、没有支撑的部分**
 
 - 路线 A：「市场上最轻的接法」「最强大的 dsh 视觉插件」「验证过真机」等定性说法；每次读取 5-10 秒 / 15-45 秒 / 20-45 秒的耗时数字；「读取的是证据而非想象」；对模型家族（GLM-5.3、DeepSeek-V4、MiMo Pro）的现状描述。这些都没有基准测试、没有错误率、没有第三方复现。
 - 路线 B：自称是「iOS 版的 Agentation」；其余描述基本对应 README 里的功能与命令，未见独立复现或性能数据。
 - 路线 C：调研结论认为「值得小范围试」，理由是原文给出了完整可照做的命令、配置和失败/限制条件，且把「界面看着不对」变成 agent 可执行任务；但版本 0.1.0、只支持 iOS 模拟器，适用面窄。未见独立复现或性能数据。
+- 路线 D：内容主要是项目自述，没有独立 benchmark、用户研究或工作结果数据；「减少口头描述和来回澄清」是作者主张，不是已证实的量化结论。自动裁剪调参证据来自模拟捕获和手工标注的理想裁剪，评估的是裁剪质量，不是工作任务效果。
 
 **基本无依据的部分**
 
 - 路线 A 的「主动推进」：原文没有给出任何基于时间、事件或状态的持续触发机制。
 - 路线 B 的长期可用性：依赖 Xcode 私有框架这一点原文已明确风险，但何时会失效、项目是否会跟进，没有任何承诺或时间表。
 - 路线 C 的长期可用性与推广价值：原文没有给出时长门槛；只支持 iOS 模拟器，版本 0.1.0，不宜直接定为团队标准流程。
+- 路线 D 的长期可用性与推广价值：原文没有给出时长门槛；硬件和系统门槛窄，权限配置有摩擦，dev-site 自动发送依赖浏览器控制权限和 OpenCode session，agent skill 依赖目标 agent 支持。调研结论是 try 级别试用，暂不宜直接 adopt。
 
 ## 依据的调研
 
 - [liustack/modlens](../research/radar/2026-10-02/591-liustack-modlens.md)：值得一试，给纯文本模型（尤其已 adopt 的 Claude Code、try 的 DeepSeek 这类无视觉通道）装上 ModLens，按 README 的一条命令安装、配一个免费 Gemini key 或复用本机已登录的 CLI，就能把粘贴的截图/图表转成结构化文字证据再回答，值得在一台机器上小范围试；但全部效果只有作者自证的演示，没有基准数据，先小范围验证再决定是否写进手册。
 - [lcandy2/sim-agentation](../research/radar/2026-10-07/1616-lcandy2-sim-agentation.md)：值得一试，在 Apple Silicon Mac + Xcode 26 的 iOS 项目上小范围试：先让编码智能体按 SETUP.md 装好，用 Design Mode 对运行中的模拟器提一批真实 UI 批注，经 MCP 交给 Claude Code，看它能否不经人工补充就定位到正确文件与代码行。README 给出了可照抄的安装命令、MCP 接入命令、SDK 代码片段和配置项，但依赖 Xcode 私有框架、只支持单一开发环境、项目仅 34 stars，不适合直接定为团队标准流程。
 - [ostiums/fixkit](../research/radar/2026-10-08/1928-ostiums-fixkit.md)：值得一试，值得小范围试：按 README 的 Quick start 四步接入（marketplace 装 mod、加 Swift/npm 包、根视图加一行 .fixKitHost()、放开读 .fixkit/ 权限），先在仓库自带的 Tally 示例上跑通再用于自己项目的模拟器 UI 缺陷；理由是原文给出了完整可照做的命令、配置和失败/限制条件，而且它把「界面看着不对」这类难描述的反馈直接变成 agent 可执行任务，但版本 0.1.0、只支持 iOS 模拟器，适用面窄。
+- [kitlangton/scrawl](../research/radar/2026-10-20/5099-kitlangton-scrawl.md)：值得一试，建议以 try 级别在 Apple silicon + macOS 26 以上的小范围视觉/交互任务中试用：按 README 安装 Scrawl 与 agent skill，用 ⌥⇧S 录屏、口述并标注生成 bundle，再交给 Claude Code/OpenCode/Codex 并用 scrawl zoom/frames 查看细节。理由是可照做的安装、权限和命令流程完整，但适用硬件窄、证据主要是 README 自述且没有工作效果数据，暂不宜直接 adopt。
