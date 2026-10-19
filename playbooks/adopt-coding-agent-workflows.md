@@ -1,16 +1,16 @@
-# 让编码 agent 先探索、再计划、后写代码，并用门禁和测试自检逼它拿出证据
+# 把项目约束写成可检查的契约，让编码 agent 开机自检
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：用编码 agent 干活时，流程每次重写、架构约定会漂移、违规提交拦不住、测试可能被改绿——本手册把这些固化成可照做的技能、钩子、门禁和常驻自检规则。
-> 先试这一步：先在一个项目里把「绝不改测试凑绿、新测试必须在空实现下失败」两条写进 AGENTS.md，并对最近一个新写的测试做一次空实现检查。
-> 最近修订：2026-10-17
+> 解决的问题：让编码 agent 每次会话先读到同一份可检查的项目契约，并用 linter 和 SessionStart 自检防止规则漂移，而不是靠散落的提示文件提醒。
+> 先试这一步：在现有仓库复制五段式 AGENTS.md 模板，填掉所有占位符并跑一次 scripts/agents_lint.py 到零错误。
+> 最近修订：2026-10-19
 
 ## 解决什么问题
 
-用编码 agent 干活时，一次性对话的方式会在几件事上反复消耗：同一个流程每次重写提示词、上下文质量差导致 agent 跑偏、架构约定写在提示文件里会随上下文漂移、「做完了」却没有证据、绿色测试套件可能是代理改测试改出来的假绿、以及「这次怎么做对的」要靠人手工整理成规则。本手册以 Claude Code 为主线，另一条可试路线是自托管的 MyAgent（本次新增），再加上一条写进 AGENTS.md 的测试常驻约束（本次新增）。
+用编码 agent 干活时，一次性对话的方式会在几件事上反复消耗：同一个流程每次重写提示词、上下文质量差导致 agent 跑偏、项目约定散落在多个提示文件里会漂移、「做完了」却没有证据、绿色测试套件可能是代理改测试改出来的假绿、以及「这次怎么做对的」要靠人手工整理成规则。本手册以 Claude Code 为主线，另一条可试路线是自托管的 MyAgent，再加上提交门禁、测试常驻约束，以及把 AGENTS.md 工程化成可 lint 的项目契约（本次新增）。
 
-这篇手册解决的是：把重复的提示词和流程固化成技能、钩子和子智能体，用固定的几条工作流控制「先探索、再计划、后写代码、最后提交」的节奏，把可判定的硬约束从「写在提示文件里靠提醒」搬到「提交时强制门禁」——违规就让提交失败，并把纠正指令当作反馈喂回给 agent；同时在一条自托管 runtime 上试「只读计划审批 + 反馈自动沉淀成技能」这条路线（本次新增，来源只有 README，没有任何评测数据）；并用「绝不改测试凑绿 + 新测试必须在空实现下失败」这条常驻规则，堵住代理最容易伪造的「测试全绿」出口（本次新增，来源只有一条推文，且只完整给出 7 条中的第 1 条）。
+这篇手册解决的是：把重复的提示词和流程固化成技能、钩子和子智能体，用固定工作流控制「先探索、再计划、后写代码、最后提交」的节奏，把可判定的硬约束从「写在提示文件里靠提醒」搬到「提交时强制门禁」，并用五段式 AGENTS.md + 零依赖 linter + SessionStart 钩子让项目契约可检查、可复用、能在会话开始时自检（本次新增）。同时保留两条证据较弱的试验路线：MyAgent 的「只读计划审批 + 反馈自动沉淀成技能」，以及「绝不改测试凑绿 + 新测试必须在空实现下失败」的常驻规则。
 
 ## 适用与不适用
 
@@ -40,6 +40,13 @@
 - 使用的编码代理会读取 `AGENTS.md` 作为上下文。
 - 代理有读写代码与测试文件的权限；规则同时用来限制它对测试的改动。
 
+**适用于项目契约与开机自检（本次新增，AntoGA/agents-contract）**
+
+- 项目里有隐性规则：真实费率藏在配置文件里、生成物不许手改、测试命令不是裸 `pytest`、改完必须写 changelog 之类从代码里推不出来的约定。
+- 你希望同一份 `AGENTS.md` 被 Claude Code、Codex、Cursor、Copilot 等工具复用；Claude Code 通过 `CLAUDE.md` 里一行 `@AGENTS.md` 导入。
+- 你愿意用 Python 3.9+ 跑一个零依赖 linter，并接受把 lint 接进 CI。
+- 你用 Claude Code，想让会话开始或恢复时自动跑 linter、装依赖、跑测试，把结果送进上下文。
+
 **不适用（原有）**
 
 - 只是问一次性问题，不值得固化成 skill（原文对照表：一次性任务跳过 Skills）。
@@ -65,7 +72,14 @@
 - 你想直接采用「7 条规则」：原文在采集时被截断，只完整给出第 1 条，第 2 条起缺失，不要据此推断或复述其余 6 条。
 - 你想用它替代第 11 步的提交门禁：这条规则本身没有 hook 实现，目前只能写进 `AGENTS.md` 靠上下文约束，做不到「违规提交必须失败」。
 
-**范围说明**：原有调研来源在子智能体、动态工作流、Agent Teams、MCP 四节被截断，本手册对这四项只写「什么时候用 / 什么时候跳过」的判定，不给配置步骤。新增的提交门禁做法，来源只有一段第一人称口述，没有代码、没有匹配模式、没有量化数据；第 11 步会逐条标出哪些是实现细节、哪些只是作者主张。本次新增的 MyAgent 材料只有仓库 README，未核对源代码，且它的「怎么试、怎么验证」一节在材料里被截断，本手册只写截断前那部分最小试用，不补写后续。本次新增的测试规则材料只有一条推文，只完整给出 7 条中的第 1 条，第 2 条起缺失，证据只有互动量，本手册只写已给出的那条，不补写其余 6 条。
+**不适用（项目契约，本次新增）**
+
+- 你指望 linter 检查规则是否合理、测试是否真的在验证行为：它只查结构、占位符、路径、命令是否存在、密钥和文件大小，不查语义质量。
+- 你想要统计显著的收益结论：作者自己的 A/B 只有 5 次/条件、一个任务、一个小仓库，而且只测了 Claude Code。
+- 你想照 README 手写 Cursor / Copilot 的配置：原文只把它们列在「读 AGENTS.md 的工具名单」里，没有配置步骤，也没有实测。
+- 你不接受 Python 3.9+，或者不想维护一份会随项目演进的契约。
+
+**范围说明**：原有调研来源在子智能体、动态工作流、Agent Teams、MCP 四节被截断，本手册对这四项只写「什么时候用 / 什么时候跳过」的判定，不给配置步骤。新增的提交门禁做法，来源只有一段第一人称口述，没有代码、没有匹配模式、没有量化数据；第 11 步会逐条标出哪些是实现细节、哪些只是作者主张。MyAgent 材料只有仓库 README，未核对源代码，且它的「怎么试、怎么验证」一节在材料里被截断，本手册只写截断前那部分最小试用，不补写后续。测试规则材料只有一条推文，只完整给出 7 条中的第 1 条，第 2 条起缺失，证据只有互动量，本手册只写已给出的那条，不补写其余 6 条。项目契约材料来自 `AntoGA/agents-contract` 的 README（约 40 stars、单人维护、俄文），A/B 日期写作 18.10.2026，无法核实，可能是笔误；本手册只把它当小范围试验依据，不当作已复现结论。
 
 ## 前置条件
 
@@ -95,6 +109,14 @@
 - 仓库根目录已有（或可新建）`AGENTS.md`。
 - 使用的编码代理会读取 `AGENTS.md` 作为上下文。
 - 代理有读写代码与测试文件的权限。
+
+**项目契约与开机自检（本次新增）**
+
+- 一个 git 仓库。
+- Python 3.9+；linter 零依赖，macOS / Linux / Windows 通用。
+- 接 SessionStart 钩子需要 Claude Code；Windows 上没有 Git Bash 时，用仓库里的 PowerShell 变体。
+- 接 CI 需要把仓库里的 `.github/workflows/agents-lint.yml` 放进项目；README 没有贴出其具体内容，不能照 README 手写。
+- `--check-commands` 要求命令已在 PATH 中；`-r` 需在仓库根运行。
 
 ## 操作步骤
 
@@ -154,7 +176,7 @@ find and fix the failing test in src/api.test.ts
 
 预期结果：项目约定写进了 `CLAUDE.md`，而且你会隔一段时间回来改它。
 
-与第 11 步的关系：`CLAUDE.md` 适合放偏好和背景这类主观约定；能被模式匹配判定的硬约束，更适合搬到提交门禁。
+与第 11 步的关系：`CLAUDE.md` 适合放偏好和背景这类主观约定；能被模式匹配判定的硬约束，更适合搬到提交门禁。与第 17 步的关系：如果采用五段式契约，`CLAUDE.md` 应只写 `@AGENTS.md` 一行，避免两份规则漂移。
 
 ### 5. 先决定这次要不要调 effort
 
@@ -169,9 +191,8 @@ find and fix the failing test in src/api.test.ts
 /effort ultracode               # 自动多智能体工作流；保留你的 effort 等级（v2.1.284+）
 /effort auto                    # 重置为模型默认
 
-# 所有会话（low/medium/high/xhigh）—— 在 .claude/settings.json 加：
-#   "effortLevel": "high"
-# max 不能存在这里；ultracode 有自己的 "ultracode" 设置。
+# 所有会话（low/medium/high/xhigh）—— 在 .claude/settings.json 的 effortLevel 设为 high
+# max 不能存在这里；ultracode 有自己的 ultracode 设置。
 ```
 
 等级怎么选（原文建议）：
@@ -335,7 +356,7 @@ fi
 
 - 约束能被 diff 模式判定、并且你希望违规提交直接进不去 → 做法 A。
 - 约束是主观的（命名风格、抽象设计），或者只是偏好 → 做法 B。
-- 两者可以并存：门禁管硬约束，提示文件管偏好与背景。但对同一条硬约束，来源建议不要在 `AGENTS.md` 里重复（试用期故意不重复，才看得出门禁有没有起作用）。
+- 两者可以并存：门禁管硬约束，提示文件管偏好与背景。但对同一条硬约束，来源建议不要在 `AGENTS.md` 里重复（试用期故意不重复，才看得出门禁有没有起作用）。第 17 步的五段式契约是另一层：它管项目事实与结构性约定，不替代 hook 门禁；同一条硬约束如果同时写进 hook 和 `AGENTS.md`，要接受两份来源可能漂移。
 
 补充：这套门禁与第 10 步的 Hooks 是同一个机制，只是触发点落在 commit 上、用途从「格式化 / 拦截路径」变成「强制架构约定 + 把失败信息当反馈通道」。
 
@@ -543,7 +564,7 @@ pytest -q
    If it still passes, rewrite the test.
 ```
 
-预期结果：代理每次会话都能读到这两条规则，新写测试时受其约束。
+预期结果：代理每次会话都能读到这两条规则，新写测试时受其约束。如果同时采用第 17 步的五段式契约，这两条可以放进 Boundaries 或 Lessons，或保留为单独的 Testing rules 小节；linter 只检查结构，不会验证这两条是否被遵守。
 
 3. 让代理新写一个测试后，做一次「空实现检查」：把被测函数临时改成什么都不做（例如直接 `return None` / 提前返回），重跑该测试。
 
@@ -573,6 +594,69 @@ git diff --stat HEAD~1 HEAD -- '*test*' '*spec*'
 6. 与第 11 步的关系：这条规则目前走的是做法 B（写进提示文件），不是做法 A（hook 门禁）。推文原文就是把规则写进 `AGENTS.md`；本手册没有它对应的 hook 实现。若想让它「必须发生」，需要自己按第 11 步做成能被 diff 判定的门禁——但「测试是否真的在验证行为」通常不是纯文本模式能判定的，空实现检查需要实际运行测试，不是 diff 匹配能覆盖的。
 
 预期结果：代理提交里不再出现改测试凑绿；新写的测试在空实现下确实会失败；你在合并前抽查 diff 时能看到代理没有动测试文件来凑绿。
+
+### 17. 把 AGENTS.md 做成五段式契约，用 linter 和 SessionStart 钩子防漂移（本次新增）
+
+来源背景：`AntoGA/agents-contract` 把项目说明书工程化成三部分：五段式 `AGENTS.md` 契约、零依赖 linter、Claude Code SessionStart 钩子。作者称整套约一小时；A/B 只有 5 次/条件、一个任务、一个小仓库，且只测了 Claude Code，所以当小范围试验，不直接全员采用。
+
+前提：一个 git 仓库；Python 3.9+；接钩子需要 Claude Code；Windows 上没有 Git Bash 时用仓库里的 PowerShell 变体。
+
+**做法 A：只上 AGENTS.md + linter（跨工具，先验证契约本身）**（什么时候选：你想先让规则可检查，不想接会话钩子）
+
+1. 复制模板与脚本。macOS / Linux 用 `cp`：
+
+```bash
+git clone https://github.com/AntoGA/agents-contract /tmp/agents-contract
+cp /tmp/agents-contract/templates/AGENTS.md /tmp/agents-contract/templates/CLAUDE.md .
+mkdir -p scripts .claude
+cp /tmp/agents-contract/scripts/* scripts/
+# 如果 .claude/settings.json 已存在，不要覆盖它，而是手动把 hooks 块加进去
+if [ ! -f .claude/settings.json ]; then cp /tmp/agents-contract/.claude/settings.json .claude/; fi
+
+# 编辑 AGENTS.md，把所有 <...> 填掉
+python3 scripts/agents_lint.py   # 应输出“错误 0 条”
+```
+
+Windows 用仓库 README 的 PowerShell 命令（`git clone` 到临时目录、`Copy-Item` 模板与 `scripts`），并同样注意：已有 `.claude/settings.json` 时不要覆盖，手动合并 `hooks` 块。预期结果：模板和 linter 脚本进入项目，`AGENTS.md` 还有待填的占位符。
+
+2. 填写 `AGENTS.md` 的五个必填分节：Project（是什么、什么栈）、Commands（安装、构建、**测试**；测试必须写成 `` - Test: `...` `` 这样一行）、Conventions（代码与提交约定）、Boundaries（不许碰什么：生成物、目录、依赖）、Definition of Done（怎样算完成）。可选 `Lessons` 分节，把智能体每次犯错写成一行。把 `<...>`、`TODO`、`TBD`、`FIXME` 全部清掉，不要写入任何密钥。预期结果：契约内容具体到能让另一个工具照着做，而不是口号。
+
+3. 每次跑 linter 直到零错误：
+
+```bash
+python3 scripts/agents_lint.py                 # 检查当前目录的 AGENTS.md / CLAUDE.md
+python3 scripts/agents_lint.py --strict        # 警告也算失败
+python3 scripts/agents_lint.py --check-commands # 检查命令是否在 PATH 里
+python3 scripts/agents_lint.py --json          # 机器可读输出
+python3 scripts/agents_lint.py -r              # 单仓多包：递归检查子目录下所有 AGENTS.md / CLAUDE.md
+```
+
+退出码：`0` 通过，`1` 有错误（`--strict` 下警告也算失败），`2` 调用错误。前置条件：`--check-commands` 依赖命令已在 PATH 中，`-r` 需在仓库根运行。预期结果：零错误；`--strict` 下也没有你不想接受的警告。
+
+4. 让 Claude Code 读同一份文件：`CLAUDE.md` 的内容就是一行 `@AGENTS.md`。若两个文件都在但 `CLAUDE.md` 不导入 `AGENTS.md`，会得到 W070 警告（两份规则会漂移）。预期结果：没有 W070，规则只有一个来源。
+
+5. 接 CI：把仓库里的 `.github/workflows/agents-lint.yml` 放进项目。原文说该 CI 在 Ubuntu / Windows / macOS 上跑 linter 测试并做校验；但 README 没有贴出 workflow 的具体内容，必须直接用仓库里的文件，不能照着 README 手写。预期结果：推送时 CI 跑 lint，`--strict` 下警告也能阻断。
+
+6. 建立维护循环：每次智能体犯错，就在 `Lessons` 里加一行。原文把这条列为长期收益最大的机制，也是「契约不腐坏」的配套：linter 只保证结构与事实（占位、路径、命令、密钥、大小）不退化，内容靠 `Lessons` 增长。预期结果：契约随真实失败变厚，而不是一次性写完就烂掉。
+
+**做法 B：再加 SessionStart 钩子（Claude Code 开机自检）**（什么时候选：你用 Claude Code，想让会话开始或恢复时自动检查环境并跑测试）
+
+1. 复制 `.claude/settings.json`，用 `env` 指定安装/测试命令（原文示例）：
+
+```json
+{ "env": { "AGENTS_SETUP": "pip install -e .", "AGENTS_TEST": "python -m pytest -q" } }
+```
+
+`AGENTS_SKIP_TESTS=1` 可关掉测试。Windows 上没有 Git Bash 时，改用 `.claude/settings.windows.example.json`：它的命令用相对路径，钩子从项目根启动，因此在任何 shell 下都能跑。预期结果：会话开始或恢复时自动跑 linter、装依赖、跑测试，输出进上下文；钩子永远退出 0，不阻塞会话。
+
+**怎么选**
+
+- 只想让规则可检查、跨工具复用、接 CI → 做法 A。
+- 你用 Claude Code，并且想让每次会话开头就知道「契约是否合规、改动前测试是否通过」 → 做法 A + B。
+- 你不用 Claude Code → 跳过 B，但 A 的 `AGENTS.md` 与 linter 仍可用；原文只在工具名单里提到 Cursor / Copilot，没有配置步骤，不要据此写它们的操作。
+- 与第 11 步的关系：第 17 步的 linter 查结构、路径、命令、密钥和大小，不查「代码是否绕过了某个库」这类语义；硬约束仍按第 11 步做 hook 门禁。与第 16 步的关系：linter 不验证「空实现下测试必须失败」，测试规则仍要单独执行空实现检查。
+
+预期结果：`AGENTS.md` 零错误、`CLAUDE.md` 只有 `@AGENTS.md`、CI 绿；接钩子后，会话开头能看到 lint / 安装 / 测试结果。
 
 ## 怎么判断变好了
 
@@ -617,6 +701,19 @@ git diff --stat HEAD~1 HEAD -- '*test*' '*spec*'
 - 若原文其余 6 条后续可见，再用同样方式逐条小范围试，不一次性全部加入；不要凭标题补全。
 - 注意：以上指标与试用方式是调研报告给出的可操作化验证建议，不是推文原文；原文只给出一个判据——新测试在「被测代码什么都不做」时必须失败，否则重写。
 
+**项目契约与开机自检（本次新增）**
+
+- linter 是否零错误：结构、占位符、测试命令、路径、密钥、文件大小都过；`--strict` 下没有你不想接受的警告。
+- 是否只有一个规则来源：`CLAUDE.md` 只有 `@AGENTS.md`，没有 W070。
+- CI 是否在三平台跑绿：Ubuntu / Windows / macOS 的 lint 都过。
+- 会话开头是否有自检输出：接 SessionStart 钩子后，会话开始或恢复时能看到 linter、安装、测试结果；钩子不阻塞会话。
+- 契约大小是否受控：W101 在文件超过 32 KiB 时告警（Codex 默认在此截断）；原文称典型契约在 1–4 KiB，应压在这个量级。
+- linter 速度基线（来源数据，Python 3.13 / Linux / 4 vCPU / 本地盘 / 每档 200 次）：1.3 KiB 文件 `check()` 中位 0.21 ms、p95 0.36 ms，CLI 冷启动中位 50 ms；15.9 KiB 为 2.04 ms / 53 ms；31.9 KiB 为 3.91 ms / 56 ms；128 KiB 为 15.70 ms / 87 ms，随大小线性增长。加路径检查后在 31.9 KiB 为 7.85 ms；网络盘上路径检查明显变慢，可用 `--no-paths` 关掉。典型契约（1–4 KiB）本身耗时不到 1 ms，全流程几乎全耗在 Python 启动（约 50 ms）。
+- A/B 最小试用：用仓库的 `bench/ab_test.py --runs 5`（Claude Code headless `claude -p`，默认模型）先复现，再换成自己的 fixture 和任务。原文玩具仓库「增值税计算」含 3 个从任务描述看不出的陷阱：真实费率在 `rates.yaml`、`invoice/generated/rates.py` 是生成物不许手改；裸 `unittest`/`pytest` 会挂，只能 `python3 run_tests.py`；改完必须写 `CHANGELOG.md`。
+- 来源给出的 A/B 结果（注意局限）：得分 4.8→5.0（满分 5）；测试通过 5/5=5/5；只改权威来源 5/5=5/5；生成物同步且未手改 5/5=5/5；新增测试 5/5=5/5；写 CHANGELOG 4/5→5/5；平均步数 5.6→3.8（−32%）；中位时间 18.2 s→12.9 s（−29%）；平均成本 $0.091→$0.084（−8%）。
+- 怎么判定：如果你自己的 A/B 里，得分不降、步数/时间/成本下降，且主要收益出现在「从代码里推不出来」的规则上，说明契约有用；如果强模型在小仓库上不要契约也能过，别把满分当普遍结论。作者自己说明：5 次/条件远不足以统计显著；只有一个任务、仓库很小；只测了 Claude Code；模型与版本会影响结果；强模型在小仓库上自己能看到 `DO NOT EDIT` 注释并找到 `run_tests.py`，真正的质量差异只出现在「从代码里根本推不出来」的规则（CHANGELOG）上，其余收益是省掉探索步骤与降低时间波动（有契约时稳定 3–4 步，无契约时 4–7 步）。
+- 试多久：作者称整套约一小时落地；A/B 以 5 次/条件为一轮先看方向，不要当统计结论。
+
 ## 常见坑
 
 1. 把 `think` / `think hard` / `think harder` 当开关用。Claude Code 只识别 `ultrathink`，其它会被当普通文本透传。
@@ -644,6 +741,15 @@ git diff --stat HEAD~1 HEAD -- '*test*' '*spec*'
 23. 没有测试的项目硬套。对没有自动化测试的项目，这条规则无从执行。
 24. 误把补写的 git 命令当原文。`git diff --stat HEAD~1 HEAD -- '*test*' '*spec*'` 是调研报告按规则意图补的最小检查方式，不是推文给出的命令。
 25. 以为写进 `AGENTS.md` 就等于「必须发生」。它和第 11 步做法 B 一样属于提示文件约束，会漂移；要「违规提交进不去」得自己做门禁，而测试是否真的在验证行为通常不是 diff 模式能判定的。
+26. 把 linter 当语义检查。`agents_lint.py` 只查结构、占位符、路径、命令是否存在、密钥和文件大小；不查规则是否合理、测试是否有效、代码是否绕过某个库。
+27. 覆盖已有 `.claude/settings.json`。复制模板时如果项目已有这个文件，不要覆盖，手动把 `hooks` 块合进去。
+28. 照 README 手写 CI workflow。原文没贴 `.github/workflows/agents-lint.yml` 的具体内容，必须直接用仓库里的文件。
+29. 把 5 次 A/B 当统计显著。作者自己写明：5 次/条件远不足；只有一个任务、仓库很小；只测了 Claude Code；模型与版本会影响结果。
+30. 同时维护 `AGENTS.md` 和 `CLAUDE.md` 两份规则。应让 `CLAUDE.md` 只写 `@AGENTS.md`，否则 W070 警告提示两份规则会漂移。
+31. 把 Cursor / Copilot 当已验证。原文只在「哪些 agent 读 AGENTS.md」处提到它们，没有配置、没有实测，不能据此写操作步骤。
+32. 忘了 linter 的运行前提。`--check-commands` 要求命令在 PATH 中；`-r` 要在仓库根运行；Windows 没有 Git Bash 时用 PowerShell 变体。
+33. 把 `Lessons` 当自动沉淀。它要你在每次 agent 犯错后手工加一行；linter 只保证结构不退化，不生成内容。
+34. 把测试规则和契约 linter 混为一谈。linter 不验证「空实现下测试必须失败」，第 16 步的空实现检查仍要单独做。
 
 ## 证据与来源
 
@@ -670,7 +776,13 @@ git diff --stat HEAD~1 HEAD -- '*test*' '*spec*'
 - 来源四的局限：原文被截断，无法据此推断或复述其余 6 条；适用条件是项目已有测试、代理会运行测试且有能力改动测试文件，对没有自动化测试的项目这条规则无从执行。
 - 第 16 步中「空实现检查」的步骤与 `pytest` 命令示例来自来源四原文；`git diff --stat HEAD~1 HEAD -- '*test*' '*spec*'` 是调研报告补写的最小可执行检查方式，不是推文给出的。
 - 「怎么判断变好了」里测试规则部分的指标（改测试文件的提交次数、空实现检查通过率、返工次数）和最小试用方式（一个项目、一两周或若干任务周期、逐条小范围试），是调研报告给出的可操作化验证建议，不是来源原文；原文只给了「空实现必须失败」这一个判据。
-- 调研结论给的取舍：重点抄三个工作流、skills/hooks 的文件级配置步骤和两张对照表；原文在子智能体、动态工作流、Agent Teams、MCP 四节被截断，且 2026 年模型名与价格无法核验，不要照抄具体数字。提交门禁做法的结论是：思路清晰但实现空白，需自行补齐 hook 实现后小范围验证，不要照抄「ten out of ten」这类说法。MyAgent 的结论是：可以小范围试，重点验证 Plan Mode 的只读审批和 Skills 自进化能否把反馈沉淀成可复用规则，但只有作者主张、没有评测数据，先在自己的小任务上跑通再决定是否写进手册。测试规则的结论是：把原文唯一完整给出的那条规则（禁止为凑绿而改测试，且每个新测试都要先验证「被测代码什么都不做时会失败」）抄进单个项目的 AGENTS.md 试一轮，因为它是一条可直接落地、可自检的常驻约束；但原文只露出 7 条中的第 1 条，其余被截断，且仅凭作者主张，不宜直接全面采用。
+- **来源五（本次新增）**：GitHub 仓库 `AntoGA/agents-contract` 的 README（约 40 stars、单人维护、俄文），以调研报告形式并入。它给出五段式 `AGENTS.md` 契约、零依赖 linter `scripts/agents_lint.py`、Claude Code SessionStart 钩子 `scripts/session-start.sh` / `.ps1`、`CLAUDE.md` 一行 `@AGENTS.md`、三平台 CI workflow、`examples/python-app/`、`bench/` 下的 linter 速度测试与 A/B 实验脚本。
+- 来源五可核对的内容：五个必填分节（Project、Commands、Conventions、Boundaries、Definition of Done）与可选 `Lessons`；linter 的错误级检查（E001–E004 导入文件存在、E010 五节齐全、E020/E021 有命令且测试命令写成 `` - Test: `...` ``、E030 无 `<...>`/`{{...}}`/TODO/TBD/FIXME 占位、E040 无密钥）与警告级检查（W011 空分节、W022 命令不在 PATH、W050 反引号路径不存在、W060 重复标题、W070 `CLAUDE.md` 未导入 `AGENTS.md`、W101 文件超 32 KiB，Codex 默认在此截断）；`--json`、`--strict`、`--check-commands`、`-r` 与退出码 0/1/2；SessionStart 钩子跑 linter、装依赖、跑测试，输出进上下文，永远退出 0；`AGENTS_SETUP` / `AGENTS_TEST` / `AGENTS_SKIP_TESTS` 环境变量；Windows 用 `.claude/settings.windows.example.json`。
+- 来源五的数据：linter 速度（1.3 KiB `check()` 中位 0.21 ms、p95 0.36 ms，CLI 冷启动中位 50 ms；15.9 KiB 2.04 ms / 53 ms；31.9 KiB 3.91 ms / 56 ms；128 KiB 15.70 ms / 87 ms；加路径检查后 31.9 KiB 为 7.85 ms；典型契约 1–4 KiB 本身不到 1 ms）；A/B（`bench/ab_test.py --runs 5`，Claude Code headless `claude -p`，默认模型，玩具仓库「增值税计算」）得分 4.8→5.0、测试通过 5/5=5/5、只改权威来源 5/5=5/5、生成物同步且未手改 5/5=5/5、新增测试 5/5=5/5、写 CHANGELOG 4/5→5/5、平均步数 5.6→3.8（−32%）、中位时间 18.2 s→12.9 s（−29%）、平均成本 $0.091→$0.084（−8%）；linter 自身 15 个单元测试，CI 在三平台跑。
+- 来源五属于作者主张、没有数据：「Cursor / Copilot 也读 AGENTS.md」；「一小时落地」；「大仓库上差距应该更大」（作者自己说明未测）；「Lessons 长期收益最大」；「不绑厂商」。README 里 A/B 的日期写作 18.10.2026，无法核实，可能是笔误。
+- 来源五的局限（应作为试用前提）：5 次/条件远不足以统计显著；只有一个任务、仓库很小；只测了 Claude Code，没测 Codex / Cursor / Copilot；模型与版本会影响结果；强模型在小仓库上不要契约也能过——它自己能看到 `DO NOT EDIT` 注释并找到 `run_tests.py`，真正的质量差异只出现在「从代码里根本推不出来」的规则（CHANGELOG）上，其余收益是省掉探索步骤与降低时间波动（有契约时稳定 3–4 步，无契约时 4–7 步）。仓库仅约 40 stars、单人维护，未见第三方复现。
+- 第 17 步的命令、五段式分节、linter 检查项、SessionStart 配置、CI 文件路径与 `bench/ab_test.py --runs 5` 的 A/B 结果，均来自来源五 README；其中「本手册把它当小范围试验、不直接全员采用」是调研结论，不是 README 原文。第 17 步里用 `cp` 的 macOS / Linux 命令是按 README 的 Windows 快速开始改写的等价路径，不是 README 原文逐字；Windows 仍用 README 的 PowerShell 命令。
+- 调研结论给的取舍：重点抄三个工作流、skills/hooks 的文件级配置步骤和两张对照表；原文在子智能体、动态工作流、Agent Teams、MCP 四节被截断，且 2026 年模型名与价格无法核验，不要照抄具体数字。提交门禁做法的结论是：思路清晰但实现空白，需自行补齐 hook 实现后小范围验证，不要照抄「ten out of ten」这类说法。MyAgent 的结论是：可以小范围试，重点验证 Plan Mode 的只读审批和 Skills 自进化能否把反馈沉淀成可复用规则，但只有作者主张、没有评测数据，先在自己的小任务上跑通再决定是否写进手册。测试规则的结论是：把原文唯一完整给出的那条规则（禁止为凑绿而改测试，且每个新测试都要先验证「被测代码什么都不做时会失败」）抄进单个项目的 AGENTS.md 试一轮，因为它是一条可直接落地、可自检的常驻约束；但原文只露出 7 条中的第 1 条，其余被截断，且仅凭作者主张，不宜直接全面采用。项目契约的结论是：五段式 AGENTS.md + linter + SessionStart 钩子具体可照做、成本约一小时、跨工具复用，但作者自己说明只有 5 次单任务、且只测了 Claude Code，质量提升也只体现在从代码里推不出来的规则上，所以先在一个有隐性规则的真实仓库里小范围试，暂不直接全员采用。
 
 ## 依据的调研
 
@@ -678,3 +790,4 @@ git diff --stat HEAD~1 HEAD -- '*test*' '*spec*'
 - [Quoting Geoffrey Huntley](../research/radar/2026-10-13/2961-quoting-geoffrey-huntley.md)：值得一试，把架构约束从 AGENTS.md 这类提示文件搬到 pre-commit hook：提交时检查 git diff，发现绕过内部库（如 diagnostics 模块）的调用就让提交失败，并把纠正指令写进失败输出、交给编码智能体自纠。理由是把“靠提醒”变成“事件触发的强制门禁”，避免规则随上下文漂移；但原文只有一段口述、没有代码与量化数据，需自行补齐实现后小范围验证。
 - [ztt0216/MyAgent](../research/radar/2026-10-17/4080-ztt0216-myagent.md)：值得一试，可以小范围试：按 README 用 OpenAI-compatible 接口（示例里就有 deepseek-chat）把 MyAgent 在本地跑起来，重点验证 Plan Mode 的只读审批和 Skills 自进化能否把反馈沉淀成可复用规则；它给了可照抄的安装、.env、权限模式和反馈写法，但只有作者主张、没有评测数据，先在自己的小任务上跑通再决定是否写进手册。
 - [@kloss_xyz: 如果你正在进行 vibe 编码，你需要在你的 AGENTS.md 中添加这 7 条规则：](../research/radar/2026-10-17/4151-vibe-agents-md-7.md)：值得一试，把原文唯一完整给出的那条规则（禁止为凑绿而改测试，且每个新测试都要先验证“被测代码什么都不做时会失败”）抄进单个项目的 AGENTS.md 试一轮，因为它是一条可直接落地、可自检的常驻约束；但原文只露出 7 条中的第 1 条，其余被截断，且仅凭作者主张，不宜直接全面采用。
+- [AntoGA/agents-contract](../research/radar/2026-10-19/4924-antoga-agents-contract.md)：值得一试，按照 README 的做法，在一个有隐性规则的真实仓库里落地五段式 AGENTS.md、零依赖 linter 和 Claude Code SessionStart 钩子，并把 bench 脚本换成自己的任务做小规模 A/B 验证；这些步骤具体可照做、成本约一小时、跨工具复用，但作者自己说明只有 5 次单任务、且只测了 Claude Code，质量提升也只体现在从代码里推不出来的规则上，所以先小范围试，暂不直接全员采用。

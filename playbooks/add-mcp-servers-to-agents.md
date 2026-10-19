@@ -1,152 +1,87 @@
-# 给代理接外部工具前：隔离接入、核对清单、冒烟对照，再决定留不留
+# 把第三方工具和私人消息记录接给代理前，先做隔离、核对与对照验证
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：怎么在不污染主力环境的前提下，把第三方工具集（本地/远程 MCP、CLI harness、宿主内扩展、视频检索工具）接给代理，核对工具清单、做冒烟测试与对照验证，并据证据决定继续试还是只当思路参考。
-> 先试这一步：先做做法 A 或 D1（半天内能给出可观察的结论）；若你手上有一段本地视频要在里面找某个瞬间，先按做法 I 第 1–3 步跑通 index → ask → zoom。
+> 解决的问题：解决第三方 MCP/CLI（含 WhatsApp、微信、钉钉等只读私人消息源）接入代理时，只凭一条安装命令就上线、不核对工具清单、不验证数据外发与真实效果的问题。
+> 先试这一步：先选最轻的一条路径（如 `uvx jevcrawl doctor`、`idx` 零安装、或只读 WhatsApp/im-mcp 个人账号试用），在隔离环境跑通安装→枚举工具→一个真实只读任务→与人工基线对照，再决定是否扩大。
 > 最近修订：2026-10-19
 
 ## 解决什么问题
 
-把第三方工具集以 MCP 或 CLI 形式接给代理时，常见供给方式是一句注册/安装命令就完事：能不能用、多出哪些工具、花了多少钱、和现有做法比是不是真的更好，全靠感觉。本章解决的是：怎么在不污染主力环境的前提下，完成接入、核对工具清单、冒烟测试和对照验证，并据证据决定“继续试”还是“只当思路参考”。
-
-现在有八条路径。REA 接 Hermes（本地 MCP，原文只给一条命令、能力清单被截断、没有验证方式）；jevcrawl 接 Claude Code / Cursor（本地 MCP，有可直接照做的安装命令、参数默认值、输出字段和一份基准数据）；arcmira（远程 MCP，不给细粒度工具而是让模型写程序调用，有 OAuth 与 Bearer key 两条接入路径、方法表、示例程序、credits 计量规则和错误码，但数据覆盖与说话人/赞助识别准确性全是厂商自述，且有付费计划与预算门槛）；CLI-Anything / CLI-Hub（把桌面软件、代码库、内部工具包装成 agent-native CLI，有现成 harness 注册表、meta-skill 和生成流水线，但所有效果数据均为项目自述、无第三方复现）；reason network（团队 agent 横向通信，Reason CLI 首次运行相关命令时自动下载固定版本、校验 checksum 的构建并配好 MCP server `reason-network` 与三个工具 `list_team`、`send_message`、`check_inbox`，可用 `reason network who` 看谁在线、`reason network <session> "..."` 让两个 session 直接问答，但 README 没有任何效果数据，且强依赖 Reason workspace 与团队整体部署）；idx（安装包名 `ihsg-cli`、命令 `idx`，单个 Rust 静态二进制，一份数据三种界面——终端表格、`-o json`、MCP server `idx mcp`（23 个工具），数据源全部免费且无需 API key，`idx mcp setup <客户端>` 会把二进制的绝对路径直接填进配置；但它是印尼股市（IDX / IHSG）专用工具，领域窄，调研只给出结构与命令，没有效果数据）；Blender 扩展 mcp-for-blender-pro（AI 助手直接住进宿主软件：扩展内置 MCP server 与可视化 Studio 工作区，提供 21 个场景工具，支持多家云模型、本地 Ollama 和自定义端点，可选单助手或 Manager/Worker/Reviewer 团队链，带操作审批、取消、命名撤销与视口截图；但发布面向 Windows x64 + Blender 4.2+，README 未给出任何量化指标或基准测试）；以及 jevreel（零嵌入的视频理解：按 1 fps 抽帧、60 帧拼一张带标签的 1568px contact sheet，对每张 sheet 并行调 TypeSafe 的决策模型 Jev 做类型化回答，排名靠前的窗口再用全分辨率帧逐 0.5 秒复核，返回「时间、概率、帧、附近台词」给 agent；有 CLI、MCP server、skill、Python API 和 lens 机制，但底层 Jev 图像能力仍是实验性，验证只基于单个测试视频）。
-
-几条 MCP 路径的差别值得先分清：REA 与 jevcrawl 把第三方包拉到本机执行（`npx` / `uvx`），安全纪律靠隔离环境；arcmira 是远程服务器，本地不落包，但你自己写的程序会在厂商的 Cloudflare Dynamic Worker 隔离沙箱里执行，沙箱里程序不持有密钥（由父级出站代理注入凭证），出站只允许 `GET https://api.arcmira.com/v1/*`，写工具额外允许 `/v1/monitors` 与 `/v1/trackers` 的 POST/PATCH、永不 DELETE；idx 也是本地 MCP，但它不是运行时把第三方包拉下来执行，而是先装一个自包含的静态二进制，再由这个二进制自己起 MCP server（`idx mcp`）——没有运行时包依赖，也没有云端沙箱边界，边界变成“你装的是哪个二进制、它会向哪些数据源发请求”。Blender 扩展又不一样：工具不是由外部宿主连上去的，而是扩展自己把 MCP server 起在 Blender 进程里，助手住在软件内部（Studio 工作区），同时也能对 OpenCode Portable 或其他兼容客户端暴露一个经过认证的本地端点；边界变成“你给这个助手多大的场景操作权限、以及哪个模型在替你改场景”。CLI 路径多出“上游软件依赖”和“生成物自带测试”两个变量。reason network 不是给单个代理补外部数据能力，而是把团队里每个人电脑上的编码 agent session 连成一张网：同 Wi-Fi 直连，跨公网走 iroh，直连失败时经中继（中继只看到加密字节）；只有团队成员能连，且一台电脑只能代表它自己的主人说话；状态存放在 `~/.reason/network`。jevreel 是第八种形态：它既不是通用工具集，也不是宿主软件内置助手，而是一条把视频抽帧成 contact sheet、再用决策模型做类型化回答的检索流水线——CLI、MCP、skill、Python API 四套入口共用同一份索引与缓存，全程不计算、不存储任何向量。
+把第三方工具集以 MCP 或 CLI 形式接给代理时，常见供给方式是一句注册/安装命令就完事：能不能用、多出哪些工具、花了多少钱、数据发到哪里、和现有做法比是不是真的更好，全靠感觉。本章解决的是：怎么在不污染主力环境、不越过数据外发边界的前提下，完成接入、核对工具清单、冒烟测试和对照验证，并据证据决定“继续试”“只当思路参考”还是“停止”。现在覆盖 10 条工具路径：jevcrawl、REA/Hermes、arcmira、CLI-Anything/CLI-Hub、reason network、idx、Blender 扩展、jevreel、WhatsApp MCP、im-mcp；做法 C 是不接入的降级做法。新增的两条私人消息路径有一个共同前提：先只读、只用自己的个人账号、只在一台机器上试；发送、多人共享、媒体转写都不在范围内。
 
 ## 适用与不适用
 
 适用：
 
-- 本机已有可用的 MCP 客户端：Claude Code、Claude Desktop、Cursor，或 Hermes CLI（终端里 `hermes` 命令存在）。
-- 宿主支持远程 MCP / custom connector：Claude Code、Codex、Claude Desktop、claude.ai、ChatGPT、Cursor、Gemini CLI。
-- 愿意并且能够在隔离环境（容器、虚拟机或专用账号）里先跑第三方包。
-- 目标是“让代理一次性获得一整套外部工具 / 一类新能力”，例如站内多跳资料检索，或把 GIMP、Blender、LibreOffice 等软件变成可反复调用的 CLI。
-- 需要反复调用外部软件、需要可复现操作的任务：CLI 的结构化、可组合、自描述和 JSON 输出更适合 agent。
-- 需要在 YouTube 视频与直播的转录内容里检索：谁在什么时间说了什么（带时间戳链接）、某个话题在哪些节目里被讨论、某个品牌赞助了哪些节目、谁在推荐某个实体（并区分自然推荐与赞助口播）——这条走 arcmira。
-- 团队里每个人都在用 Reason CLI、且成员都在同一个 Reason workspace，想让一个 session 直接问另一个 session、减少人工中转：这条走 reason network。
-- 想把同一份数据同时供给人（终端表格）、脚本（JSON）和 agent（MCP），且要求三者字段口径一致：这条走 idx，它的 MCP 工具返回与 `-o json` 完全相同的 envelope，学会 CLI 的 agent 就已经会用工具。
-- 需要离线/弱网仍可用，并且要求“来源没返回的字段就是 `null`、不做估算”：idx 按端点的 TTL 缓存，支持 `idx --offline` 与 `IDX_OFFLINE=1`。
-- 想验证“把现成 CLI 包成 MCP 工具供 agent 调用”这一模式是否真的省事：idx 不做任何包装，装完用 `idx mcp setup <客户端>` 注册即可。
-- 你在 Windows x64 上用 Blender 4.2+，想让 AI 在场景里做“检查 → 建对象 → 改材质 → 复制排列 → 找资产”这类可回退的操作，并且希望有审批、取消、命名撤销和视口截图作为反馈面：这条走 Blender 扩展。
-- 有一段本地视频或 URL 视频，要在里面找“某个瞬间在哪儿”——有人喝果汁盒、按台词定位「Thom 何时向 Celia 道歉、说了什么」、读出画面里的报纸标题、用一张参考照片找出该角色出现的每一个场景、或把整部片按自己定义的 4 个问题“绘制地图”：这条走 jevreel。
-- 不想算 embedding、只想定位/验证/描述某一刻：jevreel 全程不计算、不存储向量；调研说明 embedding 适合对一个大库反复查询（向量建好后每次搜索零成本），jevreel 适合「定位、验证、描述某一刻」，二者组合方式是 embeddings 先缩范围、jevreel 再找到并描述。
-- 需要给整片视频挂一份可反复过滤、过滤不再产生请求的自定义问题时间线：用 jevreel 的 lens（问题类型可为 `noul` / `choice` / `score`）。
+- 通用：本机有可用的 MCP 客户端；愿意在容器、虚拟机或专用账号里先跑第三方包；目标是让代理获得一整套外部工具或一类新能力；需要反复调用外部软件、需要可复现操作；愿意做“挂载 vs 未挂载”的对照。
+- jevcrawl：站内多跳资料检索，答案埋在首页几跳之下，且目标站点不依赖 JavaScript 渲染。
+- REA/Hermes：已有 Hermes CLI，想试一条 `npx` 拉起的 MCP 工具集；但原文只给一条命令、能力清单被截断，只适合试。
+- arcmira：要在 YouTube 视频与直播转录里检索谁在什么时间说了什么、品牌赞助、谁在推荐某个实体；接受远程 MCP + 写程序调用；有付费计划与预算。
+- CLI-Anything：要反复调用 GIMP、Blender、LibreOffice 等软件，愿意先装上游软件；或想让编码 agent 为内部工具生成 CLI。
+- reason network：团队里每个人都在用 Reason CLI、成员都在同一个 Reason workspace，想让一个 session 直接问另一个 session。
+- idx：目标就是印尼股市，或想照抄它的结构——“一份数据三种界面”、`mcp setup` 自动填绝对路径、统一 envelope 与退出码。
+- Blender 扩展：Windows x64 + Blender 4.2+，想让 AI 在场景里做可回退操作，并要审批、取消、命名撤销与视口截图。
+- jevreel：有一段本地或 URL 视频，要在里面找“某个瞬间在哪儿”；接受底层 Jev 图像能力仍是实验性、验证只基于单个测试视频。
+- J WhatsApp MCP：个人 WhatsApp 账号，只做只读检索、摘要、补看群聊、给未命名聊天补名；愿意在自己的 Cloudflare 付费 Workers 上部署；能接受非官方协议和违反 WhatsApp 条款的风险；一个部署只对应一个账号和一个 owner。
+- K im-mcp：Windows x64 或 macOS，微信 4.x / 钉钉 7.x，客户端已登录；要给 agent 补一段私有沟通上下文；只读检索；能接受本地数据库解密后明文落盘、强依赖客户端版本。
 
 不适用：
 
-- 不能隔离、必须直接在主力工作目录上试用。
-- 需要稳定可复现的生产接入。
-- 你依赖“139 个工具”的完整清单来规划任务：原文在列举处被截断，完整清单不可见。
-- 目标站点需要 JavaScript 渲染、需要登录、或有付费墙 / CAPTCHA：jevcrawl 这几项都不做。
-- 需要细粒度工具清单来规划任务：arcmira 只暴露 4 个工具（`arcmira_describe`、`arcmira_execute_read`、`arcmira_execute_write`、`arcmira_feedback`），能力表在 `arcmira_describe` 返回的客户端方法参考里（约 23,000 字符），要先读它而不是猜工具名。
-- 不想开账号、不想设预算：arcmira 的 Premium 转录、赞助数据等能力会被付费计划 gate 拦住；README 没有给出免费额度上限，只说 “Plan limits apply”。
-- 需要一个“可删除”的持续跟踪生命周期：arcmira 的 monitor 不提供删除，只能 `paused`；`monitors.attachTrackers` 迁移 tracker 需用户先同意。
-- 所选 CLI harness 包装的是真实软件时，你不想先安装上游桌面软件：大量 harness 依赖上游软件。
-- 你在 Windows 上且没有 Git for Windows（含 `bash`/`cygpath`）或 WSL：Claude Code 路径会报 `cygpath: command not found`。
-- 团队不在 Reason workspace，或找不到第二个人配合：reason network 退化为思路研读，单人无法自测出“团队通信”的价值。
-- 需要效果数据、手动配置 MCP 的方法或提示词层面的指引：reason network 的 README 都没有给。
-- 你的目标不是印尼股市：idx 是领域专用工具，可照抄的是它的供给结构（一份数据三种界面、`mcp setup` 自动填绝对路径、统一的 envelope 与退出码），不是行情本身。
-- 需要该工具的效果数据或前后对比：本次给出的调研正文在第 9 步后被截断，未见效果数据或对比指标。
-- 你不在 Windows x64，或 Blender 不是 4.2+：Blender 扩展的 release bundle 面向 Windows x64 + Blender 4.2 或更高版本，其他平台/版本未见支持。
-- 你打算把 Blender 扩展的 “Python 工具验证” 当作安全沙箱：它只是拦截不允许操作的验证，不是隔离机制。
-- 你需要的是一份量化效果证据：Blender 扩展 README 没有用户案例、成功率、耗时对比或基准数据，只有作者的价值描述。
-- 你需要由时间、事件或状态触发的持续运行：Blender 扩展只提到任务按顺序自动推进、被阻塞任务有一次纠正机会，没有持续运行机制。
-- 需要成熟、有独立验证的图像理解能力：jevreel 底层 Jev 图像能力仍是实验性，验证只基于单个测试视频，调研建议只做小范围试用、不建议直接全量采用。
-- 不装 FFmpeg、不用 Python 3.11+ 或不用 uv：jevreel 的插件方式需要 uv 与 FFmpeg 在 PATH 上，本机语音转写默认不含。
-- 需要定时器或事件触发的持续运行：jevreel 只是把 `index_video` 作为 MCP 后台任务运行、重复调用返回已有索引并只补跑新增的 lens，原文没有给出定时器/事件触发的具体机制。
-- 需要看到完整的 Claude Code 插件接入细节：本次 jevreel 调研原文在 `claude m...` 处被截断，该部分细节未知。
-- 需要向量检索式的跨大库存量查询：embedding 适合一个大库反复查询，jevreel 适合定位、验证、描述某一刻，二者不是互相替代。
+- 通用：不能隔离、必须直接在主力工作目录上试用；需要稳定可复现的生产接入；依赖被截断的完整工具清单来规划任务；需要量化效果数据但原文只有作者自述。
+- jevcrawl：目标站点需要 JavaScript、需要登录、有付费墙/CAPTCHA；这些它都不做。
+- arcmira：不想开账号、不想设预算；需要可删除的持续跟踪生命周期（monitor 只能 `paused`，不提供删除）。
+- CLI-Anything：所选 harness 包装真实软件但你不想装上游软件；Windows 上没有 Git for Windows（含 `bash`/`cygpath`）或 WSL。
+- reason network：团队不在 Reason workspace，或找不到第二个人配合；单人无法自测出“团队通信”的价值。
+- idx：目标不是印尼股市；它领域窄，值得抄的是供给结构，不是行情本身。
+- Blender 扩展：不在 Windows x64 / Blender 4.2+；把“Python 工具验证”当安全沙箱；需要量化效果证据。
+- jevreel：需要成熟、有独立验证的图像理解能力；不装 FFmpeg、不用 Python 3.11+ 或不用 uv；需要向量检索式的跨大库存量查询。
+- J WhatsApp MCP：要发送消息、多人共享、媒体转写；用免费 Cloudflare 计划（README 要求 Workers Paid，免费计划未验证）；不能接受非官方协议与条款风险；希望一个部署服务多个账号或多个 owner。
+- K im-mcp：Linux（原文未提支持）；微信/钉钉版本不在支持表；Windows 没有管理员终端或微信未登录；macOS 4.1+ 没有 64 位 hex passphrase；不能接受本地解密明文落盘；需要 README 未给出的定时/事件触发实现；需要效果指标而只有兼容性验证表。
 
 ## 前置条件
 
 通用：
 
 - 一个隔离环境：容器、虚拟机或专用账号，避免第三方工具直接接触主力工作目录。
-- 到包分发源的网络出口（npx 走 npm registry，uvx 走对应源，pip 走 Python 包源）。
+- 到包分发源与目标服务的网络出口。
+- 一个可回退的低风险真实任务，用来做冒烟测试和对照。
 
-REA / Hermes 路径：
+jevcrawl：TypeSafe Jev API key（付费，`jev-1.13.0` 输入 token 单价 $0.042/百万）；本机已装 uv；到 `api.typesafe.ai` 的网络出口；确认页面文本允许外发到 TypeSafe。
 
-- Hermes CLI 可用：终端里 `hermes` 命令存在。原文默认读者已具备 Hermes 环境，但没有写安装前提，需自行确认。
-- Node.js / npx 运行环境可用，因为命令用 `npx` 拉包。
+REA/Hermes：`hermes` 命令存在；Node.js/npx 可用；能访问 npm registry；在隔离环境执行。
 
-jevcrawl 路径：
+arcmira：Arcmira 账号；MCP 宿主为 Claude Code / Codex / Claude Desktop / claude.ai / ChatGPT / Cursor / Gemini CLI 之一；付费计划与 on-demand 预算（README 只说 “Plan limits apply”，未给免费额度上限）；到 `https://mcp.arcmira.com/mcp` 与 `https://api.arcmira.com` 的网络出口。
 
-- 从 `https://console.typesafe.ai/` 申请一个 Jev API key（付费服务，README 给出 `jev-1.13.0` 输入 token 单价 $0.042/百万）。
-- 本机已装 uv（`https://docs.astral.sh/uv/`）。
-- 到 `api.typesafe.ai` 的网络出口。
-- 页面文本（段落、链接标签、URL）会被发送到 TypeSafe 打分 —— 先确认你的目标站点内容允许外发。
+CLI-Anything：Python 3.10+；若 harness 包装真实软件，先装该上游软件；meta-skill 需要支持 SKILL 的 agent；Claude Code 生成器需已装 Claude Code，Windows 需 Git for Windows 或 WSL；Cursor 需已装 Cursor 并 clone 仓库。
 
-arcmira 路径：
+reason network：使用 Reason CLI 与 Reason workspace，团队其他成员也在同一个 workspace；每台机器上的 daemon、MCP server `reason-network` 与三个工具权限可用；网络可达（同 Wi-Fi 直连、iroh 跨公网、或中继兜底）；`~/.reason/network` 可用。各 session 要维护有意义的 title 和 todo。
 
-- 一个 Arcmira 账号，可从网页注册，也可以纯 API 注册（见做法 E 第 3 步）。
-- MCP 宿主为 Claude Code / Codex / Claude Desktop / claude.ai / ChatGPT / Cursor / Gemini CLI 之一。
-- 付费计划与 on-demand 预算：决定哪些能力可用（Premium 转录、赞助数据等会被 gate 拦住）。预算在 dashboard 里设，工具本身不接受金额参数。README 未给出免费额度上限，只说明 “Plan limits apply”。
-- 到 `https://mcp.arcmira.com/mcp` 与 `https://api.arcmira.com` 的网络出口。
+idx：Node/npm，或 Rust 1.88+，或 Linux/macOS 直接跑 install.sh；Windows 无 npm 时从 releases 下载 `idx-<version>-x86_64-pc-windows-msvc.zip`；npm 12 需 `--allow-git=all`；支持 MCP 的客户端；只支持远程 URL 的产品需要 HTTPS 隧道；离线模式要求之前至少成功取过一次。
 
-CLI-Anything / CLI-Hub 路径：
+Blender 扩展：Windows x64、Blender 4.2+；从 Releases 下载 `mcp-for-blender-pro.zip`；支持 tool calling 的模型与 provider 凭证；资产工作流可能需要 Poly Haven / Sketchfab / Poly Pizza 的 key；使用 Studio 或外部客户端时保持 Blender 打开。
 
-- Python 3.10+。
-- 若所选 harness 包装的是真实软件（GIMP / Blender / LibreOffice 等），需先自行安装该上游软件。
-- 若走 meta-skill，需要支持 SKILL 的 agent（OpenClaw、Nanobot、Claude Code、Codex、Reasonix、Antigravity 等）。
-- 若走 Claude Code 生成器，需已装 Claude Code；Windows 需先装 Git for Windows（含 `bash`/`cygpath`）或使用 WSL，否则会报 `cygpath: command not found`。
-- 若走 Cursor，需已装 Cursor 并 clone 仓库；默认装到 `~/.cursor/plugins/local/cli-anything`（可用 `CURSOR_PLUGINS_HOME` 覆盖，指向名为 `plugins` 的目录）。
+jevreel：Python 3.11+、FFmpeg 在 PATH；TypeSafe API key（无 key 时，不带时间线的索引、zoom、字幕和 query 仍可用）；插件方式需要 uv 与 FFmpeg，本地语音转写默认不含；视频为本地文件或 URL，或旁有 `.srt`/`.vtt` 字幕；自定义问题要写成 lens TOML。
 
-reason network 路径：
+J WhatsApp MCP：Cloudflare 账户（README 要求 Workers Paid；免费计划未验证，作者建议删掉 `limits` 块并预期首次导入不稳定）；Node 20+；自己的手机和 WhatsApp 账号；只读个人账号；创建 `OAUTH_KV` 并把 id 填进 `wrangler.jsonc`；设置至少 12 字符的 `OWNER_PASSWORD`；可选 `PIN`（32+ 随机字符）开启调试路由。
 
-- 你使用 Reason CLI 与 Reason workspace，且团队其他成员也在同一个 Reason workspace 里。README 称 “Everyone in your Reason workspace is on the same network”。
-- 每台机器上的 daemon、MCP server `reason-network` 及三个工具权限可用；Reason CLI 会在首次运行相关命令时自动下载一个固定版本、校验过 checksum 的构建并配置好。
-- 网络可达：同 Wi-Fi 直连，或经 iroh 跨公网，或经中继兜底。
-- 本机状态目录 `~/.reason/network` 可用。
-- 各 session 维护好自己的 title 和 todo，因为这是别人判断“你在做什么”的唯一信息来源。
-
-idx 路径：
-
-- Node/npm（用于 `npx github:fzn0x/idx ...` 零安装试用或 `npm install -g github:fzn0x/idx`），或 Rust 1.88+（`cargo install ihsg-cli`），或 Linux/macOS 直接跑 install.sh；Windows 且无 npm 时从 releases 页下载 `idx-<version>-x86_64-pc-windows-msvc.zip`。
-- npm 12 需要加 `--allow-git=all`。npm 安装的只是一个小启动器，第一次运行 `idx` 时会下载对应平台的预编译二进制并用 release 的 `SHA256SUMS` 校验——这一步决定了你信任的到底是什么。
-- 一个支持 MCP 的客户端（README 列出了 Claude Code、Codex、Gemini CLI、GitHub Copilot CLI、VS Code、Factory Droid、Qwen Code、Claude Desktop、Meta Muse Code、Cline / Roo Code / Kilo Code、Cursor / Windsurf / JetBrains / Warp / Trae / Augment、OpenCode、Crush、Continue、Zed、Google Antigravity、Kiro、Goose、Mistral Vibe 等）。
-- 只支持远程 URL 的产品（ChatGPT、Claude.ai、Perplexity、Devin、Manus）需要一条 HTTPS 隧道把 `idx mcp --http ...` 暴露出去，请求头用 `Authorization: Bearer T`。
-- 想用离线模式，前提是之前至少成功取过一次（缓存按端点的 TTL 生效）。
-
-Blender 扩展路径：
-
-- Windows x64，Blender 4.2 或更高版本。
-- 从仓库 Releases 下载 `mcp-for-blender-pro.zip`。
-- 一个支持 tool calling 的模型，以及 provider 连接凭证；provider 可选 OpenAI、Anthropic Claude、Google Gemini、OpenRouter、OpenCode Zen、Ollama 和自定义 API。具备图像能力的模型才能解读视口截图。
-- 若要使用资产工作流（Poly Haven、Sketchfab、Poly Pizza），需要相应服务的 key，并遵守所用资产的许可。
-- 使用 Studio 或外部客户端时保持 Blender 打开。
-
-jevreel 路径：
-
-- Python 3.11+、FFmpeg 在 PATH 上。
-- 一个 TypeSafe API key（<https://console.typesafe.ai>）。无 key 时，不带时间线的索引、zoom、字幕和 query 仍可用。
-- 若走插件方式：uv 与 FFmpeg 在 PATH；本地语音转写默认不含，需要的话按 README 的「By hand」用 `jevreel[all]` 手动添加。
-- 视频本身要是本地文件或 URL（`[all]` 装 yt-dlp 以支持 URL），或在视频旁放好 `.srt`/`.vtt` 字幕，否则用本地 faster-whisper 转写。
-- 想把自定义问题挂到每分钟上，需要写成 lens 的 TOML（问题类型为 `noul` / `choice` / `score`）。
-
-另外，REA 侧需要自己查 Hermes 自身文档，找到“查看已注册 MCP 服务器 / 枚举工具”的命令，因为原文没有给出这个命令。
+K im-mcp：Windows x64 或 macOS（Apple Silicon / Intel），原文未提 Linux；微信 4.x（实测 `4.1.15.13` Windows、`4.1.35.15` macOS ARM64、`4.1.15`(270115) macOS x86_64），兼容 3.9.x；钉钉 7.x（实测 `7.6.0.x`，另有 7.5.x / 7.0.x）；Windows 初始化需管理员终端且微信已登录（扫描 `Weixin.exe` 内存取密钥）；macOS 4.1+ 需 64 位 hex passphrase；已安装 uv；客户端支持 MCP 配置。默认落盘 `~/.wechat_mcp/`、`~/.dingtalk_mcp/`，可用 `--output` / `--output-dir` 改。
 
 ## 操作步骤
 
-做法 A 与做法 B 适用于“文档里给了安装命令、参数默认值和输出字段”和“只有一条注册命令、清单不完整”的本地 MCP 工具集；做法 E 适用于远程 MCP，且它的调用方式不是一堆工具名，而是让模型写程序；做法 C 是不接入，只留思路；做法 D 是用 CLI-Anything / CLI-Hub 把软件包成 agent-native CLI，适用于需要反复调用外部软件、需要可复现操作的任务；做法 F 适用于团队都在 Reason workspace、想让各人的 agent session 直接互相问答或通知；做法 G 适用于“工具本身就已经是 CLI、并且自带 MCP server”，你想验证“把现成 CLI 包成 MCP 工具供 agent 调用”这一模式是否省事——它不做任何包装，装完用 `idx mcp setup <客户端>` 注册即可；做法 H 适用于“AI 助手直接住进宿主软件内部”，你想在 Blender 里边看视口边改场景、并要审批与撤销兜底；做法 I 适用于“有一段本地/URL 视频、要找里面某个瞬间”，它不接通用工具集，而是把一条抽帧 + 类型化回答 + 全分辨率复核的视频检索流水线接给 agent。先做 A 或 D1：它们能在半天内给出可观察的结论，也顺带把隔离环境、基线记录这套流程跑通；若你已有支持远程 MCP 的宿主且目标就是这类“口语内容”检索，直接做 E；若团队已在 Reason 且找得到第二个人，可做 F；若你只想用最小成本看清“CLI 与 MCP 共用一份输出”的结构，做 G 的第 1、3、4 步即可；若你手上就有 Windows x64 + Blender 4.2+，做 H 的第 1–4 步，先只跑单助手；若你手上有一段本地短视频要检索，做 I 的第 1–3 步（index → ask → zoom），接入 agent 放第 4 步。
+先做 A 或 D1：它们能在半天内给出可观察结论，也顺带把隔离环境、基线记录这套流程跑通。若目标就是私人消息只读检索，再考虑 J 或 K；不要从发送、多人共享或媒体转写开始。若你已有支持远程 MCP 的宿主且目标就是口语内容检索，直接做 E；团队已在 Reason 且找得到第二个人，可做 F；只想用最小成本看清“CLI 与 MCP 共用一份输出”的结构，做 G 的第 1、3、4 步；手上就有 Windows x64 + Blender 4.2+，做 H 的第 1–4 步；有一段本地短视频要检索，做 I 的第 1–3 步；有个人 WhatsApp 且接受条款风险，做 J 的 1–8 步；要在本机补微信/钉钉沟通上下文，做 K 的 1–6 步。
 
 ### 做法 A：接入有完整参数与回执的工具集（以 jevcrawl 为例）
 
-1. 申请 key，确认外发边界。
+1. 申请 key，确认外发边界。页面文本（段落、链接标签、URL）会被发送到 TypeSafe 打分。预期结果：拿到 key，并列出哪些站点不能碰。
 
-   从 `https://console.typesafe.ai/` 申请一个 Jev API key（付费服务）。页面文本（段落、链接标签、URL）会被发送到 TypeSafe 打分。
-
-   前提：确认你的目标站点内容允许外发。预期结果：拿到 key，并明确列出哪些站点不能碰。
-
-2. 装成 Claude Code 的 MCP server。原文原样命令：
+2. 装成 Claude Code 的 MCP server：
 
 ```bash
 claude mcp add jevcrawl -e TYPESAFE_API_KEY=<your key> -- uvx jevcrawl
 ```
 
-   预期结果：jevcrawl 作为 MCP server 写入 Claude Code 配置。
-
-3. 或写进其他 MCP 客户端的配置文件（Claude Desktop、Cursor 等，`mcpServers` 段）：
+3. 或写进其他 MCP 客户端的 `mcpServers` 段：
 
 ```json
 {
@@ -166,100 +101,130 @@ claude mcp add jevcrawl -e TYPESAFE_API_KEY=<your key> -- uvx jevcrawl
 uvx jevcrawl doctor
 ```
 
-   预期结果：doctor 报告通路正常。这一步是后面所有验证的前提。
+预期结果：doctor 报告通路正常。这是后面所有验证的前提。
 
-5. 用一句自然语言提示词验证通路：
+5. 用自然语言提示词验证通路：
 
-```
+```text
 Use jevcrawl to find which Python version added the walrus operator, starting from docs.python.org
 ```
 
-   预期结果：代理不需要用户点名工具，就自动调用 jevcrawl 并返回带出处的原文段落。README 提到会加载 skills 的 agent 还可以用仓库里的 `skills/jevcrawl/SKILL.md`。
+预期结果：代理不需要用户点名工具，就自动调用 jevcrawl 并返回带出处的原文段落。
 
-6. 或者不走 MCP，直接用 CLI：
+6. 或不走 MCP，直接用 CLI：
 
 ```bash
 uv tool install jevcrawl
-# 或 pip install jevcrawl
-
-jevcrawl crawl https://docs.python.org/3/ --goal "What does the walrus operator do?" [--json]
-jevcrawl scrape https://example.com/help/returns [--goal "..."] [--json]
-jevcrawl map https://example.com --goal "..." [--limit 20]
+jevcrawl crawl https://docs.python.org/3/ --goal "What does the walrus operator do?" --json
+jevcrawl scrape https://example.com/help/returns --goal "..." --json
+jevcrawl map https://example.com --goal "..." --limit 20
 jevcrawl doctor
 ```
 
-   三个工具的用途：`crawl(goal, start_url, max_pages=30, max_seconds=120, return_tokens=4000, max_decision_usd=0.05)` 用于答案可能在几层链接之下的情况，返回相关段落；`scrape(url, goal=None)` 用于已知单个页面，带 goal 只返回相关段落，不带 goal 返回全部内容且不调用 Jev；`map(start_url, goal, limit=50, max_pages=10)` 只返回排序后的 URL 列表，用来决定 scrape 哪些。
+`crawl(goal, start_url, max_pages=30, max_seconds=120, return_tokens=4000, max_decision_usd=0.05)` 用于答案可能在几层链接之下；`scrape(url, goal=None)` 用于已知单页；`map(start_url, goal, limit=50, max_pages=10)` 只返回排序 URL。
 
-7. 按需设置环境变量。
+7. 按需设置环境变量：`TYPESAFE_API_KEY`、`JEVCRAWL_BASE_URL`（默认 `https://api.typesafe.ai`）、`JEVCRAWL_MODEL`（默认 `jev-1.13.0`，固定版本，阈值按版本校准）、`JEVCRAWL_CACHE_DIR`（默认 `~/.jevcrawl/cache`）。
 
-| 环境变量 | 含义 | 默认值 |
-|---|---|---|
-| `TYPESAFE_API_KEY` | Jev API key（必需） | 无 |
-| `JEVCRAWL_BASE_URL` | Jev 兼容端点 | `https://api.typesafe.ai` |
-| `JEVCRAWL_MODEL` | 模型 id | `jev-1.13.0`（固定版本，阈值按版本校准） |
-| `JEVCRAWL_CACHE_DIR` | 答案缓存目录 | `~/.jevcrawl/cache` |
+8. 用预算参数和回执字段核对每次调用：`max_pages`、`max_seconds`、`max_decision_usd`、`return_tokens` 限定每次调用；`max_decision_usd` 是硬上限，可能超限的请求不会发出；用 `stopped_because`（`answered` / `frontier_empty` / `max_pages` / `max_seconds` / `budget` / `auth_error`）判断是找到答案还是撞上限；同一 goal 同一页面的 Jev 结果会缓存；需要 JS 的 URL 列在 `stats.needs_js_urls`；返回还含 `blocks`、`uncertain`、`pages`、`stats`（`pages_fetched`、`tokens_raw`、`tokens_returned`、`jev_calls`、`cache_hits`、`jev_cost_usd`、`model`、`degraded`、`needs_js_urls`、`stopped_because`、`elapsed_seconds`）。
 
-   其余（阈值、每页链接数、并发）在 `jevcrawl/config.py` 有实测默认值；Python 调用方可以传自己的 `Config`。
-
-8. 用预算参数和回执字段核对每次调用。
-
-   - 每次调用都被 `max_pages`、`max_seconds`、`max_decision_usd`、`return_tokens` 限定；`max_decision_usd` 是硬上限，可能超限的请求根本不会发出，爬取以 `budget` 结束。
-   - 用 `stopped_because`（`answered` / `frontier_empty` / `max_pages` / `max_seconds` / `budget` / `auth_error`）判断这次是找到了答案还是撞到上限。
-   - 同一 goal 同一页面的 Jev 结果会缓存到本地，重复不花钱。
-   - 需要 JS 的页面不会被执行，URL 会列在 `stats.needs_js_urls` 里。
-   - 返回结构还包含 `blocks`（相关段落，按相关性排序，带 `url`、`heading_path`、`char_start`/`char_end`、`relevance`）、`uncertain`（边缘段落）、`pages`（含 `text_sha256`）和 `stats`（`pages_fetched`、`tokens_raw`、`tokens_returned`、`jev_calls`、`cache_hits`、`jev_cost_usd`、`model`、`degraded`、`needs_js_urls`、`stopped_because`、`elapsed_seconds`）。预期失败以 `{"error": "<code>", "message": "<what to do>"}` 返回，不会往 agent 会话里抛异常。
-
-   预期结果：每次爬取都有一份可直接读的回执，而不是只能看答案对不对。
-
-9. 观察降级行为。
-
-   连续三次 Jev 请求失败后，爬取转为广度优先继续，所有 block 以未打分形式放进 `uncertain`，并置 `stats.degraded`。原文没有提到定时或事件触发的机制。
-
-   预期结果：知道系统降级时你看到的是什么，不至于把“降级后的结果”当成“打了分的结果”。
+9. 观察降级：连续三次 Jev 请求失败后，爬取转为广度优先，所有 block 以未打分形式放进 `uncertain`，并置 `stats.degraded`。不要把降级结果当成打分结果。
 
 ### 做法 B：接入只有一条命令、清单不完整的工具集（以 REA 接入 Hermes 为例）
 
-1. 准备隔离环境并确认前提。在容器、虚拟机或专用账号中打开终端，确认 `hermes` 命令存在、`npx` 可用、能访问 npm registry。预期结果：后续命令能在不接触主力工作目录的环境中执行。
+1. 在隔离环境确认 `hermes` 命令存在、`npx` 可用、能访问 npm registry。
 
-2. 注册 REA MCP 服务器。原文原样命令：
+2. 注册：
 
 ```
 hermes mcp add rea --command npx --args -y rea-agents@6.3.0 mcp
 ```
 
-   参数含义（按命令字面）：服务器名 `rea`；启动方式 `--command npx`；参数 `--args -y rea-agents@6.3.0 mcp`，即用 npx 自动确认安装并运行 `rea-agents` 的 6.3.0 版本、以 `mcp` 子命令启动。前提：npm registry 可访问；首次运行 npx 会拉取并执行第三方包。预期结果：命令完成注册，`rea` 成为一个名为 `rea` 的 MCP 服务器；是否真的出现要下一步核对。
+3. 核对注册与工具清单。原文没有给出查看已注册 MCP 服务器或工具列表的命令，需查 Hermes 文档补上。记录 `rea` 是否存在、实际工具数量和名称；作者声称有 139 个工具，这个数量未验证。
 
-3. 核对注册与工具清单。原文没有给出查看已注册 MCP 服务器或工具列表的具体命令，需要查阅 Hermes 自身文档（例如对应的 list / 工具枚举命令），确认 `rea` 是否出现在列表中。预期结果：记录到 `rea` 是否存在、实际工具数量和名称。作者声称会有 139 个工具，这一数量原文未验证，只作为核对参照。
+4. 做低风险冒烟测试：在 Hermes 会话里提一个需要外部工具的自然语言请求，观察代理会不会自动选中 rea 工具。原文在能力列举处被截断，只作为核对参照。
 
-4. 做低风险冒烟测试。在 Hermes 会话中提一个需要外部工具的自然语言请求，观察代理会不会自动选中 rea 提供的工具。原文列举的第一个能力是“反编译一个应用”，可优先用这个做冒烟测试；但原文在列举此处被截断，后续能力未知。前提：使用自有的示例应用或可回退的低风险对象。预期结果：记录代理是否在不需要用户点名工具的情况下自动调用 rea 工具。
+5. 与未挂载时做对照：同一任务，不挂载 rea 再跑一次，比较能否自主选用工具、人工干预、步骤数和耗时。
 
-5. 与未挂载时做对照。对同一任务，在不挂载 rea 的情况下再跑一次，比较代理能否自主选用工具、需要多少人工干预、步骤数和耗时。预期结果：得到一组“挂载 vs 未挂载”的对照记录。
+6. 版本与安全检查：确认 `rea-agents@6.3.0` 是否当前可用；记录实际拉取版本、权限范围，以及是否出现越权访问、读取工作目录之外文件或执行非预期命令。
 
-6. 版本与安全检查。`rea-agents@6.3.0` 是原文写死的版本号，实际使用时应确认是否为当前可用版本。注意首次运行 npx 拉取第三方包的权限与安全边界；原文未讨论这一点。预期结果：记录实际拉取到的版本、权限范围，以及是否出现越权访问、读取工作目录之外的文件、或执行非预期命令。
+### 做法 C：不实际接入，只当作“用 MCP 批量接工具”的思路参考
+
+当注册失败、注册后工具无法被代理实际调用、无法提供隔离环境、或需要完整工具清单和失败排查步骤而原文没有时，选做法 C。只记录设计点：MCP 批量供给、远程 MCP 只暴露少量工具让模型写程序、团队 agent 三工具接口（`list_team` / `send_message` / `check_inbox`）、CLI 与 MCP 共用一份 JSON envelope 并把退出码带进工具错误、零嵌入视频检索的类型化回答 + contact sheet + 全分辨率复核、MCP server 与可视化工作区一起长在宿主软件内部并用审批与命名撤销兜底。
+
+### 做法 D：用 CLI-Anything / CLI-Hub 把软件包成 agent-native CLI
+
+选 D 当你要反复调用外部软件、需要可复现操作，而且目标软件有现成 harness 或愿意让编码 agent 生成。先做 D1。
+
+#### D1：直接用现成 CLI
+
+前提：Python 3.10+；若 harness 包装真实软件，先装上游软件。
+
+```bash
+pip install cli-anything-hub
+cli-hub list
+cli-hub search image
+cli-hub info gimp
+cli-hub install gimp
+cli-hub launch gimp
+```
+
+需要时 `cli-hub update <name>`、`cli-hub uninstall <name>`。预期结果：跑通一条真实重复任务，并记录与不用 CLI 时的差异。
+
+#### D2：让 agent 自己发现并安装 CLI
+
+前提：支持 SKILL 的 agent。
+
+```bash
+npx skills add HKUDS/CLI-Anything --skill cli-hub-meta-skill -g -y
+```
+
+```text
+Find appropriate CLI software in CLI-Hub and complete the task: ...
+```
+
+预期结果：agent 自行搜索、安装并启动合适 CLI，再完成任务。
+
+#### D3：用 Claude Code 生成新 CLI
+
+前提：Python 3.10+；目标软件或源码在本机或可在线获取；已装 Claude Code；Windows 需 Git for Windows 或 WSL。
+
+```bash
+/plugin marketplace add HKUDS/CLI-Anything
+/plugin install cli-anything
+/cli-anything ./gimp
+/cli-anything:refine ./gimp
+/cli-anything:refine ./gimp "I want more CLIs on image batch processing and filters"
+```
+
+排错顺序：先 `/reload-plugins`；再 `/help cli-anything`；必要时重装 marketplace 与插件；旧版不识别 `/cli-anything` 时改用 `/cli-anything:cli-anything`。生成物可用 `/cli-anything:test`、`/cli-anything:validate` 校验。
+
+#### D4：其他宿主的最小安装动作
+
+- Cursor：clone 后 `bash CLI-Anything/cursor-plugin/scripts/install.sh`；Windows PowerShell 用 `.\CLI-Anything\cursor-plugin\scripts\install.ps1`；默认装到 `~/.cursor/plugins/local/cli-anything`（可用 `CURSOR_PLUGINS_HOME` 覆盖）；Reload Window 后用 `/cli-anything ./gimp` 等命令。
+- Pi Coding Agent：`bash .pi-extension/cli-anything/install.sh`，装到 `~/.pi/agent/extensions/cli-anything/`，`/reload` 或重启生效。
+- OpenCode：`cp CLI-Anything/opencode-commands/*.md ~/.config/opencode/commands/`，并把 `HARNESS.md` 复制到同目录。
+- OpenClaw：把 `openclaw-skill/SKILL.md` 复制到 `~/.openclaw/skills/cli-anything`，会话里用 `@cli-anything build a CLI for ./gimp`。
+- Codex：`bash CLI-Anything/codex-skill/scripts/install.sh`（Windows 用 `install.ps1`），装到 `$CODEX_HOME/skills/cli-anything`（未设置时 `~/.codex/skills/cli-anything`）。
+- Qodercli：`bash CLI-Anything/qoder-plugin/setup-qodercli.sh` 注册到 `~/.qoder.json`，新开会话用 `/cli-anything ./gimp`。
 
 ### 做法 E：接入远程 MCP，用“写程序”的方式调用（以 arcmira 为例）
 
-做法 E 与 A/B 的区别：A/B 把第三方包装到本机执行，E 是远程 MCP，本地不落包，但调用方式不是一堆细粒度工具，而是让模型写一段 async 函数体交给 `arcmira_execute_read` / `arcmira_execute_write` 在沙箱里执行。E 有两条接入路径（OAuth 无 key / Bearer key），三条以上命令任选其一即可。
-
-1. 偷懒路径：让 coding agent 自装。把这段原样丢给 agent：
+1. 偷懒路径：把这段原样丢给 coding agent：
 
 ```text
 Fetch and execute the appropriate instructions to set me up for Arcmira from https://arcmira.com/agent-setup/prompt.md
 ```
 
-2. 标准路径：用宿主登录（OAuth）添加远程 MCP，无 key。服务器对无凭证请求返回 401 + OAuth 挑战，宿主自行注册、打开 arcmira.com 登录授权，token 自动刷新，可在 Settings → Connected apps 撤销。
+2. 标准路径：用宿主登录（OAuth）添加远程 MCP，无 key：
 
 ```bash
 claude mcp add --transport http --scope user arcmira https://mcp.arcmira.com/mcp
-```
-
-```bash
 codex mcp add arcmira --url https://mcp.arcmira.com/mcp
 ```
 
-   Claude Desktop、claude.ai、ChatGPT、Cursor：把 URL 作为 custom connector / MCP server 添加，不带 header，按提示登录。逐宿主步骤见 `https://arcmira.com/agent-setup`。预期结果：宿主里出现 arcmira 这个远程 MCP，凭证由宿主管理、可在 Settings → Connected apps 撤销。
+Claude Desktop、claude.ai、ChatGPT、Cursor：把 URL 作为 custom connector / MCP server 添加，不带 header，按提示登录。预期结果：宿主里出现 arcmira，凭证由宿主管理，可在 Settings → Connected apps 撤销。
 
-3. 备用路径：用 Bearer key（适用于不支持该登录流程的客户端）。key 形如 `arc_sk_...`，来自 https://arcmira.com；计划与 scope 决定每个工具返回什么。没有账号也没有浏览器时，可纯 API 注册：
+3. 备用路径：用 Bearer key（`arc_sk_...`）。没有账号也没有浏览器时，可纯 API 注册：
 
 ```bash
 curl -X POST "https://api.arcmira.com/v1/signups?src=mcp-tool" \
@@ -271,28 +236,13 @@ curl -X POST "https://api.arcmira.com/v1/signups/verify" \
   -d '{"email":"agent@example.com","code":"482913"}'
 ```
 
-   带 key 的命令行与 JSON 配置：
-
 ```bash
 claude mcp add --transport http --scope user arcmira https://mcp.arcmira.com/mcp --header "Authorization: Bearer $ARCMIRA_API_KEY"
 ```
 
-```json
-{
-  "mcpServers": {
-    "arcmira": {
-      "url": "https://mcp.arcmira.com/mcp",
-      "headers": { "Authorization": "Bearer arc_sk_..." }
-    }
-  }
-}
-```
+4. 连上后先调用 `arcmira_describe` 拿参考手册，别猜方法签名。可用 `topic` 只取某个方法及其示例。预期结果：拿到 id 规则、方法表、参数与返回字段、可运行示例、计量与监控规则、错误码。
 
-   预期结果：拿到 key 并接上。401 响应体在 `error.data.unlock.action` 里带了注册调用，agent 可据此自行开户并重连。发现端点：`https://mcp.arcmira.com/.well-known/oauth-protected-resource`、`https://api.arcmira.com/.well-known/oauth-authorization-server`。
-
-4. 连上后先要参考手册，别猜方法签名。让 agent 调用 `arcmira_describe`（可用 `topic` 只取某个方法及其示例）拿到 id 规则、方法表、参数与返回字段、可运行示例、常见坑、计量与监控规则、错误码。预期结果：你和 agent 手上有一份可核对的方法清单（`resolve` / `search` / `mentions` / `momentum` / `sponsors` / `recommendations` / `episodes` / `transcript` / `occurrences` / `quote` / `status` / `monitors.*`），而不是靠试错。
-
-5. 遵守 id 规则：先用 `resolve` 拿 id，再用 id 查询。过滤器只接受原样 id；把名字当 id 传入会在发网络请求前抛 `id_required`。`resolve` 返回 `best`（唯一）/ `suggested`（有一个更合适，需说明假设与理由）/ `ask`（多个候选，交给用户选）。可直接照抄的示例程序：
+5. 遵守 id 规则：先用 `resolve` 拿 id，再用 id 查询。过滤器只接受原样 id；把名字当 id 会抛 `id_required`。`resolve` 返回 `best` / `suggested` / `ask`。示例程序：
 
 ```javascript
 const r = await arcmira.resolve("Linear");
@@ -302,431 +252,169 @@ const m = await arcmira.momentum(e.id);
 return { entity: e.name, id: e.id, assumed: Boolean(r.suggested), why: r.suggested?.evidence ?? null, verdict: m.verdict, last30: m.volume.mentions_30d, prior30: m.volume.mentions_prior_30d, as_of: m.as_of };
 ```
 
-   预期结果：返回里能看到实体 id、是否做了假设（`assumed`）与理由，以及 momentum 的 `verdict`、`volume.mentions_30d`、`volume.mentions_prior_30d`、`as_of`；遇到多候选时程序把 `ask` 交回给用户。
-
-6. 需要整段转录（含无字幕视频）时用 Premium 质量，并处理「还没转好」的情况。`arcmira_execute_read` 内一次 Premium 读取：
+6. 需要整段转录时用 Premium 质量，并处理“还没转好”：
 
 ```javascript
 const t = await arcmira.transcript("cdLeJU_1UH8", { quality: "premium" });
 return t.state === "ready" ? t.lines : { state: t.state, eta_seconds: t.eta_seconds, note: t.note };
 ```
 
-   若视频尚未转录，`GET /v1/transcripts/{video_id}?quality=premium` 会启动转录并返回 `202` 与 `Retry-After`；按 `Retry-After` 重读直到程序进行到第 22 秒，重读不会重复计费；仍 `pending` 则结果带 `eta_seconds`，下一次程序再读即可拿到内容。失败会返回 `state` 为 `failed` 或 `refunded` 及原因，除非传 `retry: true`（只在用户要求时传）否则不会重开。预期结果：不会把“还在转”误判成失败，也不会无意中重复付费。
+未就绪时返回 `202` + `Retry-After`，按它重读不重复计费；仍 `pending` 会带 `eta_seconds`；`failed` / `refunded` 除非传 `retry: true`（只在用户要求时传）不会重开。
 
-7. 先查价再跑贵操作。`arcmira.quote(video)` 返回整段 Premium 读取会用多少 credits（以及 on-demand 美分），本身不计费。计量规则：搜索按返回结果中超出前 5 条的每条 passage 收 4 credits；字幕读取按其窗口每开始的 15 分钟收 4 credits；Premium 转录按整段视频每开始的 15 分钟收 300 credits；`momentum` 每次调用 10 credits；`start` / `end` 不会降低 Premium 计费。预期结果：贵操作开跑前就有一份成本预估。
+7. 先查价再跑贵操作：`arcmira.quote(video)` 返回整段 Premium 读取会用多少 credits，本身不计费。计量规则：搜索按返回结果中超出前 5 条的每条 passage 收 4 credits；字幕读取按其窗口每开始的 15 分钟收 4 credits；Premium 转录按整段视频每开始的 15 分钟收 300 credits；`momentum` 每次 10 credits；`start` / `end` 不会降低 Premium 计费。
 
-8. 预算由 dashboard 控制，工具本身不接受金额参数。先在控制台设 on-demand 预算；被计划或预算拦住时，工具返回 `isError: true` 与错误码之一：`paid_plan_required`、`quota_exceeded`、`spend_limit_exceeded`、`member_limit`、`fair_use_cap`、`on_demand_paused`，并附 `message` 说明触发了什么、什么能解除，以及可选的 `unlock`。程序里应按 `code` 分支处理。预期结果：被拦住时你拿到的是可读原因和解除办法，而不是一个空结果。
+8. 预算由 dashboard 控制，工具本身不接受金额参数。被拦住时按错误码分支处理：`paid_plan_required`、`quota_exceeded`、`spend_limit_exceeded`、`member_limit`、`fair_use_cap`、`on_demand_paused`。
 
-9. 用示例提示词快速验证接通。README 给的原句：
+9. 用示例提示词快速验证接通：Which brands sponsor both TBPN and the All-In Podcast? / How hot is Linear on the spoken web right now? / Find a moment on TBPN from the last 90 days where someone talks about stablecoins, and quote it. / Who is speaking in the first minute of the latest TBPN episode, according to the Premium transcript? / On TBPN, how many episodes mentioned Cursor in July versus August? 可直接用的初始 id：TBPN 频道 `UC-DRzaGnL_vtBUpCFH5M0tg`，All-In Podcast `UCESLZhusAkFfsNsApnjF_Cg`，Ramp `ent_14`。
 
-- Which brands sponsor both TBPN and the All-In Podcast?
-- How hot is Linear, the project management tool, on the spoken web right now?
-- Find a moment on TBPN from the last 90 days where someone talks about stablecoins, and quote it.
-- Who is speaking in the first minute of the latest TBPN episode, according to the Premium transcript?
-- On TBPN, how many episodes mentioned Cursor in July versus August?
+10. 要持续盯着就建 monitor（必须走 `arcmira_execute_write`）：`monitors.create`、`monitors.update`、`monitors.addEntities`（一次最多 90 个 id）、`monitors.addName`、`monitors.attachTrackers`（迁移 tracker 需用户先同意）。不提供删除；退出方式是 `paused`。
 
-   可直接用的初始 id：TBPN 频道 `UC-DRzaGnL_vtBUpCFH5M0tg`，All-In Podcast `UCESLZhusAkFfsNsApnjF_Cg`，Ramp `ent_14`。预期结果：代理能写出一段程序完成一次检索，并给出带时间戳的可点引用。
-
-10. 要「持续盯着」就建 monitor（必须走写工具 `arcmira_execute_write`）。`monitors.create({ name, notify_frequency, notify_emails?, notify_slack?, ... })`、`monitors.update(id, { ..., paused? })`、`monitors.addEntities(id, entityIds, { personMatchMode? })`（一次最多 90 个 id）、`monitors.addName(id, [{ name, type, personMatchMode? }])`（跟踪尚未被索引的名字，节目用其 `UC` id）、`monitors.attachTrackers(id, trackerIds)`（迁移别的 monitor 的 tracker，需用户先同意）。不提供删除；`integrations.slack()` 查看已连 Slack 及默认投递频道。预期结果：监控对象、通知频率与投递方式明确，且你清楚退出方式是 `paused` 而不是删除。
-
-11. 可选：装插件，拿到 6 个任务技能。
+11. 可选装插件拿 6 个任务技能：
 
 ```bash
 claude plugin marketplace add arcmira/mcp
 claude plugin install arcmira@arcmira
-```
-
-   技能为 `arcmira`（总入口与 id 规则）、`sponsor-research`、`company-watch`、`find-quotes`、`person-research`、`compare-shows`。每个技能都从名字出发、必要时返回 `ask`、说明假设并报出所用实体，结尾都带 monitor 与 feedback 建议。Gemini CLI 用：
-
-```bash
 gemini extensions install https://github.com/arcmira/mcp
+npx skills add arcmira/mcp
 ```
 
-   （根扩展只装 `arcmira` 技能，不含 5 个可选任务技能。）其他情况可用 `npx skills add arcmira/mcp` 装技能。
-
-12. 保持更新。远程 MCP 本身不需要更新（宿主每次连接拉取工具与说明，`arcmira_describe` 每次带版本行）。预期结果：行为与参考手册不符时，先看版本行，再判断是不是自己猜错了签名。调研原文在“Claude Code 第三方 marketpla…”处被截断，该部分细节未知。
-
-### 做法 C：不实际接入，只当作“用 MCP 批量接工具”的思路参考
-
-当出现以下任一情况时选做法 C：注册失败，或注册后工具无法被代理实际调用；无法提供隔离环境；需要完整的工具清单、权限说明和失败排查步骤，而原文只给了一条命令（或命令之外的能力清单被截断）。对 arcmira 来说，同样的降级条件表现为：没有账号或不想设预算、宿主既不支持该登录流程又没有 Bearer key、以及你需要的说话人 / 赞助识别准确性无法在厂商自述之外得到佐证。对 reason network 来说，降级条件是：团队不在 Reason workspace、找不到第二个人配合，或你需要的效果数据在 README 中完全没有。对 idx 来说，降级条件是：你的目标领域不是印尼股市，你只是想把它的结构（一份数据三种界面、`mcp setup` 自动填绝对路径、统一 envelope 与退出码）当作自己工具的参照。对 Blender 扩展来说，降级条件是：你不在 Windows x64 / 不是 Blender 4.2+，或者你需要的是一份可量化的效果证据——那就只把它的三条设计点留下参考：助手住在宿主软件内部（Studio 工作区）、审批/取消/命名撤销与 `viewport_screenshot` 组成的可观察反馈面、以及 Manager/Worker/Reviewer 的角色分工与“被阻塞任务只给一次纠正机会”。对 jevreel 来说，降级条件是：你只想要成熟的图像理解能力（Jev 图像能力仍是实验性）、验证只基于单个测试视频不够、或你不想开 TypeSafe 账号 / 不装 FFmpeg ——那就只留下它的两条设计点：类型化回答（`noul` / `choice` / `score`）配「便宜模型粗筛 + 贵模型只看通过筛选的窗口」，以及 lens 把自定义问题随索引请求一起走、之后 `query` 过滤不再产生请求。
-
-做法：不把工具挂到任何工作环境，只记录“用 MCP 协议把外部工具集一次性喂给代理”这一供给方式（以及“只给 4 个工具、让模型写程序调用”这一变体，“用 MCP 把团队 agent 连成网”的三工具接口 `list_team` / `send_message` / `check_inbox`，“CLI 与 MCP 共用同一份 JSON envelope、工具报错带回 exit_code”，“零嵌入视频检索”的类型化回答 + contact sheet + 全分辨率复核，和“MCP server 与可视化工作区一起长在宿主软件内部、用审批与命名撤销做兜底”这几个设计点），作为后续遇到类似工具集时的参考。
-
-### 做法 D：用 CLI-Anything / CLI-Hub 把软件包成 agent-native CLI
-
-做法 D 与 A/B/E 的区别：A/B 走本地 MCP 服务器接工具集、E 走远程 MCP 写程序调用；D 走 CLI harness，让 agent 用命令行驱动软件。CLI-Hub 注册表有现成 harness，也可用 `/cli-anything` 为内部工具生成新 CLI。选 D 当你要反复调用外部软件、需要可复现操作，而且目标软件有现成 harness 或愿意让编码 agent 生成。先做 D1，成本最低。
-
-#### D1：直接用现成 CLI（5 分钟路径）
-
-前提：Python 3.10+；若所选 harness 包装的是真实软件（GIMP / Blender / LibreOffice 等），需先自行安装该上游软件。
-
-1. 安装 CLI-Hub 包管理器：
-
-```bash
-pip install cli-anything-hub
-```
-
-   预期结果：`cli-hub` 命令可用。
-
-2. 浏览与搜索注册表：
-
-```bash
-cli-hub list
-cli-hub search image
-```
-
-   预期结果：列出或搜索到可用 harness。
-
-3. 查看某个 CLI 的详情：
-
-```bash
-cli-hub info gimp
-```
-
-4. 安装：
-
-```bash
-cli-hub install gimp
-```
-
-5. 启动试用：
-
-```bash
-cli-hub launch gimp
-```
-
-6. 需要时更新/卸载：`cli-hub update <name>`、`cli-hub uninstall <name>`。
-
-   命令速查：`list` 浏览、`search <query>` 关键词搜索、`info <name>` 查看单个、`install <name>` 安装、`update <name>` 更新、`uninstall <name>` 卸载、`launch <name> [args...]` 运行。
-
-   预期结果：跑通一条真实重复任务，并记录与不用 CLI 时的差异。
-
-#### D2：让 agent 自己发现并安装 CLI
-
-前提：使用支持 SKILL 的 agent（OpenClaw、Nanobot、Claude Code、Codex、Reasonix、Antigravity 等）。
-
-1. 安装 meta-skill：
-
-```bash
-npx skills add HKUDS/CLI-Anything --skill cli-hub-meta-skill -g -y
-```
-
-2. 用提示词把“选工具”交给 agent：
-
-```text
-Find appropriate CLI software in CLI-Hub and complete the task: ...
-```
-
-   预期结果：agent 自行搜索、安装并启动合适 CLI，再完成任务。
-
-#### D3：用 Claude Code 生成一个新 CLI
-
-前提：Python 3.10+；目标软件或源码在本机或可在线获取；已装 Claude Code。Windows 需先装 Git for Windows（含 `bash`/`cygpath`）或使用 WSL，否则会报 `cygpath: command not found`。
-
-1. 添加 marketplace：
-
-```bash
-/plugin marketplace add HKUDS/CLI-Anything
-```
-
-2. 安装插件：
-
-```bash
-/plugin install cli-anything
-```
-
-3. 一条命令生成完整 CLI（跑完 7 阶段：分析 → 设计 → 实现 → 制定测试计划 → 写测试 → 文档 → 发布）：
-
-```bash
-/cli-anything ./gimp
-```
-
-   预期结果：生成带 REPL/JSON 输出/undo-redo 的 Click CLI、测试、文档，并生成 `setup.py`、装到 PATH。
-
-4. 迭代补全能力（可多次运行，增量且非破坏性）：
-
-```bash
-/cli-anything:refine ./gimp
-/cli-anything:refine ./gimp "I want more CLIs on image batch processing and filters"
-```
-
-5. 排错顺序：先 `/reload-plugins`；再 `/help cli-anything` 确认插件已加载；必要时重装 marketplace 与插件；确认加载后再试入口命令。旧版本若不识别 `/cli-anything`，改用 `/cli-anything:cli-anything`；辅助命令保持 `:subcommand` 形式（如 `/cli-anything:refine`）。
-
-   预期结果：生成物可用 `/cli-anything:test`、`/cli-anything:validate` 做校验；README 称流水线自带 TEST.md（unit + E2E 测试计划）。
-
-#### D4：其他宿主的最小安装动作
-
-- Cursor（前提：已装 Cursor，并已 clone 仓库）：
-
-```bash
-git clone https://github.com/HKUDS/CLI-Anything.git
-bash CLI-Anything/cursor-plugin/scripts/install.sh
-```
-
-Windows PowerShell：
-
-```powershell
-.\CLI-Anything\cursor-plugin\scripts\install.ps1
-```
-
-默认装到 `~/.cursor/plugins/local/cli-anything`（可用 `CURSOR_PLUGINS_HOME` 覆盖，指向名为 `plugins` 的目录）；升级用 `--force` / `-Force`。在 Cursor 里执行 **Developer: Reload Window**，然后：
-
-```text
-/cli-anything ./gimp
-/cli-anything-refine ./shotcut "picture-in-picture workflows"
-/cli-anything-test ./libreoffice
-/cli-anything-validate ./libreoffice
-/cli-anything-list
-```
-
-消费者侧（与生成器插件独立）：
-
-```bash
-npx skills add HKUDS/CLI-Anything --skill cli-hub-meta-skill -g -y
-pip install cli-anything-hub
-```
-
-- Pi Coding Agent：clone 后 `bash .pi-extension/cli-anything/install.sh`（卸载加 `--uninstall`），装到 `~/.pi/agent/extensions/cli-anything/`，`/reload` 或重启生效；命令有 `/cli-anything`、`/cli-anything:refine`、`/cli-anything:test`、`/cli-anything:validate`、`/cli-anything:list`。
-
-- OpenCode：`cp CLI-Anything/opencode-commands/*.md ~/.config/opencode/commands/`，并把 `HARNESS.md` 复制到同目录（命令会引用它，必须在同一目录）；旧版目录名为 `command/`。
-
-- OpenClaw：`mkdir -p ~/.openclaw/skills/cli-anything` 后把 `openclaw-skill/SKILL.md` 复制进去，会话里用 `@cli-anything build a CLI for ./gimp`。
-
-- Codex：`bash CLI-Anything/codex-skill/scripts/install.sh`（Windows 用 `install.ps1`），装到 `$CODEX_HOME/skills/cli-anything`（未设置时 `~/.codex/skills/cli-anything`），安装器会把 `HARNESS.md`、命令规范、按需加载的指南与脚本一并放入 `references/`、`scripts/`。
-
-- Qodercli：`bash CLI-Anything/qoder-plugin/setup-qodercli.sh` 注册到 `~/.qoder.json`，新开会话后用 `/cli-anything ./gimp`。
-
-预期结果：对应宿主能加载 CLI-Anything 命令/skill，并按 D3 的生成或 D1 的消费方式使用。
+12. 远程 MCP 本身不需要更新；行为与参考手册不符时，先看 `arcmira_describe` 的版本行。
 
 ### 做法 F：把团队里各人的 agent session 连成一张网（以 reason network 为例）
 
-选 F 的条件：团队里每个人都在用 Reason CLI、且成员都在同一个 Reason workspace，你想让一个 session 直接问另一个 session、减少人工中转。它与 A/B/E 的区别：不是给单个代理加外部数据工具，而是把不同人电脑上的编码 agent 连成一张可寻址、可发消息的网。README 没有给出任何效果数据，且强依赖 Reason 产品与团队整体部署，所以只建议小范围试用；若团队不在这个生态里，只把它的三工具接口和状态来源设计当思路参考。
+选 F 的条件：团队都在 Reason workspace，想让一个 session 直接问另一个 session。README 没有效果数据，只建议小范围试用。
 
-1. 初始化本机 agent 接线。Reason CLI 会在首次运行相关命令时自动下载一个固定版本、校验过 checksum 的构建并配置好。原文原样命令：
+1. 初始化本机 agent 接线：
 
 ```sh
 reason network
 ```
 
-   前提：你使用 Reason CLI 与 Reason workspace，且团队其他成员也在同一个 Reason workspace 里。预期结果：本机 daemon、MCP server 与 hooks 配好。
-
-2. 看谁在线、各自的 session 正在做什么：
+2. 看谁在线：
 
 ```sh
 reason network who
 ```
 
-   预期结果：列出团队成员的 session 及其当前任务。session“在做什么”来自它自己的 title 和 todo list，agent 不需要主动汇报状态；所以要让这套东西好用，agent 的会话标题和 todo 得是有意义的。
+状态来自 session 自己的 title 和 todo；标题和 todo 要有意义。
 
-3. 直接向某个 teammate 的某个 session 提问，并等它回答（示例中的 `alice/api-claude` 是「某人/某个 session」的寻址形式）：
+3. 直接向某个 session 提问并等回答：
 
 ```sh
 reason network alice/api-claude "did the token format change?"
 ```
 
-   预期结果：对端 session 收到消息并返回回答。适合同步问答的 agent：Claude Code、Codex、opencode、pi 和 Reason，它们会在会话中途收到消息，空闲的会被唤醒；已经打开的 Claude session 不需要重启就能加入。
+适合同步问答的 agent：Claude Code、Codex、opencode、pi、Reason。
 
-4. 只发不等（通知类）：
+4. 只发不等：
 
 ```sh
 reason network send alice/api-claude "heads up: main is red"
 ```
 
-   预期结果：消息发出但不等回答。适合异步通知的 agent：Cursor、Gemini 和 Copilot 在下一步才收到消息，只适合 `send` 这种“不指望立刻回应”的用法。
+适合异步通知的 agent：Cursor、Gemini、Copilot 在下一步才收到消息。
 
-5. 需要时把本机的 agent 重新接线一遍：
+5. 需要时重新接线：
 
 ```sh
 reason network setup
 ```
 
-   预期结果：重新配置本机接线。
+6. MCP server 名为 `reason-network`，对 agent 暴露 `list_team`、`send_message`、`check_inbox` 三个工具。
 
-6. Agent 侧不再需要额外接入脚本。MCP server 名为 `reason-network`，对 agent 暴露三个工具：`list_team`、`send_message`、`check_inbox`。预期结果：agent 可以通过这三个工具看团队、发消息、查收件箱；但原文没有给出手动配置 MCP 的方法，也没有提示词层面的指引——agent 侧怎么用那三个工具，原文未展开。
+7. 网络与安全：同 Wi-Fi 直连，跨公网走 iroh，直连失败经中继（中继只看到加密字节）；只有团队成员能连；一台电脑只能代表它自己的主人说话；发给离线者的消息会排队；状态存放在 `~/.reason/network`。
 
-7. 理解网络与安全模型。连接方式是点对点：同 Wi-Fi 直连，跨公网走 iroh，直连失败时经中继（中继只看到加密字节）。只有团队成员能连，且一台电脑只能代表它自己的主人说话。发给离线者的消息会排队，等对方回来再发。状态存放在 `~/.reason/network`。预期结果：知道消息在什么路径上走、谁能看到、离线消息会不会补发。
-
-8. 若要从源码自建或跑测试（README 的 Build 段）：
-
-```sh
-cargo fmt && cargo clippy --all-targets -- -D warnings && cargo test
-cargo build && python3 tests/e2e/two_machines.py   # two machines over iroh (needs internet)
-python3 tests/e2e/hooks.py && python3 tests/e2e/guided.py
-```
-
-   `v*` tag 会构建 Reason CLI 所安装的 macOS 和 Linux 包。
-
-9. 最小试用：找 2 名已经在用 Reason 的同事，各自装好 Reason CLI、确认在同一个 workspace。两人各开一个 Claude Code session（因为它是投递体验最好、最可能成功的一档），分别跑 `reason network who` 互相确认能看到对方的 session 和当前在做的事；然后由 A 用 `reason network <b的session> "..."` 提一个只有 B 的 agent 凭自己会话上下文才能回答的问题（例如「你当前分支上 token 格式改了吗」）。预期结果：端到端拿到回答，并记下与“人来转述”基线的差异。
+8. 最小试用：找 2 名已经在用 Reason 的同事，各自开 Claude Code session，分别跑 `reason network who` 互相确认；A 用 `reason network <b的session> "..."` 提一个只有 B 的 agent 凭会话上下文才能回答的问题。
 
 ### 做法 G：接入“现成 CLI 自带 MCP server”的工具（以 idx / ihsg-cli 为例）
 
-选 G 的条件：工具本身就已经是 CLI，并且自带 MCP server，你不想做任何包装，只想验证“把现成 CLI 包成 MCP 工具供 agent 调用”这一模式是否省事。它与 A/B 的区别：A/B 是本机 MCP 服务器在运行时用 `npx` / `uvx` 拉第三方包执行，G 是先装一个自包含的静态二进制，由它自己起 MCP server，没有运行时包依赖。它与 D 的区别：D 是用 CLI-Anything 把软件**包装**成 CLI，G 是软件**本来就是** CLI。它与 E 的区别：G 的数据与计算都在本地（或直连公开数据源），不经过厂商沙箱。**注意领域**：idx 是印尼股市（IDX / IHSG）工具，值得试的是流程与结构，不是行情本身；本次调研正文在第 9 步后被截断，未见效果数据或对比指标。
+注意领域：idx 是印尼股市（IDX / IHSG）工具，值得试的是流程与结构，不是行情本身。
 
-1. 零安装先跑通（前提：Node/npm 可用）。
+1. 零安装先跑通：
 
 ```sh
 npx github:fzn0x/idx stocks quote BBCA
 ```
 
-   预期结果：不改动环境就能看到一份行情输出，确认这个二进制在本机能跑、能取到数据。
-
-2. 正式安装（四选一）。
+2. 正式安装（四选一）：
 
 ```sh
-cargo install ihsg-cli                    # crates.io，从源码构建，需 Rust 1.88+
-npm install -g github:fzn0x/idx           # npm，直接从仓库安装
-curl -fsSL https://raw.githubusercontent.com/fzn0x/idx/main/install.sh | sh   # Linux, macOS
+cargo install ihsg-cli
+npm install -g github:fzn0x/idx
+curl -fsSL https://raw.githubusercontent.com/fzn0x/idx/main/install.sh | sh
 ```
 
-   Windows 无 npm 时从 releases 页下载 `idx-<version>-x86_64-pc-windows-msvc.zip`。npm 安装的是一个小的启动器，第一次运行 `idx` 会下载对应平台的预编译二进制并用 release 的 `SHA256SUMS` 校验。npm 12 需要加 `--allow-git=all`。
+Windows 无 npm 时从 releases 下载 `idx-<version>-x86_64-pc-windows-msvc.zip`。npm 安装的是小启动器，第一次运行 `idx` 会下载预编译二进制并用 release 的 `SHA256SUMS` 校验。npm 12 加 `--allow-git=all`。
 
-   预期结果：`idx` 命令可用；同时你清楚这个二进制从哪来、有没有被校验。
-
-3. 先用 JSON 模式核对输出契约（前提：已安装并在 PATH 上）。
+3. 先用 JSON 模式核对输出契约：
 
 ```sh
 idx -o json stocks quote BBCA | jq '.data[0] | {price, change_pct, pe_trailing, dividend_yield_pct}'
 ```
 
-   约定：stdout 只放一个 JSON 文档，其余全部走 stderr；envelope 里带 `provider`、`fetched_at`、`cached`、`stale`、`warnings`；来源没返回的字段是 `null`，不做估算。退出码有语义：`0` 正常、`2` 用法错、`3` 网络/来源错、`4` 未找到、`5` 离线缓存未命中、`6` 配置错。字段定义用 `idx schema quotes`（还有 `history`/`fundamental`/`bandar`/`ownership-*` 等）查看。
+stdout 只放一个 JSON 文档，其余走 stderr；envelope 带 `provider`、`fetched_at`、`cached`、`stale`、`warnings`；来源没返回的字段是 `null`，不做估算。退出码：`0` 正常、`2` 用法错、`3` 网络/来源错、`4` 未找到、`5` 离线缓存未命中、`6` 配置错。字段定义用 `idx schema quotes` 查看。
 
-   预期结果：你在接 MCP 之前就知道“成功长什么样、失败怎么区分”，而不是接完再猜。
-
-4. 启动 MCP server。
+4. 启动 MCP server：
 
 ```sh
-idx mcp                            # stdio
+idx mcp
 idx mcp --http 127.0.0.1:8765 --token T --allowed-host '*'
-idx mcp setup --list               # 列出所有支持的客户端
-idx mcp setup codex                # 打印：codex mcp add idx -- /abs/path/idx mcp
-idx mcp setup muse                 # 打印 Meta Muse Code 需要的 settings.json 片段
+idx mcp setup --list
+idx mcp setup codex
 ```
 
-   关键点：`idx mcp setup <client>` 会把二进制的**绝对路径**填进配置输出——README 明说理由是 GUI 应用通常不继承 shell 的 `PATH`。
+`idx mcp setup <client>` 会把二进制绝对路径填进配置，因为 GUI 应用通常不继承 shell 的 `PATH`。
 
-   预期结果：拿到一条可直接粘贴的注册命令或配置片段，而不是自己手写路径。
-
-5. 按你手上的客户端挑一条注册（README 给出的原样命令/配置）。
+5. 按客户端注册，例如：
 
 ```sh
-# Claude Code
 claude mcp add --scope user idx -- idx mcp
-# OpenAI Codex（CLI / IDE 扩展 / app）
 codex mcp add idx -- idx mcp
-# Gemini CLI
 gemini mcp add -s user idx idx mcp
-# GitHub Copilot CLI
 copilot mcp add idx -- idx mcp
-# VS Code（Copilot agent mode）
-code --add-mcp '{"name":"idx","command":"idx","args":["mcp"]}'
-# Factory Droid
-droid mcp add idx "idx mcp"
-# Qwen Code
-qwen mcp add idx idx mcp
 ```
 
 ```json
-// Claude Desktop: claude_desktop_config.json
 {"mcpServers": {"idx": {"command": "idx", "args": ["mcp"]}}}
 ```
 
-```json
-// Meta Muse Code: ~/.config/muse/settings.json
-{"schema_version": 1, "mcp_servers": {"idx": {"transport": "stdio", "command": "idx", "args": ["mcp"], "mode": "optional"}}}
-```
+其他客户端可用 `idx mcp setup <client>` 生成；注册后去客户端确认 `idx` 出现、工具数可枚举。
 
-```json
-// Cline / Roo Code / Kilo Code：MCP Servers → Configure，type 必须为 stdio
-{"mcpServers": {"idx": {"command": "idx", "args": ["mcp"], "type": "stdio"}}}
-```
+6. 只支持远程 URL 的产品：把 HTTP 形态放在 HTTPS 隧道后，作为 connector 添加，请求头 `Authorization: Bearer T`。
 
-```json
-// Cursor / Windsurf / JetBrains / Warp / Trae / Augment：粘贴到 MCP 设置里
-{"mcpServers": {"idx": {"command": "idx", "args": ["mcp"]}}}
-```
-
-```json
-// OpenCode: opencode.json
-{"mcp": {"idx": {"type": "local", "command": ["idx", "mcp"], "enabled": true}}}
-```
-
-```json
-// Crush: crush.json
-{"mcp": {"idx": {"type": "stdio", "command": "idx", "args": ["mcp"]}}}
-```
-
-```toml
-# OpenAI Codex 的配置文件写法：~/.codex/config.toml
-[mcp_servers.idx]
-command = "idx"
-args = ["mcp"]
-```
-
-```yaml
-# Continue: ~/.continue/mcpServers/idx.yaml（`idx mcp setup continue` 会打印）
-```
-
-   - Zed：`settings.json` → `"context_servers": {"idx": {"command": "idx", "args": ["mcp"], "env": {}}}`
-   - Google Antigravity：`~/.gemini/config/mcp_config.json` → `mcpServers.idx`，`command` 用绝对路径，不要写 `type` 字段
-   - Kiro：`~/.kiro/settings/mcp.json`，或 `kiro-cli mcp add --name idx --command idx --args mcp`
-   - Goose：`goose configure` → Add Extension → Command-line Extension → `idx mcp`
-   - Mistral Vibe：`~/.vibe/config.toml` → `[[mcp_servers]]`，`name = "idx"`、`transport = "stdio"`、`command`、`args`
-
-   预期结果：注册完成后，去客户端里确认 `idx` 真的出现、工具数真的可枚举——这一步和做法 B 第 3 步一样，不能跳过。
-
-6. 只支持远程 URL 的产品（ChatGPT、Claude.ai、Perplexity、Devin、Manus）：把 HTTP 形态放在 HTTPS 隧道后面，再作为 connector 添加，请求头 `Authorization: Bearer T`：
+7. 离线 / 弱网：
 
 ```sh
-idx mcp --http 127.0.0.1:8765 --token T --allowed-host '*'
-# connector 地址：https://<host>/mcp
-```
-
-   预期结果：远程客户端能连上，且你清楚是隧道在暴露你的本机服务、token 是唯一门禁。
-
-7. 离线 / 弱网（前提：之前至少成功取过一次，缓存按端点的 TTL 生效）。
-
-```sh
-idx --offline stocks quote BBCA     # 或 IDX_OFFLINE=1
+idx --offline stocks quote BBCA
 idx cache stats
 ```
 
-   预期结果：离线时命中缓存返回数据并置 `cached` / `stale`；未命中则退出码为 `5`，而不是静默返回空值。
+命中缓存置 `cached` / `stale`；未命中退出码为 `5`。
 
-8. 让 agent 直接用工具（23 个工具，`idx_brief` 是一把起手的那个）：`idx_brief`、`idx_market`、`idx_quote`、`idx_history`、`idx_profile`、`idx_financials`、`idx_earnings`、`idx_dividends`、`idx_returns`、`idx_fundamental`、`idx_technical`、`idx_compare`、`idx_screen`、`idx_news`、`idx_sentiment`、`idx_broker`、`idx_bandar`、`idx_bandar_screen`、`idx_ownership_ticker`、`idx_ownership_entity`、`idx_ownership_changes`、`idx_ownership_foreign`、`idx_ownership_releases`。筛选示例：
+8. 让 agent 直接用工具（23 个，`idx_brief` 起手）：`idx_brief`、`idx_market`、`idx_quote`、`idx_history`、`idx_profile`、`idx_financials`、`idx_earnings`、`idx_dividends`、`idx_returns`、`idx_fundamental`、`idx_technical`、`idx_compare`、`idx_screen`、`idx_news`、`idx_sentiment`、`idx_broker`、`idx_bandar`、`idx_bandar_screen`、`idx_ownership_ticker`、`idx_ownership_entity`、`idx_ownership_changes`、`idx_ownership_foreign`、`idx_ownership_releases`。筛选示例：
 
 ```sh
 idx stocks screen -f "pe<15,roe>15,sector=financial"
 idx bandar screen --preset quiet-accumulation
-idx bandar screen -f 'acc>=5,fpct>=5,gain<0'
 ```
 
-   预期结果：agent 用 `idx_brief` 起手就能拿到一屏概览，而不是自己拼十几次调用。
+9. 可迁移的设计约束：23 个工具用每个 harness 都接受的类型化输入 schema；工具返回与 `-o json` 完全相同的 envelope；失败以工具错误返回 `{error: {code, message}, exit_code}`，把退出码语义带进 MCP。
 
-9. 照抄它的三个工具设计约束（这是本路径里最可迁移的部分）。
+10. 数据保鲜结构：GitHub Actions 定时抓取、用 `idx` 导入验证可解析、发布到 release；因为 idx.co.id 拦截云网络，任务跑在自托管 runner（`OWNERSHIP_RUNNER=self-hosted`）；Worker 每 30 分钟检查 `index.json`、校验 SHA-256、装入 D1，Worker 没有写端点。迁移的是结构，不是印尼股市本身。
 
-   - 23 个工具用“每个 harness 都接受的那一子集”的类型化输入 schema（不用 nullable 类型数组，不用 `format`/`default` 关键字），每个工具配一段话描述。
-   - 工具返回与 `-o json` 完全相同的 envelope，因此“学会 CLI 的 agent 就已经会用工具”。
-   - 失败以工具错误返回 `{error: {code, message}, exit_code}`，把 CLI 的退出码语义带进 MCP。
-
-   预期结果：你自己的内部工具也能做到“一份数据三种界面、口径一致、失败可分”。
-
-10. 需要“上游数据自动保持新鲜”时，参考它的仓库做法。GitHub Actions `ownership.yml` 在 08:17 / 14:17 / 20:17 WIB 抓取 IDX 页面、下载新的“Pemegang Saham di Atas 1%”工作簿、用 `idx` 导入验证可解析，并把文件和 `index.json` 发布到 `ownership-data` release；因为 idx.co.id 会拦截云网络（含 GitHub 自己的 runner），任务跑在自托管 runner 上（把仓库变量 `OWNERSHIP_RUNNER` 设为 `self-hosted`），跑在 GitHub runner 上时保留镜像并在最新登记表超过 45 天时变红。终端侧 Worker 每 30 分钟检查 `index.json`、校验 SHA-256、每分钟把一个 part 装进 D1，只在新月份全部行数到齐且数量匹配后才算“出现”；Worker 没有任何写端点。本地用 `idx ownership import --latest` 优先读 idx.co.id，被 Cloudflare 拒绝则从镜像下载并校验 SHA-256，`IDX_OWNERSHIP_SOURCE=mirror` 直接跳过 idx.co.id。
-
-    预期结果：你要迁移的是这套结构（定时抓取 → 可解析性校验 → 发布 → 带校验的消费），不是印尼股市本身。
-
-11. 与未挂载时做对照。接好之后跑一条你本来就要做的真实任务，再不挂 MCP 用原方式做同一件事，比较调用次数、人工步骤数、耗时、以及 agent 是不是自己选对了工具。前提：使用可回退的低风险任务。预期结果：得到一组“挂载 vs 未挂载”的对照记录，而不是只凭感觉说“接上真方便”。
+11. 与未挂载时做对照：接好后跑一条真实任务，再不挂 MCP 用原方式做同一件事，比较调用次数、人工步骤、耗时、工具选择是否正确。
 
 ### 做法 H：把 AI 助手接进宿主软件内部（以 Blender 扩展 mcp-for-blender-pro 为例）
 
-选 H 的条件：你在 Windows x64 上用 Blender 4.2+，想让 AI 在场景里做可回退的操作，并且希望有审批、取消、命名撤销和视口截图作为反馈面。它与 A/B/E/G 的区别：不是“外部宿主连上一堆工具”，而是扩展自己把 MCP server 起在 Blender 进程里，助手住在软件内部（Studio 工作区），同时也能对 OpenCode Portable 或其他兼容客户端暴露一个经过认证的本地端点。它与 D 在 Blender 上有重叠，差别是：D 用 CLI-Anything 把 Blender 这类软件**包装**成 CLI、由外部 agent 用命令行驱动，适合“反复调用、可复现”；H 是软件**自己**装上助手，适合“边看视口边改、每一步要人审批、随时可撤销”。两条都写、都需要时各取一条：要外部 agent 批量驱动走 D，要在 Blender 里交互式改场景走 H。**注意证据等级**：README 没有量化指标或基准测试，价值描述均为作者主张。
+注意证据等级：README 没有量化指标或基准测试，价值描述均为作者主张。
 
-1. 前提与安装扩展。确认 Windows x64、Blender 4.2 或更高版本；从仓库 Releases 下载 `mcp-for-blender-pro.zip`；在 Blender 中打开 **Edit → Preferences → Get Extensions → menu → Install from Disk**，选中该 ZIP，启用 **mcp-for-blender-pro**。预期结果：扩展出现在偏好设置里并可启用。
+1. 在 Windows x64 + Blender 4.2+ 中，从 Releases 下载 `mcp-for-blender-pro.zip`；`Edit → Preferences → Get Extensions → menu → Install from Disk`，选中 ZIP，启用 **mcp-for-blender-pro**。
 
-2. 打开面板：**3D Viewport → N → MCP Pro**。预期结果：侧边栏出现 MCP Pro 面板。
+2. 打开 **3D Viewport → N → MCP Pro**。
 
-3. 配置 provider 与模型。选择一个 provider —— OpenAI、Anthropic Claude、Google Gemini、OpenRouter、OpenCode Zen、Ollama 或自定义 API —— 填入连接信息，选择模型。注意：必须选支持 tool calling 的模型，否则工具根本调不起来；具备图像能力的模型才能解读视口截图。预期结果：模型可用，能发出第一条消息，或点 **Open Studio Window** 进入可视化工作区。
+3. 配置 provider 与模型：OpenAI、Anthropic Claude、Google Gemini、OpenRouter、OpenCode Zen、Ollama 或自定义 API；必须选支持 tool calling 的模型；要解读视口截图还需模型有图像能力。
 
-4. 先用单助手跑通。在 Blender 中发送消息，或进入 Studio 工作区，按 README 原样提示词依次跑：
+4. 先用单助手跑通，按 README 提示词依次跑：
 
 ```text
 Inspect this scene and explain its object structure before making any changes.
@@ -744,52 +432,40 @@ Duplicate the selected object into a neatly spaced row of five and show the view
 Find an appropriate Poly Haven asset for this scene and ask before importing it.
 ```
 
-   预期结果：助手先检查后行动（走 `get_scene_info`、`list_objects`、`get_object_info`），再建对象、改材质、复制排列；导入资产前会先问你。全程观察审批、取消、命名撤销与 `viewport_screenshot` 这几个反馈面有没有按预期出现。
+观察审批、取消、命名撤销与 `viewport_screenshot` 是否按预期出现。
 
-5. 核对工具清单（共 21 个场景工具），确认你实际拿到的是什么：
+5. 核对 21 个工具：`get_scene_info`、`list_objects`、`get_object_info`、`add_cube`、`add_sphere`、`add_cylinder`、`add_plane`、`add_light`、`add_camera`、`move_object`、`duplicate_object`、`delete_object`、`parent_objects`、`set_material`、`viewport_screenshot`、`execute_code`、`bpy_api_lookup`、`describe_node_type`、`export_scene`、`search_assets`、`import_asset`。其中 `execute_code`、`export_scene`、`import_asset` 是高影响操作。
 
-   - 场景检查：`get_scene_info`、`list_objects`、`get_object_info`
-   - 对象创建：`add_cube`、`add_sphere`、`add_cylinder`、`add_plane`、`add_light`、`add_camera`
-   - 编辑：`move_object`、`duplicate_object`、`delete_object`、`parent_objects`、`set_material`
-   - 视觉反馈与脚本：`viewport_screenshot`、`execute_code`
-   - Blender API 与导出：`bpy_api_lookup`、`describe_node_type`、`export_scene`
-   - 资产工作流：`search_assets`、`import_asset`
+6. 多步任务再换 Manager/Worker/Reviewer 团队链做同一件事。任务按顺序执行；被阻塞任务有一次纠正机会，第二次审核失败则停止工作流。比较单助手与团队链的耗时、人工接管次数、Reviewer 退回次数。
 
-   预期结果：能对上这 21 个，并明确其中 `execute_code`、`export_scene`、`import_asset` 这几个是高影响操作。
+7. 需要外部客户端时，从侧边栏启动 OpenCode Portable，或其他兼容 MCP 客户端连接经过认证的本地端点。外部客户端的审批策略由该客户端自己管理。
 
-6. 多步任务再换团队链做同一件事。配置 Team chain，给每个角色单独的职责、指令和模型：Manager 把请求拆成任务和验收标准；Workers 执行分配的场景操作；Reviewers 检查结果并批准，或退回具体发现。任务按顺序执行以保证场景编辑有序；被阻塞的任务有一次纠正机会，第二次审核失败则停止工作流；任务板展示分配、尝试和审核发现。预期结果：拿到“单助手 vs 团队链”在同一任务上的对照（耗时、人工接管次数、Reviewer 退回次数），而不是默认团队链更好。
-
-7. 需要外部客户端时，从侧边栏启动 **OpenCode Portable**（OpenCode 自己管理 provider 登录和模型选择），或其他兼容 MCP 客户端连接经过认证的本地端点（见 `docs/CONNECTIONS.md`）。预期结果：外部客户端能连上；但注意外部 MCP 客户端的审批策略由该客户端自己管理，不再由扩展替你兜底。
-
-8. 用完后核对边界：连接凭证存于用户设置；聊天历史仅当前会话有效；Studio 本地运行并对发往 Blender 的请求做认证；Python 工具验证用于拦截不允许的操作，**不是安全沙箱**。资产服务（Poly Haven、Sketchfab、Poly Pizza）可能需要 key，并须遵守所用资产的许可。预期结果：你清楚这套东西能拦什么、不能拦什么。
+8. 核对边界：连接凭证存用户设置；聊天历史仅当前会话有效；Studio 本地运行并对发往 Blender 的请求做认证；Python 工具验证用于拦截不允许操作，不是安全沙箱；资产服务可能需要 key，并须遵守许可。
 
 ### 做法 I：把视频检索接给 agent（以 jevreel 为例）
 
-选 I 的条件：你有一段本地视频或 URL 视频，要在里面找“某个瞬间在哪儿”——有人喝果汁盒、按台词定位「Thom 何时向 Celia 道歉、说了什么」、读出画面里的报纸标题、用一张参考照片找出该角色出现的每一个场景、或把整部片按自己定义的 4 个问题“绘制地图”；这些以前通常要靠人工逐帧回看。它与 A/B/E/G/H 的区别：不是接一个通用工具集或宿主内助手，而是把一条检索流水线接给 agent——按 1 fps 抽帧、60 帧拼一张带标签（`T01`、`T02`…）的 1568px contact sheet，对每张 sheet 并行调 TypeSafe 的决策模型 Jev 做类型化回答，排名靠前的窗口再用全分辨率帧逐 0.5 秒复核（verify），返回「时间、概率、帧、附近台词」给 agent，由 agent 自己 `zoom` / `locate` / 进一步阅读并报时间点；全程不计算、不存储任何向量。**注意证据等级**：底层 Jev 图像能力仍是实验性，验证只基于单个测试视频，调研建议只做小范围试用、不建议直接全量采用；调研原文在 Claude Code 插件部分被截断。
+注意证据等级：底层 Jev 图像能力仍是实验性，验证只基于单个测试视频；调研原文在 Claude Code 插件部分被截断。
 
-1. 装 CLI 并配置 key。前提：Python 3.11+、FFmpeg 在 PATH 上、一个 TypeSafe API key（<https://console.typesafe.ai>）。`[all]` 额外带来 URL 支持 yt-dlp 与本地语音转写 faster-whisper。
+1. 装 CLI 并配置 key：
 
 ```bash
 uv tool install "jevreel[all]"
 export TYPESAFE_API_KEY=...
 ```
 
-   预期结果：`jevreel` 命令可用；无 key 时，不带时间线的索引、zoom、字幕和 query 仍可用。
+无 key 时，不带时间线的索引、zoom、字幕和 query 仍可用。
 
-2. 索引视频、提问、放大看。id、id 前缀、路径或标题都可以用来定位视频。
+2. 索引、提问、放大看：
 
 ```bash
-jevreel index talk.mp4                       # prints the video id
-jevreel ask talk "a slide with a bar chart"  # id, id prefix, path or title all work
-jevreel zoom talk 12:00 12:10                # full-resolution frames to look at
+jevreel index talk.mp4
+jevreel ask talk "a slide with a bar chart"
+jevreel zoom talk 12:00 12:10
 ```
 
-   预期结果：拿到命中（时间、概率、帧、附近台词）；`zoom` 取到全分辨率帧供 agent（或你自己）复核。
-
-3. 用 lens 把自己的问题挂到每一分钟上。写一个 TOML，问题类型可为 `noul` / `choice` / `score`：
+3. 用 lens 把自定义问题挂到每一分钟上：
 
 ```toml
-# examples/lenses/driving.toml
 name = "driving"
 
 [[questions]]
@@ -811,68 +487,34 @@ levels = ["None", "Light", "Moderate", "Heavy"]
 ```
 
 ```bash
-jevreel index drive.mp4 --lens driving.toml     # rides in the indexing requests: almost free
-jevreel lens drive driving.toml                 # or run it later: one request per minute of video
-jevreel query drive "on_bridge > 0.7"           # filter as often as you like: no requests
-jevreel query drive "weather == snow and traffic >= 2"
+jevreel index drive.mp4 --lens driving.toml
+jevreel lens drive driving.toml
+jevreel query drive "on_bridge > 0.7"
 ```
 
-   预期结果：得到一条可反复过滤、过滤不再产生请求的本地时间线；lens 随索引请求一起走几乎免费，事后再单独跑是每分钟视频一次请求。
+`query` 过滤不产生请求；lens 随索引请求一起走几乎免费，事后再跑是每分钟视频一次请求。
 
-4. 接到 agent（插件 / 手动 MCP / skill 三种方式任选）。
-
-   作为插件（需要 uv 与 FFmpeg 在 PATH；本地语音转写默认不含，需要的话按「By hand」用 `jevreel[all]` 手动添加）：
+4. 接到 agent（插件 / 手动 MCP / skill 任选）：
 
 ```bash
 claude plugin marketplace add DeepAleph/jevreel
 claude plugin install jevreel@jevreel
-```
-
-```bash
 uvx --from "jevreel[url]==0.2.0" jevreel login
 codex plugin marketplace add DeepAleph/jevreel
 codex plugin add jevreel@jevreel
 ```
 
-   手动添加 MCP server：
-
 ```bash
 claude mcp add jevreel -e TYPESAFE_API_KEY=your-key -- uvx --from "jevreel[all]" jevreel mcp
-```
-
-```bash
 codex mcp add jevreel --env TYPESAFE_API_KEY=your-key -- uvx --from "jevreel[all]" jevreel mcp
-```
-
-   Claude Desktop / Cursor / 其他 `mcpServers` 客户端（VS Code 用同样的条目，放在 `"servers"` 下并加 `"type": "stdio"`）：
-
-```json
-{
-  "mcpServers": {
-    "jevreel": {
-      "command": "uvx",
-      "args": ["--from", "jevreel[all]", "jevreel", "mcp"],
-      "env": { "TYPESAFE_API_KEY": "your-key" }
-    }
-  }
-}
-```
-
-   装 skill（Claude Code、Codex 等读 Agent Skills 的 agent；没有 MCP 的 agent 也可以只用 skill + CLI，每个命令都输出 JSON）：
-
-```bash
 npx skills add DeepAleph/jevreel
 ```
 
-   预期结果：agent 能自己调用视频检索工具，拿到「时间、概率、帧、附近台词」后再自己 `zoom` / `locate` / 进一步阅读并报时间点。调研原文在 Claude Code 插件部分（`claude m...`）被截断，这段细节未知。
-
-5. 或用 Python API：
+5. 或走 Python API：
 
 ```python
 import asyncio
-
 from jevreel import Reel
-
 
 async def main() -> None:
     async with Reel() as reel:
@@ -882,157 +524,257 @@ async def main() -> None:
             print(hit.time, hit.probability, hit.frame)
         print(reel.query(video.id, "text_on_screen > 0.8").rows)
 
-
 asyncio.run(main())
 ```
 
-   预期结果：脚本里也能拿到同样的命中与查询结果。
+6. 关键环境变量：`JEVREEL_HOME`（缓存位置）、`JEVREEL_MODEL`（默认 `jev-1.14.0`，故意锁定，别名会漂移）、`JEVREEL_FPS`（默认 1，最高 5）、`JEVREEL_TILES_PER_SHEET`（默认 60）、`JEVREEL_VERIFY_TOP`（默认 6，0 关闭验证）、`JEVREEL_CACHE`（默认 1）、`JEVREEL_CONCURRENCY`（默认 16，速率限制按 TypeSafe 账号计）、`JEVREEL_ASR_MODEL`（默认 `small`）、`JEVREEL_CAPTION_LANGUAGES`。
 
-6. 按需调配置（环境变量）：
+7. 成本自测：`jevreel measure <video>` 报告某个网格尺寸下一张 contact sheet 在你账号上的成本。
 
-| 变量 | 默认 | 含义 |
-| - | - | - |
-| `TYPESAFE_API_KEY` | Jev 必需 | 无它时，不带时间线的索引、zoom、字幕和 query 仍可用 |
-| `JEVREEL_HOME` | 用户缓存目录 | 索引、sheet、帧和答案缓存的存放位置，`jevreel home` 打印 |
-| `JEVREEL_MODEL` | `jev-1.14.0` | 故意锁定：Box 和图像 tile 需要 1.14，别名会漂移 |
-| `JEVREEL_FPS` | `1` | 抽帧频率（最高 5） |
-| `JEVREEL_TILES_PER_SHEET` | `60` | 每张 sheet 的帧数；更少＝更大的 tile 和更多请求 |
-| `JEVREEL_VERIFY_TOP` | `6` | 每次 ask 在全帧上复核的窗口数；`0` 关闭验证 |
-| `JEVREEL_CACHE` | `1` | 设为 `0` 则每次都重新问 Jev |
-| `JEVREEL_CONCURRENCY` | `16` | 并行 Jev 请求数，速率限制按 TypeSafe 账号计 |
-| `JEVREEL_ASR_MODEL` | `small` | 无字幕视频用的 faster-whisper 模型 |
-| `JEVREEL_CAPTION_LANGUAGES` | `en,en-orig,en.*` | URL 抓字幕的语言顺序 |
+8. 按四步工作流使用：Index（1 fps 抽帧 + 固定问题集 + lens）→ Screen（每张 sheet 一次请求）→ Verify（按排名取 top 窗口，在全帧上每半秒做一次 yes/no）→ Look closer（`zoom`、`locate`、`whole`）。MCP 工具与 CLI 对照：`index_video`/`index`、`ask_video`/`ask`、`find_in_video`/`find`、`locate_in_frame`/`locate`、`zoom_video`/`zoom`、`video_transcript`/`transcript`、`ask_whole_video`/`whole`、`run_lens`/`lens`、`query_timeline`/`query`、`list_videos`/`list`。
 
-   前提：视频为本地文件或 URL，或视频旁放好 `.srt`/`.vtt` 字幕，否则用本地 faster-whisper 转写。预期结果：你清楚自己在抽多密的帧、复核几个窗口、并发多大，以及这些改动会不会让你的账号撞上限速。
+### 做法 J：只读 WhatsApp MCP（Cloudflare 自部署）
 
-7. 成本自测：`jevreel measure <video>` 报告某个网格尺寸下一张 contact sheet 在你账号上的成本。预期结果：开跑前就有一份按自己账号算出来的成本参考，而不是拿 README 的数字硬套。
+选 J 的条件：你只想用自己的个人 WhatsApp 账号做只读检索、摘要、补看群聊、给未命名聊天补名；愿意在自己的 Cloudflare 付费 Workers 上部署；能接受非官方协议和违反 WhatsApp 条款的风险；一个部署只对应一个账号和一个 owner。不要用来发送消息或多人共用。
 
-8. 按 README 的四步工作流使用工具：Index（1 fps 抽帧 + 固定问题集 + lens，得到类型化时间线）→ Screen（每张 sheet 一次请求：noul 判「在这一分钟内吗」+ choice 选「第几秒」）→ Verify（按排名而非阈值取 top 窗口，在全帧上每半秒做一次 yes/no）→ Look closer（`zoom` 看全分辨率帧、`locate` 框选并裁剪、`whole` 对整个视频问一个问题）。
+1. 准备 Cloudflare 账户（README 要求 Workers Paid；免费计划未验证，作者建议删掉 `limits` 块并预期首次导入不稳定）、Node 20+、自己的手机和 WhatsApp 账号。
 
-   MCP 工具与 CLI 对照：`index_video`/`index`、`ask_video`/`ask`（`mode`: visual、speech、both）、`find_in_video`/`find`、`locate_in_frame`/`locate`、`zoom_video`/`zoom`、`video_transcript`/`transcript`、`ask_whole_video`/`whole`、`run_lens`/`lens`、`query_timeline`/`query`、`list_videos`/`list`。
+2. 克隆并安装依赖：
 
-   预期结果：agent 用同一套工具名完成从粗筛到复核的整条链路。
+```sh
+git clone https://github.com/finereli/whatsapp-mcp
+cd whatsapp-mcp
+npm install
+```
+
+3. 创建 OAuth KV 命名空间，把打印出的 id 填进 `wrangler.jsonc`：
+
+```sh
+npx wrangler kv namespace create OAUTH_KV
+```
+
+4. 设置 owner 密码（至少 12 个字符）：
+
+```sh
+npx wrangler secret put OWNER_PASSWORD
+```
+
+5. 部署：
+
+```sh
+npm run deploy
+```
+
+6. 打开 Wrangler 打印的部署 URL，按页面提示扫码链接 WhatsApp（设置 → 已链接设备 → 链接设备）。首次链接会导入历史，页面显示进度，可关闭页面。
+
+7. 接入 MCP 客户端，以 Claude Code 为例：
+
+```sh
+claude mcp add --transport http whatsapp https://your-url/mcp
+```
+
+然后输入 `/mcp` 并用密码登录；其他客户端指向同一个 `/mcp` URL。
+
+8. 调用只读工具：`list_chats`、`get_messages`、`search_messages`、`unnamed_chats`、`set_contact_names`、`sync_now`、`link_status`、`relink`。可直接对 agent 说：
+
+```text
+"What did Dana say about the flights?"
+"Find every message where someone mentioned the lease, across all my chats."
+"Summarize what I missed in the family group this week."
+```
+
+9. 补全未命名聊天：对 agent 说 `find names for my unnamed chats`；agent 会调用 `unnamed_chats`，用已有联系人工具匹配号码，再用 `set_contact_names` 保存姓名。前提是 agent 已有 Google Contacts、Gmail 等联系人访问工具；服务器本身不连接联系人服务。
+
+10. 可选调试：设置 `PIN`（32+ 随机字符）后，可用 `x-pin` 头访问 `/debug`、`/debug/pull`、`/debug/chats?q=`、`/debug/messages?chat=`、`/debug/search?q=`、`/debug/types`、`/debug/unnamed`、`/debug/sql?q=`、`/debug/logout`。不设置则关闭这些路由。
+
+11. 验证：`npm run typecheck`、`npm test`；部署后 `GET /debug` 应为 `phase: "idle"` 且 `paired: true`；`GET /debug/pull` 在安静账号上约十秒返回 `reason: "idle"`；再调用 `list_chats`、`get_messages`、`search_messages`，并用 `unnamed_chats` 和 `set_contact_names` 验证补名；改过 ingest 后重新链接，确认消息计数不增长。
+
+12. 最小试用：在自己的个人 Cloudflare 账户部署，链接一个个人 WhatsApp 账号，接入 Claude Code，只做只读查询。选一组真实任务（按人找航班信息、跨聊天找租约、补看家庭群、给未命名聊天补名），先人工完成并记录耗时和结果，再用 MCP 工具完成同样任务。若出现导入失败、隐私/合规不可接受、或结果明显不如人工，就停止试用。
+
+### 做法 K：本地只读微信/钉钉检索（以 im-mcp 为例）
+
+选 K 的条件：Windows x64 或 macOS，微信 4.x / 钉钉 7.x，客户端已登录；要给 agent 补私有沟通上下文；只读检索；能接受本地数据库解密后明文落盘和强版本依赖。它把微信/钉钉本地数据库解密为 SQLite、建 FTS5 全文索引，再通过 MCP 工具暴露给 Claude Desktop、Cursor、Cline、Pi 等客户端；微信侧 16 个工具，钉钉侧 5 个工具，全部声明为只读。
+
+1. 确认前置条件：Windows 初始化需管理员权限终端且微信已登录（扫描 `Weixin.exe` 内存取密钥）；macOS 4.1+ 需 64 位 hex passphrase；已安装 uv；客户端支持 MCP 配置；版本在支持表内。
+
+2. 安装（推荐 `uv tool` 全局隔离安装）：
+
+```bash
+uv tool install "git+https://github.com/stkoecn/im-mcp.git" --with "im-mcp[all]"
+```
+
+国内网络亦可用 Gitee 源：`uv tool install "git+https://gitee.com/ws4m/im-mcp.git" --with "im-mcp[all]"`。更新用 `uv tool upgrade im-mcp`。只装一侧：
+
+```bash
+pip install "git+https://github.com/stkoecn/im-mcp.git#egg=im-mcp[wechat]"
+pip install "git+https://github.com/stkoecn/im-mcp.git#egg=im-mcp[dingtalk]"
+```
+
+3. 一次性初始化（提取密钥 + 解密 + 建 FTS5 索引）：
+
+```bash
+wechat-init
+wechat-init --passphrase <64位十六进制passphrase>
+wechat-init --output ~/.wechat_mcp/decrypted
+wechat-init --only-extract
+wechat-init --etl-only
+dingtalk-init
+dingtalk-init --output-dir ~/.dingtalk_mcp/decrypted
+```
+
+默认保存至 `~/.wechat_mcp/`、`~/.dingtalk_mcp/`。
+
+4. 接入 AI 客户端。方案 A（原文推荐，`uvx` 即席运行，零环境污染）：把 `mcpServers` JSON 写进客户端配置，`command` 用 `uvx`，`args` 用 `--from`、`git+https://github.com/stkoecn/im-mcp.git[all]`、`wechat-mcp` 或 `dingtalk-mcp`，`env` 固定 `PYTHONIOENCODING=utf-8`、`PYTHONUTF8=1`。方案 B：步骤 2 已 `uv tool install` 成功且命令在 PATH 中时，`command` 可直接写 `wechat-mcp` / `dingtalk-mcp`；若提示 not on your PATH，可 `uv tool update-shell` 或重启终端，受限环境写绝对路径。
+
+5. 给 agent 装配套技能文档：
+
+```bash
+mkdir -p ~/.agents/skills/im-mcp && cp skills/im-mcp/SKILL.md ~/.agents/skills/im-mcp/
+mkdir -p ~/.claude/skills/im-mcp && cp skills/im-mcp/SKILL.md ~/.claude/skills/im-mcp/
+mkdir -p .agents/skills/im-mcp && cp skills/im-mcp/SKILL.md .agents/skills/im-mcp/
+```
+
+6. 让 agent 自己完成配置：
+
+```text
+请阅读并遵循开源项目 https://github.com/stkoecn/im-mcp 中的 README.md 与 skills/im-mcp/SKILL.md，帮我配置并启用本机的绿泡泡与DuangDuang MCP 服务。
+```
+
+7. 用完即清（公共机器或试用结束后必须做）。先完全退出 AI 客户端，否则 SQLite 句柄与 `-shm`/`-wal` 锁会阻止删除；或强制结束进程：
+
+```powershell
+Get-Process | Where-Object { $_.ProcessName -match "wechat-mcp|dingtalk-mcp" } | Stop-Process -Force
+```
+
+```bash
+im-clean --dry-run
+im-clean
+im-clean --scope wechat
+im-clean -y --force
+uv tool uninstall im-mcp
+```
+
+8. 日常使用（工具→场景）：找群里谁发过某话题 → `search_wechat_messages`；总结项目群最近 50 条 → `get_session_history`；汇总某天沟通做日报 → `get_messages_by_date`；拉某时间段群聊 → `get_messages_by_range`；找群文件 → `search_shared_files`；解密聊天图片 → `get_message_image`；查联系人 → `search_contacts`；查数据是否最新 → `get_sync_status`；刚聊了几句要更新后再查 → `sync_wechat_database`。
+
+9. 验证：原文只给了兼容性验证表（Windows/macOS、多个微信/钉钉版本），没有效果指标、任务成功率或对照数据。需要自己选一组真实只读任务，先人工完成并记录耗时和结果，再用 MCP 工具完成同样任务；检查 `get_sync_status` 的索引新鲜度，必要时先 `sync_wechat_database` / `sync_dingtalk_data` 再查询。若版本不兼容、初始化失败、明文落盘不可接受或结果明显不如人工，就停止试用。
 
 ## 怎么判断变好了
 
 可观察指标：
 
-- 通路：`uvx jevcrawl doctor` 是否报通路正常；`rea` 是否出现在 Hermes 的服务器列表中；CLI-Hub 的 `cli-hub info`、`install`、`launch` 是否成功；arcmira 的 `arcmira_describe` 是否返回方法表与版本行；reason network 的 `reason network who` 是否稳定列出对方 session 及其当前任务；idx 的 `idx mcp setup <client>` 是否打印出可直接使用的绝对路径，客户端里 `idx` 是否出现且工具数可枚举；Blender 扩展是否装好后能打开 MCP Pro 面板、选中支持 tool calling 的模型、跑通“检查场景 → 建对象 → 复制排列”这一串；jevreel 是否 `jevreel index` 打印出 video id、`jevreel ask` 返回带时间 / 概率 / 帧的命中、`jevreel zoom` 能取到全分辨率帧、装成插件 / MCP / skill 后 agent 是否能自己调用这几个工具。
-- 上下文压缩：`tokens_raw` 对 `tokens_returned`。jevcrawl README 的演示是 docs.python.org 示例抓 6 页，80,034 tokens 压到 1,873 tokens，$0.0069，8.3 秒。
-- 成本与停止原因：`jev_cost_usd`、`stopped_because`、`degraded`、`needs_js_urls`。
-- 任务效果：是否抓到含答案的页面、答案是否正确，外加每次任务成本、每个正确答案成本、耗时。
-- REA 侧：代理能否在不需要用户点名工具的情况下自动调用 rea 的工具；同一任务与未挂载时相比，人工步骤数和耗时是否减少。
-- arcmira 侧：`resolve` 是否返回 `best` / `suggested` / `ask` 而不是抛 `id_required`；`arcmira.quote` 的预估与实际消耗是否对得上；被拦住时是否拿到 `paid_plan_required` / `quota_exceeded` / `spend_limit_exceeded` / `member_limit` / `fair_use_cap` / `on_demand_paused` 这类可按 `code` 分支的错误码；Premium 未就绪时是否按 `Retry-After` 重读并最终拿到内容，而不是判失败；monitor 建好后 `notify_frequency` 与投递渠道是否按预期生效。
-- CLI-Anything 侧：agent 是否自主发现、安装并启动合适 CLI；生成流水线是否产出 TEST.md、`/cli-anything:test` 与 `/cli-anything:validate` 是否通过；README 自报 2,461 个测试通过、pytest 100%、多语言/多 harness 覆盖率，但这是项目自述，不是第三方复现。
-- reason network 侧：`who` 能否稳定列出对方 session 及其当前任务（验证 title / todo 作为状态来源是否够用）；端到端拿到回答的时延，对比“人来转述”的基线；一次协作中人工中转的次数是否下降；消息在哪几个 agent 上是中途可见、哪几个要等到下一步，是否与 README 描述一致（验证任务匹配的那条判据）；关掉一端后发消息、再重连，消息是否补发到（验证离线排队）。
-- idx 侧：stdout 是否只输出一个 JSON 文档（把 stderr 单独接走，管道里仍然可解析）；envelope 里的 `provider`、`fetched_at`、`cached`、`stale`、`warnings` 是否符合预期；来源未返回的字段是 `null` 而不是被估算；退出码是否严格按 `0/2/3/4/5/6` 语义返回（用它做脚本分支，而不是解析报错文本）；`idx --offline` 是否命中缓存、未命中是否返回 `5`；agent 是否用 `idx_brief` 起手；工具失败时拿到的是不是 `{error: {code, message}, exit_code}`。
-- Blender 扩展侧：同一场景任务从提出到可接受的耗时（手工 vs 单助手 vs 团队链）；需要人工接管或手动修正的次数；触发撤销/回退的次数；Reviewer 退回任务的次数，以及第二次审核失败导致工作流停止的次数；`execute_code` 报错或 Python 工具验证拦截的次数；`viewport_screenshot` 是否按需出现，审批/取消/命名撤销是否真的生效。
-- jevreel 侧：`jevreel measure <video>` 的报告与你账号实际计费是否对得上；重复 `ask` 同一问题是否 0 请求 0 成本；`jevreel query` 反复过滤是否确实不产生请求；`JEVREEL_VERIFY_TOP` 打开与关闭时同一段视频的命中差异（README 的四步流程明确是「按排名而非阈值取 top 窗口，再在全帧上每半秒做一次 yes/no」）。README 给出的对照成本量级：10 分钟 1080p 视频，单张 sheet 约 $0.00025、索引 $0.0033、一次 ask $0.004–0.005、重复 ask $0、locate $0.0002、whole $0.0003，一小时视频一个问题约 $0.02–0.03。可量化的验证价值证据：在 10 分钟 1080p 无语音游戏录像上逐条对照帧检查命中；三个不到一秒的暂停菜单出现，仅 screening 得分 0.36 / 0.50 / 0.95，「验证前三个里有两个被漏掉」，验证后被全部捞回。
-- 安全负向指标：是否出现越权访问、读取工作目录之外的文件、或执行非预期命令；出现即回滚并降级为 study。Blender 侧还要看 `execute_code` 是否执行了超出你预期的操作——Python 工具验证不是沙箱。jevreel 侧要注意：视频帧与问题会被发送到 TypeSafe 的 Jev 打分，先确认视频内容允许外发。
+- 通路：`uvx jevcrawl doctor` 是否报通路正常；`rea` 是否出现在 Hermes 服务器列表；CLI-Hub 的 `cli-hub info/install/launch` 是否成功；`arcmira_describe` 是否返回方法表与版本行；`reason network who` 是否稳定列出对方 session 及当前任务；`idx mcp setup <client>` 是否打印绝对路径、客户端里 `idx` 是否出现且工具数可枚举；Blender 扩展是否能打开 MCP Pro 面板、选中支持 tool calling 的模型、跑通“检查场景 → 建对象 → 复制排列”；jevreel 是否 `index` 打印 video id、`ask` 返回时间/概率/帧、`zoom` 取到全分辨率帧、接入 agent 后能自己调用；WhatsApp MCP 的 `/debug` 是否为 `phase: idle` 且 `paired: true`、`link_status` 的 `last_pull` 是否正常更新；im-mcp 的 `wechat-init` / `dingtalk-init` 是否成功、客户端能调用 `search_wechat_messages` / `get_session_history` 等工具。
+- 工具清单：注册后必须去客户端确认工具真的出现、数量可枚举；不能把“注册成功”当“验证完成”。
+- 任务效果：同一组真实任务，挂载 vs 未挂载/人工，比较任务完成率、答案正确性、漏掉已知消息数、人工步骤数、耗时、工具报错次数。
+- 成本与停止原因：jevcrawl 看 `jev_cost_usd`、`stopped_because`、`degraded`、`needs_js_urls`；arcmira 看 `quote` 预估与实际消耗、错误码是否可按 `code` 分支；jevreel 看 `jevreel measure` 与实际计费、重复 `ask` 是否 0 请求 0 成本、`query` 是否不产生请求。
+- 安全负向指标：是否出现越权访问、读取工作目录之外文件、执行非预期命令；Blender 侧看 `execute_code` 是否超出预期；jevreel 侧确认视频帧与问题允许外发到 TypeSafe；WhatsApp MCP 侧确认没有发送消息、没有多人共享、没有绕过条款；im-mcp 侧确认只读、明文数据库已按需清理、没有在公共机器残留。
 
-对照试验设计（借用 jevcrawl README 的基准设计）：所有系统从站点首页出发、同样的 30 页预算、同一个问题，抓到的内容交给同一个回答 LLM，由同一个 judge 打分，只让爬虫这个变量变。CLI-Anything 没有对比性指标（用了 CLI 之后任务成功率/耗时变化），原文没有给；arcmira 同样没有给出对比性指标，只有厂商自述的数据覆盖与识别准确性；reason network 也没有任何效果数据、性能数字、前后对比或用户案例；idx 本次给出的调研正文在第 9 步后被截断，未见效果数据或对比指标；Blender 扩展 README 也没有量化指标或基准测试；jevreel 给的是成本数据与一个视频上的对照帧验证，底层 Jev 图像能力仍是实验性、验证只基于单个测试视频，没有跨视频的对比指标。这些条只能先用流程内建测试和真实重复任务做前后对照（做法 G 第 11 步、做法 H 第 6 步、做法 I 第 2 与第 8 步）。
+对照试验设计：所有系统从同一入口、同样预算、同一个问题出发，抓到的内容交给同一个回答 LLM，由同一个 judge 打分，只让被试工具这个变量变。没有对比性指标的工具，先用流程内建测试和真实重复任务做前后对照。
 
 可参考的作者自测数据（非独立验证）：
 
-- 50 个 WebWalkerQA 任务（2026-10-12，回答模型 `claude-opus-5-5`，judge `claude-sonnet-5-5`）：jevcrawl 答对 40%、找到答案页 54%、$0.025/任务；“Claude 逐个挑链接”为 30% / 33% / $0.194；广度优先为 8% / 11% / $0.228。
-- 每正确答答案成本：jevcrawl $0.06、“Claude 挑链接” $0.65、广度优先 $2.85。
-- 与 Crawl4AI 0.9.4 的对照（20 个任务，2026-10-13，只比“是否抓到 gold page”，不接 LLM）：答案页 10 次 vs 5 次；全部答案页 5 vs 2；中位爬取时间 29s vs 43s；站点加载失败 0 vs 3；jevcrawl 找到 6 个 Crawl4AI 错过的答案页，Crawl4AI 找到 1 个 jevcrawl 错过的。
-- CLI-Anything README 自报：2,461 个测试通过、pytest 100%、多语言/多 harness 的覆盖率；demos 声称能产出 CAD 模型、3D 场景、图表、游戏内容、字幕等真实产物。均无第三方复现。
-- reason network：README 没有给出任何效果数据、指标或案例；仓库 33 stars，成熟度无从判断。
-- idx：本次给出的调研正文只给出安装命令、MCP 注册方式、输出契约与仓库的数据流水线描述，未见效果数据、性能数字或对比指标。
-- Blender 扩展：仓库指标显示 705 stars；README 标注 Release 1.0.0、Blender 4.2+、Windows x64、MIT 许可。除此之外没有用户案例、成功率、耗时对比或基准数据；“更快迭代”“自动化重复工作”“把创意简报变成场景操作”均为作者主张。
-- jevreel：README 给出成本量级（10 分钟 1080p 视频单张 sheet 约 $0.00025、索引 $0.0033、一次 ask $0.004–0.005、重复 ask $0、locate $0.0002、whole $0.0003、一小时视频一个问题约 $0.02–0.03）和 `jevreel measure <video>`；给出一个可量化的验证价值证据（10 分钟 1080p 无语音游戏录像上逐条对照帧检查命中，三个不到一秒的暂停菜单仅 screening 得分 0.36 / 0.50 / 0.95，验证前漏掉两个、验证后全部捞回）。这些均为作者自测；底层 Jev 图像能力仍是实验性、验证只基于单个测试视频，调研原文在 Claude Code 插件部分被截断。
+- jevcrawl：50 个 WebWalkerQA 任务（2026-10-12，回答模型 `claude-opus-5-5`，judge `claude-sonnet-5-5`）答对 40%、找到答案页 54%、$0.025/任务；Claude 逐个挑链接 30% / 33% / $0.194；广度优先 8% / 11% / $0.228。每正确答答案成本 $0.06 / $0.65 / $2.85。与 Crawl4AI 0.9.4 的 20 任务对照（2026-10-13，只比是否抓到 gold page）：答案页 10 vs 5、全部答案页 5 vs 2、中位爬取时间 29s vs 43s、站点加载失败 0 vs 3。docs.python.org 示例 80,034 tokens 压到 1,873 tokens，$0.0069，8.3 秒。
+- CLI-Anything README 自报：2,461 个测试通过、pytest 100%、多语言/多 harness 覆盖率；无第三方复现。
+- reason network：README 没有效果数据、指标或案例；仓库 33 stars。
+- idx：调研正文只给安装命令、MCP 注册方式、输出契约与数据流水线描述，未见效果数据、性能数字或对比指标；正文在第 9 步后被截断。
+- Blender 扩展：仓库 705 stars；Release 1.0.0、Blender 4.2+、Windows x64、MIT 许可；没有用户案例、成功率、耗时对比或基准数据。
+- jevreel：10 分钟 1080p 视频单张 sheet 约 $0.00025、索引 $0.0033、一次 ask $0.004–0.005、重复 ask $0、locate $0.0002、whole $0.0003、一小时视频一个问题约 $0.02–0.03；10 分钟 1080p 无语音游戏录像上，三个不到一秒的暂停菜单仅 screening 得分 0.36 / 0.50 / 0.95，验证前漏掉两个、验证后全部捞回。底层 Jev 图像能力仍是实验性，验证只基于单个测试视频。
+- WhatsApp MCP：README 给出完整部署命令、配置项、工具表、架构和调试步骤；HN 35 points、23 comments 只能说明关注度；作者只在一个真实账号上跑过；没有业务效果指标；首次历史导入每个链接只发生一次，失败后要重新链接才能补；免费计划未验证；媒体只显示 `[image]`、`[voice note 12s]` 等标签，不下载不转写；一个部署对应一个 WhatsApp 账号和一个 owner；非官方实现，作者承认违反 WhatsApp 条款；已知缺口包括未命名聊天不会自动刷新、每日 pull 发现登出不会通知、编辑/删除路径未用真实事件测试。
+- im-mcp：README 给出完整安装、初始化、客户端配置、清理命令和工具表；只有一张兼容性验证表，没有效果指标、任务成功率或对照数据；“毫秒级响应”为作者声称，未给测量方法；工具只读，但本地数据库解密后明文落盘；没有 cron、webhook、守护进程等定时/事件触发说明，调度层需自行搭建。
 
-最小试用方式（半天内可完成）：
+最小试用方式与试多久：
 
-1. 准备一个真实问题，条件是答案埋在目标站点首页几跳之下、且该站点不依赖 JS 渲染。
-2. 记下当前基线：用你现在的方式（让模型自己抓、或现有爬虫如 Crawl4AI）跑同一个问题，保存它喂给 LLM 的原始上下文和最终答案。
-3. 按做法 A 接好 MCP，用 `uvx jevcrawl doctor` 确认通路，然后跑：
+- jevcrawl：半天内完成。准备一个答案埋在首页几跳之下、站点不依赖 JS 的真实问题；先用现有方式跑同一个问题并保存原始上下文和答案；按做法 A 接好，`uvx jevcrawl doctor` 确认通路，跑 `jevcrawl crawl <start_url> --goal "<你的问题>" --json`；再换一个答案就在已知单页上的问题跑 `scrape`；把两份产出交给同一个评审做对照打分。
+- REA：以完成一轮“注册 → 枚举 → 冒烟 → 对照”为准，原文没有时间或次数建议。
+- CLI-Anything：以跑通一条真实重复任务并留下一组对照为准。
+- arcmira：以“示例提示词跑通 + `resolve` 路径走通 + `quote` 预估与实际对得上”为一轮；调研只建议小范围试用。
+- reason network：以 2 人配合跑通一轮 who → 问答 → send → 离线补发为准。
+- idx：以“零安装跑通 → JSON 契约核对 → MCP 注册 → agent 一次调用 → 离线一次”为一轮。
+- Blender 扩展：以“单助手四条提示词跑通 + 团队链把同一任务重做一次”为一轮。
+- jevreel：以“index → ask → zoom 跑通 + 一次插件/MCP 接入 + 一次 lens 过滤”为一轮。
+- J WhatsApp MCP：以“部署 → 链接个人账号 → 只读搜索/摘要/补名 → 与人工完成同一组任务对照”为一轮；出现导入失败、隐私/合规不可接受或结果明显不如人工就停止。
+- K im-mcp：以“初始化 → 客户端接入 → 3–5 个真实只读任务 → 与人工对照 → 清理”为一轮；版本不兼容、初始化失败、明文落盘不可接受或结果明显不如人工就停止。
 
-```bash
-jevcrawl crawl <start_url> --goal "<你的问题>" --json
-```
-
-4. 再换一个“答案就在已知单页上”的问题，跑 `jevcrawl scrape <url> --goal "..."`，确认这种场景不会浪费 Jev 调用、也不需要多页爬。
-5. 把两份产出的答案交给同一个评审（人或另一个模型）做对照打分 —— 原文在这里被截断，评审的具体口径需要用自己的流程补上。
-6. REA 侧的最小试用：在隔离环境执行注册命令 → 枚举工具清单并记录 → 挑一个低风险、可回退的任务做冒烟测试 → 与不挂载 rea 时的同一任务做对照。
-7. CLI-Anything 侧的最小试用：在隔离环境 `pip install cli-anything-hub` → `cli-hub list/search/info/install/launch` 一个现成 harness → 接进 agent 跑一条真实重复任务 → 记下未接时的基线并对照；确认真有用后，再考虑用 `/cli-anything` 为内部工具生成新 CLI，并用 `/cli-anything:test`、`/cli-anything:validate` 检查生成物。
-8. arcmira 侧的最小试用：在 Claude Code 用 `claude mcp add --transport http --scope user arcmira https://mcp.arcmira.com/mcp` 接入（或改用带 Bearer key 的 JSON 配置）→ 调 `arcmira_describe` 读方法表 → 照 README 的“先 `resolve` 后查询”示例程序跑一次 → 从上面 5 条示例提示词里挑一条验证接通 → 对贵操作先 `arcmira.quote` 再跑。
-9. reason network 侧的最小试用：找 2 名已经在用 Reason 的同事，各自装好 Reason CLI、确认在同一个 workspace。两人各开一个 Claude Code session，分别跑 `reason network who` 互相确认能看到对方的 session 和当前在做的事；然后由 A 用 `reason network <b的session> "..."` 提一个只有 B 的 agent 凭自己会话上下文才能回答的问题。若团队不在 Reason workspace，或找不到第二个人配合，本线索就退化为思路研读——可以借鉴它的 MCP 三工具接口设计（`list_team` / `send_message` / `check_inbox`）和“状态来自 session 自己的 title 和 todo、不需要 agent 主动汇报”这一条，自建轻量版本。
-10. idx 侧的最小试用：`npx github:fzn0x/idx stocks quote BBCA` 零安装跑通 → `npm install -g github:fzn0x/idx`（npm 12 加 `--allow-git=all`）或 `cargo install ihsg-cli` → `idx -o json stocks quote BBCA | jq ...` 核对 envelope 与退出码 → `idx mcp setup <你手上的客户端>` 拿到注册命令并接进 agent → 让 agent 用 `idx_brief` 跑一次 → `idx --offline stocks quote BBCA` 与 `idx cache stats` 验证离线路径。若你的目标领域不是印尼股市，就只抄第 3、4、9 步的结构（统一 envelope、`mcp setup` 自动填绝对路径、失败带回 exit_code），把这条记为 study。
-11. Blender 扩展侧的最小试用：在一台 Windows x64 + Blender 4.2+ 机器上按第 1–3 步装好扩展并选中一个支持 tool calling 的模型，依次运行 README 的四条提示词，先只做“检查场景 → 创建 product-display 场景 → 复制选中对象为五件排列”，全程观察审批、撤销和视口截图；跑通后再把同一任务交给 Manager/Worker/Reviewer 团队链重做一次。如果指标相比纯手工没有改善，或团队链的审核开销大于收益，就退回单助手模式或放弃该集成。
-12. jevreel 侧的最小试用：`uv tool install "jevreel[all]"` → `export TYPESAFE_API_KEY=...` → 在一段本地短视频上 `jevreel index` 拿到 video id → `jevreel ask` 提一个具体问题 → `jevreel zoom` 看命中处的全分辨率帧 → 用插件或手动 MCP 接到 Claude Code 或 Codex → 写一个 lens TOML 把自定义问题挂到每分钟上 → `jevreel query` 过滤几次确认不产生请求。时间紧就只跑 index → ask → zoom 三步；若底层图像识别在你自己的视频上命中率明显不行，或视频内容不允许外发到 TypeSafe，就只保留它的两条设计点（类型化回答 + contact sheet 粗筛、lens + query 零请求过滤），把这条记为 study。
-
-试多久：jevcrawl 侧原文说最小试用半天内可完成；REA 侧原文没有给出时间或次数建议，以完成一轮“注册 → 枚举 → 冒烟 → 对照”为准；CLI-Anything 侧原文未给固定时长，以跑通一条真实重复任务并留下一组对照为准；arcmira 侧调研只建议“小范围试用”，也没有给固定时长或次数，以“示例提示词跑通 + `resolve` 路径走通 + `quote` 预估与实际对得上”为一轮；reason network 侧 README 没有效果数据，以 2 人配合跑通一轮 who → 问答 → send → 离线补发为准；idx 侧调研未给时长，以“零安装跑通 → JSON 契约核对 → MCP 注册 → agent 一次调用 → 离线一次”为一轮；Blender 扩展侧 README 未给时长，以“单助手四条提示词跑通 + 团队链把同一任务重做一次”为一轮；jevreel 侧调研未给固定时长，以“index → ask → zoom 跑通 + 一次插件 / MCP 接入 + 一次 lens 过滤”为一轮。在得到明确正负结果前，不要扩展到长期使用或生产环境。
+在得到明确正负结果前，不要扩展到长期使用或生产环境。
 
 ## 常见坑
 
-- 把“注册成功”当成“验证完成”。REA 侧原文没有给出 list / 枚举命令，必须查 Hermes 文档自行补上；jevcrawl 侧至少还有 `uvx jevcrawl doctor` 这一步；arcmira 侧至少还有 `arcmira_describe` 和一条示例提示词；reason network 侧至少还有 `reason network who` 和一次真实问答；idx 侧至少还要去客户端里确认 `idx` 出现、工具数可枚举，并用 `idx_brief` 真跑一次；Blender 扩展侧至少还要跑一遍“检查场景 → 建对象 → 复制排列”，并观察审批、撤销和视口截图是否真的生效；jevreel 侧至少还要 `jevreel ask` 真问一次、`jevreel zoom` 真看一次，再接进 agent 看它会不会自己调用。
-- 把名字当 id 传。arcmira 的过滤器只接受原样 id，传名字会在发网络请求前抛 `id_required`；必须先 `resolve`，并在 `suggested` 时说明假设与理由、在 `ask` 时把候选交回用户。
-- 连上就开始猜方法签名。先调 `arcmira_describe`（需要时用 `topic` 只取一个方法及其示例），把 id 规则、参数与返回字段、计量规则、错误码一次读全。
-- 不看清计量规则就批量跑。搜索按超出前 5 条的每条 passage 收 4 credits；字幕读取按其窗口每开始的 15 分钟收 4 credits；Premium 转录按整段视频每开始的 15 分钟收 300 credits；`momentum` 每次 10 credits；`start` / `end` 不降低 Premium 计费。贵操作前先 `arcmira.quote`（本身不计费）。
-- 以为工具有预算参数。arcmira 的预算在 dashboard 设，工具不接受金额参数；被拦住时按返回的 `code` 分支处理（`paid_plan_required`、`quota_exceeded`、`spend_limit_exceeded`、`member_limit`、`fair_use_cap`、`on_demand_paused`），别把拦截当成“没有数据”。
-- 把“还在转”当成失败。Premium 转录未就绪时返回 `202` + `Retry-After`，按它重读不重复计费；仍 `pending` 会带 `eta_seconds`；`failed` / `refunded` 除非传 `retry: true`（只在用户要求时传）不会重开。
-- 建了 monitor 就以为能删。arcmira 的 monitor 不提供删除，只能 `paused`；`monitors.attachTrackers` 迁移 tracker 需用户先同意；`monitors.addEntities` 一次最多 90 个 id。
-- 把厂商自述当独立证据。arcmira 的数据覆盖与说话人 / 赞助识别准确性全是厂商自述，且有付费计划与 on-demand 预算门槛（README 未给免费额度上限，只说 “Plan limits apply”）。
-- 把“安装成功”当成“任务有效”。CLI-Hub 装完 harness 后，要接进 agent 跑一条真实重复任务，确认真有用再考虑用 `/cli-anything` 生成新 CLI。
-- 把作者自测当独立证据。jevcrawl 的 50 和 20 个任务样本都很小；原文自己写出的判断是“成本差距大而稳定，准确率差距没那么稳定”。CLI-Anything 的所有效果数据均为项目自述、无第三方复现；reason network 则连效果数据都没有；idx 本次给出的调研正文未包含效果数据；Blender 扩展只有 README 级证据、没有任何量化指标；jevreel 的成本与暂停菜单对照验证同样是作者自测，且底层 Jev 图像能力仍是实验性、验证只基于单个测试视频。
-- 在主力环境里直接跑第三方包。REA 命令字面依赖 `npx`、jevcrawl 依赖 `uvx`、CLI-Hub 依赖 `pip`，都会拉取并执行第三方包；REA 原文完全没讨论安全边界、权限范围、失败排查或离线可用性。arcmira 不往本地落包，但你的程序会在厂商的 Cloudflare Dynamic Worker 沙箱里执行，出站只允许 `GET https://api.arcmira.com/v1/*`（写工具额外允许 `/v1/monitors` 与 `/v1/trackers` 的 POST/PATCH，永不 DELETE）——这既是安全设计，也意味着能力边界。idx 是第三种形态：不自带沙箱的静态二进制直连公开数据源，边界由你自己评估。Blender 扩展是第四种：助手住在本地 Blender 进程里，凭据存用户设置、Studio 本地运行，但 Python 工具验证只是拦截不允许操作的校验、不是安全沙箱。jevreel 是第五种：CLI / 插件 / MCP 三种入口都通过 `uvx` 或 `uv tool install` 拉包执行，而且视频帧与问题会被发到 TypeSafe 的 Jev 打分——外发边界要先想清楚。
-- 忽略版本写死。`rea-agents@6.3.0` 是原文写死的版本；jevcrawl 的 `jev-1.13.0` 也是固定版本，阈值按版本校准，换模型需重新评估。arcmira 是远程 MCP、本身不需要更新，但宿主每次连接都会拉取工具与说明，`arcmira_describe` 带版本行；行为不符时先看版本行。jevreel 的 `JEVREEL_MODEL` 默认 `jev-1.14.0` 也是**故意锁定**：Box 和图像 tile 需要 1.14，别名会漂移；换版本要重新评估。
-- 以为 jevcrawl 能爬任何站点。它不执行 JavaScript（需 JS 的 URL 会列在 `stats.needs_js_urls`），不读 `robots.txt`，除了一次抓 4 页外不做限速，站点条款与合规由使用者自负；不登录、不绕付费墙和 CAPTCHA。
-- 忽略内容外发。jevcrawl 会把页面文本（段落、链接标签、URL）发送到 TypeSafe 打分；API key 只从环境变量读，不落盘、不写日志。
-- 把 401 当成故障。arcmira 对无凭证请求返回 401 + OAuth 挑战，这是登录/开户路径；401 响应体里 `error.data.unlock.action` 带了注册调用，agent 可据此自行开户并重连。
-- 忽略上游软件依赖。大量 CLI harness 包装的是真实桌面软件（GIMP / Blender / LibreOffice 等），不先装上游软件，`cli-hub launch` 不会产生有效结果。
-- Windows 上直接跑 Claude Code 生成路径。Windows 需先装 Git for Windows（含 `bash`/`cygpath`）或使用 WSL，否则会报 `cygpath: command not found`。
+- 把“注册成功”当成“验证完成”。REA 原文没有 list/枚举命令，要查 Hermes 文档补上；jevcrawl 至少还有 `uvx jevcrawl doctor`；arcmira 至少还有 `arcmira_describe` 和一条示例提示词；reason network 至少还有 `reason network who` 和一次真实问答；idx 至少还要去客户端确认 `idx` 出现、工具数可枚举，并用 `idx_brief` 真跑一次；Blender 扩展至少还要跑一遍“检查场景 → 建对象 → 复制排列”；jevreel 至少还要 `ask` 真问一次、`zoom` 真看一次；WhatsApp MCP 至少还要看 `/debug` 的 `paired` 与 `last_pull`、真搜一次；im-mcp 至少还要初始化成功、客户端真调一次检索工具。
+- 把名字当 id 传。arcmira 的过滤器只接受原样 id，传名字会在发网络请求前抛 `id_required`；必须先 `resolve`，`suggested` 时说明假设与理由，`ask` 时把候选交回用户。
+- 连上就开始猜方法签名。先调 `arcmira_describe`，把 id 规则、参数与返回字段、计量规则、错误码一次读全。
+- 不看清计量规则就批量跑。arcmira 搜索按超出前 5 条的每条 passage 收 4 credits；字幕每开始 15 分钟收 4 credits；Premium 转录每开始 15 分钟收 300 credits；`momentum` 每次 10 credits；`start`/`end` 不降低 Premium 计费。贵操作前先 `arcmira.quote`。
+- 以为 arcmira 工具有预算参数。预算在 dashboard 设；被拦住时按返回的 `code` 分支处理，别把拦截当成“没有数据”。
+- 把“还在转”当失败。Premium 未就绪时返回 `202` + `Retry-After`，按它重读不重复计费；`failed` / `refunded` 除非传 `retry: true` 不会重开。
+- 建了 arcmira monitor 就以为能删。它不提供删除，只能 `paused`；`attachTrackers` 迁移 tracker 需用户先同意；`addEntities` 一次最多 90 个 id。
+- 把厂商自述当独立证据。arcmira 的数据覆盖与说话人/赞助识别准确性全是厂商自述；README 未给免费额度上限，只说 “Plan limits apply”。
+- 把“安装成功”当“任务有效”。CLI-Hub 装完 harness 后，要接进 agent 跑一条真实重复任务，确认真有用再考虑用 `/cli-anything` 生成新 CLI。
+- 把作者自测当独立证据。jevcrawl 的 50 和 20 个任务样本都很小；CLI-Anything 所有效果数据均为项目自述；reason network 连效果数据都没有；idx 调研未包含效果数据；Blender 扩展只有 README 级证据；jevreel 的成本与暂停菜单对照验证同样是作者自测；WhatsApp MCP 只有 README 和单账号验证；im-mcp 只有兼容性表。
+- 在主力环境里直接跑第三方包。REA 依赖 `npx`、jevcrawl 依赖 `uvx`、CLI-Hub 依赖 `pip`，都会拉取并执行第三方包；arcmira 不往本地落包，但程序会在厂商的 Cloudflare Dynamic Worker 沙箱里执行，出站只允许 `GET https://api.arcmira.com/v1/*`（写工具额外允许 `/v1/monitors` 与 `/v1/trackers` 的 POST/PATCH，永不 DELETE）；idx 是不自带沙箱的静态二进制直连公开数据源；Blender 扩展的 Python 工具验证不是安全沙箱；jevreel 的视频帧与问题会发到 TypeSafe；WhatsApp MCP 使用非官方协议并违反 WhatsApp 条款；im-mcp 会把本地数据库解密后明文落盘。
+- 忽略版本写死。`rea-agents@6.3.0` 是原文写死的版本；jevcrawl 的 `jev-1.13.0` 是固定版本，阈值按版本校准；arcmira 是远程 MCP、本身不需要更新，但 `arcmira_describe` 带版本行；jevreel 的 `JEVREEL_MODEL` 默认 `jev-1.14.0` 是故意锁定；im-mcp 强依赖微信 4.x / 钉钉 7.x 的具体版本。
+- 以为 jevcrawl 能爬任何站点。它不执行 JavaScript（需 JS 的 URL 列在 `stats.needs_js_urls`），不读 `robots.txt`，除一次抓 4 页外不做限速，站点条款与合规由使用者自负；不登录、不绕付费墙和 CAPTCHA。
+- 忽略内容外发。jevcrawl 会把页面文本发送到 TypeSafe；API key 只从环境变量读，不落盘、不写日志。
+- 把 401 当故障。arcmira 对无凭证请求返回 401 + OAuth 挑战，这是登录/开户路径。
+- 忽略上游软件依赖。大量 CLI harness 包装真实桌面软件；不先装上游软件，`cli-hub launch` 不会产生有效结果。
+- Windows 上直接跑 Claude Code 生成路径。需先装 Git for Windows（含 `bash`/`cygpath`）或使用 WSL，否则会报 `cygpath: command not found`。
 - OpenCode 命令引用的 `HARNESS.md` 没和命令放同一目录。命令会引用它，必须在同一目录；旧版目录名为 `command/`。
-- 旧版 Claude Code 不识别 `/cli-anything`。改用 `/cli-anything:cli-anything`；辅助命令保持 `:subcommand` 形式（如 `/cli-anything:refine`）。
-- 给 GUI 客户端手写相对路径或 `idx`。GUI 应用通常不继承 shell 的 `PATH`，所以 idx 才提供 `idx mcp setup <client>` 并把二进制**绝对路径**填进配置；自己手写命令名会在 GUI 里连不上，而且报错通常看不出是这个原因。
-- 从 stdout 以外的地方捞数据。idx 的约定是 stdout 只放一个 JSON 文档、其余全部走 stderr；把 stderr 混进管道解析，或从日志里抠字段，会得到看似随机的结果。
-- 把 `null` 当 0、或当成“该自己补一个”。idx 对来源未返回的字段就写 `null`，不做估算；看到 `null` 要按“没有这个数据”处理，并去看 `warnings`。
-- 不看退出码。idx 用退出码分语义（`0` 正常、`2` 用法错、`3` 网络/来源错、`4` 未找到、`5` 离线缓存未命中、`6` 配置错）；靠解析错误文本做分支，换个版本就碎。
+- 旧版 Claude Code 不识别 `/cli-anything`。改用 `/cli-anything:cli-anything`；辅助命令保持 `:subcommand` 形式。
+- 给 GUI 客户端手写相对路径或 `idx`。GUI 应用通常不继承 shell 的 `PATH`；用 `idx mcp setup <client>` 生成绝对路径。
+- 从 stdout 以外的地方捞数据。idx 约定 stdout 只放一个 JSON 文档、其余全部走 stderr；把 stderr 混进管道会得到看似随机的结果。
+- 把 `null` 当 0、或当成“该自己补一个”。idx 对来源未返回的字段写 `null`，不做估算；看到 `null` 要按“没有这个数据”处理，并去看 `warnings`。
+- 不看退出码。idx 用 `0/2/3/4/5/6` 分语义；靠解析错误文本做分支，换个版本就碎。
 - npm 12 不加 `--allow-git=all`。用 npm 从仓库安装时会卡住或失败。
-- 以为 npm 安装直接给你一个二进制。npm 装的是小启动器，第一次运行 `idx` 才下载对应平台的预编译二进制并用 release 的 `SHA256SUMS` 校验；这一步没跑通，后面所有 `idx mcp` 都不成立。
-- 在云 runner 上抓取会拦截云网络的数据源。idx 的 ownership 流水线跑在自托管 runner 上，因为 idx.co.id 会拦截云网络（含 GitHub 自己的 runner）；换成云 runner 会失败，作者的做法是保留镜像、并在最新登记表超过 45 天时让任务变红。
-- 以为发布端 Worker 能写。那个 Worker 没有任何写端点；校验靠 SHA-256，且只有新月份全部行数到齐且数量匹配才算“出现”。
-- 把 idx 当通用工具。它是印尼股市（IDX / IHSG）专用工具，领域窄；调研的结论是“先试流程而不是直接写进手册”。
-- 把 Blender 扩展的 Python 工具验证当安全沙箱。它用于拦截不允许的操作，不是隔离机制；真正的高影响操作是 `execute_code`、`export_scene`、`import_asset`。
-- 在 Windows x64 + Blender 4.2+ 之外直接照抄 Blender 扩展的 release bundle。发布面向该组合，其他平台/版本未见支持。
+- 以为 npm 安装直接给你一个二进制。npm 装的是小启动器，第一次运行 `idx` 才下载预编译二进制并用 `SHA256SUMS` 校验。
+- 在云 runner 上抓取会拦截云网络的数据源。idx 的 ownership 流水线跑在自托管 runner 上；换成云 runner 会失败。
+- 以为 idx 发布端 Worker 能写。那个 Worker 没有写端点；校验靠 SHA-256，且只有新月份全部行数到齐且数量匹配才算“出现”。
+- 把 idx 当通用工具。它是印尼股市专用工具，领域窄；先试流程，不要直接写进生产手册。
+- 把 Blender 扩展的 Python 工具验证当安全沙箱。它用于拦截不允许操作，不是隔离机制；高影响操作是 `execute_code`、`export_scene`、`import_asset`。
+- 在 Windows x64 + Blender 4.2+ 之外直接照抄 Blender 扩展 release bundle。其他平台/版本未见支持。
 - 选了不支持 tool calling 的模型。Blender 扩展里工具根本调不起来；要看视口截图还需要模型有图像能力。
-- 默认团队链一定更好。README 没有量化指标，审核开销可能大于收益；先用单助手把同一任务跑通，再换团队链重做一次对比。
-- 以为 Blender 扩展的聊天历史会留存。聊天历史仅当前会话有效；连接凭证存在用户设置里。
-- 接上外部 MCP 客户端后还以为审批有兜底。外部 MCP 客户端的审批策略由该客户端自己管理，不由扩展管理。
-- 把“任务顺序自动推进”当成持续运行。Blender 扩展只提到任务按顺序执行、被阻塞任务有一次纠正机会，没有时间/事件/状态触发的持续运行机制。
-- 把 Blender 扩展的价值描述当效果证据。“更快迭代”“自动化重复工作”“把创意简报变成场景操作”均为作者主张，没有用户案例、成功率、耗时对比或基准数据。
-- 把 jevreel 的底层图像能力当成熟能力。README 明确它是实验性，验证只基于单个测试视频；调研的建议是值得小范围试、不建议直接全量采用。
-- 以为 jevreel 能自己持续推进。`index_video` 作为 MCP 后台任务运行、重复调用返回已有索引并只补跑新增的 lens，但原文没有给出定时器或事件触发的具体机制。
-- 把 `jevreel query` 当收费操作、或反过来把 lens 事后跑当免费。`query` 过滤不产生任何请求，可以反复过滤；lens 随索引请求一起走几乎免费，事后再单独跑是每分钟视频一次请求。
-- 重复问同一个问题还担心重复付费。答案有缓存：同样的图片和问题问同一个模型不会重复付费，重复的 `ask` 是 0 请求 0 成本。
+- 默认团队链一定更好。README 没有量化指标，审核开销可能大于收益；先用单助手跑通同一任务，再换团队链对比。
+- 以为 Blender 扩展聊天历史会留存。聊天历史仅当前会话有效；连接凭证存在用户设置里。
+- 接上外部 MCP 客户端后还以为审批有兜底。外部 MCP 客户端的审批策略由该客户端自己管理。
+- 把“任务顺序自动推进”当持续运行。Blender 扩展只提到任务按顺序执行、被阻塞任务有一次纠正机会，没有时间/事件/状态触发的持续运行机制。
+- 把 jevreel 的底层图像能力当成熟能力。README 明确它是实验性，验证只基于单个测试视频；只建议小范围试。
+- 以为 jevreel 能自己持续推进。`index_video` 作为 MCP 后台任务运行、重复调用返回已有索引并只补跑新增 lens，但原文没有给出定时器或事件触发机制。
+- 把 `jevreel query` 当收费操作、或把 lens 事后跑当免费。`query` 过滤不产生任何请求；lens 随索引请求一起走几乎免费，事后再单独跑是每分钟视频一次请求。
+- 重复问同一个 jevreel 问题还担心重复付费。答案有缓存；同样的图片和问题问同一个模型不会重复付费。
 - 把 `JEVREEL_CONCURRENCY` 开大不当。默认 16，速率限制按 TypeSafe 账号计；调大并发不等于更快。
-- 没字幕也没 key 就直接放弃。无 `TYPESAFE_API_KEY` 时，不带时间线的索引、zoom、字幕和 query 仍可用；本地转写要手动用 `jevreel[all]` 添加。
-- 把 jevreel 的插件方式当成装什么都有。插件方式需要 uv 与 FFmpeg 在 PATH；本地语音转写默认不含。
-- 需要完整插件接入细节时只看截断的原文。本次 jevreel 调研原文在 Claude Code 插件部分（`claude m...`）被截断，该段细节未知。
-- 误把传播数据当效果证据。Matthew 的 REA 帖子 230 万次浏览是曝光量，不是任何效果证据。
-- 用被截断的能力清单去规划任务。REA 原文只列到“反编译一个应用”就被截断，后续能力未知；arcmira 调研在“Claude Code 第三方 marketpla…”处被截断，该部分细节未知；idx 的调研正文在第 9 步后被截断，后续内容未知。
-- 把“139 个工具”当成事实。数量只是作者主张。
-- 没有隔离就上线。只要出现越权访问、读取工作目录之外的文件或执行非预期命令，就应回滚并降级为 study。
-- 期待接入 MCP 本身带来主动推进。原文只给出单次调用的边界与状态；定时或事件触发的机制，jevcrawl 与 REA 两侧的原文都没有提到。arcmira 有部分依据（monitor 的 `notify_frequency` 与 Slack/邮件投递），但它需要你先建 monitor、且不支持删除；CLI-Anything 仅在 meta-skill 自主发现安装、Unreal Insights 后台捕获会话控制上有部分依据；reason network 的触发是消息事件驱动的——发给离线者的消息会等待并在其回来时发出，空闲的 session 会被消息唤醒，不支持投递的 agent 会在下一步拿到消息，未提及定时触发或状态触发；idx 的仓库用定时 Actions + 每 30 分钟的 Worker 保持上游数据新鲜，但那是它自己维护数据源的做法，不是这个工具自身会主动推进你的任务；Blender 扩展只是任务按顺序自动推进、被阻塞任务有一次纠正机会，没有持续运行；jevreel 只有 `index_video` 作为 MCP 后台任务运行与重复调用复用已有索引这两点，没有定时器或事件触发。
-- 团队不在 Reason workspace 却想试 reason network。它强依赖 Reason CLI 和 Reason workspace，不是通用方案；团队不在这个生态里就用不上。
-- 单人自测 reason network。它要求团队整体部署，单人无法自测出“团队通信”的价值。
-- 不看 session title/todo 就想让 `who` 有用。状态来自 session 自己的 title 和 todo，agent 不主动汇报；标题和 todo 没意义时，别人看不出你在做什么。
-- 把 reason network 的 README 自述当成独立验证。投递时机、离线排队、唤醒空闲 session 等行为均来自 README 自述，未经独立验证。
+- 没字幕也没 key 就直接放弃 jevreel。无 `TYPESAFE_API_KEY` 时，不带时间线的索引、zoom、字幕和 query 仍可用；本地转写要手动用 `jevreel[all]` 添加。
+- 把 jevreel 插件方式当成装什么都有。插件方式需要 uv 与 FFmpeg 在 PATH；本地语音转写默认不含。
+- 需要完整 jevreel 插件接入细节时只看截断的原文。本次 jevreel 调研原文在 Claude Code 插件部分被截断。
+- 误把传播数据当效果证据。Matthew 的 REA 帖子 230 万次浏览是曝光量，不是效果证据；WhatsApp MCP 的 HN 35 points、23 comments 也只是关注度。
+- 用被截断的能力清单规划任务。REA 原文只列到“反编译一个应用”就被截断；arcmira 调研在“Claude Code 第三方 marketpla…”处被截断；idx 调研正文在第 9 步后被截断。
+- 把“139 个工具”当事实。数量只是作者主张。
+- 没有隔离就上线。只要出现越权访问、读取工作目录之外文件或执行非预期命令，就应回滚并降级为 study。
+- 团队不在 Reason workspace 却想试 reason network。它强依赖 Reason CLI 和 Reason workspace，不是通用方案；单人无法自测出“团队通信”的价值。
+- 不看 session title/todo 就想让 `reason network who` 有用。状态来自 session 自己的 title 和 todo，agent 不主动汇报。
+- 把 reason network 的 README 自述当成独立验证。投递时机、离线排队、唤醒空闲 session 等行为均来自 README 自述。
+- 用 WhatsApp MCP 的免费 Cloudflare 计划，或以为首次导入失败会自动补。README 要求 Workers Paid，免费计划未验证；首次历史导入每个链接只发生一次，失败后要重新链接才能补。
+- 以为 WhatsApp MCP 能发消息、能多人共享、能转写媒体。它不能发送；只用于读取自己的个人账号；媒体只显示 `[image]`、`[voice note 12s]` 等标签，不下载不转写；一个部署对应一个账号和一个 owner。
+- 忽略 WhatsApp MCP 的非官方协议与条款风险。作者明确说使用非官方协议、违反 WhatsApp 条款；只读链接的实际风险低但不是零。
+- 以为 WhatsApp MCP 的姓名会自动刷新、登出会通知。未命名聊天不会自动刷新；每日 pull 发现登出不会通知；编辑/删除路径未用真实事件测试。
+- 在公共机器上跑完 im-mcp 不清理。先完全退出 AI 客户端，否则 SQLite 句柄与 `-shm`/`-wal` 锁会阻止删除；用 `im-clean --dry-run` 预览，再 `im-clean`；残留句柄用 `im-clean -y --force`；最后 `uv tool uninstall im-mcp`。
+- 把 im-mcp 当通用方案。原文未提 Linux；强依赖微信 4.x / 钉钉 7.x 的具体版本；Windows 需管理员终端且微信已登录；macOS 4.1+ 需 64 位 hex passphrase。
+- 以为 im-mcp 有定时/事件触发。它只提供 `get_sync_status`、`sync_wechat_database`、`sync_dingtalk_data` 等原子能力，README 没有 cron、webhook、守护进程说明，调度层要自己搭。
+- 把 im-mcp 的只读声明当安全沙箱。工具声明只读，但本地数据库被解密为 SQLite、明文落盘；用完要清理，不要在不可信机器上长期保留。
+- 把 im-mcp 的“毫秒级响应”当实测结论。原文未给测量方法，只有作者声称。
 
 ## 证据与来源
 
-- 做法 A / B / C 依据的调研：REA / Hermes 路径可核查内容为“REA 设置菜单已支持 Claude Code 和 Codex”这一事实陈述，以及一条完整可复制的接入命令 `hermes mcp add rea --command npx --args -y rea-agents@6.3.0 mcp`。只是作者主张、未经原文验证：接入后代理会多出 139 个工具；“反编译一个应用”等具体能力清单，且原文在列举处被截断。传播数据：Matthew 的 REA 帖子 230 万次浏览，这是曝光量，不是效果证据。该调研的判断是原文只给了一种接入形态、没有验证方式，因此只建议给到“试”，而不是“采用”。
-- 做法 A 依据的调研（仓库 RayenMlayeh/jevcrawl，Apache-2.0，Python 3.11+，README 页显示 37 stars）：可直接照做的是安装命令、参数默认值、输出字段与环境变量表。数据均为作者自测：50 个 WebWalkerQA 任务（2026-10-12，回答模型 `claude-opus-5-5`，judge `claude-sonnet-5-5`）jevcrawl 40% / 54% / $0.025，Claude 逐个挑链接 30% / 33% / $0.194，广度优先 8% / 11% / $0.228；每正确答答案成本 $0.06 / $0.65 / $2.85；与 Crawl4AI 0.9.4 的 20 任务对照（2026-10-13）答案页 10 vs 5、全部答案页 5 vs 2、中位爬取时间 29s vs 43s、站点加载失败 0 vs 3；docs.python.org 示例 80,034 tokens → 1,873 tokens，$0.0069，8.3 秒。作者主张（无独立验证）：找到答案页的概率约 2 倍于 Crawl4AI、比 LLM 驱动爬取快 2 倍、天然抗 prompt injection（页面文本只作为数据字段被打分，问句是 jevcrawl 写死的固定字符串）、引文逐字可溯源。原文自陈局限：样本小；Crawl4AI 驱动真实浏览器而 jevcrawl 不执行 JavaScript；不读 `robots.txt`、除一次抓 4 页外不限速、站点条款与合规自负、不登录不绕付费墙和 CAPTCHA；页面文本会发送到 TypeSafe。
-- 做法 E 依据的调研：arcmira/mcp。可核查的是 README / 调研给出的接入与使用方法：`claude mcp add --transport http --scope user arcmira https://mcp.arcmira.com/mcp`、`codex mcp add arcmira --url https://mcp.arcmira.com/mcp`、带 `Authorization: Bearer $ARCMIRA_API_KEY` 的命令行与 `mcpServers` JSON 配置、纯 API 注册的两个 `/v1/signups` 调用、`arcmira.com/agent-setup`、`arcmira/mcp` 插件与 `gemini extensions install https://github.com/arcmira/mcp`、`npx skills add arcmira/mcp`，以及 4 个工具（`arcmira_describe` 约 23,000 字符且不计量、`arcmira_execute_read`、`arcmira_execute_write`、`arcmira_feedback`）、客户端方法表、`id_required` 与 `resolve` 的 `best` / `suggested` / `ask` 语义、Premium 转录的 `202` + `Retry-After` 与 `failed` / `refunded` / `retry: true` 行为、credits 计量规则（搜索超出前 5 条每条 passage 4 credits；字幕每开始 15 分钟 4 credits；Premium 转录每开始 15 分钟 300 credits；`momentum` 每次 10 credits；`start`/`end` 不减 Premium 计费）、错误码清单、monitor 方法集（不提供删除）、沙箱出站白名单与永不 DELETE。厂商自述、无第三方复现：数据覆盖与说话人 / 赞助识别准确性。该调研的结论是先在 Claude Code 里用一条命令接入（或改用带 Bearer key 的 JSON 配置），再照“先 resolve 后查询”的示例做小范围试用；因为仓库给出了可直接复制的安装命令、方法表、示例代码和 credits/限额规则，属于能立刻落地的工具供给，但准确性主张全是厂商自述、且有付费计划与预算门槛，不足以直接采纳。README 未给出免费额度上限，只说明 “Plan limits apply”。
-- 做法 D 依据的调研：HKUDS/CLI-Anything。可核查的是 README 给出的安装与使用命令：`pip install cli-anything-hub`、`cli-hub list/search/info/install/update/uninstall/launch`、`npx skills add HKUDS/CLI-Anything --skill cli-hub-meta-skill -g -y`、`/plugin marketplace add HKUDS/CLI-Anything`、`/plugin install cli-anything`、`/cli-anything`、`:refine`、`:test`、`:validate`，以及各宿主安装脚本。作者主张（无第三方复现）：CLI 是人和 agent 的通用接口；7 阶段流水线能自动生成带 REPL/JSON 输出/undo-redo 的 Click CLI、测试、文档并发布；README 自报 2,461 个测试通过、pytest 100%、多语言/多 harness 覆盖率；demos 声称能产出 CAD 模型、3D 场景、图表、游戏内容、字幕等真实产物；建议小范围试用，先用 `cli-hub` 装一个现成 harness 接进 agent 跑一条真实重复任务，确认真有用后再考虑用 `/cli-anything` 为内部工具生成新 CLI。原文也明确：大量 harness 依赖上游桌面软件；Windows 需 Git for Windows 或 WSL；生成流水线有 TEST.md 与 `/cli-anything:test`、`/cli-anything:validate`，但没有对比性指标（用了 CLI 之后任务成功率/耗时变化）。
-- 做法 F 依据的调研：reason-machines/reason-network。原文给出的、可直接照做的部分：安装方式（Reason CLI 自动下载校验后的固定构建）、四条 CLI 命令（`reason network`、`reason network who`、`reason network <session> "..."`、`reason network send <session> "..."`，以及 `reason network setup`）、MCP server 名 `reason-network` 与三个工具名 `list_team` / `send_message` / `check_inbox`、按 agent 区分的投递时机（Claude Code、Codex、opencode、pi、Reason 会话中途可收消息且空闲会被唤醒；Cursor、Gemini、Copilot 下一步才收到）、网络与安全模型（P2P / iroh / 中继只看到密文、仅团队成员可连、一台机器只代表本人）、状态目录 `~/.reason/network`、源码构建与测试命令。只是作者主张、没有数据支撑的部分：整套“团队协作因此变好”的说法；README 没有任何使用数据、性能数字、前后对比或用户案例。仓库 33 stars，成熟度无从判断。适用条件与局限：强依赖 Reason CLI 和 Reason workspace，不是通用方案；要求团队整体部署，单人无法自测出“团队通信”的价值；README 没有给出手动配置 MCP 的方法，也没有提示词层面的指引；投递时机、离线排队、唤醒空闲 session 等行为均来自 README 自述，未经独立验证。
-- 做法 G 依据的调研：fzn0x/idx（安装包名 `ihsg-cli`，命令 `idx`）。可核查的是 README / 调研给出的命令与约定：三/四种安装方式（`cargo install ihsg-cli` 需 Rust 1.88+、`npm install -g github:fzn0x/idx`、install.sh、Windows releases zip）、npm 12 需 `--allow-git=all`、npm 启动器首次运行下载预编译二进制并用 release 的 `SHA256SUMS` 校验、`idx -o json` 的 envelope 字段（`provider`、`fetched_at`、`cached`、`stale`、`warnings`）、缺失字段为 `null` 不估算、退出码 `0/2/3/4/5/6` 语义、`idx schema quotes` 等字段定义入口、`idx mcp` 的 stdio 与 `--http 127.0.0.1:8765 --token T --allowed-host '*'` 形态、`idx mcp setup --list` / `idx mcp setup <client>`（打印绝对路径，理由是 GUI 不继承 `PATH`）、各客户端注册命令与配置片段（Claude Code / Codex / Gemini CLI / Copilot CLI / VS Code / Droid / Qwen Code / Claude Desktop / Meta Muse Code / Cline-Roo-Kilo / Cursor-Windsurf-JetBrains-Warp-Trae-Augment / OpenCode / Crush / Codex config.toml / Continue / Zed / Antigravity / Kiro / Goose / Mistral Vibe）、面向只支持远程 URL 产品的 HTTPS 隧道 + Bearer 做法、离线命令 `idx --offline` / `IDX_OFFLINE=1` 与 `idx cache stats`、23 个工具名与筛选语法示例、工具设计约束（用每个 harness 都接受的类型化输入 schema、工具返回与 `-o json` 同一 envelope、失败以 `{error: {code, message}, exit_code}` 返回）、仓库的数据保鲜流水线（Actions 定时抓取、因 idx.co.id 拦截云网络而跑在自托管 runner、Worker 每 30 分钟校验 SHA-256 后装入 D1、Worker 无写端点、`idx ownership import --latest` 与 `IDX_OWNERSHIP_SOURCE=mirror`）。调研未给出的部分：效果数据、性能数字、前后对比；该调研正文在第 9 步后被截断，后续内容未知。调研的判断是“值得小范围试”——照 README 装起来并用 `idx mcp setup <客户端>` 注册进你已在用的 agent，用来验证“把现成 CLI 包成 MCP 工具供 agent 调用”这一模式是否真的省事；它本身是印尼股市工具、领域窄，所以先试流程而不是直接写进手册。
-- 做法 H 依据的调研：LiCinCan/blender-ai-mcp-addon（扩展发布版本 1.0.0，MIT 许可）。可核查的是 README 给出的安装与使用信息：仓库指标显示 705 stars；Windows x64 + Blender 4.2 或更高版本；从 Releases 下载 `mcp-for-blender-pro.zip`，经 **Edit → Preferences → Get Extensions → menu → Install from Disk** 安装并启用，面板入口在 **3D Viewport → N → MCP Pro**；provider 支持 OpenAI、Anthropic Claude、Google Gemini、OpenRouter、OpenCode Zen、Ollama 和自定义 API；21 个场景工具的完整清单；单助手与 Manager/Worker/Reviewer 团队链的角色分工；四条可直接照抄的提示词；从侧边栏启动 OpenCode Portable 或其他兼容客户端连接经认证的本地端点（见 `docs/CONNECTIONS.md`）；资产服务 Poly Haven、Sketchfab、Poly Pizza；控制与安全说明（操作审批、当前步骤后取消、命名撤销、Python 工具验证不是安全沙箱、连接凭证存于用户设置、聊天历史仅当前会话、Studio 本地运行并对发往 Blender 的请求做认证）。仅为作者主张、无数据支撑：更快迭代、自动化重复工作、把创意简报变成场景操作等价值描述；没有任何用户案例、成功率、耗时对比或基准数据。适用条件：release bundle 面向 Windows x64 + Blender 4.2 或更高版本；需自备 provider 凭证；资产服务可能需要 key，并须遵守相应许可；外部 MCP 客户端的审批策略不由本扩展管理。该调研的判断是建议在 Windows x64 + Blender 4.2+ 环境小范围试用，先单助手跑通“检查场景 → 创建对象 → 复制排列”，再视任务复杂度配置团队链。
-- 做法 I 依据的调研：DeepAleph/jevreel。可核查的是 README / 调研给出的命令与机制：`uv tool install "jevreel[all]"`、`jevreel index/ask/zoom/lens/query/measure`、lens 的 TOML（问题类型 `noul` / `choice` / `score`）、Claude Code 与 Codex 的插件安装命令、手动 MCP 命令与 `mcpServers` JSON、VS Code 的 `"servers"` + `"type": "stdio"` 写法、Python API 示例、环境变量表（`TYPESAFE_API_KEY`、`JEVREEL_HOME`、`JEVREEL_MODEL` 默认 `jev-1.14.0`、`JEVREEL_FPS`、`JEVREEL_TILES_PER_SHEET`、`JEVREEL_VERIFY_TOP`、`JEVREEL_CACHE`、`JEVREEL_CONCURRENCY`、`JEVREEL_ASR_MODEL`、`JEVREEL_CAPTION_LANGUAGES`）、四步工作流（Index → Screen → Verify → Look closer）、MCP 工具与 CLI 的对照（`index_video`/`index`、`ask_video`/`ask`、`find_in_video`/`find`、`locate_in_frame`/`locate`、`zoom_video`/`zoom`、`video_transcript`/`transcript`、`ask_whole_video`/`whole`、`run_lens`/`lens`、`query_timeline`/`query`、`list_videos`/`list`）。数据均为作者自测：10 分钟 1080p 视频单张 sheet 约 $0.00025、索引 $0.0033、一次 ask $0.004–0.005、重复 ask $0、locate $0.0002、whole $0.0003、一小时视频一个问题约 $0.02–0.03；10 分钟 1080p 无语音游戏录像上逐条对照帧检查命中，三个不到一秒的暂停菜单仅 screening 得分 0.36 / 0.50 / 0.95，验证前漏掉两个、验证后全部捞回。作者自陈 / 未验证：底层 Jev 图像能力仍是实验性，验证只基于单个测试视频；原文没有给出定时器或事件触发的具体机制；调研原文在 Claude Code 插件部分（`claude m...`）被截断。该调研的判断是照 Quickstart 在一段本地短视频上跑通 index→ask→zoom，并以 MCP/插件形式接到 Claude Code 或 Codex 试做视频检索，值得小范围试，但不建议直接全量采用。
-- 与已有清单的关系：Claude Code 为 adopt；jevcrawl 以 MCP server 形式接入 Claude Code 是给已采用工具加装“站内多跳检索”能力的一条路径；Cursor 为 watch，README 明确支持，配置方式就是上面的 `mcpServers` JSON；arXiv（source，try）是基准所用 WebWalkerQA 的来源（arXiv 2501.07572，Wu et al., Alibaba Tongyi Lab, ACL 2025）。清单中 Claude Code 已内置对 REA 的接入，Hermes 为 watch，本条线索给出一条手动让它获得外部工具集的路径；清单中没有与 REA / rea-agents 直接对应的条目，也没有与 jevcrawl 或 Crawl4AI 这类具体爬虫方案直接对应的条目。HKUDS/CLI-Anything 在清单中为 watch，本报告建议上调为 try；Claude Code 是它的一等公民宿主，Cursor、OpenClaw、OpenCode、goose、Hermes 为 watch 且是它支持的宿主/同类接入点；GitHub Copilot 为 drop，本报告未给出具体安装路径；SkillHub 为 study，与 `npx skills add ... --skill <name> -g -y` 的 skill 分发方式相关。清单中没有覆盖“多 agent 跨机通信 / 用 MCP 把团队的 agent 连成一张网”的条目，reason network 补的是这一块；它的三个 MCP 工具设计（`list_team` / `send_message` / `check_inbox`）可以脱离本产品，作为自建同类能力时的接口参照。idx 这类“现成 CLI 自带 MCP server、一份数据三种界面”的供给方式在清单中没有直接对应条目；可迁移的是它的 `mcp setup` 自动填绝对路径、统一 envelope 与退出码、以及 Worker/Actions 的数据保鲜结构。Blender 扩展这一条与清单里的 OpenCode（watch）相关：README 提到可从侧边栏启动 OpenCode Portable 完成 Blender 自动化，OpenCode 自己管理 provider 登录和模型选择；它也和 CLI-Anything 在“Blender 自动化”上重叠——前者是把 Blender 包成 CLI 由外部 agent 驱动，后者是把助手装进 Blender 内部，两者都保留、按任务选。jevreel 与清单里的 Claude Code（adopt）直接相关：它提供 Claude Code 插件安装，Claude Code 与 Codex 都是它的一等接入宿主，Claude Desktop / Cursor 走 `mcpServers` 配置；它与 arcmira 都通过 TypeSafe 的 Jev 计量，但目标不同——arcmira 面向口语内容检索（转录、谁说了什么、赞助识别），jevreel 面向视频画面级的定位、验证与描述；调研还指出它与 embedding 方案的分工是“embeddings 先缩范围、jevreel 去找到并描述某一刻”。
-- 尚未覆盖的部分：MCP 八条线索都只给出有限的接入形态 —— REA 与 jevcrawl 是 MCP 服务器 + 代理，arcmira 是远程 MCP + 写程序沙箱，CLI-Anything 给的是 CLI harness 形态，reason network 给的是团队 agent 横向通信形态，idx 给的是“CLI 与 MCP 共用一份 JSON 契约”的形态，Blender 扩展给的是“MCP server 与可视化工作区一起长在宿主软件内部、用审批与命名撤销兜底”的形态，jevreel 给的是“零嵌入视频检索：类型化回答 + contact sheet 粗筛 + 全分辨率复核 + lens 零请求过滤”的形态。它们都没有讨论哪类任务适合哪个模型，也没有比较 Claude Code / Codex / Hermes 三者在同一工具集下的差异；没有涉及反馈信号、上下文信息、权限回收机制（arcmira 有 `arcmira_feedback`、`settings → Connected apps` 撤销与 monitor `paused` 等零散机制，Blender 扩展有审批、取消与命名撤销，jevreel 的反馈入口是工具返回的「时间、概率、帧、附近台词」再由 agent 自己 `zoom`/`locate` 复核，但均未系统化）；除单次调用边界与停止原因外，未提任何由时间、事件或状态触发的主动推进能力（arcmira 的 monitor 通知、CLI-Anything 的 meta-skill 自主发现安装与 Unreal Insights 后台捕获会话控制、reason network 的消息事件驱动与离线排队、idx 仓库的定时 Actions 与 30 分钟 Worker、Blender 扩展的任务顺序推进与一次纠正机会、jevreel 的 `index_video` 后台任务与重复调用复用索引，都只是部分依据）。另需注意，jevreel 的底层 Jev 图像能力仍被 README 标为实验性，验证只基于单个测试视频，且本次调研原文在 Claude Code 插件部分被截断。
+本节说明每个做法依据哪类材料、有哪些数据、哪些只是作者主张。
+
+- 做法 A jevcrawl：可核查的是 README 的安装命令、参数默认值、输出字段与环境变量表。数据均为作者自测：50 个 WebWalkerQA 任务（2026-10-12，回答模型 `claude-opus-5-5`，judge `claude-sonnet-5-5`）jevcrawl 40% / 54% / $0.025，Claude 逐个挑链接 30% / 33% / $0.194，广度优先 8% / 11% / $0.228；每正确答答案成本 $0.06 / $0.65 / $2.85；与 Crawl4AI 0.9.4 的 20 任务对照（2026-10-13）答案页 10 vs 5、全部答案页 5 vs 2、中位爬取时间 29s vs 43s、站点加载失败 0 vs 3；docs.python.org 示例 80,034 tokens → 1,873 tokens，$0.0069，8.3 秒。作者主张无独立验证：找到答案页概率约 2 倍于 Crawl4AI、比 LLM 驱动爬取快 2 倍、天然抗 prompt injection、引文逐字可溯源。原文自陈局限：样本小；Crawl4AI 驱动真实浏览器而 jevcrawl 不执行 JavaScript；不读 `robots.txt`、除一次抓 4 页外不限速、站点条款与合规自负、不登录不绕付费墙和 CAPTCHA；页面文本会发送到 TypeSafe。
+- 做法 B REA/Hermes：可核查的是一条完整接入命令 `hermes mcp add rea --command npx --args -y rea-agents@6.3.0 mcp`，以及“REA 设置菜单已支持 Claude Code 和 Codex”的事实陈述。只是作者主张、未经原文验证：接入后代理会多出 139 个工具；“反编译一个应用”等能力清单，且原文在列举处被截断。传播数据：Matthew 的 REA 帖子 230 万次浏览，是曝光量，不是效果证据。
+- 做法 C：不接入的降级做法，依据是各路径原文在工具清单、验证方式或效果数据上的缺口。
+- 做法 D CLI-Anything：可核查的是 README 的安装与使用命令、各宿主安装脚本。作者主张无第三方复现：CLI 是人和 agent 的通用接口；7 阶段流水线能生成带 REPL/JSON 输出/undo-redo 的 Click CLI、测试、文档并发布；README 自报 2,461 个测试通过、pytest 100%、多语言/多 harness 覆盖率；demos 声称能产出 CAD 模型、3D 场景、图表、游戏内容、字幕等。原文明确：大量 harness 依赖上游桌面软件；Windows 需 Git for Windows 或 WSL；没有对比性指标。
+- 做法 E arcmira：可核查的是 README/调研给出的接入命令、两个 `/v1/signups` 调用、`arcmira_describe` 约 23,000 字符且不计量、4 个工具、客户端方法表、`id_required` 与 `resolve` 的 `best`/`suggested`/`ask` 语义、Premium 转录的 `202` + `Retry-After` 与 `failed`/`refunded`/`retry: true` 行为、credits 计量规则、错误码清单、monitor 方法集、沙箱出站白名单与永不 DELETE。厂商自述、无第三方复现：数据覆盖与说话人/赞助识别准确性。调研结论是先在 Claude Code 用一条命令接入或改用 Bearer key，再照“先 resolve 后查询”的示例做小范围试用；准确性主张全是厂商自述，且有付费计划与预算门槛。
+- 做法 F reason network：可核查的是安装方式、四条 CLI 命令、MCP server 名 `reason-network` 与三个工具名、按 agent 区分的投递时机、网络与安全模型、状态目录、源码构建与测试命令。只是作者主张、没有数据支撑：整套“团队协作因此变好”的说法；README 没有任何使用数据、性能数字、前后对比或用户案例；仓库 33 stars。适用条件与局限：强依赖 Reason CLI 和 Reason workspace；要求团队整体部署；README 没有手动配置 MCP 的方法和提示词层面指引；投递时机、离线排队、唤醒空闲 session 等行为均来自 README 自述。
+- 做法 G idx：可核查的是 README/调研给出的安装方式、npm 启动器校验、`idx -o json` 的 envelope 字段、缺失字段为 `null` 不估算、退出码语义、`idx schema`、`idx mcp` 的 stdio 与 HTTP 形态、`idx mcp setup` 打印绝对路径、各客户端注册命令与配置片段、离线命令、23 个工具名与筛选语法、工具设计约束、仓库数据保鲜流水线。调研未给出效果数据、性能数字、前后对比；正文在第 9 步后被截断。调研判断是值得小范围试，用来验证“把现成 CLI 包成 MCP 工具供 agent 调用”是否省事；它本身是印尼股市工具、领域窄，先试流程。
+- 做法 H Blender 扩展：可核查的是 README 的安装与使用信息、Windows x64 + Blender 4.2+、21 个工具清单、单助手与 Manager/Worker/Reviewer 团队链、四条提示词、OpenCode Portable 与其他兼容客户端、资产服务、控制与安全说明。仅为作者主张、无数据支撑：更快迭代、自动化重复工作、把创意简报变成场景操作等价值描述；没有用户案例、成功率、耗时对比或基准数据。仓库指标 705 stars；Release 1.0.0、MIT 许可。
+- 做法 I jevreel：可核查的是 README/调研给出的命令与机制、lens TOML、插件安装命令、手动 MCP 命令、Python API、环境变量表、四步工作流、MCP 工具与 CLI 对照。数据均为作者自测：10 分钟 1080p 视频单张 sheet 约 $0.00025、索引 $0.0033、一次 ask $0.004–0.005、重复 ask $0、locate $0.0002、whole $0.0003、一小时视频一个问题约 $0.02–0.03；10 分钟 1080p 无语音游戏录像上逐条对照帧检查命中，三个不到一秒的暂停菜单仅 screening 得分 0.36 / 0.50 / 0.95，验证前漏掉两个、验证后全部捞回。作者自陈/未验证：底层 Jev 图像能力仍是实验性，验证只基于单个测试视频；没有定时器或事件触发的具体机制；调研原文在 Claude Code 插件部分被截断。调研判断是照 Quickstart 在一段本地短视频上跑通 index→ask→zoom，并以 MCP/插件形式接到 Claude Code 或 Codex 试做视频检索，值得小范围试，不建议直接全量采用。
+- 做法 J WhatsApp MCP：可核查的是仓库 README 给出的完整部署命令、配置项、工具表、架构和调试步骤。HN 的 35 points、23 comments 只能说明关注度，不能证明效果。作者明确说只在一个真实账号上跑过；首次历史导入每个链接只发生一次，失败后要重新链接才能补；免费计划未验证，付费计划才能提高 CPU limit；媒体不下载、不转写；只支持一个部署对应一个 WhatsApp 账号和一个 owner；非官方实现，使用 WhatsApp Web 协议和 Baileys，作者承认违反 WhatsApp 条款，认为只读链接的实际风险低但不是零；已知缺口包括未命名聊天不会自动刷新、每日 pull 发现登出不会通知、编辑/删除路径未用真实事件测试。没有业务效果指标。
+- 做法 K im-mcp：可核查的是 README 给出的安装命令、初始化命令、客户端配置、清理命令、工具表、兼容性验证表。原文只给了兼容性验证（覆盖 Windows/macOS、多个微信/钉钉版本的实测表），没有任何效果指标、任务成功率或对照数据；“毫秒级响应”是作者声称，未给测量方法。工具声明只读，但本地数据库会解密为 SQLite、明文落盘；没有 cron、webhook、守护进程等定时/事件触发说明，调度层需自行搭建。适用条件与局限：Windows x64 或 macOS，原文未提 Linux；强依赖微信 4.x / 钉钉 7.x 的客户端版本；Windows 需管理员终端且微信已登录；macOS 4.1+ 需 64 位 hex passphrase。
+- 与已有清单的关系：Claude Code 为 adopt；jevcrawl 是给已采用工具加装“站内多跳检索”的路径；Cursor 为 watch；arXiv 是基准所用 WebWalkerQA 的来源。HKUDS/CLI-Anything 在清单中为 watch，本报告建议上调为 try；reason network 补的是“多 agent 跨机通信”这一块；idx 的“现成 CLI 自带 MCP server、一份数据三种界面”在清单中没有直接对应条目；Blender 扩展与 OpenCode、CLI-Anything 在 Blender 自动化上重叠，按任务选；jevreel 与 Claude Code 直接相关，也与 arcmira 都通过 TypeSafe 的 Jev 计量，但目标不同；WhatsApp MCP 与 im-mcp 都是给 agent 补私人沟通上下文的只读数据源，前者是远程 Cloudflare 部署、单账号单 owner，后者是本地数据库解密、强版本依赖。
+- 尚未覆盖的部分：这些路径都没有讨论哪类任务适合哪个模型，也没有系统比较 Claude Code / Codex / Hermes 三者在同一工具集下的差异；反馈信号、上下文信息、权限回收机制只有零散机制；除单次调用边界与停止原因外，多数没有由时间、事件或状态触发的主动推进能力；私人消息路径都没有给出业务效果指标，只给出部署/兼容性验证。
 
 ## 依据的调研
 
@@ -1044,3 +786,5 @@ jevcrawl crawl <start_url> --goal "<你的问题>" --json
 - [fzn0x/idx](../research/radar/2026-10-18/4493-fzn0x-idx.md)：值得一试，值得小范围试：照 README 把 idx 装起来并用 `idx mcp setup <客户端>` 注册进你已在用的 agent，用来验证「把现成 CLI 包成 MCP 工具供 agent 调用」这一模式是否真的省事；它本身是印尼股市工具，领域窄，先试流程而不是直接写进手册。
 - [LiCinCan/blender-ai-mcp-addon](../research/radar/2026-10-18/4630-licincan-blender-ai-mcp-addon.md)：值得一试，建议在 Windows x64 + Blender 4.2+ 环境小范围试用：按 README 安装扩展，先用单助手跑通“检查场景→创建对象→复制排列”的提示词，再视任务复杂度配置 Manager/Worker/Reviewer 团队链；理由是它把场景工具、模型选择、审批与审核流程都做成了可照做的集成，但只有 README 级证据，缺少效果数据且平台受限。
 - [DeepAleph/jevreel](../research/radar/2026-10-19/4711-deepaleph-jevreel.md)：值得一试，照 README 的 Quickstart 在一段本地短视频上跑通 index→ask→zoom，并以 MCP/插件形式接到 Claude Code 或 Codex 试做视频检索；它给的是完整可复制的安装、配置与 lens 用法，值得小范围试，但底层 Jev 图像能力仍是实验性、验证只基于单个测试视频，不建议直接全量采用。
+- [Show HN: WhatsApp MCP running free on Cloudflare](../research/radar/2026-10-19/4806-show-hn-whatsapp-mcp-running-free-on-cloudflare.md)：值得一试，建议小范围试用：在自己的 Cloudflare 账户部署只读 WhatsApp MCP，接入 Claude Code 验证搜索、跨聊天查找和群聊补课类任务；它给出了完整部署步骤和工具接口，但属于非官方协议、仅单账号验证，不宜直接作为团队默认方案。
+- [stkoecn/im-mcp](../research/radar/2026-10-19/4855-stkoecn-im-mcp.md)：值得一试，按 README 的「uv tool 安装 → wechat-init/dingtalk-init 初始化 → 客户端 MCP 配置」三步在一两台机器上小范围试跑，它能把微信/钉钉的沟通上下文变成 agent 可直接检索的只读数据源；但涉及本地数据库解密与明文落盘、强依赖客户端版本，且只有作者自述无实测数据，暂不宜作为通用做法直接写进手册。
