@@ -1,22 +1,24 @@
-# 给编码 agent 补技能：先小范围试装，用同一任务对照再决定是否纳入流程
+# 让长任务在无人盯盘时按判据收敛并留下证据
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：同一类任务反复出现时，怎么判断给 agent 装一个技能包是真减少了返工，还是只是装上了，并且怎么安全地试装、对照、再决定要不要把它写进自己的流程。
-> 先试这一步：在你自己的非关键仓库里挑一个之前让 Codex 改过的 Bug 任务并保留原提示词，先用它跑一次作为 baseline；再把 Caveman 的安装提示词贴给 Codex 让它自行安装，然后用同一提示词、同一任务再跑一次，比较两次输出长度与一次成功率。
-> 最近修订：2026-10-18
+> 解决的问题：这篇手册解决：在长任务里，如何让一个 agent 执行、另一个 agent 定时审查，并把成功判定绑到可核对证据和硬止损上，避免 agent 自称完成。
+> 先试这一步：先选一个 1–2 小时能跑完、成功判据能写成检查清单的任务，按做法 AW 装好 skill，设 max_rounds=5、max_hours=8、max_no_progress_reviews=2，跑一次有/无监督回路的对照。
+> 最近修订：2026-10-20
 
 ## 解决什么问题
 
 你已经在用编码 agent、写作 agent 或通用 agent，但每次都要重复描述同一套规范，或者不确定装一个技能包是否真的减少了返工——甚至因为一次装太多，上下文反而更乱。这篇手册给出一个可照做的流程：先小范围试装一个现成技能包，用同一任务做有/无技能的对照，确认有效后再考虑把自己的重复工作写成 `SKILL.md`，或者把一本反复查阅的技术书、一份内部文档、或一套 AI 研究全流程知识转成按需加载的技能。
 
-它也覆盖具体场景：让 agent 代理编码 CLI 跑长任务并拿硬证据验收；给 agent 补行业设计知识；把模糊想法写成任务书；让 agent 出可交互架构图、工作流图、时序图、数据流图；检索中国金融市场数据；把移动端模拟器与真机画面接进 Codex 聊天；把多步复杂任务拆成三阶段并加门禁；中英文学术写作去模板化并用命题级核对保住数字、引文与证据强度；路由技能自动选工作流并对 bug 交出失败→通过证据；按职能只装少量 agent 角色；在 T3 Code 里用 p3-stack 按 playbook 路由；审计自己的 `SKILL.md`；让 agent 渲染一页可离线打开的单文件 HTML；校验、打包并分发自己的 `SKILL.md`；补 SwiftUI / Apple 平台知识；工作写作去 AI 腔；把产品经理重复流程交给 agent 跑成命令链；给编码 agent 立四条硬约束；按阶段从零建站并用状态文件续做；补 AI 研究全流程知识；补 Go 终端 UI 的 Charm 生态库用法；把真实 UI 组件拆成绘制层并自动读数验收；给 Elixir/Phoenix 项目补工程规范；用 vercel-labs/skills CLI 安装、临时使用、搜索、列出、更新、卸载并生成 `SKILL.md` 模板；用小团队注册表把团队 `SKILL.md` 分发到每个人的多种编码代理。
+它也覆盖具体场景：让 agent 代理编码 CLI 跑长任务并拿硬证据验收；让一个执行 agent 和一个审查 agent 组成无人盯盘的长任务回路；给 agent 补行业设计知识；把模糊想法写成任务书；让 agent 出可交互架构图、工作流图、时序图、数据流图；检索中国金融市场数据；把移动端模拟器与真机画面接进 Codex 聊天；把多步复杂任务拆成三阶段并加门禁；中英文学术写作去模板化并用命题级核对保住数字、引文与证据强度；路由技能自动选工作流并对 bug 交出失败→通过证据；按职能只装少量 agent 角色；在 T3 Code 里用 p3-stack 按 playbook 路由；审计自己的 `SKILL.md`；让 agent 渲染一页可离线打开的单文件 HTML；校验、打包并分发自己的 `SKILL.md`；补 SwiftUI / Apple 平台知识；工作写作去 AI 腔；把产品经理重复流程交给 agent 跑成命令链；给编码 agent 立四条硬约束；按阶段从零建站并用状态文件续做；补 AI 研究全流程知识；补 Go 终端 UI 的 Charm 生态库用法；把真实 UI 组件拆成绘制层并自动读数验收；给 Elixir/Phoenix 项目补工程规范；用 vercel-labs/skills CLI 安装、临时使用、搜索、列出、更新、卸载并生成 `SKILL.md` 模板；用小团队注册表把团队 `SKILL.md` 分发到每个人的多种编码代理。
 
 新增做法 AT：做 Android 开发时，用 Android 官方维护的 android/skills 给智能体补“评测显示 LLM 表现较弱”的工作流，例如 R8 分析、Wear Compose Material 3、edge-to-edge UI 改造；它只公开安装方式，没有技能全清单和效果数据，所以先按做法 A 小范围试，不要一次装全部。
 
 新增做法 AU：需要把外语论文 PDF 翻成韩语、又要尽量保住图、表、公式位置时，按做法 A 小范围试装 `maenjh/ko-paper`；它把版式解析（BabelDOC）和翻译（本地已登录的 Claude Code 或 Codex）封装成一个 skill，输出语言固定为韩语，效果描述全部来自作者自述，先拿一篇 2 页公开论文验证版式、公式、术语一致性与 token 消耗，再决定是否把这类流程纳入自己的文档处理链路。
 
 新增做法 AV：觉得 Codex 改 Bug 时先分析半天、讲一堆背景才动手时，按做法 A 小范围试装 `JuliusBrussee/caveman`——它把「控制智能体输出风格／冗长度」本身当成一个可安装的能力单元来交付，而不是每次在提示词里手写「别废话」。本次材料里这条做法只有一条推文和一段被截断的安装提示词，仓库内容、配置项、兼容版本与任何验证数据都没有出现，所以只能先在非关键仓库里做安装前后对照，不要直接纳入常规流程。
+
+新增做法 AW：有一类长任务，执行端是 Claude Code、监督端是 Codex，成功判据能写成检查清单，且你能接受每小时一次审查开销时，按做法 A 小范围试装 `ajogalekar/claude-codex-loop`。它把「定时复审、证据核对、claim/issue 结转、生成下一条有界提示」交给 Codex，并用 `goal`、`success_criteria`、`max_rounds`、`max_hours`、`max_no_progress_reviews` 固定范围与止损；但原文只有隔离模拟测试，尚未在真实客户端端到端验证，不能把“能跑”当成“结论可靠”。
 
 ## 适用与不适用
 
@@ -54,6 +56,7 @@
 - 做 Android 开发，且任务属于 README 点名的方向之一，例如 R8 分析、Wear Compose Material 3、edge-to-edge UI 改造。
 - 需要把英语、德语、法语、日语等外语论文 PDF 翻成韩语 PDF，并希望图、表、公式尽量留在原位；本机已登录 Claude Code 或 Codex，且已装 `uv` 与 `git`。
 - 用 Codex 做编码任务，觉得它动手前分析、铺垫太多，想把「少说废话、直接干活」做成一个可安装的能力单元；愿意在非关键仓库里做安装前后对照。
+- 有一类长任务，执行端用 Claude Code、监督端用 Codex，成功判据能写成检查清单，且你愿意维护常开桌面环境、接受每小时审查开销。
 
 不适用：
 
@@ -65,6 +68,7 @@
 - 把 android/skills 的 README 当完整技能清单：它只举例了 `r8-analyzer`、`wear-compose-m3`、`android-cli`，完整清单要装完自己看。
 - 把它的“evaluations”当成公开评测数据：README 没有给评测集、指标或对比结果，效果必须自测。
 - AV 只针对 Codex 类编码智能体、以及需要快速进入执行的改 Bug 场景；其他模型、其他工具、其他任务类型没有材料支持。不要把「装上就能少说废话」当成已验证结论；不要直接让 Codex「自行安装」一个未经审阅的第三方仓库；不要把材料里被截断的安装提示词当完整提示词使用；本次材料不含原文提到的实测视频，无法核实。
+- AW 不适用于无法写出成功判据、必须 headless / API 运行、不能使用 computer use、桌面客户端没有同会话定时调度工具、或不接受每小时审查开销的场景。原文只有隔离模拟测试和真实研究 workflow 的方法来源，没有在真实客户端上端到端验证；控制器不保证 UI 投递恰好一次，不沙箱项目代码，不强制美元预算，两个模型的意见也不等于真值。
 - 其他各做法的边界见对应小节：E 只针对中文技术文档；F 只针对生物医学论文；M 不适用于无合法访问权的书或打算再分发第三方版权书生成的 skill；O 只在 Postgres / TimescaleDB / PostGIS 任务上有用；P 只对自有或书面授权资产；Q 的领域内容不通用；T 不支持直接驱动交易或投顾建议；U 需要 Apple Silicon Mac + Codex desktop + 私有仓库访问权；X 面向全栈开发；Y 需要能加载完整 Skill 文件夹的环境，且 DOCX 抽取保留不了复杂样式、批注、修订记录、脚注与文本框；AF 只覆盖 SwiftUI / Apple 平台开发；AG 的材料没有覆盖合同或其他法律文件，也不承诺通过 AI 检测器；AH 主要面向数学/理论科学/算法类开放式研究；AI 的材料只有 README；AJ 只面向会读 CLAUDE.md 的编码智能体；AK 的材料只有 README，单个技能的 `SKILL.md` 正文没随材料给出；AL 的材料只有 README；AM 的素材涉及他人聊天记录与个人信息而原文完全没有讨论授权与隐私；AN 的材料只有 README，且属进攻性安全领域；AO 只对 Go + Charm 生态的终端 UI 开发有用；AP 只对基于 DOM/CSS 的组件有效；AQ 只对 Elixir/Phoenix 项目有用；AR 是安装/分发 CLI，不是效果证明工具；AS 是团队分发/治理工具，不是效果证明工具；AV 的材料只有一条推文和一段被截断的安装提示词，仓库内容需自行审阅。
 - AU 的输出语言固定为韩语，目标语言不是韩语就别用；原文只有作者自述的演示，没有第三方评测、基准或前后对比数据；Windows 上被 Smart App Control 拦截时，要么走简易模式（不保版式、不含图片），要么装 WSL，不要关 SAC。
 
@@ -80,11 +84,11 @@
 
 各做法额外前置（压缩保留）：
 
-- A：无额外。B：一件每周重复、有明文规范的工作。C：`pip install skill-seekers`。D：你的提供商端点与 key，以及你网关实际提供的模型名。E：可用的 `npx` 或 `git`；可选装 autocorrect。F：宿主能读 PDF/图像。G：Claude Code 2.1.287 或更高。H：Cline CLI；Python 3；支持 Agent Skills 规范的宿主。I：Node/npm 装 CLI；本机 Python 3.x。J：本地 Node 环境。K：一个受支持的 Agent Skills 宿主。L：Claude Code 或 `gh`/可用 `npx`。M：本机 Python 并能安装抽取器。N：支持 Agent Skills 的 Agent；git、`CLAUDE.md`/`AGENTS.md`、`docs/`。O：本机 `npx`；目标 agent 支持 Agent Skills 或 MCP。P：已装 Claude Code；只对自有或书面授权资产使用。Q：支持本地 Skills 的宿主；可写的 `PROJECT_ROOT` 与只读的 `SKILL_ROOT` 分开。R：支持 agent skills 的编码 agent。S：Node.js/npx；Google Cloud 账号、项目和权限。T：Node.js 22.20+ / npm；Python 3.9+。U：Codex desktop + Apple Silicon Mac；Xcode 26+ 与 simulator runtime。V：本机已安装 Claude Code。W：Node.js；`SKILL.md`、`references/`、`scripts/` 三部分放在一起。X：已安装并使用 Claude Code。Y：Python 3.10+；PDF 文本抽取需 Poppler。Z：先装好对应 harness；Codex 需先通过 `/hooks` 信任路由 hook。AA：本地有 git 与 bash。AB：一台能跑 T3 Code 的机器。AC：Claude Code 环境或 claude.ai 账号；本地 Python 3.8+。AD：Node.js ≥ 20；agent 能执行 shell 命令。AE：用现成技能需要 Claude Code 或支持 Agent Skills 的 agent；用这套流程分发自己的技能，只需 Claude Code + Python 3。AF：用支持 Agent Skills 的编程助手；安装需要 Node/npx，或用 Claude Code 插件市场。AG：一个能加载 skills 的 agent；要处理的文本；最好有作者自己的笔记、语音转写或自写粗稿；跑 `check.py` 需要 Python 和能执行代码的 agent 环境。AH：装有 Codex 或 Claude Code；Python 3.9 或更新；一个浏览器；可选获授权的 Slurm 集群、LaTeX、私有 dashboard 目的地。AI：能访问 GitHub；Cowork 路线需要桌面端 Claude；Claude Code / Codex 路线需要先装好对应 CLI 并登录；其它助手路线只需对目标 skills 目录有写权限。AJ：Claude Code 或 Cursor；一个非琐碎的代码任务；项目级写入 CLAUDE.md 的权限，或能装 Claude Code 插件。AK：本地有 Node.js 才能用 `npx`；至少一个被支持的编码智能体；能访问 npm 与 GitHub；有权限写入 `~/.orchestra/skills/` 并把技能 symlink 到各 agent 目录。AL：一个支持 skill 机制的编程智能体；一个空的项目文件夹；设计插件 `impeccable`；DataForSEO 账号与 webhosting 由 skill 在真正需要它们的阶段才来配置。AM：一个受支持的本地 agent host；Python 3.9+；知道该 host 的 Skills 目录；素材可能涉及他人聊天记录与个人信息，实际试用前须自行解决授权与隐私。AN：一个 Claude 使用环境；使用范围合法合规；对 `~/.claude/skills` 有写权限。AO：本机有 Node/npx；目标代理被 skills CLI 支持；想跑通示例验证可用性需要本机 Go 环境。AP：一个能读 skills 的代理；组件在本地可运行，且 CSS 与页面同源；有 Chrome。AQ：项目为 Elixir/Phoenix 应用；客户端为 Cursor、Claude Code 或 Codex 之一；本机有 Node.js 22.20.0+ 和 npm。AR：本机有 Node.js 与 `npx`；目标 agent 已安装；私有仓库需可用的 Git / gh / SSH 凭据，或显式设置 `GITHUB_TOKEN` / `GH_TOKEN`。AS：macOS 或 Linux（Windows 走 WSL2）；已安装 `git`；`propose` 用到 `gh` 或 `glab`；一个私有 Git 仓库作为注册表；对 `~/.agents/skills` 和 `~/.claude/skills` 有写权限。AT：Android CLI 已安装，或 Claude Code / Codex 可用插件市场；做 Android 开发；有一个真实、范围小的 Android 任务可对照。AU：已登录的 Claude Code（`claude`）或 Codex，二选一；已安装 `uv`；已安装 `git`；Windows 上没有 git 时先 `winget install --id Git.Git -e`；BabelDOC 与 Python 依赖在第一次运行时自动安装；翻译后端自动选择：有 `claude` 用 Claude Code，只有 `codex` 才用 Codex。AV：Codex（CLI / IDE 等可以执行命令、并能联网访问 GitHub 的形态）；对目标仓库有修改权限——安装过程需要 Codex 自己读仓库、写配置；建议在非关键仓库或独立目录里试，安装前先自己审阅该第三方仓库代码。
+- A：无额外。B：一件每周重复、有明文规范的工作。C：`pip install skill-seekers`。D：你的提供商端点与 key，以及你网关实际提供的模型名。E：可用的 `npx` 或 `git`；可选装 autocorrect。F：宿主能读 PDF/图像。G：Claude Code 2.1.287 或更高。H：Cline CLI；Python 3；支持 Agent Skills 规范的宿主。I：Node/npm 装 CLI；本机 Python 3.x。J：本地 Node 环境。K：一个受支持的 Agent Skills 宿主。L：Claude Code 或 `gh`/可用 `npx`。M：本机 Python 并能安装抽取器。N：支持 Agent Skills 的 Agent；git、`CLAUDE.md`/`AGENTS.md`、`docs/`。O：本机 `npx`；目标 agent 支持 Agent Skills 或 MCP。P：已装 Claude Code；只对自有或书面授权资产使用。Q：支持本地 Skills 的宿主；可写的 `PROJECT_ROOT` 与只读的 `SKILL_ROOT` 分开。R：支持 agent skills 的编码 agent。S：Node.js/npx；Google Cloud 账号、项目和权限。T：Node.js 22.20+ / npm；Python 3.9+。U：Codex desktop + Apple Silicon Mac；Xcode 26+ 与 simulator runtime。V：本机已安装 Claude Code。W：Node.js；`SKILL.md`、`references/`、`scripts/` 三部分放在一起。X：已安装并使用 Claude Code。Y：Python 3.10+；PDF 文本抽取需 Poppler。Z：先装好对应 harness；Codex 需先通过 `/hooks` 信任路由 hook。AA：本地有 git 与 bash。AB：一台能跑 T3 Code 的机器。AC：Claude Code 环境或 claude.ai 账号；本地 Python 3.8+。AD：Node.js ≥ 20；agent 能执行 shell 命令。AE：用现成技能需要 Claude Code 或支持 Agent Skills 的 agent；用这套流程分发自己的技能，只需 Claude Code + Python 3。AF：用支持 Agent Skills 的编程助手；安装需要 Node/npx，或用 Claude Code 插件市场。AG：一个能加载 skills 的 agent；要处理的文本；最好有作者自己的笔记、语音转写或自写粗稿；跑 `check.py` 需要 Python 和能执行代码的 agent 环境。AH：装有 Codex 或 Claude Code；Python 3.9 或更新；一个浏览器；可选获授权的 Slurm 集群、LaTeX、私有 dashboard 目的地。AI：能访问 GitHub；Cowork 路线需要桌面端 Claude；Claude Code / Codex 路线需要先装好对应 CLI 并登录；其它助手路线只需对目标 skills 目录有写权限。AJ：Claude Code 或 Cursor；一个非琐碎的代码任务；项目级写入 CLAUDE.md 的权限，或能装 Claude Code 插件。AK：本地有 Node.js 才能用 `npx`；至少一个被支持的编码智能体；能访问 npm 与 GitHub；有权限写入 `~/.orchestra/skills/` 并把技能 symlink 到各 agent 目录。AL：一个支持 skill 机制的编程智能体；一个空的项目文件夹；设计插件 `impeccable`；DataForSEO 账号与 webhosting 由 skill 在真正需要它们的阶段才来配置。AM：一个受支持的本地 agent host；Python 3.9+；知道该 host 的 Skills 目录；素材可能涉及他人聊天记录与个人信息，实际试用前须自行解决授权与隐私。AN：一个 Claude 使用环境；使用范围合法合规；对 `~/.claude/skills` 有写权限。AO：本机有 Node/npx；目标代理被 skills CLI 支持；想跑通示例验证可用性需要本机 Go 环境。AP：一个能读 skills 的代理；组件在本地可运行，且 CSS 与页面同源；有 Chrome。AQ：项目为 Elixir/Phoenix 应用；客户端为 Cursor、Claude Code 或 Codex 之一；本机有 Node.js 22.20.0+ 和 npm。AR：本机有 Node.js 与 `npx`；目标 agent 已安装；私有仓库需可用的 Git / gh / SSH 凭据，或显式设置 `GITHUB_TOKEN` / `GH_TOKEN`。AS：macOS 或 Linux（Windows 走 WSL2）；已安装 `git`；`propose` 用到 `gh` 或 `glab`；一个私有 Git 仓库作为注册表；对 `~/.agents/skills` 和 `~/.claude/skills` 有写权限。AT：Android CLI 已安装，或 Claude Code / Codex 可用插件市场；做 Android 开发；有一个真实、范围小的 Android 任务可对照。AU：已登录的 Claude Code（`claude`）或 Codex，二选一；已安装 `uv`；已安装 `git`；Windows 上没有 git 时先 `winget install --id Git.Git -e`；BabelDOC 与 Python 依赖在第一次运行时自动安装；翻译后端自动选择：有 `claude` 用 Claude Code，只有 `codex` 才用 Codex。AV：Codex（CLI / IDE 等可以执行命令、并能联网访问 GitHub 的形态）；对目标仓库有修改权限——安装过程需要 Codex 自己读仓库、写配置；建议在非关键仓库或独立目录里试，安装前先自己审阅该第三方仓库代码。AW：macOS/Linux；Python 3.10+；桌面客户端提供“同会话定时调度”工具；支持可操作 Claude UI 的 computer use；已登录的 Claude Code 与 Codex 会话；本地主机与桌面应用保持运行；有一个成功判据能写成检查清单、1–2 小时能跑完的小任务。
 
 ## 操作步骤
 
-怎么选：先做做法 A；A 里某个技能确实有效、且你有一件每周重复且规范明确的工作，再做做法 B。其余按场景选：C 多来源知识打包；D 补模型端点/权限/搜索；E 中文技术文档写作与审稿；F 单篇论文精读；G 写一个 Claude Code mod；H 用 Cline CLI 代理长任务拿硬证据验收；I 补 UI/UX 设计知识；J 出带交互的单文件 HTML 图；K 出品牌一致的静态 HTML+SVG 图；L 从大插件市场只装一个单元并按任务档位选模型；M 把书或内部文档转成按需加载技能；N 把模糊想法写成任务书并给破坏性操作加闸门；O 补 Postgres 领域知识与版本化文档检索；P 在授权安全场景按主题加载安全技能库；Q 把多步任务拆成三阶段加门禁；R 装一套小而可组合的工程技能集；S 从 google/skills 按任务只装一个；T 让 agent 检索中国金融市场数据并核对来源与时间戳；U 把移动端模拟器与真机画面接进 Codex 聊天；V 用一行 curl 装单个 Markdown 技能；W 用元技能观察你怎么用技能；X 装一套全栈开发技能包按请求自动激活；Y 把中英文学术写作去模板化改写并用命题核对保住事实；Z 用路由技能自动选工作流并对 bug 交出失败→通过证据；AA 按职能只装少量 agent 角色并用真实任务与默认提示对照；AB 在 T3 Code 里用 p3-stack 按 playbook 路由并用 worktree/PR 监视减少等待和冲突；AC 审计并改进自己的 SKILL.md；AD 让 agent 把结论、方案对比与流程解释渲染成一页可离线打开的 HTML；AE 把自己的 SKILL.md 校验、打包并分发到多端；AF 给 agent 补一块 SwiftUI 领域知识并按需触发审查；AG 给工作写作去 AI 腔并保住事实与承诺强度；AH 把开放式研究做成迷宫地图、证据分级与独立裁判循环；AI 装 1–2 个 PM 插件并用 `/discover` 跑一个真实想法；AJ 给编码 agent 立四条行为约束并把任务改写成带验证标准的目标；AK 给 agent 补 AI 研究全流程知识，按类别只装一个技能并用真实研究任务对照；AL 把多阶段、跨天的长流程打包成 skill，用状态文件断点续做、按阶段按需接外部工具；AM 把某个人的工作方式蒸馏成可复用 Person Profile 技能；AN 把一套领域方法论拆成细粒度、按对话触发词按需加载的技能文件；AO 给写 Go 终端 UI 的编码 agent 补 Charm 生态各库的用法；AP 把真实 UI 组件拆成绘制层、自动读出测量值与 token 并跑审计验收；AQ 给 Elixir/Phoenix 项目补 Phoenix 工程规范；AR 用 vercel-labs/skills 安装、临时使用、列出、更新、卸载和生成 SKILL.md 模板；AS 用小团队、私有 Git 仓库和 Skillcrew 把团队 SKILL.md 注册表分发到每个人的多种编码代理；AT 给 Android 开发 agent 补官方弱项技能；AU 把外语论文 PDF 翻成韩语并尽量保住版式；AV 让 Codex 少说废话、直接动手改代码（Caveman）。
+怎么选：先做做法 A；A 里某个技能确实有效、且你有一件每周重复且规范明确的工作，再做做法 B。其余按场景选：C 多来源知识打包；D 补模型端点/权限/搜索；E 中文技术文档写作与审稿；F 单篇论文精读；G 写一个 Claude Code mod；H 用 Cline CLI 代理长任务拿硬证据验收；I 补 UI/UX 设计知识；J 出带交互的单文件 HTML 图；K 出品牌一致的静态 HTML+SVG 图；L 从大插件市场只装一个单元并按任务档位选模型；M 把书或内部文档转成按需加载技能；N 把模糊想法写成任务书并给破坏性操作加闸门；O 补 Postgres 领域知识与版本化文档检索；P 在授权安全场景按主题加载安全技能库；Q 把多步任务拆成三阶段加门禁；R 装一套小而可组合的工程技能集；S 从 google/skills 按任务只装一个；T 让 agent 检索中国金融市场数据并核对来源与时间戳；U 把移动端模拟器与真机画面接进 Codex 聊天；V 用一行 curl 装单个 Markdown 技能；W 用元技能观察你怎么用技能；X 装一套全栈开发技能包按请求自动激活；Y 把中英文学术写作去模板化改写并用命题核对保住事实；Z 用路由技能自动选工作流并对 bug 交出失败→通过证据；AA 按职能只装少量 agent 角色并用真实任务与默认提示对照；AB 在 T3 Code 里用 p3-stack 按 playbook 路由并用 worktree/PR 监视减少等待和冲突；AC 审计并改进自己的 SKILL.md；AD 让 agent 把结论、方案对比与流程解释渲染成一页可离线打开的 HTML；AE 把自己的 SKILL.md 校验、打包并分发到多端；AF 给 agent 补一块 SwiftUI 领域知识并按需触发审查；AG 给工作写作去 AI 腔并保住事实与承诺强度；AH 把开放式研究做成迷宫地图、证据分级与独立裁判循环；AI 装 1–2 个 PM 插件并用 `/discover` 跑一个真实想法；AJ 给编码 agent 立四条行为约束并把任务改写成带验证标准的目标；AK 给 agent 补 AI 研究全流程知识，按类别只装一个技能并用真实研究任务对照；AL 把多阶段、跨天的长流程打包成 skill，用状态文件断点续做、按阶段按需接外部工具；AM 把某个人的工作方式蒸馏成可复用 Person Profile 技能；AN 把一套领域方法论拆成细粒度、按对话触发词按需加载的技能文件；AO 给写 Go 终端 UI 的编码 agent 补 Charm 生态各库的用法；AP 把真实 UI 组件拆成绘制层、自动读出测量值与 token 并跑审计验收；AQ 给 Elixir/Phoenix 项目补 Phoenix 工程规范；AR 用 vercel-labs/skills 安装、临时使用、列出、更新、卸载和生成 SKILL.md 模板；AS 用小团队、私有 Git 仓库和 Skillcrew 把团队 SKILL.md 注册表分发到每个人的多种编码代理；AT 给 Android 开发 agent 补官方弱项技能；AU 把外语论文 PDF 翻成韩语并尽量保住版式；AV 让 Codex 少说废话、直接动手改代码（Caveman）；AW 用 claude-codex-loop 让 Claude Code 执行、Codex 定时审查并按判据收敛。
 
 几组容易混的：
 
@@ -120,8 +124,9 @@
 - AU 与 A / V：AU 同样是「按 A 小范围试装」，走安装脚本或插件市场；V 是用一行 curl 装单个 Markdown 技能。AU 的产出是 PDF，不是技能目录。
 - AV 与 AJ / AA / AN：AJ 是往编码 agent 里写四条行为约束（先想、简单优先、只做被请求的改动、按可验证目标执行）；AV 是装一个第三方 Skill 来改变输出风格与动手时机；AA 装的是按职能组织的角色文件；AN 是把领域方法论拆成细粒度技能文件。
 - AV 与 A / V：AV 同样套用 A 的对照方法，安装方式是「让 Codex 自己读仓库并安装」的提示词；V 是用一行 curl 装单个 Markdown 技能。AV 目前只有一条推文和一段被截断的安装提示词。
+- AW 与 H / Z / AJ：H 用 Cline CLI 跑长任务并拿硬证据验收；Z 用路由技能自动选工作流并对 bug 交出失败→通过证据；AJ 是给编码 agent 写四条行为约束；AW 是让 Claude Code 执行、Codex 定时审查，用 ledger、判据、哈希和硬止损组成无人盯盘回路。AW 也套用 A 的对照方法。
 
-E、F、G、H、I、J、K、L、M、N、O、P、Q、R、S、T、U、V、W、X、Y、Z、AA、AB、AC、AD、AE、AF、AG、AH、AI、AJ、AK、AL、AM、AN、AO、AP、AQ、AR、AS、AT、AU、AV 都必须套用 A 的对照方法，不要跳过验证直接纳入常规流程。
+E、F、G、H、I、J、K、L、M、N、O、P、Q、R、S、T、U、V、W、X、Y、Z、AA、AB、AC、AD、AE、AF、AG、AH、AI、AJ、AK、AL、AM、AN、AO、AP、AQ、AR、AS、AT、AU、AV、AW 都必须套用 A 的对照方法，不要跳过验证直接纳入常规流程。
 
 ### 做法 A：先用现成技能包做小范围试装（推荐先做）
 
@@ -698,49 +703,22 @@ git clone https://github.com/diip3sh/exploded ~/.claude/skills/exploded
 /exploded spec sheet for the email field and the switch, dark theme
 ```
 
-4. 或直接用运行时（HTML）：
-
-```html
-<link rel="stylesheet" href="runtime/exploded.css">
-<script src="runtime/exploded.js"></script>
-<script>
-  document.fonts.ready.then(() =>
-    Exploded.mount(document.querySelector("#fig"), {
-      target: document.querySelector(".btn"),
-      title: "Button · primary",
-      states: "pressable",
-      parts: { ".btn-kbd": "Shortcut chip" },
-      theme: "dark",
-    }));
-</script>
-```
-
-5. React / Next.js：
-
-```tsx
-import { Exploded } from "@/components/exploded/react/Exploded";
-
-<Exploded fig={1} title="Button · primary" states="pressable">
-  <Button>Deploy</Button>
-</Exploded>
-```
-
-6. 交互键位：`1`–`9` 切状态 · `E` 拆开 · `↑` `↓` 换层 · `←` `→` 旋转 · `T` 显示 token · `Esc` 复位。
-7. 跑审计：
+4. 交互键位：`1`–`9` 切状态 · `E` 拆开 · `↑` `↓` 换层 · `←` `→` 旋转 · `T` 显示 token · `Esc` 复位。
+5. 跑审计：
 
 ```bash
 node scripts/audit.mjs examples/gallery/index.html --out shots
 ```
 
-8. 本地预览：
+6. 本地预览：
 
 ```bash
 python3 -m http.server 8731
 open http://127.0.0.1:8731/
 ```
 
-9. 做对照：挑 1 个按钮 + 1 个输入类组件，先手工出规格表并记录耗时；再装技能跑一次 `/exploded spec sheet for …`。半天足够。
-10. 指标与止损：审计是否通过；token 溯源比例；人工成本对比；漂移检查。若跨源 CSS 或 Shadow DOM 组件无法通过，退回人工流程。
+7. 做对照：挑 1 个按钮 + 1 个输入类组件，先手工出规格表并记录耗时；再装技能跑一次 `/exploded spec sheet for …`。半天足够。
+8. 指标与止损：审计是否通过；token 溯源比例；人工成本对比；漂移检查。若跨源 CSS 或 Shadow DOM 组件无法通过，退回人工流程。
 
 ### 做法 AQ：用 Estack 给 Elixir/Phoenix 项目的编码 agent 补框架工程规范，先只读检查再配对评估（新增，按 A 的对照法验证）
 
@@ -1191,6 +1169,48 @@ https://github.com/JuliusBrussee/caveman
 6. 做对照。选一个你之前让 Codex 改过、保留过提示词的 Bug 任务；用同一提示词先跑一次作为 baseline 并记录输出；再按第 3 步安装 Caveman，用同一提示词、同一任务再跑一次，比较两次输出。
 7. 判定与止损：输出长度明显下降、且一次成功率和可评审性不下降，才考虑纳入常规流程；如果出现关键信息缺失导致返工，就放弃，或退化为「只在提示词里加一句简短输出要求」这种更轻的做法。
 
+### 做法 AW：用 claude-codex-loop 让 Claude Code 执行、Codex 每小时审查并按判据收敛（新增，按 A 的对照法验证）
+
+定位：`ajogalekar/claude-codex-loop` 是一个可复用的 Codex skill，实现「Claude Code 执行 → Codex 每小时心跳审查 → 核对与验证 → 只发一条有边界的下一步提示 → 循环」的自治回路。每轮 Codex 对照最初目标与固定成功判据，检查最新一轮的实际产出、是否推进原目标、每条判据有何证据，并复查此前的 claim 与未决 objection；只有全部判据记录为满足且无 blocking objection 才宣布成功。仓库含 `SKILL.md`、`scripts/control.py`（无依赖持久状态控制器）、setup/protocol 参考、配置/评审/下一提示模板与隔离测试。
+
+1. 确认前提，缺一不可：macOS/Linux；Python 3.10+；桌面客户端提供“同会话定时调度”工具；支持可操作 Claude UI 的 computer use；已登录的 Claude Code 与 Codex 会话；本地主机与桌面应用保持运行。仓库不负责安装这些依赖。
+2. 安装 skill 到客户端的 skill 目录。当前 `.agents/skills` 约定，从仓库根目录执行：
+
+```bash
+mkdir -p "$HOME/.agents/skills"
+ln -s "$PWD" "$HOME/.agents/skills/claude-codex-loop"
+```
+
+部分客户端读取 `~/.codex/skills`，按客户端选目录；目标已存在时不要覆盖。Claude 侧不需要安装该 skill。
+3. 在给 Codex 的起始提示里写清范围、目标、成功判据和停止条件。示例可直接改用，替换路径、会话与 claim：
+
+```text
+Use $claude-codex-loop for /work/my-calculation and my existing Claude Code
+conversation "My calculation," session SESSION_ID. Review every hour and
+automatically send follow-up prompts. Keep the work within this local project.
+
+The goal is to produce a rigorous certificate for [precise claim]. Count success
+only when Codex has checked the certificate against that claim and resolved all
+blocking objections.
+
+Stop after 20 follow-up prompts, 48 hours, or 3 consecutive reviews without
+verified progress, whichever comes first.
+```
+
+4. 用配置模板分离三类设置：`goal`（要完成什么）、`success_criteria`（宣布成功前必须由证据确立什么）、`max_rounds`/`max_hours`/`max_no_progress_reviews`（未完成时的硬止损）。设置在运行开始时固定；修改原配置文件不会影响进行中的 run，要换设置就新开一次授权 run 并保留旧 ledger。
+5. 让 Codex 记录范围与判据、接管当前计算、执行第一次 tick，并用可用工具建立同会话每小时计划。安装本身不启动任何东西；常规轮次无需再逐次确认。
+6. 每轮按核对清单执行：
+   - 以 Claude 实际会话、已发送标记、最终回复三者对照 ledger，绝不用“文件没动”或交接中的 PASS 标签推断完成；
+   - 对选定输入、代码、输出做哈希；评审后文件若变化，必须重新评审才能发下一条提示；
+   - 每条评审用哈希指向前一条，claim 与 issue ID 全部结转，纠正/撤回/解决显式记录；
+   - 每条成功判据都要有证据，存在 open blocking issue 就不得判成功；预算触顶记为“未完成停止”；
+   - 触碰 UI 前先冻结提示文本并持久化 `submitting`；投递不确定时靠观察 marker 恢复，绝不盲目重放；
+   - 用 lease 与本地原子写协调重叠或中断的 tick。
+7. 运行状态放在 Claude 项目之外、skill 仓库之外的私有 supervisor 目录；不要把真实对话、标识符、提示、凭据或研究 artifacts 随包发布。
+8. 结束处理：满足全部判据且无 blocking objection 时保存结论并暂停计划；触发任一上限则记录为未完成停止。
+9. 做对照。选一个 1–2 小时能跑完、判据可写成检查清单的任务，在测试机装好 skill，起始提示设 `max_rounds=5`、`max_hours=8`、`max_no_progress_reviews=2`，artifacts 保持小而可哈希。同一任务人工盯盘跑一遍，记录人工介入次数、完成时间、被发现的错误/objection 数。
+10. 判定与止损：误报成功次数应为 0，出现一次即说明验证环节不可靠；看 blocking objection 每轮关闭数、连续无进展轮次是否按规则触发停止、文件被改动后是否被哈希发现并要求重新评审、发送是否恰好一次（看 marker 与是否出现重复提示）、人工介入次数与总耗时相对基线的变化。若频繁需要人工救场、UI 投递重复/丢失，或出现“PASS 标签但证据不足”，就只保留其“外部定时审查 + ledger + 停止条件”的思路，不采用该实现。
+
 ## 怎么判断变好了
 
 最小试用方式：
@@ -1232,13 +1252,14 @@ https://github.com/JuliusBrussee/caveman
 - 个人经验蒸馏类（做法 AM）：在 Claude Code 上装好 distilly 并确认 host 能发现该 Skill；只喂一位同事的设计文档/评审意见生成 colleague profile；用 3–5 个该同事平时会被问到的真实问题分别问「不带 Skill 的通用 agent」和「装了该 Skill 的 agent」，看输出能不能直接用；同一批问题再只喂群聊素材重建一次做对照；追加一份新文档确认旧结论未被覆盖；用一句纠正确认 Correction 层立即生效且可回滚。
 - 领域方法论技能包类（做法 AN）：先不用技能，让 Claude 处理 3–5 个自己工作里的真实任务并留存输出；按第 7 步自建一份 `Skills/<类别>/<技能名>/SKILL.md`（写清技术要点、可用工具、边界情况、何时升级/求助）；安装或注入后用同样输入再跑一次，逐条对比；只在自建的那一类任务上使用，不扩张。
 - Go 终端 UI 领域技能类（做法 AO）：先 clone 仓库并在 `examples/` 下跑通 `go run ./charmed-bubbletea/counter`，确认技能引用的代码在本机可编译。然后选一个已有的小型 Go TUI 任务作为对照组，先不装技能让代理做一次并记录数据；再装 2–3 个技能，开新会话做同类但不同的任务，记录同样数据。
-- 组件规格表类（做法 AP）：在一个本地前端项目里挑 1 个按钮 + 1 个输入类组件（CSS 同源），先手工出一份规格表并记录耗时；再装技能跑一次 `/exploded spec sheet for …`，用第 4 步的运行时 HTML 片段把同一组件挂到页面里对照；跑 `node scripts/audit.mjs examples/gallery/index.html --out shots`，看输出与 PNG。再用 `T` 模式数一遍有多少值显示成你写过的 token 名、多少是硬编码原值。半天足够。
+- 组件规格表类（做法 AP）：在一个本地前端项目里挑 1 个按钮 + 1 个输入类组件（CSS 同源），先手工出一份规格表并记录耗时；再装技能跑一次 `/exploded spec sheet for …`，跑 `node scripts/audit.mjs examples/gallery/index.html --out shots`，看输出与 PNG。再用 `T` 模式数一遍有多少值显示成你写过的 token 名、多少是硬编码原值。半天足够。
 - Elixir/Phoenix 技能类（做法 AQ）：选择一个真实 Elixir/Phoenix 项目，在单一客户端安装 Estack 完整技能包；先运行 `estack-doctor` 只读检查，确认能给出带证据的三项改进且不改文件；再选一个小任务用 `estack-debug` 复现并修复失败，或用 `estack-review` 评审待合并 diff；记录代理是否按该技能流程执行、是否运行真实检查、是否保留失败信号、是否报告实际验证内容。要比较技能版本时用 README 的 `estack-eval` 提示词和 runner，对同一批配对任务比较匿名输出。
 - 技能安装/分发包类（做法 AR）：在一个真实代码仓库里用 `npx skills add vercel-labs/agent-skills --list` 先看清单；用 `npx skills add ... --skill ... -a ...` 按项目作用域安装 1–2 个到你实际使用的 agent；确认它们落到 `./.claude/skills/` 或 `./.agents/skills/` 等项目路径并随仓库提交。只想试一次时用 `npx skills use ... | claude`。然后按 A 的对照方法，对同一类任务比较安装前/后的首稿可用率、人工修改次数、返工轮数、命令/配置正确率。
 - 团队注册表分发类（做法 AS）：在一个小团队、一个私有 Git 仓库上，先按第 3–6 步建注册表并只加一个 `required` 技能；让一位同事按第 7 步加入，新开会话确认技能出现在 `~/.agents/skills/<skill>` 和 `~/.claude/skills/<skill>`；改一次技能并提交，观察 session 启动 hook 或每小时定时器是否自动同步；把该技能设为 `blocked`，确认下次同步从机器上移除。记录手工分发次数、版本漂移次数、忘 update 次数、`skillcrew doctor` 报错次数。
 - Android 技能类（做法 AT）：选一个真实、范围小的 Android 任务，且该任务对应 README 点名的方向之一，例如 R8 相关分析，或“把 UI 改成 edge-to-edge”。先在不装技能的情况下让智能体做同一任务，保存输出和你的返工次数。项目级用 `android skills add r8-analyzer --project=.`，或全量用 `android skills add --all`。再用同一句提示语跑一遍，例如 `Make my app UI edge-to-edge.`，确认智能体确实自动调用到了技能而不是靠猜。之后定期 `android skills update --all`。
 - 论文翻译类（做法 AU）：挑一篇 2 页公开论文（自己已读过、知道正确译法），先记录手工翻译或用其他方式的基线；装好后用 `ko-paper doctor` 确认输出末尾出现 `kopaper ready`，再用 skill 或 CLI 翻一次，检查图、表、公式位置是否保留、术语是否前后一致、`<文件名>.ko.pdf` 与 `<文件名>.ko.dual.pdf` 是否都生成；同一文件再翻一次，确认复用缓存与术语抽取、token 消耗下降（原文称约省 30%）。同一篇论文至少跑 3 次，或换 2–3 篇再下结论。
 - 输出风格类（做法 AV）：选一个非关键仓库里你之前让 Codex 改过、并保留过提示词的 Bug 任务；用同一提示词先跑一次作 baseline 并记录输出；再按做法 AV 第 3 步贴入 Caveman 安装提示词让 Codex 自行安装，然后用同一提示词、同一任务再跑一次，比较两次输出长度、动手前轮数、是否一次成功。
+- 长任务监督回路类（做法 AW）：选一个 1–2 小时能跑完、判据可写成检查清单的任务，装好 skill 后设 `max_rounds=5`、`max_hours=8`、`max_no_progress_reviews=2`，artifacts 保持小而可哈希；同一任务人工盯盘跑一遍作为基线，记录人工介入次数、完成时间、被发现的错误/objection 数；再让 Codex 按起始提示接管，观察每轮是否用实际会话、发送标记与最终回复对照 ledger，是否对输入/代码/输出做哈希，文件改动后是否重新评审，是否把预算触顶记为未完成停止。
 
 可观察的指标：
 
@@ -1246,6 +1267,7 @@ https://github.com/JuliusBrussee/caveman
 - 做法 AT：一次通过率：输出是否直接可编译/可提交，无需你手工修改；返工轮数：从提出任务到可用结果之间，你要求智能体修改的次数（A/B 对比，装与不装技能）；事实正确性：产出的做法是否与 developer.android.com 上的官方指引一致；触发可靠性：多次同类任务中，智能体自发使用技能的比率；成本：完成同一任务消耗的 token/时间是否上升。判定门槛：如果在 3~5 个真实任务上，一次通过率或返工轮数相对基线有稳定改善、且触发可靠，则把该项目对应的接入方式沉淀进手册；否则只保留“技能包按 LLM 弱项选题 + 放入 agent 目录自动激活”这一条方法论，不写具体命令。
 - 做法 AU：`ko-paper doctor` 是否输出 `kopaper ready`（只证明装得上）；译文里图、表、公式的位置是否保留；术语是否前后一致；同一文件第二次翻译时是否跳过术语抽取、token 是否下降；韩语本与对照本是否都生成在输入文件旁边；网页 UI 顶部显示的 Claude 调用次数与 token 数；同一任务上人工修补译文的时间是否下降。
 - 做法 AV：动手前 Codex 输出的字数 / 轮数（越短越好，但要有下限）；从下指令到第一次修改文件之间的对话轮数；任务是否一次成功，是否需要人工纠偏；输出长度与一次成功率、可评审性是否同时成立。
+- 做法 AW：误报成功次数（判成功但判据无证据）应为 0，出现一次即说明验证环节不可靠；blocking objection 每轮关闭数；连续无进展轮次是否按规则触发停止；文件被改动后是否被哈希发现并要求重新评审；发送是否恰好一次（看 marker 与是否出现重复提示）；人工介入次数、总耗时与费用相对基线的变化。
 - 做法 AS：技能是否按预期同步到 `~/.agents/skills/<skill>` 和 `~/.claude/skills/<skill>`；`skillcrew status` 是否显示正确组织、团队、已安装技能及状态；`skillcrew list --available` 是否列出可自行添加的技能；`skillcrew doctor` 是否报告 hooks、定时器、注册表和已安装技能正常；改一次技能后，开发者端是否无需人工动作就拿到新版本；把技能设为 `blocked` 后，下次同步是否从每台机器移除；本地改动是否被备份到 `~/.skillcrew/backups/<skill>/` 并恢复团队版本；`skillcrew propose` 是否能把本地改动转成 PR；CI 是否在 PR 上跑 `skillcrew validate`。不要拿安装成功、`doctor` 通过或 README 支持多种 agent 当效果证据。
 - 其余做法指标保留：H 看测试是否通过、非空文件、git 改动；I 看交付前 8 条检查清单；J 看按 `diagnostics[]` 修的轮数；K 看品牌 onboarding 后是否还需手动改配色字体；L 看完成时间与返工次数；M 看 8 个已知答案题命中数与 0 幻觉；N 看七问是否全有答案；O 看约束数量与 PG 版本匹配；P 看 7-Question Gate；Q 看五道门禁通过/失败记录；R 看 `GLOSSARY.md` 与 ADR 是否更新；S 看任务完成时间与权限收敛；T 看数据来源、行情时间、抓取时间；U 看从描述问题到 Codex 指到具体元素的耗时；V 看是否自动触发；W 看观察条数与被接受改动数；X 看激活命中与返工轮次；Y 看模板化表达减少与事实不变；Z 看失败→通过证据；AA 看角色激活命中与返工；AB 看 playbook 是否走完与冲突次数；AC 看 validator 退出码与 warning 数；AD 看输出 token 与页面可读性；AE 看校验是否 0 错误与分发效率；AF 看弃用 API 检出数量与误报率；AG 看「愿意发出」比例与意义改动条数；AH 看 tier 计数与 frontier 已解决比例；AI 看 `/discover` 是否产出假设清单与实验设计；AJ 看 diff 是否只含被请求改动；AL 看到「可用初稿」的墙钟时间与人工返工次数、断点续做能否恢复上下文、调研数据是否来自外部搜索源；AQ 看 `estack-doctor` 是否只读并给出带证据的三项改进、`estack-review` 是否发现缺陷、`estack-debug` 是否复现并验证修复、`estack-quality` 是否运行真实质量门并诚实报告失败、`estack-pr` 是否给出与检查一致的验证证据、`estack-eval` 的配对任务盲 worker 与独立评审是否按描述执行；AR 看技能是否按预期作用域安装、`npx skills list` / `ls -g` / `ls -a` 是否能列出、团队拉仓库后是否可用、`skills use` 是否只临时生效、`update` / `remove` 是否按预期工作、技能发现是否符合三层规则、私有仓库安装是否用对凭据。
 
@@ -1297,8 +1319,9 @@ https://github.com/JuliusBrussee/caveman
 - 做法 AT：把 android/skills 的“evaluations show LLMs underperform”当成公开评测集、指标或对比结果——README 没有给；把 8096 stars 或当日 +36 当效果证据；只装 `android-cli` 就以为装上了完整 Android 技能；不指定 `--agent` 却发现装到了 `~/.gemini/antigravity/skills`，先确认目标 agent 目录；一次 `android skills add --all` 后不逐项看技能；等智能体自动触发却从不检查它是否真的用了技能；更新后不跑 `android skills update --all`。
 - 做法 AU：把 `ko-paper doctor` 输出 `kopaper ready` 当成翻译质量证据；把作者自述的演示或 AGPL 许可证当成效果数据；在目标语言不是韩语的任务上硬用；只翻部分页面却期待术语表被保存（原文说只翻部分页面的那次运行不保存术语）；Windows 上被 Smart App Control 拦截时去关 SAC，而不是走简易模式或 WSL；把「支持 10 种原文语言」误当成「支持 10 种输出语言」（输出固定为韩语）；照抄被材料截断的 `--with-cl…` 选项名。
 - 做法 AV：输出变短但漏掉关键说明，导致后续 review 或调试变难，先放弃这一档，或退化为「只在提示词里加一句简短输出要求」；把作者「装上就直接干活」的描述当成效果结论。
+- 做法 AW：把隔离模拟测试通过、28 个本地测试通过、Codex skill validator 通过、GitHub Actions 已配置但还没跑过当成端到端可靠性的证据；把作者真实跑过 convex-hull workflow 当成通用效果；在无法写成功判据、必须 headless/API、没有 computer use 或同会话定时工具的环境里硬装；把 PASS 标签或“文件没动”当成完成；文件改动后不重新评审就发下一条提示；把预算触顶当成成功；把两个模型的意见当成真值；不先审阅第三方仓库代码就让 Codex 自己装；把真实对话、标识符、提示、凭据或研究 artifacts 随包发布。
 
-注意：`doctor`、`validate`、`npm test`、`claude plugin validate`、`npx @anthropics/skills-ref validate`、`archify doctor`、`validate --json`、`python -m unittest discover -s tests`、`validate_skill.py`、`check.py`、`skillforge validate` / `skillforge check` 这类检查只能证明「技能或 mod 装得上、格式合法、不带危险命令、图能通过校验、回归测试能过、技能符合规则表」，不能证明「产出更好」。效果必须自己对照。做法 AK 的 `npx @orchestra-research/ai-research-skills list` 同理；做法 AM 里「host 能发现该 Skill」也只证明装上了；做法 AO 里 `go run ./charmed-bubbletea/counter` 跑通只证明环境没问题；做法 AQ 里安装成功、`estack-doctor` 能跑、`doctor.py` 能输出 JSON 也只证明装上了和工具能动；做法 AR 里 `npx skills list` 能看到技能也一样；做法 AS 里 `skillcrew doctor` 通过也只证明 hooks、定时器、注册表和已安装技能没坏，不证明团队工作变好；做法 AT 里 `android skills add` 装成功也只证明技能文件落了盘；做法 AU 里 `ko-paper doctor` 输出 `kopaper ready` 同样只证明依赖与 CLI 装得上；做法 AV 里 Codex 说安装完成也只证明它读到了仓库，不证明输出更短或任务更少返工。
+注意：`doctor`、`validate`、`npm test`、`claude plugin validate`、`npx @anthropics/skills-ref validate`、`archify doctor`、`validate --json`、`python -m unittest discover -s tests`、`validate_skill.py`、`check.py`、`skillforge validate` / `skillforge check` 这类检查只能证明「技能或 mod 装得上、格式合法、不带危险命令、图能通过校验、回归测试能过、技能符合规则表」，不能证明「产出更好」。效果必须自己对照。做法 AK 的 `npx @orchestra-research/ai-research-skills list` 同理；做法 AM 里「host 能发现该 Skill」也只证明装上了；做法 AO 里 `go run ./charmed-bubbletea/counter` 跑通只证明环境没问题；做法 AQ 里安装成功、`estack-doctor` 能跑、`doctor.py` 能输出 JSON 也只证明装上了和工具能动；做法 AR 里 `npx skills list` 能看到技能也一样；做法 AS 里 `skillcrew doctor` 通过也只证明 hooks、定时器、注册表和已安装技能没坏，不证明团队工作变好；做法 AT 里 `android skills add` 装成功也只证明技能文件落了盘；做法 AU 里 `ko-paper doctor` 输出 `kopaper ready` 同样只证明依赖与 CLI 装得上；做法 AV 里 Codex 说安装完成也只证明它读到了仓库，不证明输出更短或任务更少返工；做法 AW 里 28 个本地测试通过、skill validator 通过或隔离模拟 UI 测试覆盖中断与并发，也只证明控制器逻辑在测试里成立，不证明真实客户端上能稳定收敛或结论为真。
 
 ## 常见坑
 
@@ -1351,6 +1374,7 @@ https://github.com/JuliusBrussee/caveman
 - 做法 AT：把 README 的“evaluations show LLMs underperform”当成公开评测集、指标或对比结果；把 8096 stars 或当日 +36 当效果证据；只装 `android-cli` 就以为装上了完整 Android 技能；不指定 `--agent` 却发现装到了 `~/.gemini/antigravity/skills`，先确认目标 agent 目录；一次 `android skills add --all` 后不逐项看技能；等智能体自动触发却从不检查它是否真的用了技能；更新后不跑 `android skills update --all`；把 Android 技能命令搬到非 Android 项目上。
 - 做法 AU：把 `ko-paper doctor` 输出 `kopaper ready` 当成翻译质量证据；把作者自述的演示当效果数据；目标语言不是韩语却硬用；只翻部分页面却发现术语表没有保存；Windows 上被 Smart App Control 拦截时去关 SAC，而不是走简易模式或 WSL；把「支持 10 种原文语言」误当成支持 10 种输出语言；忘了 `KOPAPER_CODEX_EFFORT` 默认是 `low`（选 opus 时才是 `medium`）；照抄材料里被截断的 `--with-cl…` 选项名；只装 `SKILL.md` 而不给 `references/`。
 - 做法 AV：把作者的「装上就直接干活」当效果结论——只有一条推文，没有数据、样本量或对比结果；把材料里被截断的安装提示词当完整提示词使用；直接让 Codex「自行安装」第三方仓库而不先审阅它读和执行的代码；在关键仓库或主工作区里试装；以为视频后段的实测报告可核实（本次材料不含视频）；把「输出变短」直接当成「任务变好」，不去看一次成功率与可评审性。
+- 做法 AW：把 28 个本地测试通过、skill validator 通过或隔离模拟 UI 测试当成真实客户端端到端可用；把作者跑过的 convex-hull workflow 当成通用效果证明；没有 computer use、同会话定时工具或已登录双会话就硬装；从安装后的 skill 目录或 Claude 项目内放真实对话、标识符、提示、凭据、研究 artifacts；把 “文件没动” 或交接里的 PASS 标签当完成；文件改动后不重新评审就发下一条提示；把预算触顶记成成功；把两个模型的意见当成真值；不先审阅第三方仓库代码就让 Codex 自己装；在无法写成功判据或必须 headless/API 的任务上硬用。
 
 ## 证据与来源
 
@@ -1365,6 +1389,7 @@ https://github.com/JuliusBrussee/caveman
 - android/skills 路线：全部来自调研《android/skills》，即该仓库 README。原文实际给出的、可核查的信息：Android 官方维护，遵循 agentskills.io，技能是 markdown 文件 `SKILL.md`，用来让智能体按 developer.android.com 最佳实践执行特定开发模式。README 举例技能名 `r8-analyzer`、`wear-compose-m3`、`android-cli`，并说 `android-cli` 是默认安装的那个。安装与更新命令：`android skills add r8-analyzer --project=.`、`android skills add --all`、`android skills update --all`、`android skills update wear-compose-m3`。选项：`--all`、`--agent`、`--project`。默认安装位置：没有已存在智能体目录、也没指定 agent 时，装到 Gemini 和 Antigravity 的 `~/.gemini/antigravity/skills`。插件安装：Claude Code 的 `/plugin install android-skills --marketplace android/skills`；Codex 的 `codex plugin marketplace add android/skills` 和 `codex plugin add android-skills@android-skills`。触发方式：不要手动调用，直接描述相关任务，例如 `Make my app UI edge-to-edge.`。反馈路径：GitHub issue；当前不接受公开 PR。授权 Apache License 2.0。效果验证方面：README 提到选题基于 evaluations，但没有给出评测集、指标或对比结果；没有任何案例、前后对比、用户反馈或性能数字。仓库元信息约 8096 stars、当日 +36，来自抓取指标，不构成有效性证据。局限：只依据 README，看不到技能全清单、每个 `SKILL.md` 的实际内容，也无法判断质量与覆盖面；强绑定 Android 开发与 Android CLI；能否稳定触发是运行时的未知数；仓库不接受公开贡献。因此本手册只把它列为「按做法 A 小范围试装」，并把“技能包按 LLM 弱项选题 + 放入 agent 目录自动激活”作为可借鉴的方法论。
 - ko-paper 路线：全部来自调研《maenjh/ko-paper》，即该仓库 README。可核查信息：安装脚本与 Windows PowerShell 命令、Claude Code 插件市场两步、`ko-paper doctor` 自检与 `kopaper ready` 判据、`ko-paper update`、三种使用入口（skill 自然语言、`ko-paper` CLI、固定监听 `127.0.0.1:8787` 的网页 UI）、输出文件名 `<文件名>.ko.pdf` 与 `<文件名>.ko.dual.pdf`、术语表 CSV 列 `source,target,tgt_lng` 与四级冲突优先级、关键环境变量表、手动安装用 `babeldoc==0.5.24` 加 `bitstring<5`、Windows Smart App Control 拦截时的简易模式（产出 `<文件名>.ko.lite.pdf`）与 WSL 两条出路、网页 UI 的 Host / Origin 检查与 `data/web_jobs.sqlite` 任务记录。原文自述：同一文件再翻会复用术语并跳过抽取步骤、token 约省 30%；自动抽取会过滤掉会议/机构/出版社名等应保持原文的专有名词；网页 UI 顶部显示最近 5 小时内发出的 Claude 调用次数与 token 数；只翻部分页面的那次运行不保存术语。局限：输出语言固定为韩语；没有第三方评测、基准或前后对比数据，全部效果描述来自作者自述；许可证为 AGPL-3.0-or-later；材料里 Claude 订阅对应的 `--with-cl…` 选项名被截断，本手册未补全。因此只把它列为「按做法 A 小范围试装」。
 - Caveman 路线：全部来自调研《@goan999999: 用上 Caveman，我的 Codex 终于不说废话了》。可核查信息：一条推文（28 赞、5 转发、8 回复）、一段「让 Codex 自己安装」的提示词（材料里被截断，且仓库 URL 为折行展示，本手册按常见形式拼接为 `https://github.com/JuliusBrussee/caveman`）、以及作者的主观前后对比描述（以前改 Bug 会先分析半天、讲一堆背景，最后才动手；装上后就动手）。局限：没有仓库内容、依赖、安装脚本、所需权限、兼容的 Codex 版本信息；原文只提到视频后段有实测报告，本次材料不含视频，无法核实；「装上就能少说废话」只是作者主张，没有数据、样本量或对比结果；只适用于 Codex 类编码智能体，不能外推到其他模型或非编码任务。因此只把它列为「按做法 A 小范围试装」，效果必须自己用同一任务、同一提示词做安装前后对照。
+- claude-codex-loop 路线：全部来自调研《ajogalekar/claude-codex-loop》，即该仓库 README。可核查信息：这是一个 Codex skill，入口为 `SKILL.md`，含 `scripts/control.py` 无依赖持久状态控制器、setup/protocol 参考、配置/评审/下一提示模板与隔离测试；安装用 symlink 到 `$HOME/.agents/skills/claude-codex-loop`，部分客户端读 `~/.codex/skills`；起始提示要写范围、目标、成功判据、会话名与 SESSION_ID、停止条件；配置字段为 `goal`、`success_criteria`、`max_rounds`/`max_hours`/`max_no_progress_reviews`；每轮用实际会话、已发送标记、最终回复对照 ledger，对输入/代码/输出做哈希，评审后文件变化必须重新评审，claim 与 issue ID 结转，存在 open blocking issue 不得判成功，预算触顶记为未完成停止，UI 投递前冻结提示并持久化 `submitting`，投递不确定靠 marker 恢复，用 lease 与本地原子写协调 tick。证据：方法源自一个真实跑过的 convex-hull 研究 workflow；通用控制器用隔离的模拟 UI 观测与临时项目验证，覆盖中断发送、并发所有权、漂移、陈旧证据、claim 连续性与停止行为；2026-10-17 在 macOS + Python 3.14.6 上本地 28 个测试通过、Codex skill validator 通过；GitHub Actions 已配置 macOS/Linux 的 Python 3.10/3.12，但尚未跑过；仓库 38 stars。局限（作者自述或材料可见）：不是每个桌面客户端的端到端演示；测试从不发送真实 Claude 提示；无法靠两个模型意见确立真值；不保证 UI 投递恰好一次；不沙箱项目代码；不强制美元预算；漂移覆盖仅限配置监视的文件；不安装依赖工具、不提供 API runner、不绕过审批或登录。因此本手册把它列为「按做法 A 小范围试装」，效果必须用同一任务做人工盯盘与监督回路对照。
 - 文中提到的 star 数来自 metrics，不构成有效性证据。
 
 ## 依据的调研
@@ -1422,3 +1447,4 @@ https://github.com/JuliusBrussee/caveman
 - [android/skills](../research/radar/2026-10-17/4228-android-skills.md)：值得一试，做 Android 开发的话，可按 README 给出的命令在当前项目或全局安装部分 skill（如 r8-analyzer），让智能体在相关任务中自动调用；理由是原文给出了可直接执行的安装、更新、激活流程，并把技能范围明确限定在“评估显示 LLM 表现较弱”的工作流上，但仓库只公开了安装方式，没有技能全清单和效果数据，所以先小范围试、用自己项目的结果来判断。
 - [maenjh/ko-paper](../research/radar/2026-10-17/4354-maenjh-ko-paper.md)：值得一试，先小范围试：按 README 把 ko-paper 装成 Claude Code / Codex 的 skill，用一篇 2 页公开论文验证版式、公式、术语一致性与 token 消耗，再决定是否把「PDF 版式保持翻译」这类流程纳入自己的文档处理链路。理由：原文给出了可直接复制的安装命令、CLI/网页用法、术语表 CSV 格式和缓存/并发等参数，属于可照做的具体流程，但输出语言固定为韩语、证据全部来自作者自述，因此不宜直接 adopt。
 - [@goan999999: 用上 Caveman，我的 Codex 终于不说废话了！](../research/radar/2026-10-18/4666-caveman-codex.md)：值得一试，可以小范围试装：在你自己的非关键仓库里，把原文那段提示词原样贴给 Codex，让它自行安装 caveman，然后用安装前后同一个改 Bug 任务对比输出长度与一次成功率。理由是可照做的部分只有这条安装提示词，正文没有给出仓库内容、配置细节和任何验证数据，必须自行实测才能判断是否值得写进手册。
+- [ajogalekar/claude-codex-loop](../research/radar/2026-10-20/5012-ajogalekar-claude-codex-loop.md)：值得一试，建议小范围试：把 claude-codex-loop 装成 Codex skill，用一个有明确可验证判据的长任务跑 5 轮以内，重点看它能否在无人盯盘时收敛且不误报成功；理由是原文给出了可直接照抄的安装命令、启动提示、配置字段与每轮核对/停止规则，但端到端可靠性只有模拟测试支撑，尚未在真实客户端上验证。
