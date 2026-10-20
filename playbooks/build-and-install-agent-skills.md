@@ -1,14 +1,16 @@
-# 给 agent 装技能包前先做小范围对照，再用截图和追溯链验收
+# 让编码 agent 复刻动效视频前先看片，并用逐帧对照交证据
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：避免把安装成功、doctor 通过或 stars 当成效果，先用小范围对照判断技能包是否真的减少返工，并把仪表盘截图验收、BA/PO 规格追溯等专门做法纳入同一套试用流程。
-> 先试这一步：选一个非关键项目和一类重复任务，只装一个技能包，用同一任务做有/无技能各 3 次对照；如果你做仪表盘或 BA/PO 规格，先按 AY 或 AZ 做半天到一个小需求的最小试用。
+> 解决的问题：这篇手册解决 agent 在重复任务和视觉动效任务中凭想象交付、缺少对照证据的问题：先用小范围对照验证技能，再把踩坑写成按现象触发的经验卡，最后用逐帧打分验收动效复刻。
+> 先试这一步：先在一个非关键项目上只装一个技能包，用同一任务做有/无各 3 次对照；若要做动效视频复刻，先拿一段 10 秒左右的扁平动效片跑 study_video → 写页面 → frame_diff → check_anim --runtime → side_by_side 闭环。
 > 最近修订：2026-10-21
 
 ## 解决什么问题
 
-你已经在用编码 agent、写作 agent 或通用 agent，但经常遇到两类问题：一是每次都要重复描述同一套规范，装了一个技能包也不确定是否真的减少返工；二是同类排障反复出现，agent 每次都从头试错，踩过的坑没有变成下一次可直接调用的经验。这篇手册给出一套可照做的流程：先用做法 A 在一个非关键项目上试装一个现成技能包，用同一任务做有/无技能对照；确认有效后再把自己的重复工作写成 SKILL.md；同时用做法 AX 把重复踩坑写成短经验卡，放在 procedures/ 目录，用全局钩子让 agent 在动手前按现象定向读卡。专门场景（仪表盘截图验收、BA/PO 规格追溯、Android、SwiftUI、Elixir/Phoenix、Go 终端 UI、论文翻译、学术写作、长任务监督等）保留为索引，统一要求先小范围对照再采用。
+你已经在用编码 agent、写作 agent 或通用 agent，但经常遇到三类问题：一是每次都要重复描述同一套规范，装了一个技能包也不确定是否真的减少返工；二是同类排障反复出现，agent 每次都从头试错，踩过的坑没有变成下一次可直接调用的经验；三是让 agent 复刻一段动效视频或 UI 录屏时，它看不到画面，只能凭想象写节拍、缓动、颜色和文字，最后用“看起来对”交差。
+
+这篇手册给出一套可照做的流程：先用做法 A 在一个非关键项目上试装一个现成技能包，用同一任务做有/无技能对照；确认有效后再把自己的重复工作写成 SKILL.md；同时用做法 AX 把重复踩坑写成短经验卡，放在 procedures/ 目录，用全局钩子让 agent 在动手前按现象定向读卡；动效视频复刻用做法 BA，先让 agent 看片，再按页面契约写代码，用 frame_diff 逐帧打分、check_anim --runtime 体检、side_by_side 出证明视频。专门场景（仪表盘截图验收、BA/PO 规格追溯、Android、SwiftUI、Elixir/Phoenix、Go 终端 UI、论文翻译、学术写作、长任务监督等）保留为索引，统一要求先小范围对照再采用。
 
 ## 适用与不适用
 
@@ -23,6 +25,7 @@
 - 你需要安装或分发以 SKILL.md 为载体的技能到多个编码代理，或把团队规范同步给多人。
 - 你需要给 agent 补仪表盘/数据屏设计规范，并希望验收落在三档截图而不是代码自检（做法 AY）。
 - 你需要 BA/PO 规格文档、用户故事、验收标准、测试用例和追溯矩阵，且宿主支持 Agent Skills（做法 AZ）。
+- 你要把扁平矢量动效、排版动画或 UI 动效录屏复刻成内联 SVG + GSAP 时间线，并希望用逐帧对照而不是口头判断验收（做法 BA）。
 
 不适用：
 
@@ -33,6 +36,7 @@
 - 做法 AX 的触发依赖 agent 自律和触发词匹配；跨工作区不自动共享；工具层可能随宿主升级失效；卡片会过期，淘汰需要人判断。
 - 做法 AY 只针对仪表盘/数据屏，偏 Web（Tailwind + React 表述）与 SwiftUI；材料只有 README，不能确认内部规则质量；仓库 41 stars，属个人项目，长期维护不确定；它的 Sign-off 推广语会出现在对话里，采用前要处理。
 - 做法 AZ 适合愿意维护 Markdown 规格、按阶段调用命令的团队；不需要规格文档、只想快速写代码的团队价值有限；Windows 安装需另行适配；README 只有自述效果，没有独立验证。
+- 做法 BA 只覆盖扁平矢量风格的动效/排版动画/UI 动效录屏到代码，绑定 GSAP 生态；不适合实拍、复杂 3D、需要保留原始视频或逐帧描摹的任务；没有 Python 3.9+、ffmpeg、Playwright + chromium 的环境不要硬上；案例全部出自作者自证，没有独立 benchmark。
 - 各专门做法的边界见索引条目：E 只针对中文技术文档；F 只针对生物医学论文；M 不得再分发第三方版权书生成的 skill；P 只对自有或书面授权资产；T 不支持直接驱动交易或投顾建议；U 需要 Apple Silicon Mac 加 Codex desktop 加私有仓库访问权；AU 输出语言固定为韩语；AV 只有一条推文和一段被截断的安装提示词；AW 只有隔离模拟测试，不能当成真实客户端端到端可靠。
 
 ## 前置条件
@@ -68,11 +72,18 @@
 - 本地已有仓库路径，下文用 /path/to/ba-kit-open 代替实际路径；Unix-like shell 用于 symlink，Windows 需另行适配。
 - python3 用于渲染 Mermaid；一个真实但范围小的功能需求。
 
+做法 BA 额外前置：
+
+- Python 3.9+ 与 ffmpeg；会开浏览器的脚本还需要 Playwright + chromium。
+- 一段要复刻的扁平动效视频或 UI 录屏（例如 clip.mp4），以及填好的 brief；明确只能用这个源片。
+- 允许脚本启动无头浏览器、发起网络请求、读写本地帧图与视频文件。
+- Claude Code、Codex、Cursor、Gemini CLI、Copilot 等之一，能装技能或把技能目录拷到对应 skills 目录。
+
 专门做法 C–AZ 另有前置，按索引条目和对应仓库 README 准备；不要跳过 A 的对照方法直接纳入常规流程。
 
 ## 操作步骤
 
-怎么选：先做做法 A；A 里某个技能确实有效、且你有一件每周重复且规范明确的工作，再做做法 B；如果你有一类重复排障任务，先做做法 AX。如果你要做仪表盘/数据屏，先做 AY 的半天试用；如果你要 BA/PO 规格链，先做 AZ 的一个小需求试用。其余按场景从专门做法索引里选，且 C–AZ 都必须套用 A 的对照方法。
+怎么选：先做做法 A；A 里某个技能确实有效、且你有一件每周重复且规范明确的工作，再做做法 B；如果你有一类重复排障任务，先做做法 AX。如果你要做仪表盘/数据屏，先做 AY 的半天试用；如果你要 BA/PO 规格链，先做 AZ 的一个小需求试用；如果你要把动效视频复刻成代码，先做 BA 的 10 秒小片闭环，并套用 A 的有/无对照方法。其余按场景从专门做法索引里选，且 C–BA 都必须套用 A 的对照方法。
 
 ### 做法 A：先用现成技能包做小范围试装（推荐先做）
 
@@ -175,7 +186,7 @@ node tools/procedures-audit.mjs
 9. 做最小试用。选 1 个重复排障多的仓库，建 procedures/，写全局钩子，只写 2–3 张复发卡；用 3–5 个现象问题新开会话验证是否读卡。连续试运行一段时间，记录重复试错轮次、同类坑复发次数、读卡命中率、无关读卡或乱翻次数、每张卡体积和维护耗时。
 10. 判定与止损。同一现象第二次出现时能直接命中首选或别再来，且没有把大量未使用卡塞进上下文，才算初步有效；若完全不读卡，先查钩子和触发词，不要用全量注入掩盖。
 
-### 做法 AY：用截图评论、重设计和三档截图 QA 验收仪表盘（新增，先做半天试用）
+### 做法 AY：用截图评论、重设计和三档截图 QA 验收仪表盘（先做半天试用）
 
 定位：abdiraimov-otabek/dashboard-design-skill 是一个 Claude Code skill，把仪表盘设计规范和截图 QA 验收打包在一起，教 agent 构建、重设计并批评分析类、营收类、指标类仪表盘。它的核心不是再给一份设计规范，而是把领域规范文档、截图自检和每步 done when 固化成可复制的 skill 结构。材料只有 README，没有 SKILL.md 与 references/*.md 正文，所以只能确认结构和流程，不能确认内部规则条文质量。
 
@@ -226,7 +237,7 @@ Run the dashboard QA pass on /dashboard.
 8. 收尾检查推广行。该 skill 每完成一个完整任务会在对话里加一行作者与其 Mac 应用的推广语（不在代码、提交或 UI 内）。要关掉就让它停，或从 SKILL.md 删除 Sign-off 一节。预期结果是推广行没有混进代码、提交或产品 UI。
 9. 做对照。保存原版和新版截图、问题清单；先按半天最小试用人工计数。若要纳入常规流程，再按做法 A 做有/无各 3 次，或换 2–3 个仪表盘任务再下结论。不要拿插件安装成功当效果证据。
 
-### 做法 AZ：把需求脑暴到测试用例跑成可追溯的规格链（新增，保留原流程对照）
+### 做法 AZ：把需求脑暴到测试用例跑成可追溯的规格链（保留原流程对照）
 
 定位：spmtitsolution/OpenBA-Kit（BA-Kit Open）是一个面向 IT 业务分析师和产品负责人的开源 Agent Skills 技能包。README 自述包含 56 个专用技能、19 条需求工程规则和 47 个模板，覆盖从模糊脑暴、发现报告到 IEEE 830 技术规格、架构图、HTML 线框图、INVEST 用户故事、Gherkin 验收标准和可追踪测试用例的软件规格生命周期。原文只列出技能、规则和模板名称，没有给出具体提示词、规则全文、模板内容或脚本实现，不能验证技能质量和自动消除歧义是否真实成立。
 
@@ -277,7 +288,139 @@ README 称输出为可双击打开的独立 .html、纯 .svg 矢量文件，以�
 8. 交付评审包。用 /preview 生成单页交互式文档门户，供干系人浏览、评审和签收。前提是前面已生成 PRD/SRS/流程图/用户故事/验收标准等文档。预期结果是拿到可评审的一页材料，而不是把生成评审包本身当成签收。
 9. 做对照与判定。统计歧义词数量、追溯覆盖率、评审轮次和返工、图与原型可用性、变更影响完整性。若文档变多但追溯、评审和返工没有改善，降级为 study/watch，不要仅凭 56 个技能、19 条规则、47 个模板或 36 stars 就纳入常规。
 
-### 专门做法索引（C–AZ）
+### 做法 BA：先让 agent 看片，再用逐帧对照交证明（新增，先做 10 秒小片试用）
+
+定位：lovisdotio/motion2code 是一个分发给编码智能体的技能包，把一段动效设计视频或 App/网页录屏重建为干净、可编辑的代码——内联 SVG 图形加一条 GSAP 时间线，可逐帧 seek、无缝循环，并与源视频并排逐帧对照；对录屏类素材还会进一步产出可交互的真实页面（用 GSAP ScrollTrigger 实现真实滚动、按钮、键盘与移动端支持）。它本身不是模型，而是“流程 + 脚本 + 硬规则 + 安装适配器”的组合，支持 Claude Code、Codex、Cursor、Copilot、Gemini CLI 等（原文称约 70 多个 agent）。核心闭环是 study_video 看片 → 按页面契约写页面 → frame_diff 逐帧打分 → check_anim --runtime 体检 → side_by_side 出证明视频。
+
+适用前提与边界：适合扁平矢量风格的动效、排版动画、UI 动效录屏到代码；目标能被 SVG 加单一 GSAP 时间线表达。不适合实拍、复杂 3D、必须保留原始视频或逐帧描摹的任务。案例全部出自作者自证，没有独立 benchmark；先小范围试，重点是把“确定性 seek + 逐帧对照”的验证方式搬到其他视觉产出任务上。
+
+1. 准备运行环境。前提：本机已有 Python 3.9+ 与 ffmpeg；会开浏览器的脚本还需要 Playwright + chromium。
+
+```bash
+# 方式一
+uv run --with playwright python ...
+# 方式二
+pip install playwright && python -m playwright install chromium
+```
+
+2. 安装技能（按你用的工具选一条）。前提：Claude Code 走插件市场；其他工具走 skills 包或手工拷目录。
+
+Claude Code：
+
+```bash
+claude plugin marketplace add lovisdotio/motion2code
+```
+
+```bash
+claude plugin install motion2code@motion2code
+```
+
+或者直接拷技能目录：
+
+```bash
+cp -R skills/motion2code ~/.claude/skills/
+```
+
+Codex / Cursor / Gemini CLI / Copilot 等（通过 skills 分发）：
+
+```bash
+npx skills add lovisdotio/motion2code
+```
+
+手工安装：
+
+- **Codex**：把 `skills/motion2code` 拷到 `~/.agents/skills/`
+- **Cursor**：拷到 `~/.cursor/skills/`，并加上 `adapters/cursor/` 里的规则
+- **Copilot**：`gh skill install lovisdotio/motion2code motion2code`，并加上 `adapters/copilot/`
+- **Gemini CLI**：`gemini extensions install https://github.com/lovisdotio/motion2code`
+- **Hermes**：拷到 `~/.hermes/skills/`
+- **claude.ai**：把 `skills/motion2code` 打包 zip，在 Settings > Capabilities > Skills 里上传
+- **ChatGPT、Gemini Gems 等纯聊天工具**：见仓库 `adapters/` 目录
+
+3. 准备源片与任务说明（brief）。把要复刻的片段（例如 clip.mp4）放好；需要完整 brief 时填写 prompts/convert-video-prompt.md，仓库另有“源提示词怎么写”的建议。然后用自然语言下指令，例如：
+
+```text
+Rebuild clip.mp4 as an SVG + GSAP animation that loops
+
+turn this app screen recording into a real site
+```
+
+4. 让 agent 先“看片”，再动手。前提：已完成第 1、2 步；这一步产出的是 agent 能读的“视觉事实”，而不是让模型凭空想象。
+
+```bash
+python3 scripts/study_video.py clip.mp4 -o study/
+```
+
+输出：每 0.25 s 一帧（按时间命名）、每次检测到的硬切前后帧、一张 contact sheet、精确的扁平调色板、以及源片是否循环的评分，汇总在 study.json。需要单独取色时：
+
+```bash
+python3 scripts/palette.py ...
+```
+
+（palette.py 打印视频或图片的精确扁平色十六进制值及其占画面比例。）
+
+5. 写页面：必须满足“页面契约”与硬规则。前提：这是后面所有自动校验的基础，不满足就无法逐帧对照。页面契约：
+
+```js
+window.anim = { tl, duration, seek(t), play(from), pause() }   // seek(t) is a pure function of t
+```
+
+- index.html?t=6.5 冻结在第 6.5 秒；?external=1 等待被外部驱动；不带参数则自动播放并循环。
+- 字体加载完、首帧画完后，设置 `<html data-ready=\"1\">`。
+- 自包含：内联 SVG、cdnjs 的 GSAP 3、仅在做形变时用 jsdelivr 的 flubber、Google Fonts，其他一律不加。
+
+硬规则（原文 Hard rules）：
+
+- 只用给定的源视频：绝不重新生成、绝不内嵌视频、绝不描帧。
+- 文字严格按源提示词里的写法，即使视频里拼错了也照抄。
+- 扁平形状用 SVG，颜色从源片采样。
+- GSAP 时间线是唯一时钟。
+- 循环在代码里完成：frame(duration) 等于 frame(0)。
+- 每个时刻都要和源片并排对照过。
+
+6. 逐帧对照打分，定位最差时刻。
+
+```bash
+python3 scripts/frame_diff.py clip.mp4 index.html -o diff/
+```
+
+输出：指定时刻（或某段区间的每一帧）的“源片 | 代码”成对图、全部配对的拼图、每个时刻的差异分数以及最差五处。
+
+7. 运行时体检（含循环接缝与 seek 确定性）。
+
+```bash
+python3 scripts/check_anim.py index.html --runtime
+```
+
+检查：页面契约是否满足、脚本白名单、是否混入内嵌位图或视频；加 --runtime 后会无头打开页面，检查控制台报错、网络请求、循环接缝、seek 是否确定性、页面是否自动播放。
+
+8. 逐帧渲染出片。
+
+```bash
+python3 scripts/render_anim.py index.html -o anim.mp4
+```
+
+通过 anim.seek 逐帧渲染为 mp4、GIF poster 或 PNG 序列，可用 --size 指定任意尺寸——因此不会丢帧或重复帧。
+
+9. 出“证明视频”。
+
+```bash
+python3 scripts/side_by_side.py clip.mp4 anim.mp4 -o side_by_side.mp4 --html index.html
+```
+
+把源片与渲染结果叠成一条带标注的对照视频（横屏或竖屏）。
+
+10. 查看现成范例的对照页。
+
+```bash
+python3 -m http.server -d gallery/eye
+```
+
+然后打开 http://127.0.0.1:8000/compare.html。gallery/ 下每个文件夹都有 index.html（自包含成品）、compare.html（源片与代码逐帧同步并排）、source.mp4（480p 源片）、poster.gif，录屏类另有 site.html（可交互真站）。
+
+11. 做最小试用与判定。先拿一段 10 秒左右的扁平动效视频跑完整闭环，保存 study/、diff/、side_by_side.mp4 和最终 index.html；再按做法 A 的思路做有/无对照，或换 2–3 个同类小片再下结论。不要拿安装成功或 gallery 案例当效果证据；若素材不是扁平矢量、项目不用 GSAP，或 frame_diff 的最差五处无法被有效收敛，先降级为 study，不要把 BA 纳入常规流程。
+
+### 专门做法索引（C–BA）
 
 下表保留各专门做法的用途和入口，完整边界以对应仓库 README 和本手册的判断原则为准。所有条目都先套用做法 A 的对照方法。
 
@@ -332,6 +475,7 @@ README 称输出为可双击打开的独立 .html、纯 .svg 矢量文件，以�
 | AW | 用 Claude Code 执行、Codex 定时审查并按判据收敛 | 把 ajogalekar/claude-codex-loop symlink 到客户端 skill 目录；起始提示写 goal、success_criteria、max_rounds、max_hours、max_no_progress_reviews；每轮用 ledger、哈希、claim 结转和止损；误报成功一次即停用 |
 | AY | 做仪表盘/数据屏，想让 agent 按截图验收 | 安装 abdiraimov-otabek/dashboard-design-skill；跑截图评论、重设计、三档宽度截图 QA；非 Claude Code 用 AGENTS.md 指向 SKILL.md；采用前处理 Sign-off 推广行 |
 | AZ | 做 BA/PO 规格文档、需求追溯与测试用例 | 安装 spmtitsolution/OpenBA-Kit；按 /brainstorm→/srs→/userstory→/ac→/test-cases→/preview 跑；用追溯矩阵和歧义词检查；保留原流程对照 |
+| BA | 把扁平动效视频或 UI 录屏复刻成 SVG + GSAP 代码，并用逐帧对照验收 | 安装 lovisdotio/motion2code；先跑 study_video 看片；按页面契约写页面；用 frame_diff 打分；用 check_anim --runtime 体检；用 render_anim 和 side_by_side 出证明视频；先做 10 秒小片试用 |
 
 ## 怎么判断变好了
 
@@ -345,9 +489,11 @@ README 称输出为可双击打开的独立 .html、纯 .svg 矢量文件，以�
 
 做法 AZ 的最小试用方式：选一个真实但范围小的功能需求，在 Claude Code 中按 Option A 挂载技能，或把仓库放进项目工作区按 Option C 使用；按 README 的一天流程跑一遍 /brainstorm → /srs → /sequence + /erd → /render-diagrams → /wireframe-html（可选）→ /userstory + /ac → /test-cases → /preview，同时保留团队原有流程做对照，不要只跑新流程就下结论。可观察指标是：歧义词数量，统计 SRS 和用户故事中 fast、secure、user-friendly 等定性词出现次数，看是否被替换为可量化指标和 FR-、BR-、ERR- 命名；追溯覆盖率，检查 Idea → PRD → SRS → Flows → User Stories → AC → Test Cases 是否每层都能追到，尤其是每个 FR-/BR-/ERR- 是否有对应测试用例；评审效率，记录生成 /preview 评审包所需时间、干系人评审轮次和返工次数，与原流程对比；图与原型可用性，检查 Mermaid 是否成功渲染为独立 HTML/SVG，非技术干系人能否直接打开并理解，线框图是否可点击；变更影响完整性，模拟一次范围变更，用 /cr 看是否产出影响矩阵，并人工核对遗漏项。判断标准是：如果歧义词显著减少、追溯链完整、评审轮次或返工减少，再把 BA-Kit 纳入手册；如果只是文档变多但追溯、评审和返工没有改善，则降级为 study/watch。以上 AY 和 AZ 的指标是试用指标，不是原文给出的实验数据。
 
-专门做法 C–AZ 的统一试用方式：选一个与所装技能对应的真实小任务，先在不装该技能的会话里做一次并保存输出，再装上做一次；同一任务至少跑 3 次，或换 2–3 个任务再下结论。通用指标是首稿可用率、人工修改次数、返工轮数、查文档时间、命令或配置正确率、权限申请次数、耗时和成本。各条目的特别指标按索引执行：H 看测试是否通过、非空文件、git 改动；I 看交付前检查清单；J 看按 diagnostics 修的轮数；Y 看命题核对是否拦下方向改变；Z 看失败→通过证据；AH 看 tier 计数与 frontier 已解决比例；AI 看 /discover 是否产出假设清单与实验设计；AJ 看 diff 是否只含被请求改动；AK 看真实研究任务的前后差异；AP 看审计是否通过和 token 溯源比例；AQ 看 estack-doctor 是否只读并给出带证据的改进；AR 看技能是否按预期作用域安装和更新卸载；AS 看技能是否自动同步、blocked 是否下次同步移除；AT 看一次通过率、返工轮数和触发可靠性；AU 看图表公式位置、术语一致性、第二次翻译是否复用术语；AV 看动手前轮数和输出长度是否同时保住一次成功率；AW 看误报成功次数是否为 0、blocking objection 每轮关闭数、预算触顶是否记为未完成停止；AY 看问题清单命中率、可执行性、截图 QA 独有价值、数字一致性和 Sign-off 副作用；AZ 看歧义词数量、追溯覆盖率、评审轮次与返工、图与原型可用性、变更影响完整性。
+做法 BA 的最小试用方式：选一段 10 秒左右的扁平动效视频或 UI 动效录屏，先跑 study_video 生成 study.json、调色板和硬切前后帧；按页面契约写 index.html，再依次跑 frame_diff、check_anim --runtime、render_anim、side_by_side，保存 diff/ 的最差五处、运行时体检结果和对照视频。可观察指标是：frame_diff 的每时刻分数与最差五处是否下降；check_anim --runtime 是否还有控制台报错、意外网络请求、循环接缝不闭合、seek 不确定；页面是否混入内嵌位图或视频；render_anim 是否因走 anim.seek 而没有丢帧或重复帧；side_by_side 是否能让另一个人直接复核。若最差五处反复落在同一类节拍、缓动、颜色或文字错误上，回到页面契约和硬规则改，不要只凭观感重跑。先做 1 个小片闭环，再换 2–3 个同类小片；不要拿安装成功、gallery 里作者自证案例或 check_anim 通过当效果结论。若素材不是扁平矢量、项目不用 GSAP，或逐帧对照无法定位和收敛问题，降级为 study。
 
-反向指标：加了技能后仍要口头纠正同一件事，先改 SKILL.md 或 description；文档改完只是删空话没补事实，先把代码、配置和真实报错给它读；agent 只凭自己的声明就宣布完成，而 git status 和测试报告不支持，作废重跑；同一断言连续失败 3 次还在本地重试，升级到强模型；出图技能每次失败都盲重试，说明没用上 diagnostics；plugin-eval 分数不错但真实任务没改善，说明把筛子当成了结论；AX 跑几个会话后 observation-log 或读卡行为仍不存在，先补钩子、触发词或探针，不要先加卡；AY 三档截图 QA 抓不出代码看不出的问题，就降级为 study；AZ 只是文档变多而追溯和评审返工没改善，就降级为 study/watch。
+专门做法 C–AZ 的统一试用方式：选一个与所装技能对应的真实小任务，先在不装该技能的会话里做一次并保存输出，再装上做一次；同一任务至少跑 3 次，或换 2–3 个任务再下结论。通用指标是首稿可用率、人工修改次数、返工轮数、查文档时间、命令或配置正确率、权限申请次数、耗时和成本。各条目的特别指标按索引执行：H 看测试是否通过、非空文件、git 改动；I 看交付前检查清单；J 看按 diagnostics 修的轮数；Y 看命题核对是否拦下方向改变；Z 看失败→通过证据；AH 看 tier 计数与 frontier 已解决比例；AI 看 /discover 是否产出假设清单与实验设计；AJ 看 diff 是否只含被请求改动；AK 看真实研究任务的前后差异；AP 看审计是否通过和 token 溯源比例；AQ 看 estack-doctor 是否只读并给出带证据的改进；AR 看技能是否按预期作用域安装和更新卸载；AS 看技能是否自动同步、blocked 是否下次同步移除；AT 看一次通过率、返工轮数和触发可靠性；AU 看图表公式位置、术语一致性、第二次翻译是否复用术语；AV 看动手前轮数和输出长度是否同时保住一次成功率；AW 看误报成功次数是否为 0、blocking objection 每轮关闭数、预算触顶是否记为未完成停止；AY 看问题清单命中率、可执行性、截图 QA 独有价值、数字一致性和 Sign-off 副作用；AZ 看歧义词数量、追溯覆盖率、评审轮次与返工、图与原型可用性、变更影响完整性；BA 看 frame_diff 最差五处、运行时体检、循环接缝、seek 确定性、是否内嵌视频或位图、渲染丢帧与并排对照视频。
+
+反向指标：加了技能后仍要口头纠正同一件事，先改 SKILL.md 或 description；文档改完只是删空话没补事实，先把代码、配置和真实报错给它读；agent 只凭自己的声明就宣布完成，而 git status 和测试报告不支持，作废重跑；同一断言连续失败 3 次还在本地重试，升级到强模型；出图技能每次失败都盲重试，说明没用上 diagnostics；plugin-eval 分数不错但真实任务没改善，说明把筛子当成了结论；AX 跑几个会话后 observation-log 或读卡行为仍不存在，先补钩子、触发词或探针，不要先加卡；AY 三档截图 QA 抓不出代码看不出的问题，就降级为 study；AZ 只是文档变多而追溯和评审返工没改善，就降级为 study/watch；BA 的 frame_diff 只给出整体分数却定位不到最差时刻，或 agent 仍在偷偷内嵌视频、描帧、改文字，说明页面契约和硬规则没被遵守，先修契约和硬规则，不要继续盲出片。
 
 ## 常见坑
 
@@ -365,6 +511,14 @@ README 称输出为可双击打开的独立 .html、纯 .svg 矢量文件，以�
 - 做法 AX：忽略卡片会过期、工具层会随宿主升级失效、跨工作区不自动共享这些限制。
 - 做法 AY：只装插件不验证自动触发；把问题清单照单全收，不先算命中率和可执行性；把 Sign-off 推广行带进代码、提交或产品 UI；把截图 QA 当成代码审查的替代；材料只有 README 就宣称内部规则质量已验证；仓库 41 stars 属个人项目，长期维护不确定。
 - 做法 AZ：把 56 个技能、19 条规则、47 个模板或 36 stars 当效果证据；只跑新流程不做原流程对照；把文档变多当改善；Windows 直接照抄 ln -s；把 /preview 生成评审包当成签收本身；README 没有展示规则全文和提示词，不能确认自动消除歧义真的成立。
+- 做法 BA：跳过 study_video 直接让 agent 写页面，等于又让它凭想象猜节拍、缓动、颜色和文字。
+- 做法 BA：不满足页面契约就急着跑 frame_diff；seek(t) 不是纯函数、没有设置 data-ready、字体未加载完就截图，后面的逐帧对照都不可信。
+- 做法 BA：违反硬规则，偷偷内嵌视频、描帧或重新生成源片；check_anim 会查脚本白名单和是否混入内嵌位图或视频，不要绕过。
+- 做法 BA：只跑 frame_diff 看整体分数，不看最差五处；应按时段定位最差时刻，再回去改时间线。
+- 做法 BA：不跑 check_anim --runtime，漏掉控制台报错、意外网络请求、循环接缝和 seek 确定性。
+- 做法 BA：用录屏式出片代替 render_anim；render_anim 通过 anim.seek 逐帧渲染，才能避免丢帧或重复帧。
+- 做法 BA：把 gallery 里作者自证案例当效果证据；案例覆盖有限，必须拿自己的 10 秒小片跑闭环。
+- 做法 BA：把非扁平矢量、复杂 3D、实拍素材硬套到 SVG + GSAP；先判断目标是否能被单一时间线表达，不适合就降级。
 - 做法 AV：把作者的一条推文当效果结论；材料里的安装提示词被截断，不能照抄成完整提示词；不要直接让 Codex 自行安装未经审阅的第三方仓库。
 - 做法 AW：把 28 个本地测试通过、skill validator 通过或隔离模拟 UI 测试当成真实客户端端到端可用；误报成功一次就说明验证环节不可靠。
 - 其他专门做法的坑按索引条目和对应 README 执行；例如 AU 不要把 kopaper ready 当翻译质量证据，AT 不要把 evaluations 当成公开评测集，AS 不要把 skillcrew doctor 通过当团队工作变好。
@@ -375,7 +529,8 @@ README 称输出为可双击打开的独立 .html、纯 .svg 矢量文件，以�
 - 做法 AX 全部来自调研《MiHjy12138/DSH-agent-procedures》，即该仓库 README。可核查信息包括：procedures/ 目录、INDEX.md、_模板.md、_inbox.md、卡片六段模板、四条全局钩子、templates/INDEX.template.md 与 templates/card-template.md 的指向、tools/scan-sessions.mjs、tools/procedures-probe.mjs、tools/procedures-audit.mjs、退出码 1 表示有 P0/P1。README 给出的自测数据是：新会话首轮查 procedures，5 题命中 5/5，对照题不命中不乱翻，读 6 张卡约 12 KB；索引从 5.2 KB 降到约 0.8 KB；13 张卡从 77.8 KB 压到 26.6 KB，约减 65%；38 张卡精简时一次移出 9 张，约 24%；两次收尾补卡实测未自发，而踩坑当下记 inbox 自发发生。局限是这些多为作者自测，样本和统计口径有限；触发依赖 agent 自律，触发词匹配模糊；跨工作区不自动共享；工具层会随宿主升级失效；卡片会过期，淘汰需人判断；本次只拿到 README，未验证仓库模板和脚本的实际可用性。因此只把 AX 列为先试再决定推广，不把作者自测当成通用效果结论。
 - 做法 AY 来自调研《abdiraimov-otabek/dashboard-design-skill》README。可核查信息包括：Claude Code 插件安装命令、普通 skill 手动放置命令、非 Claude Code 用 AGENTS.md 指向 SKILL.md、skills/dashboard-design/ 下的 SKILL.md 与 references 文件列表、四个可直接照抄的提示词、Web 端 3440 / 1440 / 375 三档截图 QA、SwiftUI 模拟器覆盖设备尺寸和最大 Dynamic Type 与深色模式与 Reduce Motion、Sign-off 推广行。README 给的 before/after 对照表列了 9 条具体设计替换；作者自述方法学证据是 127 个已上线的仪表盘页面、对一个营收分析产品的完整拆解、一次每条规则被违反一次并被截图抓到的真实重设计。哪些只是作者主张：127 这个数字、提炼是否忠实、规则可移植到任何技术栈、设计判断本身的有效性，都没有外部数据或对照实验支撑；README 带有自我推广成分，作者两个付费 Mac 应用链接需要打折看待；仓库 41 stars，属个人项目，长期维护不确定。材料只有 README，没有 SKILL.md 与 references 正文，只能确认结构存在、流程可跑，不能确认规则都对。
 - 做法 AZ 来自调研《spmtitsolution/OpenBA-Kit》README。可核查信息包括：README 自述 56 个 Agent Skills、19 条需求工程规则、47 个模板、9 个 SDLC 阶段、45 种图类型、diagram-design 为 v2.6；安装命令包括 mkdir -p ~/.claude/skills 与 ln -s 挂载 skills/，Hermes 示例用 ~/.hermes/skills；斜杠命令表与一天工作流；scripts/render_diagrams.py 的两条命令；追溯矩阵 Idea → PRD → SRS → Flows → User Stories → AC → Test Cases；外部指标只有 36 stars。作者主张而非证据：README 说可自动化完整软件规格生命周期、能消除歧义、避免幻觉假设和 bug 与返工及失败 sprint、能一键交接干系人，这些都没有附 benchmark、客户案例、前后对比数据或失败案例。关键内容未展示：原文只列出技能、规则和模板名称，没有给出具体提示词、规则全文、模板内容或脚本实现，因此无法验证技能质量、规则是否真的能自动检测歧义、渲染脚本是否稳定。适用条件是适合需要规范化 BA/PO 文档且团队愿意按阶段调用命令、维护 Markdown 规格和图表，宿主需支持 Agent Skills；README 的安装示例是 mkdir 和 ln -s，未给 Windows 命令，Windows 环境需另行适配；对只需要快速写代码、没有规格文档流程的团队价值有限。手册中的 AZ 指标是基于其可检查产出提出的试用指标，不是原文效果数据。
-- 做法 C–AZ 的证据与局限按本手册现有正文所合并的各篇调研保留；本版新增了 AY 和 AZ 两条做法的可核查命令、作者主张与局限，但没有新增这两条做法的独立效果数据，也没有把它们升级为已验证结论。各条目的可照做命令、作者主张、无效果数据的部分，均以对应仓库 README 和原文限制为准。
+- 做法 BA 来自调研《lovisdotio/motion2code》。可核查信息包括：Claude Code 的 claude plugin marketplace add 与 claude plugin install motion2code@motion2code、手工 cp -R skills/motion2code ~/.claude/skills/、npx skills add lovisdotio/motion2code、Codex/Cursor/Copilot/Gemini CLI/Hermes/claude.ai 的适配路径；scripts/study_video.py、palette.py、frame_diff.py、check_anim.py --runtime、render_anim.py、side_by_side.py 的命令与输出说明；页面契约 window.anim = { tl, duration, seek(t), play(from), pause() }，?t=6.5、?external=1、data-ready 标记；硬规则包括只用源视频、不内嵌视频、不描帧、文字照抄、SVG 采样颜色、GSAP 单一时间线、frame(duration) 等于 frame(0)、每个时刻并排对照。原文给出的 gallery 有 6 个重建案例：动效排版 10 s、24 KB；匹配剪辑 10 s、40 KB；节日站点回放 15 s、52 KB，含 real site；天气站回放 15 s、60 KB，含 real site；贴纸作品集回放 15 s、56 KB，含 real site；播客播放页回放 15 s、36 KB，含 real site。每个案例带 compare.html 逐帧对照与 480p 源片。哪些只是作者主张：原文称支持约 70 多个 agent、能堵住 agent 看不到视频时凭想象写节拍/缓动/颜色/拼写甚至偷偷嵌视频或描帧的问题，但案例全部出自作者自证，没有独立 benchmark、第三方复现或失败案例统计；只覆盖扁平矢量风格并绑定 GSAP 生态，不能证明可推广到实拍、复杂 3D 或其他动画技术栈；原文没有给出定时或事件触发的自动化编排，?external=1、纯函数 seek 与 frame_diff 分数只是让“渲染 → 打分 → 定位最差时刻 → 回去改”可脚本化，仓库 README 未声明已实现该循环。手册中的 BA 指标是基于其可检查产出提出的试用指标，不是原文效果数据。
+- 做法 C–AZ 的证据与局限按本手册现有正文所合并的各篇调研保留；本版新增了 BA 的可核查命令、作者主张与局限，但没有新增 BA 的独立效果数据，也没有把它升级为已验证结论。各条目的可照做命令、作者主张、无效果数据的部分，均以对应仓库 README 和原文限制为准。
 - 文中提到的 star 数来自 metrics，不构成有效性证据。
 
 ## 依据的调研
@@ -437,3 +592,4 @@ README 称输出为可双击打开的独立 .html、纯 .svg 矢量文件，以�
 - [MiHjy12138/DSH-agent-procedures](../research/radar/2026-10-20/5271-mihjy12138-dsh-agent-procedures.md)：值得一试，建议在 1 个有重复性排障任务的工作区小范围试点：先建 procedures/、写全局钩子、从 2~3 张复发卡开始，并观察 agent 是否真的在动手前读卡。理由是 README 给出了可复制的文件结构、钩子、卡模板和体检命令，但触发依赖 agent 自律，证据主要来自作者自测，适合先试再决定推广。
 - [abdiraimov-otabek/dashboard-design-skill](../research/radar/2026-10-21/5345-abdiraimov-otabek-dashboard-design-skill.md)：值得一试，先在一个真实仪表盘上装上这个 skill，跑一遍“截图评论 + 重构 + 三档宽度截图 QA”的闭环，验证它给出的问题是具体可改的还是泛泛而谈；值得试的理由不是它的设计规则本身，而是它把“领域规范文档 + 截图自检”这套给智能体供料和验收的模式固化成了一个可复制的 skill 结构。
 - [spmtitsolution/OpenBA-Kit](../research/radar/2026-10-21/5347-spmtitsolution-openba-kit.md)：值得一试，建议小范围试：按 README 的 Agent Skills 方式把 skills/ 挂到 Claude Code（或把仓库放进工作区），选一个真实小需求跑 /brainstorm→/srs→/userstory→/ac→/test-cases→/preview，并用歧义词、追溯覆盖率、评审返工等指标做前后对比；理由是它给出了可复制的安装命令、斜杠命令和 Mermaid 渲染脚本，但效果只有 README 自述，缺少独立验证。
+- [lovisdotio/motion2code](../research/radar/2026-10-21/5453-lovisdotio-motion2code.md)：值得一试，可在 Claude Code / Cursor 等已装技能的智能体里装这个技能，先用一段 10 秒左右的扁平动效视频跑通“study_video 看片 → 写页面 → frame_diff 逐帧打分 → check_anim --runtime 体检 → side_by_side 出证明视频”这条闭环；它把“看起来对”换成了可打分、可复现的逐帧对照，并给看不见视频的 agent 补上了“眼睛”。但它只覆盖扁平矢量动效、绑定 GSAP 生态、案例全部出自作者自证，所以先小范围试，重点是把这套“确定性 seek + 逐帧对照”的验证方式搬到其他视觉产出任务上。
