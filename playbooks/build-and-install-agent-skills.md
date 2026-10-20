@@ -1,14 +1,14 @@
-# 让 agent 先读经验卡再动手排障
+# 给 agent 装技能包前先做小范围对照，再用截图和追溯链验收
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：你反复让 agent 做同类排障，它却每次从头试错；这篇手册把现成技能包试用、自写 SKILL.md 和新增的文件化经验卡统一成一套先小范围对照再采用的工作方法。
-> 先试这一步：先在一个重复排障的工作区建 procedures/ 目录，写 2–3 张复发卡，把四条经验流程钩子写进 AGENTS.md 或 CLAUDE.md，再用 3–5 个现象问题新开会话看 agent 是否动手前读卡。
-> 最近修订：2026-10-20
+> 解决的问题：避免把安装成功、doctor 通过或 stars 当成效果，先用小范围对照判断技能包是否真的减少返工，并把仪表盘截图验收、BA/PO 规格追溯等专门做法纳入同一套试用流程。
+> 先试这一步：选一个非关键项目和一类重复任务，只装一个技能包，用同一任务做有/无技能各 3 次对照；如果你做仪表盘或 BA/PO 规格，先按 AY 或 AZ 做半天到一个小需求的最小试用。
+> 最近修订：2026-10-21
 
 ## 解决什么问题
 
-你已经在用编码 agent、写作 agent 或通用 agent，但经常遇到两类问题：一是每次都要重复描述同一套规范，装了一个技能包也不确定是否真的减少返工；二是同类排障反复出现，agent 每次都从头试错，踩过的坑没有变成下一次可直接调用的经验。这篇手册给出一套可照做的流程：先用做法 A 在一个非关键项目上试装一个现成技能包，用同一任务做有/无技能对照；确认有效后再把自己的重复工作写成 SKILL.md；同时用做法 AX 把重复踩坑写成短经验卡，放在 procedures/ 目录，用全局钩子让 agent 在动手前按现象定向读卡。专门场景（Android、SwiftUI、Elixir/Phoenix、Go 终端 UI、论文翻译、学术写作、长任务监督等）保留为索引，统一要求先小范围对照再采用。
+你已经在用编码 agent、写作 agent 或通用 agent，但经常遇到两类问题：一是每次都要重复描述同一套规范，装了一个技能包也不确定是否真的减少返工；二是同类排障反复出现，agent 每次都从头试错，踩过的坑没有变成下一次可直接调用的经验。这篇手册给出一套可照做的流程：先用做法 A 在一个非关键项目上试装一个现成技能包，用同一任务做有/无技能对照；确认有效后再把自己的重复工作写成 SKILL.md；同时用做法 AX 把重复踩坑写成短经验卡，放在 procedures/ 目录，用全局钩子让 agent 在动手前按现象定向读卡。专门场景（仪表盘截图验收、BA/PO 规格追溯、Android、SwiftUI、Elixir/Phoenix、Go 终端 UI、论文翻译、学术写作、长任务监督等）保留为索引，统一要求先小范围对照再采用。
 
 ## 适用与不适用
 
@@ -21,6 +21,8 @@
 - 你需要把文档站点、仓库、PDF、技术书或内部 docs 变成按需加载的技能。
 - 你需要给多步、有明确交付物的复杂任务分阶段推进，或在编码 agent 里立行为约束、做路由、做审查回路。
 - 你需要安装或分发以 SKILL.md 为载体的技能到多个编码代理，或把团队规范同步给多人。
+- 你需要给 agent 补仪表盘/数据屏设计规范，并希望验收落在三档截图而不是代码自检（做法 AY）。
+- 你需要 BA/PO 规格文档、用户故事、验收标准、测试用例和追溯矩阵，且宿主支持 Agent Skills（做法 AZ）。
 
 不适用：
 
@@ -29,6 +31,8 @@
 - 只看 stars、README 徽章或 CI 状态就决定采用。
 - 做法 AX 不适合把全部经验常驻注入；不适合没有明确失败现象、不会复发的任务；也不适合不愿维护短卡、不愿对入库和删卡做人审的团队。
 - 做法 AX 的触发依赖 agent 自律和触发词匹配；跨工作区不自动共享；工具层可能随宿主升级失效；卡片会过期，淘汰需要人判断。
+- 做法 AY 只针对仪表盘/数据屏，偏 Web（Tailwind + React 表述）与 SwiftUI；材料只有 README，不能确认内部规则质量；仓库 41 stars，属个人项目，长期维护不确定；它的 Sign-off 推广语会出现在对话里，采用前要处理。
+- 做法 AZ 适合愿意维护 Markdown 规格、按阶段调用命令的团队；不需要规格文档、只想快速写代码的团队价值有限；Windows 安装需另行适配；README 只有自述效果，没有独立验证。
 - 各专门做法的边界见索引条目：E 只针对中文技术文档；F 只针对生物医学论文；M 不得再分发第三方版权书生成的 skill；P 只对自有或书面授权资产；T 不支持直接驱动交易或投顾建议；U 需要 Apple Silicon Mac 加 Codex desktop 加私有仓库访问权；AU 输出语言固定为韩语；AV 只有一条推文和一段被截断的安装提示词；AW 只有隔离模拟测试，不能当成真实客户端端到端可靠。
 
 ## 前置条件
@@ -53,11 +57,22 @@
 - 对工作区 procedures/ 目录和全局指令文件有写权限。
 - 可选：使用 DeepSeek Harness 等兼容会话日志的工具链，且工具未因宿主升级失效；没有工具也可以人工从最近踩坑记录开始写卡。
 
-专门做法 C–AW 另有前置，按索引条目和对应仓库 README 准备；不要跳过 A 的对照方法直接纳入常规流程。
+做法 AY 额外前置：
+
+- Claude Code，或其他能读 Markdown 规则文件的智能体；一个已有前端项目或一张现有仪表盘截图。
+- 能安装插件或写 ~/.claude/skills/；走 SwiftUI 版时需有模拟器。
+
+做法 AZ 额外前置：
+
+- 支持 Agent Skills 的宿主，如 Claude Code、Hermes Agent、Antigravity、OpenAI Codex、Cursor 或 Windsurf。
+- 本地已有仓库路径，下文用 /path/to/ba-kit-open 代替实际路径；Unix-like shell 用于 symlink，Windows 需另行适配。
+- python3 用于渲染 Mermaid；一个真实但范围小的功能需求。
+
+专门做法 C–AZ 另有前置，按索引条目和对应仓库 README 准备；不要跳过 A 的对照方法直接纳入常规流程。
 
 ## 操作步骤
 
-怎么选：先做做法 A；A 里某个技能确实有效、且你有一件每周重复且规范明确的工作，再做做法 B；如果你有一类重复排障任务，先做做法 AX。其余按场景从专门做法索引里选，且 C–AW 都必须套用 A 的对照方法。
+怎么选：先做做法 A；A 里某个技能确实有效、且你有一件每周重复且规范明确的工作，再做做法 B；如果你有一类重复排障任务，先做做法 AX。如果你要做仪表盘/数据屏，先做 AY 的半天试用；如果你要 BA/PO 规格链，先做 AZ 的一个小需求试用。其余按场景从专门做法索引里选，且 C–AZ 都必须套用 A 的对照方法。
 
 ### 做法 A：先用现成技能包做小范围试装（推荐先做）
 
@@ -90,7 +105,7 @@ npx genspark-claw install all --target claude
 6. 换一个新会话，或让一位不了解背景的同事只凭 description 触发该技能。预期结果是它能被自动发现，而不是每次都要手动点名。
 7. 没有自动触发时逐项排查路径、重启、嵌套目录、手动调用标记，先改 description 和触发条件，不要急着加内容。
 
-### 做法 AX：把重复踩坑写成按现象触发的经验卡（新增，按 A 的对照法验证）
+### 做法 AX：把重复踩坑写成按现象触发的经验卡（按 A 的对照法验证）
 
 定位：MiHjy12138/DSH-agent-procedures 是一套文件化经验库。它不是技能、记忆插件、知识库或 RAG，核心是钩子常驻、索引消歧、卡片按需读，并强调反面清单（试过且失败的路）而不是只写正向流程。
 
@@ -160,7 +175,109 @@ node tools/procedures-audit.mjs
 9. 做最小试用。选 1 个重复排障多的仓库，建 procedures/，写全局钩子，只写 2–3 张复发卡；用 3–5 个现象问题新开会话验证是否读卡。连续试运行一段时间，记录重复试错轮次、同类坑复发次数、读卡命中率、无关读卡或乱翻次数、每张卡体积和维护耗时。
 10. 判定与止损。同一现象第二次出现时能直接命中首选或别再来，且没有把大量未使用卡塞进上下文，才算初步有效；若完全不读卡，先查钩子和触发词，不要用全量注入掩盖。
 
-### 专门做法索引（C–AW）
+### 做法 AY：用截图评论、重设计和三档截图 QA 验收仪表盘（新增，先做半天试用）
+
+定位：abdiraimov-otabek/dashboard-design-skill 是一个 Claude Code skill，把仪表盘设计规范和截图 QA 验收打包在一起，教 agent 构建、重设计并批评分析类、营收类、指标类仪表盘。它的核心不是再给一份设计规范，而是把领域规范文档、截图自检和每步 done when 固化成可复制的 skill 结构。材料只有 README，没有 SKILL.md 与 references/*.md 正文，所以只能确认结构和流程，不能确认内部规则条文质量。
+
+1. 选一个已有前端项目或一张现有仪表盘截图，非关键页面。前提是失败可回滚。预期结果是拿到原始截图和一组可对照的问题清单。
+2. 以 Claude Code 插件方式安装（推荐，能用插件市场升级）：
+
+```bash
+/plugin marketplace add abdiraimov-otabek/dashboard-design-skill
+/plugin install dashboard-design@dashboard-design-skill
+```
+
+3. 或作为普通 skill 手动放置：
+
+```bash
+git clone https://github.com/abdiraimov-otabek/dashboard-design-skill
+cp -r dashboard-design-skill/skills/dashboard-design ~/.claude/skills/
+```
+
+4. 非 Claude Code 的智能体（Codex、Cursor 等）：在 AGENTS.md 或规则文件里指向 skills/dashboard-design/SKILL.md，其余 references 会从那里被加载。预期结果是技能能被发现，references 按需加载。
+5. 触发方式：做仪表盘相关工作时自动触发；也可显式下指令。README 给的四个可直接照抄的提示词是：
+
+```text
+Build an analytics dashboard for this app: visitors, signups, revenue by source.
+```
+
+配截图问：
+
+```text
+Is this a good design?
+```
+
+预期返回结论、哪些做得好、以及按危害排序的问题清单（从「数字互相打架」开始）。还可以用：
+
+```text
+Redesign the date range picker
+```
+
+```text
+Make the KPI tiles cleaner.
+```
+
+```text
+Run the dashboard QA pass on /dashboard.
+```
+
+6. 按问题清单做一次重设计。前提是只改你认可的具体项，不要照单全收。预期结果是得到新版页面，并保留原版截图。
+7. 跑 QA 验收。Web 端要求三种浏览器宽度（3440 / 1440 / 375）各出截图；SwiftUI 端在模拟器里覆盖设备尺寸、最大 Dynamic Type、深色模式、Reduce Motion。每个步骤以可勾选的 done when 结束，最后一步必须交付截图。预期结果是 agent 根据屏幕上的实际画面判断，而不是根据代码判断。
+8. 收尾检查推广行。该 skill 每完成一个完整任务会在对话里加一行作者与其 Mac 应用的推广语（不在代码、提交或 UI 内）。要关掉就让它停，或从 SKILL.md 删除 Sign-off 一节。预期结果是推广行没有混进代码、提交或产品 UI。
+9. 做对照。保存原版和新版截图、问题清单；先按半天最小试用人工计数。若要纳入常规流程，再按做法 A 做有/无各 3 次，或换 2–3 个仪表盘任务再下结论。不要拿插件安装成功当效果证据。
+
+### 做法 AZ：把需求脑暴到测试用例跑成可追溯的规格链（新增，保留原流程对照）
+
+定位：spmtitsolution/OpenBA-Kit（BA-Kit Open）是一个面向 IT 业务分析师和产品负责人的开源 Agent Skills 技能包。README 自述包含 56 个专用技能、19 条需求工程规则和 47 个模板，覆盖从模糊脑暴、发现报告到 IEEE 830 技术规格、架构图、HTML 线框图、INVEST 用户故事、Gherkin 验收标准和可追踪测试用例的软件规格生命周期。原文只列出技能、规则和模板名称，没有给出具体提示词、规则全文、模板内容或脚本实现，不能验证技能质量和自动消除歧义是否真实成立。
+
+1. 选一个真实但范围小的功能需求，同时保留团队原有流程做对照。前提是团队愿意按阶段调用命令、维护 Markdown 规格和图表。预期结果是你能拿到新流程产出和原流程产出两份可比较材料。
+2. 获取仓库并确定本地路径。按 README 的 Option C，可把仓库直接克隆到项目根目录或子目录，让智能体自动发现 skills/ 和 rules/；也可按 Option A/B 做全局技能挂载。下文用 /path/to/ba-kit-open 代替实际路径。
+3. 安装到 Claude Code（Option A）。前提是使用 Unix-like shell，并把路径替换为实际仓库路径：
+
+```bash
+mkdir -p ~/.claude/skills
+ln -s /path/to/ba-kit-open/skills/* ~/.claude/skills/
+```
+
+4. 安装到 Hermes Agent / Antigravity / Codex（Option B）。README 给出的 Hermes 示例命令如下；前提同上：
+
+```bash
+mkdir -p ~/.hermes/skills
+ln -s /path/to/ba-kit-open/skills/* ~/.hermes/skills/
+```
+
+Windows 环境没有给出对应命令，需另行适配，不要直接照抄 ln -s。
+
+5. 用斜杠命令跑完整 BA 流程。README 给出的「AI BA 的一天」可直接作为小需求试跑顺序。前提是技能已安装或被工作区发现，并在对应项目上下文中调用：
+
+```text
+09:00  /brainstorm      Elicit requirements and define project boundaries
+09:40  /srs             Draft IEEE 830 specification (FR, BR, ERR, NFR)
+10:30  /sequence + /erd Model interaction sequences and entity relationships
+10:45  /render-diagrams Compile diagrams into editorial HTML & vector SVGs
+11:00  /wireframe-html  Generate clickable, standalone HTML prototypes
+14:00  /userstory + /ac Slice INVEST user stories with Gherkin scenarios
+16:00  /test-cases      Generate comprehensive test suites mapped to Error Matrix
+16:45  /preview         Assemble the single-page stakeholder review bundle
+```
+
+6. 渲染 Mermaid 图。前提是已安装 python3，且 Markdown 中包含 Mermaid 块（如 sequenceDiagram、stateDiagram-v2、flowchart、erDiagram）：
+
+```bash
+# Scan and render a single markdown file:
+python3 scripts/render_diagrams.py docs/{feature}/srs/flows.md
+
+# Scan and render all documentation in a feature folder:
+python3 scripts/render_diagrams.py docs/{feature}/
+```
+
+README 称输出为可双击打开的独立 .html、纯 .svg 矢量文件，以及交互式 index.html 画廊。预期结果是图和原型能被非技术干系人直接打开。
+
+7. 处理变更与治理。README 列出 /cr（变更请求与爆炸半径影响分析）、/gap、/doc-drift、/dashboard、/kg 等治理命令；前提是已有规格文档，并在客户范围变化或文档漂移时显式调用。原文没有给出这些命令的详细参数，只能按技能名和阶段表使用。
+8. 交付评审包。用 /preview 生成单页交互式文档门户，供干系人浏览、评审和签收。前提是前面已生成 PRD/SRS/流程图/用户故事/验收标准等文档。预期结果是拿到可评审的一页材料，而不是把生成评审包本身当成签收。
+9. 做对照与判定。统计歧义词数量、追溯覆盖率、评审轮次和返工、图与原型可用性、变更影响完整性。若文档变多但追溯、评审和返工没有改善，降级为 study/watch，不要仅凭 56 个技能、19 条规则、47 个模板或 36 stars 就纳入常规。
+
+### 专门做法索引（C–AZ）
 
 下表保留各专门做法的用途和入口，完整边界以对应仓库 README 和本手册的判断原则为准。所有条目都先套用做法 A 的对照方法。
 
@@ -213,6 +330,8 @@ node tools/procedures-audit.mjs
 | AU | 把外语论文 PDF 翻成韩语并尽量保住版式 | 安装 maenjh/ko-paper；ko-paper doctor 看到 kopaper ready 只证明装得上；用 skill 或 CLI 翻译；输出固定为韩语；同一文件再翻确认术语复用和 token 下降；Windows 被 Smart App Control 拦截时走简易模式或 WSL，不要关 SAC |
 | AV | 让 Codex 少说废话、直接动手改代码 | 在非关键仓库让 Codex 自行安装 JuliusBrussee/caveman；材料里的安装提示词被截断，不能当完整提示词使用；安装前先审阅第三方仓库；同一 Bug 任务做安装前后对照 |
 | AW | 用 Claude Code 执行、Codex 定时审查并按判据收敛 | 把 ajogalekar/claude-codex-loop symlink 到客户端 skill 目录；起始提示写 goal、success_criteria、max_rounds、max_hours、max_no_progress_reviews；每轮用 ledger、哈希、claim 结转和止损；误报成功一次即停用 |
+| AY | 做仪表盘/数据屏，想让 agent 按截图验收 | 安装 abdiraimov-otabek/dashboard-design-skill；跑截图评论、重设计、三档宽度截图 QA；非 Claude Code 用 AGENTS.md 指向 SKILL.md；采用前处理 Sign-off 推广行 |
+| AZ | 做 BA/PO 规格文档、需求追溯与测试用例 | 安装 spmtitsolution/OpenBA-Kit；按 /brainstorm→/srs→/userstory→/ac→/test-cases→/preview 跑；用追溯矩阵和歧义词检查；保留原流程对照 |
 
 ## 怎么判断变好了
 
@@ -222,9 +341,13 @@ node tools/procedures-audit.mjs
 
 做法 AX 的最小试用方式：选 1 个重复排障多的仓库，建 procedures/，写全局钩子，只写 2–3 张复发卡；用 3–5 个现象问题新开会话验证是否读卡。试运行一段时间，记录重复试错轮次是否下降、同类坑复发次数是否下降、读卡命中率、无关读卡或乱翻次数、每张卡体积和维护耗时。可用 tools/procedures-probe.mjs 观察是否出现 <<< HIT，或用 tools/procedures-audit.mjs 检查结构缺段、断链、体积、触发词覆盖、对象失效和结论偏旧。判定门槛是同一现象第二次出现时能直接命中首选或别再来，且没有把大量未使用卡塞进上下文；若完全不读卡，先查钩子和触发词，不要用全量注入掩盖。
 
-专门做法 C–AW 的统一试用方式：选一个与所装技能对应的真实小任务，先在不装该技能的会话里做一次并保存输出，再装上做一次；同一任务至少跑 3 次，或换 2–3 个任务再下结论。通用指标是首稿可用率、人工修改次数、返工轮数、查文档时间、命令或配置正确率、权限申请次数、耗时和成本。各条目的特别指标按索引执行：H 看测试是否通过、非空文件、git 改动；I 看交付前检查清单；J 看按 diagnostics 修的轮数；Y 看命题核对是否拦下方向改变；Z 看失败→通过证据；AH 看 tier 计数与 frontier 已解决比例；AI 看 /discover 是否产出假设清单与实验设计；AJ 看 diff 是否只含被请求改动；AK 看真实研究任务的前后差异；AP 看审计是否通过和 token 溯源比例；AQ 看 estack-doctor 是否只读并给出带证据的改进；AR 看技能是否按预期作用域安装和更新卸载；AS 看技能是否自动同步、blocked 是否下次同步移除；AT 看一次通过率、返工轮数和触发可靠性；AU 看图表公式位置、术语一致性、第二次翻译是否复用术语；AV 看动手前轮数和输出长度是否同时保住一次成功率；AW 看误报成功次数是否为 0、blocking objection 每轮关闭数、预算触顶是否记为未完成停止。
+做法 AY 的最小试用方式：半天内按步骤装好，拿现有仪表盘截图问 Is this a good design?，记录返回的问题清单；让 agent 按清单做一次重设计，再跑 dashboard QA pass 拿 3440 / 1440 / 375 三张截图；对照原版和新版人工判断。可观察指标是：命中率，即问题清单中被你认可为确实有害的条数除以总条数，低于一半说明规则不适配你的产品；可执行性，即有多少条能直接落到具体改动，而不是提升可读性这类空话；截图 QA 的独有价值，即三档宽度下抓出的纯读代码发现不了的问题数，例如超宽屏空带、手机上 tab 横向滚动，这是这套方法的核心卖点，必须单独计数；一致性，即同一个数字在 KPI 磁贴、图表、排行里是否一致，空数据或 0 基数时是否还出现夸张的百分比；成本，即从提问到拿到可用布局的轮次与时间；副作用，即确认 Sign-off 推广行没有混进代码、提交或产品 UI。如果截图 QA 抓到代码看不出的问题几乎为零，说明它对你只是又一份设计规范，降级为 study，只借规范文件加截图验收的结构，不必继续用这个具体 skill。
 
-反向指标：加了技能后仍要口头纠正同一件事，先改 SKILL.md 或 description；文档改完只是删空话没补事实，先把代码、配置和真实报错给它读；agent 只凭自己的声明就宣布完成，而 git status 和测试报告不支持，作废重跑；同一断言连续失败 3 次还在本地重试，升级到强模型；出图技能每次失败都盲重试，说明没用上 diagnostics；plugin-eval 分数不错但真实任务没改善，说明把筛子当成了结论；AX 跑几个会话后 observation-log 或读卡行为仍不存在，先补钩子、触发词或探针，不要先加卡。
+做法 AZ 的最小试用方式：选一个真实但范围小的功能需求，在 Claude Code 中按 Option A 挂载技能，或把仓库放进项目工作区按 Option C 使用；按 README 的一天流程跑一遍 /brainstorm → /srs → /sequence + /erd → /render-diagrams → /wireframe-html（可选）→ /userstory + /ac → /test-cases → /preview，同时保留团队原有流程做对照，不要只跑新流程就下结论。可观察指标是：歧义词数量，统计 SRS 和用户故事中 fast、secure、user-friendly 等定性词出现次数，看是否被替换为可量化指标和 FR-、BR-、ERR- 命名；追溯覆盖率，检查 Idea → PRD → SRS → Flows → User Stories → AC → Test Cases 是否每层都能追到，尤其是每个 FR-/BR-/ERR- 是否有对应测试用例；评审效率，记录生成 /preview 评审包所需时间、干系人评审轮次和返工次数，与原流程对比；图与原型可用性，检查 Mermaid 是否成功渲染为独立 HTML/SVG，非技术干系人能否直接打开并理解，线框图是否可点击；变更影响完整性，模拟一次范围变更，用 /cr 看是否产出影响矩阵，并人工核对遗漏项。判断标准是：如果歧义词显著减少、追溯链完整、评审轮次或返工减少，再把 BA-Kit 纳入手册；如果只是文档变多但追溯、评审和返工没有改善，则降级为 study/watch。以上 AY 和 AZ 的指标是试用指标，不是原文给出的实验数据。
+
+专门做法 C–AZ 的统一试用方式：选一个与所装技能对应的真实小任务，先在不装该技能的会话里做一次并保存输出，再装上做一次；同一任务至少跑 3 次，或换 2–3 个任务再下结论。通用指标是首稿可用率、人工修改次数、返工轮数、查文档时间、命令或配置正确率、权限申请次数、耗时和成本。各条目的特别指标按索引执行：H 看测试是否通过、非空文件、git 改动；I 看交付前检查清单；J 看按 diagnostics 修的轮数；Y 看命题核对是否拦下方向改变；Z 看失败→通过证据；AH 看 tier 计数与 frontier 已解决比例；AI 看 /discover 是否产出假设清单与实验设计；AJ 看 diff 是否只含被请求改动；AK 看真实研究任务的前后差异；AP 看审计是否通过和 token 溯源比例；AQ 看 estack-doctor 是否只读并给出带证据的改进；AR 看技能是否按预期作用域安装和更新卸载；AS 看技能是否自动同步、blocked 是否下次同步移除；AT 看一次通过率、返工轮数和触发可靠性；AU 看图表公式位置、术语一致性、第二次翻译是否复用术语；AV 看动手前轮数和输出长度是否同时保住一次成功率；AW 看误报成功次数是否为 0、blocking objection 每轮关闭数、预算触顶是否记为未完成停止；AY 看问题清单命中率、可执行性、截图 QA 独有价值、数字一致性和 Sign-off 副作用；AZ 看歧义词数量、追溯覆盖率、评审轮次与返工、图与原型可用性、变更影响完整性。
+
+反向指标：加了技能后仍要口头纠正同一件事，先改 SKILL.md 或 description；文档改完只是删空话没补事实，先把代码、配置和真实报错给它读；agent 只凭自己的声明就宣布完成，而 git status 和测试报告不支持，作废重跑；同一断言连续失败 3 次还在本地重试，升级到强模型；出图技能每次失败都盲重试，说明没用上 diagnostics；plugin-eval 分数不错但真实任务没改善，说明把筛子当成了结论；AX 跑几个会话后 observation-log 或读卡行为仍不存在，先补钩子、触发词或探针，不要先加卡；AY 三档截图 QA 抓不出代码看不出的问题，就降级为 study；AZ 只是文档变多而追溯和评审返工没改善，就降级为 study/watch。
 
 ## 常见坑
 
@@ -240,6 +363,8 @@ node tools/procedures-audit.mjs
 - 做法 AX：agent 不读卡时先加卡；应先查钩子位置、措辞和触发词，再用探针验证。
 - 做法 AX：把写卡和删卡权限完全交给 agent；入库和出库都建议人审。
 - 做法 AX：忽略卡片会过期、工具层会随宿主升级失效、跨工作区不自动共享这些限制。
+- 做法 AY：只装插件不验证自动触发；把问题清单照单全收，不先算命中率和可执行性；把 Sign-off 推广行带进代码、提交或产品 UI；把截图 QA 当成代码审查的替代；材料只有 README 就宣称内部规则质量已验证；仓库 41 stars 属个人项目，长期维护不确定。
+- 做法 AZ：把 56 个技能、19 条规则、47 个模板或 36 stars 当效果证据；只跑新流程不做原流程对照；把文档变多当改善；Windows 直接照抄 ln -s；把 /preview 生成评审包当成签收本身；README 没有展示规则全文和提示词，不能确认自动消除歧义真的成立。
 - 做法 AV：把作者的一条推文当效果结论；材料里的安装提示词被截断，不能照抄成完整提示词；不要直接让 Codex 自行安装未经审阅的第三方仓库。
 - 做法 AW：把 28 个本地测试通过、skill validator 通过或隔离模拟 UI 测试当成真实客户端端到端可用；误报成功一次就说明验证环节不可靠。
 - 其他专门做法的坑按索引条目和对应 README 执行；例如 AU 不要把 kopaper ready 当翻译质量证据，AT 不要把 evaluations 当成公开评测集，AS 不要把 skillcrew doctor 通过当团队工作变好。
@@ -248,7 +373,9 @@ node tools/procedures-audit.mjs
 
 - 做法 A 和 B 的核心方法来自本手册现有正文所合并的 anthropics/skills、genspark-claw、awesome-copilot 等材料：技能是文件夹加 SKILL.md，frontmatter 至少写 name 和 description；先小范围试装，不要整体 adopt；doctor 或 validate 只验证装得上、格式合法，不证明产出更好。这些是方法主张，不是对照实验数据。
 - 做法 AX 全部来自调研《MiHjy12138/DSH-agent-procedures》，即该仓库 README。可核查信息包括：procedures/ 目录、INDEX.md、_模板.md、_inbox.md、卡片六段模板、四条全局钩子、templates/INDEX.template.md 与 templates/card-template.md 的指向、tools/scan-sessions.mjs、tools/procedures-probe.mjs、tools/procedures-audit.mjs、退出码 1 表示有 P0/P1。README 给出的自测数据是：新会话首轮查 procedures，5 题命中 5/5，对照题不命中不乱翻，读 6 张卡约 12 KB；索引从 5.2 KB 降到约 0.8 KB；13 张卡从 77.8 KB 压到 26.6 KB，约减 65%；38 张卡精简时一次移出 9 张，约 24%；两次收尾补卡实测未自发，而踩坑当下记 inbox 自发发生。局限是这些多为作者自测，样本和统计口径有限；触发依赖 agent 自律，触发词匹配模糊；跨工作区不自动共享；工具层会随宿主升级失效；卡片会过期，淘汰需人判断；本次只拿到 README，未验证仓库模板和脚本的实际可用性。因此只把 AX 列为先试再决定推广，不把作者自测当成通用效果结论。
-- 做法 C–AW 的证据与局限按本手册现有正文所合并的各篇调研保留；本版没有新增这些做法的效果数据，也没有把它们升级为已验证结论。各条目的可照做命令、作者主张、无效果数据的部分，均以对应仓库 README 和原文限制为准。
+- 做法 AY 来自调研《abdiraimov-otabek/dashboard-design-skill》README。可核查信息包括：Claude Code 插件安装命令、普通 skill 手动放置命令、非 Claude Code 用 AGENTS.md 指向 SKILL.md、skills/dashboard-design/ 下的 SKILL.md 与 references 文件列表、四个可直接照抄的提示词、Web 端 3440 / 1440 / 375 三档截图 QA、SwiftUI 模拟器覆盖设备尺寸和最大 Dynamic Type 与深色模式与 Reduce Motion、Sign-off 推广行。README 给的 before/after 对照表列了 9 条具体设计替换；作者自述方法学证据是 127 个已上线的仪表盘页面、对一个营收分析产品的完整拆解、一次每条规则被违反一次并被截图抓到的真实重设计。哪些只是作者主张：127 这个数字、提炼是否忠实、规则可移植到任何技术栈、设计判断本身的有效性，都没有外部数据或对照实验支撑；README 带有自我推广成分，作者两个付费 Mac 应用链接需要打折看待；仓库 41 stars，属个人项目，长期维护不确定。材料只有 README，没有 SKILL.md 与 references 正文，只能确认结构存在、流程可跑，不能确认规则都对。
+- 做法 AZ 来自调研《spmtitsolution/OpenBA-Kit》README。可核查信息包括：README 自述 56 个 Agent Skills、19 条需求工程规则、47 个模板、9 个 SDLC 阶段、45 种图类型、diagram-design 为 v2.6；安装命令包括 mkdir -p ~/.claude/skills 与 ln -s 挂载 skills/，Hermes 示例用 ~/.hermes/skills；斜杠命令表与一天工作流；scripts/render_diagrams.py 的两条命令；追溯矩阵 Idea → PRD → SRS → Flows → User Stories → AC → Test Cases；外部指标只有 36 stars。作者主张而非证据：README 说可自动化完整软件规格生命周期、能消除歧义、避免幻觉假设和 bug 与返工及失败 sprint、能一键交接干系人，这些都没有附 benchmark、客户案例、前后对比数据或失败案例。关键内容未展示：原文只列出技能、规则和模板名称，没有给出具体提示词、规则全文、模板内容或脚本实现，因此无法验证技能质量、规则是否真的能自动检测歧义、渲染脚本是否稳定。适用条件是适合需要规范化 BA/PO 文档且团队愿意按阶段调用命令、维护 Markdown 规格和图表，宿主需支持 Agent Skills；README 的安装示例是 mkdir 和 ln -s，未给 Windows 命令，Windows 环境需另行适配；对只需要快速写代码、没有规格文档流程的团队价值有限。手册中的 AZ 指标是基于其可检查产出提出的试用指标，不是原文效果数据。
+- 做法 C–AZ 的证据与局限按本手册现有正文所合并的各篇调研保留；本版新增了 AY 和 AZ 两条做法的可核查命令、作者主张与局限，但没有新增这两条做法的独立效果数据，也没有把它们升级为已验证结论。各条目的可照做命令、作者主张、无效果数据的部分，均以对应仓库 README 和原文限制为准。
 - 文中提到的 star 数来自 metrics，不构成有效性证据。
 
 ## 依据的调研
@@ -308,3 +435,5 @@ node tools/procedures-audit.mjs
 - [@goan999999: 用上 Caveman，我的 Codex 终于不说废话了！](../research/radar/2026-10-18/4666-caveman-codex.md)：值得一试，可以小范围试装：在你自己的非关键仓库里，把原文那段提示词原样贴给 Codex，让它自行安装 caveman，然后用安装前后同一个改 Bug 任务对比输出长度与一次成功率。理由是可照做的部分只有这条安装提示词，正文没有给出仓库内容、配置细节和任何验证数据，必须自行实测才能判断是否值得写进手册。
 - [ajogalekar/claude-codex-loop](../research/radar/2026-10-20/5012-ajogalekar-claude-codex-loop.md)：值得一试，建议小范围试：把 claude-codex-loop 装成 Codex skill，用一个有明确可验证判据的长任务跑 5 轮以内，重点看它能否在无人盯盘时收敛且不误报成功；理由是原文给出了可直接照抄的安装命令、启动提示、配置字段与每轮核对/停止规则，但端到端可靠性只有模拟测试支撑，尚未在真实客户端上验证。
 - [MiHjy12138/DSH-agent-procedures](../research/radar/2026-10-20/5271-mihjy12138-dsh-agent-procedures.md)：值得一试，建议在 1 个有重复性排障任务的工作区小范围试点：先建 procedures/、写全局钩子、从 2~3 张复发卡开始，并观察 agent 是否真的在动手前读卡。理由是 README 给出了可复制的文件结构、钩子、卡模板和体检命令，但触发依赖 agent 自律，证据主要来自作者自测，适合先试再决定推广。
+- [abdiraimov-otabek/dashboard-design-skill](../research/radar/2026-10-21/5345-abdiraimov-otabek-dashboard-design-skill.md)：值得一试，先在一个真实仪表盘上装上这个 skill，跑一遍“截图评论 + 重构 + 三档宽度截图 QA”的闭环，验证它给出的问题是具体可改的还是泛泛而谈；值得试的理由不是它的设计规则本身，而是它把“领域规范文档 + 截图自检”这套给智能体供料和验收的模式固化成了一个可复制的 skill 结构。
+- [spmtitsolution/OpenBA-Kit](../research/radar/2026-10-21/5347-spmtitsolution-openba-kit.md)：值得一试，建议小范围试：按 README 的 Agent Skills 方式把 skills/ 挂到 Claude Code（或把仓库放进工作区），选一个真实小需求跑 /brainstorm→/srs→/userstory→/ac→/test-cases→/preview，并用歧义词、追溯覆盖率、评审返工等指标做前后对比；理由是它给出了可复制的安装命令、斜杠命令和 Mermaid 渲染脚本，但效果只有 README 自述，缺少独立验证。
