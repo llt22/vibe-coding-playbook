@@ -42,24 +42,25 @@ description: 中文说人话写作与文案润色规范。去除 AI 味与翻译
 - **自然收尾，绝不假升华**：事情讲完就停，不总结中心思想，不展望行业未来（禁“未来已来”“无限可能”）。
 
 ### 4. 步骤说明遵循 STE 规范
-- 解释操作步骤时，一律用**祈使句 + 编号列表**，每行一个动作。
+- 解释操作步骤时，一律用**祈使句 + 编号列表**，每行一个主要动作。
 - 前后名词叫法统一，指代明确，绝不中途换同义词显摆词汇量。
+- 用 `check_ste.py` 检查步骤的长度、动作数量、被动句和含糊指代；普通叙事不套这层检查。
 
 ---
 
 ## 校验与自动化检查
 
 在产出成稿或改稿后，使用配套的纯 Python 静态检查脚本进行规则自检：
-
 ```bash
-# 1. 综合检查（同时检查翻译腔与文风硬伤）
+# 1. 综合检查，包含翻译腔、文风与 STE 步骤
 python3 ~/skills/human-writing/scripts/check.py <文章路径或草稿路径>
 
 # 2. 单项检查
 python3 ~/skills/human-writing/scripts/check_prose.py <文件路径>
 python3 ~/skills/human-writing/scripts/check_translationese.py <文件路径>
+python3 ~/skills/human-writing/scripts/check_ste.py <文件路径>
 
-# 3. 运行评测套件（验证检查器拦截与放行是否正常）
+# 3. 运行回归评测
 python3 ~/skills/human-writing/scripts/test_skill.py
 ```
 

@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
-"""write-post 技能回归评测套件 (Eval-First)。
+"""human-writing 技能回归评测套件（Eval-First）。
 
-验证 check_prose.py 与 check_translationese.py 是否能准确拦截反模式坏样本，
-并放行符合阮一峰风格的标准正样本。
+验证文风、翻译腔与 STE 检查器能拦截坏样本，并放行正常中文。
 """
 
 import subprocess
@@ -13,6 +12,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 PROSE_SCRIPT = HERE / "check_prose.py"
 TRANSLATIONESE_SCRIPT = HERE / "check_translationese.py"
+STE_SCRIPT = HERE / "check_ste.py"
 
 TESTS = [
     {
@@ -127,6 +127,60 @@ date: 2026-10-03
         "checker": "both",
         "expect_passed": True,
     },
+    {
+        "name": "test_ste_long_step",
+        "description": "拦截过长的操作步骤",
+        "text": "1. 打开项目配置文件并找到数据库连接区域，然后修改服务器地址、端口和密码，保存文件后重新启动服务并查看日志确认连接成功。",
+        "checker": "ste",
+        "expect_passed": False,
+        "expect_keyword": "超过 36",
+    },
+    {
+        "name": "test_ste_multiple_actions",
+        "description": "拦截一个编号步骤塞入多个动作",
+        "text": "1. 打开终端，安装依赖，然后修改配置并启动服务。",
+        "checker": "ste",
+        "expect_passed": False,
+        "expect_keyword": "同一步包含",
+    },
+    {
+        "name": "test_ste_passive_voice",
+        "description": "拦截隐藏执行者的被动步骤",
+        "text": "1. 配置文件被程序修改后，重新启动服务。",
+        "checker": "ste",
+        "expect_passed": False,
+        "expect_keyword": "隐藏了执行者",
+    },
+    {
+        "name": "test_ste_ambiguous_reference",
+        "description": "拦截以含糊指代开头的步骤",
+        "text": "1. 它会读取配置文件。",
+        "checker": "ste",
+        "expect_passed": False,
+        "expect_keyword": "含糊指代",
+    },
+    {
+        "name": "test_ste_explicit_block_requires_numbering",
+        "description": "显式 STE 区块必须使用编号步骤",
+        "text": "<!-- ste:on -->\n打开终端并安装依赖。\n<!-- ste:off -->",
+        "checker": "ste",
+        "expect_passed": False,
+        "expect_keyword": "编号步骤",
+    },
+    {
+        "name": "test_ste_good_steps",
+        "description": "放行短句、单动作、指代明确的编号步骤",
+        "text": "1. 打开终端。\n2. 运行安装命令。\n3. 检查输出里的成功提示。",
+        "checker": "ste",
+        "expect_passed": True,
+    },
+    {
+        "name": "test_ste_does_not_touch_narrative",
+        "description": "STE 不检查普通叙事段落",
+        "text": "我把这个工具用了两个星期，期间遇到过几次超时，也改过三次配置，最后保留了最简单的一套方案。",
+        "checker": "ste",
+        "expect_passed": True,
+    },
 ]
 
 
@@ -162,6 +216,8 @@ def main() -> int:
             scripts_to_run.append(("check_prose", PROSE_SCRIPT))
         if checker in ("translationese", "both"):
             scripts_to_run.append(("check_translationese", TRANSLATIONESE_SCRIPT))
+        if checker in ("ste", "all"):
+            scripts_to_run.append(("check_ste", STE_SCRIPT))
 
         case_ok = True
         err_msg = ""

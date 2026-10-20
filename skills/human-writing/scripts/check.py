@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""综合文本检查：运行 check_translationese.py 与 check_prose.py。
+"""综合文本检查：运行翻译腔、文风与 STE 步骤检查器。
 
 用法：
   python3 check.py <文件路径>...
@@ -16,6 +16,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 PROSE_SCRIPT = HERE / "check_prose.py"
 TRANSLATIONESE_SCRIPT = HERE / "check_translationese.py"
+STE_SCRIPT = HERE / "check_ste.py"
 
 
 def check_file(path: Path) -> tuple[bool, list[str]]:
@@ -55,6 +56,22 @@ def check_file(path: Path) -> tuple[bool, list[str]]:
     except json.JSONDecodeError:
         err_msg = (res_pr.stderr or res_pr.stdout).strip()[:200]
         problems.append(f"check_prose 运行异常: {err_msg}")
+
+    # 3. check_ste：只检查 Markdown 编号步骤或 ste:on/off 显式区块
+    res_ste = subprocess.run(
+        [sys.executable, str(STE_SCRIPT), "--json", str(path)],
+        capture_output=True,
+        text=True,
+    )
+    try:
+        data_ste = json.loads(res_ste.stdout)
+        for fail in data_ste.get("failures", []):
+            problems.append(
+                f"STE (第 {fail.get('line', '?')} 行): {fail.get('message', '')} —— …{fail.get('context', '')}…"
+            )
+    except json.JSONDecodeError:
+        err_msg = (res_ste.stderr or res_ste.stdout).strip()[:200]
+        problems.append(f"check_ste 运行异常: {err_msg}")
 
     passed = len(problems) == 0
     return passed, problems
