@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """human-writing 技能回归评测套件（Eval-First）。
 
-验证文风、翻译腔与 STE 检查器能拦截坏样本，并放行正常中文。
+验证文风、翻译腔、STE 与写作简报检查器能拦截坏样本，并放行正常中文。
 """
 
 import subprocess
@@ -13,6 +13,7 @@ HERE = Path(__file__).resolve().parent
 PROSE_SCRIPT = HERE / "check_prose.py"
 TRANSLATIONESE_SCRIPT = HERE / "check_translationese.py"
 STE_SCRIPT = HERE / "check_ste.py"
+BRIEF_SCRIPT = HERE / "check_brief.py"
 
 TESTS = [
     {
@@ -181,6 +182,78 @@ date: 2026-10-03
         "checker": "ste",
         "expect_passed": True,
     },
+    {
+        "name": "test_ste_does_not_touch_numbered_arguments",
+        "description": "STE 不把编号观点当成操作步骤",
+        "text": "1. 这种关系会放大人的不安全感，也会让双方越来越难沟通。\n2. 真正需要处理的是长期积累的信任问题。",
+        "checker": "ste",
+        "expect_passed": True,
+    },
+    {
+        "name": "test_brief_opinion_missing_reasoning",
+        "description": "观点长文缺少推理、反例和边界时不放行",
+        "text": """mode: 观点
+reader: 使用编码 Agent 的开发者
+outcome: 理解开发者角色变化
+scope: 只讨论开发工作
+claim: 开发者会变成 Agent 管理者
+evidence:
+  - 本地 Agent 可以通过 SSH 操作服务器
+  - 新模型可以直接生成视频代码
+""",
+        "checker": "brief",
+        "expect_passed": False,
+        "expect_keyword": "reasoning",
+    },
+    {
+        "name": "test_brief_opinion_good",
+        "description": "完整观点简报可以开始写作",
+        "text": """mode: 观点
+reader: 使用编码 Agent 的开发者
+outcome: 重新划分人与 Agent 的工作
+scope: 只讨论开发工作
+claim: 开发者最稀缺的能力正在从手写代码转向识别模型边界和配置工具环境
+evidence:
+  - 本地 Agent 通过 SSH 直接排查服务器
+  - 新模型直接生成可用视频代码
+reasoning: 两个案例分别说明工具组合和模型升级都会改变可委派边界
+counterargument: 高风险生产操作仍需人工确认
+limitations: 案例来自个人工作流，不能代表所有团队
+""",
+        "checker": "brief",
+        "expect_passed": True,
+    },
+    {
+        "name": "test_brief_tutorial_missing_completion",
+        "description": "教程缺少完成验证时不放行",
+        "text": """mode: 教程
+reader: 第一次安装工具的开发者
+outcome: 完成安装
+scope: 只覆盖 macOS
+prerequisites:
+  - Python 3.11
+""",
+        "checker": "brief",
+        "expect_passed": False,
+        "expect_keyword": "completion_test",
+    },
+    {
+        "name": "test_brief_memoir_voice",
+        "description": "随笔简报必须保留真实事件、细节与作者原话",
+        "text": """mode: 随笔
+reader: 关注 Agent 工作方式的开发者
+outcome: 看见一次真实的工作方法变化
+scope: 只记录服务器排障经历
+event: 从人肉复制命令改成让本地 Agent 通过 SSH 排障
+concrete_details:
+  - 本地窗口复制命令到远程终端
+  - 服务器端 Agent 看不到本地代码
+voice_samples:
+  - 之前那个方案还是太麻烦了
+""",
+        "checker": "brief",
+        "expect_passed": True,
+    },
 ]
 
 
@@ -218,6 +291,8 @@ def main() -> int:
             scripts_to_run.append(("check_translationese", TRANSLATIONESE_SCRIPT))
         if checker in ("ste", "all"):
             scripts_to_run.append(("check_ste", STE_SCRIPT))
+        if checker == "brief":
+            scripts_to_run.append(("check_brief", BRIEF_SCRIPT))
 
         case_ok = True
         err_msg = ""

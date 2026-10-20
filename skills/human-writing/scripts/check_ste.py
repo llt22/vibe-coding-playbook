@@ -73,7 +73,10 @@ def extract_targets(text: str) -> tuple[list[tuple[int, str]], list[Finding]]:
 
         match = NUMBERED_STEP.match(raw)
         if match:
-            targets.append((line_no, strip_inline_markup(match.group(2))))
+            step = strip_inline_markup(match.group(2))
+            # 普通编号观点不属于操作说明。显式区块、动作步骤和含糊步骤才进入检查。
+            if explicit or ACTION.match(step) or AMBIGUOUS_START.match(step):
+                targets.append((line_no, step))
             continue
 
         if explicit and stripped and not stripped.startswith(("#", ">", "- ", "* ", "|")):
