@@ -1,14 +1,14 @@
-# 在把浏览器、桌面和手机交给 AI 前，先用真实任务验证它能不能干活
+# 让 AI 操作界面前，先用可验证回路和小范围对照选对路线
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：在把浏览器、桌面、终端或手机界面交给 AI 操作之前，用成本递增的步骤先验证反馈回路、验收标准与安全边界，并把效果变成可比较的数字，避免装完一堆组件却不知道能不能用。
-> 先试这一步：先做最便宜的反馈回路验证：用 Cua Bench 建一个小任务并确认参考解 reward 为 1.0；若你只想先验证真实登录态浏览器，再按做法 H 装 qz 扩展、接一个自带 API key 的模型，跑一个带来源的小任务并逐条核对来源。
-> 最近修订：2026-10-19
+> 解决的问题：在把浏览器、桌面、终端或手机界面交给 AI 操作之前，用成本递增的步骤验证反馈回路、验收标准和安全边界，并把「高效」变成同批任务上的可比较数字。
+> 先试这一步：先跑做法 A 的两条安装命令确认参考解 reward 为 1.0；若已有 agent 和浏览器，再按做法 I 的 doctor 与 3–5 个真实任务和现有做法做同任务对照。
+> 最近修订：2026-10-20
 
 ## 解决什么问题
 
-在把浏览器、桌面、终端或手机界面交给 AI 操作之前，用成本递增的步骤先验证它的反馈回路、验收标准和安全边界，并把「高效」变成同批任务上的可比较数字，避免装完一堆组件却不知道能不能用。浏览器路线现在有三种可选形态：dsh 的文本快照路线、Chrome Relay 借用真实登录态后台标签页、qz 本地优先浏览器扩展；桌面/终端/iOS 有 Cua 生态与 AutoCua；安卓有 ADB 技能。选哪条取决于你已有的 agent、操作系统、是否要复用登录态、是否需要成对基准或独立评测。qz 的调研结论要求：先在个人 Chrome/Edge 上装扩展、接一个自带 API key 的模型，跑 2–3 个真实的多源调研与登录态数据抽取任务，逐条核对来源后，再把跑通的流程存成 Skill 复用；它的可靠性目前只有作者自述、没有独立评测，仓库采用度也低，不宜直接全量采用。
+在把浏览器、桌面、终端或手机界面交给 AI 操作之前，用成本递增的步骤先验证它的反馈回路、验收标准和安全边界，并把「高效」变成同批任务上的可比较数字，避免装完一堆组件却不知道能不能用。浏览器路线现在有四种可选形态：dsh 的文本快照路线、Chrome Relay 借用真实登录态后台标签页、qz 本地优先浏览器扩展、axuse 的 MCP + 无障碍树 + diff 路线；桌面/终端/iOS 有 Cua 生态与 AutoCua；安卓有 ADB 技能。选哪条取决于你已有的 agent、操作系统、是否要复用登录态、是否需要成对基准或独立评测。qz 的调研结论要求：先在个人 Chrome/Edge 上装扩展、接一个自带 API key 的模型，跑 2–3 个真实的多源调研与登录态数据抽取任务，逐条核对来源后，再把跑通的流程存成 Skill 复用；它的可靠性目前只有作者自述、没有独立评测，仓库采用度也低，不宜直接全量采用。axuse 的调研结论要求：先按 README 把 axuse 以 MCP 方式接入 Claude Code 或 Codex，只用于表单填写、滚动查找、批量打开 URL 这类浏览器任务，与现有做法做同任务对照；它仅在非商业许可下免费使用，基准数据由作者自行报告且统计口径有疑点，桌面控制也只有 Windows 经过验证。
 
 ## 适用与不适用
 
@@ -24,12 +24,13 @@
 - 你在 Chrome 或 Edge 上，希望用一句话让浏览器智能体跨站执行、翻页、滚动加载并抽取数据；你要在已登录的站点上做多源调研、对比表、带来源的报告，不想另起无状态浏览器。
 - 你愿意自带模型 API key（或 ChatGPT 账号/Codex 登录），并接受按 README 声明数据只发给你选的模型和你访问的网站。
 - 你想让 Claude Code / Codex / pi / Grok Bot 这类编码 agent 通过 CLI 或 MCP 把网页任务转交给 qz；你想把跑通的一次性调研固化成 Skill，下次一句话复用。
+- 你希望用 MCP 接入 Claude Code / Codex / OpenCode 等宿主，让 agent 在浏览器里用无障碍树 + diff 操作，而不是截图循环猜坐标；任务以表单填写、滚动查找、批量打开 URL 为主，并愿意先与现有做法做同任务对照：axuse。
 
 **不适用 / 先别用：**
 - 团队不在用 dsh 桌面端：浏览器路线完全绑定 dsh 生态（桥接是 dsh 插件，配置写在桌面 profile 的 `cordis.patch.yml` 里）；手机或平板也不支持 dsh 浏览器方案。
 - 你要的是成熟稳定的 1.0 产品：Cua Spaces 为 0.1.0，Pro/Teams 标注「即将推出」；CUA-S1 是早期源码研究版；dsh 扩展在 Chrome / Firefox 均标注 not yet listed；android-adb-control 作者自述「本版本已做文档审查和静态检查，尚未完成修订版真机端到端验收」。
-- 你的机器不满足硬性条件：Spaces 需 macOS 26+，Lume 需 Apple Silicon；dsh 需 Node ≥ 20、桌面版 Chrome/Chromium/Edge ≥ 116 或 Firefox ≥ 140.0；Chrome Relay 仅 macOS + Google Chrome + Node.js 20+；AutoCua 需 Python 3.10+。
-- 你要做对外托管或商用集成：Cua 的许可不是单一的；dsh 方案 README 通篇没有给出基准实测结果；Chrome Relay 的 0.15s/命令、2 分钟 setup 也只是作者自述。
+- 你的机器不满足硬性条件：Spaces 需 macOS 26+，Lume 需 Apple Silicon；dsh 需 Node ≥ 20、桌面版 Chrome/Chromium/Edge ≥ 116 或 Firefox ≥ 140.0；Chrome Relay 仅 macOS + Google Chrome + Node.js 20+；AutoCua 需 Python 3.10+；axuse 需 Node.js 22+ 且机器上装有 Chrome、Edge、Chromium 或 Chrome for Testing 之一。
+- 你要做对外托管或商用集成：Cua 的许可不是单一的；dsh 方案 README 通篇没有给出基准实测结果；Chrome Relay 的 0.15s/命令、2 分钟 setup 也只是作者自述；axuse 是 PolyForm Noncommercial 1.0.0，商业使用需单独授权。
 - 你想用安卓路线绕过锁屏、验证码、支付验证或企业策略，或做无人值守监控、自动交易、无限重试：android-adb-control 明确排除这些用途；云端会话或远程容器也不会自动获得本地 USB 设备。
 - 你打算把手里的主力机（承载凭据的设备）当试验田：ADBKeyboard 的部分实现允许其他本地应用发送控制广播，应优先用于可信测试设备，不用于凭据输入。
 - 你不在 macOS 或不用 Google Chrome，或你的 agent 不在 Claude Code / Codex / Cursor / Paseo 四类之内：Chrome Relay 不适用。
@@ -46,6 +47,13 @@
 - 你不愿给浏览器扩展读取所有已登录站点的权限：材料只指向 `docs/permissions.md`，未给出具体权限内容，使用前需自行核查。
 - 你的模型不支持 tool calling，或你要接外部 agent 但 Node.js 低于 22，或要从源码构建但 Node.js 不是 24 LTS：先补条件。
 - 你想把 qz 当成恶意软件安全边界或无人值守自动推进系统：材料没有这种承诺。
+- 你要把 axuse 用于商业用途：PolyForm Noncommercial 1.0.0 免费仅限非商业（个人、研究、教育、慈善、公共机构），商业使用需向 CTOL Digital Solutions 单独授权。
+- 你主要以纯视觉判断（canvas、图表）为主，或需要绕过反爬：axuse 不适用；它不实现流量标注和反爬交接，指纹识别自动化的站点仍可能拦。
+- 你在 Linux 上要桌面控制：axuse 无桌面驱动（浏览器工具仍可用）。
+- 你需要成熟稳定、高采用度背书：axuse 47 stars、单一公司维护，基准为作者自建自评且统计口径有疑点。
+- 你需要在 extension backend 下进入 OOPIF 帧：只能列出、不能进入（CDP backend 可以）。
+- 你不愿手动 Load unpacked 扩展来用 bridge 模式：bridge 需要这一步。
+- 你要定时/事件触发的常驻调度：axuse 原文只有原语级依据（`ax_wait_for`、`ax_scroll {until}`、`ax_events`），没有常驻调度方案。
 
 ## 前置条件
 
@@ -59,10 +67,11 @@
 - Chrome Relay：macOS、Google Chrome、Node.js 20+、`agent-browser`；每个希望 agent 使用的 Chrome profile 需手动加载扩展；`bin/chrome-relay setup` 会生成密钥、装后台服务、生成身份映射、把 `chrome-relay` 放进 PATH，并把 Claude Code skill 链进去；连接只放行 Claude Code、Codex、Cursor、Paseo 四类 agent 应用。
 - AutoCua：Python 3.10+；写 `main.py` 并安装 `pip install AutoCua`；模型密钥写 `.env` 文件或在桌面应用 Settings 里粘贴；模型名从仓库 `model_list.txt` 选且区分大小写；代理保存的一切落在运行 Python 目录下的 `AutoCua_data/`。Windows UAC 可选：从源码检出目录运行 `setup_windows.bat`；Linux 需 x86_64 + GNOME 桌面和发行版绑定，首次 computer-use 需在 GNOME 屏幕共享同意里打开 Allow Remote Interaction；iOS 需完整 Xcode 和 git。
 - qz：Chrome 或 Edge；扩展已安装并打开侧边栏；一个支持 tool calling 的模型 provider 或兼容本地模型服务，或一个 ChatGPT 账号；模型 API key（若用 ChatGPT 账号/Codex 设备码则不需要 API key）；外部 agent 桥接需 Node.js 22+；源码构建需 Node.js 24 LTS 与 npm；本机有仓库 checkout；使用前核查 `docs/permissions.md`（材料只给链接，未给内容）。
+- axuse：Node.js 22+；机器上装有 Chrome、Edge、Chromium 或 Chrome for Testing 之一（浏览器不在默认位置时设 `AXUSE_BROWSER=/path/to/chrome`）；宿主 CLI（Codex / Claude Code / OpenCode 等）；bridge 模式需手动在 Chrome/Edge 开发者模式 Load unpacked 指向 `bridge/extension`，并注册 native messaging host（Edge 还要求 host manifest 里有 `allowed_origins`）；macOS 桌面控制需 `AXUSE_ENABLE_MACOS_CUA=1` 和系统设置授予 Accessibility 与 Screen Recording；商业使用需获得 CTOL Digital Solutions 授权。
 
 ## 操作步骤
 
-下面按路线分组。**建议先做做法 A**；如果团队已在用 dsh 桌面端，做法 B 是最短的一条「模型真的读浏览器」的路；如果你已有 agent 和一台可信安卓测试机，做法 E 是最短的一条「agent 真的操作手机」的路；如果你在 macOS + Chrome + 编码 agent 环境，做法 F 是最短的一条「agent 用你真实登录态读网页」的路；如果你要一个统一入口覆盖桌面、自己的 Chrome、真实终端和 iOS 手机，做法 G 是最短的一条「先用 pip 包和一次 `run_agent(...)` 验证」的路；如果你在 Chrome/Edge 上、想用一句话在已登录站点做跨站任务，做法 H 是最直接的一条本地优先浏览器路线。
+下面按路线分组。**建议先做做法 A**；如果团队已在用 dsh 桌面端，做法 B 是最短的一条「模型真的读浏览器」的路；如果你已有 agent 和一台可信安卓测试机，做法 E 是最短的一条「agent 真的操作手机」的路；如果你在 macOS + Chrome + 编码 agent 环境，做法 F 是最短的一条「agent 用你真实登录态读网页」的路；如果你要一个统一入口覆盖桌面、自己的 Chrome、真实终端和 iOS 手机，做法 G 是最短的一条「先用 pip 包和一次 `run_agent(...)` 验证」的路；如果你在 Chrome/Edge 上、想用一句话在已登录站点做跨站任务，做法 H 是最直接的一条本地优先浏览器路线；如果你要 MCP 接入、用无障碍树 + diff 而不是截图循环，并且接受非商业许可，做法 I 是新增的一条可对照路线。
 
 ### 做法 A：只跑评测回路，不碰界面（最便宜的入口）
 
@@ -481,7 +490,7 @@ run_agent(
 
 16. 更多工程细节：父子代理分工（父 agent 管屏幕、coder agent 14 个工具、minions 只读侦察兵 6 个工具不可递归，只回 `path:line` 锚定结论）；长任务用独立压缩 agent 把 handoff 摘要拼进 transcript；工具结果预算（单次 200 行或 15,000 字符，`shell` 只留 50 行尾部，`view` 上限 2,000 行，`grep` 上限 8 MB），只消化工具结果的那一步完全跳过屏幕扫描；并行有 `extra_tasks` 和「把并行 agent 钉到某个标签页」两种做法，钉住的 agent 只有 15 个工具；`scrape` 模式不接模型给的 CSS 选择器，而是按页面「形状」找记录，一次读三屏、约 8k token，索引存成 JSON，进入 scraping 模式后工具白名单收缩成 6 个；AppleScript 是一等工具，模型给出完整的 `tell application` 块，运行时负责启动、前台化和 30 秒上限；web agent 有 `speed="fast"` 和 quality 模式，但 6.1 秒等数字是作者视频示例声称，不是第三方实测。
 
-### 做法 H：本地优先的浏览器智能体——在个人 Chrome/Edge 里用 qz 跑真实登录态任务（新增）
+### 做法 H：本地优先的浏览器智能体——在个人 Chrome/Edge 里用 qz 跑真实登录态任务
 
 前提：Chrome 或 Edge；已登录目标站点；模型支持 tool calling；有 API key 或 ChatGPT 账号。预期结果：侧边栏里用一句话跑完一个跨站任务，输出表格/文件/带来源的报告；跑通后可保存为 Skill，下次一句话复用。调研结论要求：先在个人 Chrome/Edge 上跑 2–3 个真实的多源调研与登录态数据抽取任务，逐条核对来源，再把跑通的流程存成 Skill；可靠性目前只有作者自述、没有独立评测，仓库采用度也低，不宜直接全量采用。
 
@@ -554,6 +563,111 @@ npm run verify    # Type-check and run all automated suites with coverage
 
 8. 最小试用顺序按调研结论：先在个人 Chrome/Edge 上跑 2–3 个真实的多源调研与登录态数据抽取任务，逐条核对来源；只把跑通的流程存成 Skill；再考虑让外部 agent 调用或扩大使用范围。预期结果：来源核对通过、未核实项有标注、Skill 复用一次成功。
 
+### 做法 I：用 MCP + 无障碍树 + diff 做浏览器操作（axuse，新增）
+
+前提：Node.js 22+；机器上装有 Chrome、Edge、Chromium 或 Chrome for Testing 之一；宿主支持 MCP（Codex / Claude Code / OpenCode 等）。预期结果：`node src/cli.js doctor` 找到浏览器、启动并做一次快照；宿主能调用 `ax_open` 拿全量快照，之后每个动作只返回 diff；用一句自然语言任务能打开 `https://example.com` 并找到指定链接。调研结论要求：先小范围试用，按 README 接入 Claude Code 或 Codex，只用于表单填写、滚动查找、批量打开 URL 这类浏览器任务，与现有做法做同任务对照；它仅在非商业许可下免费使用，基准数据由作者自行报告且统计口径有疑点，桌面控制也只有 Windows 经过验证。
+
+1. 准备环境并自检（前提：Node.js 22+，机器上装有 Chrome、Edge、Chromium 或 Chrome for Testing 之一）：
+
+```bash
+git clone https://github.com/ctoldigital/axuse.git
+cd axuse
+node src/cli.js doctor        # 找到浏览器、启动、做一次快照
+```
+
+浏览器不在默认位置时设 `AXUSE_BROWSER=/path/to/chrome`。预期结果：doctor 能完成一次快照，不报浏览器缺失。
+
+2. 接入宿主（前提：有对应宿主的 CLI；把 `<path>` 换成 `src/cli.js` 的绝对路径）：
+
+```bash
+# Codex
+codex mcp add axuse -- node /abs/path/axuse/src/cli.js mcp
+
+# Claude Code
+claude mcp add --scope user axuse -- node /abs/path/axuse/src/cli.js mcp
+```
+
+其他宿主先打印配置块再粘贴：
+
+```bash
+node src/cli.js print-config --harness opencode   # 或 agy | generic
+```
+
+按 README：Codex 可把打印出的 `[mcp_servers.axuse]` 追加到 `~/.codex/config.toml`，OpenCode 把 `mcp` 块并入 `opencode.json`，Antigravity 或任何 MCP 宿主用打印出的 `mcpServers` 块。预期结果：宿主能连上 axuse MCP server。
+
+3. 把使用约定交给模型（前提：宿主有 skill 或系统提示机制）：仓库根目录的 `SKILL.md` 是面向模型的使用约定，把它指向宿主的 skill 系统或系统提示。预期结果：模型知道按 `ax_open`、`ax_observe`、`ax_fill` 等工具面行动，而不是截图猜坐标。
+
+4. 首次验证（前提：步骤 2 已完成）：用一句自然语言任务触发：
+
+```text
+Open https://example.com, find the "More information" link and tell me where it goes.
+```
+
+模型会调 `ax_open` 拿全量快照，之后每个动作只返回 diff。预期结果：能找到链接并给出目标地址；每一步只返回相对上次观测的差异。
+
+5. 要登录态或真实浏览器时用 bridge（前提：能手动在 Chrome/Edge 开发者模式 Load unpacked）：
+
+```bash
+node src/cli.js setup --browser chrome --harness codex   # 注册 native host、开扩展页、打印要加载的目录和 harness 配置
+node src/cli.js bridge verify
+```
+
+或分步：
+
+```bash
+axuse bridge install        # 注册 native messaging host（Chrome + Edge）
+axuse bridge                # 启动 hub（也会随 MCP server 按需拉起）
+```
+
+在扩展页 Load unpacked 指向 `bridge/extension`，然后用 `ax_open { url, backend: "extension" }`。`ax_close` 只关 axuse 自己开的标签页。预期结果：bridge verify 通过，agent 能驱动你已登录的 Chrome/Edge。
+
+6. 可选环境变量（写进 MCP server 配置）：
+
+| 变量 | 作用 |
+|---|---|
+| `AXUSE_HEADLESS=1` | 无窗口启动（服务器、CI） |
+| `AXUSE_BROWSER` | 浏览器可执行文件路径 |
+| `AXUSE_PROFILE_DIR` | 临时浏览器 profile 目录（默认系统临时目录，退出时删除） |
+| `AXUSE_BRIDGE_DIR` | bridge 本地状态目录（macOS 默认 `~/Library/Application Support/axuse`） |
+| `AXUSE_ENABLE_MACOS_CUA=1` | 开启 macOS 桌面工具（仍需授予 Accessibility 与 Screen Recording） |
+| `AXUSE_BRIDGE_DEBUG=1` | 追踪扩展 bridge 消息 |
+
+7. 非 MCP 的批量抓取（前提：有一份 URL 列表或含链接的 Markdown）：
+
+```bash
+node src/cli.js open-urls sources.md --backend extension --output report.md
+```
+
+报告只含页面标题、访问状态和有界的 AX 文本摘录，不做语义编造。预期结果：得到一份有界报告，不额外生成原文没有的结论。
+
+8. 自测与回归（前提：想验证环境或改代码）：
+
+```bash
+node --test test/diff.test.js test/browser.test.js test/mcp.test.js test/desktop.test.js test/oopif.test.js test/bridge.test.js test/plugin.test.js
+```
+
+macOS 桌面能力需显式开启：`AXUSE_ENABLE_MACOS_CUA=1 AXUSE_TEST_MACOS_DESKTOP=1 npm test`，并在系统设置授予 Accessibility 与 Screen Recording。跳过项用 `node tools/skip-audit.mjs` 审计，缺登记即失败，CI 强制执行。预期结果：测试通过；跳过项都有登记。
+
+9. 把错误处理写进提示词（可直接抄这段结构）：
+
+```json
+{ "code": "REF_NOT_FOUND",
+  "hint": "Refs are per-observation. Call ax_observe, then act on fresh refs.",
+  "retry": "reobserve" }
+```
+
+按 `retry` 字段决定 reobserve / retry / never，`action_sent` 表示动作是否已经发出（是否需要清理副作用）。预期结果：模型遇到失效引用时先重新观测，而不是拿旧 ref 硬点。
+
+10. 优先用省步骤的工具（来自 README 的工具面）：
+
+- `ax_fill`：一次调用设完整个表单（文本、下拉、复选、单选、开关、自定义下拉、自动补全），可顺带点提交。
+- `ax_observe {find:"text"}`：大页面只回匹配行。
+- `ax_scroll {until:"text"}`：在页面或滚动面板里滚到目标文本出现。
+- `ax_upload`：给文件输入设文件；点到会弹文件选择框时报出来而不是挂住。
+- `ax_open_many`：有界 URL 列表顺序打开，回紧凑标题和 AX 摘录，默认关掉临时标签页。
+
+预期结果：同样任务用更少工具调用完成；滚动查找和整表填写不需要逐步截图。
+
 ### 怎么选
 
 - 只想验证「这套东西在我这儿能不能用起来」：选做法 A，成本最低。
@@ -564,10 +678,11 @@ npm run verify    # Type-check and run all automated suites with coverage
 - 你在 macOS + Chrome + Node.js 20+，希望编码 agent 复用你已登录的 Chrome 后台标签页，且不抢焦点、不弹对话框：选做法 F。先在单机单 profile、非关键账号上试四步流程，并用 `chrome-relay audit` 复盘。
 - 你要一个 pip 包和一次 `run_agent(...)` 同时覆盖真实桌面、你自己的 Chrome、真实终端和 iOS 手机，并且能在一台可控机器上先小范围验证：选做法 G。先核对 `model_list.txt`，再用低风险桌面任务试跑。
 - 你在 Chrome/Edge 上、想用一句话让浏览器智能体在已登录站点跨站执行并产出带来源的报告，且接受自带模型 key 和先小范围核对来源：选做法 H。
-- 做法 H 与做法 B 的差异：B 绑定 dsh 桌面端，走自己的 MV3 扩展与文本快照，提供 17 个工具和成对基准；H 是 Chrome/Edge 扩展，BYO 模型，侧边栏人机同视，可保存 Skill，可被编码 agent 通过 CLI/MCP 调用，但材料没有成对基准或独立评测。需要可比较的浏览器后端数字选 B；需要在你日常浏览器里做登录态跨站任务、并愿意逐条核对来源，选 H。
-- 做法 H 与做法 F 的差异：F 仅 macOS + Google Chrome + 四类 agent 应用，用 Chrome Relay 复用真实登录态后台标签页，不附带模型配置；H 是 Chrome/Edge 扩展，需要自带模型 API key 或 ChatGPT 账号，侧边栏可见可介入，能保存 Skill 和通过 CLI/MCP 委派，但材料没有 audit 式复盘和四类应用白名单的描述。需要后台标签页与 audit 选 F；需要一句话委派整个跨站任务并固化 Skill 选 H。
-- 做法 H 与做法 G 的差异：G 是一个 pip 包和 `run_agent(...)`，覆盖桌面、自己的 Chrome、终端和 iOS；H 只覆盖 Chrome/Edge 浏览器内的网页任务。要统一入口覆盖多界面选 G；只解决登录态浏览器跨站任务选 H。
-- 做法 H 与做法 A/B 的差异：H 没有给出成对基准或评测器；A 的 Cua Bench、B 的成对基准仍是把「高效」变成数字的手段。
+- 你要 MCP 接入 Claude Code / Codex / OpenCode，让 agent 用无障碍树 + diff 操作浏览器，任务以表单填写、滚动查找、批量打开 URL 为主，并接受非商业许可和先与现有做法同任务对照：选做法 I。先跑 `doctor`，接一个宿主，用 3–5 个真实任务对照。
+- 做法 I 与做法 B 的差异：B 绑定 dsh 桌面端，走自己的 MV3 扩展与文本快照，提供 17 个工具和成对基准；I 是零 npm 依赖的 MCP server，用 AX 树 + diff + 稳定引用，可接多种 MCP 宿主，有 `ax_fill`、`ax_scroll {until}`、`ax_open_many` 等省步骤工具，但基准为作者自报且统计口径有疑点，许可是非商业。需要成对基准和 dsh 生态选 B；需要 MCP 接入和 AX 树 + diff 选 I。
+- 做法 I 与做法 H 的差异：H 是 Chrome/Edge 扩展，侧边栏人机同视，BYO 模型，可保存 Skill，可被编码 agent 通过 CLI/MCP 调用；I 是 MCP 浏览器/桌面操作 server，强调 AX 树 + diff，不靠截图循环，可复用登录态（bridge），但没有侧边栏式人机同视和 Skill 保存描述。需要一句话跨站任务并固化 Skill 选 H；需要 MCP 接入和稳定元素寻址选 I。
+- 做法 I 与做法 F 的差异：F 仅 macOS + Google Chrome + 四类 agent 应用，用 Chrome Relay 复用真实登录态后台标签页，不附带模型配置；I 通过 bridge 复用已登录 Chrome/Edge，但需要手动 Load unpacked，宿主是 MCP 宿主，且非商业许可。需要后台标签页与 audit 选 F；需要 MCP + AX 树 + diff 选 I。
+- 做法 I 与做法 G 的差异：G 是一个 pip 包和 `run_agent(...)`，覆盖桌面、自己的 Chrome、终端和 iOS；I 以浏览器任务为主，桌面控制只有 Windows 已验证，macOS 需 opt-in，Linux 无桌面驱动。要统一入口覆盖多界面选 G；浏览器表单/滚动/批量任务选 I。
 - 已经装了旧包 `cuabot`（npm）：先停用并卸载，见「常见坑」。
 
 ## 怎么判断变好了
@@ -581,6 +696,7 @@ npm run verify    # Type-check and run all automated suites with coverage
 - 做法 F：四步流程（`chrome-relay url <你的邮箱>` → `open` → `snapshot -i` → `click @e5` → `close`）一次跑通的成功率；每条命令的实际耗时（对照作者称的 ~0.15s）；出现 `SIGN-IN NEEDED` 的次数（越少说明登录态复用越顺；频繁出现则调 `identities.json`）；运行过程中是否发生抢焦点、弹框、Chrome 弹远程调试确认框（按设计应为 0；工作期间 Chrome 会显示「Chrome Relay started debugging this browser」）；`chrome-relay audit` 里 blocked pages 的数量与原因，确认权限边界符合预期；对比基线：同样这些浏览器步骤之前靠人工切换窗口/手动登录花的时间。
 - 做法 G：`pip install AutoCua` 成功；`python main.py` 后 agent 能按 `mode` 驱动对应界面；模型只从编号元素里选，未展示过的编号被拒绝；桌面输入走 OS 输入层而不打开调试端口；coder agent 的含逻辑改动在 `./.AutoCua_verify/` 下写一次性测试并运行、记录输出、退出前删除；`replace` 行号过期时报 mismatch at line X；`AutoCua_data/` 里能看到聊天、密钥、自定义技能、浏览器 profile；低风险桌面任务 `task="check the version of macOS."` 能跑通。作者视频示例声称：一次航班搜索 6.1 秒（fast 模式）；一次运行不足一分钟完成三件事——这些是作者主张，不是第三方实测。
 - 做法 H：2–3 个真实的多源调研/登录态数据抽取任务能跑完；输出带来源链接；逐条核对来源后，未核实项被标注；跑通的流程能「Save this as a Skill」并用一句话再次触发；外部 agent 通过 `npx qz-browser-agent@latest create ... --stream` 或 MCP 能拿到结果；侧边栏每一步可见、可介入或停止。材料没有给出准确率、耗时、成功率；不要用 46 stars 或作者对比表当效果证据。
+- 做法 I：`node src/cli.js doctor` 能完成一次快照；首次验证任务能找到 `https://example.com` 上的 "More information" 链接并给出目标地址；`ax_open` 拿全量快照后，后续动作只返回 diff；`ax_fill` 能一次设完整个表单（文本、下拉、复选、单选、开关、自定义下拉、自动补全）；`ax_observe {find:"text"}` 大页面只回匹配行；`ax_scroll {until:"text"}` 能滚到目标文本；`ax_upload` 遇到文件选择框会报出来而不是挂住；`ax_open_many` 有界打开 URL 并回紧凑标题和 AX 摘录；错误按 `retry` 字段处理（`reobserve` / `retry` / `never`），`action_sent` 能判断动作是否已发出。作者自报的基准（16 个服务端评分任务、同一 harness/模型）：axuse 28/28、Codex + Chrome 扩展 27/27、browser-use 0.13 27/27；中位每任务 17s / 26s / 56s；token 总量 4.7M / 9.8M / 8.8M；中位工具调用 5 / 7 / 12。注意称 16 个任务却给出 28/28，统计口径未解释；7 任务扩展只跑过一次；全部为作者自建自评，没有第三方复现——只能作为作者主张参考，不能当定论。
 
 最小试用方式：
 - 先只跑做法 A 的两条安装命令，建最小任务、跑参考解，确认 reward 为 `1.0`。这是「这套东西在我这儿能不能用起来」最便宜的入口。
@@ -590,14 +706,16 @@ npm run verify    # Type-check and run all automated suites with coverage
 - 做法 F 的最小试用（一台 Mac，约需几分钟安装）：① `npm i -g agent-browser`，clone 仓库后跑 `bin/chrome-relay setup`；② 在一个 Chrome profile 里 Load unpacked 加载扩展，跑 `chrome-relay doctor` 确认；③ 选一个需要登录的内部站点，让 agent 走完 `chrome-relay url <你的邮箱>` → `open` → `snapshot -i` → `click @e5` → `close` 这条四步流程，中途不手动登录；④ 跑 `chrome-relay audit` 复盘这次会话记录是否完整。放量前的门槛：先只在单机单 profile、非关键账号上试；确认 audit 记录、权限拦截和登录跳转行为符合预期后，再考虑更多 profile 或更多 agent。
 - 做法 G 的最小试用（一台可控机器，Python 3.10+）：① 先核对 `model_list.txt`，`pip install AutoCua`，写好 `.env` 或桌面 Settings 里的模型密钥；② 用低风险桌面任务 `task="check the version of macOS."` 试跑，确认「一行 mode 切换驱动对象」是否真的省事；③ 用 `run_agent(mode="web use", ...)` 让它驱动你自己的 Chrome 打开一个页面并停下，确认登录态复用和停止条件；④ 若要用桌面模式，先跑 `computer use` 做一个可判对错的小任务；⑤ 若要用 iOS，先跑 `device="simulation"` 的模拟器任务，确认 WebDriverAgent 克隆和 Xcode 环境；⑥ 观察 `AutoCua_data/` 数据落点，确认没有你不希望外发的数据。
 - 做法 H 的最小试用：① 在个人 Chrome/Edge 装扩展并接一个自带 API key 的模型（或 ChatGPT 账号）；② 选一个已登录的真实站点，跑一个带来源要求的小任务，逐条核对来源；③ 再跑 1–2 个多源调研或登录态抽取任务；④ 只把跑通的流程说「Save this as a Skill」；⑤ 需要时再按第 6 步接外部 agent。放量前门槛：来源核对通过、未核实项有标注、Skill 复用一次成功；材料没有给出耗时，按 2–3 个任务的实际核对结果判断。
+- 做法 I 的最小试用（半天内）：① 一台机器 clone 并跑通 `node src/cli.js doctor`；② 接到 Claude Code（或 Codex）的一个会话，把 `SKILL.md` 指给 skill 系统或系统提示；③ 用 3–5 个手上真实的浏览任务跑一遍，覆盖一个整表填写加提交、一个滚动查找、一个多 URL 批量（`ax_open_many` 或 `open-urls`）；④ 同一批任务用现有做法（截图式 agent 或你已在用的路线）做对照，记录通过数、中位耗时、总 token、中位工具调用数；⑤ 若要用 bridge，再跑 `node src/cli.js setup --browser chrome --harness codex` 和 `node src/cli.js bridge verify`。放量前门槛：同任务对照不差于现有做法，且 `ax_fill`/`ax_scroll`/`ax_open_many` 至少各成功一次；不要拿作者自报的 28/28 当定论。
 
 试多久：
-- 材料没有给出耗时或成功率的数字；以「参考解拿到 `1.0`」「快照能给出编号控件并且点得中」「只读任务不改动设置」「Chrome Relay 的 doctor 通过且四步流程一次跑通」「AutoCua 能驱动目标界面一次且模型只选编号元素」「qz 的 2–3 个真实任务来源核对通过且 Skill 一句话复用成功」这类单点事实跑通为准，不要用 star 数或视频演示判定。
+- 材料没有给出耗时或成功率的数字；以「参考解拿到 `1.0`」「快照能给出编号控件并且点得中」「只读任务不改动设置」「Chrome Relay 的 doctor 通过且四步流程一次跑通」「AutoCua 能驱动目标界面一次且模型只选编号元素」「qz 的 2–3 个真实任务来源核对通过且 Skill 一句话复用成功」「axuse 的 doctor 通过且 3–5 个真实任务与现有做法对照有结果」这类单点事实跑通为准，不要用 star 数或视频演示判定。
 - AutoCua 材料同样没有给出耗时或成功率数字（6.1 秒、不足一分钟只是作者视频声称）；以「能驱动目标界面一次」「模型只选编号元素」「含逻辑改动真的跑过一次性测试」这类单点事实跑通为准。
+- axuse 的基准数据是作者自报且统计口径有疑点；以你手上 3–5 个真实任务的同任务对照为准，不以 README 的 28/28 或 17s 为中位耗时定论。
 
 ## 常见坑
 
-- 把关注度当可用性：28,641 stars、今日 +229 只说明有人看，原文没有给任何性能数字；dsh 方案 README 同样通篇没有基准实测结果；android-adb-control 标称 40 stars，也没有给出任何效果数据或真实案例结果。AutoCua 也只有作者自述的演示时长，没有第三方复现；qz 仓库仅 46 stars，同样没有独立评测。
+- 把关注度当可用性：28,641 stars、今日 +229 只说明有人看，原文没有给任何性能数字；dsh 方案 README 同样通篇没有基准实测结果；android-adb-control 标称 40 stars，也没有给出任何效果数据或真实案例结果。AutoCua 也只有作者自述的演示时长，没有第三方复现；qz 仓库仅 46 stars，同样没有独立评测；axuse 47 stars、单一公司维护，基准为作者自建自评且统计口径有疑点。
 - 以为插件能替你装浏览器扩展：不能。命令行 `--load-extension` 只维持一个会话，关掉浏览器就没了；Chrome 137+ 的品牌版 Chrome/Edge 已忽略 `--load-extension`。必须在 profile 里正式装一次。
 - 上架包传错：普通构建带 manifest `key`，Chrome Web Store 会拒收，要传 `-store` 包。
 - 以为默认有人把关：`unrestrictedBrowserAccess` 出厂为开，新装不做询问；关掉才恢复动手前提示，而且它还会覆盖「读页面前先问」的选择。
@@ -612,10 +730,10 @@ npm run verify    # Type-check and run all automated suites with coverage
 - 把设备连接问题当技能问题：`unauthorized`、`offline`、Linux `no permissions` 先解决连接；多个设备时明确指定目标；不要将 ADB 端口暴露到公网。
 - 以为技能会自己无限跑：默认预算是最多 30 个设备状态变更动作、5 分钟，发送状态不明时不会自动重发；原文也没有时间/事件触发的持续运行、无人值守监控或无限重试。
 - 忽略成熟度：Cua Spaces 是 0.1.0，个人免费，Pro 和 Teams 标注为「即将推出」；CUA-S1 自述为早期源码研究发布；dsh 扩展在 Chrome / Firefox 均 not yet listed。
-- 环境不满足硬装：Spaces 需 macOS 26+，Lume 需 Apple Silicon；dsh 需 Node ≥ 20、桌面版浏览器 ≥ 116/140；手机与平板不支持 dsh 方案；Windows 下只有 Cua Driver 有 PowerShell 安装脚本；AutoCua 需 Python 3.10+。
+- 环境不满足硬装：Spaces 需 macOS 26+，Lume 需 Apple Silicon；dsh 需 Node ≥ 20、桌面版浏览器 ≥ 116/140；手机与平板不支持 dsh 方案；Windows 下只有 Cua Driver 有 PowerShell 安装脚本；AutoCua 需 Python 3.10+；axuse 需 Node.js 22+ 且机器上有 Chromium 系浏览器。
 - 跑错已废弃包：`cuabot`（npm）有已知安全问题，原文明确写 Do not run it，应停用并卸载，改用 Cua Driver 或 `cua` CLI；`cua-computer`、`cua-computer-server`、`cua-agent`、`cua-som` 也已被替代。
 - 以为后台投递一定成立：「不移动指针、不抢焦点」只在「app 和平台支持时」成立；原文也没有给出由时间、事件或状态触发并持续完成任务的机制。
-- 商用许可踩坑：Spaces 之外的 SDK、CLI、Driver、Lume 是 MIT；Cua Spaces 是 FSL-1.1-MIT；`cua-som` 是 AGPL-3.0-or-later；`cua-perception` 打包了 AGPL-3.0-only 的 OmniParser 模型产物；android-adb-control 是 MIT；AutoCua 是 MIT，其 Windows Interception 驱动是 LGPL-3.0 非商业 / 付费商业双许可。做商用集成前必须逐目录查 LICENSING.md。
+- 商用许可踩坑：Spaces 之外的 SDK、CLI、Driver、Lume 是 MIT；Cua Spaces 是 FSL-1.1-MIT；`cua-som` 是 AGPL-3.0-or-later；`cua-perception` 打包了 AGPL-3.0-only 的 OmniParser 模型产物；android-adb-control 是 MIT；AutoCua 是 MIT，其 Windows Interception 驱动是 LGPL-3.0 非商业 / 付费商业双许可。做商用集成前必须逐目录查 LICENSING.md。axuse 是 PolyForm Noncommercial 1.0.0，免费仅限非商业（个人、研究、教育、慈善、公共机构），商业使用需向 CTOL Digital Solutions 单独授权。
 - 以为 README 就是全部：Cua 的权限授予、平台支持边界、任务编写格式都在外链文档里；dsh 的安装确认要按仓库 `docs/INSTALL.md`；android-adb-control 的具体 ADB 命令、故障处理、真机验收清单在 references 和 docs/testing.md 里，本次材料只包含 README。
 - 以为 Chrome Relay 能覆盖所有浏览器：仅 macOS + Google Chrome + Node.js 20+；只放行 Claude Code / Codex / Cursor / Paseo 四类 agent 应用。
 - 以为 setup 会自动装扩展：不会。Chrome Relay 是 opt-in 的，需要每个希望 agent 使用的 Chrome profile 手动 Load unpacked。
@@ -646,6 +764,15 @@ npm run verify    # Type-check and run all automated suites with coverage
 - 把 qz 的 ChatGPT 账号登录和 API key 混在一起：选 OpenAI Codex 走设备码流程，无需 API key。
 - 以为 qz 数据完全不出本机：按 README 声明，数据只发给你选的模型和你访问的网站；模型调用本身会把任务内容发给模型提供方，需自行确认数据与日志策略。
 - 把 qz 和 dsh / Chrome Relay / AutoCua 的命令混用：不同项目、不同命令、不同许可。
+- 把 axuse 的基准当定论：称 16 个服务端评分任务却给出 28/28、27/27、27/27，统计口径未解释；7 任务扩展只跑过一次；全部为作者自建自评，没有第三方复现。
+- 把 axuse 用于商业用途而不看许可：PolyForm Noncommercial 1.0.0 免费仅限非商业，商业使用需向 CTOL Digital Solutions 单独授权。
+- 忽略 axuse 的维护风险：47 stars、单一公司维护，长期维护需自行评估。
+- 在 axuse 的 extension backend 下想进入 OOPIF 帧：只能列出、不能进入；CDP backend 可以。
+- 以为 axuse 能绕过反爬：它不实现流量标注和反爬交接，指纹识别自动化的站点仍可能拦。
+- 在 Linux 上找 axuse 桌面驱动：没有；浏览器工具仍可用。macOS 桌面控制需 `AXUSE_ENABLE_MACOS_CUA=1` 并授予 Accessibility 与 Screen Recording。
+- axuse bridge 的 Edge native messaging host manifest 没写 `allowed_origins`：会连不上。
+- 以为 axuse 的商业 CAPTCHA solver 默认可用：它是另外计费的插件，需装 `AXUSE_PLUGINS`。
+- 把 axuse 的 `open-urls` 当无限批量：它是有界的一次性批处理，报告只含标题、访问状态和有界 AX 摘录。
 
 ## 证据与来源
 
@@ -675,6 +802,10 @@ npm run verify    # Type-check and run all automated suites with coverage
 - qz 的权限细节：README 指向 `docs/permissions.md`，本次材料未包含其内容；使用前需自行核查。
 - qz 没有给出定时调度、事件监听或状态触发；周期性任务仍需人或外部 agent 再次发起。
 - qz 的 Skill 复用稳定性（跨站点改版、跨时间）未提及。
+- 做法 I 的 clone、`node src/cli.js doctor`、MCP 接入命令（`codex mcp add` / `claude mcp add`）、`print-config --harness`、`SKILL.md`、`bridge setup` / `bridge verify`、环境变量、`open-urls`、自测命令、错误 JSON、工具面（`ax_fill` / `ax_observe {find}` / `ax_scroll {until}` / `ax_upload` / `ax_open_many`）：来自 ctoldigital/axuse README（本次整理的调研材料）。
+- axuse 的基准数据（16 个服务端评分任务、axuse 28/28、Codex + Chrome 扩展 27/27、browser-use 0.13 27/27、中位每任务 17s/26s/56s、token 4.7M/9.8M/8.8M、中位工具调用 5/7/12；7 任务扩展 axuse 7/7，Codex+Chrome 2 个因停下等确认失败，browser-use 失败 1 个）：来自同一份 axuse README，属作者自建自评；称 16 个任务却给出 28/28，统计口径未解释；7 任务扩展只跑过一次；没有第三方复现。只能作为作者主张 + 自报数据，不能当作定论。
+- axuse 的 PolyForm Noncommercial 1.0.0 许可、47 stars、单一公司维护、bridge 的 native messaging host 注册、extension backend 没有 Target domain、OOPIF 只能列出不能进入、CDP backend 可进入、不实现流量标注和反爬交接、macOS 桌面需 opt-in 且受 TCC 保护、Linux 无桌面驱动、商业 CAPTCHA solver 是另外计费的插件：来自同一份 axuse 调研。
+- axuse 的「浏览器任务用 AX 树 + diff，截图只留给视觉或 canvas 校验」「动作触发的 JS 对话框与新标签页汇报」「`action_sent` / `side_effect`」「事件环形缓冲」：来自同一份调研，属项目描述，本次未独立实测。
 
 ## 依据的调研
 
@@ -685,3 +816,4 @@ npm run verify    # Type-check and run all automated suites with coverage
 - [AutoCua/AutoCua](../research/radar/2026-10-13/2911-autocua-autocua.md)：值得一试，可以把 AutoCua 当作"给代理开放真实桌面/浏览器/手机界面权限"的可试方案：它给出了完整的 pip 安装、各平台依赖清单、run_agent 调用示例和权限配置步骤，但需要在一台可控机器上小范围验证稳定性和安全边界后再进手册。
 - [ComputerUseAgent/AutoCua](../research/radar/2026-10-13/2954-computeruseagent-autocua.md)：值得一试，可以按 README 的命令在 macOS 上装好并用一条低风险桌面任务（原文示例 `task="check the version of macOS."`）做小范围试跑，确认「一行 mode 切换驱动对象」这条用法是否真的省事；只给 try 不给 adopt，是因为原文只有作者自述的演示时长、没有第三方复现，且示例里的模型名与现有命名不符，需要先核对 model_list.txt 再投入生产流程。
 - [alibaba/qz-browser-agent](../research/radar/2026-10-19/4769-alibaba-qz-browser-agent.md)：值得一试，先在个人 Chrome/Edge 上装扩展、接一个自带 API key 的模型，跑 2–3 个真实的多源调研与登录态数据抽取任务，逐条核对来源后再把跑通的流程存成 Skill 复用；理由是 README 给出了完整的安装、配模型、CLI/MCP 接入与源码构建步骤，可照做，但可靠性只有作者自述、没有独立评测，仓库采用度也低，还不宜直接 adopt。
+- [ctoldigital/axuse](../research/radar/2026-10-20/5183-ctoldigital-axuse.md)：值得一试，建议先小范围试用：按 README 的步骤把 axuse 以 MCP 方式接入 Claude Code 或 Codex，只用于表单填写、滚动查找、批量打开 URL 这类浏览器任务，与现有做法做同任务对照。理由是安装、配置、错误处理约定和自测命令都可以直接复制，但它仅在非商业许可下免费使用，基准数据由作者自行报告且统计口径有疑点，桌面控制也只有 Windows 经过验证。

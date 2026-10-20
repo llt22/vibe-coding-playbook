@@ -1,14 +1,14 @@
-# 把第三方工具和私人消息记录接给代理前，先做隔离、核对与对照验证
+# 把第三方工具接给代理前，先隔离、核对清单并做对照试用
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：解决第三方 MCP/CLI（含 WhatsApp、微信、钉钉等只读私人消息源）接入代理时，只凭一条安装命令就上线、不核对工具清单、不验证数据外发与真实效果的问题。
-> 先试这一步：先选最轻的一条路径（如 `uvx jevcrawl doctor`、`idx` 零安装、或只读 WhatsApp/im-mcp 个人账号试用），在隔离环境跑通安装→枚举工具→一个真实只读任务→与人工基线对照，再决定是否扩大。
-> 最近修订：2026-10-19
+> 解决的问题：这篇手册解决的是：如何在不污染主力环境、不越过数据外发边界的前提下，把第三方 MCP、CLI 或技能接入代理，核对工具清单、做冒烟测试和对照验证，并据证据决定继续、参考还是停止。
+> 先试这一步：先选一个低风险真实任务，在容器、虚拟机或专用账号里按做法 A 或 D1 跑通“接入→核对工具清单→冒烟→与未挂载对照”这一轮。
+> 最近修订：2026-10-20
 
 ## 解决什么问题
 
-把第三方工具集以 MCP 或 CLI 形式接给代理时，常见供给方式是一句注册/安装命令就完事：能不能用、多出哪些工具、花了多少钱、数据发到哪里、和现有做法比是不是真的更好，全靠感觉。本章解决的是：怎么在不污染主力环境、不越过数据外发边界的前提下，完成接入、核对工具清单、冒烟测试和对照验证，并据证据决定“继续试”“只当思路参考”还是“停止”。现在覆盖 10 条工具路径：jevcrawl、REA/Hermes、arcmira、CLI-Anything/CLI-Hub、reason network、idx、Blender 扩展、jevreel、WhatsApp MCP、im-mcp；做法 C 是不接入的降级做法。新增的两条私人消息路径有一个共同前提：先只读、只用自己的个人账号、只在一台机器上试；发送、多人共享、媒体转写都不在范围内。
+把第三方工具集以 MCP、CLI 或技能形式接给代理时，常见供给方式是一句注册/安装命令就完事：能不能用、多出哪些工具、花了多少钱、数据发到哪里、和现有做法比是不是真的更好，全靠感觉。本章解决的是：怎么在不污染主力环境、不越过数据外发边界的前提下，完成接入、核对工具清单、冒烟测试和对照验证，并据证据决定“继续试”“只当思路参考”还是“停止”。现在覆盖 11 条工具路径：jevcrawl、REA/Hermes、arcmira、CLI-Anything/CLI-Hub、reason network、idx、Blender 扩展、jevreel、WhatsApp MCP、im-mcp、claude-security-scan；做法 C 是不接入的降级做法。新增的两条私人消息路径（WhatsApp MCP、im-mcp）有一个共同前提：先只读、只用自己的个人账号、只在一台机器上试；发送、多人共享、媒体转写都不在范围内。新增的 claude-security-scan 路径也要先只读、只对一个低风险域、确认脱敏和“未能确认”标注可靠后再扩大。
 
 ## 适用与不适用
 
@@ -25,6 +25,7 @@
 - jevreel：有一段本地或 URL 视频，要在里面找“某个瞬间在哪儿”；接受底层 Jev 图像能力仍是实验性、验证只基于单个测试视频。
 - J WhatsApp MCP：个人 WhatsApp 账号，只做只读检索、摘要、补看群聊、给未命名聊天补名；愿意在自己的 Cloudflare 付费 Workers 上部署；能接受非官方协议和违反 WhatsApp 条款的风险；一个部署只对应一个账号和一个 owner。
 - K im-mcp：Windows x64 或 macOS，微信 4.x / 钉钉 7.x，客户端已登录；要给 agent 补一段私有沟通上下文；只读检索；能接受本地数据库解密后明文落盘、强依赖客户端版本。
+- claude-security-scan：已安装 Claude Code、git、bash；Python 3.11+；能访问 GitHub；想用一句自然语言或定时任务做跨 Mac 本体、本地 git 仓库、GitHub、Vercel/公开站点、AWS、GCP、Azure、Cloudflare、Supabase、Gmail 的只读例行检查；愿意按域准备只读登录；接受缺工具或权限时进入“未能确认”而不是“无问题”；想按重要度、领域、NEW 过滤报告。
 
 不适用：
 
@@ -38,6 +39,7 @@
 - jevreel：需要成熟、有独立验证的图像理解能力；不装 FFmpeg、不用 Python 3.11+ 或不用 uv；需要向量检索式的跨大库存量查询。
 - J WhatsApp MCP：要发送消息、多人共享、媒体转写；用免费 Cloudflare 计划（README 要求 Workers Paid，免费计划未验证）；不能接受非官方协议与条款风险；希望一个部署服务多个账号或多个 owner。
 - K im-mcp：Linux（原文未提支持）；微信/钉钉版本不在支持表；Windows 没有管理员终端或微信未登录；macOS 4.1+ 没有 64 位 hex passphrase；不能接受本地解密明文落盘；需要 README 未给出的定时/事件触发实现；需要效果指标而只有兼容性验证表。
+- claude-security-scan：需要攻击性测试（暴力、模糊测试）；需要 Google Workspace 整体管理设置（需 Admin API 委派，不在范围）；AWS 只默认东京和弗吉尼亚，其他区域需配置；不能接受第三方技能读取多账户敏感信息；要求有检出率、误报率或独立评测；不能先在隔离或低风险环境试；只依赖 README 的只读与脱敏设计而未经代码级验证。
 
 ## 前置条件
 
@@ -67,9 +69,11 @@ J WhatsApp MCP：Cloudflare 账户（README 要求 Workers Paid；免费计划�
 
 K im-mcp：Windows x64 或 macOS（Apple Silicon / Intel），原文未提 Linux；微信 4.x（实测 `4.1.15.13` Windows、`4.1.35.15` macOS ARM64、`4.1.15`(270115) macOS x86_64），兼容 3.9.x；钉钉 7.x（实测 `7.6.0.x`，另有 7.5.x / 7.0.x）；Windows 初始化需管理员终端且微信已登录（扫描 `Weixin.exe` 内存取密钥）；macOS 4.1+ 需 64 位 hex passphrase；已安装 uv；客户端支持 MCP 配置。默认落盘 `~/.wechat_mcp/`、`~/.dingtalk_mcp/`，可用 `--output` / `--output-dir` 改。
 
+claude-security-scan：Claude Code、git、bash；Python 3.11+；能访问 GitHub。把仓库克隆到 `~/.claude/skills/security-scan`，并安装 gitleaks 与 osv-scanner（`scripts/install-tools.sh`，SHA256 验证）。按域准备只读登录：`gh auth login`、`vercel login`、`aws configure` 或 `aws sso login`、`gcloud auth login`（viewer）、`az login`（Reader）、`CLOUDFLARE_API_TOKEN` 只读、`supabase login`、`SUPABASE_ACCESS_TOKEN`、`gog auth add you@example.com`；命令里的 `...` 要换成自己的只读 token。无配置也能运行；需要限制范围时把 `config.example.toml` 复制到 `~/.config/security-scan/config.toml` 后编辑。AWS 默认只查东京 `ap-northeast-1` 和弗吉尼亚 `us-east-1`，其他区域要在 `[aws] regions` 中追加。报告保存在 `reports/<日時>/report.html`，本机权限 700，含弱点清单，注意共享。
+
 ## 操作步骤
 
-先做 A 或 D1：它们能在半天内给出可观察结论，也顺带把隔离环境、基线记录这套流程跑通。若目标就是私人消息只读检索，再考虑 J 或 K；不要从发送、多人共享或媒体转写开始。若你已有支持远程 MCP 的宿主且目标就是口语内容检索，直接做 E；团队已在 Reason 且找得到第二个人，可做 F；只想用最小成本看清“CLI 与 MCP 共用一份输出”的结构，做 G 的第 1、3、4 步；手上就有 Windows x64 + Blender 4.2+，做 H 的第 1–4 步；有一段本地短视频要检索，做 I 的第 1–3 步；有个人 WhatsApp 且接受条款风险，做 J 的 1–8 步；要在本机补微信/钉钉沟通上下文，做 K 的 1–6 步。
+先做 A 或 D1：它们能在半天内给出可观察结论，也顺带把隔离环境、基线记录这套流程跑通。若目标就是私人消息只读检索，再考虑 J 或 K；不要从发送、多人共享或媒体转写开始。若你已有支持远程 MCP 的宿主且目标就是口语内容检索，直接做 E；团队已在 Reason 且找得到第二个人，可做 F；只想用最小成本看清“CLI 与 MCP 共用一份输出”的结构，做 G 的第 1、3、4 步；手上就有 Windows x64 + Blender 4.2+，做 H 的第 1–4 步；有一段本地短视频要检索，做 I 的第 1–3 步；有个人 WhatsApp 且接受条款风险，做 J 的 1–8 步；要在本机补微信/钉钉沟通上下文，做 K 的 1–6 步；想做跨系统的例行只读安全检查，做 L 的 1–8 步，先 `--demo`，再只对一个低风险域 `--skip repos`。
 
 ### 做法 A：接入有完整参数与回执的工具集（以 jevcrawl 为例）
 
@@ -658,15 +662,92 @@ uv tool uninstall im-mcp
 
 9. 验证：原文只给了兼容性验证表（Windows/macOS、多个微信/钉钉版本），没有效果指标、任务成功率或对照数据。需要自己选一组真实只读任务，先人工完成并记录耗时和结果，再用 MCP 工具完成同样任务；检查 `get_sync_status` 的索引新鲜度，必要时先 `sync_wechat_database` / `sync_dingtalk_data` 再查询。若版本不兼容、初始化失败、明文落盘不可接受或结果明显不如人工，就停止试用。
 
+### 做法 L：把例行只读安全检查交给 agent（以 claude-security-scan 为例）
+
+选 L 的条件：已安装 Claude Code、git、bash；Python 3.11+；能访问 GitHub；想用一句自然语言或定时任务做跨 Mac 本体、本地 git 仓库、GitHub、Vercel/公开站点、AWS、GCP、Azure、Cloudflare、Supabase、Gmail 的只读例行检查；能接受这是会读取多账户敏感信息的第三方技能，且目前只有 README 证据。不要从全量扫描开始。
+
+1. 克隆技能并安装工具（前提：Claude Code、git、bash 可用；能访问 GitHub）：
+
+```bash
+git clone https://github.com/chaenmasahiro0425/claude-security-scan ~/.claude/skills/security-scan
+bash ~/.claude/skills/security-scan/scripts/install-tools.sh   # gitleaks と osv-scanner を取得（SHA256を検証）
+```
+
+预期结果：技能目录出现，gitleaks 与 osv-scanner 安装完成并通过 SHA256 校验。
+
+2. 按需准备各域只读登录（前提：只对你确实要检查、且已安装对应 CLI 的域执行；缺什么会在报告里标为未确认）。把 `...` 换成自己的只读 token：
+
+```bash
+gh auth login
+vercel login
+aws configure        # または aws sso login
+gcloud auth login    # 閲覧者 roles/viewer 相当の権限
+az login             # 閲覧者 Reader 相当の権限
+export CLOUDFLARE_API_TOKEN=...   # 読み取り専用のAPIトークン
+supabase login
+export SUPABASE_ACCESS_TOKEN=...  # RLS などの診断用
+gog auth add you@example.com
+```
+
+预期结果：至少一个域完成只读登录；没有登录的域后续会进入“未能确认的项目”并附理由。
+
+3. 先用示例数据确认安装和报告样式（前提：第 1 步已完成；不依赖真实账户数据）：
+
+```bash
+python3 ~/.claude/skills/security-scan/scan.py --demo --open
+```
+
+预期结果：打开示例 HTML 报告，能看到按重要度分级、可按领域/NEW 过滤的样式；不读取真实账户。
+
+4. 只对一个低风险域跑真实扫描，先去掉较重的本地仓库代码检查（前提：第 2 步至少完成一个域的只读登录；先不要全量）：
+
+```bash
+python3 ~/.claude/skills/security-scan/scan.py --skip repos
+```
+
+预期结果：生成 `reports/<日時>/report.html`；失败或未登录的域进入“未能确认的项目”，而不是被当成“没有问题”；报告中没有明文秘密值。
+
+5. 在 Claude Code 里用自然语言触发和追问（前提：技能已放在 `~/.claude/skills/security-scan`，并在 Claude Code 会话中）：
+
+```text
+セキュリティチェックして
+前回から新しく出たリスクだけ教えて
+直せるところある？
+毎週月曜にスキャンするようにして
+```
+
+预期结果：Claude Code 能按技能说明触发扫描、只汇报前次之后新增的风险，并把可修复项列出来；定时请求按第 6 步或原文说明处理。
+
+6. 可选：设置 macOS 每周一 8:00 自动执行（前提：macOS；第 1 步已完成）：
+
+```bash
+bash ~/.claude/skills/security-scan/scripts/install-schedule.sh
+```
+
+预期结果：定时任务安装完成；下一轮按计划运行并生成新报告。原文没有给出事件触发或状态机式持续执行机制。
+
+7. 可选：限制扫描对象。无配置也能运行；需要时复制并编辑配置（前提：知道自己的区域和要限制的范围）：
+
+```bash
+cp ~/.claude/skills/security-scan/config.example.toml ~/.config/security-scan/config.toml
+```
+
+AWS 默认只查东京 `ap-northeast-1` 和弗吉尼亚 `us-east-1`，其他区域要在 `[aws] regions` 中追加。预期结果：扫描范围按配置缩小，报告仍会标出未覆盖或未确认的范围。
+
+8. 查看结果并按安全边界核对（前提：扫描已运行）。报告在 `reports/<日時>/report.html`，可按重要度、领域、NEW 过滤；报告含弱点清单，保存在本机、权限 700，注意共享。核对：只读——gog 用 `--readonly`，各云只用 list/get/describe 和 API 的 GET，对网站只用 GET；不保留秘密值——gitleaks 用 `--redact`，Vercel 环境变量只记名称和类型，AWS key ID 只留末尾 4 位，常驻程序不记录启动参数，错误文也先脱敏再保存；抓取失败的账号/组织/仓库范围，不因“这次没看到”而在与上次比较时算作“已解决”或“新增”。预期结果：确认上述边界成立；检测结果只当线索，最终判断和修正由人做。
+
+9. 最小试用：先 `--demo`，再只登录一个域（例如个人 GitHub），用 `--skip repos` 跑一次，确认报告能生成、失败项进入“未能确认”、没有明文秘密、没有对测试仓库/账号产生写入或发送；确认后再逐域增加登录，最后才考虑全量扫描和每周定时。若误报过多、权限范围过宽或报告泄露敏感值，应缩小域、改为仅手动运行或放弃采用。
+
 ## 怎么判断变好了
 
 可观察指标：
 
-- 通路：`uvx jevcrawl doctor` 是否报通路正常；`rea` 是否出现在 Hermes 服务器列表；CLI-Hub 的 `cli-hub info/install/launch` 是否成功；`arcmira_describe` 是否返回方法表与版本行；`reason network who` 是否稳定列出对方 session 及当前任务；`idx mcp setup <client>` 是否打印绝对路径、客户端里 `idx` 是否出现且工具数可枚举；Blender 扩展是否能打开 MCP Pro 面板、选中支持 tool calling 的模型、跑通“检查场景 → 建对象 → 复制排列”；jevreel 是否 `index` 打印 video id、`ask` 返回时间/概率/帧、`zoom` 取到全分辨率帧、接入 agent 后能自己调用；WhatsApp MCP 的 `/debug` 是否为 `phase: idle` 且 `paired: true`、`link_status` 的 `last_pull` 是否正常更新；im-mcp 的 `wechat-init` / `dingtalk-init` 是否成功、客户端能调用 `search_wechat_messages` / `get_session_history` 等工具。
+- 通路：`uvx jevcrawl doctor` 是否报通路正常；`rea` 是否出现在 Hermes 服务器列表；CLI-Hub 的 `cli-hub info/install/launch` 是否成功；`arcmira_describe` 是否返回方法表与版本行；`reason network who` 是否稳定列出对方 session 及当前任务；`idx mcp setup <client>` 是否打印绝对路径、客户端里 `idx` 是否出现且工具数可枚举；Blender 扩展是否能打开 MCP Pro 面板、选中支持 tool calling 的模型、跑通“检查场景 → 建对象 → 复制排列”；jevreel 是否 `index` 打印 video id、`ask` 返回时间/概率/帧、`zoom` 取到全分辨率帧、接入 agent 后能自己调用；WhatsApp MCP 的 `/debug` 是否为 `phase: idle` 且 `paired: true`、`link_status` 的 `last_pull` 是否正常更新；im-mcp 的 `wechat-init` / `dingtalk-init` 是否成功、客户端能调用 `search_wechat_messages` / `get_session_history` 等工具；claude-security-scan 的 `scan.py --demo --open` 能否打开示例报告、`--skip repos` 能否生成 `reports/<日時>/report.html`、Claude Code 里“セキュリティチェックして”能否触发。
 - 工具清单：注册后必须去客户端确认工具真的出现、数量可枚举；不能把“注册成功”当“验证完成”。
 - 任务效果：同一组真实任务，挂载 vs 未挂载/人工，比较任务完成率、答案正确性、漏掉已知消息数、人工步骤数、耗时、工具报错次数。
 - 成本与停止原因：jevcrawl 看 `jev_cost_usd`、`stopped_because`、`degraded`、`needs_js_urls`；arcmira 看 `quote` 预估与实际消耗、错误码是否可按 `code` 分支；jevreel 看 `jevreel measure` 与实际计费、重复 `ask` 是否 0 请求 0 成本、`query` 是否不产生请求。
-- 安全负向指标：是否出现越权访问、读取工作目录之外文件、执行非预期命令；Blender 侧看 `execute_code` 是否超出预期；jevreel 侧确认视频帧与问题允许外发到 TypeSafe；WhatsApp MCP 侧确认没有发送消息、没有多人共享、没有绕过条款；im-mcp 侧确认只读、明文数据库已按需清理、没有在公共机器残留。
+- 安全负向指标：是否出现越权访问、读取工作目录之外文件、执行非预期命令；Blender 侧看 `execute_code` 是否超出预期；jevreel 侧确认视频帧与问题允许外发到 TypeSafe；WhatsApp MCP 侧确认没有发送消息、没有多人共享、没有绕过条款；im-mcp 侧确认只读、明文数据库已按需清理、没有在公共机器残留；claude-security-scan 侧确认没有明文秘密、没有对测试仓库/账号产生写入或发送、报告权限 700、共享前已确认脱敏。
+- claude-security-scan 的报告质量：人工复核首次报告中的 high/medium 项，记录真实问题数与误报数，计算可确认的准确率；连续两周运行，记录 NEW 项数量及其中经复核为真的比例；统计“未能确认”项及原因，确认没有把失败静默当成无问题；记录单次运行时间和每周定时是否完成；在测试账号/仓库比对扫描前后配置与文件，确认只读边界成立。
 
 对照试验设计：所有系统从同一入口、同样预算、同一个问题出发，抓到的内容交给同一个回答 LLM，由同一个 judge 打分，只让被试工具这个变量变。没有对比性指标的工具，先用流程内建测试和真实重复任务做前后对照。
 
@@ -680,6 +761,7 @@ uv tool uninstall im-mcp
 - jevreel：10 分钟 1080p 视频单张 sheet 约 $0.00025、索引 $0.0033、一次 ask $0.004–0.005、重复 ask $0、locate $0.0002、whole $0.0003、一小时视频一个问题约 $0.02–0.03；10 分钟 1080p 无语音游戏录像上，三个不到一秒的暂停菜单仅 screening 得分 0.36 / 0.50 / 0.95，验证前漏掉两个、验证后全部捞回。底层 Jev 图像能力仍是实验性，验证只基于单个测试视频。
 - WhatsApp MCP：README 给出完整部署命令、配置项、工具表、架构和调试步骤；HN 35 points、23 comments 只能说明关注度；作者只在一个真实账号上跑过；没有业务效果指标；首次历史导入每个链接只发生一次，失败后要重新链接才能补；免费计划未验证；媒体只显示 `[image]`、`[voice note 12s]` 等标签，不下载不转写；一个部署对应一个 WhatsApp 账号和一个 owner；非官方实现，作者承认违反 WhatsApp 条款；已知缺口包括未命名聊天不会自动刷新、每日 pull 发现登出不会通知、编辑/删除路径未用真实事件测试。
 - im-mcp：README 给出完整安装、初始化、客户端配置、清理命令和工具表；只有一张兼容性验证表，没有效果指标、任务成功率或对照数据；“毫秒级响应”为作者声称，未给测量方法；工具只读，但本地数据库解密后明文落盘；没有 cron、webhook、守护进程等定时/事件触发说明，调度层需自行搭建。
+- claude-security-scan：README 给出检测项清单、安装命令、各域准备方式、报告路径、安全设计和限制；仓库 32 stars。没有检出率、误报率、真实用户案例或独立评测，也没有代码审计结果；作者关于“最近信息泄露多由疏忽造成”“这些检查去看几秒就能知道”等是主张，不是数据结论。原文自述限制：Google Workspace 整体管理设置因需 Admin API 委派不在范围；AWS 默认只查东京和弗吉尼亚；不做暴力/模糊测试等攻击性检查；检测结果需人工最终判断。另需注意：这是会读取多账户敏感信息的第三方技能，README 中的只读与脱敏设计尚未在本报告依据的材料中经过代码级验证；Gmail 依赖第三方 `gog`；token 的 export 命令中 `...` 是占位符。
 
 最小试用方式与试多久：
 
@@ -693,12 +775,13 @@ uv tool uninstall im-mcp
 - jevreel：以“index → ask → zoom 跑通 + 一次插件/MCP 接入 + 一次 lens 过滤”为一轮。
 - J WhatsApp MCP：以“部署 → 链接个人账号 → 只读搜索/摘要/补名 → 与人工完成同一组任务对照”为一轮；出现导入失败、隐私/合规不可接受或结果明显不如人工就停止。
 - K im-mcp：以“初始化 → 客户端接入 → 3–5 个真实只读任务 → 与人工对照 → 清理”为一轮；版本不兼容、初始化失败、明文落盘不可接受或结果明显不如人工就停止。
+- claude-security-scan：先 `--demo` 看示例报告；再只登录一个低风险域（如个人 GitHub），用 `--skip repos` 跑一次；确认报告生成、失败项进入“未能确认”、没有明文秘密、没有写入/发送后，再逐域增加登录；连续两周记录 NEW 项和人工复核结果，再决定是否全量或定时。
 
 在得到明确正负结果前，不要扩展到长期使用或生产环境。
 
 ## 常见坑
 
-- 把“注册成功”当成“验证完成”。REA 原文没有 list/枚举命令，要查 Hermes 文档补上；jevcrawl 至少还有 `uvx jevcrawl doctor`；arcmira 至少还有 `arcmira_describe` 和一条示例提示词；reason network 至少还有 `reason network who` 和一次真实问答；idx 至少还要去客户端确认 `idx` 出现、工具数可枚举，并用 `idx_brief` 真跑一次；Blender 扩展至少还要跑一遍“检查场景 → 建对象 → 复制排列”；jevreel 至少还要 `ask` 真问一次、`zoom` 真看一次；WhatsApp MCP 至少还要看 `/debug` 的 `paired` 与 `last_pull`、真搜一次；im-mcp 至少还要初始化成功、客户端真调一次检索工具。
+- 把“注册成功”当成“验证完成”。REA 原文没有 list/枚举命令，要查 Hermes 文档补上；jevcrawl 至少还有 `uvx jevcrawl doctor`；arcmira 至少还有 `arcmira_describe` 和一条示例提示词；reason network 至少还有 `reason network who` 和一次真实问答；idx 至少还要去客户端确认 `idx` 出现、工具数可枚举，并用 `idx_brief` 真跑一次；Blender 扩展至少还要跑一遍“检查场景 → 建对象 → 复制排列”；jevreel 至少还要 `ask` 真问一次、`zoom` 真看一次；WhatsApp MCP 至少还要看 `/debug` 的 `paired` 与 `last_pull`、真搜一次；im-mcp 至少还要初始化成功、客户端真调一次检索工具；claude-security-scan 至少还要 `--demo` 打开报告、再只对一个低风险域 `--skip repos` 跑一次并人工复核。
 - 把名字当 id 传。arcmira 的过滤器只接受原样 id，传名字会在发网络请求前抛 `id_required`；必须先 `resolve`，`suggested` 时说明假设与理由，`ask` 时把候选交回用户。
 - 连上就开始猜方法签名。先调 `arcmira_describe`，把 id 规则、参数与返回字段、计量规则、错误码一次读全。
 - 不看清计量规则就批量跑。arcmira 搜索按超出前 5 条的每条 passage 收 4 credits；字幕每开始 15 分钟收 4 credits；Premium 转录每开始 15 分钟收 300 credits；`momentum` 每次 10 credits；`start`/`end` 不降低 Premium 计费。贵操作前先 `arcmira.quote`。
@@ -707,8 +790,8 @@ uv tool uninstall im-mcp
 - 建了 arcmira monitor 就以为能删。它不提供删除，只能 `paused`；`attachTrackers` 迁移 tracker 需用户先同意；`addEntities` 一次最多 90 个 id。
 - 把厂商自述当独立证据。arcmira 的数据覆盖与说话人/赞助识别准确性全是厂商自述；README 未给免费额度上限，只说 “Plan limits apply”。
 - 把“安装成功”当“任务有效”。CLI-Hub 装完 harness 后，要接进 agent 跑一条真实重复任务，确认真有用再考虑用 `/cli-anything` 生成新 CLI。
-- 把作者自测当独立证据。jevcrawl 的 50 和 20 个任务样本都很小；CLI-Anything 所有效果数据均为项目自述；reason network 连效果数据都没有；idx 调研未包含效果数据；Blender 扩展只有 README 级证据；jevreel 的成本与暂停菜单对照验证同样是作者自测；WhatsApp MCP 只有 README 和单账号验证；im-mcp 只有兼容性表。
-- 在主力环境里直接跑第三方包。REA 依赖 `npx`、jevcrawl 依赖 `uvx`、CLI-Hub 依赖 `pip`，都会拉取并执行第三方包；arcmira 不往本地落包，但程序会在厂商的 Cloudflare Dynamic Worker 沙箱里执行，出站只允许 `GET https://api.arcmira.com/v1/*`（写工具额外允许 `/v1/monitors` 与 `/v1/trackers` 的 POST/PATCH，永不 DELETE）；idx 是不自带沙箱的静态二进制直连公开数据源；Blender 扩展的 Python 工具验证不是安全沙箱；jevreel 的视频帧与问题会发到 TypeSafe；WhatsApp MCP 使用非官方协议并违反 WhatsApp 条款；im-mcp 会把本地数据库解密后明文落盘。
+- 把作者自测当独立证据。jevcrawl 的 50 和 20 个任务样本都很小；CLI-Anything 所有效果数据均为项目自述；reason network 连效果数据都没有；idx 调研未包含效果数据；Blender 扩展只有 README 级证据；jevreel 的成本与暂停菜单对照验证同样是作者自测；WhatsApp MCP 只有 README 和单账号验证；im-mcp 只有兼容性表；claude-security-scan 只有 README、32 stars，没有检出率、误报率或代码审计。
+- 在主力环境里直接跑第三方包。REA 依赖 `npx`、jevcrawl 依赖 `uvx`、CLI-Hub 依赖 `pip`，都会拉取并执行第三方包；arcmira 不往本地落包，但程序会在厂商的 Cloudflare Dynamic Worker 沙箱里执行，出站只允许 `GET https://api.arcmira.com/v1/*`（写工具额外允许 `/v1/monitors` 与 `/v1/trackers` 的 POST/PATCH，永不 DELETE）；idx 是不自带沙箱的静态二进制直连公开数据源；Blender 扩展的 Python 工具验证不是安全沙箱；jevreel 的视频帧与问题会发到 TypeSafe；WhatsApp MCP 使用非官方协议并违反 WhatsApp 条款；im-mcp 会把本地数据库解密后明文落盘；claude-security-scan 会读取 Mac 本体、本地全部 git 仓库、GitHub、Vercel、多个云和 Gmail，README 的只读与脱敏设计尚未经过代码级验证。
 - 忽略版本写死。`rea-agents@6.3.0` 是原文写死的版本；jevcrawl 的 `jev-1.13.0` 是固定版本，阈值按版本校准；arcmira 是远程 MCP、本身不需要更新，但 `arcmira_describe` 带版本行；jevreel 的 `JEVREEL_MODEL` 默认 `jev-1.14.0` 是故意锁定；im-mcp 强依赖微信 4.x / 钉钉 7.x 的具体版本。
 - 以为 jevcrawl 能爬任何站点。它不执行 JavaScript（需 JS 的 URL 列在 `stats.needs_js_urls`），不读 `robots.txt`，除一次抓 4 页外不做限速，站点条款与合规由使用者自负；不登录、不绕付费墙和 CAPTCHA。
 - 忽略内容外发。jevcrawl 会把页面文本发送到 TypeSafe；API key 只从环境变量读，不落盘、不写日志。
@@ -741,7 +824,7 @@ uv tool uninstall im-mcp
 - 没字幕也没 key 就直接放弃 jevreel。无 `TYPESAFE_API_KEY` 时，不带时间线的索引、zoom、字幕和 query 仍可用；本地转写要手动用 `jevreel[all]` 添加。
 - 把 jevreel 插件方式当成装什么都有。插件方式需要 uv 与 FFmpeg 在 PATH；本地语音转写默认不含。
 - 需要完整 jevreel 插件接入细节时只看截断的原文。本次 jevreel 调研原文在 Claude Code 插件部分被截断。
-- 误把传播数据当效果证据。Matthew 的 REA 帖子 230 万次浏览是曝光量，不是效果证据；WhatsApp MCP 的 HN 35 points、23 comments 也只是关注度。
+- 误把传播数据当效果证据。Matthew 的 REA 帖子 230 万次浏览是曝光量，不是效果证据；WhatsApp MCP 的 HN 35 points、23 comments 也只是关注度；claude-security-scan 的 32 stars 同样只说明关注度。
 - 用被截断的能力清单规划任务。REA 原文只列到“反编译一个应用”就被截断；arcmira 调研在“Claude Code 第三方 marketpla…”处被截断；idx 调研正文在第 9 步后被截断。
 - 把“139 个工具”当事实。数量只是作者主张。
 - 没有隔离就上线。只要出现越权访问、读取工作目录之外文件或执行非预期命令，就应回滚并降级为 study。
@@ -757,6 +840,14 @@ uv tool uninstall im-mcp
 - 以为 im-mcp 有定时/事件触发。它只提供 `get_sync_status`、`sync_wechat_database`、`sync_dingtalk_data` 等原子能力，README 没有 cron、webhook、守护进程说明，调度层要自己搭。
 - 把 im-mcp 的只读声明当安全沙箱。工具声明只读，但本地数据库被解密为 SQLite、明文落盘；用完要清理，不要在不可信机器上长期保留。
 - 把 im-mcp 的“毫秒级响应”当实测结论。原文未给测量方法，只有作者声称。
+- 把第三方安全技能当“只读就安全”。claude-security-scan 会读取 Mac 本体、本地全部 git 仓库、GitHub、Vercel、多个云和 Gmail；README 的只读与脱敏设计尚未在本次材料中经过代码级验证。先在隔离或低风险环境只登录一个域试。
+- 一上来就全量扫描 claude-security-scan。先 `--demo`，再 `--skip repos` 只对一个低风险域跑；确认失败项进入“未能确认”而不是“无问题”，没有明文秘密、没有写入/发送，再逐域扩大。
+- 把“未能确认”当“没有问题”。claude-security-scan 里缺工具、缺权限、抓取失败都会进入“未能确认的项目”并附理由；跨次比较时，抓取失败的范围不算“已解决”或“新增”。
+- 把 claude-security-scan 的检测结果当最终结论。原文明确不做攻击性测试，检测只是线索，最终判断和修正由人做；没有检出率、误报率或对照实验。
+- 忽略 claude-security-scan 的默认覆盖范围。AWS 默认只查东京 `ap-northeast-1` 和弗吉尼亚 `us-east-1`，其他区域要在 `[aws] regions` 追加；Google Workspace 整体管理设置因需 Admin API 委派不在范围内。
+- 把 claude-security-scan 命令里的 `...` 原样写进命令。各域准备命令里的 `...` 是占位符，要换成自己的只读 token；`gog` 是第三方依赖。
+- 把 claude-security-scan 的报告随便共享。报告含弱点清单，保存在本机、权限 700；共享前先确认脱敏。
+- 把 claude-security-scan 的定时任务当持续运行。原文只给 macOS 每周一 8:00 的定时；没有事件触发或状态机式持续执行机制。
 
 ## 证据与来源
 
@@ -773,8 +864,9 @@ uv tool uninstall im-mcp
 - 做法 I jevreel：可核查的是 README/调研给出的命令与机制、lens TOML、插件安装命令、手动 MCP 命令、Python API、环境变量表、四步工作流、MCP 工具与 CLI 对照。数据均为作者自测：10 分钟 1080p 视频单张 sheet 约 $0.00025、索引 $0.0033、一次 ask $0.004–0.005、重复 ask $0、locate $0.0002、whole $0.0003、一小时视频一个问题约 $0.02–0.03；10 分钟 1080p 无语音游戏录像上逐条对照帧检查命中，三个不到一秒的暂停菜单仅 screening 得分 0.36 / 0.50 / 0.95，验证前漏掉两个、验证后全部捞回。作者自陈/未验证：底层 Jev 图像能力仍是实验性，验证只基于单个测试视频；没有定时器或事件触发的具体机制；调研原文在 Claude Code 插件部分被截断。调研判断是照 Quickstart 在一段本地短视频上跑通 index→ask→zoom，并以 MCP/插件形式接到 Claude Code 或 Codex 试做视频检索，值得小范围试，不建议直接全量采用。
 - 做法 J WhatsApp MCP：可核查的是仓库 README 给出的完整部署命令、配置项、工具表、架构和调试步骤。HN 的 35 points、23 comments 只能说明关注度，不能证明效果。作者明确说只在一个真实账号上跑过；首次历史导入每个链接只发生一次，失败后要重新链接才能补；免费计划未验证，付费计划才能提高 CPU limit；媒体不下载、不转写；只支持一个部署对应一个 WhatsApp 账号和一个 owner；非官方实现，使用 WhatsApp Web 协议和 Baileys，作者承认违反 WhatsApp 条款，认为只读链接的实际风险低但不是零；已知缺口包括未命名聊天不会自动刷新、每日 pull 发现登出不会通知、编辑/删除路径未用真实事件测试。没有业务效果指标。
 - 做法 K im-mcp：可核查的是 README 给出的安装命令、初始化命令、客户端配置、清理命令、工具表、兼容性验证表。原文只给了兼容性验证（覆盖 Windows/macOS、多个微信/钉钉版本的实测表），没有任何效果指标、任务成功率或对照数据；“毫秒级响应”是作者声称，未给测量方法。工具声明只读，但本地数据库会解密为 SQLite、明文落盘；没有 cron、webhook、守护进程等定时/事件触发说明，调度层需自行搭建。适用条件与局限：Windows x64 或 macOS，原文未提 Linux；强依赖微信 4.x / 钉钉 7.x 的客户端版本；Windows 需管理员终端且微信已登录；macOS 4.1+ 需 64 位 hex passphrase。
-- 与已有清单的关系：Claude Code 为 adopt；jevcrawl 是给已采用工具加装“站内多跳检索”的路径；Cursor 为 watch；arXiv 是基准所用 WebWalkerQA 的来源。HKUDS/CLI-Anything 在清单中为 watch，本报告建议上调为 try；reason network 补的是“多 agent 跨机通信”这一块；idx 的“现成 CLI 自带 MCP server、一份数据三种界面”在清单中没有直接对应条目；Blender 扩展与 OpenCode、CLI-Anything 在 Blender 自动化上重叠，按任务选；jevreel 与 Claude Code 直接相关，也与 arcmira 都通过 TypeSafe 的 Jev 计量，但目标不同；WhatsApp MCP 与 im-mcp 都是给 agent 补私人沟通上下文的只读数据源，前者是远程 Cloudflare 部署、单账号单 owner，后者是本地数据库解密、强版本依赖。
-- 尚未覆盖的部分：这些路径都没有讨论哪类任务适合哪个模型，也没有系统比较 Claude Code / Codex / Hermes 三者在同一工具集下的差异；反馈信号、上下文信息、权限回收机制只有零散机制；除单次调用边界与停止原因外，多数没有由时间、事件或状态触发的主动推进能力；私人消息路径都没有给出业务效果指标，只给出部署/兼容性验证。
+- 做法 L claude-security-scan：可核查的是 README 的检测项清单、安装命令、各域准备方式、报告路径、安全设计和限制；仓库 32 stars。没有检出率、误报率、真实用户案例或独立评测，也没有代码审计结果；作者关于“最近信息泄露多由疏忽造成”“这些检查去看几秒就能知道”等是主张，不是数据结论。原文自述限制：Google Workspace 整体管理设置因需 Admin API 委派不在范围；AWS 默认只查东京和弗吉尼亚；不做暴力/模糊测试等攻击性检查；检测结果需人工最终判断。另需注意：这是会读取多账户敏感信息的第三方技能，README 中的只读与脱敏设计尚未在本报告依据的材料中经过代码级验证；Gmail 依赖第三方 `gog`；token 的 export 命令中 `...` 是占位符。
+- 与已有清单的关系：Claude Code 为 adopt；jevcrawl 是给已采用工具加装“站内多跳检索”的路径；Cursor 为 watch；arXiv 是基准所用 WebWalkerQA 的来源。HKUDS/CLI-Anything 在清单中为 watch，本报告建议上调为 try；reason network 补的是“多 agent 跨机通信”这一块；idx 的“现成 CLI 自带 MCP server、一份数据三种界面”在清单中没有直接对应条目；Blender 扩展与 OpenCode、CLI-Anything 在 Blender 自动化上重叠，按任务选；jevreel 与 Claude Code 直接相关，也与 arcmira 都通过 TypeSafe 的 Jev 计量，但目标不同；WhatsApp MCP 与 im-mcp 都是给 agent 补私人沟通上下文的只读数据源，前者是远程 Cloudflare 部署、单账号单 owner，后者是本地数据库解密、强版本依赖；claude-security-scan 是 Claude Code 的一个技能，清单里 Claude Code 为 adopt，清单中没有其他相关条目。
+- 尚未覆盖的部分：这些路径都没有讨论哪类任务适合哪个模型，也没有系统比较 Claude Code / Codex / Hermes 三者在同一工具集下的差异；反馈信号、上下文信息、权限回收机制只有零散机制；除单次调用边界与停止原因外，多数没有由时间、事件或状态触发的主动推进能力；私人消息路径都没有给出业务效果指标，只给出部署/兼容性验证；claude-security-scan 只有 README 证据，没有独立评测或代码审计。
 
 ## 依据的调研
 
@@ -788,3 +880,4 @@ uv tool uninstall im-mcp
 - [DeepAleph/jevreel](../research/radar/2026-10-19/4711-deepaleph-jevreel.md)：值得一试，照 README 的 Quickstart 在一段本地短视频上跑通 index→ask→zoom，并以 MCP/插件形式接到 Claude Code 或 Codex 试做视频检索；它给的是完整可复制的安装、配置与 lens 用法，值得小范围试，但底层 Jev 图像能力仍是实验性、验证只基于单个测试视频，不建议直接全量采用。
 - [Show HN: WhatsApp MCP running free on Cloudflare](../research/radar/2026-10-19/4806-show-hn-whatsapp-mcp-running-free-on-cloudflare.md)：值得一试，建议小范围试用：在自己的 Cloudflare 账户部署只读 WhatsApp MCP，接入 Claude Code 验证搜索、跨聊天查找和群聊补课类任务；它给出了完整部署步骤和工具接口，但属于非官方协议、仅单账号验证，不宜直接作为团队默认方案。
 - [stkoecn/im-mcp](../research/radar/2026-10-19/4855-stkoecn-im-mcp.md)：值得一试，按 README 的「uv tool 安装 → wechat-init/dingtalk-init 初始化 → 客户端 MCP 配置」三步在一两台机器上小范围试跑，它能把微信/钉钉的沟通上下文变成 agent 可直接检索的只读数据源；但涉及本地数据库解密与明文落盘、强依赖客户端版本，且只有作者自述无实测数据，暂不宜作为通用做法直接写进手册。
+- [chaenmasahiro0425/claude-security-scan](../research/radar/2026-10-20/5184-chaenmasahiro0425-claude-security-scan.md)：值得一试，建议先小范围试用：按 README 安装后用 --demo 验证，再只对一个低风险域运行 --skip repos，确认只读、脱敏和“未能确认”标注可靠后再扩大。理由是它把跨 Mac、仓库、云和 Gmail 的例行检查封装成一句触发和定时任务，步骤具体；但它是跨多账户读取敏感信息的第三方技能，目前只有 README 证据，不宜直接全量 adopt。
