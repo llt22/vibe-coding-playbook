@@ -1,16 +1,18 @@
-# 把 AI 接进真实工作流：先补领域能力，再补收口、观测和交接
+# 让 AI 在长任务里按工作单元划清上下文边界
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：你已在用 Claude Code 或 Cowork，但每次让 AI 做职能工作都要重讲领域知识和公司上下文，且缺少收口、观测、交接和编码变更编排，无法判断是否真的变好。
-> 先试这一步：先记录 2–3 次基线，然后只装一个与你当前工作最接近的职能插件或一个域技能包，用真实任务试一两周，没有可感知改善就卸载。
+> 解决的问题：解决 AI 长会话中上下文越滚越大、跨任务交接靠自动压缩丢失关键约束、以及多层工具叠加后说不清有没有变好的问题。
+> 先试这一步：先记录 2–3 次真实任务的基线，再只加一层（收口、观测或交接）跑同一类任务对照；如果你在用 DSH PTC，先用一个含 4–6 个独立子任务的任务试一次块级压缩。
 > 最近修订：2026-10-21
 
 ## 解决什么问题
 
 你已经在用 Claude Code 或 Cowork，但每次让 AI 做某个职能的活（写 SQL、准备客户通话、审合同、对账、做 3D 资产、写 PRD、画论文示意图等），都要重新解释领域知识、反复交代公司上下文、手动把外部工具的数据贴进去，而且 AI 给出的流程往往是教科书做法，不是你团队实际的做法。另外几个常见缺口：AI 在会话中途问你的问题、顺手发现的 bug、失败的测试，过一会儿就淹没在对话里；装完一堆插件后，你说不清到底有没有变好；任务跑得比一个上下文窗口更久时，交接、唤醒和拍板都靠人守着；真正做一次中大型编码变更时，单个会话往往一口气写到底，没有计划、没有独立审查、landing 之前没人核对。
 
-本手册用五层叠加来补：官方插件市场层、职能层（含独立 Agent Skills、按域技能包与编码变更编排）、收口层、观测层（广/深）、交接层。职能层除了官方职能插件和独立技能包，还可选 `alirezarezvani/claude-skills` 这类按域技能包：把领域流程固化成 `SKILL.md`＋`scripts/`＋`references/`，安装前先用它自带的审计脚本扫一遍，只装一个域。编码变更编排层有两个可选项：`priyanshujha/subagent-studio` 偏重计划、worktree、两轮 review 和可审计 landing；`iha2/superlite` 偏重把 spec 交给 agent、回来拿已完成且已测试的代码，支持人工审批计划和 AI 无人驾驶两种编排模式。两者都做多代理编排，但买的东西不同，先选一个跑通，不要在同一任务上叠。
+长会话还会遇到另一个问题：自动压缩按 token 阈值切，不知道哪些消息属于同一个工作单元。在 DeepSeek Harness 的 PTC 模式里，可以让模型按工作单元给消息打块，转场时用自己写的交接摘要替换整段；原始消息仍保留在 append-only 日志里，人看到的 transcript 完整，模型下一次请求看到摘要。这个做法只适用于 DSH PTC，不装插件时也可以只借它的机制。
+
+本手册用五层叠加来补：官方插件市场层、职能层（含独立 Agent Skills、按域技能包与编码变更编排）、收口层、观测层（广/深）、交接层。职能层除了官方职能插件和独立技能包，还可选 `alirezarezvani/claude-skills` 这类按域技能包：把领域流程固化成 `SKILL.md`＋`scripts/`＋`references/`，安装前先用它自带的审计脚本扫一遍，只装一个域。编码变更编排层有两个可选项：`priyanshujha/subagent-studio` 偏重计划、worktree、两轮 review 和可审计 landing；`iha2/superlite` 偏重把 spec 交给 agent、回来拿已完成且已测试的代码，支持人工审批计划和 AI 无人驾驶两种编排模式。两者都做多代理编排，但买的东西不同，先选一个跑通，不要在同一任务上叠。交接层也有两个做法：`Arjun0014/project-sentinel` 做跨上下文窗口的控制台；你在 DSH PTC 里时，可以用 `mengwEX/dsh-block-ptc` 让模型按工作单元划块并自己写交接摘要。两者都在动上下文边界，先只选一个。
 
 ## 适用与不适用
 
@@ -18,18 +20,20 @@
 
 **职能插件与独立 Agent Skills**：适用前提是团队已用 Claude Code 或 Cowork；所需外部工具能通过 MCP 接入；有人愿意读插件的 `skills/` 并按本团队流程改写；你希望把某职能的领域知识、工具连接和固定动作预打包复用。Blender 需要 Blender 5.2 LTS+ 并支持 Agent Skills；PM 需要能读结构化 Markdown 的代理；科研示意图需要 Node.js 22+ 与 Chromium。不适用——只看 README 就指望复现技能内部的提示词、脚本或 QA 规则；期望开箱即用、不做定制就大幅改善；需要先看到官方效果数据才采用。
 
-**claude-skills 按域技能包**：适用——现有 11 个职能插件没有覆盖你的域，或你想拿一个可复制的 `SKILL.md`＋`scripts/`＋`references/` 结构做团队模板；需要同一套 skill 跨 Claude Code、Codex、Cursor 等工具复用；愿意在安装前跑安全审计并按域隔离安装。不适用——只看 README 就指望复现技能内部提示词、脚本或 QA；需要前后对比数据或用户案例才采用；不愿做安装前审计；想一次全装。前提是本地有 git 与 Python 3，已装 Claude Code 或任一编码智能体；Windows 需用 `git clone -c core.symlinks=true` 并开启开发者模式，同时设置 `PYTHONUTF8=1`。
+**claude-skills 按域技能包**：适用——现有 11 个职能插件没有覆盖你的域，或你想拿一个可复制的 `SKILL.md`＋`scripts/`＋`references/` 结构做团队模板；需要同一套 skill 跨 Claude Code、Codex、Cursor 等工具复用；愿意在安装前跑安全审计并按域隔离安装。不适用——只看 README 就想复现技能内部提示词、脚本或 QA；需要前后对比数据或用户案例才采用；不愿做安装前审计；想一次全装。前提是本地有 git 与 Python 3，已装 Claude Code 或任一编码智能体；Windows 需用 `git clone -c core.symlinks=true` 并开启开发者模式，同时设置 `PYTHONUTF8=1`。
 
 **subagent-studio**：适用——中大型代码库、复杂变更：每次改多个文件、有真实用户、代码要维护多年；或无人值守的定时运行；能用 git 和 worktree、能定义 check commands。不适用——小而明确的工作；需要先看到结果证据才采用；不能接受每个变更的数倍 token；无法确认 `docs/evidence.md` 里的证据细节。
 
 **superlite**：适用——已安装 Claude Code、git、Python 3.10+、bash（Windows 上用 Git Bash），`uv` 可选；有一个 spec 清晰的中小型功能；愿意先用人工审批计划模式跑一轮，并用 `.superlite/metrics.jsonl` 和测试通过率自行复核。不适用——需要独立效果证据才采用；不能接受它与 superpowers 技能名冲突、不能在同一会话同时启用；高风险变更需要你逐步把关时直接上 AI 编排；没有 git 或 Python 3.10+ 的环境。
 
-**收口层、观测层、交接层**：收口层适合经常被 AI 反问、经常要回头翻测试结果的人；观测层适合想把“有没有变好”变成数字的人，但面板只在 CLI 或 Claude Desktop 的 Code tab 显示；交接层适合任务跨上下文窗口、需要定时唤醒和拍板不阻塞的人，但只在 Windows 11 和作者验证过的 Claude Code 版本上验证过，远程会话未测试。
+**收口层、观测层、交接层**：收口层适合经常被 AI 反问、经常要回头翻测试结果的人；观测层适合想把“有没有变好”变成数字的人，但面板只在 CLI 或 Claude Desktop 的 Code tab 显示；交接层的 Project Sentinel 适合任务跨上下文窗口、需要定时唤醒和拍板不阻塞的人，但只在 Windows 11 和作者验证过的 Claude Code 版本上验证过，远程会话未测试。
+
+**block-ptc（DSH PTC 专用）**：适用——你在用 DeepSeek Harness（DSH）>=0.2.1-rc.2 和 PTC 模式；一个会话里有多个相对独立子任务、需要跨任务交接；你愿意让模型自己写交接摘要并遵守 `content` 写作规范；你需要完整 transcript 保留和确定性回放。不适用——单块连续、信息强耦合、需要逐字回溯原始对话的任务；不在 DSH 上；期望它自动跑或替代 DSH 内置自动压缩引擎；不愿接受“被省略的信息在后续请求里就不存在”；需要先看到量化收益才采用——作者自己声明节省 token、降低成本等收益尚未验证。
 
 ## 前置条件
 
 1. 能使用 Claude Code（有 `claude` CLI）或访问 claude.com/plugins 的 Cowork。
-2. 版本口径：观测层（广）Claude Code 2.1.287+；收口层在 2.1.292 上构建；交接层 ≥2.1.289 且带 function-hooks 插件 API；subagent-studio 的 `roles` 配置需要 v2.1.292+；观测层（深）本地开发需要 Node 22.19.0 或更高。
+2. 版本口径：观测层（广）Claude Code 2.1.287+；收口层在 2.1.292 上构建；交接层 >=2.1.289 且带 function-hooks 插件 API；subagent-studio 的 `roles` 配置需要 v2.1.292+；观测层（深）本地开发需要 Node 22.19.0 或更高。
 3. 独立技能：Blender 5.2 LTS+；PM 可选 Python 环境；schematic-figure 需要 Node.js 22+ 与 Chromium，导出 TIFF/EPS/PowerPoint 还要 Python 3 加 Pillow、python-pptx、lxml 并安装 `pdftops` 或 Ghostscript。
 4. superlite 需要 git、Python 3.10+、bash；`uv` 可选；被构建的项目可以是任何语言。
 5. subagent-studio 需要 Claude Code 构建支持 plugin 和 marketplace；要用七步流程需能建分支和 `git worktree`，并先定义好 check commands。
@@ -39,6 +43,7 @@
 9. 准备一个非敏感、小体量的现有项目做试用，并先记录 2–3 次基线：同一任务的完成时间、返工次数、补齐上下文的次数。
 10. 同时用多层前先 `claude --version` 核对；升级 Claude Code 后先 `/reload-plugins`。
 11. claude-skills 需要 git 与 Python 3；Windows 用 `git clone -c core.symlinks=true` 并开启开发者模式，设 `PYTHONUTF8=1`；安装前能运行其 `skill_security_auditor.py`，并把 PASS 作为继续安装的门槛，WARN/FAIL 先人工检查或放弃。
+12. block-ptc 需要 DSH >=0.2.1-rc.2，随附 Cordis >=4.0.5；插件零运行时依赖（仅 `node:crypto`）；安装后必须重启一次；新建会话时选 Block PTC preset。本次发布只用 DSH 0.2.1-rc.2 做过 live 验证；peer 依赖只声明下限、无上限，新宿主只是“允许加载”，事件语义与 preset 配置仍需重新验证。
 
 ## 操作步骤
 
@@ -543,6 +548,99 @@ claude --plugin-dir /path/to/project-sentinel/plugins/project-sentinel
 
 只想验证有没有减少上下文溢出和人工盯守，先做这一步；决定长期用再正式安装。在 Claude Desktop 的 Code tab 用工作副本，把文件夹名写进 `~/.claude/settings.json` 的 `env` 块 `CLAUDE_CODE_PLUGIN_DIRS`。
 
+### 第 7 步之二：让模型按工作单元划上下文块并自己写交接摘要（DSH PTC 专用，做法 A / 做法 B）
+
+**什么时候用**：你在用 DeepSeek Harness（DSH）>=0.2.1-rc.2 和 PTC 模式；一个会话里有多个相对独立子任务，需要在任务之间交接；你能接受“被省略的信息在后续请求里就不存在”，因此要求模型把用户要求、纠正和约束完整写进摘要。**什么时候跳过**：单块连续、信息强耦合、需要逐字回溯原始对话的任务；不在 DSH 上；期望插件自动跑或替代 DSH 内置自动压缩引擎；需要先看到量化收益才采用。
+
+**做法 A：在 DSH 里安装 block-ptc**
+
+1. 安装 bundle。在 Harness Plugin Manager 里找 `dsh-block-ptc`，或让启用了 Plugin Manager 工具的 agent 执行：
+
+```text
+plugin_manager  install_bundle  dsh-block-ptc
+```
+
+本地 checkout：
+
+```sh
+git clone https://github.com/mengwEX/dsh-block-ptc.git
+```
+
+```text
+plugin_manager  install_bundle  /absolute/path/to/dsh-block-ptc
+```
+
+手工安装等价做法：编辑 `~/.dsh/profiles/<profile>/package.json`，把依赖和 bundle 加进去；下面只保留需要新增的两处，不要改原有 `ptc` preset：
+
+```jsonc
+{
+  "dependencies": { "dsh-block-ptc": "link:/absolute/path/to/dsh-block-ptc" },
+  "dsh": { "profile": { "bundles": ["@deepseek-ai/dsh-base", "@deepseek-ai/dsh-web-app", "dsh-block-ptc"] } }
+}
+```
+
+在该目录下运行 `pnpm`。
+
+2. 重启一次应用。loader 按解析后的 URL 缓存插件模块，安装 bundle 改变组合后不重启会继续跑旧模块。
+
+3. 新建会话时在 preset 选择器里选 **Block PTC**。看不到 preset 时先查 `dsh.profile.bundles` 和 `plugin_manager list_bundles`，再重启。
+
+4. 每次直接调用 `run_code` 都带 header，guard 会强制；被拒的调用本身不会被打标签，带上 header 重试即可：
+
+```text
+run_code({ description: "[block: <ids>] <goal>", code })
+```
+
+header 规则：`[block: <ids>]` 必填、逗号分隔、非空、唯一，id 不得含逗号、方括号、换行；`<goal>` 必填，与 header 同一行。同一条 assistant 消息里多个调用的 id 取并集，并作用于整条消息（含其前的 thinking/text）及其工具结果。
+
+5. 在程序内收尾一个块：
+
+```text
+await tools.block_compact({ ids, content })
+```
+
+`content` 照这个规范写：完整保留后续工作仍需的信息，细化到可以直接接着做；对不再需要的信息简要概括，删掉无关与重复内容；准确保留用户的要求、纠正和约束；记录已完成的工作、结果、未完成事项和下一步。
+
+6. 掌握收尾时机：围绕相对独立的工作单元划分块，做同一件事时复用同一 id；只在“内容不再需要”或“结果已向用户汇报、要转向其他工作”时 compact。仅仅完成一个工作步骤，不构成 compact 的理由；后续执行、回复或讨论还要用的内容要留着。
+
+7. 读返回值判断状态：成功返回 `{ replaced, tokensFreed, ids? }`；若工具结果或其他压缩仍在挂起，返回 `{ replaced: 0, tokensFreed: 0, pending: true, requestSeq, note }`，这只表示已排队，不代表已替换。
+
+8. 自查安装：
+
+```sh
+npm run check
+node tests/logic.test.mjs
+```
+
+可选原生检查（需要 DSH 已安装的服务路径）：
+
+```sh
+node tests/native-session.mjs /path/to/dsh-session/lib/index.js /path/to/dsh-tools/lib/index.js
+node tests/native-prompt.mjs /path/to/dsh-tools/lib/index.js
+```
+
+9. 卸载或停用：
+
+```text
+plugin_manager  remove_bundle  dsh-block-ptc
+```
+
+停用而不删包：
+
+```text
+plugin_manager  set_bundle  dsh-block-ptc enabled=false
+```
+
+两者都需重启。
+
+**排查要点**：preset 不在列表，查 `dsh.profile.bundles` 与 `plugin_manager list_bundles` 后重启；报 `invalid config: $.mode expected native | ptc but got both`，是老 0.2.x bundle 装在 DSH 0.2.1+ 上，升级到 0.3.0 并重启；摘要报 `no current content for ids`，说明该 id 在当前界面从未出现在 `run_code` header 中，检查拼写（已摘要过的 id 是关闭态）；块一直不压缩，说明从未用 `block_compact` 关闭，内容会留到自动压缩时被折进通用摘要；会话里压缩突然失效，先查是否存在没有配对 `compaction/end` 的 `compaction/start`（持久锁），本插件每次失败都会自己闭合括号，旧版本遗留则新开会话。
+
+**做法 B：不装插件，只借机制**
+
+不在 DSH 上，或不想引入社区插件时，保留三条做法即可：按相对独立的工作单元给会话分段；在转场时手写一份交接摘要，必须包含用户要求、纠正、约束、已完成、未完成和下一步；原始对话不要删，摘要只作为下一段工作的入口。这个做法的代价是边界和摘要都靠人，不会像做法 A 那样由 guard 强制 header、由插件替换整段消息。
+
+**怎么选**：在 DSH PTC 上、且任务确实有多个独立子任务，用做法 A；否则用做法 B，或者先用第 7 步的 Project Sentinel 做跨会话交接。块级压缩和 Project Sentinel 都在动上下文边界，材料没有说明同时装会不会互相干扰，先只在一个任务上用一套。
+
 ### 第 8 步：打开 Control Room，先开 Autopilot
 
 ```text
@@ -598,11 +696,11 @@ Machine load 默认 Off：给 CPU 和内存建议上限（Low / Medium / High / 
 
 ### 第 11 步：贡献回仓库（可选）
 
-职能插件是 markdown 文件，fork 后改，提 PR。交接层是 MIT、无构建步骤的 TypeScript，按本地 clone 改、`/reload-plugins` 热加载即可。Blender 是 MIT，可 fork 后运行 `validate_skills.py` 和 `run_tests.py`；PM 是 CC BY-NC-SA 4.0，fork 和再分发要遵守许可，添加技能遵守 `## Input` 和不用 `$ARGUMENTS` 的约定；schematic-figure 代码是 MIT，内置 Latin Modern 字体是 GUST 字体许可。claude-skills 是 MIT，按仓库自带审计与贡献方式改；superlite 和 subagent-studio 按各自仓库的贡献方式和许可来。
+职能插件是 markdown 文件，fork 后改，提 PR。交接层是 MIT、无构建步骤的 TypeScript，按本地 clone 改、`/reload-plugins` 热加载即可。Blender 是 MIT，可 fork 后运行 `validate_skills.py` 和 `run_tests.py`；PM 是 CC BY-NC-SA 4.0，fork 和再分发要遵守许可，添加技能遵守 `## Input` 和不用 `$ARGUMENTS` 的约定；schematic-figure 代码是 MIT，内置 Latin Modern 字体是 GUST 字体许可。claude-skills 是 MIT，按仓库自带审计与贡献方式改；superlite 和 subagent-studio 按各自仓库的贡献方式和许可来。block-ptc 是 MIT，按仓库的测试与贡献方式改；它是社区插件，不是 DSH 官方组件。
 
 ## 怎么判断变好了
 
-先分清来源：职能插件原文没有给出验证方法或指标；收口层只有成本口径；交接层只有机制描述；观测层（深）明确没有给出四配置性能结果；Blender、PM、示意图材料都只到 README；subagent-studio 只有作者单项目自述、仓库仅 30 星，关键证据在未包含的 `docs/evidence.md`；superlite 的 3.9 倍与 52% 是作者用自建 harness 单次或少量运行自测得出，材料未说明 52% 的具体口径，且鲁棒性探针低于对照组，不能当定论；claude-skills README 全是目录与宣传、没有效果数据、没有用户案例或基准测试，规模数字还自相矛盾。
+先分清来源：职能插件原文没有给出验证方法或指标；收口层只有成本口径；交接层只有机制描述；观测层（深）明确没有给出四配置性能结果；Blender、PM、示意图材料都只到 README；subagent-studio 只有作者单项目自述、仓库仅 30 星，关键证据在未包含的 `docs/evidence.md`；superlite 的 3.9 倍与 52% 是作者用自建 harness 单次或少量运行自测得出，材料未说明 52% 的具体口径，且鲁棒性探针低于对照组，不能当定论；claude-skills README 全是目录与宣传、没有效果数据、没有用户案例或基准测试，规模数字还自相矛盾；block-ptc 的作者明确说节省 token、降低成本等收益尚未验证。
 
 **通用最小试用**：先记录 2–3 次基线（完成时间、返工次数、补齐上下文次数），装一个插件或技能包，跑一个真实任务，再对照同一类任务。试一两周；没有可感知改善就卸载，并记为“该插件无实质增益”。
 
@@ -620,14 +718,16 @@ Machine load 默认 Off：给 CPU 和内存建议上限（Low / Medium / High / 
 
 **观测层**：广层看工具失败/被拒调用次数、单次工具延迟、上下文占用、每轮时长/token/中断、cache 读/写；深层看会话时间去向、窗口占用构成、重复读取次数、重复失败与 edit/retry 循环、任意步骤的文件原貌。若这些数字在同类任务上没有改善，换一个或卸掉。
 
-**交接层**：看 Handoff Health、跨交接的里程碑连续性、上下文溢出/被迫压缩次数、你手动 `/clear` 或 `/compact` 的次数、你守着 run 的时间、Watchers 是否按时间唤醒、Mission Queue 是否只在边界投递且只投一次、Decision Inbox 是否让拍板不阻塞 run。几次交接后里程碑仍连续、Handoff Health 没有明显空洞，才算有价值。
+**交接层（Project Sentinel）**：看 Handoff Health、跨交接的里程碑连续性、上下文溢出/被迫压缩次数、你手动 `/clear` 或 `/compact` 的次数、你守着 run 的时间、Watchers 是否按时间唤醒、Mission Queue 是否只在边界投递且只投一次、Decision Inbox 是否让拍板不阻塞 run。几次交接后里程碑仍连续、Handoff Health 没有明显空洞，才算有价值。
+
+**block-ptc（DSH PTC）**：最小试用是在一个 DSH 0.2.1-rc.2 实例上装 bundle、重启、新开 Block PTC 会话，选一个含 4–6 个相对独立子任务的真实任务（例：读仓库 → 讲 tokenizer → 讲 lexer → 写并跑测试），每个子任务一个 block id，转场时 compact 前一个块；同一任务再用默认 `ptc` preset 跑一遍作基线。看五项：同一任务每次请求的输入 token 曲线；provider 侧缓存命中与账单（必须实测，不能拿 `tokensFreed` 当结论）；后续步骤里是否还记得用户此前给出的要求、纠正与约束，记录“用户不得不重述”的次数；返工次数与完成时间；机制健康度（是否频繁 `pending: true`、guard 拒绝、`compaction/start` 无配对 `end` 导致压缩停摆）。判定规则：上下文占用与账单不上升，且重述次数/返工次数不增加、关键约束零丢失，则继续用；若 token 降了但账单或缓存命中变差、或出现关键信息丢失导致返工，结论降为 study——只借鉴“模型自写交接摘要 + 完整日志保留 + 确定性回放”这套设计，不绑这个插件。
 
 ## 常见坑
 
 - 官方市场原文没有收录任何具体插件，也没有效果数据；Anthropic 不控制也不验证插件内容，安装前必须自己检查插件主页和来源。
 - marketplace 条目的 `name` 是不可变 slug；改名会让用户安装报 `plugin-not-found`；要改显示名改 `displayName`，必须改名时用 `renames` 映射。
 - `strict: false` 声明 skill 包时路径相对于 `source.path`；每个路径指向包含 `SKILL.md` 的目录，注册为 `<plugin-name>:<skill-name>`。
-- 仓库热度不是效果：39,182 stars、Blender 42 stars、PM 7421 stars、schematic-figure 31 stars、subagent-studio 30 stars 都只反映关注度。
+- 仓库热度不是效果：39,182 stars、Blender 42 stars、PM 7421 stars、schematic-figure 31 stars、subagent-studio 30 stars、block-ptc 37 stars 都只反映关注度。
 - 材料可能被截断：PM README 末尾截断在 “worth a bookmark if you work”；交接层材料截断在 Lazy-exit guard；subagent-studio 材料截断在 “每个 agent 文件在 frontmatter 里固定 model、”。未给出的行为不要照抄。
 - 职能插件和三个独立技能包都只到 README，未展示技能内部提示词、脚本、配置或 QA 规则；开箱插件原文自称 general starting points，价值在定制。
 - 命令不出现 = 未生效；先检查 marketplace，不要继续往下做。
@@ -652,6 +752,15 @@ Machine load 默认 Off：给 CPU 和内存建议上限（Low / Medium / High / 
 - Decision Inbox 只管插件自己的决定请求，Claude Code 自己的权限提示不会被延后；inbox 的 Needs you 与 Decision Inbox 可能重叠，先只用一个。
 - 数字口径要看清：观测 mod 截图不是原生 app 截图，而是测试套件用 fixture 数据捕获的渲染树；Desktop Usage Strip 的 USD 不是订阅账单；部分 forecast 和 token 计算是估算；Autopilot 阈值截图里的 70% / 80% 只是示例。
 - Blender 需要 Blender 5.2 LTS+，MCP server 可用性自行确认；43 个 headless 测试是否全部通过无法从材料验证。PM 是 CC BY-NC-SA 4.0，添加技能必须有 `## Input` 且不能用 `$ARGUMENTS`。schematic-figure 不替代设计图的人，证据是作者自制五篇论文对比演示，没有量化评分或盲评；字体许可与代码许可不同。
+- block-ptc 的 guard 会拒绝不带 header 的直接 `run_code` 调用；被拒的调用本身不会被打标签，带上 header 重试即可。
+- block-ptc 一次摘要只能替换一个从最早到最晚的连续区间；区间内有受保护的 system/developer 消息则整段被拒，不会只替换前缀。
+- block-ptc 被省略的信息在后续请求中就不存在；摘要必须自己写全，准确保留用户要求、纠正和约束。
+- block-ptc 返回 `pending: true` 只表示已排队，不代表已替换；不要拿它当压缩成功。
+- block-ptc 的 preset 不在列表，查 `dsh.profile.bundles` 与 `plugin_manager list_bundles` 后重启；报 `invalid config: $.mode expected native | ptc but got both`，是老 0.2.x bundle 装在 DSH 0.2.1+ 上，升级到 0.3.0 并重启。
+- block-ptc 摘要报 `no current content for ids`，说明该 id 在当前界面从未出现在 `run_code` header 中，检查拼写；已摘要过的 id 是关闭态。块一直不压缩，说明从未用 `block_compact` 关闭，内容会留到自动压缩时被折进通用摘要。
+- block-ptc 会话里压缩突然失效，先查是否存在没有配对 `compaction/end` 的 `compaction/start`（持久锁）；本插件每次失败都会自己闭合括号，旧版本遗留则新开会话。
+- block-ptc 的 `tokensFreed` 不是 provider 的 cache-hit 度量；更小的上下文不等于更高缓存命中或更低账单，必须实测。
+- block-ptc 本次只用 DSH 0.2.1-rc.2 做过 live 验证；peer 依赖只声明下限、无上限，新宿主只是“允许加载”，事件语义与 preset 配置仍需重新验证。块是 per-session 的，子代理各跑自己的上下文与块。
 
 ## 证据与来源
 
@@ -675,7 +784,9 @@ Machine load 默认 Off：给 CPU 和内存建议上限（Low / Medium / High / 
 
 **交接层**：安装、会话内安装、本地 clone、`--plugin-dir` 试跑、Desktop 的 `CLAUDE_CODE_PLUGIN_DIRS`、迁移、更新、卸载、`/cr` 系列命令、六节面板、状态栏 HUD、Handoff Health、`milestones` 工具、`decision_request` 工具、权限策略、Autopilot 交接步骤、Watchers 三种策略、Mission Queue 边界投递、Run Budget / Machine load / Cache Guardian / Keep warm / Cold Resume Guard 默认值与行为、profiles 与 Answer styles 来自 `Arjun0014/project-sentinel` README；版本 1.6.3、MIT、无运行时依赖、2.1.289+ 且需 function-hooks、只在 Windows 11 与 2.1.289 / 2.1.293 / 2.1.295 验证过、远程会话未测试、1.4.0 更名与两处行为变化来自原文；减少上下文溢出和人工盯守没有量化数据。
 
-**属于调研建议、非原文数据**：官方市场的最小试用路径（1–2 小时 + 一周观察、只挑一个、检查来源、低风险任务、记录完成时间/轮次/手工切换/失败比例/新任务，一周无改善则卸载）来自调研报告建议；职能插件与独立技能的自测指标来自调研报告建议；claude-skills 的“先只装一个域、安装前审计、与不装基线比返工轮数、没有改善就卸载”来自调研结论，不是原文效果数据；subagent-studio 的最小试用建议（装 `studio-core`、跑 `studio-init`、用 plan-then-build 跑中等以上变更、验证第二遍 review 与 guard/audit）来自调研结论；superlite 的最小试用建议（先人工审批计划、记录 metrics.jsonl 与测试通过率、用内置 harness 自测、不要直接采信 3.9 倍与 52%）来自调研结论；收口层、观测层、交接层的最小试用与指标也来自各调研报告的“怎么试、怎么验证”部分，不是原文效果数据。
+**block-ptc**：v0.4.0、MIT、37 stars、DSH >=0.2.1-rc.2、Cordis >=4.0.5、零运行时依赖（仅 `node:crypto`）、安装/配置/工具调用/返回值/排错、`npm run check` 与 `tests/logic.test.mjs`、两个可选原生检查、快速上手样例 `{ replaced: 3, tokensFreed: 346 }` 均来自 `mengwEX/dsh-block-ptc` README；插件自己给出 `replaced` 与 `tokensFreed`，但原文明确 `tokensFreed` 不是 provider 的 cache-hit 度量，上下文变小不保证缓存命中率更高或账单更低；`docs/assets/context-comparison.en.png` 明确标注为机制示意、不是 API benchmark；“模型自己划线比自动压缩更好”是作者论证，不是实验；本次发布只用 DSH 0.2.1-rc.2 做过 live 验证，两个原生检查都离线、不跑模型，因此不验证实际块选择、压缩时机与信息保留质量。
+
+**属于调研建议、非原文数据**：官方市场的最小试用路径（1–2 小时 + 一周观察、只挑一个、检查来源、低风险任务、记录完成时间/轮次/手工切换/失败比例/新任务，一周无改善则卸载）来自调研报告建议；职能插件与独立技能的自测指标来自调研报告建议；claude-skills 的“先只装一个域、安装前审计、与不装基线比返工轮数、没有改善就卸载”来自调研结论，不是原文效果数据；subagent-studio 的最小试用建议（装 `studio-core`、跑 `studio-init`、用 plan-then-build 跑中等以上变更、验证第二遍 review 与 guard/audit）来自调研结论；superlite 的最小试用建议（先人工审批计划、记录 metrics.jsonl 与测试通过率、用内置 harness 自测、不要直接采信 3.9 倍与 52%）来自调研结论；block-ptc 的最小试用与判定规则（4–6 个独立子任务、对比默认 ptc、看 token 曲线/账单/重述次数/返工/机制健康度）来自调研报告的“怎么试、怎么验证”部分，不是原文效果数据；收口层、观测层、交接层的最小试用与指标也来自各调研报告的“怎么试、怎么验证”部分，不是原文效果数据。
 
 ## 依据的调研
 
@@ -691,3 +802,4 @@ Machine load 默认 Off：给 CPU 和内存建议上限（Low / Medium / High / 
 - [priyanshujha/subagent-studio](../research/radar/2026-10-18/4433-priyanshujha-subagent-studio.md)：值得一试，建议小范围试：在中大型代码库上按 README 的 quickstart 安装 studio-core，并用 plan-then-build 跑一个中等以上变更，验证第二遍 review、guard/audit 是否真的带来质量收益；理由是原文给出了可直接复制的安装命令、七步落地流程、landing trailers 和审查守卫，具体到可以照做，但证据只有作者单项目自述、仓库仅 30 星，且关键证据细节在未包含的 docs/evidence.md 中。
 - [iha2/superlite](../research/radar/2026-10-19/4923-iha2-superlite.md)：值得一试，可以在 Claude Code 中装上 superlite，先在一个 spec 清晰的中小型功能上采用“人工审批计划”模式跑一轮，同时用 metrics.jsonl 和测试通过率自行复核它的速度与质量，再决定是否推广。它把规划、并行分发、按任务难度路由到 Haiku、Sonnet、Opus 以及审查修复做成了一套可执行的插件流程；但 3.9 倍和 52% 的数据是作者用自建 harness 单次或少量运行自测得出的，鲁棒性探针还低于对照组，因此不宜直接当成定论采纳。
 - [alirezarezvani/claude-skills](../research/radar/2026-10-21/5609-alirezarezvani-claude-skills.md)：值得一试，先只装一个域、并在安装前用仓库自带的 skill-security-auditor 扫一遍，再挑两个真实任务与“不装 skill”的基线对比返工轮数；值得试的理由是它把领域流程固化成 SKILL.md＋脚本＋参考文档的可复制结构，但 README 全是目录与宣传、没有任何效果数据，规模数字还自相矛盾，不能直接 adopt。
+- [mengwEX/dsh-block-ptc](../research/radar/2026-10-21/5616-mengwex-dsh-block-ptc.md)：值得一试，如果团队正在使用 DeepSeek Harness 的 PTC 模式，可以按 README 的安装步骤和 block 使用流程先做小范围试用，把模型自己写的交接摘要当作可控的上下文边界；如果不用这套宿主，就只借鉴它的机制。理由：安装、配置、工具调用和收尾规范都能照着做，但它只是有 37 个 star 的社区插件，只在一个宿主版本上做过实测，节省 token、降低成本等收益连作者自己都声明尚未验证。
