@@ -1,16 +1,18 @@
-# 让编码 agent 动手前先说清任务与需求，再自己跑到完成线
+# 让编码 agent 跑长任务：先定完成线，再拿证据验收
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：AI 干活时任务定义太窄、需求理解错、长任务中途停摆、宣布完成时无法确认——这篇手册给出一套「先升维任务、再澄清需求、再跑到完成线」的可照做规程。
-> 先试这一步：挑一个你本来就要派出去的真实任务，先只做一步：用 /ambition 看一版升维 brief（做法 0-D），或发一条澄清提示词让模型先反问（做法 0-A / 0-C），确认它没有抢跑。
-> 最近修订：2026-10-16
+> 解决的问题：解决长任务在派发前没定义清楚、跑起来反复停或跑偏、宣布完成时你无法确认是否真完成的问题。
+> 先试这一步：先挑一个已有测试命令的低风险仓库，只开一个任务（MAX_PARALLEL=1、默认不开网络），把 AGENT_VERIFY_CMD 设成能独立跑的测试命令，按做法 C 跑完 dispatch→review→integrate→ship 一条小需求，并记录返工与人工介入。
+> 最近修订：2026-10-21
 
 ## 解决什么问题
 
-一次让 agent 写代码，页面出来了才发现需求理解错了；或者任务在派发之前就没定义清楚——它到底该做多大、往哪个方向做，你自己都没想好；或者长任务跑到一半停下、返工；上下文被摘要后你只能读滚动回放；它宣布完成时你没法确认是否真完成。本文给出一套开工规程：任务本身还没成型时，先用 ambition skill 把它改写成「更有野心」的版本、由你在 brief 阶段拍板（做法 0-D）；需求没想清时先让模型澄清目标用户、使用场景和验收标准（做法 0-A），或者用一条模型无关的苏格拉底式追问提示词把用户、场景、边界、验收标准问全并整理成需求文档（做法 0-C），也可以在 Claude Code 里装一道「先设计、你批准、再写码」的批准闸门（做法 0-B）；需求清楚后再用「一次性交底 + 明确完成线 + CLAUDE.md 停走规则 + TASKS.md 清单 + 子代理分工 + 合并前审查」把长任务跑完（做法 A），需要你每一步都参与时改用做法 B。
+一次让 agent 写代码，页面出来了才发现需求理解错了；或者任务在派发之前就没定义清楚——它到底该做多大、往哪个方向做，你自己都没想好；或者长任务跑到一半停下、返工；上下文被摘要后你只能读滚动回放；它宣布完成时你没法确认是否真完成。还有一种更隐蔽的情况：交接靠聊天记录，完成靠 agent 自报，验证和审查不绑定具体提交，集成后才发现坏了。
 
-证据状况：做法 0-A 出自一条 X 推文，采集文本只保留 Codex 6.1 六条技巧中的第一条，没有效果数据；做法 0-C 出自另一条 X 推文，采集文本只完整保留第 1 条、第 2 条起被截断，同样没有案例和数据；做法 0-B 出自 superbrainstorming 的 README，安装与验证步骤写得很清楚，但效果主张没有数据支撑，仓库仅 31 stars，本手册也未审查其代码实现；做法 0-D 出自 ambition-skill 的 README，安装命令、两个触发方式和「先出 brief 再等你选择」的交互约定写得很清楚，但本次材料只有 README，`SKILL.md` 正文不可见，README 也没给出任何结果数据或案例；Opus 5.5 那套的收益表述全部来自厂商/作者单方主张，也没有可复现的量化证据。各做法都建议先在一个真实任务上小范围验证。
+本文给出一套开工规程：任务本身还没成型时，先用 ambition skill 把它改写成「更有野心」的版本、由你在 brief 阶段拍板（做法 0-D）；需求没想清时先让模型澄清目标用户、使用场景和验收标准（做法 0-A），或者用一条模型无关的苏格拉底式追问提示词把用户、场景、边界、验收标准问全并整理成需求文档（做法 0-C），也可以在 Claude Code 里装一道「先设计、你批准、再写码」的批准闸门（做法 0-B）；需求清楚后再用「一次性交底 + 明确完成线 + CLAUDE.md 停走规则 + TASKS.md 清单 + 子代理分工 + 合并前审查」把长任务跑完（做法 A），需要你每一步都参与时改用做法 B。若长任务需要人持续验收、还要独立验证和集成门禁，用做法 C 把编码 agent 放进独立 worktree，由调度脚本判定完成、绑定 SHA、失败回滚。
+
+证据状况：做法 0-A 出自一条 X 推文，采集文本只保留 Codex 6.1 六条技巧中的第一条，没有效果数据；做法 0-C 出自另一条 X 推文，采集文本只完整保留第 1 条、第 2 条起被截断，同样没有案例和数据；做法 0-B 出自 superbrainstorming 的 README，安装与验证步骤写得很清楚，但效果主张没有数据支撑，仓库仅 31 stars，本手册也未审查其代码实现；做法 0-D 出自 ambition-skill 的 README，安装命令、两个触发方式和「先出 brief 再等你选择」的交互约定写得很清楚，但本次材料只有 README，`SKILL.md` 正文不可见，README 也没给出任何结果数据或案例；做法 C 出自 hitl-dev-loop 的 README，命令、脚本、配置和流程写得可照做，测试是 21 个模拟 Codex 的自动化场景，但没有量化的效率或质量提升数据，也没有独立第三方评测，很多可靠性描述是作者主张；Opus 5.5 那套的收益表述全部来自厂商/作者单方主张，也没有可复现的量化证据。各做法都建议先在一个真实任务上小范围验证。
 
 ## 适用与不适用
 
@@ -20,7 +22,8 @@
 - 需求模糊、担心「页面出来了，需求理解错了」的产品/功能任务：先做需求澄清。不想装东西、只用一条提示词，用做法 0-A（原文指定 Codex 6.1）或做法 0-C（原文未指定模型，任何支持多轮对话的模型均可）；想把结论落成一份能交给别人或另一个会话的文档，优先 0-C。
 - 在 Claude Code 里、想让流程本身挡住「没批准就写码」，用做法 0-B。
 - 长、多步骤、有明确完成线的工作，例如贯穿大仓库的改动直到测试通过（做法 A）。
-- 大代码库的审计、迁移、跨服务评审，可拆给子代理并行做（做法 A）。
+- 有验收人、需要把「编码 agent 干活」和「独立验证 / 审查 / 集成」分开的长任务，例如已有测试命令、能把产品拆成可验证小任务的仓库：用做法 C。
+- 大代码库的审计、迁移、跨服务评审，可拆给子代理并行做（做法 A）；做法 C 也适合把服务或文件范围拆成独立任务。
 - 信息在图表、示意图、日历截图里，需要问依赖空间位置关系的问题。
 - 需要先跑一轮合并前审查，或要成品文件（可分享的表格、文档）而不是大纲。
 - 1–3 小时规模的真实编码任务、你用的又是当前前沿模型、只想要一次快速设计确认：这是做法 0-B 的试点场景。
@@ -37,9 +40,11 @@
 - 做法 0-B 主要适用于 Claude Code；其他支持 Agent Skills 的宿主没有 session-start hook，不会自动触发，需要按名字显式要求它。
 - 做法 0-B 删掉了 TDD、子代理与逐任务代码审查，在高风险或要求可审计的代码库中，这种精简本身就是风险。
 - 需要强制测试先行、独立代码审查、并行多代理或 git worktree 管理时：回上游 Superpowers，或按做法 A 手动补齐子代理与合并前审查。
+- 做法 C 不是无人监督的自动编程，README 明确要求人负责体验产品、反馈和发布；没有可独立运行的验证命令时任务会停在 `needs-review`。
+- 做法 C 强依赖 Claude Code、Codex CLI、bash、git、python3/jq；README 未提 Windows 支持，行为与 Codex CLI 版本相关，升级后需重验。
 - 长链分析类项目不要用「已答过的问题视为定稿」这条项目指令：后面的步骤可能暴露前面答案的错误。
-- 需要你每一步都参与的成对编程，不要用自主长任务的停走规则，改用做法 B。
-- 上述各做法的收益都没有可复现的量化证据（插件那篇甚至没有任何效果指标，只给了插件自身的测试命令），按 try 使用，不要按 adopt 全面铺开。
+- 需要你每一步都参与的成对编程，不要用自主长任务的停走规则，改用做法 B；也不要用做法 C 的调度循环替代你逐步参与。
+- 上述各做法的收益都没有可复现的量化证据（插件那篇甚至没有任何效果指标，只给了插件自身的测试命令；做法 C 只有仓库自述与模拟测试），按 try 使用，不要按 adopt 全面铺开。
 
 ## 前置条件
 
@@ -49,6 +54,8 @@
 - 做法 0-C 的采集原文只完整给出第 1 条提示词，第 2 条在「2.」处即被截断，其余提示词无法核实，不要替作者补全。
 - 做法 0-B：使用 Claude Code。如果你已经在用 Superpowers，先准备通过 `/plugin` 把它禁用或卸载——两个插件都带 `brainstorming` skill 和 session-start hook，重名会冲突。可选的视觉伴侣另需本机有 Node.js。
 - 做法 0-B 的仓库只有 31 stars，本手册只依据其 README 判断，未审查代码实现，技能提示词的实际内容与行为约束强度未知。
+- 做法 C：Claude Code、Codex CLI（或 Codex 桌面端自带 CLI）、git ≥ 2.31、bash、python3（或 jq）；可选 `gh`、git ≥ 2.38。仓库内需要 `AGENTS.md`、`CLAUDE.md`、`TASKS.md`、`DECISIONS.md`、共用规则、任务说明模板、报告 JSON Schema；需要 `AGENT_VERIFY_CMD`、`AGENT_SHIP_CMD`；需要按项目实际填写网络权限、额外可写目录、超时、熔断、预算、并发上限。
+- 做法 C 的 README 建议在 macOS/Linux 类环境使用，未提 Windows 支持；它默认适配 Codex CLI（`exec --json --output-schema`），其他编码 agent 需要实现同样接口。
 - 在 Claude 应用里，先确认模型选择器显示的是 Opus 5.5。
 - 在 Claude Code 里，项目根目录有或可新建 CLAUDE.md，按项目实际修改。
 - 你自己清楚验收标准，才能写出「完成」长什么样。
@@ -63,8 +70,9 @@
 - 做法 0（需求还没想清）：先澄清再实现。0-A 是一条提示词，不装东西，原文指定 Codex 6.1；0-C 也是一条提示词，模型无关，额外覆盖「边界」并要求把结论整理成需求文档；0-B 是 Claude Code 插件，用批准闸门保证「没批准不写码」。
 - 做法 A（自主长任务）：任务长、多步骤、有明确完成线，你不想全程盯着。默认先试这套。
 - 做法 B（成对编程）：你希望每一步都参与，开始前一行计划、结束时一段简短回顾。CLAUDE.md 按做法 B 反向配置。
+- 做法 C（有人验收的长任务）：任务能拆成可验证的小任务、仓库已有可独立运行的测试命令，你希望编码 agent 在独立 worktree 里改代码，调度脚本独立判定完成、审查和验证绑定 SHA、集成失败自动回滚，人只做验收和方向决策。
 
-三者的分工与顺序：0-D 管「任务该是什么」，0 管「需求本身没想清」，A 管「需求清楚后怎么一次交底并跑到完成」。可以串起来：先 0-D 升维 → 再 0-A / 0-C 澄清 → 再进 A。需求已经清楚时直接从 A 开始。做法 0-B 和做法 A 也不冲突，但要知道：0-B 的设计前提是「设计达成后模型自己走完」，它删掉了子代理和逐任务代码审查，所以高风险任务仍要手动补上做法 A 的第 8 步。
+分工与顺序：0-D 管「任务该是什么」，0 管「需求本身没想清」，A 管「需求清楚后怎么一次交底并跑到完成」，C 管「有人验收时怎么把交接、验证、审查、集成做成状态机」。可以串起来：先 0-D 升维 → 再 0-A / 0-C 澄清 → 再进 A 或 C。需求已经清楚时直接从 A 或 C 开始。做法 0-B 和做法 A 也不冲突，但要知道：0-B 的设计前提是「设计达成后模型自己走完」，它删掉了子代理和逐任务代码审查，所以高风险任务仍要手动补上做法 A 的第 8 步。做法 C 与 A 的差异：A 靠提示词和 CLAUDE.md 约束模型行为；C 靠外部脚本和状态机，把完成判定、验证、审查、集成从 agent 自报里拆出来，但需要更多工具依赖，且必须有人验收。
 
 ### 做法 0-D：动手前先把任务升维，再由你选择（ambition skill）
 
@@ -110,7 +118,7 @@ brief 是按 altitude / depth / range 升维过的任务描述。预期结果：
 
 例如改变它升维的方向、brief 长度、是否自动继续。前提：先自己读一遍这个文件——本次材料没有它的正文，无法告诉你里面写了什么。
 
-**和做法 0-A / 0-C 的差异：**0-D 改的是「任务该是什么」（高度、深度、范围），作用在任务定义与委派环节；0-A / 0-C 改的是「这个需求里的用户、场景、边界、验收标准是什么」，作用在需求澄清环节。两者可以连用：先 0-D 升维，再用 0-A 或 0-C 把需求问清，然后进做法 A。
+**和做法 0-A / 0-C 的差异：**0-D 改的是「任务该是什么」（高度、深度、范围），作用在任务定义与委派环节；0-A / 0-C 改的是「这个需求里的用户、场景、边界、验收标准是什么」，作用在需求澄清环节。两者可以连用：先 0-D 升维，再用 0-A 或 0-C 把需求问清，然后进做法 A 或 C。
 
 **成本与收益：**安装与触发方式明确、成本极低（一行 clone、一个斜杠命令）；但仓库只有 49 stars，本次只有 README、没有 `SKILL.md` 正文，README 也没有给任何效果数据或案例。「升维后更好」「先出 brief 再确认能避免跑偏」都只是作者主张。
 
@@ -164,7 +172,7 @@ brief 是按 altitude / depth / range 升维过的任务描述。预期结果：
 
 **6. 把这份文档作为后续写代码、生成方案、或用其他 AI 工具的输入。**
 
-预期结果：你拿到一份能不问背景就看懂的需求文档；接着可以进入做法 A（把「完成」写成验收线）或做法 0-B（走批准闸门）。
+预期结果：你拿到一份能不问背景就看懂的需求文档；接着可以进入做法 A（把「完成」写成验收线）、做法 B（你逐步参与）或做法 C（需要独立验证和验收门禁时）。
 
 **0-A / 0-C / 0-B / 0-D 怎么选：**
 
@@ -267,7 +275,7 @@ Stop and ask me only if a test fails for a reason you can't explain.
 
 包括提示词里和已保存的指令里。前提：你用的确实是 Opus 5.5。原文理由：它每次回复前都会思考，并由自己决定思考多少。
 
-- 要快速回答简单问题时，直接写 "Answer directly."。
+- 要快速回答简单问题时，直接写「Answer directly.」。
 - 要在 Claude Code 里调整思考量，改 effort 设置，而不是写「think hard」。
 
 **3. 任务跑到一半想起补充要求，直接打字追加，不用重启。**
@@ -289,7 +297,7 @@ When a step doesn't need my input, keep going. Put status notes in the same mess
 Stop and ask only when you can't continue without me, or before anything destructive: deleting data, force-pushing, or changing anything outside this repository.
 ```
 
-预期结果：减少以 "Want me to continue?" 结束的停顿。原文补充：如果一次运行这样停下，回一句 "continue" 即可；如果经常这样，这条规则能减少停顿。
+预期结果：减少以「Want me to continue?」结束的停顿。原文补充：如果一次运行这样停下，回一句「continue」即可；如果经常这样，这条规则能减少停顿。
 
 注意：规则让它可以继续跑，就意味着你更要保留自己的把关——所以最后一行要保留「破坏性操作前先停」，并且破坏性命令的权限提示要保持开启。
 
@@ -356,6 +364,122 @@ Mark anything you couldn't confirm, and say where you looked
 
 前提：你希望每一步都参与。在 CLAUDE.md 里写成：开始前先给一行计划，结束时给一段简短回顾。原文说两种方式 Opus 5.5 都遵守。
 
+### 做法 C：有验收人的长任务，用状态机 + 独立验证 + SHA 门禁跑（hitl-dev-loop）
+
+它把角色拆开：Claude 作为主 Agent 负责理解需求、调研、拆解任务；编码 Agent（默认 Codex CLI）在独立 git worktree 中改代码；调度脚本负责任务状态、反馈送达、独立验证、审查/集成门禁和构建提醒；人负责体验产品、用大白话或截图反馈、决定方向和发布。README 明确说这不是无人监督的自动编程。
+
+**1. 安装插件或复制技能。**
+
+前提：已能运行 Claude Code，并准备使用 Codex CLI。插件方式：
+
+```bash
+/plugin marketplace add mu-zi-lee/hitl-dev-loop
+/plugin install hitl-dev-loop@hitl-dev-loop
+```
+
+或复制安装：
+
+```bash
+git clone https://github.com/mu-zi-lee/hitl-dev-loop
+cp -r hitl-dev-loop/skills/hitl-dev-loop ~/.claude/skills/
+cp hitl-dev-loop/PROTOCOL.md ~/.claude/skills/hitl-dev-loop/
+cp hitl-dev-loop/agents/repo-maintainer.md ~/.claude/agents/
+```
+
+**2. 在项目里启动 Claude Code，用启动话术让它先检查状态并只做最小改动。**
+
+前提：已进入目标项目目录。原文话术：
+
+```
+用 hitl-dev-loop 的方式开发这个项目。先检查项目状态，告诉我需要做哪些最小改动。
+```
+
+预期结果：它先看项目状态，不直接大改。
+
+**3. 初始化仓库并配置验证命令。**
+
+`init.sh` 每个仓库运行一次、可重复运行；验证命令写在 `.agent-loop/config.sh`：
+
+```bash
+S=~/.claude/skills/hitl-dev-loop/scripts
+$S/init.sh
+echo "AGENT_VERIFY_CMD='make test'" >> .agent-loop/config.sh
+```
+
+前提是已设置一个可独立运行的验证命令；README 说明不设置 `AGENT_VERIFY_CMD` 时任务会停在 `needs-review`。把 `make test` 换成你项目真实可跑的测试命令。
+
+**4. 创建任务 worktree、分支、任务状态和任务说明。**
+
+默认不开网络，可用 `--scope` 限定改动范围：
+
+```bash
+$S/new-task.sh reader-fonts --scope 'src/reader/*'
+$EDITOR .agent-loop/briefs/reader-fonts.md
+```
+
+预期结果：得到独立 worktree、分支、任务状态和一份待你补全的任务说明。任务说明要写清目标、边界和验收标准。
+
+**5. 派发并后台运行调度循环。**
+
+```bash
+$S/dispatch.sh reader-fonts --detach
+```
+
+预期结果：`drive.sh` 调度循环按状态推进任务，后台运行。
+
+**6. 给任务追加反馈。**
+
+调度器只在一轮成功后才确认送达，失败会重发：
+
+```bash
+$S/feedback.sh reader-fonts "正文在 1280px 宽度下溢出"
+```
+
+**7. 查看状态和单任务报告。**
+
+```bash
+$S/status.sh
+$S/report.sh reader-fonts
+```
+
+预期结果：看到轮数、token、验证、审查、待送达反馈等状态；`status.sh` 能识别进程已死的 stalled 任务。
+
+**8. Claude 审查 diff 后记录审查结论（绑定 SHA）。**
+
+`changes` 会转成反馈：
+
+```bash
+$S/review.sh reader-fonts approve
+```
+
+前提：你已经看过 diff。审查结论绑定当前 commit SHA；不要只看 agent 自报。
+
+**9. 集成：门禁检查后在集成 worktree 合并、再验证，失败自动回滚；冲突时停下并说明。**
+
+```bash
+$S/integrate.sh reader-fonts
+```
+
+预期结果：集成前有门禁，集成后重新验证；失败自动回滚，冲突不会悄悄吞掉。
+
+**10. 只构建已验证的集成 SHA，并提醒人验收。**
+
+```bash
+$S/ship.sh && $S/alert.sh "可以验收了"
+```
+
+预期结果：`ship.sh` 只构建已验证的集成 SHA；提醒人去验收。`alert.sh` 要在 macOS 沙箱外运行才有声音。
+
+**11. 按需配置 `.agent-loop/config.sh`。**
+
+README 列出的关键项包括：`AGENT_SHIP_CMD` 构建并安装产品以便验收（在集成 worktree 中运行，可用 `$SHIP_SHA`）；`AGENT_COMMITS` 默认 `scheduler`（Agent 不写 git 元数据），可改为 `agent`；`DEFAULT_NETWORK` 默认 `0`，单任务用 `--network` 开启；`MAX_PARALLEL`/`MAX_ROUNDS` 默认 3/15；`MAX_FAILS`/`MAX_VERIFY_FAILS` 默认 3/3；`ROUND_TIMEOUT`/`VERIFY_TIMEOUT` 默认 3600 秒；`TASK_TIME_BUDGET`/`TOKEN_BUDGET` 默认 0（不限）；`INTEGRATION_BRANCH` 默认 `codex/integration`。这些配置需要按项目实际命令和风险偏好填写。
+
+**做法 C 与做法 A 怎么选：**
+
+- 任务需求清楚、你主要靠提示词和 CLAUDE.md 约束模型、希望模型在一个会话里自主跑完：用做法 A。
+- 任务需要人持续验收、需要独立验证命令、审查和验证要绑定 SHA、集成失败要自动回滚、还要把编码 agent 隔离在独立 worktree：用做法 C。
+- 两者可以连用：先用 0-A / 0-C 澄清需求，再用 A 或 C 执行；C 里的任务说明仍要写「完成」长什么样，否则调度器只能按测试结果判完成，判不了产品意图。
+
 ### Claude 应用里的补充做法
 
 **1. 先确认模型选择器显示的是 Opus 5.5。**
@@ -419,8 +543,8 @@ Don't use a cream or off-white background, italic accent words in headings, numb
 
 原文称 Opus 5.5 是首个带 Fable 级生物 / 网络安全防护的 Opus 模型；应用和 Claude Code 里大多数被标记的消息会转到较老的模型上继续，工作不中断；在源码中查找安全漏洞是被允许的，日常健康和教育问题也应正常。
 
-- Claude 应用：会看到以 "Switched to" 开头的提示和较老模型名，对话留在该模型上。要回到 Opus 5.5，在模型选择器里选它；如果那条消息还在对话里，可能再次被标记，开新对话可以避免。想先被询问，去 Settings → Capabilities，关掉 "Switch models when a message is flagged"，会看到一张带选项的 "paused" 卡片。注意：检查覆盖对话里的全部内容，包括文件和搜索结果，所以标记可能来自更早的内容而非你最后一条消息。
-- Claude Code：提示里会点名较老的模型，会话继续在该模型上。要切回，运行 `/model`；按两次 Esc 编辑上一条消息重试；想先被询问，运行 `/config` 修改 "Switch models when a message is flagged"；如果是误判，运行 `/feedback`。
+- Claude 应用：会看到以「Switched to」开头的提示和较老模型名，对话留在该模型上。要回到 Opus 5.5，在模型选择器里选它；如果那条消息还在对话里，可能再次被标记，开新对话可以避免。想先被询问，去 Settings → Capabilities，关掉「Switch models when a message is flagged」，会看到一张带选项的「paused」卡片。注意：检查覆盖对话里的全部内容，包括文件和搜索结果，所以标记可能来自更早的内容而非你最后一条消息。
+- Claude Code：提示里会点名较老的模型，会话继续在该模型上。要切回，运行 `/model`；按两次 Esc 编辑上一条消息重试；想先被询问，运行 `/config` 修改「Switch models when a message is flagged」；如果是误判，运行 `/feedback`。
 
 **2. 不要在回复里要求它复现内部推理。**
 
@@ -434,10 +558,10 @@ Explain why you chose this approach in three sentences.
 
 收尾清单（出自 Opus 5.5 指南原文），可以直接当检查表用，每一条都是可观察的：
 
-- 提问侧：任务写清了「完成」长什么样；提示词和保存的指令里没有 "think hard" 类句子；设计请求列出了要排除的风格；图表和截图是附件而不是重打的数字。
+- 提问侧：任务写清了「完成」长什么样；提示词和保存的指令里没有「think hard」类句子；设计请求列出了要排除的风格；图表和截图是附件而不是重打的数字。
 - Claude Code 长任务侧：CLAUDE.md 写明何时停何时继续、破坏性操作前必停；破坏性命令的权限提示仍然开启；大型审计和迁移拆给了子代理；任务清单保存在 TASKS.md 里。
 - 核查侧：先读报告里「需要你」的部分；人工评审前先跑了一轮审查；研究类回答标注了无法确认的内容。
-- 拦截侧：知道怎么切回（模型选择器或 `/model`）；"Switch models when a message is flagged" 按你的意愿设置。
+- 拦截侧：知道怎么切回（模型选择器或 `/model`）；「Switch models when a message is flagged」按你的意愿设置。
 
 做法 0-D 侧（原文没有任何指标、也没有案例，下面四条是本次调研为试用环节设计的自设观察点）：
 
@@ -465,6 +589,17 @@ Explain why you chose this approach in three sentences.
 
 做法 A 侧：一次运行中途问你「要不要继续」的次数是否变少；子代理汇报是否附了可核对的证据，最终表是否完整；它标注的「无法确认」项与你事后发现的盲区是否吻合；合并前审查给出的阻塞项里，多少是真问题、多少是误报。
 
+做法 C 侧（README 没有给量化效率或质量数据，下面几条是调研报告建议的记录项）：
+
+- **从派发到 verified 的轮数和耗时**：用 `status.sh` 与 `report.sh` 记录，和手工做同一需求的基线对比。
+- **验证失败次数**：`AGENT_VERIFY_CMD` 是否稳定拦住问题，还是大量误报。
+- **审查打回次数**：`review.sh` 后打回的次数；审查 diff 是否小到你能快速看完。
+- **集成冲突 / 回滚次数**：`integrate.sh` 后是否无需手工修冲突或回滚。
+- **token 与人工介入次数**：`status.sh` 显示的 token；你补上下文、修 agent 坏改动、做验收决策各花多少时间。
+- **验收时发现的缺陷数**：ship 后你实际验收时发现的问题数。
+
+改善判断（做法 C）：在同样范围下，验证能稳定拦住问题、审查只需看小 diff、集成无需手工修冲突/回滚、人工介入集中在验收和方向决策，而不是反复补上下文或修 agent 的坏改动；若轮数或人工时间高于手工基线且没有质量收益，则只保留其状态机、SHA 门禁和独立验证思路。
+
 最小试用方式（做法 0-D，调研建议）：按第 1 步的 clone 命令装好后，在 Claude Code 里挑 2–3 个你**本来就要派给 AI 或同事的真实任务**，逐个跑 `/ambition`，只读它给出的 brief，先不做任何执行；对比 brief 与你的原始表述。退出门槛：如果试过后发现它只是把任务说得更花哨、实际产出与不改写时无明显差别，就把它从「可用工具」降为「思路参考」，不要写进团队规范。
 
 最小试用方式（做法 0-C，调研报告建议的对照法，1 周内跑 2～3 个真实小需求）：
@@ -484,7 +619,9 @@ Explain why you chose this approach in three sentences.
 
 最小试用方式（做法 A）：挑一个你手头的真实长任务，按做法 A 的 1–9 步跑一遍；如果这个任务的需求本身还模糊，先按做法 0（0-A 或 0-C）做一轮澄清再进 A。先不全面铺开。这些原文都没有给出试用时长和量化阈值，试多久由你按任务长度决定（0-B 建议落在 1–3 小时的任务上，0-C 建议 1 周内跑 2～3 个真实小需求，0-D 建议挑 2–3 个本来就要派出去的真实任务）。
 
-什么时候不该继续用 0-B：任务需要强制测试先行、需要独立代码审查、或需要并行多代理时——原文自己说了这类场景应回到上游 Superpowers。
+最小试用方式（做法 C，README 建议）：选一个低风险、已有测试命令的仓库，只开一个任务，`MAX_PARALLEL=1`，默认不开网络，设置一个快速但完整的 `AGENT_VERIFY_CMD`，用 `new-task.sh --scope` 限定小范围；按 `dispatch → feedback → status/report → review approve → integrate → ship` 跑完一条真实小需求。记录基线（同样需求手工做的时间、人工审查轮次、返工次数），再记录本流程的：从派发到 verified 的轮数和耗时、验证失败次数、审查打回次数、集成冲突/回滚次数、`status.sh` 显示的 token、人工介入次数、验收时发现的缺陷数。
+
+什么时候不该继续用 0-B：任务需要强制测试先行、需要独立代码审查、或需要并行多代理时——原文自己说了这类场景应回到上游 Superpowers。什么时候不该继续用 C：你没有人持续验收、仓库没有可独立运行的测试命令、或任务无法拆成范围清晰的小任务时，先不要上调度循环。
 
 ## 常见坑
 
@@ -506,22 +643,30 @@ Explain why you chose this approach in three sentences.
 - 跳过冒烟验证。发一句 `Let's make a react todo list` 就能看出 skill / hook 有没有生效；不出现「先问这个应用是做什么用的」就说明没生效。
 - 把 `.superbrainstorming/` 提交进仓库。视觉伴侣生成的 mockup 存在这个目录，记得加进 `.gitignore`。
 - 以为插件的轻量配置是通用规律。它删掉了 TDD、子代理和独立代码审查，「当前模型能自己走完」只是作者主张，没有对照数据；高风险或需要可审计的代码库要么用上游 Superpowers，要么手动补做法 A 的第 6、8 步。
-- 试用时只跑装了插件的那一遍。没有对照就看不出改善，也没有基线可比。
-- 拿玩具任务或大重构当试点。报告建议的任务规模是 1–3 小时的真实任务。
-- 在非 Claude Code 宿主上等它自动触发。没有 session-start hook 时，要按名字显式要求它加载 `skills/brainstorming/SKILL.md`。
+- 试用 0-B 时只跑装了插件的那一遍。没有对照就看不出改善，也没有基线可比。
+- 拿玩具任务或大重构当 0-B 试点。报告建议的任务规模是 1–3 小时的真实任务。
+- 在非 Claude Code 宿主上等 superbrainstorming 自动触发。没有 session-start hook 时，要按名字显式要求它加载 `skills/brainstorming/SKILL.md`。
 - 改了 `skills/brainstorming/SKILL.md` 或 `hooks/bootstrap.md` 就直接合并。这会改变智能体行为，要在真实会话里试过再合并。
 - 让它自主跑就放松把关。规则让它可以继续跑，就意味着你更要保留自己的把关；「破坏性操作前先停」这条必须留在 CLAUDE.md 里，破坏性命令的权限提示也要保持开启。
 - 靠读滚动回放看进度。长任务会填满上下文窗口，Claude Code 会摘要较早的回合；要看 TASKS.md。
-- 还在提示词里写「think hard / think step by step」。前提是你用的确实是 Opus 5.5；要控制思考量就改 effort 设置，简单问题直接写 "Answer directly."。
+- 还在提示词里写「think hard / think step by step」。前提是你用的确实是 Opus 5.5；要控制思考量就改 effort 设置，简单问题直接写「Answer directly.」。
 - 用「别做得平庸」这种笼统说法排除设计风格。原文说这基本只是换一种默认风格，要列具体的排除项。
 - 在长链分析类项目里加「已答过的问题视为定稿」。后面的步骤可能暴露前面答案的错误。
 - 在回复里要求复现内部推理。这是会被拒的类别之一。
 - 拦截后一直卡在原对话里。那条消息可能再次被标记，开新对话可以避免；标记也可能来自更早的内容（包括文件和搜索结果），不一定是最后一条消息。
 - 把 fast mode 当成默认。它是研究预览功能，需要额外用量、每 token 更贵，只适合逐条等回复的来回式工作。
+- 用做法 C 却没设 `AGENT_VERIFY_CMD`。README 说明任务会停在 `needs-review`，调度器无法独立判定完成。
+- 把做法 C 当成无人监督自动编程。README 明确要求人负责体验产品、反馈、决定方向和发布；你仍要持续验收。
+- 一开始就把 `MAX_PARALLEL` 开大。并行任务会有文件重叠检测，但最小试用应只开一个任务、限定 `--scope`，先看验证和回滚是否可靠。
+- 只看 agent 自报完成，不看 SHA 与验证结果。做法 C 的要点是完成由调度器独立判定、验证和审查绑定 commit SHA；跳过这一步就退化成普通聊天。
+- 升级 Codex CLI 后不重验流程。README 说明行为与 Codex CLI 版本相关，升级后需要重新验证。
+- 在 Windows 上直接照搬做法 C。README 未提 Windows 支持，强依赖 bash、git、python3/jq。
+- 等 `alert.sh` 在 macOS 沙箱里发声。它要在沙箱外运行才有声音。
+- 任务说明不写验收标准，只写「改一下阅读器字体」。调度器能跑测试，但判不了产品意图；做法 C 仍需要你把「完成」写清楚。
 
 ## 证据与来源
 
-本手册合并五篇调研。
+本手册合并六篇调研。
 
 **一、开发前需求澄清的两条提示词（做法 0-A / 0-C）**
 
@@ -566,7 +711,19 @@ Explain why you chose this approach in three sentences.
 - 作者 / 厂商单方主张，没有可复现的量化证据：Opus 5.5 自主工作时间更长、会直白说明自己做了什么、每次回复前都会先思考；在多步骤长任务上比 Opus 5 撑得更久；读图表、示意图、截图更准；做出的表格和文档分享前需要的编辑更少；是首个带 Fable 级生物 / 网络安全防护的 Opus 模型。
 - 转述的早期测试者说法，二手且无数据：让它跑数小时编码任务几乎不用盯着；协调多个并行子代理做长审计和迁移几乎不用盯着；在最低 effort 下抓到的 bug 比 Opus 5 在高 effort 下还多、误报更少。
 
-五篇（两条提示词、一个插件 README、一个 skill README、一篇模型操作指南）的收益表述都来自厂商 / 作者一方，且 Opus 5.5 那套强绑定具体版本，因此整套做法按 try 使用，不要按 adopt 全面铺开。
+**五、hitl-dev-loop：有人验收的长任务循环（做法 C）**
+
+来源：mu-zi-lee/hitl-dev-loop 的 README。
+
+- 原文给出的可核验内容：安装命令（插件方式与复制方式）、脚本清单、配置表、使用示例、协议、模板和测试说明；流程为 init→new-task→dispatch→feedback→status/report→review→integrate→ship；`AGENT_VERIFY_CMD` 不设置时任务停在 `needs-review`；默认适配 Codex CLI（`exec --json --output-schema`）；任务隔离在独立 git worktree；默认由调度器提交（`AGENT_COMMITS=scheduler`），避免沙箱写不了 git 索引；只读 `repo-maintainer` 子 Agent 走低成本路线；`status.sh` 能识别 stalled 任务；审查结论绑定 SHA；集成后再验证，失败自动回滚；`ship.sh` 只构建已验证的集成 SHA。
+- 测试证据：21 个模拟 Codex 的自动化场景，CI 在 ubuntu 和 macOS 运行。这些验证的是流程机制，不是真实项目里的效率或质量提升。
+- 只是作者主张、没有量化数据：没有给出效率或质量提升数据，没有独立第三方评测；很多可靠性描述是作者主张；作者列出在真实项目踩坑后的经验，部分在 codex-cli 0.162 实测，但这不是对照实验。
+- 局限：强依赖 Claude Code、Codex CLI、bash、git、python3/jq，README 未提 Windows 支持；行为与 Codex CLI 版本相关，升级后需重验；需要人持续验收，不是无人监督自动编程；`alert.sh` 在 macOS 沙箱外运行才有声音。
+- 试用建议：按调研结论，在一个低风险、已有测试命令的仓库按 README 的 init→new-task→dispatch→feedback→review→integrate→ship 跑一条真实小任务，重点看独立验证和 SHA 门禁是否减少返工；暂不宜直接 adopt。
+
+**六、证据强度总说明**
+
+六篇（两条提示词、一个插件 README、一个 skill README、一篇模型操作指南、一个开发循环仓库 README）的收益表述都来自厂商 / 作者一方，且 Opus 5.5 那套强绑定具体版本，因此整套做法按 try 使用，不要按 adopt 全面铺开。
 
 ## 依据的调研
 
@@ -575,3 +732,4 @@ Explain why you chose this approach in three sentences.
 - [harrymunro/superbrainstorming](../research/radar/2026-10-05/1275-harrymunro-superbrainstorming.md)：值得一试，可以在一两个真实开发任务上小范围试装 superbrainstorming：它把「先对齐设计、人工批准、再动手写码」做成了 Claude Code 里的固定流程，安装和验证步骤在原文中写得很清楚；但效果主张没有数据支撑，且它砍掉了上游的 TDD、子代理与代码审查，是否够用取决于你用的模型和任务风险。
 - [@watreejane: 作为小排老师的忠实粉丝，我其实还收藏了很多 逆天 prompt，谁用谁知道，大家也不用找了：](../research/radar/2026-10-14/3154-prompt.md)：值得一试，可以把原文第 1 条提示词原样拿来，在真正开工前的需求澄清环节小范围试用：它是可直接复制的多轮追问模板，能逼出用户、场景、边界和验收标准；但原文只有这一条完整、无案例无数据，先试再定是否写进手册。
 - [wanderingspirit03/ambition-skill](../research/radar/2026-10-16/3841-wanderingspirit03-ambition-skill.md)：值得一试，把仓库 clone 到 ~/.claude/skills/ambition，在 Claude Code 里用 /ambition 或“make this more ambitious”触发，让它在动手前先产出升维改写 brief 再由你选择——安装与触发方式明确、成本极低，适合先在自己定义任务/委派任务的环节小范围试；但本次材料只有 README，SKILL.md 正文不可见，暂不足以给 adopt。
+- [mu-zi-lee/hitl-dev-loop](../research/radar/2026-10-21/5566-mu-zi-lee-hitl-dev-loop.md)：值得一试，建议小范围试用：在一个低风险、已有测试命令的仓库按 README 的 init→new-task→dispatch→feedback→review→integrate→ship 跑一条真实小任务，重点看独立验证和 SHA 门禁是否减少返工；它给出了可复制的脚本、配置和流程，但依赖 Claude Code/Codex CLI 且证据主要是仓库自述与模拟测试，暂不宜直接 adopt。

@@ -1,14 +1,14 @@
-# 论文交稿前：把引用和 AI 痕迹核到可复查
+# 交稿前让 AI 把每条引用对回原文
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：这篇手册解决论文交稿前参考文献不可溯源、AI 参与痕迹无人负责、审稿分诊缺少可核查证据的问题。
-> 先试这一步：先在一篇在写的论文上跑 `uvx paper-preflight check <项目> --lang zh --details`，逐条人工复核误报，再决定是否接入流程。
-> 最近修订：2026-10-08
+> 解决的问题：AI 参与的论文或法律文稿，引用、事实与作者责任常常没人真正核对；这本手册给出一条可重复的核查流程，把可核查的候选清单交回给人判断。
+> 先试这一步：先拿一份 3–5 页、带脚注的短稿跑一次 cite-check（论文可先用 paper-preflight），只看报告能否把“已确认问题 / 无法核实”分开、能否按引文定位，再决定是否扩大使用。
+> 最近修订：2026-10-21
 
 ## 解决什么问题
 
-论文由 AI 参与产出、却没有任何人真正负责时，问题往往不在语言好不好看，而在三类“缺席”：没人润色（写作层 L）、没人掌舵（研究层 R）、没人核对（痕迹 / 引用层 P、R）。absent-author 把语言痕迹与研究 / 事实核验分开评分；paper-preflight 则把参考文献拉到真实学术记录里逐条核对，说不清时明说“cannot determine”。两者合起来，把“引用能不能溯源、AI 痕迹能不能定位、作者能不能回答”变成交稿前可复查的候选清单，最终判断仍交回给人。
+论文或法律文稿由 AI 参与产出、却没有任何人真正负责时，问题往往不在语言好不好看，而在三类“缺席”：没人润色（写作层 L）、没人掌舵（研究层 R）、没人核对（痕迹 / 引用层 P、R）。在论文场景，absent-author 把语言痕迹与研究 / 事实核验分开评分；paper-preflight 把参考文献拉到真实学术记录里逐条核对，说不清时明说“cannot determine”。在法律 / 带脚注文稿场景，legal-research-skills 的 cite-check 把“读脚注→取源→比引文→记录核查状态→落报告”做成固定链路，报告分“需你注意”和“无法核实”，并在重跑时列出与上次相比的变化。三者共同的产物都不是“判决”，而是把“引用能不能溯源、AI 痕迹能不能定位、作者能不能回答”变成交稿前可复查的候选清单，最终判断仍交回给人。
 
 ## 适用与不适用
 
@@ -17,29 +17,40 @@
 - 学术论文与审稿流程：投稿前的作者自查、稿件到达时的审稿人 / AC 分诊。
 - 交稿前的参考文献事实核验：存在性、元数据一致性、撤稿、预印本是否已正式发表。
 - 确定性 lint 可脱离 agent，在命令行或 CI 独立运行，输出 lint.md；paper-preflight 也可用命令行、pre-commit、GitHub Actions 或 MCP 接入。
+- 法律研究文稿与带脚注的 Word 短稿：逐条核对引文、引号内文字、脚注交叉引用；提示未更新后续历史（affirmed / reversed / cert. denied）的下级法院案例，以及被后续判决 overrule 或 limited 的案例；为某命题找已核实权威并给页码与脚注用语；校对；建 Zotero 文库；写带来源链接与局限披露的研究备忘录；准备最高法院案卷材料（仅 Claude 插件，需额外设置）。
+- 可迁移模式：报告的数据引用、政策文件条款引用、代码注释里的出处引用等需要逐条对源的工作，可借鉴“读脚注→取源→比引文→记录→报告”的流程；但 legal-research-skills 本身只在法律研究场景验证，不能宣称其他场景已有同样效果。
 
 不适用：
 
-- 两个工具都面向学术论文写作与审稿流程，不能直接外推到一般工作产出。
+- absent-author 与 paper-preflight 面向学术论文写作与审稿流程，不能直接外推到一般工作产出；legal-research-skills 面向法律研究，也不能直接外推到所有引用核查。
 - absent-author 不得用于公开指控。审稿只陈述可核查缺陷，来源疑问以问题形式交给 AC。
 - paper-preflight 只做记录层面核验，不替你判断研究贡献或作者责任。
 - 不适用于同事投诉、学生纪律、招聘晋升等场景。
 - absent-author 不能当作洗稿工具：仓库明说清单可能被这样滥用，且最多只能把 D 洗到 C。
 - 语言痕迹对非母语写作者与首篇论文易误报（“Junior is not absent”），只允许在与研究或产物证据同现时计入。
 - paper-preflight 自述仍是 v0.4 早期版本，有已知误报与漏检；不能把退出码 0 当成“论文绝对干净”，也不能把未确认引用当成“引用错误”。
+- legal-research-skills 不能替代期刊 / 法院的正式 cite-check 或本人阅读；作者自述会漏报也会误报，正确用法是把它当补充，叠加自己的阅读和期刊的 cite-check。
+- legal-research-skills 的 Codex 桌面按钮安装尚未在全新账号上端到端测试（只验证了在插件浏览器里能正确出现）；Codex ZIP 路线更新需手动，定时更新器不管 ZIP 安装；本次材料只有 README，没有准确率、召回率、耗时或成本数字。
+- 付费墙 / 登录后的来源，工具访问不到；需要你提供有权限下载的 PDF，报告应标出访问不到的来源。不能把“无法核实”当“引文错误”。
+- 一次完整 cite-check 可能消耗相当多套餐额度，不适合拿长稿直接开跑。
+- 法律技能包不是“让 AI 帮你查资料”的通用聊天；它增加的是固定链路，结论仍由人负责。
 
 ## 前置条件
 
-- 本机有 git 与 Python 3.9+（absent-author lint 无其他依赖）。
+- 论文侧：本机有 git 与 Python 3.9+（absent-author lint 无其他依赖）。
 - 要跑 absent-author skill，需要有能读取 SKILL.md 的 agent（Claude Code、Codex 或同类），并能访问论文路径或全文。
 - 要跑 paper-preflight，本机有 Python 3.11–3.14；除 `--offline` 外需要能访问 Crossref、dblp、arXiv、DataCite、PubMed、OpenAlex 等学术 API；要有论文源文件，或参考文献文本 / PDF / arXiv ID。
 - 作者侧需要“有一个能回答问题的人类”；否则进入 audit-only 模式，并拒绝润色一篇无人掌舵的论文（否则只是把 D 变成 C）。
 - 审稿侧需先确认所在 venue 的审稿 LLM 政策允许。README 明确提示：ICML 2026 因审稿人违反自选的 no-LLM 政策而桌拒了 497 篇；该 skill 会先要求确认这一点。
 - 两个 absent-author skill 共享同一份 references/evidence-catalog.md（由 EVIDENCE.md 同步）。
+- 法律侧 Claude 桌面端路线：Mac 或 Windows；Claude 订阅需包含 Claude Code（Pro / Max，部分 Team、Enterprise 可用）；不需要开终端；准备一份几页纸、带脚注的 Word 文档；在 Code 标签选 Local 目录（Windows 不选 WSL 条目）；CourtListener 免费账号与 token（用于引注核查的判例库）；Zotero 可选，不用就在 setup 回答 skip；允许执行命令、联网、拆分给多个 AI 助手。
+- 法律侧 Codex 桌面端路线：ChatGPT 桌面端可访问文件夹；下载 ZIP 并解压，保留外层 `legal-research-skills-main` 文件夹；不需要 Codex CLI、不需要 Claude；插件里的 setup 助手只处理更新，不能替代手动环境自检。
+- 法律侧成本：一次完整 cite-check 可能消耗相当多套餐额度，先用短文档起步；登录 / 付费墙后的来源要自己提供有权限下载的 PDF。
+- 所有侧共同前提：有一个能对结论负责的人；工具输出只给候选，判断由人做。
 
 ## 操作步骤
 
-（共同准备）
+（一）论文侧共同准备
 
 1. 克隆 absent-author 仓库并安装两个 skill。前提：本机有 git。预期结果：得到本地仓库，paper-author-pass 与 paper-slop-screen 两个 skill 可用。小范围试用建议用 `--project`，避免污染全局环境。
 
@@ -140,7 +151,100 @@ Use paper-author-pass on paper/ in audit mode. I'll answer your questions.
 
 10. 签署前回答三个问题，skill 不替你回答：你是否彻底理解它？你是否能面对面为它辩护？你是否愿意把名字署在它后面？
 
-11. 可选：把 paper-preflight 装进 coding agent，让它在“收尾”时自动检查。前提：使用 Claude Code、Codex、Gemini CLI、Copilot、Cursor 等 agent。预期结果：Claude 在宣布论文完成前检查参考文献、只修有证据的错误、绝不编造参考文献。
+（做法 B：审稿人 / AC 对可疑稿件分诊）适合稿件已到你手上、且 venue 政策允许。
+
+11. 先确认所在 venue 的审稿 LLM 政策允许。预期结果：确认可以继续；不允许就不要用该 skill。
+
+12. 在 agent 里用审稿侧 skill 对可疑稿件分级。前提：已确认政策允许。预期结果：输出 W / R / Q 三级评分与 A–D 四象限；其中 R 层每条 flag 应是能用算术或引用存在性验证的事实。
+
+```text
+Use paper-slop-screen to triage this arXiv preprint: <path or id>
+```
+
+13. 如稿件有源文件或参考文献列表，可用 paper-preflight 做引用存在性 / 撤稿核验，只作为可核查缺陷，不用于公开指控。预期结果：得到可定位到具体条目的引用问题。
+
+```bash
+uvx paper-preflight check path/to/suspicious-paper --lang zh --details
+```
+
+（做法 C：法律 / 带脚注 Word 文稿的 cite-check，Claude 桌面端）
+
+14. 安装并登录 Claude 桌面版，点顶部 Code 标签（名字叫 Code，但研究写作都用这个标签）。前提：Mac 或 Windows，Claude 订阅包含 Claude Code。预期结果：能进入 Code 标签并选择本地文件夹。
+
+15. 准备一份几页纸、带脚注的 Word 文档，放在一个好找的文件夹里。消息框下方第一个控件选 Local 下的第一项（Windows 上不要选 WSL 条目，那里不支持插件）；再点旁边的文件夹控件 → Open folder… → 选中放文档的文件夹。预期结果：当前会话锁定到该文件夹。
+
+16. 安装法律研究插件。前提：已进入 Code 标签并选好文件夹。预期结果：插件安装到当前账号，详情面板可选 Install for you。把下面整行粘进 Code 标签的消息框回车：
+
+```text
+/plugin install legal-research --marketplace danepps/legal-research-skills
+```
+
+提示添加来源 `danepps/legal-research-skills` 时确认；详情面板里选 Install for you（对所有文件夹可用）→ Install。
+
+17. 在同一文件夹下新开一个会话，跑 setup。前提：插件已安装。预期结果：依赖检查完成，CourtListener token 已保存；Zotero 不用则 skip；自动更新可选，可事后用同一命令开关。
+
+```text
+/legal-research:setup
+```
+
+要点：CourtListener 按提示注册免费账号，从个人页复制 token（一串字母数字）粘进去；Zotero 不用就回答 skip，之后仍可做引注核查、校对、找引注、写备忘录。
+
+18. 新开会话（同一文件夹）跑第一个任务，把文件名换成自己的。前提：setup 已完成；草稿是 .docx。预期结果：生成与草稿同目录、文件名以 `Cite Check.md` 结尾的报告，草稿不被改动。过程中它可能请求执行命令 / 联网、或把任务拆给多个 AI 助手，需逐次批准；拆给多助手再复审是作者经验，无对照证据。
+
+```text
+Cite-check "My Article.docx" in this folder. Leave the draft unchanged.
+When you finish, show me the report and explain how to open it.
+```
+
+19. 读结果：先看 needs your attention 段，区分“已确认的问题”与“无法核实”项，用报告里引的原文词句和脚注号回 Word 定位。预期结果：每条要处理的问题都能落到具体引文或脚注；需要人判断的部分留在 advisory 段落而不是混进结论。
+
+20. 安装快捷方式不被识别时的兜底（老版本 Claude Code 需要两条分开的快捷方式，逐条回车）。前提：上一条 `/plugin install ... --marketplace ...` 没被识别。预期结果：装好后回到 setup。
+
+```text
+/plugin marketplace add danepps/legal-research-skills
+```
+
+```text
+/plugin install legal-research@danepps
+```
+
+详情面板选 Install for you → Install，再回第 17 步。
+
+21. 环境类故障处理（README 明确给出）：Mac 弹“command line developer tools”点 Install 等待完成重试；Windows 装插件需要 Git for Windows，装完按提示重启 Claude；setup 快捷方式不出现则新开会话，或用消息框旁 + → Add plugins 确认已安装。出问题就用大白话描述看到的报错，通常能绕过去；卡住再走分步指南或邮件联系作者。
+
+22. 企业账号被管理员限制插件源时，README 给了可直接转发管理员的原话：允许 Claude Code 设置中的插件市场 `danepps/legal-research-skills`（GitHub 仓库，作者 Daniel Epps，Washington University in St. Louis），以便安装 `legal-research` 插件；该插件只增加研究指令和脚本，不改变文件可见范围。被拒则改用下载文件夹在个人账号上跑的方案（见 TECHNICAL.md，本次未提供内容）。
+
+23. 重跑同一份短稿，先看报告开头列出的与上次相比的变化。前提：已至少跑过一次并保留旧报告。预期结果：能看出哪些问题已修复、哪些仍在、哪些是新出现的；这是稳定性观察点，不是质量证明。
+
+24. 遇到登录 / 付费墙后的来源，自己提供有权限下载的 PDF，并在报告里确认它被标为访问不到的来源。前提：你知道哪些来源需要登录。预期结果：报告不会把“无法核实”当成“引文错误”；拿不到 PDF 的条目留给人处理。
+
+（做法 D：Codex 桌面端跑同一套法律技能）
+
+25. 下载 ZIP 并解压，保留外层 `legal-research-skills-main` 文件夹（里面有告诉应用去哪里找插件的 catalog）。前提：ChatGPT 桌面端可用文件夹；不需要 Codex CLI、不需要 Claude。
+
+26. 在桌面端把该文件夹选为本地项目（选外层目录），重启桌面端、重开该项目，打开 Plugins，选来源 Daniel Epps: Codex Research Skills → Legal Research Skills → 点安装（可能是 +）。前提：解压后外层目录还在。预期结果：插件出现在列表中；来源不出现就先确认选的是解压后的目录。
+
+27. 手动做一次环境自检（注意：插件里的 setup 助手只处理更新，不能替代这步）。新开会话、选中草稿文件夹后问：
+
+```text
+Check what I need to use Legal Research Skills on this computer, including Python, web access, and CourtListener. Walk me through anything missing.
+```
+
+预期结果：缺什么会被逐项指出，包括 Python、联网能力、CourtListener。
+
+28. 首个任务（换成真实文件名）：
+
+```text
+Cite-check My Article.docx. Leave the draft unchanged, and show me how to open the report.
+```
+
+预期结果：同 Claude 路线，生成报告、草稿不改。
+
+29. 更新是手动的：重新下 ZIP、重做选目录与安装；仍显示旧版就在 Plugins 里先卸载再装；ZIP 安装不受可选定时更新器影响。工具文件夹与研究文档分开放。
+
+（工程化与维护）
+
+30. 可选：把 paper-preflight 装进 coding agent，让它在“收尾”时自动检查。前提：使用 Claude Code、Codex、Gemini CLI、Copilot、Cursor 等 agent。预期结果：Claude 在宣布论文完成前检查参考文献、只修有证据的错误、绝不编造参考文献。
 
 ```bash
 claude plugin marketplace add amos689/paper-preflight
@@ -158,13 +262,13 @@ MCP 客户端：
 paper-preflight mcp
 ```
 
-12. 可选：挂到提交 / 推送时机上。前提：已有版本控制与 CI。预期结果：pre-commit 每次提交在几秒内检查引用键和缓存判定；GitHub Actions 每次 push 检查，报告进 job summary，可选 code-scanning 告警。
+31. 可选：挂到提交 / 推送时机上。前提：已有版本控制与 CI。预期结果：pre-commit 每次提交在几秒内检查引用键和缓存判定；GitHub Actions 每次 push 检查，报告进 job summary，可选 code-scanning 告警。
 
 ```yaml
 uses: amos689/paper-preflight@main
 ```
 
-13. 可选：设免费凭证让结果更快更全。前提：不设账号也能用。预期结果：Crossref polite pool 更快更可靠；OpenAlex 额度更大，用于撤稿检查；Semantic Scholar 作为兜底源。值不会被打印或记录日志。
+32. 可选：设免费凭证让结果更快更全。前提：不设账号也能用。预期结果：Crossref polite pool 更快更可靠；OpenAlex 额度更大，用于撤稿检查；Semantic Scholar 作为兜底源。值不会被打印或记录日志。
 
 ```text
 PAPER_PREFLIGHT_EMAIL   Crossref polite pool：更快更可靠
@@ -173,38 +277,20 @@ S2_API_KEY              把 Semantic Scholar 作为“别人都没找到”时�
 paper-preflight doctor
 ```
 
-14. 实验性：找出每条引用背后的原文段落。前提：先装 extra。预期结果：输出只有“confirmed”（逐字引用段落）或“could not confirm”（附原因：无全文、只有摘要、没有足够接近的段落）。它从不说某条引用是错的。
+33. 实验性：找出每条引用背后的原文段落。前提：先装 extra。预期结果：输出只有“confirmed”（逐字引用段落）或“could not confirm”（附原因：无全文、只有摘要、没有足够接近的段落）。它从不说某条引用是错的。
 
 ```bash
 pip install "paper-preflight[support]"
 paper-preflight support path/to/paper --download-model --all
 ```
 
-（做法 B：审稿人 / AC 对可疑稿件分诊）适合稿件已到你手上、且 venue 政策允许。
-
-15. 先确认所在 venue 的审稿 LLM 政策允许。预期结果：确认可以继续；不允许就不要用该 skill。
-
-16. 在 agent 里用审稿侧 skill 对可疑稿件分级。前提：已确认政策允许。预期结果：输出 W / R / Q 三级评分与 A–D 四象限；其中 R 层每条 flag 应是能用算术或引用存在性验证的事实。
-
-```text
-Use paper-slop-screen to triage this arXiv preprint: <path or id>
-```
-
-17. 如稿件有源文件或参考文献列表，可用 paper-preflight 做引用存在性 / 撤稿核验，只作为可核查缺陷，不用于公开指控。预期结果：得到可定位到具体条目的引用问题。
-
-```bash
-uvx paper-preflight check path/to/suspicious-paper --lang zh --details
-```
-
-（仓库维护侧）
-
-18. 维护 absent-author 证据清单时，中英两份文件要一起改，再同步并靠 CI 校验 ID 覆盖。
+34. 维护 absent-author 证据清单时，中英两份文件要一起改，再同步并靠 CI 校验 ID 覆盖。
 
 ```bash
 python tools/sync_evidence.py
 ```
 
-怎么选：自己写的东西投稿前用做法 A；别人稿件到手用做法 B。两种做法都可以先跑 absent-author lint 和 paper-preflight；lint 与 preflight 输出只给候选，判断始终由人做。引用核验优先用 paper-preflight，AI 痕迹与作者责任优先用 absent-author。
+怎么选：自己写的东西投稿前用做法 A；别人稿件到手用做法 B；法律 / 带脚注 Word 文稿用做法 C（Claude 桌面端）或做法 D（Codex 桌面端）。两种法律路线都先跑短稿；所有路线都可以先跑 absent-author lint 和 paper-preflight，lint 与 preflight 输出只给候选，判断始终由人做。引用核验优先用 paper-preflight（学术记录），法律引文 / 判例后续历史优先用 cite-check；AI 痕迹与作者责任优先用 absent-author。法律技能包与 paper-preflight 不互相替代。
 
 ## 怎么判断变好了
 
@@ -214,6 +300,8 @@ python tools/sync_evidence.py
 2. 取 2–3 篇自己写过的论文，跑 `python tools/slop_lint.py` 与 `paper-author-pass`（audit 模式），看是否产出“你能回答”和“你答不上来”两类问题清单。
 3. 同时用 `uvx paper-preflight check <项目> --lang zh --details` 跑同一批论文，逐条人工复核引用发现，记录真命中 / 误报；再用 `bib fetch` 替换掉凭记忆写的条目。
 4. 取 3–6 篇已知标签的论文（至少 1 篇纯人类、1 篇已知 AI 生成，最好含 1 篇 2026 年 pipeline 产物）跑 `paper-slop-screen`，把输出象限与已知标签对照。
+5. 法律侧：用一份 3–5 页带脚注的短稿跑一遍 cite-check，把报告里的 needs your attention 项逐条回原文 / 来源抽查，分别记“真命中 / 无法核实 / 误报 / 漏报”；重跑一次看变化列表是否稳定。
+6. 同一份短稿也可在普通对话里跑一次作对照，观察技能包多出来的“读脚注→取源→比引文→记录→报告”链路是否让定位更容易；这是试用方法，不是已有对照实验结论。
 
 可观察指标：
 
@@ -223,8 +311,11 @@ python tools/sync_evidence.py
 - 诚实人类论文被判 C / D 的比例（误报率）——原文把误报列为最需要上报的类别。
 - author-pass 结束后，“彻底理解 / 当面辩护 / 署名”三问中原本答不上来的问题数量是否下降。
 - 对作者而言最硬的指标：修改后论文中“承诺但缺失的分析”“文本与表格不一致的数字”“无法溯源的引用”是否清零。
+- 法律侧：报告是否落成 `Cite Check.md`；needs your attention 每条能否用引文词句和脚注号回原文；已确认问题与无法核实项是否分开；重跑差异是否可读；付费墙来源是否被标出；人工抽查的真命中 / 误报 / 漏报；一次短稿消耗的套餐额度（作者未给数字，只能自己记）。
+- 法律侧：报告是否出现 advisory 段承载需人判断项，而不是混进结论。
+- 代码注释等迁移场景只观察流程是否可复制，不能拿法律场景的结论当验证。
 
-试多久：absent-author 调研没有给出建议时长；它给出的前提是校准样本小且为 in-sample，作者自己也指出 2026 年 pipeline 论文几乎不触发这些语言痕迹。paper-preflight 自述是 v0.4 早期版本，有已知误报与漏检，作者把误报列为最希望收到的反馈。因此先用上面的对照结果决定是否扩大使用，而不是先定一个采用期限。
+试多久：absent-author 调研没有给出建议时长；它给出的前提是校准样本小且为 in-sample，作者自己也指出 2026 年 pipeline 论文几乎不触发这些语言痕迹。paper-preflight 自述是 v0.4 早期版本，有已知误报与漏检，作者把误报列为最希望收到的反馈。legal-research-skills 的 README 没有给准确率、召回率、耗时或成本数字，只说会漏报也会误报；Codex 桌面安装路线尚未端到端验证。因此先用上面的对照结果决定是否扩大使用，而不是先定一个采用期限。法律侧建议至少跑到：同一短稿重跑一次、人工抽查一批 needs your attention 项、确认付费墙来源被标出；做不到这三点就不要扩大。
 
 ## 常见坑
 
@@ -242,10 +333,20 @@ python tools/sync_evidence.py
 - 把 `support` 的“could not confirm”当成“引用错误”。298 条金标引用上，93% 的确认是对的 [95% CI 82%, 98%]，但只确认了大约六分之一的真实引用，低分指向错误引用的情况不到一半。
 - 离线答案和源中断可能让参考文献规则没跑；规则只在一次完整联网运行后才判定。
 - 静音注释乱堆。没静音任何东西的抑制会报为 CFG001（info），避免过期注释堆积。
+- 把 cite-check 当替代期刊 / 法院的正式核查。它自述会漏报也会误报，应叠加本人阅读和期刊的 cite-check。
+- 直接拿长稿跑完整 cite-check，消耗大量套餐额度；先用短文档。
+- 付费墙 / 登录来源没提供 PDF，却把“无法核实”当“引文错误”；报告应标出访问不到的来源。
+- Codex 桌面按钮安装未端到端验证；ZIP 路线更新手动；setup 助手只处理更新，不能替代环境自检。
+- 把法律技能包外推到非法律场景并宣称已验证；它本身只在法律研究流程，其他场景只借鉴“读脚注→取源→比引文→记录→报告”模式。
+- 重跑不看与上次的差异，无法判断稳定性。
+- 让工具改草稿；提示词明确 Leave the draft unchanged，报告单独文件。
+- 企业账号插件源被限制时硬装；按 README 给管理员原话或改个人账号下载文件夹方案。
+- 没确认 CourtListener token 或 Zotero 是否 skip 就开跑；setup 会引导。
+- 把“找支持性权威”当成自动写文献综述；它给页码和脚注用语，仍需人判断。
 
 ## 证据与来源
 
-本手册中的命令与数字来自 THUROI0787/absent-author（MIT，41 stars）与 amos689/paper-preflight（MIT，v0.4 早期版本）的调研报告。
+本手册中的命令与数字来自 THUROI0787/absent-author（MIT，41 stars）、amos689/paper-preflight（MIT，v0.4 早期版本）与 danepps/legal-research-skills（MIT，本次仅有 README 可依据）的调研材料。
 
 有数据支撑的部分：
 
@@ -257,14 +358,17 @@ python tools/sync_evidence.py
 - paper-preflight：Python 3.11–3.14，PyPI 包，MIT；判决里没有 LLM；向 Crossref、dblp、arXiv、DataCite、PubMed、OpenAlex 询问，配 key 时再加 Semantic Scholar；最新一批真实论文误报约每 100 条引用 1.3 次。
 - paper-preflight 的 `support` 实验：298 条金标引用上，93% 的确认是对的 [95% CI 82%, 98%]，但只确认了大约六分之一的真实引用，低分指向错误引用的情况不到一半；100 条金标引用上，Claude agent 确认了 39% 的真实引用（HHEM 为 9%），且每个确认至少部分有支撑；`--download-model` 下载 HHEM-2.1-open，0.4 GB。
 - paper-preflight 退出码：0 没有达到门槛的发现；1 有阻断性发现；2 没有阻断性发现但源不可用且没有别的源顶上，所以还不能说干净；3 用法错误。规则示例 REF001–REF017、CIT001–CIT008、REF090 来自仓库文档。
+- legal-research-skills：Daniel Epps，Washington University in St. Louis 法学院教授，*Divided Argument* 播客联合主持，声明这些工具用于自己的学术写作；MIT 许可，“as-is”发布；README 自述六类能力（cite-check、找支持性权威、校对、建 Zotero 文库、写研究备忘录、准备最高法院案卷材料）；给出了 Claude 桌面端与 Codex 桌面端两条安装路线、命令、提示词、故障处理清单，以及“完整 cite-check 会消耗大量额度、先用短文档”的成本提醒；明确说“These tools can miss problems and raise false alarms.”；付费墙 / 登录来源需用户提供有权限的 PDF，报告应标出访问不到的来源；Codex 桌面按钮安装尚未在全新账号上端到端测试，只验证了在插件浏览器里能正确出现；Codex ZIP 路线更新需手动，定时更新器不管 ZIP 安装；Zotero 非必需。
 
 属于作者主张而非实证：
 
 - absent-author：把“缺席”分为没人润色 / 没人掌舵 / 没人核对的三分法、四象限及 B（可救）与 D（AI 浪费）的区分方式；“语言证据不得降低研究等级”的评分约定；“文本证明力递减、评估将转向披露的 AI 使用、可核查产物与当面辩护”的判断。
 - paper-preflight：作者把它定位为补上 AI 写作最容易出问题的一环；把误报列为最希望收到的反馈；自述 v0.4 早期发布版，有已知误报与漏检。这些是作者主张，不是实证。
+- legal-research-skills：作者主张“AI 自己装比任何书面说明都更能应付意外”，这是经验判断，无对照数据；README 未给任何案例、准确率、召回率、耗时或成本数字，因此“报告能有效区分确认问题与未核实项、能发现未更新后续历史 / 被 overrule 的案例”目前只是作者主张；拆给多个助手再复审能提升质量，也无证据；本次材料只有 README，Codex 安装路线与更新方式需按作者后续更新再核。
 - 报告中给出的可复用判据示例：R01 失败方法改标签为 “audit / diagnostic” 且方法骨架仍在、R07 文中承诺却从未出现的分析、R09 跨节漂移的数字（“+16%” 实为 6.7%）、S02 每节都放在审稿人会攻击位置上的“忏悔式” caveat、S06 通不过替换检验的生造词、P03 编造作者列表或形如 arXiv:2409.XXXXX 的引用、H06 日志 / 代码 / 版本历史 / 带时间戳的预注册可作为反证。
 
 ## 依据的调研
 
 - [THUROI0787/absent-author](../research/radar/2026-10-06/1579-thuroi0787-absent-author.md)：值得一试，建议小范围试用这套“AI 产出审核”组合：先克隆仓库、用 --project 安装两个 agent skill，对自有或公开论文跑确定性 lint（slop_lint.py）与作者侧 paper-author-pass，再用若干篇已知标签的论文跑审稿侧 paper-slop-screen 做校准。理由是原文给出了可直接执行的安装命令、运行命令和提示词，并把语言痕迹与研究/事实核验分开评分、要求每条命中可定位可核对；但校准样本小且 in-sample、2026 年 pipeline 论文几乎不留语言痕迹，效果尚不足以保证直接采用。
 - [amos689/paper-preflight](../research/radar/2026-10-08/1930-amos689-paper-preflight.md)：值得一试，把 paper-preflight 作为「交稿前的参考文献事实核验关卡」小范围试用：先用 `uvx paper-preflight check <项目> --lang zh --details` 跑一篇在写的论文并逐条人工复核误报，再用 `bib fix --level safe` 看 diff 决定是否落盘，并用 `bib fetch` 取代凭记忆写条目。理由是原文给出了可直接复制的命令、规则清单、agent 接入方式和量化评测数据（最新一批真实论文误报约每 100 条引用 1.3 次），但它自述仍是 v0.4 早期版本、有已知误报与漏检，必须先人工复核再进流程。
+- [danepps/legal-research-skills](../research/radar/2026-10-21/5563-danepps-legal-research-skills.md)：值得一试，建议小范围试：用一份 3–5 页带脚注的短稿跑一遍 cite-check，重点看报告是否能把「已确认问题 / 无法核实 / 误报」分开且能按引文定位；理由是该仓库把「引用可核查」做成了从安装、setup 到固定报告文件的完整可照做流程，但作者自述会漏报误报、Codex 桌面安装路线尚未端到端验证，且本次只有 README 可依据。
