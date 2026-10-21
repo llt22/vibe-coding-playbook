@@ -1,22 +1,24 @@
-# 让 AI 按团队流程交付：装对插件、跑通变更、看住长任务
+# 把 AI 接进真实工作流：先补领域能力，再补收口、观测和交接
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：你已经在用 Claude Code，但每次做职能工作都要重讲领域知识，编码变更缺少计划和独立审查，长任务跨上下文会掉线，而且说不清改造有没有效果。
-> 先试这一步：先选一个与你当前工作最贴近的职能插件或技能包，在非敏感小项目上跑通一个真实任务并记录基线；若你要做中大型编码变更，先只装 studio-core 跑一个变更，或用 superlite 的人工审批计划模式跑一个 spec 清晰的中小型功能。
-> 最近修订：2026-10-20
+> 解决的问题：你已在用 Claude Code 或 Cowork，但每次让 AI 做职能工作都要重讲领域知识和公司上下文，且缺少收口、观测、交接和编码变更编排，无法判断是否真的变好。
+> 先试这一步：先记录 2–3 次基线，然后只装一个与你当前工作最接近的职能插件或一个域技能包，用真实任务试一两周，没有可感知改善就卸载。
+> 最近修订：2026-10-21
 
 ## 解决什么问题
 
 你已经在用 Claude Code 或 Cowork，但每次让 AI 做某个职能的活（写 SQL、准备客户通话、审合同、对账、做 3D 资产、写 PRD、画论文示意图等），都要重新解释领域知识、反复交代公司上下文、手动把外部工具的数据贴进去，而且 AI 给出的流程往往是教科书做法，不是你团队实际的做法。另外几个常见缺口：AI 在会话中途问你的问题、顺手发现的 bug、失败的测试，过一会儿就淹没在对话里；装完一堆插件后，你说不清到底有没有变好；任务跑得比一个上下文窗口更久时，交接、唤醒和拍板都靠人守着；真正做一次中大型编码变更时，单个会话往往一口气写到底，没有计划、没有独立审查、landing 之前没人核对。
 
-本手册用五层叠加来补：官方插件市场层、职能层（含独立 Agent Skills 与编码变更编排）、收口层、观测层（广/深）、交接层。编码变更编排层现在有两个可选项：`priyanshujha/subagent-studio` 偏重计划、worktree、两轮 review 和可审计 landing；`iha2/superlite` 偏重把 spec 交给 agent、回来拿已完成且已测试的代码，支持人工审批计划和 AI 无人驾驶两种编排模式。两者都做多代理编排，但买的东西不同，先选一个跑通，不要在同一任务上叠。
+本手册用五层叠加来补：官方插件市场层、职能层（含独立 Agent Skills、按域技能包与编码变更编排）、收口层、观测层（广/深）、交接层。职能层除了官方职能插件和独立技能包，还可选 `alirezarezvani/claude-skills` 这类按域技能包：把领域流程固化成 `SKILL.md`＋`scripts/`＋`references/`，安装前先用它自带的审计脚本扫一遍，只装一个域。编码变更编排层有两个可选项：`priyanshujha/subagent-studio` 偏重计划、worktree、两轮 review 和可审计 landing；`iha2/superlite` 偏重把 spec 交给 agent、回来拿已完成且已测试的代码，支持人工审批计划和 AI 无人驾驶两种编排模式。两者都做多代理编排，但买的东西不同，先选一个跑通，不要在同一任务上叠。
 
 ## 适用与不适用
 
 **官方插件市场**：适用——本机已安装并运行 Claude Code、能访问该 marketplace；想先浏览再决定装哪个；想按官方规范打包团队能力；愿意安装前检查插件主页和来源。不适用——没在用 Claude Code；需要先看到具体插件名单、评价或效果数据；期望 Anthropic 替你审核插件行为；不能接受插件访问文件与外部服务。
 
 **职能插件与独立 Agent Skills**：适用前提是团队已用 Claude Code 或 Cowork；所需外部工具能通过 MCP 接入；有人愿意读插件的 `skills/` 并按本团队流程改写；你希望把某职能的领域知识、工具连接和固定动作预打包复用。Blender 需要 Blender 5.2 LTS+ 并支持 Agent Skills；PM 需要能读结构化 Markdown 的代理；科研示意图需要 Node.js 22+ 与 Chromium。不适用——只看 README 就指望复现技能内部的提示词、脚本或 QA 规则；期望开箱即用、不做定制就大幅改善；需要先看到官方效果数据才采用。
+
+**claude-skills 按域技能包**：适用——现有 11 个职能插件没有覆盖你的域，或你想拿一个可复制的 `SKILL.md`＋`scripts/`＋`references/` 结构做团队模板；需要同一套 skill 跨 Claude Code、Codex、Cursor 等工具复用；愿意在安装前跑安全审计并按域隔离安装。不适用——只看 README 就指望复现技能内部提示词、脚本或 QA；需要前后对比数据或用户案例才采用；不愿做安装前审计；想一次全装。前提是本地有 git 与 Python 3，已装 Claude Code 或任一编码智能体；Windows 需用 `git clone -c core.symlinks=true` 并开启开发者模式，同时设置 `PYTHONUTF8=1`。
 
 **subagent-studio**：适用——中大型代码库、复杂变更：每次改多个文件、有真实用户、代码要维护多年；或无人值守的定时运行；能用 git 和 worktree、能定义 check commands。不适用——小而明确的工作；需要先看到结果证据才采用；不能接受每个变更的数倍 token；无法确认 `docs/evidence.md` 里的证据细节。
 
@@ -33,9 +35,10 @@
 5. subagent-studio 需要 Claude Code 构建支持 plugin 和 marketplace；要用七步流程需能建分支和 `git worktree`，并先定义好 check commands。
 6. 收口层 PRs 标签页需要已安装并登录的 `gh`；测试/构建要由 Claude 作为独立命令运行。
 7. 交接层运行面为终端 CLI 或 Claude Desktop 的 Code tab 本地会话；远程云会话未测试。
-8. 自行确认仓库许可：Blender 是 MIT；PM 是 CC BY-NC-SA 4.0；schematic-figure 代码是 MIT，内置 Latin Modern 字体是 GUST 字体许可；superlite 和 subagent-studio 也按各自仓库许可确认后再用于生产。
+8. 自行确认仓库许可：Blender 是 MIT；PM 是 CC BY-NC-SA 4.0；schematic-figure 代码是 MIT，内置 Latin Modern 字体是 GUST 字体许可；superlite、subagent-studio 和 claude-skills 也按各自仓库许可确认后再用于生产。
 9. 准备一个非敏感、小体量的现有项目做试用，并先记录 2–3 次基线：同一任务的完成时间、返工次数、补齐上下文的次数。
 10. 同时用多层前先 `claude --version` 核对；升级 Claude Code 后先 `/reload-plugins`。
+11. claude-skills 需要 git 与 Python 3；Windows 用 `git clone -c core.symlinks=true` 并开启开发者模式，设 `PYTHONUTF8=1`；安装前能运行其 `skill_security_auditor.py`，并把 PASS 作为继续安装的门槛，WARN/FAIL 先人工检查或放弃。
 
 ## 操作步骤
 
@@ -78,7 +81,7 @@ plugin-name/
 
 原文列出 11 个插件：productivity、sales、customer-support、product-management、marketing、legal、finance、data、enterprise-search、bio-research、cowork-plugin-management。数据岗选 data，销售选 sales，法务选 legal，以此类推。只挑一个，不要一次装多个。
 
-如果你的职能不在上面，或需要跨运行时使用，去看第 4 步之二的独立 Agent Skills。如果你要动的是中大型代码库上的一次变更，看第 4 步之三的 subagent-studio，或第 4 步之四的 superlite。
+如果你的职能不在上面，或需要跨运行时使用，去看第 4 步之二的独立 Agent Skills；如果现有 11 个职能插件仍不覆盖你的域，或你想拿一个可复制的 skill 结构做团队模板，看第 4 步之五的 claude-skills。如果你要动的是中大型代码库上的一次变更，看第 4 步之三的 subagent-studio，或第 4 步之四的 superlite。
 
 ### 第 2 步：安装职能插件（做法 A / 做法 B）
 
@@ -361,6 +364,98 @@ arm 取 `superpowers` 或 `superlite`；`SUPERLITE_PLUGIN_DIR` 可把 superlite 
 
 **与 subagent-studio 怎么选**：要计划、worktree、每步 check、两轮 review、带 trailers 的 landing 和 audit 链，用 subagent-studio；要更轻的 spec 到代码、模型分层路由、无人驾驶 rulings 和内置 benchmark harness，用 superlite。两者都做多代理，材料未说明同时装会不会互相干扰，先只在一个任务上用一套。
 
+### 第 4 步之五：用 claude-skills 按域补一个领域的专业能力（做法 A / 做法 B / 做法 C）
+
+**什么时候用**：现有 11 个职能插件没有覆盖你的域；你想拿一个可复制的 `SKILL.md`＋`scripts/`＋`references/` 结构做团队模板；需要同一套 skill 跨 Claude Code、Codex、Cursor 等工具复用。**什么时候跳过**：只看 README 就指望复现技能内部提示词、脚本或 QA；需要前后对比数据或用户案例才采用；不愿做安装前审计；想一次全装。一次只装一个域或一个技能，不要与已有职能插件一次叠多个。
+
+**做法 A：在 Claude Code 里按域安装，先审计再装**
+
+1. 克隆到本地：
+
+```bash
+git clone https://github.com/alirezarezvani/claude-skills.git
+cd claude-skills
+```
+
+Windows 必须用：
+
+```bash
+git clone -c core.symlinks=true https://github.com/alirezarezvani/claude-skills.git
+```
+
+并开启开发者模式，否则 `.gemini/`、`.codex/`、`.vibe/`、`.hermes/` 镜像目录会变成单行指针文本；同时设置环境变量 `PYTHONUTF8=1`，否则打印 Unicode 的脚本会在旧代码页控制台崩溃。
+
+2. 安装前审计目标 skill：
+
+```bash
+python3 engineering/skill-security-auditor/scripts/skill_security_auditor.py /path/to/skill/
+```
+
+前提：目标 skill 目录已在本地。审计覆盖命令注入、代码执行、数据外泄、提示注入、依赖供应链风险和权限提升，返回 PASS / WARN / FAIL。把 PASS 作为继续安装的门槛；WARN/FAIL 先人工检查或放弃，不要直接装。
+
+3. 添加 marketplace，只装一个域或单个 skill：
+
+```text
+/plugin marketplace add alirezarezvani/claude-skills
+/plugin install engineering-skills@claude-code-skills
+/plugin install skill-security-auditor@claude-code-skills
+```
+
+其他域包名包括 `product-skills`、`marketing-skills`、`pm-skills`、`c-level-skills`、`finance-skills`、`business-growth-skills`、`ra-qm-skills`、`engineering-advanced-skills`。示例只装核心工程 24 个：`/plugin install engineering-skills@claude-code-skills`。**预期结果**：安装后能在会话里按固定句式调用该 skill；不出现就回查 marketplace 与包名，不要继续叠装。
+
+**做法 B：在其他工具里安装或转换**
+
+```bash
+npx agent-skills-cli add alirezarezvani/claude-skills --agent codex
+./scripts/codex-install.sh
+./scripts/convert.sh --tool all
+./scripts/install.sh --tool cursor --target /path/to/project
+```
+
+README 称全量转换约 15 秒；`--force` 可跳过确认。各工具目标目录不同：Cursor → `.cursor/rules/*.mdc`；Aider → `CONVENTIONS.md`；Kilo Code → `.kilocode/rules/`；Windsurf → `.windsurf/skills/`；OpenCode → `.opencode/skills/`；Augment → `.augment/rules/`；Antigravity → `~/.gemini/antigravity/skills/`；Hermes → `python scripts/sync-hermes-skills.py --verbose` 装到 `~/.hermes/skills/`；Mistral Vibe → `./scripts/vibe-install.sh` 装到 `~/.vibe/skills/`。校验示例：
+
+```bash
+find .cursor/rules -name "*.mdc" | wc -l
+```
+
+README 在期望值处写 346，同一页其他地方写 345 和 392，说明数字不可全信，以实际 `find` 结果为准。
+
+**做法 C：调用、组合与自建**
+
+固定调用句式：
+
+```text
+Using the senior-architect skill, review our microservices architecture and identify the top 3 scalability risks.
+```
+
+即“Using the <skill-name> skill, <任务>”，让智能体显式加载对应 `SKILL.md`。随包 Python 工具可直接调用，不经过智能体也能用，例如：
+
+```bash
+python3 finance/saas-metrics-coach/scripts/metrics_calculator.py --mrr 80000 --customers 200 --churned 3 --json
+python3 marketing-skill/content-production/scripts/brand_voice_analyzer.py article.txt
+python3 c-level-advisor/cto-advisor/scripts/tech_debt_analyzer.py /path/to/codebase
+python3 product-team/product-manager-toolkit/scripts/rice_prioritizer.py features.csv
+```
+
+前提：README 称这些工具只用标准库、无需 pip 安装；但工具数量在文中出现 580 / 706 / 746 三种说法，具体某个脚本是否存在需自行 `ls` 确认。跨域工作时按四种编排模式组合：
+
+| 模式 | 做法 | 适用 |
+|---|---|---|
+| Solo Sprint | 按项目阶段切换 persona | 单人项目、MVP |
+| Domain Deep-Dive | 一个 persona + 叠加多个 skill | 架构评审、合规审计 |
+| Multi-Agent Handoff | persona 互相评审对方产出 | 高风险决策、发布就绪检查 |
+| Skill Chain | 纯顺序串 skill，不用 persona | 内容流水线、可重复清单 |
+
+要用 persona 就拷到对应目录：
+
+```bash
+cp agents/personas/startup-cto.md ~/.claude/agents/
+```
+
+自建时参照 `agents/personas/TEMPLATE.md`；自建 skill 参照 README 指向的 `alirezarezvani/claude-code-skills-agents-factory`。
+
+**怎么选**：官方职能插件是开箱通用起点；claude-skills 覆盖更广、可按域装、可跨工具转换；独立技能包是单点。先只装一个域或一个技能，用真实任务与“不装 skill”的基线比返工轮数，再决定是否保留。
+
 ### 第 5 步：加一层收口，让 AI 把没收口的事交出来（inbox）
 
 安装：
@@ -503,17 +598,19 @@ Machine load 默认 Off：给 CPU 和内存建议上限（Low / Medium / High / 
 
 ### 第 11 步：贡献回仓库（可选）
 
-职能插件是 markdown 文件，fork 后改，提 PR。交接层是 MIT、无构建步骤的 TypeScript，按本地 clone 改、`/reload-plugins` 热加载即可。Blender 是 MIT，可 fork 后运行 `validate_skills.py` 和 `run_tests.py`；PM 是 CC BY-NC-SA 4.0，fork 和再分发要遵守许可，添加技能遵守 `## Input` 和不用 `$ARGUMENTS` 的约定；schematic-figure 代码是 MIT，内置 Latin Modern 字体是 GUST 字体许可。superlite 和 subagent-studio 按各自仓库的贡献方式和许可来。
+职能插件是 markdown 文件，fork 后改，提 PR。交接层是 MIT、无构建步骤的 TypeScript，按本地 clone 改、`/reload-plugins` 热加载即可。Blender 是 MIT，可 fork 后运行 `validate_skills.py` 和 `run_tests.py`；PM 是 CC BY-NC-SA 4.0，fork 和再分发要遵守许可，添加技能遵守 `## Input` 和不用 `$ARGUMENTS` 的约定；schematic-figure 代码是 MIT，内置 Latin Modern 字体是 GUST 字体许可。claude-skills 是 MIT，按仓库自带审计与贡献方式改；superlite 和 subagent-studio 按各自仓库的贡献方式和许可来。
 
 ## 怎么判断变好了
 
-先分清来源：职能插件原文没有给出验证方法或指标；收口层只有成本口径；交接层只有机制描述；观测层（深）明确没有给出四配置性能结果；Blender、PM、示意图材料都只到 README；subagent-studio 只有作者单项目自述、仓库仅 30 星，关键证据在未包含的 `docs/evidence.md`；superlite 的 3.9 倍与 52% 是作者用自建 harness 单次或少量运行自测得出，材料未说明 52% 的具体口径，且鲁棒性探针低于对照组，不能当定论。
+先分清来源：职能插件原文没有给出验证方法或指标；收口层只有成本口径；交接层只有机制描述；观测层（深）明确没有给出四配置性能结果；Blender、PM、示意图材料都只到 README；subagent-studio 只有作者单项目自述、仓库仅 30 星，关键证据在未包含的 `docs/evidence.md`；superlite 的 3.9 倍与 52% 是作者用自建 harness 单次或少量运行自测得出，材料未说明 52% 的具体口径，且鲁棒性探针低于对照组，不能当定论；claude-skills README 全是目录与宣传、没有效果数据、没有用户案例或基准测试，规模数字还自相矛盾。
 
 **通用最小试用**：先记录 2–3 次基线（完成时间、返工次数、补齐上下文次数），装一个插件或技能包，跑一个真实任务，再对照同一类任务。试一两周；没有可感知改善就卸载，并记为“该插件无实质增益”。
 
 **职能插件**：同一任务完成时间、返工次数、补齐上下文的次数是否下降；`/xxx:yyy` 是否出现并成功执行，这是最硬的通过/不通过信号。
 
 **独立技能**：Blender 记录完成时间、人工干预次数、能否通过目标引擎导入检查、`blender-asset-qa` 是否报出 z-fighting、浮空部件、坏法线或权重问题；PM 用真实 PM 任务与裸提示对照，看完成时间、返工、输出能否直接使用；示意图看从需求到可用初稿的时间、人工调整轮次、SVG/PDF 能否逐处编辑、按 `standard` 口径复核每个计数/方向/连接时的漏检比例，以及字体授权是否满足投稿要求。
+
+**claude-skills**：先只装一个域，安装前审计必须 PASS；挑两个真实任务与“不装 skill”的基线对比返工轮数、完成时间和人工补齐次数。看 `skill-doctor`、`self-eval` 或 SkillCheck 徽章能否从真实会话取证并过确定性闸门，但材料没有前后对比数据、用户案例或基准测试，不能引用其结论。若返工轮数没有下降，或审计 WARN/FAIL 未处理，卸载；若只想借鉴思路，就保留“从真实会话取证＋闸门”的检查方式，不要采信规模数字。
 
 **subagent-studio**：在中大型代码库上只装 `studio-core`，跑 `studio-init`，再对一个中等以上变更执行 `Plan and build X with studio-core:plan-then-build`。看 landing commit 是否有 `Reviewed-by` / `Fixed-after-review` trailers、数字是否真实；`review_guard.sh audit` 是否判定 merge 恰好带入被审查内容、有没有漏掉的 landing；两轮 review 分别抓到了什么；token 用量相对单会话是否可接受。若第二遍独立 review 抓不到东西、guard/audit 从不拦停、trailers 记不出真实数字，说明数倍 token 没换来质量收益。
 
@@ -534,13 +631,18 @@ Machine load 默认 Off：给 CPU 和内存建议上限（Low / Medium / High / 
 - 材料可能被截断：PM README 末尾截断在 “worth a bookmark if you work”；交接层材料截断在 Lazy-exit guard；subagent-studio 材料截断在 “每个 agent 文件在 frontmatter 里固定 model、”。未给出的行为不要照抄。
 - 职能插件和三个独立技能包都只到 README，未展示技能内部提示词、脚本、配置或 QA 规则；开箱插件原文自称 general starting points，价值在定制。
 - 命令不出现 = 未生效；先检查 marketplace，不要继续往下做。
-- 不要一次装多个职能插件或技能；subagent-studio 先只装 `studio-core`；superlite 先只跑一个人工审批计划。
+- 不要一次装多个职能插件或技能；subagent-studio 先只装 `studio-core`；superlite 先只跑一个人工审批计划；claude-skills 先只装一个域或一个技能。
 - 小而明确的编码工作不要上 subagent-studio：单会话更便宜，小变更上很少买到东西。
 - subagent-studio 的七步流程有关键留白：plan 的固定 shape、`reviewer-prompt.md` 的检查项、占位符完整内容都要自己补；copy-in 会合并 hooks 并重写命名空间；`core.review.land: pr` 合并时必须保留 trailers；`review_guard.sh` 如果从不拦停，先怀疑配置没接上。
 - superlite 不能与 superpowers 同时启用：二者共享 skill 名且都注入会话上下文，会冲突。
 - superlite 的人工审批计划模式在 approve 之前不做 lint、分发或写文件；AI 编排模式把需要拍板的事项记成 rulings，不会打断你；高风险变更不要直接上 AI 编排。
 - superlite 的 `Est. context` 系数只在一个项目上拟合过，只能当参考；最终审查只报发现不改代码；大代码库上装 Graphify 会先问你，push 必须经你确认。
 - superlite 的作者自测数据不是独立证据：3.9 倍与 52% 来自自建 harness 的单次或少量运行，鲁棒性探针低于对照组；Codex 与 Grok 安装命令作者自标 Unverified。
+- claude-skills 的 README 数字自相矛盾：392 / 346 / 345，工具数量 580 / 706 / 746；以实际 `find`、`ls` 结果为准，不能把规模数字当质量。
+- claude-skills 安装前必须审计；Windows 不用 `core.symlinks=true` 会让镜像目录变成单行指针文本；旧代码页控制台打印 Unicode 需 `PYTHONUTF8=1`。
+- claude-skills 的 `human-gate`、`agent-memory`、`security-guidance` 的 PreToolUse hook 等只有一句话，没有配置细节；`agent-launcher`、`run-without-you`、`grade-iterate`、`loop-library`、`skillopt-sleep`、`autoresearch-agent`、`deep-research` 等长跑/主动推进组件缺触发条件与持续机制配置，材料不足以照做。
+- claude-skills 的 `skill-doctor`、`self-eval`、SkillCheck 徽章没有前后对比数据、用户案例或基准测试；只能借鉴“从真实会话取证＋闸门”的思路，不能引用其结论。
+- claude-skills 随包 Python 工具数量说法冲突，具体脚本用 `ls` 确认；跨工具转换目标目录不同，Cursor 用 `.cursor/rules/*.mdc`，Aider 用 `CONVENTIONS.md`，不要混。
 - 收口层每轮都要花钱，短会话额外开销占比更高；没减少遗漏就卸载。
 - 观测面板有硬边界：必须在 CLI 或 Claude Desktop 的 Code tab 里用；VS Code 聊天面板和 `claude -p` 不显示面板；深层 mod 对引擎版本敏感，2.1.280 早期访问版下 Context Inspector 缺少 `session.append`、Time Machine 的 per-test 选项会被忽略。
 - 观测层（深）的 README 只有概览，具体安装命令和配置项要进各自 README；原文对 marketplace 只给了 Add this marketplace once 的机制描述，没有命令行。
@@ -559,6 +661,8 @@ Machine load 默认 Off：给 CPU 和内存建议上限（Low / Medium / High / 
 
 **独立 Agent Skills**：Blender 安装命令、支持代理、20 个技能、示例提示词、`validate_skills.py` 与 43 个 headless 测试来自 `EL4CTEO/blender-skills` README；42 stars 来自抓取指标；作者声称每个脚本在真实 Blender 测试过，但材料只到 README。PM 的安装命令、下载包、playground、技能结构、77 技能 + 6 工作流、`## Input` 约定、CC BY-NC-SA 4.0、7421 stars 来自 `deanpeters/Product-Manager-Skills` README；77 技能正文质量和效果数据无从验证，时长估计属作者主张。schematic-figure 的安装命令、四个提示词模板、look/size/depth 三旋钮、输出路径、Node 22+ 与 Chromium、可选 Blender/RDKit、字体许可见 `lgwrightlab/schematic-figure` README；证据只有作者自制五篇论文对比演示，属定性证据。
 
+**claude-skills**：仓库 MIT；README 自称 392 个 skill、120 个 agent、151 个命令、7 个 persona、20 个领域、可转换给 13 种编码工具；单个 skill 的 `SKILL.md`＋`scripts/`＋`references/`＋可选 `assets/` 结构、Skills/Agents/Personas 三层分工、安装命令、按域包名、审计脚本与覆盖范围、Windows `core.symlinks=true` 与 `PYTHONUTF8=1`、Codex/Cursor 等安装与转换命令、目标目录、`find` 校验、随包 Python 工具示例、固定调用句式、四种编排模式、persona 拷贝与 TEMPLATE、`skill-doctor`/`self-eval`/SkillCheck 均来自 `alirezarezvani/claude-skills` README；README 无效果数据、无用户案例、无基准测试，规模数字自相矛盾；`human-gate`、`agent-memory`、`security-guidance`、`agent-launcher` 等只有一句话，缺配置细节；结论中“先只装一个域、安装前审计、与不装基线比返工轮数”来自调研建议，不是原文效果数据。
+
 **subagent-studio**：四个模块及 agents/skills/scripts、六条主张、三条安装命令、`studio-init` 行为、copy-in 行为、七步流程示例、landing trailers 示例、`review_guard.sh audit`、`reviewed_paths` / `land` / `roles` 配置、`roles` 需要 v2.1.292+、每个变更 agent 调用更多、一次 run 约 31 个 skill 中加载约 6 个、低于 50 行的严重 bug 发现率 9% 均来自 `priyanshujha/subagent-studio` README；仓库仅 30 星、作者自述约五周定时 Claude Code 会话、关键证据在未包含的 `docs/evidence.md`，属可核声明与调研报告的局限说明。
 
 **superlite**：安装命令、本地 `--plugin-dir`、用 `Let's make a react todo list` 验证是否先触发 `brainstorming`、人工审批计划与 AI 编排两种模式、`.superlite/progress.md` / `test-summary.json` / `metrics.jsonl` / 运行历史、`Detail: contracts | tests | full`、`Est. context` 超 80k 拆分、可变部分小于固定前缀则合并、单任务约 3 分钟、最多 18 个 agent、计划 15k 字符以内、`CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL=1h`、协调者 medium effort、最终 `final-reviewer` 用全新 Opus high effort 单轮只报发现、不能与 superpowers 同开、大代码库装 Graphify 先询问、push 需确认、`.superlite` 痕迹、bench harness 命令、`mechanical_ab` 验证模型路由，均来自 `iha2/superlite` README 与调研报告；作者自测的 3.9 倍与 52% 来自自建 harness 单次或少量运行，材料未说明 52% 的具体口径，鲁棒性探针低于对照组，属作者主张而非独立证据；`Est. context` 系数只在一个项目上拟合过；Codex 与 Grok 安装命令作者自标 Unverified。
@@ -571,7 +675,7 @@ Machine load 默认 Off：给 CPU 和内存建议上限（Low / Medium / High / 
 
 **交接层**：安装、会话内安装、本地 clone、`--plugin-dir` 试跑、Desktop 的 `CLAUDE_CODE_PLUGIN_DIRS`、迁移、更新、卸载、`/cr` 系列命令、六节面板、状态栏 HUD、Handoff Health、`milestones` 工具、`decision_request` 工具、权限策略、Autopilot 交接步骤、Watchers 三种策略、Mission Queue 边界投递、Run Budget / Machine load / Cache Guardian / Keep warm / Cold Resume Guard 默认值与行为、profiles 与 Answer styles 来自 `Arjun0014/project-sentinel` README；版本 1.6.3、MIT、无运行时依赖、2.1.289+ 且需 function-hooks、只在 Windows 11 与 2.1.289 / 2.1.293 / 2.1.295 验证过、远程会话未测试、1.4.0 更名与两处行为变化来自原文；减少上下文溢出和人工盯守没有量化数据。
 
-**属于调研建议、非原文数据**：官方市场的最小试用路径（1–2 小时 + 一周观察、只挑一个、检查来源、低风险任务、记录完成时间/轮次/手工切换/失败比例/新任务，一周无改善则卸载）来自调研报告建议；职能插件与独立技能的自测指标来自调研报告建议；subagent-studio 的最小试用建议（装 `studio-core`、跑 `studio-init`、用 plan-then-build 跑中等以上变更、验证第二遍 review 与 guard/audit）来自调研结论；superlite 的最小试用建议（先人工审批计划、记录 metrics.jsonl 与测试通过率、用内置 harness 自测、不要直接采信 3.9 倍与 52%）来自调研结论；收口层、观测层、交接层的最小试用与指标也来自各调研报告的“怎么试、怎么验证”部分，不是原文效果数据。
+**属于调研建议、非原文数据**：官方市场的最小试用路径（1–2 小时 + 一周观察、只挑一个、检查来源、低风险任务、记录完成时间/轮次/手工切换/失败比例/新任务，一周无改善则卸载）来自调研报告建议；职能插件与独立技能的自测指标来自调研报告建议；claude-skills 的“先只装一个域、安装前审计、与不装基线比返工轮数、没有改善就卸载”来自调研结论，不是原文效果数据；subagent-studio 的最小试用建议（装 `studio-core`、跑 `studio-init`、用 plan-then-build 跑中等以上变更、验证第二遍 review 与 guard/audit）来自调研结论；superlite 的最小试用建议（先人工审批计划、记录 metrics.jsonl 与测试通过率、用内置 harness 自测、不要直接采信 3.9 倍与 52%）来自调研结论；收口层、观测层、交接层的最小试用与指标也来自各调研报告的“怎么试、怎么验证”部分，不是原文效果数据。
 
 ## 依据的调研
 
@@ -586,3 +690,4 @@ Machine load 默认 Off：给 CPU 和内存建议上限（Low / Medium / High / 
 - [lgwrightlab/schematic-figure](../research/radar/2026-10-17/4172-lgwrightlab-schematic-figure.md)：值得一试，按 README 给出的安装命令和提示词模板，在自己论文里挑一张真实示意图小范围试用该技能（含 look/size/depth 参数与三 agent 并行出多版设计），因为它提供了可直接复制的安装步骤、提示模板和输出目录约定；但证据只有作者自制的对比演示、无量化评测，且原文明确仍需人工把关科学性与细节，故先试不直接采用。
 - [priyanshujha/subagent-studio](../research/radar/2026-10-18/4433-priyanshujha-subagent-studio.md)：值得一试，建议小范围试：在中大型代码库上按 README 的 quickstart 安装 studio-core，并用 plan-then-build 跑一个中等以上变更，验证第二遍 review、guard/audit 是否真的带来质量收益；理由是原文给出了可直接复制的安装命令、七步落地流程、landing trailers 和审查守卫，具体到可以照做，但证据只有作者单项目自述、仓库仅 30 星，且关键证据细节在未包含的 docs/evidence.md 中。
 - [iha2/superlite](../research/radar/2026-10-19/4923-iha2-superlite.md)：值得一试，可以在 Claude Code 中装上 superlite，先在一个 spec 清晰的中小型功能上采用“人工审批计划”模式跑一轮，同时用 metrics.jsonl 和测试通过率自行复核它的速度与质量，再决定是否推广。它把规划、并行分发、按任务难度路由到 Haiku、Sonnet、Opus 以及审查修复做成了一套可执行的插件流程；但 3.9 倍和 52% 的数据是作者用自建 harness 单次或少量运行自测得出的，鲁棒性探针还低于对照组，因此不宜直接当成定论采纳。
+- [alirezarezvani/claude-skills](../research/radar/2026-10-21/5609-alirezarezvani-claude-skills.md)：值得一试，先只装一个域、并在安装前用仓库自带的 skill-security-auditor 扫一遍，再挑两个真实任务与“不装 skill”的基线对比返工轮数；值得试的理由是它把领域流程固化成 SKILL.md＋脚本＋参考文档的可复制结构，但 README 全是目录与宣传、没有任何效果数据，规模数字还自相矛盾，不能直接 adopt。
