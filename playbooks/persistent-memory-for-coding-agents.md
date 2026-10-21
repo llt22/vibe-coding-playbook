@@ -1,16 +1,16 @@
-# 让编码 agent 跨会话记住项目，但先核对事实再动手
+# 让 AI 接手项目前先核对记忆、事实和依赖变更
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：如何让 AI 跨会话、跨机器、跨 agent 记住项目背景和长期知识，同时避免把旧笔记、旧结论或上一会话的交接当成事实继续施工。
-> 先试这一步：先在最轻路线和二选一：在非敏感目录建 second-brain 并写一条“先读 memory”规则；如果主要痛点是跨 agent/跨机器记忆，再在单机单仓库只接一个 agent 的情况下按 ai-memory README 装好并验证一次捕获—回顾—交接。
-> 最近修订：2026-10-18
+> 解决的问题：AI 每次开新会话都要重新交代背景，跨会话笔记和旧结论可能失真，模型训练截止后依赖库的 API 变更又不会自动知道，导致 agent 把旧笔记或旧 API 当事实继续施工。
+> 先试这一步：先做最轻的做法 A：在 second-brain 下建 memory 和 CLAUDE.md 读取规则；如果项目是 JS/TS，再跑一次 `npx stalemap` 预览依赖变更。
+> 最近修订：2026-10-21
 
 ## 解决什么问题
 
-AI 每次开新会话都要重新交代背景，跨会话的资料和结论无法沉淀；更糟的是，上次的笔记、handoff 或 memory 只是“主张”，如果直接当作事实继续施工，会把已失败的后台任务、未推送的分支、已完成的待办带进新会话。还有一种反向失败：第二大脑（memory、vault、公司/个人知识库）已经建好，却从没告诉 AI 什么时候读它、读到的旧结论和用户当下说的话冲突时该听谁的，于是这个大脑要么没被用上，要么被原样沿用。
+AI 每次开新会话都要重新交代背景，跨会话的资料和结论无法沉淀；更糟的是，上次的笔记、handoff 或 memory 只是“主张”，如果直接当作事实继续施工，会把已失败的后台任务、未推送的分支、已完成的待办带进新会话。还有一种反向失败：第二大脑（memory、vault、公司/个人知识库）已经建好，却从没告诉 AI 什么时候读它、读到的旧结论和用户当下说的话冲突时该听谁的，于是这个大脑要么没被用上，要么被原样沿用。另有一类失真发生在编码场景：模型训练截止之后依赖库改了 API，agent 不会主动查 changelog，仍按旧 API 写代码。
 
-这套做法分六层。先让长期信息在本地 Markdown 文件夹落盘（做法 A/B/C）；再用常驻指令让 agent 每次任务前先读知识库、发现冲突就标记并同时引用两版、等用户裁决后给出对知识库的确切编辑（做法 E）；再用 truongfelix/workflow 在两个会话边界跑同一个事实采集脚本，报告主张与 git/GitHub/本机事实的不一致，然后才决定当天做什么（做法 D）。如果跨 agent、跨机器、跨项目的记忆需求更强，可以加做法 F：用 akitaonrails/ai-memory 把捕获、汇总、召回、交接做成一条常驻管线；它的真相源仍是 git 托管的 Markdown，数据库可重建，默认路径零 LLM 调用，但所有收益说法目前只有项目自述，需要先小范围试。
+这套做法分七层。先让长期信息在本地 Markdown 文件夹落盘（做法 A/B/C）；再用常驻指令让 agent 每次任务前先读知识库、发现冲突就标记并同时引用两版、等用户裁决后给出对知识库的确切编辑（做法 E）；再用 truongfelix/workflow 在两个会话边界跑同一个事实采集脚本，报告主张与 git/GitHub/本机事实的不一致，然后才决定当天做什么（做法 D）。如果跨 agent、跨机器、跨项目的记忆需求更强，可以加做法 F：用 akitaonrails/ai-memory 把捕获、汇总、召回、交接做成一条常驻管线；它的真相源仍是 git 托管的 Markdown，数据库可重建，默认路径零 LLM 调用，但所有收益说法目前只有项目自述，需要先小范围试。如果项目是 JS/TS，且依赖有大版本跨越或紧贴发布节奏，再加做法 G：用 stalemap 把“模型训练截止前已知的最后一个稳定版”与“项目实际 pin 的版本”之间的差异压缩成短笔记，通过会话开始注入、编辑后 guard 和 MCP 检索交给 agent；它补的是依赖 API 盲区，不替代 A-F 的记忆与事实核对。
 
 ## 适用与不适用
 
@@ -22,6 +22,7 @@ AI 每次开新会话都要重新交代背景，跨会话的资料和结论无�
 - 长期项目有多个会话、跨天跨机器，上一次笔记可能失真；或有多仓库工作区，需要每次先核对 git/机器事实，走做法 D。
 - 已经有一个可被 AI 读取的知识库（文件、仓库、笔记库，或通过 MCP/连接器接入的资料），但 AI 不会主动去读它，或把库里的旧结论当事实沿用；所用工具支持“自定义指令 / 项目指令 / 常驻说明”这类每次对话生效的入口，并允许 AI 提出对知识库的写回编辑（至少是给出编辑内容），走做法 E。
 - 想跨 agent（二十多个 harness 共用一个记忆）、跨项目（一份工作习惯 profile 带到每个新仓库）、跨机器（记忆存在自己跑的服务器上），甚至团队共享（多用户认证、按人归属、审计日志，且不是付费档），并且能接受常驻服务和采集提示词与工具调用，走做法 F。
+- 项目是 JavaScript / TypeScript，依赖有大版本跨越或紧贴发布节奏；有 lockfile 或 node_modules 以确定 pin 的版本；能访问 npm registry 与 GitHub；愿意把生成的笔记块写进 AGENTS.md/CLAUDE.md，并接受编辑后跑 guard 或 CI 检查，走做法 G。
 
 不适用：
 - 还没有安装 Claude Code 或任何可读 Markdown 的 agent，或没有本地文件系统写权限。
@@ -32,6 +33,9 @@ AI 每次开新会话都要重新交代背景，跨会话的资料和结论无�
 - 没有稳定的知识库，或知识库里本来就是不可信内容：做法 E 只会把不可信内容引用得更正式；做法 F 也会把不可信内容捕获、汇总并交接下去。
 - 工具不会稳定遵守常驻指令，或你不愿让 AI 提议改写知识库，或不能接受每次任务前读库带来的 token/时间开销：先别把做法 E 当成默认配置。
 - 不能接受常驻服务、采集提示词与工具调用，或必须先有独立效果验证：先别把做法 F 当默认配置。
+- 非 JS/TS 项目；多 workspace/monorepo（stalemap 只支持一个 package.json，尚无 workspace 遍历）；无自带类型的包只能靠 release note（`@types/*` 不做 diff）。
+- 不能接受把包名与版本发往 npm registry、GitHub、models.dev，或使用 `--llm` / `--examples` / `--guides` 时把类型 diff、release note 片段、指南文本与导入的 API 名发往 Claude（不含代码）：先别把做法 G 当默认配置。
+- 把做法 G 当作已成熟、可直接推广的做法：它只测了两个 Claude 模型且为作者自测；Cursor/Codex/OpenCode 的 `setup --agent` 原文明确说尚未在真实安装中验证过。
 
 ## 前置条件
 
@@ -41,17 +45,19 @@ AI 每次开新会话都要重新交代背景，跨会话的资料和结论无�
 - 做法 D：需要 bash 和 git。可选：GitHub CLI `gh`（读开着的 PR 和 CI）、systemd（后台任务，仅 Linux）。支持 Linux、macOS 和 Windows（在 Git Bash 或 WSL 里跑，CI 三种都测）。开始前先读 `PRINCIPLES.md`。适用形态：单仓库，或一个装着多个 repo 的工作区文件夹，根目录自身是一个只放文档的 repo；工作区形态的 remote 必须是 PRIVATE。
 - 做法 E：已经有一个可被 AI 工具读取的知识库（本地文件、仓库、笔记库，或通过 MCP/连接器接入的资料）；所用工具支持常驻指令入口，且允许 AI 提出对知识库的写回编辑（至少给出编辑内容）；你本人愿意做冲突裁决——原文明确把这一环留给人。
 - 做法 F：能访问 GitHub releases 和 curl（Linux/macOS）；Windows 用 PowerShell，无需管理员，或只考虑 WSL2；Arch/Fedora 走包管理器；macOS 菜单栏 App 需要 Rust 工具链 + Xcode / Swift 6；Docker 路线需要 Docker 或 Podman + 一个支持 MCP 的 agent CLI。先在测试机、单仓库、只接一个 agent 上做第 1 步，确认有效再推到主力环境。要常驻服务并采集提示词与工具调用，先用非敏感账号或受限范围试。
+- 做法 G：Node 项目；有 lockfile 或 `node_modules` 以确定 pin 的版本；能访问 npm registry 与 GitHub（读 changelog/releases）；知道当前会话用的模型（可用 `--model` 指定，或依赖 Claude Code / Codex / OpenCode / Gemini CLI 的配置、`$ANTHROPIC_MODEL`；截止日来自 models.dev，也可显式传 `--cutoff YYYY-MM-DD`）；可选 GitHub token 或 `gh` 登录以取 changelog/releases；选择 LLM 通道时需 Anthropic API 或 `claude -p`；comment 模式的 CI 需 `pull-requests: write` 权限。
 - 涉及隐私与凭据安全：先用非敏感账号或受限范围试，不要一上来就接真实收件箱或公司级知识库。
 
 ## 操作步骤
 
-先选路线，六条路线可以叠加：
+先选路线，七条路线可以叠加：
 - 只需要跨会话记住项目背景，先做做法 A（最轻，一条手写规则 + 一个 memory 目录）。
 - 还需要 AI 读取 Gmail、日历、云端硬盘，在 A 之上做做法 B。原文缺安装与授权细节，必须先查证再操作。
 - 想把材料变成可摄入、可提问、可引用、可清洗的库，或想找回想不起名字的历史会话，做做法 C。C 可以独立于 A，也可以直接建在 A 的 second-brain 目录上。
 - 如果新会话经常把上次笔记当事实、需要跨天跨机器接续长期项目，做做法 D。D 可以叠加在 A/B/C/F 上：A 的 memory、C 的 vault、F 的 wiki/handoff 都只是“主张”来源，D 负责在会话边界拿 git/机器事实核对。
 - 如果知识库已经存在、但 AI 不主动用、或你说的话和库里记录打架时它自作主张，做做法 E。E 只写常驻指令，改动成本极低；可以叠加在 A/B/C/F 上，也可以直接用于你已有的公司/个人知识库。E 管“你说的话 vs 知识库记录”，D 管“笔记/记忆 vs git、GitHub、本机事实”，两者都要。
 - 如果主要痛点是跨 agent、跨项目、跨机器的长期记忆，并且能接受常驻服务和采集提示词与工具调用，试做法 F。F 可以替代 A 的 memory 骨架和 C 的部分 vault/query 能力，但不能替代 D 的事实核对；E 的冲突裁决指令也可以和 F 叠加。
+- 如果是 JS/TS 单 package.json 项目、依赖有大版本跨越或紧贴发布节奏，加做法 G。G 可以独立使用，也可以叠加在 A/D/E/F 上：它把依赖变更笔记写进 AGENTS.md/CLAUDE.md，或用插件在会话开始注入；但它的笔记仍来自 changelog/release note，是“主张”，编辑后 guard 和 CI check 才是编译层的事实核对。G 不能替代 D 的 git/机器事实核对。
 
 ### 做法 A：只搭本地记忆骨架
 
@@ -306,7 +312,7 @@ ai-memory setup
 
 相关开关：`--plan` 只打印计划不做任何改动；`--web` 把计划显示成浏览器页面、勾选后应用；`--yes` 跳过询问；再次运行不会改动任何东西；`--agent` 指定要接的 agent。装完后重启你的 agent，问它一句 “What do you remember about this project?”，如果它通过 ai-memory 回答，就说明接线成功。
 
-41. Windows 走 PowerShell。前提：Windows 环境，或只考虑 WSL2。预期：校验 release zip 的 SHA-256，解到 `%LOCALAPPDATA%\Programs\ai-memory` 并加进用户 `PATH`；`setup` 做的事与 Linux/macOS 相同，只是用登录项代替系统服务：登录时启动服务器、无控制台窗口、失败会重启。README 把“原生 Windows”标为 Experimental，更稳的路子是 WSL2 或 Docker Desktop（见 `docs/windows.md`）。
+41. Windows 走 PowerShell。前提：Windows 环境，或只考虑 WSL2。预期：校验 release zip 的 SHA-256，解到 `%LOCALAPPDATA%\\Programs\\ai-memory` 并加进用户 `PATH`；`setup` 做的事与 Linux/macOS 相同，只是用登录项代替系统服务：登录时启动服务器、无控制台窗口、失败会重启。README 把“原生 Windows”标为 Experimental，更稳的路子是 WSL2 或 Docker Desktop（见 `docs/windows.md`）。
 
 ```powershell
 irm https://github.com/akitaonrails/ai-memory/releases/latest/download/install.ps1 | iex
@@ -368,6 +374,111 @@ ai-memory continue           # 恢复最新的 managed checkout
 
 47. 试用与回滚：先在单机、单仓库、只接一个 agent（Claude Code 或 Codex）的情况下按 README 的两条命令装上并跑一到两周，用“新会话是否还要重新交代背景”来判断是否值得留下。因为原文确实给出了可直接复制的安装、接线、启动和回滚命令，但所有收益说法都只有项目自述、没有独立验证，且要常驻服务并采集提示词与工具调用，必须先小范围试。不要一上来推到主力环境或团队共享。
 
+### 做法 G：用 stalemap 把依赖库在模型训练截止后的 API 变更注入给编码 agent
+
+针对的问题是：模型训练截止之后依赖库改了 API，agent 仍按旧 API 写代码。stalemap 是 npm CLI + MCP server + Claude Code 插件，算出每个直接依赖在“模型训练截止日之前至少 30 天发布的最后一个稳定版”与“项目实际 pin 的版本”之间的差异，把差异压缩成一份带排序的短笔记，通过三条通道交给 agent：会话开始时的笔记注入（写进 `AGENTS.md` 或 `CLAUDE.md`，或由插件注入上下文）、每次编辑后运行的 guard（跑项目自己的 `tsc`，把编译错误与对应变更条目一起回给 agent）、`search_changes` MCP 工具（agent 用自己的话检索，如 “resolve alias in next.config”）。只支持 JavaScript / TypeScript 项目；声明可配 Claude Code、Cursor、Codex、OpenCode 或任意 MCP client。
+
+48. 先预览，不动文件：
+
+```bash
+npx stalemap            # preview what changed and the block it would write
+```
+
+前提：Node 项目；有 lockfile 或 `node_modules` 以确定 pin 的版本；能访问 npm registry 与 GitHub；知道当前会话用的模型（可用 `--model` 指定，或依赖 Claude Code / Codex / OpenCode / Gemini CLI 的配置、`$ANTHROPIC_MODEL`；截止日来自 models.dev，也可显式传 `--cutoff YYYY-MM-DD`）。预期：看到变更预览和将要写入的笔记块，但不改动文件。
+
+49. 写入笔记块：
+
+```bash
+npx stalemap sync       # write the block into AGENTS.md or CLAUDE.md
+```
+
+前提：确认要写进哪个文件。预期：笔记块位于 `<!-- stalemap:start -->` 与 `<!-- stalemap:end -->` 之间，块外文字不会被改动。Claude Code 读 `CLAUDE.md`；若笔记写在 `AGENTS.md`，需在 `CLAUDE.md` 里加 `@AGENTS.md`，或用 `--target CLAUDE.md` 指定目标。
+
+50. CI 守门：
+
+```bash
+npx stalemap check      # for CI: exit 1 when the block is missing or stale
+```
+
+前提：CI 能跑 npm/npx。预期：笔记块缺失或过期时 exit 1，把“依赖变了但笔记没更新”拦在合并前。
+
+51. 手动跑 guard：
+
+```bash
+npx stalemap guard src/**/*.ts   # run the guard by hand
+```
+
+前提：项目自己的 `tsc` 可运行。预期：guard 把编译错误与匹配到的变更条目一起回给 agent，形成“写错 → 立刻看到原因 → 改正”的闭环。普通 `tsc` 钩子是 guard 的子集，二者不等价。
+
+52. Claude Code 插件（拿到自动注入 + 编辑后 guard）：
+
+```text
+/plugin marketplace add Umair/stalemap
+/plugin install stalemap@stalemap
+```
+
+前提：使用 Claude Code。预期：安装后提供 SessionStart hook（启动时、`/clear` 后、compaction 后把笔记放进上下文，不写文件）、PostToolUse hook（每次 Write/Edit 后跑 guard）、stalemap MCP server 和两个 skill（`/stalemap:sync` 写笔记块；`upgrade` 让 Claude 在使用或升级某包前先查它的变更）。hook 与 MCP server 走 `npx -y stalemap@latest`，因此始终用最新 npm 版本。
+
+53. 其他 agent 一键配置：
+
+```bash
+stalemap setup --agent cursor             # or codex, opencode, claude
+stalemap setup --agent codex --dry-run    # print the changes, write nothing
+```
+
+前提：确认目标 agent。预期：为每个 agent 写笔记、注册 MCP server、把 guard 装成 post-edit hook，产出可提交的项目文件；合并进已有配置、保留非它写入的条目、重复执行不变更。原文明确提示：尚未在真实 Cursor / Codex / OpenCode 安装中验证过；Cursor 目前不把 `postToolUse` hook 的上下文传给模型，所以 setup 额外加了一个 stop-hook 兜底，把未上报的发现作为后续消息发出。
+
+54. 任意 MCP client：
+
+```json
+{ "mcpServers": { "stalemap": { "command": "npx", "args": ["-y", "stalemap@latest", "mcp"] } } }
+```
+
+前提：client 支持 MCP。预期：agent 可以通过 `search_changes` 等工具按需检索依赖变更。
+
+55. GitHub Action：
+
+```yaml
+- uses: Umair/stalemap@main
+  with:
+    model: claude-opus-5-5          # fail CI when the notes are missing or stale
+    # mode: comment                 # or comment on PRs that change dependencies
+```
+
+前提：CI 使用 GitHub Actions。预期：笔记缺失或过期时失败；comment 模式需要 `permissions: pull-requests: write`，会列出每个变更依赖（模型已知的版本 → 实际 pin 的版本）及其笔记，并在后续 push 时更新同一条评论。
+
+56. 用参数控制成本与覆盖面（按需）：
+- `--all`：检查全部直接依赖（默认只查代码 import 的 + 配置文件配置的，如 `tsconfig.json`、`next.config.*`、Prisma schema、Vitest/ESLint 配置）；
+- `--margin`：截止日前多少天视为“模型已知”的版本（默认 30 天）；
+- `--budget`：笔记默认 1800 tokens，超出时优先保留项目实际用到的部分（导入的 API、成员与 props、设置的配置键、文件名）；
+- `--guides`：把升级指南也变成笔记（针对从不体现在类型签名里的变更，如新默认值、改名后的文件约定），只有引用了指南原文的笔记才保留；
+- `--examples`：在置顶笔记下加 Before → After 示例，只有能对 pin 的版本编译通过才保留；
+- `--llm`：用 Claude 生成摘要；
+- 环境变量：`STALEMAP_GUARD_TSC=0` 让 guard 只报依赖变更；`STALEMAP_GUARD_DEPRECATIONS=1` 才报 deprecation；`STALEMAP_CACHE` 改缓存目录（默认 `~/.cache/stalemap`）；`$STALEMAP_PRECOMPUTED_URL` 使用预计算报告（约 200 个高频变动包，原文注明尚未托管）。
+
+57. 按需检索：
+
+```bash
+stalemap search <query>
+```
+
+对应 MCP 工具 `search_changes`（另有 `package_changes`、`project_changes`、`check_notes`）。检索范围含全部类型变更、release note 条目、缓存下来的升级指南笔记；排序为 BM25，兼做标识符拆分（`resolveAlias` 能匹配 “resolve alias”），并对项目用到的东西加权。首次检索建索引，之后离线。
+
+58. 裁剪笔记（可选）：
+
+```bash
+stalemap probe
+```
+
+让模型为每处变更写代码、对 pin 的版本做类型检查，再带笔记重跑；模型本来就会的笔记从笔记块里删掉。原文提醒：probe 任务直接点名旧 API，因此测的是“被指到时知不知道”，比“主动发现”容易。
+
+59. 数据边界（合规前提）：
+包名与版本会发往 npm registry、GitHub（changelogs/releases，可用 `GITHUB_TOKEN` 或 `gh` 登录）与 models.dev；源码不上传，import 扫描在本地。使用 `--llm` / `--examples` / `--guides` 时，类型 diff、release note 片段、指南文本与导入的 API 名会发往 Claude（Anthropic API 或 `claude -p`），但不含代码；`probe` 的提示词发给你选的 provider；设置 `$STALEMAP_PRECOMPUTED_URL` 时只发包名不发版本。
+
+60. 小范围试用：先在一个 JS/TS 单 package.json 项目里 `npx stalemap` 预览，再 `npx stalemap sync` 写入，CI 加 `npx stalemap check`，Claude Code 侧装插件；观察会话通过率、首次编辑使用过期 API 的比例、单会话成本与时长。不要直接 adopt；原文只测了两个 Claude 模型且为作者自测，非 JS/TS、monorepo、无自带类型的包都不适用。
+
+与做法 A-F 的差异：A/E 的 memory 与知识库是用户或项目自己写的长期信息；G 的笔记是从 npm/GitHub 的 changelog/release note 与模型截止日算出来的依赖变更，写入 `AGENTS.md`/`CLAUDE.md` 或由插件注入。D 核对 git/GitHub/本机事实；G 不核对项目状态，只补依赖 API 盲区。F 是跨 agent/机器的记忆管线；G 是依赖变更通道。G 可以和 A/E 叠加，但不要把 G 的笔记当作用户确认过的知识库结论；guard 与 CI check 才是它的编译层核对。
+
 ## 怎么判断变好了
 
 最小试用方式（做法 A/B/C/D/F）：
@@ -384,6 +495,12 @@ ai-memory continue           # 恢复最新的 managed checkout
 1. 按上面的草稿写好常驻指令，只挂在你自己一个人的日常任务上，不要一上来就推给团队或改公司级知识库。
 2. 挑 5 个你已知答案的任务，其中至少 2 个故意说一句与知识库内容矛盾的话。
 3. 逐个记录：它有没有真的先读库；矛盾有没有被标出并同时引用两个版本；裁决后给出的编辑是否可以直接采纳。
+
+最小试用方式（做法 G）：
+1. 选一个 JS/TS 单 package.json 项目，先跑 `npx stalemap` 预览，确认笔记块内容与你的依赖变更相关。
+2. 再跑 `npx stalemap sync` 写入 `AGENTS.md` 或 `CLAUDE.md`，并在 CI 加 `npx stalemap check`。
+3. Claude Code 侧装插件：`/plugin marketplace add Umair/stalemap`、`/plugin install stalemap@stalemap`；观察 SessionStart 注入和编辑后 guard 是否触发。
+4. 用同一模型、同一批任务、同一项目做对照：一组不装 stalemap，一组装 stalemap；记录会话通过率、首次编辑使用过期 API 的比例、单会话成本与时长。原文未给试用时长；先小范围试，不要直接 adopt。
 
 观察指标（做法 A/B）：
 - 重复交代率：同一背景信息需要重新告诉 AI 的次数是否下降。
@@ -425,7 +542,14 @@ ai-memory continue           # 恢复最新的 managed checkout
 - 对照组：同期在未装 ai-memory 的仓库或另一个 agent 上做同类任务，比较重复交代率和召回成功率。
 - 注意：默认路径零 LLM 调用，捕获、搜索、handoff 都不需要 API key；可选 LLM“dream”后台重写。写入上限约 700/s 是 README 自称的实测值，不是独立验证。
 
-试多久：做法 A/B 用 1～2 周。如果重复交代率与召回成功率没有可观察的改善，或噪声清理成本高于收益，则放弃这条做法，退回到把 Claude Code 当作单次会话工具使用。做法 C 作者自评 early、样本 n=2，先小范围试再谈全面采用。做法 D 本次材料只到 README，脚本实现与效果未经验证，先小范围试，再谈全面采用。做法 E 一次就能跑完（5 个任务），判定标准是：冲突召回高、误报低、编辑可采纳率高，且额外成本可接受，就把这组指令固化为默认配置，再考虑推广到团队；如果误报频繁或给的编辑基本用不上，降级为“只在明确要求核对大脑时才启用”。做法 F 先单机、单仓库、只接一个 agent 跑 1～2 周；收益说法只有项目自述，没有独立验证，若“新会话是否还要重新交代背景”没有改善，就不要推到主力环境或团队。
+观察指标（做法 G）：
+- 会话通过率：同一批任务、同一模型，装与不装 stalemap 的通过率差异。调研结论称预注册盲测数据为 89%（stalemap）vs 68%（无辅助）vs 73%（普通 tsc 钩子）；但报告正文在“通过率：”处截断，具体表格无法引用。
+- 首次编辑使用过期 API 的比例：agent 第一次改代码时是否用了训练截止后的旧 API。
+- 单会话成本与时长：注入笔记、编辑后 guard、检索带来的额外开销是否值得。
+- 天花板对照：把“人工写一行点名变更的提示”当作上限，估计 stalemap 还差多少。
+- 普通 `tsc` 钩子不能当作 stalemap 的等价物：原文明确说普通 `tsc` 钩子是 guard 的子集，二者不等价。
+
+试多久：做法 A/B 用 1～2 周。如果重复交代率与召回成功率没有可观察的改善，或噪声清理成本高于收益，则放弃这条做法，退回到把 Claude Code 当作单次会话工具使用。做法 C 作者自评 early、样本 n=2，先小范围试再谈全面采用。做法 D 本次材料只到 README，脚本实现与效果未经验证，先小范围试，再谈全面采用。做法 E 一次就能跑完（5 个任务），判定标准是：冲突召回高、误报低、编辑可采纳率高，且额外成本可接受，就把这组指令固化为默认配置，再考虑推广到团队；如果误报频繁或给的编辑基本用不上，降级为“只在明确要求核对大脑时才启用”。做法 F 先单机、单仓库、只接一个 agent 跑 1～2 周；收益说法只有项目自述，没有独立验证，若“新会话是否还要重新交代背景”没有改善，就不要推到主力环境或团队。做法 G 原文未给试用时长；先在一个 JS/TS 单 package.json 项目小范围试，用会话通过率、首次编辑使用过期 API 的比例、单会话成本与时长判断是否继续，不要直接 adopt。
 
 ## 常见坑
 
@@ -458,6 +582,18 @@ ai-memory continue           # 恢复最新的 managed checkout
 - 做法 F 的原文在 `ai-memory run --f` 处截断，不能补全；遇到 lease 问题先查 README。
 - 做法 F 的“跨 20 多个 harness、跨项目 profile、跨机器、团队共享、多用户认证、审计日志、不是付费档、无 LLM 记忆老化、写入上限约 700/s”都是 README 自称，缺少独立验证。
 - 做法 F 不能替代做法 D：它的 handoff 仍是 agent 交接协议，仍是主张；git/GitHub/本机事实仍要用 `ground-truth.sh` 这类脚本核对。
+- 做法 G 只支持 JavaScript / TypeScript 项目，且只支持一个 `package.json`，尚无 workspace 遍历；monorepo 不要直接套。
+- 做法 G 对无自带类型的包只能靠 release note；`@types/*` 不做 diff。别把“类型签名没报错”当成依赖没变。
+- 做法 G 的预注册盲测数据是作者自测，只测了两个 Claude 模型；报告正文在“通过率：”处截断，具体表格无法引用。不要当作已证明有效。
+- 做法 G 的 Cursor / Codex / OpenCode `setup --agent` 原文明确说尚未在真实安装中验证过；Cursor 目前不把 `postToolUse` hook 的上下文传给模型，只能靠 stop-hook 兜底。先按 watch 对待，不要写进团队标准流程。
+- 做法 G 的普通 `tsc` 钩子是 guard 的子集，二者不等价；不要用普通 tsc 钩子替代 guard。
+- 做法 G 的 `npx stalemap check` 会在笔记块缺失或过期时 exit 1；不要忽略这个失败，否则依赖变了笔记没变。
+- 做法 G 把笔记写在 `AGENTS.md` 时，Claude Code 读的是 `CLAUDE.md`；要在 `CLAUDE.md` 里加 `@AGENTS.md`，或用 `--target CLAUDE.md` 指定目标。
+- 做法 G 的插件和 hook 走 `npx -y stalemap@latest`，因此始终用最新 npm 版本；要固定版本需自己另做控制，原文没有给固定版本的做法。
+- 做法 G 的 `--budget` 默认 1800 tokens，超出时优先保留项目实际用到的部分；不要为了塞全量 changelog 把预算撑爆。
+- 做法 G 的 `probe` 任务直接点名旧 API，测的是“被指到时知不知道”，比“主动发现”容易；不要把 probe 结果当成主动发现能力的证明。
+- 做法 G 的 GitHub Action comment 模式需要 `permissions: pull-requests: write`；没有这个权限就不要开 comment 模式。
+- 做法 G 的数据边界：包名与版本会发往 npm registry、GitHub、models.dev；`--llm` / `--examples` / `--guides` 会把类型 diff、release note 片段、指南文本与导入的 API 名发往 Claude（不含代码）；`probe` 的提示词发给你选的 provider；`$STALEMAP_PRECOMPUTED_URL` 只发包名不发版本。不能接受就别开对应通道。
 
 ## 证据与来源
 
@@ -467,10 +603,11 @@ ai-memory continue           # 恢复最新的 managed checkout
 - truongfelix/workflow 侧：来源是该仓库 README（MIT，32 stars）。本次材料只到 README，脚本实现与效果未经验证。README 给出一份完整的 Monday morning `/session-start` 输出样例（含 3 条与上周五 handoff 的不一致告警、当天 3 项带完成判据的任务、2 条等待裁决的问题），并称这套场景的全部文件与脚本输出都在 `example/`。仓库自身有 CI 徽章，`test/run.sh` 测 `adopt.sh` 与 `ground-truth.sh`，CI 在 Linux/macOS/Windows 三种系统上跑。
 - @coreyganim 侧：来源是一条推文（101 赞、6 次转发、14 条回复）。原文给出三条指令要点：任务前先读公司大脑与个人大脑、与大脑冲突就标记并同时引用两版、等用户裁决后给出对大脑的确切编辑；并主张“建了第二大脑却不告诉 AI 怎么用，它就毫无用处”“修复只要 90 秒”。这些判断没有对照、案例或数据支撑。关键材料缺口：原文写“完整提示如下”，但采集到的正文未包含该完整提示，本手册中的提示词是按这三条要点整理的草稿，效果可能与作者实际使用的提示不同。
 - akitaonrails/ai-memory 侧：来源是该仓库 README（MIT，Rust 单二进制）。README 给出 capture→consolidate→recall→handoff 管线、Linux/macOS 两条安装命令、Windows PowerShell、Arch/Fedora 包管理器、macOS 菜单栏 App、Docker quick-start、`ai-memory run` 启动方式；并称默认路径零 LLM 调用，捕获、搜索、handoff 都不需要 API key，真相源是 git 托管的普通 `.md` 文件，数据库只是可随时从文件重建的派生索引，跨 agent 交接是显式的、带类型的 claim-once 协议。收益说法（跨二十多个 harness、跨项目、跨机器、团队共享、多用户认证、审计日志不是付费档、纯 Markdown、静默捕获、无 LLM 记忆老化、可选 LLM dream、写入上限约 700/s）目前只有项目自述，没有独立验证。本次调研结论明确建议：先在单机、单仓库、只接一个 agent（Claude Code 或 Codex）的情况下按 README 的两条命令装上并跑一到两周，用“新会话是否还要重新交代背景”来判断是否值得留下。
-- 证据强度提示：做法 A、B 只有步骤清单和传播数据，没有效果验证；做法 C 有对照实验数据，但样本极小且作者自评 early；做法 D 只有 README、样例输出和模板自身 CI，缺少独立效果验证；做法 E 只有一条推文和三条指令要点，推广、成本和风险均无数据；做法 F 只有 README 和可复制命令，收益只有项目自述，缺少独立效果验证。所有数据都不能当作“这套做法一定有效”的证明。
-- 作者主张（缺少支撑）：建独立文件夹、接入 GWS CLI 打通 Gmail/日历/云端硬盘、单开 `memory` 子目录、在 `CLAUDE.md` 写死记忆规则；obsidian-wiki 的“知识是编译而非堆积”、manifest 增量摄入、每条主张打标 extracted / inferred / ambiguous、查询成本随规模基本不变；workflow 的“主张和事实是两回事”“做完删除不打勾”“UNKNOWN 绝不算通过”“没被点名的东西不算只存在一块盘上”“先建议再等”；@coreyganim 的“不告诉 AI 怎么用第二大脑就毫无用处”“90 秒修复”；ai-memory 的跨 agent/项目/机器、团队共享、无 LLM 记忆老化、写入上限约 700/s 等。
-- 调研报告给出的建议（不是原文）：规则示例“把每次会话中确认的长期有效信息追加到 `memory` 下的文件中；开始新任务前先读取 `memory`”；先只开一项权限跑通；重复交代率、召回成功率、记忆文件质量、越权与泄漏、对照组等指标；1～2 周试用期；用同一模型、同一 vault、同一批问题做对照验证；在长期项目上小范围试做法 D；做法 E 的提示词草稿、5 个已知答案任务的试用方式，以及读取命中率、冲突召回、误报数、编辑可采纳率、成本五项指标，先只挂在自己日常任务上，不要推给团队或改公司级知识库；做法 F 先单机、单仓库、只接一个 agent 跑 1～2 周，用“新会话是否还要重新交代背景”判断是否留下。
-- 仅为推测的部分：second-brain 第 4 步规则的目标位置推测指向 `memory` 目录；原文未界定“重要细节”；未说明记忆召回机制、GWS CLI 授权范围、凭证存储与撤销方式；obsidian-wiki 的 Cursor / Hermes / OpenClaw 支持细节也尚未证实；workflow 的脚本实现与效果未验证；做法 E 中“具体在哪个入口写常驻指令”原文只说要“添加一组自定义指令”，落点需按你手头的工具确认；做法 F 的 `ai-memory run --f` 处原文截断，Docker quick-start 未包含认证步骤。
+- Umair/stalemap 侧：来源是该仓库 README。调研报告称预注册盲测 held-out v4：66 个任务，按种子从 33 个流行 npm 包在某三个月窗口内发布的所有 breaking / deprecation / behavior change 中抽取；每任务每臂每模式每模型 3 个 session；构建在任何 v4 结果产生前冻结为 `freeze/v4-final`；只有两层 bootstrap（先任务后运行）求出的区间不含 0 才算胜。调研结论给出 89% vs 无辅助 68% vs 普通 tsc 钩子 73%，但报告正文在“通过率：”处截断，具体表格无法引用。只支持 JS/TS 与单个 package.json；只测了两个 Claude 模型且为作者自测。Cursor/Codex/OpenCode 的 `setup --agent` 原文明确说尚未在真实安装中验证过；Cursor 目前不把 `postToolUse` hook 的上下文传给模型，需 stop-hook 兜底。数据边界：包名与版本发往 npm registry、GitHub、models.dev；源码不上传；`--llm` / `--examples` / `--guides` 会把类型 diff、release note 片段、指南文本与导入的 API 名发往 Claude（不含代码）；`probe` 提示词发给你选的 provider；`$STALEMAP_PRECOMPUTED_URL` 只发包名不发版本。
+- 证据强度提示：做法 A、B 只有步骤清单和传播数据，没有效果验证；做法 C 有对照实验数据，但样本极小且作者自评 early；做法 D 只有 README、样例输出和模板自身 CI，缺少独立效果验证；做法 E 只有一条推文和三条指令要点，推广、成本和风险均无数据；做法 F 只有 README 和可复制命令，收益只有项目自述，缺少独立效果验证；做法 G 有预注册盲测设计，但只支持 JS/TS、只测两个 Claude 模型且为作者自测，报告正文在通过率处截断，缺少独立复现。所有数据都不能当作“这套做法一定有效”的证明。
+- 作者主张（缺少支撑）：建独立文件夹、接入 GWS CLI 打通 Gmail/日历/云端硬盘、单开 `memory` 子目录、在 `CLAUDE.md` 写死记忆规则；obsidian-wiki 的“知识是编译而非堆积”、manifest 增量摄入、每条主张打标 extracted / inferred / ambiguous、查询成本随规模基本不变；workflow 的“主张和事实是两回事”“做完删除不打勾”“UNKNOWN 绝不算通过”“没被点名的东西不算只存在一块盘上”“先建议再等”；@coreyganim 的“不告诉 AI 怎么用第二大脑就毫无用处”“90 秒修复”；ai-memory 的跨 agent/项目/机器、团队共享、无 LLM 记忆老化、写入上限约 700/s 等；stalemap 的“训练截止后依赖 API 变化是 agent 默认不知道自己不知道的工作”“普通 tsc 钩子是 guard 的子集，二者不等价”“probe 测的是被指到时知不知道，比主动发现容易”。
+- 调研报告给出的建议（不是原文）：规则示例“把每次会话中确认的长期有效信息追加到 `memory` 下的文件中；开始新任务前先读取 `memory`”；先只开一项权限跑通；重复交代率、召回成功率、记忆文件质量、越权与泄漏、对照组等指标；1～2 周试用期；用同一模型、同一 vault、同一批问题做对照验证；在长期项目上小范围试做法 D；做法 E 的提示词草稿、5 个已知答案任务的试用方式，以及读取命中率、冲突召回、误报数、编辑可采纳率、成本五项指标，先只挂在自己日常任务上，不要推给团队或改公司级知识库；做法 F 先单机、单仓库、只接一个 agent 跑 1～2 周，用“新会话是否还要重新交代背景”判断是否留下；做法 G 先 `npx stalemap` 预览、再 `npx stalemap sync` 写入、CI 加 `npx stalemap check`、Claude Code 侧装插件，先在一个 JS/TS 单 package.json 项目小范围试，不要直接 adopt。
+- 仅为推测的部分：second-brain 第 4 步规则的目标位置推测指向 `memory` 目录；原文未界定“重要细节”；未说明记忆召回机制、GWS CLI 授权范围、凭证存储与撤销方式；obsidian-wiki 的 Cursor / Hermes / OpenClaw 支持细节也尚未证实；workflow 的脚本实现与效果未验证；做法 E 中“具体在哪个入口写常驻指令”原文只说要“添加一组自定义指令”，落点需按你手头的工具确认；做法 F 的 `ai-memory run --f` 处原文截断，Docker quick-start 未包含认证步骤；做法 G 的通过率表格在报告正文中截断，无法核对每个任务与每种模式的具体结果。
 
 ## 依据的调研
 
@@ -479,3 +616,4 @@ ai-memory continue           # 恢复最新的 managed checkout
 - [truongfelix/workflow](../research/radar/2026-10-11/2508-truongfelix-workflow.md)：值得一试，在一个有多会话、跨天跨机器的长期项目上小范围试：clone 仓库后运行 bin/adopt.sh，先填好 .claude/ground-truth.conf 并把 ground-truth.sh 跑到 GROUND TRUTH: complete，再用 /session-start 和 /handoff 包住每天的工作；理由是它把“上次会话的笔记只是主张、git 与机器状态才是事实”这条规则做成两个技能共用同一个采集脚本的机制，直接针对跨会话记忆失真，但本次材料只到 README，脚本实现与效果未经验证。
 - [@coreyganim: 如果你构建了一个第二大脑，但没有告诉 Claude/Codex 如何使用它，它就毫无用处。](../research/radar/2026-10-14/3145-claude-codex.md)：值得一试，先照原文那三条规则，给 Claude/Codex 加一组自定义指令（任务前读公司大脑与个人大脑、与大脑冲突就标记并引用两版、让你裁决后给出大脑的确切编辑），小范围试跑若干任务；因为这三条规则本身可以直接落地、改动成本极低，但原文承诺的“完整提示”并未出现在采集到的正文里，也没有任何效果数据，是否真有效必须自己验证。
 - [akitaonrails/ai-memory](../research/radar/2026-10-18/4553-akitaonrails-ai-memory.md)：值得一试，先在单机、单仓库、只接一个 agent（Claude Code 或 Codex）的情况下按 README 的两条命令装上并跑一到两周，用「新会话是否还要重新交代背景」来判断是否值得留下；因为原文确实给出了可直接复制的安装、接线、启动和回滚命令，但所有收益说法都只有项目自述、没有独立验证，且要常驻服务并采集提示词与工具调用，必须先小范围试。
+- [Umair/stalemap](../research/radar/2026-10-21/5613-umair-stalemap.md)：值得一试，在 JS/TS 项目里小范围试用：先 `npx stalemap` 预览、再 `npx stalemap sync` 把变更笔记写进 AGENTS.md/CLAUDE.md，CI 加 `npx stalemap check`，Claude Code 侧装插件拿到 SessionStart 注入和编辑后 guard。理由是原文给出了可直接复制的安装、配置、CI 与 MCP 步骤，并有预注册盲测数据（89% vs 无辅助 68% vs 普通 tsc 钩子 73%）；但仅支持 JS/TS 与单个 package.json、只测了两个 Claude 模型且为作者自测，所以先试不直接 adopt。
