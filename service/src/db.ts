@@ -181,6 +181,17 @@ export class Store {
     return r.t;
   }
 
+  /** 从最近一次运行往前数连续失败次数，最多数 limit 条；用来给失败的采集器做退避。 */
+  consecutiveFailures(collector: string, limit = 10): number {
+    const rows = this.db.prepare(`SELECT status FROM runs WHERE collector=? ORDER BY id DESC LIMIT ?`).all(collector, limit) as { status: string }[];
+    let n = 0;
+    for (const r of rows) {
+      if (r.status === 'ok') break;
+      n++;
+    }
+    return n;
+  }
+
   lastRuns(): Run[] {
     return this.db.prepare(`SELECT * FROM runs WHERE id IN (SELECT MAX(id) FROM runs GROUP BY collector) ORDER BY collector`).all() as Run[];
   }

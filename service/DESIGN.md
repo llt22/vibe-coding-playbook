@@ -31,11 +31,11 @@
 | `github-active` | Search API，不限创建时间，近 7 天有推送且星数过 500/1000，补上只看新建会漏掉的成熟项目 | 每天 | 4 条查询之间隔 7 秒，避开无 token 时的限流 |
 | `github-trending` | 解析 github.com/trending 页面 | 每天 | 无官方 API；解析出 0 条视为失败 |
 | `hn` | HN Algolia API，按关键词，限分数阈值 | 3 小时 | |
-| `rss` | 博客、newsletter 和官方博客的 feed（含 claude.dev、OpenAI News） | 6 小时 | 每个 feed 单独记成功或失败 |
-| `pages` | 没有 feed 的文章列表页（Anthropic Engineering），解析卡片的链接、标题、日期 | 12 小时 | 解析出 0 篇视为失败（可能改版） |
+| `rss` | 博客、newsletter 和官方/厂商博客的 feed（claude.dev、OpenAI News、Simon Willison、Martin Fowler、Latent Space、Pragmatic Engineer、GitHub Engineering、Microsoft Open Source、Wiz、GitHub Changelog） | 6 小时 | 每个 feed 单独记成功或失败；厂商博客补上一手基准和事故复盘 |
+| `pages` | 没有 feed 的文章列表页（Anthropic Engineering，卡片链接已迁到 `/research/<slug>`） | 12 小时 | 解析出 0 篇视为失败（可能改版） |
 | `ingest` | 外部推送（X/Ego、以后的官方 API） | 被动 | 记录推送方的最后心跳 |
 
-每次采集都记一条运行记录，GitHub 结果顺带记星数快照，用来算增长。
+每次采集都记一条运行记录，GitHub 结果顺带记星数快照，用来算增长。采集失败的采集器按 5、10、20 分钟退避重试，连续失败 3 次以上退回正常周期，不会在断网时每分钟重打同一个源。
 
 暂不做：关注仓库的 Releases、arXiv、Reddit、V2EX。
 
@@ -121,7 +121,7 @@ Authorization: Bearer $INGEST_TOKEN
 ## 分阶段
 
 1. **MVP（本次）**：上述采集器、初筛、三个页面、推送接口，在 Mac 上用 launchd 常驻。
-2. **X 采集（已完成）**：`x/run.sh` 每 3 小时用 Ego 里已登录的 X 会话只读搜索 `x/queries.json` 里的账号和关键词（取自 ai-engineering-radar 方法文档），推到 `/ingest`。遇到登录墙直接失败，不绕过。
+2. **X 采集（已完成）**：`x/run.sh` 每 3 小时用 Ego 里已登录的 X 会话只读搜索 `x/queries.json` 里的账号和关键词（起点取自 ai-engineering-radar 方法文档，2026-10-14 按只读探针的命中情况复核过覆盖，见该文件的 `_说明`），推到 `/ingest`。遇到登录墙直接失败，不绕过。
 3. **自动深度调研（已完成）**：模型在初筛时选出值得深入的条目，服务自己取原文、调用 `.env` 里配置的模型写报告，写回仓库并提交。
 4. **落地成手册（已完成）**：可照做的调研每小时合并进按场景组织的手册，周报改为“手册新增或修改了哪些做法”。
 5. **沙箱实测**：挑手册里的步骤在隔离环境实际跑一遍，记录结果，通过的去掉“未经实测”标记。

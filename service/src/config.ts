@@ -50,10 +50,10 @@ export const githubActiveQueries = [
 ];
 
 /** HN Algolia 查询：限近 3 天、分数过阈值的 story。 */
-export const hnQueries = ['claude code', 'codex', 'ai agent', 'llm', 'mcp', 'cursor'];
+export const hnQueries = ['claude code', 'codex', 'ai agent', 'coding agent', 'agent skills', 'llm', 'mcp', 'cursor'];
 export const hnMinPoints = 30;
 
-/** feed 地址已在 2026-09-30 验证可访问；catalogId 对应 catalog.jsonl 里的信源条目，不在清单里的留空、来源名用域名。 */
+/** feed 地址均在 2026-10-22 验证返回 RSS/Atom；catalogId 是来源标签（catalog.jsonl 没有对应条目时只影响显示名）。 */
 export const feeds = [
   { catalogId: '', url: 'https://claude.dev/rss.xml' },
   { catalogId: '', url: 'https://openai.com/news/rss.xml' },
@@ -62,4 +62,8 @@ export const feeds = [
   { catalogId: 'src-latent-space', url: 'https://www.latent.space/feed' },
   { catalogId: 'src-pragmatic-engineer', url: 'https://newsletter.pragmaticengineer.com/feed' },
   { catalogId: 'src-github-engineering', url: 'https://github.blog/engineering/feed/' },
+  // 厂商与官方博客：一手基准、发布说明和事故复盘。这几类内容很少出现在 HN 和 X 的时间线里。
+  { catalogId: 'src-microsoft-oss', url: 'https://opensource.microsoft.com/blog/feed/' },
+  { catalogId: 'src-wiz-research', url: 'https://www.wiz.io/blog/rss.xml' },
+  { catalogId: 'src-github-changelog', url: 'https://github.blog/changelog/feed/' },
 ];

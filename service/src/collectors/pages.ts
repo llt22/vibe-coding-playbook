@@ -1,21 +1,25 @@
 import { getText, itemKey } from '../http.ts';
 import type { Collector, RawItem } from './types.ts';
 
-/** 没有 feed 的文章列表页。每张卡片是 <article> 里一个链接、一个标题、一个 <time dateTime>。 */
+/** 没有 feed 的文章列表页。每张卡片是 <article> 里一个链接、一个标题、一个 <time>。 */
 const PAGES = [
-  { name: 'anthropic-engineering', url: 'https://www.anthropic.com/engineering', path: '/engineering/' },
+  // 2026-10 改版：文章链接从 /engineering/<slug> 迁到 /research/<slug>，<time> 只剩可见文本、没有 dateTime。
+  { name: 'anthropic-research', url: 'https://www.anthropic.com/engineering', path: '/research/' },
 ];
 
 const strip = (s: string) => s.replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/&#x27;|&#39;/g, "'").replace(/&quot;/g, '"').replace(/\s+/g, ' ').trim();
 
 export function parseArticleList(html: string, base: string, path: string, source: string): RawItem[] {
   const out: RawItem[] = [];
+  const seen = new Set<string>();
   for (const [, card] of html.matchAll(/<article\b[^>]*>([\s\S]*?)<\/article>/g)) {
     const href = card.match(new RegExp(`href="(${path}[^"]+)"`))?.[1];
     const title = card.match(/<h\d[^>]*>([\s\S]*?)<\/h\d>/)?.[1];
-    const date = card.match(/<time[^>]*dateTime="([^"]+)"/i)?.[1];
+    const date = card.match(/<time[^>]*dateTime="([^"]+)"/i)?.[1] ?? card.match(/<time[^>]*>([^<]+)<\/time>/i)?.[1];
     if (!href || !title) continue;
     const url = new URL(href, base).href;
+    if (seen.has(url)) continue;
+    seen.add(url);
     out.push({ key: itemKey(url), source, title: strip(title), url, published_at: date ? new Date(date).toISOString() : null });
   }
   return out;

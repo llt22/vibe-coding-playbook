@@ -94,9 +94,18 @@ function digest(store: Store) {
   }
 }
 
+/** 失败后按 5、10、20 分钟重试；连续失败 3 次以上就退回正常周期，避免每分钟重打同一个坏源。 */
+const RETRY_BASE_MS = 5 * 60_000;
+const RETRY_MAX = 3;
+
 const due = (store: Store, c: { name: string; intervalHours: number }) => {
-  const last = store.lastSuccess(c.name);
-  return !last || Date.now() - Date.parse(last) >= c.intervalHours * 3600_000;
+  const last = store.lastStart(c.name);
+  if (!last) return true;
+  const failures = store.consecutiveFailures(c.name);
+  const wait = failures > 0 && failures <= RETRY_MAX
+    ? RETRY_BASE_MS * 2 ** (failures - 1)
+    : c.intervalHours * 3600_000;
+  return Date.now() - Date.parse(last) >= wait;
 };
 
 let busy = false;
