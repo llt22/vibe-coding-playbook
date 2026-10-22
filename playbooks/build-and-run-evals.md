@@ -1,14 +1,14 @@
-# 让 AI 改动拿出可核验的证据：建评测、爬坡与各类验收（附听觉评审试用）
+# 让 AI 的每次改动都拿出可核验的证据：从建评测到上线验收的操作手册
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：手工搭评测、靠感觉判断改动有没有变好，以及给 AI 写的代码和重写的老代码做验收，都缺一套可核验的证据；这篇手册给出从建评测、爬坡到上线闸门和各类验收的完整操作，并附一条给编码代理接听觉评审的待验证试用。
-> 先试这一步：先在 Claude Code 里运行 `/claude-api build-eval`，用你手上的一点真实数据把第一套评测建起来；只有手头是音频生成/评审任务时，才再按 I 组执行 `claude mcp add earshot -- python -m earshot mcp` 做一次待验证的试用。
-> 最近修订：2026-10-16
+> 解决的问题：避免靠感觉判断 AI 改动有没有变好，用可重复的评测、回归闸门、对照实验、上线口径和产品级评测把每次改动变成可核验的证据。
+> 先试这一步：先选一个能反复跑的文本类改进对象，用 /claude-api build-eval 建一套带置信区间的评测，再决定是否爬坡。
+> 最近修订：2026-10-23
 
 ## 解决什么问题
 
-手工搭评测集、手工调 prompt 和参数、靠感觉判断「这次改动到底有没有变好」，都很费时而且容易自欺。这套做法有四条腿，外加一道对尺子本身的质检，再加一条按模型能力决定行为 harness 开销的支线，一条用现成脚手架跑 agent benchmark 的支线，一条用配对对照实验验证「某个上下文改动对 AI 产出到底有没有影响」的支线，一条用逐字节输出对比加变异自检验收「AI 重写老代码」的支线，外加一条给编码代理接听觉评审的待验证试用支线。
+手工搭评测集、手工调 prompt 和参数、靠感觉判断「这次改动到底有没有变好」，都很费时而且容易自欺。这套做法有四条主腿：建评测并爬坡、给 AI 代码改动加回归闸门、质检评测本身、上线验收；另有多条支线：按模型能力决定行为 harness 开销、用 RSI Eval 跑 agent benchmark、用配对对照实验验证上下文改动、用逐字节对比加变异自检验收 AI 重写老代码、给编码代理接听觉评审的待验证试用，以及用 Scope 做产品级编码智能体评测的小范围试用。共同点只有一个：改动必须拿出可核验的证据，而不是「我觉得好多了」。
 
 第一条腿针对可反复跑的文本类改进对象（system prompt、skill 或 instruction 文件、tool 描述、模型与参数）：让 Claude Code 里的 claude-api skill 先把评测建起来（从真实数据采样用例、选最便宜够用的 grader、跑 baseline 并做诊断检查），再对着这套评测做自动爬坡——一轮只改一处，用 train/test 拆分和置信区间判断增益是不是真的，并自动回滚过拟合或回退的改动。
 
@@ -18,15 +18,17 @@
 
 第三条腿针对上线之后到底算不算改善：借用 FDE Gym 的评分口径——0 分是什么都没改，100 分是参考解，≥80 通过，生产事故最高 0 分，占用客户人员时间要扣分；验证发生在客户从未展示过的流量上，指标是客户自己那个数字改善了多少，而且一次运行只交付一次。前三条腿都是离线、可回滚、可重跑的；这一条是最终闸门，交出去就没有第二次。
 
-新增支线针对编码 agent 的行为 harness 成本：不是所有模型都值得在开发全程挂契约化 guides+sensors。用着便宜或不稳定的模型时，开发全程挂，把漂移当场抓住；用前沿模型且能一次做对时，把同一套确定性检查只在最终验收门禁跑一次。实验里 GPT-6 Luna 无 harness 只有 3/10 通过，挂上 harness 后 10/10，单次估算成本约 $0.273，低于无 harness 的 GPT-6 Sol 的约 $0.406；而 Sol 加 harness 只是把成本推到约 7 倍、通过率仍为 10/10。共同点仍是：改动必须拿出可核验的证据，而不是「我觉得好多了」。
+行为 harness 支线：不是所有模型都值得在开发全程挂契约化 guides+sensors。用便宜或不稳定的模型时，开发全程挂，把漂移当场抓住；用前沿模型且能一次做对时，把同一套确定性检查只在最终验收门禁跑一次。实验里 GPT-6 Luna 无 harness 只有 3/10 通过，挂上 harness 后 10/10，单次估算成本约 $0.273，低于无 harness 的 GPT-6 Sol 的约 $0.406；而 Sol 加 harness 只是把成本推到约 7 倍、通过率仍为 10/10。
 
-新增支线 RSI Eval 针对 agent/基准评测场景：如果你已经有一套自己的候选生成、记忆、选择、停止规则循环，只缺一个稳定的评测边界，可以用这个轻量 Python SDK + CLI，把 `candidate -> evaluate() -> task feedback -> your next candidate` 中的 `evaluate()` 交给它。它不要求继承某个 optimizer 基类，只负责跑基准、调 grader、返回统一结果；任务选择、evolve/test 划分仍由你自己的方法控制。
+RSI Eval 支线：如果你已经有一套自己的候选生成、记忆、选择、停止规则循环，只缺一个稳定的评测边界，可以用这个轻量 Python SDK + CLI，把 candidate -> evaluate() -> task feedback -> your next candidate 中的 evaluate() 交给它。它不要求继承某个 optimizer 基类，只负责跑基准、调 grader、返回统一结果；任务选择、evolve/test 划分仍由你自己的方法控制。
 
-新增支线（配对对照实验）针对「上下文改动到底有没有影响 AI 产出」这个问题：把代码库复制成两份，一份做你要验证的改动（原文是删掉全部注释，只保留约 800 行工具本身需要的注释），编译两份并确认产出的代码完全相同；选一大一小两个真实任务，两份用同一提示词、同一 agent、同一套设置；每个分支每个任务跑三次并交替跑；检查统一走 lint / 类型检查 / 已有测试，大任务额外加一个 agent 完成后才写上的隐藏测试；最后用一个独立会话按跑之前就写好的清单盲评。原文用大任务三次 token 的方差说明：单次运行的结果足以写出两篇结论相反的博客——同一任务、同一天，去掉注释既可能贵 30%，也可能便宜 31%。共同点仍是：改动必须拿出可核验的证据，而不是「我觉得好多了」。
+配对对照实验支线：把代码库复制成两份，一份做你要验证的改动（原文是删掉全部注释，只保留约 800 行工具本身需要的注释），编译两份并确认产出的代码完全相同；选一大一小两个真实任务，两份用同一提示词、同一 agent、同一套设置；每个分支每个任务跑三次并交替跑；检查统一走 lint / 类型检查 / 已有测试，大任务额外加一个 agent 完成后才写上的隐藏测试；最后用一个独立会话按跑之前就写好的清单盲评。原文用大任务三次 token 的方差说明：单次运行的结果足以写出两篇结论相反的博客——同一任务、同一天，去掉注释既可能贵 30%，也可能便宜 31%。
 
-新增支线（AI 重写老代码的行为等价性验收）针对「AI 把一段老代码重写完，怎么证明它没改坏」这个问题：只要老代码还能独立跑、输入可复现、输出可确定捕获，就把同一批真实输入分别喂给新旧两份实现，逐字节比对输出；再自造至少 10 个新输入重复比对，覆盖真实数据碰不到的边界值、空输入、异常路径、极端长度、非法参数；最后故意改坏新代码的一行，确认测试会变红——变绿说明前面的通过只是测试空转。前两步确认重写没有改变可观测行为，第三步确认用来保证这一点的测试本身有效。它只回答「行为没变」，不回答「重写变好了」。
+AI 重写老代码的行为等价性验收支线：只要老代码还能独立跑、输入可复现、输出可确定捕获，就把同一批真实输入分别喂给新旧两份实现，逐字节比对输出；再自造至少 10 个新输入重复比对，覆盖真实数据碰不到的边界值、空输入、异常路径、极端长度、非法参数；最后故意改坏新代码的一行，确认测试会变红——变绿说明前面的通过只是测试空转。它只回答「行为没变」，不回答「重写变好了」。
 
-新增试用条目（给编码代理接听觉评审）针对「生成的声音怎么验证」这个问题：原文给出的思路是不要只做盲测，而是把生成结果与真实录音比较；审美/品味层面的最终判断仍留给人。接入方式只有一条原文命令（在 Claude Code 里执行 `claude mcp add earshot -- python -m earshot mcp`），仓库里另有一个「从真实授权录音中制作原声音轨」的技能。注意：原文只是推文片段，仓库内容、评测指标和适用条件都未给出，所以它只能作为待验证的试用条目，不作为成型方法。
+earshot 试用条目：原文给出的思路是不要只做盲测，而是把生成结果与真实录音比较；审美/品味层面的最终判断仍留给人。接入方式只有一条原文命令（在 Claude Code 里执行 claude mcp add earshot -- python -m earshot mcp），仓库里另有一个「从真实授权录音中制作原声音轨」的技能。注意：原文只是推文片段，仓库内容、评测指标和适用条件都未给出，所以它只能作为待验证的试用条目。
+
+Scope 支线：微软开源的、基于 Kubernetes 的 AI 编码智能体评测平台，可驱动 GitHub Copilot、Claude Code、VS Code with Copilot 等编码智能体。它把智能体与软件产品的交互变成可复现的实验证据：定义代表性任务、起始代码库、智能体配置、模拟用户 personas、版本化 profiles、DAG 形式的评价标准、LLM Judge、运行轨迹和工作区快照，并提供 Portal、CLI 和 REST API。它是需要自行部署的软件，不是托管服务。原文只给流程和入口，没有命令级配置，所以只能小范围试用。
 
 ## 适用与不适用
 
@@ -34,87 +36,68 @@
 
 - 有一个能反复跑的文本类改进对象：system prompt、skill 或 instruction 文件、tool 描述、模型选择与 effort/API 参数。
 - 手里有一点真实数据：生产转录、bug 报告、支持工单，或自己手写的 5–10 个用例。
-- 目标是提升性能，或性能持平下降低成本（原文认为后者即使评测饱和也普遍好用）。
-- 另一类适用对象是代码改动本身：AI 交来一个 patch，你需要一套能自动判分的验收协议，判断它到底该不该合。
-- 元评估：已经有一套能跑起来的评估和验证器，想在采信分数之前先确认这把尺子准不准；能同时跑多个不同能力档位的模型代理；能拿到每次运行的完整轨迹。
-- 上线验收：有一个正在运行的系统、一个业务方能说清的目标指标，并且能分出一段客户或业务方从未见过的流量来做验证；能接受一次运行只交付一次的约束；有人愿意为线上后果负责。
-- 想先跑一遍原工具验证这套口径是否成立：本机有 Docker、Python 3.9+ 和一个 OpenRouter key。
-- 行为 harness：用编码智能体在清晰 brief 下构建绿地服务，接口契约可机器执行，有一批独立验收测试，想比较有/无行为 harness 的通过率、可靠性、token、耗时、估算成本。
-- 行为 harness：想按模型能力选择传感器节奏：便宜或不稳定模型开发全程挂 harness，前沿模型只在验收门禁跑一次。
-- RSI Eval：你已有自己的 RSI/候选循环，只想在 agent benchmark 上获得统一评测边界；或者想先零成本预览一个打包基准任务，再对单个任务跑 oracle 基线与候选对比。
-- RSI Eval：需要覆盖终端与软件工程、代码生成、推理与数学、阅读理解、MCE 任务、工程、领域工作流等打包基准；或想直接跑 Meta-Harness、RRSI、AHE、HarnessX 四个方法集成。
-- 上下文改动对照实验：想判断某个上下文改动（删注释、删 docs、改 AGENTS.md、换 prompt 等）对 AI 产出到底有没有影响，并且有一个能编译、能跑 lint / 类型检查 / 测试的真实项目，愿意改代码、加测试、调用 agent，且愿意每分支每任务跑三次并交替跑。
-- AI 重写老代码的行为等价性验收：正在做大规模、无行为变更的重构——AI 把一段老代码重写完，人的肉眼读 diff 不足以判断行为是否一致；并且老版本仍能独立运行、输入可复现、输出可确定捕获（函数返回值、stdout、文件、HTTP 响应等），第 2、3 步的对比能作为可重复、可判定、退出码可读的自动化测试运行。单点小改动不需要这么重的验收。
-- 想验证「让编码代理自己听声音、并把生成结果与真实录音对照」这条评测回路是否跑得通：已安装 Claude Code，本机可运行 Python，手上有一段真实、有授权的录音作为对照素材。
+- 目标是提升性能，或性能持平下降低成本。
+- AI 交来一个 patch，你需要一套能自动判分的验收协议。
+- 已经有一套能跑起来的评估和验证器，想在采信分数之前先确认这把尺子准不准。
+- 有一个正在运行的系统、一个业务方能说清的目标指标，并且能分出一段客户或业务方从未见过的流量来做验证。
+- 用编码智能体在清晰 brief 下构建绿地服务，接口契约可机器执行，有一批独立验收测试，想比较有/无行为 harness 的通过率、可靠性、token、耗时和估算成本。
+- 已有自己的 RSI/候选循环，只想在 agent benchmark 上获得统一评测边界；或想先零成本预览一个打包基准任务。
+- 想判断某个上下文改动（删注释、删 docs、改 AGENTS.md、换 prompt 等）对 AI 产出到底有没有影响，并且有一个能编译、能跑 lint / 类型检查 / 测试的真实项目。
+- 正在做大规模、无行为变更的重构，老版本仍能独立运行、输入可复现、输出可确定捕获。
+- 想验证「让编码代理自己听声音、并把生成结果与真实录音对照」这条评测回路是否跑得通。
+- 想给编码智能体做产品级评测：有代表性 SDK/CLI 任务，愿意自管理部署、接入模型与智能体提供方，并有人力分析 trace。
 
 **不适用或要谨慎**
 
-- 对 agent harness 做开放式改动：可能牵涉大量代码改动，容易卡住；原文说内部和客户多数把爬坡集中在文本（prompt、skill）上，因为好改好回滚。
-- 评测接近饱和（baseline ≥95%）：无法判断改动的影响，skill 会告警并建议把目标转向成本或延迟。
+- 对 agent harness 做开放式改动：可能牵涉大量代码改动，容易卡住；多数爬坡集中在文本上，因为好改好回滚。
+- 评测接近饱和（baseline ≥95%）：无法判断改动的影响，应转向成本或延迟。
 - 分数变化无法归因到你想改的那个面。
 - 依赖 claude-api skill 的实际可用性，且原文案例全部来自作者内部基准，需要在自己的任务上验证后再推广。
-- 回归守门协议不适用于：目标仓库不能构建、没有可见测试套件、拿不到 base commit 或没有可用的隐藏测试的场景；也不适合只想要通过/不通过的验收——它给的是部分分，前提是你能把任务拆成若干子任务。
-- 元评估不适用于：还没有可运行的评估和验证器；审查代理拿不到验证器逻辑或环境状态；没人做人工复核（审查代理的误报会直接污染流程）。另外原推文只给了 4 条步骤，没有可复制的提示词、配置和数据，能不能落地要自己试。
-- 上线验收口径不适用于：分不出客户没见过的流量、或线上指标拿不到的任务——这时只能借用口径的思路（0 分基线、参考解、一票否决），不能真的按 0/100 打分。
-- 只需要通过/不通过的验收时不必上百分制；也不要把 FDE Gym 当成可以反复提交的 OJ——一次运行只交付一次。
-- FDE Gym 自述处于早期：数据库 schema 会在版本间变化且只能向前迁移，升级前必须备份数据库与对象存储；roadmap 上更多公开案例、题解、学习者自选模型或自带 key、agent 单轮操作的 undo、真 PTY 终端、可直接拉取的镜像全部未勾选，意味着目前要自己 build 镜像，而且没有 agent 操作的 undo。
-- 站点会执行人写出来的代码，默认只监听本机；在让其他人接入之前，必须先做安全处理（见 `docs/self-hosting.md` 的 Security 一节）。
-- 行为 harness 的不适用与局限：新实验未验证遗留代码修改、其他语言或推理设置、模糊或不完整需求；样本是每个模型 10 组配对运行、1 个绿地 Java 服务、两个模型都是低推理努力。
-- 行为 harness 的 guides 与 sensors 是一起加的，无法区分各自贡献；成本口径不含契约、示例、断言与 harness 的编写、评审和维护投入，也不含发现、诊断、修复不可接受结果的人力，未测量跨实现复用带来的摊薄。
-- 只有前沿模型且能一次做对时，开发全程挂 harness 可能只是把成本推到约 7 倍而通过率不变（Sol 有 harness 约 $2.679 vs 无 harness 约 $0.406，均 10/10），所以不一定在开发全程跑。
-- RSI Eval 只覆盖 agent/基准评测场景，不是通用文本 prompt 评测工具；没有实测数据佐证其可靠性，只能当评测脚手架小范围试。
-- RSI Eval 的部分任务需要 NVIDIA GPU、原生 Linux amd64 或外部资产；JobBench、Harvey LAB、APEX 需要单独的 native judge 凭据；会消耗模型配额。
-- RSI Eval 的 catalog 不预设永久的 evolve/test 角色，任务选择属于你的实验；它提供的是评测边界，不是选择、停止或 RSI 方法本身。
-- RSI Eval 的 Harbor extra 会 pin 住 Harbor 0.18.0；其可执行文件必须在 `PATH` 上，或在运行配置里用 `options.harbor_executable` 指定。
-- RSI Eval 原文最后一段接自有循环的代码被截断，无法据以写出完整示例；需自己按 SDK 文档补齐。
-- 上下文改动对照实验的适用边界与局限：原文只覆盖一个模型（Claude Code + Opus 5.5 high effort）、两个任务、每分支三次运行，作者明说这足以排除大效应、不足以排除小效应；评分由另一个 Claude 会话完成，没有评委与人工评分的一致性数据；小任务上出现 22% 的 token 差异而大任务上没有，说明这种量级的差异在不同任务间不稳定；「无注释」版本仍保留约 800 行工具必需注释，并非零注释。所以不能把「注释对 agent 无用」当成已证明的结论，也不能把结论外推到其他模型、其他任务或更大的代码库。
-- 行为等价性验收不适用于：老代码跑不起来、拿不到可复现的输入、或输出不确定——凡是依赖时间、随机数、外部服务、并发顺序、浮点误差的输出，逐字节比对会持续误报，必须先做确定性隔离，否则这套验收会变成噪音源。
-- 行为等价性验收只验证「行为没变」，不验证重写是否带来了性能、可读性、安全性上的改善；把它当成重写质量的全面验收会误判。
-- 行为等价性验收的原文没有给出插件安装、命令、配置、目录结构或提示词，也没说明这三条规则是插件自动执行、还是需要人工按这个标准去做；「官方插件」这一说法来自推文作者，原文没有贴插件仓库、文档或安装链接，无法确认它是否为官方发布、正式名称以及是否仍在维护。
-- 「至少 10 个新输入」只是一个门槛，原文没有说明它是否足够，也没有给覆盖率指标；只看通过率不看覆盖会自欺。
-- earshot 只是待验证的试用条目，不是成型方法：原文极短，仓库 README、技能名称、评测指标、适用条件均未获取；「Forge」在原文中未定义；命令的依赖前提（Python 版本、earshot 安装方式、是否需要额外的音频/模型依赖）原文未交代。
-- 只想做盲测、或者没有真实授权录音作为对照素材时，不适用这条做法——原文主张单纯盲测可能产生误导（但没有任何实验、对比数据或案例支撑这一主张）。
-- 不要指望代理判断品味：原文明确审美/品味层面的最终判断仍由人来做。
+- 回归守门协议不适用于：目标仓库不能构建、没有可见测试套件、拿不到 base commit 或没有可用的隐藏测试；也不适合只想要通过/不通过的验收。
+- 元评估不适用于：还没有可运行的评估和验证器；审查代理拿不到验证器逻辑或环境状态；没人做人工复核。原推文只给了 4 条步骤，没有可复制的提示词、配置和数据。
+- 上线验收口径不适用于：分不出客户没见过的流量、或线上指标拿不到的任务。FDE Gym 自述处于早期，schema 会在版本间变化且只能向前迁移，升级前必须备份；roadmap 上多项未完成，需要自己 build 镜像，而且没有 agent 操作的 undo。
+- 行为 harness 的不适用与局限：未验证遗留代码修改、其他语言或推理设置、模糊或不完整需求；样本是每个模型 10 组配对运行、1 个绿地 Java 服务、两个模型都是低推理努力；guides 与 sensors 一起加，无法区分各自贡献；成本口径不含契约、示例、断言与 harness 的编写、评审和维护投入。
+- 只有前沿模型且能一次做对时，开发全程挂 harness 可能只是把成本推到约 7 倍而通过率不变。
+- RSI Eval 只覆盖 agent/基准评测场景，不是通用文本 prompt 评测工具；没有实测数据佐证其可靠性；部分任务需要 NVIDIA GPU、原生 Linux amd64 或外部资产；JobBench、Harvey LAB、APEX 需要单独的 native judge 凭据；会消耗模型配额；原文最后一段接自有循环的代码被截断。
+- 配对对照实验的适用边界：原文只覆盖一个模型（Claude Code + Opus 5.5 high effort）、两个任务、每分支三次运行，作者明说这足以排除大效应、不足以排除小效应；评分由另一个 Claude 会话完成，没有评委与人工评分的一致性数据；「无注释」版本仍保留约 800 行工具必需注释，并非零注释。不能把「注释对 agent 无用」当成已证明的结论。
+- 行为等价性验收不适用于：老代码跑不起来、拿不到可复现的输入、或输出不确定——凡是依赖时间、随机数、外部服务、并发顺序、浮点误差的输出，逐字节比对会持续误报，必须先做确定性隔离。它只验证「行为没变」，不验证重写是否带来了性能、可读性、安全性上的改善。原文没有给出插件安装、命令、配置、目录结构或提示词，也没说明这三条规则是插件自动执行、还是需要人工按这个标准去做。
+- earshot 只是待验证的试用条目，不是成型方法：原文极短，仓库 README、技能名称、评测指标、适用条件均未获取；命令的依赖前提原文未交代；原文主张单纯盲测可能产生误导，但没有任何实验、对比数据或案例支撑。
+- Scope 不适用于：没有可自管理部署环境、拿不到模型与智能体提供方访问权限、没人分析 trace 的团队；也没有现成托管服务。原文没有给出完整方法论、任务细节、Judge 提示词、运行次数或独立复现结果；可重复配置不保证智能体行为完全一致，自动 Judge 可能犯错。Azure Cosmos DB 案例是特定产品场景，不是对智能体的通用排名。
 
 ## 前置条件
 
 - Claude Code 中已装好 claude-api skill。
-- 数据与权限：生产转录（skill 会先问保留策略和敏感数据问题）、bug 报告与支持工单、你手写的 5–10 个用例、代码库访问；案例里还给了文档与 SDK 的访问权，使 Claude 能自己发现错误并自我纠正。
+- 数据与权限：生产转录（skill 会先问保留策略和敏感数据问题）、bug 报告与支持工单、你手写的 5–10 个用例、代码库访问。
 - 约束条件：允许改动的面清单、优化目标、被测模型与 judge 模型的指定。
-- 干净的环境：避免上一轮残留状态（文件、git 历史）把答案递给 agent；effort 等配置要一致应用。
+- 干净的环境：避免上一轮残留状态把答案递给 agent；effort 等配置要一致应用。
 - 人力：有人确认输入、抽样阅读打分 transcript、最后决定是否合并。
-- 做代码验收时：目标仓库能构建、有 base commit、有可见测试套件；要用现成工具的话还需要能用 Harbor 框架并拉到它指定的源码 revision（注意 Harbor 0.23 不支持这些任务所用的独立 verifier 环境和 collect hooks，项目暂时 pin 了 Harbor 源码仓库中一个兼容 revision，直到 Harbor 0.24 发布）。只搬协议、不装工具的话，以上版本约束可以忽略。
-- 做元评估时：一个已经在用的评估（不必新造）+ 对审查代理可见的验证器逻辑（评分脚本、判定规则、环境状态）；能同时跑 2–3 个能力档位不同的模型代理并拿到轨迹；能把一份常见陷阱清单作为 skill 或系统提示挂到审查代理上；愿意投入人工复核时间。注意原文没有给这一步的提示词、配置和数据，需要自己写。
+- 做代码验收时：目标仓库能构建、有 base commit、有可见测试套件；要用现成工具的话还需要能用 Harbor 框架并拉到它指定的源码 revision（Harbor 0.23 不支持这些任务所用的独立 verifier 环境和 collect hooks，项目暂时 pin 了一个兼容 revision，直到 Harbor 0.24 发布）。
+- 做元评估时：一个已经在用的评估 + 对审查代理可见的验证器逻辑；能同时跑 2–3 个能力档位不同的模型代理并拿到轨迹；能把一份常见陷阱清单作为 skill 或系统提示挂到审查代理上；愿意投入人工复核时间。
 - 做上线验收时：一个跑着的系统 + 一个业务方能说清的目标指标 + 一段客户或业务方从未展示过的流量；有人为线上后果负责；愿意把占用对方人员的时间计入成本。
-- 要本地起 FDE Gym 试跑时：Docker、Python 3.9+、一个 OpenRouter key（放在仓库之外的文件里，避免提交进版本库）。`docker compose up` 会起四样东西：站点本身、runner（运行 case 的机器，此处为容器）、PostgreSQL、S3 兼容对象存储。
-- 做行为 harness 时：写详细应用 brief；提供可机器执行的接口契约（OpenAPI/AsyncAPI）；请求-响应示例；一个实现 skill；MCP 工具与 agent plugin；契约驱动的下游 mock；配置校验（例如校验环境变量）；一个可被 agent 调用的统一测试命令；隔离容器与干净 agent home；一套独立、答案不外泄的验收套件。
-- 做 RSI Eval 时：Python 3.12+；Docker（Linux 上 Docker Engine + Compose + Buildx，macOS 上用 Docker Desktop 或 Colima Linux VM）；部分任务需要 NVIDIA GPU、原生 Linux amd64 或外部资产；JobBench、Harvey LAB、APEX 需要单独的 native judge 凭据；会消耗模型配额。
-- 做 RSI Eval 时：凭据必须放在候选产物和仓库之外；为实验建专用、file-backed 的 Codex 登录，并用 `configure` 生成 profile。
+- 要本地起 FDE Gym 试跑时：Docker、Python 3.9+、一个 OpenRouter key（放在仓库之外的文件里）。docker compose up 会起站点、runner、PostgreSQL、S3 兼容对象存储。
+- 做行为 harness 时：写详细应用 brief；提供可机器执行的接口契约（OpenAPI/AsyncAPI）；请求-响应示例；一个实现 skill；MCP 工具与 agent plugin；契约驱动的下游 mock；配置校验；一个可被 agent 调用的统一测试命令；隔离容器与干净 agent home；一套独立、答案不外泄的验收套件。
+- 做 RSI Eval 时：Python 3.12+；Docker；部分任务需要 NVIDIA GPU、原生 Linux amd64 或外部资产；JobBench、Harvey LAB、APEX 需要单独的 native judge 凭据；会消耗模型配额；凭据必须放在候选产物和仓库之外；为实验建专用、file-backed 的 Codex 登录。
 - 做上下文改动对照实验时：一个能编译、能跑 lint / 类型检查 / 测试的真实项目；有权限改代码、加测试、调用 agent；同一 agent 与同一套设置贯穿所有运行；一个独立会话当评委，按事先写好的清单盲评；愿意每分支每任务跑三次并交替跑；大任务还要准备一个 agent 从未见过的隐藏测试，且在 agent 完成后才加。
-- 做 AI 重写老代码的行为等价性验收时：一个仍可运行的老版本；可复现的输入注入方式；可捕获、可比较的字节级输出（函数返回值、stdout、文件、HTTP 响应等）；一个能在代码被改坏时确实失败的测试执行环境（可重复、可判定、退出码可读）。第 2、3 步的对比本身要能作为自动化测试运行，否则第 4 步的变异自检无从谈起。
-- 做 earshot 试用时：已安装 Claude Code；本机可运行 Python（原文命令使用 `python -m ...`，说明需要一个能加载 earshot 模块的 Python 环境；具体版本与依赖原文未给出）；有真实、有授权的录音作为对照素材；从 earshot 仓库取用那个「从真实授权录音中制作原声音轨」的技能（技能名称、安装方式、调用方式原文未给出，需要自己在仓库里找）。
+- 做行为等价性验收时：一个仍可运行的老版本；可复现的输入注入方式；可捕获、可比较的字节级输出；一个能在代码被改坏时确实失败的测试执行环境。
+- 做 earshot 试用时：已安装 Claude Code；本机可运行 Python；有真实、有授权的录音作为对照素材；从 earshot 仓库取用那个「从真实授权录音中制作原声音轨」的技能。
+- 做 Scope 试用时：愿意自管理部署环境；有模型与智能体提供方访问权限；有一个代表性任务和起始代码库；有人力分析 trace 和做产品改进。原文称可用 Docker Compose 按 quick-start 启动本地栈，但正文未给具体命令。
 
 ## 操作步骤
 
-A 组（第 1–7 步）先建评测，A 组续（第 8–11 步）给这套评测本身做质检，B 组（第 12–18 步）再对着它爬坡，C 组（第 19–24 步）给 AI 的代码改动加回归闸门，D 组（第 25–29 步）给上线验收定一套能自动判分的口径；第 30–33 步是各阶段要对照的清单；E 组（第 34–43 步）按模型能力决定行为 harness 的传感器节奏；F 组（第 44–56 步）用现成评测脚手架跑 agent benchmark；G 组（第 57–66 步）用配对对照实验验证某个上下文改动对 AI 产出到底有没有影响；H 组（第 67–71 步）用新旧实现的逐字节对比加变异自检，验收 AI 对老代码的重写；I 组（第 74–77 步）用 earshot 给编码代理接上听觉评审，做一次待验证的试用（第 78 步是对照清单）。
+A 组（第 1–7 步）先建评测，A 组续（第 8–11 步）给这套评测本身做质检，B 组（第 12–18 步）再对着它爬坡，C 组（第 19–24 步）给 AI 的代码改动加回归闸门，D 组（第 25–29 步）给上线验收定一套能自动判分的口径；第 30–33 步是各阶段要对照的清单；E 组（第 34–43 步）按模型能力决定行为 harness 的传感器节奏；F 组（第 44–56 步）用现成评测脚手架跑 agent benchmark；G 组（第 57–66 步）用配对对照实验验证上下文改动对 AI 产出的影响；H 组（第 67–73 步）用新旧实现的逐字节对比加变异自检，验收 AI 对老代码的重写；I 组（第 74–78 步）用 earshot 给编码代理接上听觉评审，做一次待验证的试用；J 组（第 79–87 步）用 Scope 给编码智能体做产品级评测的小范围试用。
 
 1. **建评测。** 前提：skill 已装好，并准备好能访问的生产数据或示例。在 Claude Code 里运行：
 
-   ```
-   /claude-api build-eval
-   ```
+```
+/claude-api build-eval
+```
 
 2. **接受 Claude 的访谈。** 它会问生产数据的保留策略与敏感数据问题，然后按这个顺序采样输入：生产转录 → bug 报告与支持工单 → 你手写的 5–10 个用例 → 从代码库合成的用例。没有生产转录时，它会以你给的少量真实样本为锚点生成合成数据。
 3. **人工确认输入。** skill 会生成一个简单页面列出每一个输入，等你确认后才继续。确认时对照：用例分布要反映你真正关心的生产任务，而不是好生成或好判分的任务。预期结果：输入确认通过，才进入 grader 环节。
-4. **让 Claude 提出够用的最便宜 grader。** 原文给的选型规则：
-   - 输出空间受约束（精确匹配、固定标签集、符合 schema 的 JSON、能通过的测试）→ 用代码化的程序化验证；
-   - 输出开放、有效答案多但有明确质量标准 → 用 LLM-as-judge：rubric 要写成可核查的断言，不要用 1–5 分制；如果有 baseline，judge 应随机顺序同时读两份输入、不告诉它哪份是 baseline，然后选更好的那份；judge 模型由你选，且不能是被测的那个模型。
-5. **抽样读打分记录，再决定信不信评测器。** Claude 会先给少量用例打分，并问你有没有哪条判分与你不同。原文强调在相信评测器之前先读一部分已打分的 transcript——判分错误是评测配错最常见的原因之一。
+4. **让 Claude 提出够用的最便宜 grader。** 选型规则：输出空间受约束（精确匹配、固定标签集、符合 schema 的 JSON、能通过的测试）→ 用代码化的程序化验证；输出开放、有效答案多但有明确质量标准 → 用 LLM-as-judge：rubric 要写成可核查的断言，不要用 1–5 分制；如果有 baseline，judge 应随机顺序同时读两份输入、不告诉它哪份是 baseline，然后选更好的那份；judge 模型由你选，且不能是被测的那个模型。
+5. **抽样读打分记录，再决定信不信评测器。** Claude 会先给少量用例打分，并问你有没有哪条判分与你不同。在相信评测器之前先读一部分已打分的 transcript——判分错误是评测配错最常见的原因之一。
 6. **确认 grader 后跑 baseline。** skill 会先告诉你评测规模（用例数 × 重复次数 × 模型，以及大致耗时）。跑完打印得分和置信区间。产出物：用例、grader、runner、每用例一行 JSON、每用例完整 transcript、一个列出每个用例得分并链到 transcript 的普通页面。
-7. **看诊断检查结果**（skill 在 baseline 阶段自动做）：
-   - Grader：同一份输出跑两次 grader，报告判定是否变化；
-   - Plumbing：检查超时、API 错误、被截断的回答，避免基础设施噪声被当成模型方差；
-   - Headroom：baseline 已经 ≥95% 时会告警，并提示 hillclimb 应转向探索成本或延迟，而不是质量。
+7. **看诊断检查结果**（skill 在 baseline 阶段自动做）：Grader：同一份输出跑两次 grader，报告判定是否变化；Plumbing：检查超时、API 错误、被截断的回答，避免基础设施噪声被当成模型方差；Headroom：baseline 已经 ≥95% 时会告警，并提示 hillclimb 应转向探索成本或延迟，而不是质量。
 
 ### A 组续：给评测本身做质检（元评估）
 
@@ -127,17 +110,14 @@ A 组（第 1–7 步）先建评测，A 组续（第 8–11 步）给这套评�
 
 12. **开始爬坡。** 前提：已有一套可用的评测（通常是 A 组的产物）。运行：
 
-    ```
-    /claude-api hillclimb
-    ```
+```
+/claude-api hillclimb
+```
 
-13. **指定允许它改动的面。** 原文给的可选范围：system prompt；skills 或 instruction 文件；tool 描述；模型选择、effort level 及其他 API 参数；harness 代码。
+13. **指定允许它改动的面。** 可选范围：system prompt；skills 或 instruction 文件；tool 描述；模型选择、effort level 及其他 API 参数；harness 代码。
 14. **说明优化目标**，例如提升性能或性能持平下降低成本。之后 Claude 会把评测集随机拆成 train / test。若目标是成本，它会先看几个常见成本驱动项：prompt caching、审计 prompt 与所选模型的兼容性、模型与 effort 设置的选择。案例中的实际操作顺序是：先审计 prompt（移除强制 tool-call 仪式、一个 scratchpad 步骤、相互矛盾的规则），再试模型与 effort 档位。
 15. **第一轮之前先核对噪声。** Claude 检查评测噪声（仅凭运气得分能移动的幅度）是否小于你愿意据以行动的最小改进；如果不够小，它会直接说明并建议增加重复次数或用例数。
-16. **按每轮机制走。** Claude 读上一轮 train 的 transcript，提出一个 patch；改动要解决失败行为的根因（重写造成问题的那一节，或补一条缺失规则），而不是改词句。跑完评测后按这条规则决定：
-    - train 升、test 平 → 怀疑过拟合，回滚该 patch；
-    - 出现回退 → 回滚；
-    - train 和 test 都升 → 保留。
+16. **按每轮机制走。** Claude 读上一轮 train 的 transcript，提出一个 patch；改动要解决失败行为的根因（重写造成问题的那一节，或补一条缺失规则），而不是改词句。跑完评测后按这条规则决定：train 升、test 平 → 怀疑过拟合，回滚该 patch；出现回退 → 回滚；train 和 test 都升 → 保留。
 17. **停滞时只分类、不编辑。** 连续 2–3 轮分数停滞时（或一开始就发现没有任何单个改动能超过噪声时），Claude 不再编辑，而是读每一条剩余 train 失败并按原因归类。这一步能抓出模糊用例、harness 错误和 run-to-run 方差；只有合法失败才进入后续爬坡轮次。
 18. **收尾并决定是否合并。** Claude 把代码停在你的目标下 test 集表现最好的版本，并报告相对 baseline 的带置信区间的 test 结果；如果增益落在噪声内，它会明说并建议不要合并。
 
@@ -145,491 +125,317 @@ A 组（第 1–7 步）先建评测，A 组续（第 8–11 步）给这套评�
 
 19. **先决定：装工具跑一遍，还是只抄它的评分协议。** 原文自己的建议是后者更轻量、也更值得推广——不引入这套工具，只把第 21 步的伪代码搬进团队现有的 AI 改码流程。想先验证协议是否成立，再按 Quickstart 装：
 
-    ```bash
-    git clone https://github.com/facebookresearch/swe-sweep.git
-    cd swe-sweep
-    uv sync   # or pip install .
-    ```
+```bash
+git clone https://github.com/facebookresearch/swe-sweep.git
+cd swe-sweep
+uv sync   # or pip install .
+```
 
-    ```bash
-    sweep infra doctor
-    ```
+```bash
+sweep infra doctor
+```
 
-    预期结果：自检通过（前提：本机有 git 与 Python 环境）。
+预期结果：自检通过（前提：本机有 git 与 Python 环境）。
 20. **跑单个任务，看协议在真实任务上怎么走。** 前提：准备一个针对该任务 base commit 的 unified diff（待评的模型 patch）；命令是任务名 + diff 路径。
 
-    ```bash
-    sweep eval <task> <path/to/submission.diff>
-    ```
+```bash
+sweep eval <task> <path/to/submission.diff>
+```
 
-    它底层等价于下面这条原始 Harbor 命令（原文例子用的是 `tasks/pandora-bench__dateutil` 这个任务路径）：
+它底层等价于下面这条原始 Harbor 命令（原文例子用的是 tasks/pandora-bench__dateutil 这个任务路径）：
 
-    ```bash
-    uv run harbor run --path tasks/pandora-bench__dateutil --agent swesweep.patch_agent:PatchAgent --agent-kwarg "patch_path=$(realpath /path/to/model.patch)" --jobs-dir jobs --n-concurrent 1 --yes
-    ```
+```bash
+uv run harbor run --path tasks/pandora-bench__dateutil --agent swesweep.patch_agent:PatchAgent --agent-kwarg 'patch_path=$(realpath /path/to/model.patch)' --jobs-dir jobs --n-concurrent 1 --yes
+```
 
-    预期结果：Harbor 在任务独立的 verifier 环境中评测打补丁后的 checkout，结果默认写到 `jobs/` 目录。
+预期结果：Harbor 在任务独立的 verifier 环境中评测打补丁后的 checkout，结果默认写到 jobs/ 目录。
 21. **把评分协议抄成自己流程的模板。** 原文给出的伪代码就是完整的评分流程，可直接照抄：
 
-    ```python
-    reset_to_base_commit()
-    apply(agent_patch)
-    reset(test_files)
-    build_if_needed()
-    base_commit_results = run_visible_suite()  # test -> pass/fail
+```python
+reset_to_base_commit()
+apply(agent_patch)
+reset(test_files)
+build_if_needed()
+base_commit_results = run_visible_suite()  # test -> pass/fail
 
-    subtask_results = {}   # subtask -> {test -> pass/fail}
-    for subtask in subtasks:
-      apply(subtask.test_patch)
-      subtask_results[subtask.id] = run(subtask.hidden_tests)
-      revert(subtask.test_patch)
+subtask_results = {}   # subtask -> {test -> pass/fail}
+for subtask in subtasks:
+  apply(subtask.test_patch)
+  subtask_results[subtask.id] = run(subtask.hidden_tests)
+  revert(subtask.test_patch)
 
-    if any_new_failures(base_commit_results):
-      task_score = 0
-    else:
-      task_score = sum(passed_subtasks) / len(subtasks)
-    ```
+if any_new_failures(base_commit_results):
+  task_score = 0
+else:
+  task_score = sum(passed_subtasks) / len(subtasks)
+```
 
-    要点三条：先重置到 base commit 再打 agent 的补丁；把测试文件重置回原状（防止改测试作弊）；只要相对基线出现任何新失败，整个任务直接判 0 分，否则按通过的隐藏子任务比例给部分分。
+要点三条：先重置到 base commit 再打 agent 的补丁；把测试文件重置回原状（防止改测试作弊）；只要相对基线出现任何新失败，整个任务直接判 0 分，否则按通过的隐藏子任务比例给部分分。
 22. **故意做两个对照，确认回归守门真的生效。** 一个 patch 顺带改动了测试文件，一个 patch 引入了新的失败用例——预期结果：二者都被判 0 分。这是最便宜的一次验证验证器的动作。
 23. **汇总多份结果算总分。** 前提：已有若干目录存放已评分的 Harbor trials。基准总分定义为解掉的 bug 总数 / 总 bug 数，等价于对每个任务的 bug 数 × 任务得分取平均：
 
-    ```bash
-    sweep info path/to/graded-solutions --per-task
-    sweep info path/to/graded-solutions --json
-    ```
+```bash
+sweep info path/to/graded-solutions --per-task
+sweep info path/to/graded-solutions --json
+```
 
 24. **要改这个仓库本身时才用开发模式。** 原文说明 CI 在 Python 3.12 和 3.13 上测试。
 
-    ```bash
-    git clone https://github.com/facebookresearch/swe-sweep.git
-    cd swe-sweep
-    uv sync --extra test
-    ```
+```bash
+git clone https://github.com/facebookresearch/swe-sweep.git
+cd swe-sweep
+uv sync --extra test
+```
 
-    ```bash
-    uv run pytest
-    ```
+```bash
+uv run pytest
+```
 
-    ```bash
-    uvx pre-commit run --all-files
-    ```
+```bash
+uvx pre-commit run --all-files
+```
 
 ### D 组：给上线验收定一套能自动判分的口径
 
 25. **先定义 0 分基线、100 分参考解和通过线。** 前提：有一个跑着的系统，和一个业务方能说清的目标指标。做法：照 FDE Gym 的判分口径——0 分 = 什么都没改，100 分 = 参考解，≥80 通过，生产事故最高 0 分。预期结果：任何一次交付都落在一个连续分数上，而不是只有过/不过；什么都没改这件事有了明确的分数下限。注意：这套数字是 README 陈述的机制设计，没有附任何实测数据。
-26. **把验证搬到客户没展示过的流量上，并接受只交付一次。** 做法：交付后系统在客户从未展示过的流量上运行，得分就是客户自己那个数字改善的幅度。前提：你能分出一段对方没见过的流量，并且拿得到那个指标。预期结果：分数反映线上改善，而不是你自己的评测集上的表现。注意：一次运行只交付一次，不像经典 OJ 那样错就再交一次——所以要事先想清楚再交。
+26. **把验证搬到客户没展示过的流量上，并接受只交付一次。** 做法：交付后系统在客户从未展示过的流量上运行，得分就是客户自己那个数字改善的幅度。前提：你能分出一段对方没见过的流量，并且拿得到那个指标。预期结果：分数反映线上改善，而不是你自己的评测集上的表现。一次运行只交付一次，不像经典 OJ 那样错就再交一次。
 27. **给向人提问标上价格。** FDE Gym 里占用客户人员时间要扣分。做法：在自己流程里也把占用业务方或客户的每一次问询算进成本（时间、金钱都算），这样多问几次和自己扛下不确定之间的取舍才有可比性。预期结果：能算出可以问人相对不可以问的边际收益是正还是负。依据：这是 README 的机制设计，没有数据说明具体扣多少。
-28. **照 README 的人侧清单检查自己流程。** FDE Gym 把听出客户真正的问题（发起人描述的通常只是他想象中的修法）、找出没人写下来的规则（什么可自动化、什么必须交给人、谁说了算，往往只有一个人知道）、做判断（把不确定全丢给人看似安全，但客户请你来就是不想这样）、为线上后果负责列为编码智能体之外、留给人的部分。做法：逐条问这四项在自己的流程里有没有明确责任人。预期结果：四项各有归属，不会被 AI 会写代码掩盖过去。注意：这只是它列的人侧能力清单，报告里没有给出 AI 侧的能力清单。
-29. **想先小范围验证这套口径，就本地起一遍原工具。** 前提：Docker、Python 3.9+，以及一个放在仓库之外的 OpenRouter key 文件（那个便宜模型用来扮演客户员工）。
+28. **照 README 的人侧清单检查自己流程。** FDE Gym 把听出客户真正的问题、找出没人写下来的规则、做判断、为线上后果负责列为编码智能体之外、留给人的部分。做法：逐条问这四项在自己的流程里有没有明确责任人。预期结果：四项各有归属，不会被 AI 会写代码掩盖过去。
+29. **想先小范围验证这套口径，就本地起一遍原工具。** 前提：Docker、Python 3.9+，以及一个放在仓库之外的 OpenRouter key 文件。
 
-    ```bash
-    git clone https://github.com/deeplethe/fde-gym.git && cd fde-gym
-    mkdir -p ~/.fdegym && echo "sk-or-..." > ~/.fdegym/openrouter_key
-    python3 scripts/fetch_cases.py        # the three open cases, into cases/
-    docker compose up --build             # http://127.0.0.1:8787
-    ```
+```bash
+git clone https://github.com/deeplethe/fde-gym.git && cd fde-gym
+mkdir -p ~/.fdegym && echo 'sk-or-...' > ~/.fdegym/openrouter_key
+python3 scripts/fetch_cases.py        # the three open cases, into cases/
+docker compose up --build             # http://127.0.0.1:8787
+```
 
-    打开 `http://127.0.0.1:8787`，第一个注册的账号自动成为 admin；选一个 case，按 Begin 进入工作台（工作区文件、终端、接受你指令的编码智能体，以及坐在旁边的客户员工）。交付后它会在客户没展示过的流量上运行。预期结果：拿到一个公开 case 的完整交付分数。命令行也可以走：底层 harness 在 `harness/`，只用 Python 标准库，同一个 case 既能由人、也能由 AI 智能体从命令行完成，细节见 `harness/README.md`，版本用 `python3 harness/run.py --version` 查看。安全前提：站点会执行人写出来的代码，默认只监听本机，让别人接入前先读 `docs/self-hosting.md` 的 Security 一节；升级前备份数据库与对象存储（schema 会在版本间变化且只能向前迁移）。扩展案例：三个完整公开案例在 HuggingFace 的 `DeepLethe/FDE-Gym-examples`，另有 20 个覆盖银行、医疗、物流、制造、能源等场景的 case 需申请（`DeepLethe/FDE-Gym`）；admin console 可配置运行 case 的机器、编码智能体的模型与花费上限，也可上传、归档、暂停或删除案例。
+打开 http://127.0.0.1:8787，第一个注册的账号自动成为 admin；选一个 case，按 Begin 进入工作台。交付后它会在客户没展示过的流量上运行。命令行也可以走：底层 harness 在 harness/，只用 Python 标准库，同一个 case 既能由人、也能由 AI 智能体从命令行完成。安全前提：站点会执行人写出来的代码，默认只监听本机，让别人接入前先读 docs/self-hosting.md 的 Security 一节；升级前备份数据库与对象存储。
 
 ### 各阶段对照清单
 
-30. **建评测时逐条对照这份自查清单：**
-    - 任务镜像生产：用例来自你真正关心的场景分布。
-    - 更强模型或更高 effort 应该更好：如果没有，通常是任务模糊或 grader 失准。
-    - 前沿模型要留有可通过的余量：最强模型 + 最高 effort 应明显低于 100%，否则无法判断改动的影响；但缺口不能由不可能或模糊的任务造成——一个好任务是两位领域专家会得出同一结论、且 grader 检查的每一项都在任务里写明。
-    - 低 run-to-run 方差：方差常来自模糊任务或对同一输出给出不同结论的 grader，也可能藏在配置里（比如 effort 没有一致地应用）和环境里（上一轮残留状态，如文件、git 历史，会把答案递给 agent）。
-    - 对抗采样要小心：不要因为今天的模型在这些用例上失败而选它们，那是在测单个模型能力面的低谷、测它的失败指纹；要按人类判断难来选，并能说出它难在哪。来自生产流量、bug 报告、工单的具体失败可以纳入，但不要盲信用户流量——用户常常只试他们预期能成的东西，纯流量分布可能偏简单。
-31. **每次爬坡都确认反过拟合三件事：** 拆用例（hillclimber 可读 train，test 永不打开；train 升而 test 平就是常见过拟合信号）；绝不把失败内容粘进 prompt；把答案在结构上放到模型够不到的地方（模型有时会 reward hack，直接找出评测答案）。
-32. **只挑符合三条标准的对象去爬坡：** 廉价迭代（时间、成本、精力上改起来都便宜；文本类最好改好回滚，对 agent harness 做开放式修改可能牵涉大量代码改动）；可归因（评测分数变化要能归因到你在改的那个面，例如把爬坡集中在 skill 触发上时，触发率直接耦合于被修改的 skill description）；目标界定清楚（不要给提升性能这种开放式请求，也不要用笼统的更新 harness）。
-33. **上线验收前对照四条：** 0 分是不是真的什么都没改，而不是我们现在的版本；用来打分的是不是客户没见过的流量；占用对方人员时间的成本有没有算进去；出事故是不是一票归零，而不是只扣几分。
+30. **建评测时逐条对照这份自查清单：** 任务镜像生产；更强模型或更高 effort 应该更好；前沿模型要留有可通过的余量（最强模型 + 最高 effort 应明显低于 100%，但缺口不能由不可能或模糊的任务造成）；低 run-to-run 方差（方差常来自模糊任务、grader 不一致、配置里 effort 没一致应用、环境残留状态）；对抗采样要小心，不要因为今天的模型在这些用例上失败而选它们，要按人类判断难来选。
+31. **每次爬坡都确认反过拟合三件事：** 拆用例（hillclimber 可读 train，test 永不打开）；绝不把失败内容粘进 prompt；把答案在结构上放到模型够不到的地方。
+32. **只挑符合三条标准的对象去爬坡：** 廉价迭代；可归因；目标界定清楚。
+33. **上线验收前对照四条：** 0 分是不是真的什么都没改；用来打分的是不是客户没见过的流量；占用对方人员时间的成本有没有算进去；出事故是不是一票归零。
 
 ### E 组：按模型能力决定行为 harness 的传感器节奏
 
-34. **写详细应用 brief。** 前提：任务有清晰的功能、架构、技术、接口描述。做法：说明服务该做什么、架构与技术约束、外部接口、响应形状和失败行为，但把代码级实现细节留给 agent。本例中被明确写进 brief 的行为包括：下游创建超时要变成 deferred request，返回 202 和可轮询的响应头链接；瞬时搜索失败返回 429 并给可用的恢复间隔；依赖不可用或事件发布失败返回 503；成功响应要遵守请求的过滤条件否则 502；availability search 成功后只把第一个返回的产品发布到 Kafka（若发布全部产品，agent 就可以不做选择逻辑而蒙混通过）。预期结果：brief 覆盖不显眼行为，而不是只描述主流程。
-35. **把接口约定写成机器可读契约，作为 guides。** 做法：OpenAPI 覆盖 BFF 与下游 Order API，AsyncAPI 覆盖 Kafka。契约与 brief 互补，不是另一套需求。
+34. **写详细应用 brief。** 说明服务该做什么、架构与技术约束、外部接口、响应形状和失败行为，但把代码级实现细节留给 agent。本例中被明确写进 brief 的行为包括：下游创建超时要变成 deferred request，返回 202 和可轮询的响应头链接；瞬时搜索失败返回 429 并给可用的恢复间隔；依赖不可用或事件发布失败返回 503；成功响应要遵守请求的过滤条件否则 502；availability search 成功后只把第一个返回的产品发布到 Kafka。
+35. **把接口约定写成机器可读契约，作为 guides。** OpenAPI 覆盖 BFF 与下游 Order API，AsyncAPI 覆盖 Kafka。契约与 brief 互补，不是另一套需求。
 36. **为接口配请求-响应示例，并先校验示例再跑测试。** 示例要覆盖下游超时、畸形载荷、过滤违规、重试序列、Kafka 事件确认。先运行：
 
-    ```
-    examples validate
-    ```
+```
+examples validate
+```
 
-    该命令检查示例载荷是否符合各自的 API 规格；测试再用这些规格和示例去检查实现，让 sensors 始终对齐其来源 guides。预期结果：guides 与 sensors 不互相矛盾。
-37. **让检查来源独立于实现者。** 做法：契约检查由提供的规格确定性生成，示例加行为 fixture 定义取值与副作用断言；明确要求 agent 保留这些输入和验证 helper，失败时去查实现或执行设置，不得削弱期望值。否则 agent 自己解释需求、自己写测试、失败后再改期望，会把同一个误读或遗漏同时写进实现和测试。
-38. **配置契约驱动的下游 mock。** 做法：把下游交互变成可执行的——agent 能对定义好的下游响应、失败、恢复序列来跑自己的实现；另有 helper 校验时序约束。
-39. **提供一个 API 开发 skill。** 做法：给出实现实践、依赖模拟、行为验证，以及如何诊断和响应失败。
-40. **把 harness 挂到项目自己的测试命令上。** 这是 agent 的入口。该命令依次：校验配置与示例 → 跑必需的构建与单元检查 → 启动下游 mock → 让应用对着 mock 启动 → 跑契约、HTTP 响应值、副作用检查。
-41. **让反馈回路可诊断。** 做法：报告摘要指出具体的契约、响应值、交互不匹配；agent 按 skill 指示诊断，改实现或执行设置，用 helper 只重跑受影响的场景，通过后再跑完整套件作为最终门禁。注意本实验中这个回路依赖 agent 主动调用这些工具，并非每次代码编辑后自动运行。
-42. **外层评估与开发分离，并隔离每次尝试。** 开发停止后，用外层评估 harness 对 178 项功能检查（含非法输入、下游失败、恢复序列、成功请求产生的消息）跑一次；评估 harness 控制自己的下游 fixture 与消息捕获，不依赖应用的开发测试。内层 harness 从未接触评估套件的答案。每个尝试跑在独立 Docker 容器里，有自己的 workspace 和一份全新的、按尝试区分的 Codex home；除共享认证与语言依赖缓存外，不带入此前任何会话、记忆、插件、skill 或状态。
-43. **按模型能力选择传感器节奏，并保留可复核证据。** 作者实践建议：
-    - 成本优化模型结果不稳定时：开发全程挂行为 harness，把漂移当场抓住；
-    - 前沿模型能一次做对时：只在验收前把同一套自动化测试作为确定性最终门禁跑一次，用最小开销拿到独立检查；
-    - 不论哪种：都保留独立验收检查，并把精力投在清晰的规格与示例上——检查只能执行人类编码进去的期望，覆盖不到的地方靠人工审查。
-
-    另外，skill 要求留下依赖交互与最终验证结果的可审查证据，完成与否不能只凭 agent 自述。最小配对试验：选一个接口契约清晰、有明确外部验收标准的绿地服务；至少选一个成本优化模型和一个前沿模型，各跑 10 次配对（有/无 harness），每次在干净容器/干净 agent home 中开始；记录每轮通过与否、token、耗时、估算成本，并把失败按位置聚类（协议边界、韧性路径、集成缝）。作者用的是 Specmatic 实现这套 harness，但指出等价的契约测试与服务虚拟化工具可以提供相同能力。
+该命令检查示例载荷是否符合各自的 API 规格；测试再用这些规格和示例去检查实现，让 sensors 始终对齐其来源 guides。
+37. **让检查来源独立于实现者。** 契约检查由提供的规格确定性生成，示例加行为 fixture 定义取值与副作用断言；明确要求 agent 保留这些输入和验证 helper，失败时去查实现或执行设置，不得削弱期望值。
+38. **配置契约驱动的下游 mock。** 把下游交互变成可执行的——agent 能对定义好的下游响应、失败、恢复序列来跑自己的实现；另有 helper 校验时序约束。
+39. **提供一个 API 开发 skill。** 给出实现实践、依赖模拟、行为验证，以及如何诊断和响应失败。
+40. **把 harness 挂到项目自己的测试命令上。** 该命令依次：校验配置与示例 → 跑必需的构建与单元检查 → 启动下游 mock → 让应用对着 mock 启动 → 跑契约、HTTP 响应值、副作用检查。
+41. **让反馈回路可诊断。** 报告摘要指出具体的契约、响应值、交互不匹配；agent 按 skill 指示诊断，改实现或执行设置，用 helper 只重跑受影响的场景，通过后再跑完整套件作为最终门禁。注意本实验中这个回路依赖 agent 主动调用这些工具，并非每次代码编辑后自动运行。
+42. **外层评估与开发分离，并隔离每次尝试。** 开发停止后，用外层评估 harness 对 178 项功能检查跑一次；评估 harness 控制自己的下游 fixture 与消息捕获，不依赖应用的开发测试。内层 harness 从未接触评估套件的答案。每个尝试跑在独立 Docker 容器里，有自己的 workspace 和一份全新的、按尝试区分的 Codex home。
+43. **按模型能力选择传感器节奏，并保留可复核证据。** 成本优化模型结果不稳定时：开发全程挂行为 harness；前沿模型能一次做对时：只在验收前把同一套自动化测试作为确定性最终门禁跑一次；不论哪种都保留独立验收检查，并把精力投在清晰的规格与示例上。最小配对试验：选一个接口契约清晰、有明确外部验收标准的绿地服务；至少选一个成本优化模型和一个前沿模型，各跑 10 次配对（有/无 harness），每次在干净容器/干净 agent home 中开始；记录每轮通过与否、token、耗时、估算成本，并把失败按位置聚类。
 
 ### F 组：用现成评测脚手架跑 agent benchmark（RSI Eval）
 
-44. **克隆仓库、建虚拟环境、可编辑安装。** 前提：Python 3.12+。这一步不需要 Docker 和登录。
+44. **克隆仓库、建虚拟环境、可编辑安装。** 前提：Python 3.12+。
 
-    ```sh
-    git clone https://github.com/Danielxu0208/rsi_eval.git
-    cd rsi_eval
-    python3.12 -m venv .venv
-    source .venv/bin/activate
-    python -m pip install -e .
-    ```
+```sh
+git clone https://github.com/Danielxu0208/rsi_eval.git
+cd rsi_eval
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e .
+```
 
-    预期结果：本地能运行 `rsi-eval` CLI。
+预期结果：本地能运行 rsi-eval CLI。
+45. **先做零副作用预览。** preview 只解析任务引用、候选哈希和运行设置，不需要 Docker、Harbor、登录或模型调用。
 
-45. **先做零副作用预览。** `preview` 只解析任务引用、候选哈希和运行设置，不需要 Docker、Harbor、登录或模型调用。示例默认选 Terminal-Bench 2.0 的 `extract-elf` 任务和打包的 Codex 候选。
+```sh
+rsi-eval list
+rsi-eval preview --config examples/evaluate.json
+```
 
-    ```sh
-    rsi-eval list
-    rsi-eval preview --config examples/evaluate.json
-    ```
+预期结果：看到任务引用、候选哈希和运行设置；没有副作用。
+46. **装 Harbor extra。** 前提：要真正跑基准评测。这一步会 pin 住 Harbor 0.18.0。其可执行文件必须在 PATH 上，或在运行配置里用 options.harbor_executable 指定。
 
-    预期结果：看到任务引用、候选哈希和运行设置；没有副作用。
-
-46. **装 Harbor extra。** 前提：要真正跑基准评测。这一步会 pin 住 Harbor 0.18.0。其可执行文件必须在 `PATH` 上，或在运行配置里用 `options.harbor_executable` 指定。非可编辑安装用 `python -m pip install '.[harbor]'`。
-
-    ```sh
-    python -m pip install -e '.[harbor]'
-    ```
+```sh
+python -m pip install -e '.[harbor]'
+```
 
 47. **校验 Docker 可用。** 用实际跑评测的账号。
 
-    ```sh
-    docker info
-    docker compose version
-    docker buildx version
-    ```
+```sh
+docker info
+docker compose version
+docker buildx version
+```
 
-    Apple Silicon 上如需独立的 Colima profile：
+Apple Silicon 上如需独立的 Colima profile，按仓库脚本启动并 source scripts/mac-env.sh；按机器情况调整资源。任务要求时设 DOCKER_DEFAULT_PLATFORM=linux/amd64，按任务选平台的配置则要清掉它。
+48. **为实验建专用、file-backed 的 Codex 登录，并用 configure 生成 profile。** configure 只探测并记录 Codex CLI 版本，不调用模型。凭据必须放在候选产物和仓库之外。
 
-    ```sh
-    brew install colima docker docker-compose docker-buildx
-    colima start rsi-eval --cpus 6 --memory 12 --disk 120 \
-      --vm-type vz --vz-rosetta --runtime docker --activate=false \
-      --ssh-config=false --mount "$PWD:w"
-    source scripts/mac-env.sh
-    ```
+```sh
+mkdir -p "$HOME/.codex-rsi-eval"
+chmod 700 "$HOME/.codex-rsi-eval"
+CODEX_HOME="$HOME/.codex-rsi-eval" codex -c 'cli_auth_credentials_store="file"' login
+rsi-eval configure --model YOUR_MODEL --auth-dir "$HOME/.codex-rsi-eval" --output profile.json
+```
 
-    按机器情况调整资源；该 Colima 命令要求 Rosetta；x86-only 镜像在 Apple Silicon 上需要模拟。任务要求时设 `DOCKER_DEFAULT_PLATFORM=linux/amd64`，按任务选平台的配置则要清掉它。
+49. **改 examples/evaluate.json（运行前必做三处）。** target.model 设为你能访问的模型；target.config.codex_auth_dir 设为上一步的专用登录目录；target.config.codex_version 设为 profile.json 里记录的 codex.expected_version 精确版本。
+50. **按“检查 → 参考解 → 候选”三段跑。** check 不调用模型；--oracle 跑声明的参考解、不经过 Codex，但仍需要任务环境；最后一条才消耗模型配额。每次新评测用新的输出目录。
 
-48. **为实验建专用、file-backed 的 Codex 登录，并用 `configure` 生成 profile。** `configure` 只探测并记录 Codex CLI 版本，不调用模型。凭据必须放在候选产物和仓库之外。
+```sh
+rsi-eval check --config examples/evaluate.json
+rsi-eval run --config examples/evaluate.json --oracle --output runs/tb20-reference
+rsi-eval run --config examples/evaluate.json --output runs/tb20-candidate
+```
 
-    ```sh
-    mkdir -p "$HOME/.codex-rsi-eval"
-    chmod 700 "$HOME/.codex-rsi-eval"
-    CODEX_HOME="$HOME/.codex-rsi-eval" codex \
-      -c 'cli_auth_credentials_store="file"' login
+51. **选基准与任务。** 选择可用显式 task_ids，或 manifest（含 JSON ID 列表）；两者都不写就选整个配置。扩大运行前先看任务数和整个 job 的超时。
 
-    rsi-eval configure --model YOUR_MODEL \
-      --auth-dir "$HOME/.codex-rsi-eval" --output profile.json
-    ```
+```sh
+rsi-eval status --benchmark terminal-bench@2.0 --method rrsi
+rsi-eval preview --config examples/benchmarks/mgsm.json
+rsi-eval preview --config examples/benchmarks/frontier-eng.json
+```
 
-49. **改 `examples/evaluate.json`（运行前必做三处）。** `target.model` 设为你能访问的模型；`target.config.codex_auth_dir` 设为上一步的专用登录目录；`target.config.codex_version` 设为 `profile.json` 里记录的 `codex.expected_version` 精确版本。
-50. **按“检查 → 参考解 → 候选”三段跑。** `check` 不调用模型；`--oracle` 跑声明的参考解、不经过 Codex，但仍需要任务环境；最后一条才消耗模型配额。路径规则：run JSON 里的路径相对配置文件解析，CLI `--output` 相对当前目录；每次新评测用新的输出目录。
+任务专属设置放 options.benchmark_runtime。想复用源下载，设 RSI_EVAL_SOURCE_CACHE。
+52. **用 Python SDK。** 与 CLI 共用同一套 target、selection、options；打包的订阅版 Codex 目标要求 concurrency=1。按 SDK 文档写 evaluate 调用，输出 result.status、逐 trial 的 task_id/status/reward 和 report_path。
+53. **跑一个打包方法。** prepare 会建独立依赖环境、拉 pin 住的上游代码、冻结配置和 seed，不调用模型；run 起原生改进流程；test 独立评测其选定产物。把 --method 换成 rrsi、ahe、harnessx。
 
-    ```sh
-    rsi-eval check --config examples/evaluate.json
-    rsi-eval run --config examples/evaluate.json \
-      --oracle --output runs/tb20-reference
-    rsi-eval run --config examples/evaluate.json \
-      --output runs/tb20-candidate
-    ```
+```sh
+rsi-eval method list
+rsi-eval method prepare --method meta-harness --profile profile.json --experiment runs/meta-example
+rsi-eval method check --experiment runs/meta-example
+rsi-eval method run --experiment runs/meta-example
+rsi-eval method test --experiment runs/meta-example --output runs/meta-test
+```
 
-51. **选基准与任务。** 选择可用显式 `task_ids`，或 `manifest`（含 JSON ID 列表，如 `["extract-elf"]`）；两者都不写就选整个配置。扩大运行前先看任务数和整个 job 的超时：
+54. **读结果。** 每次评测在输出目录下写 result.json（统一状态、逐任务结果、指标与用量）、resolved.json（选中任务、源引用、候选哈希与设置）、candidate/（候选快照）、native/eval/（Harbor trials、verifier 输出和可用轨迹）、harbor.log（后端进程输出）。completed 包含测得的零奖励；partial 和 failed 保留可用结果并说明缺失部分；基础设施与鉴权失败和判分结果分开。
+55. **中断后显式恢复。**
 
-    ```sh
-    rsi-eval status --benchmark terminal-bench@2.0 --method rrsi
-    rsi-eval preview --config examples/benchmarks/mgsm.json
-    rsi-eval preview --config examples/benchmarks/frontier-eng.json
-    ```
+```sh
+rsi-eval resume --output runs/tb20-candidate
+rsi-eval method resume --experiment runs/meta-example
+```
 
-    任务专属设置放 `options.benchmark_runtime`。想复用源下载，设 `RSI_EVAL_SOURCE_CACHE="$PWD/.runtime/source-cache"`。
-
-52. **用 Python SDK。** 与 CLI 共用同一套 target、selection、options；打包的订阅版 Codex 目标要求 `concurrency=1`。
-
-    ```python
-    import json
-    from pathlib import Path
-    from rsi_eval import BenchmarkSelection, RunOptions, TargetSpec, evaluate
-
-    profile = json.loads(Path("profile.json").read_text())["codex"]
-    target = TargetSpec(
-        artifact_dir=Path("templates/codex_agent"),
-        entrypoint="rsi_eval.harbor_codex:Agent",
-        model=profile["model"],
-        config={
-            "codex_auth_dir": profile["auth_dir"],
-            "codex_version": profile["expected_version"],
-            "reasoning_effort": profile["reasoning_effort"],
-        },
-    )
-    result = evaluate(
-        target=target,
-        benchmark=BenchmarkSelection(
-            "terminal-bench", "2.0", task_ids=("extract-elf",)
-        ),
-        options=RunOptions(repetitions=1, concurrency=1),
-        output_dir=Path("runs/sdk-candidate"),
-    )
-    print(result.status)
-    for trial in result.trials:
-        print(trial.task_id, trial.status, trial.reward)
-    print(result.report_path)
-    ```
-
-53. **跑一个打包方法。** prepare 会建独立依赖环境、拉 pin 住的上游代码、冻结配置和 seed，不调用模型；run 起原生改进流程；test 独立评测其选定产物。把 `--method` 换成 `rrsi`、`ahe`、`harnessx`；准备时用 `--config experiment.json` 选任务和方法设置。连续或异构奖励要先看各方法的目标要求，显式 score policy 可适配方法目标同时保留基准原始奖励。
-
-    ```sh
-    rsi-eval method list
-    rsi-eval method prepare --method meta-harness \
-      --profile profile.json --experiment runs/meta-example
-    rsi-eval method check --experiment runs/meta-example
-    rsi-eval method run --experiment runs/meta-example
-    rsi-eval method test --experiment runs/meta-example --output runs/meta-test
-    ```
-
-54. **读结果。** 每次评测在输出目录下写这些产物：
-
-    | 路径 | 内容 |
-    | --- | --- |
-    | `result.json` | 统一状态、逐任务结果、指标与用量 |
-    | `resolved.json` | 选中任务、源引用、候选哈希与设置 |
-    | `candidate/` | 提交执行的候选快照 |
-    | `native/eval/` | Harbor trials、verifier 输出和可用轨迹 |
-    | `harbor.log` | 后端进程输出 |
-
-    `completed` 包含测得的零奖励；`partial` 和 `failed` 保留可用结果并说明缺失部分；基础设施与鉴权失败和判分结果分开；基准自己的汇总保持原有含义；未知 token 数保持未知。
-
-55. **中断后显式恢复。** core 恢复会重试未完成的任务重复、保留已完成测量和此前尝试；方法恢复按各方法自己的 checkpoint 与回滚行为，可能重复中断轮次里的调用。
-
-    ```sh
-    rsi-eval resume --output runs/tb20-candidate
-    rsi-eval method resume --experiment runs/meta-example
-    ```
-
-56. **接自己的 RSI 循环。** 在你需要候选反馈的地方调 `evaluate()`。工具不要求你继承某个 optimizer 基类；候选生成、记忆、选择、停止规则、evolve/test 任务划分都由你自己的方法控制。注意：原文最后一段接自有循环的代码被截断，无法据以写出完整示例，需自己按 SDK 文档补齐。
+56. **接自己的 RSI 循环。** 在你需要候选反馈的地方调 evaluate()。工具不要求你继承某个 optimizer 基类；候选生成、记忆、选择、停止规则、evolve/test 任务划分都由你自己的方法控制。原文最后一段接自有循环的代码被截断，需自己按 SDK 文档补齐。
 
 ### G 组：用配对对照实验验证上下文改动对 AI 产出的影响
 
 57. **先决定要验证哪一处上下文改动，并准备两个分支。** 前提：有一个能编译、能跑 lint / 类型检查 / 测试的真实项目，且有权限改代码、加测试、调用 agent。做法：主干一份，另一份做你要验证的改动副本；原文的做法是删掉全部注释，只保留工具本身需要的注释（如 lint 指令、插件头文件），这部分约 800 行。预期结果：两份代码库只有目标变量不同。
 58. **验证两份代码等价。** 前提：项目可编译。做法：编译两份代码库，并检查编译产出的代码完全相同。预期结果：唯一变量是注释，而不是别的差异。
-59. **选定任务，两条分支用同一提示词。** 做法：用两个真实功能，一大一小——原文的小任务是把所有打开的窗口平铺，大任务是让窗口保持置顶。预期结果：能看出差异是否被运行方差淹没（原文小任务上出现 22% 的 token 差异，大任务上没有）。
-60. **固定 agent 与设置。** 原文配置：
-
-    ```
-    agent: Claude Code with Opus 5.5 at high effort
-    Same model and settings for every run.
-    ```
-
-    预期结果：所有运行用同一模型、同一套设置，差异不来自 agent 或参数。
+59. **选定任务，两条分支用同一提示词。** 做法：用两个真实功能，一大一小——原文的小任务是把所有打开的窗口平铺，大任务是让窗口保持置顶。预期结果：能看出差异是否被运行方差淹没。
+60. **固定 agent 与设置。** 原文配置：agent: Claude Code with Opus 5.5 at high effort；Same model and settings for every run。预期结果：所有运行用同一模型、同一套设置，差异不来自 agent 或参数。
 61. **检查方式统一，隐藏测试在 agent 完成后才加。** 做法：每个运行都过项目自带的 lint、类型检查、已有测试；大任务额外加一个 agent 从未见过的隐藏测试，且是 agent 完成后才加上。目的：防止它为了通过测试而写代码。预期结果：六次运行都过同一套检查，隐藏测试也覆盖了最容易漏的边界。
-62. **盲评打分。** 做法：用一个独立的 Claude 会话读每个改动并打分，评分依据是**跑之前就写好**的清单，改动被贴上随机名字，评委不知道哪个来自哪个分支。原文清单要点：
-
-    ```
-    - does it work（能不能用）
-    - does it follow the project's conventions（是否符合项目约定）
-    - does it have tests（有没有测试）
-    - 等等
-    ```
-
-    预期结果：分数不受评审先入为主的影响。
+62. **盲评打分。** 做法：用一个独立的 Claude 会话读每个改动并打分，评分依据是跑之前就写好的清单，改动被贴上随机名字，评委不知道哪个来自哪个分支。清单要点：does it work；does it follow the project's conventions；does it have tests；等等。预期结果：分数不受评审先入为主的影响。
 63. **每个分支每个任务跑三次，并交替分支跑。** 目的：让时段等外部因素对两个分支的影响均等（例如 A-B-B-A 之类的次序）。
 64. **统计时看均值和离散度，不看单次。** 原文大任务三次运行的 token 消耗分别是：有注释 8.21M / 8.79M / 10.17M，无注释 7.01M / 9.70M / 10.64M。单次对比可以得出方向相反的结论：10.64M 对 8.21M 是「贵 30%」，7.01M 对 10.17M 是「便宜 31%」。预期结果：只有当差异大于同一分支三次运行之间的波动时，才认为该改动「有效果」。
-65. **设计一个能暴露「上下文本该有用」的暗坑。** 做法：在大任务里埋一个陷阱——置顶状态必须在页面刷新后存活，而保存窗口会话的 PHP 函数会丢掉任何它不认识的 key；漏掉的话功能看着正常，一刷新就废。目的：看注释能不能帮 agent 避开它。预期结果：原文六次运行（含与不含注释）都发现了这个陷阱，说明这类暗坑上注释没起区分作用。
-66. **把结论按样本边界说清楚。** 原文只覆盖一个模型（Claude Code + Opus 5.5 high effort）、两个任务、每分支三次运行，作者明说这足以排除大效应、不足以排除小效应。可迁移的两条结论：不必为了 AI 而特意写代码注释，注释按人类读者的需要决定去留；测量任何 agent 效果时，运行次数少于三次的对比不要采信。
+65. **设计一个能暴露「上下文本该有用」的暗坑。** 做法：在大任务里埋一个陷阱——置顶状态必须在页面刷新后存活，而保存窗口会话的 PHP 函数会丢掉任何它不认识的 key；漏掉的话功能看着正常，一刷新就废。预期结果：原文六次运行（含与不含注释）都发现了这个陷阱，说明这类暗坑上注释没起区分作用。
+66. **把结论按样本边界说清楚。** 原文只覆盖一个模型、两个任务、每分支三次运行，作者明说这足以排除大效应、不足以排除小效应。可迁移的两条结论：不必为了 AI 而特意写代码注释，注释按人类读者的需要决定去留；测量任何 agent 效果时，运行次数少于三次的对比不要采信。
 
 ### H 组：验收 AI 重写的老代码（行为等价性 + 变异自检）
 
-> 这一组来自一条推文对 Claude Code 官方插件 `code-modernization` 的描述，原文只给了三条规则，没有命令、配置、目录结构或提示词。下面是把三条规则拆成可执行动作，具体实现要按自己的项目补。
+> 这一组来自一条推文对 Claude Code 官方插件 code-modernization 的描述，原文只给了三条规则，没有命令、配置、目录结构或提示词。下面是把三条规则拆成可执行动作，具体实现要按自己的项目补。
 
-67. **先确认前提：老代码还能跑，且输出是确定的。** 前提：老项目能独立执行，有明确的输入入口和输出出口（函数返回值、stdout、文件、HTTP 响应等），输出不含随机数、时间戳、并发顺序、外部服务、浮点误差等不确定因素。做法：把这一条当成准入门槛来检查，不合格就先做确定性隔离（固定种子、冻结时钟、把外部服务换成可重放的桩），否则逐字节对比会持续误报，这套验收会变成噪音源。预期结果：确认这条路径在你的项目上走得通，或者明确判定走不通。
-68. **建最小对比回路：同一批输入分别喂新旧实现，逐字节比对输出。** 做法：输入优先取项目里真实存在、有代表性的调用数据，而不是随手编的；两边输出按字节比较，不相等即视为行为不一致。时机：在 AI 重写完成之后立刻跑，作为第一道门槛。预期结果：得到一份「一致 / 不一致」的差异清单；不一致的条目就是需要人工确认的行为差异。
-69. **自造不少于 10 个新输入，重复第 68 步的对比。** 做法：这 10 个输入由人（或 AI）主动构造，覆盖真实数据碰不到的、重写后容易出偏差的分支：边界值、空输入、异常路径、极端长度、非法参数等。原文没有说明这 10 个输入该覆盖什么，需要自己按业务补。预期结果：这 10 个输入同样逐字节一致；同时记录它们实际触发了多少分支——只看通过率不看覆盖会自欺。
-70. **做一次变异自检：故意改坏新代码的一行，跑测试，必须变红。** 前提：第 68、69 步的对比已经能作为自动化测试运行（可重复、可判定、退出码可读）。做法：在新实现里随机改坏一行，重跑对比，确认它报错；然后把这行改回去。预期结果：测试变红 = 有效；还是绿的说明前面的对比根本没覆盖到那行，前两步的通过没有意义，必须先修测试再谈验收。
-71. **判定与回退。** 判定规则：第 68、69 步全绿，且第 70 步变红，才认为这次 AI 重写通过验收。任意一步失败，就把失败的输入作为新用例补进用例集，再让 AI 重新改写。预期结果：每轮重写都留下一条可复查的行为差异清单和一次测试有效性证明，而不是「我看了一遍 diff，应该没问题」。
+67. **先确认前提：老代码还能跑，且输出是确定的。** 把这一条当成准入门槛来检查；不合格就先做确定性隔离（固定种子、冻结时钟、把外部服务换成可重放的桩），否则逐字节对比会持续误报。预期结果：确认这条路径在你的项目上走得通，或者明确判定走不通。
+68. **建最小对比回路：同一批输入分别喂新旧实现，逐字节比对输出。** 输入优先取项目里真实存在、有代表性的调用数据，而不是随手编的；两边输出按字节比较，不相等即视为行为不一致。时机：在 AI 重写完成之后立刻跑，作为第一道门槛。预期结果：得到一份「一致 / 不一致」的差异清单。
+69. **自造不少于 10 个新输入，重复第 68 步的对比。** 这 10 个输入由人（或 AI）主动构造，覆盖真实数据碰不到的、重写后容易出偏差的分支：边界值、空输入、异常路径、极端长度、非法参数等。预期结果：这 10 个输入同样逐字节一致；同时记录它们实际触发了多少分支。
+70. **做一次变异自检：故意改坏新代码的一行，跑测试，必须变红。** 前提：第 68、69 步的对比已经能作为自动化测试运行。做法：在新实现里随机改坏一行，重跑对比，确认它报错；然后把这行改回去。预期结果：测试变红 = 有效；还是绿的说明前面的对比根本没覆盖到那行，必须先修测试再谈验收。
+71. **判定与回退。** 判定规则：第 68、69 步全绿，且第 70 步变红，才认为这次 AI 重写通过验收。任意一步失败，就把失败的输入作为新用例补进用例集，再让 AI 重新改写。预期结果：每轮重写都留下一条可复查的行为差异清单和一次测试有效性证明。
 
 ### H 组对照清单
 
 72. **重写验收前对照三条：** 真实输入下新旧输出是否逐字节一致；自造输入是否不少于 10 个且同样一致；改坏一行后测试是否真的变红。三条缺一，前面的通过都不算数。
-73. **把结论按验证范围说清楚。** 这套验收只回答「行为有没有变」，不回答「重写带来了多少性能、可读性、安全性改善」；插件是否为官方发布、三条规则是自动执行还是人工执行，原文都没有交代，要自己确认后再往团队里推。
+73. **把结论按验证范围说清楚。** 这套验收只回答「行为有没有变」，不回答「重写带来了多少性能、可读性、安全性改善」；插件是否为官方发布、三条规则是自动执行还是人工执行，原文都没有交代。
 
 ### I 组：给编码代理接上听觉评审（earshot，待验证试用）
 
-> 这一组来自一条推文对项目 earshot 的描述：给编码代理装上「耳朵」，让 AI 能听、审阅和生成声音，CPU-only，以 MCP 形式接入 Claude Code。原文极短，只给了一条接入命令、一个技能用途和两点主张；仓库 README、技能名称、评测指标、适用条件均未获取。下面把原文明确给出的内容拆成可执行动作，凡是原文没交代的环节都标注「原文未给出」，不补写。
+> 这一组来自一条推文对项目 earshot 的描述：给编码代理装上「耳朵」，让 AI 能听、审阅和生成声音，CPU-only，以 MCP 形式接入 Claude Code。原文极短，只给了一条接入命令、一个技能用途和两点主张；仓库 README、技能名称、评测指标、适用条件均未获取。
 
-74. **先确认这是一条待验证的试用，不是成型方法。** 前提：已安装 Claude Code，且本机可运行 Python（原文命令用 `python -m ...`）。做法：原文只是推文片段，仓库内容、评测指标和适用条件都未给出，暂不宜作为手册的成型方法；把它当「值得小范围试」的接入线索。预期结果：明确这一步的目标是验证回路能不能跑通，而不是照抄一套已验证的音频评测方法。
+74. **先确认这是一条待验证的试用，不是成型方法。** 前提：已安装 Claude Code，且本机可运行 Python。做法：把它当「值得小范围试」的接入线索。预期结果：明确这一步的目标是验证回路能不能跑通，而不是照抄一套已验证的音频评测方法。
 75. **在 Claude Code 里按原文命令接入 earshot 的 MCP 服务。** 命令原样：
 
-    ```bash
-    claude mcp add earshot -- python -m earshot mcp
-    ```
+```bash
+claude mcp add earshot -- python -m earshot mcp
+```
 
-    前提：Claude Code 环境 + 能加载 earshot 模块的 Python 环境（具体版本与依赖原文未给出）。预期结果：Claude Code 里多出一个 earshot MCP；是否接入成功要看它能否启动，原文没有给验证命令。
-76. **取用仓库里那个「从真实授权录音中制作原声音轨」的技能，先做出对照素材。** 做法：原文只说这个技能存在、用途是从真实授权录音制作原声音轨；技能名称、安装方式、调用方式原文未给出，需要自己到仓库里找。前提：手上有真实、有授权的录音素材（「授权」二字是原文自带的限定）。预期结果：得到一条真实原声音轨，作为后面评审生成的对照。
-77. **让代理对生成的声音做评审/修改，对照真实录音，而不是只做盲测；品味判断留给人。** 做法：选一个已经有真实录音作为对照的小音频任务（例如一段配音、一段环境声或音效），让代理生成或评审，并把真实录音同时给它作为参照；观察它能否自己指出「生成结果与真实录音的差异」，并据此做出一轮修改。原文明确：审美/品味层面的最终判断保留给人类，不交给代理。预期结果：代理至少能走完一轮「生成 → 与真实录音对照 → 修改」；走不通就说明这条试用在当前环境下不成立，降级为待观察。
+前提：Claude Code 环境 + 能加载 earshot 模块的 Python 环境。预期结果：Claude Code 里多出一个 earshot MCP；是否接入成功要看它能否启动，原文没有给验证命令。
+76. **取用仓库里那个「从真实授权录音中制作原声音轨」的技能，先做出对照素材。** 技能名称、安装方式、调用方式原文未给出，需要自己到仓库里找。前提：手上有真实、有授权的录音素材。预期结果：得到一条真实原声音轨，作为后面评审生成的对照。
+77. **让代理对生成的声音做评审/修改，对照真实录音，而不是只做盲测；品味判断留给人。** 做法：选一个已经有真实录音作为对照的小音频任务，让代理生成或评审，并把真实录音同时给它作为参照；观察它能否自己指出「生成结果与真实录音的差异」，并据此做出一轮修改。预期结果：代理至少能走完一轮「生成 → 与真实录音对照 → 修改」；走不通就降级为待观察。
 
 ### I 组对照清单
 
-78. **试用前对照三条：** 是否有一条真实、有授权的录音作为对照（而不是只做盲测）；代理能否自己指出生成结果与真实录音的差异并据此修改；品味判断是否明确留给人。三条缺一，就不要把它当有效回路来用。
+78. **试用前对照三条：** 是否有一条真实、有授权的录音作为对照；代理能否自己指出生成结果与真实录音的差异并据此修改；品味判断是否明确留给人。三条缺一，就不要把它当有效回路来用。
+
+### J 组：用 Scope 给编码智能体做产品级评测（小范围试用）
+
+> 这一组依据微软开源的 Scope：一个基于 Kubernetes 的 AI 编码智能体评测平台，可驱动 GitHub Copilot、Claude Code、VS Code with Copilot 等编码智能体。原文只给流程和入口，没有可直接复制的命令、配置或提示词；以下步骤均按原文描述整理，具体部署命令要按仓库 quick-start 补。
+
+79. **先判断是否值得自部署。** 前提：愿意自管理部署环境、能接入模型与智能体提供方、有人力分析 trace。原文称可用 Docker Compose 按 quick-start 启动本地栈，但正文没有给出具体命令。做法：先按仓库 quick-start 确认部署与凭证管理可行，再谈评测。预期结果：能启动本地栈并跑通一个最小任务；如果部署或凭证管理成本过高，先用 A 组或 RSI Eval 做小范围验证。
+80. **选一个对产品真正重要的任务，并先定义成功结果。** 原文示例：让智能体给示例应用添加集成，再检查它能否构建、是否使用预期 API、是否处理文档化错误响应。前提：有一个代表性任务和起始代码库。预期结果：成功标准能写成可检查的条目，而不是「看起来能用」。
+81. **固定任务和评价标准，只改变要验证的变量。** 用版本化 profile 记录 worker、模型、agent 版本、skills、MCP servers 和支持的扩展；需要时用 personas 改变模拟用户的视角和沟通风格。预期结果：两次运行之间只有你打算验证的那个变量不同。
+82. **把成功标准写成有向无环图（DAG）。** 让检查可独立或依赖前置条件，例如运行时检查依赖构建成功；由 Judge 服务用 LLM 按这些标准评估输出。前提：评价标准能拆成可判定的条目。预期结果：每条标准都有明确的通过/失败判定，失败能关联到具体步骤。
+83. **多次运行，而不是只跑一次 CI 或只看一次演示。** 保留交互记录和工作区快照，跟踪工具调用、检查生成文件，并把失败的标准关联到之前的步骤。预期结果：拿到一组带 trace 和快照的运行记录，而不是一个孤立的分数。
+84. **根据 trace 定位一个具体改进点，只改一处后用相同任务和相同标准复跑。** 改进对象包括：文档是否漏了指令或造成错误假设、SDK 选择与初始化是否正确、CLI/MCP 工具描述是否清楚、错误信息是否可操作、集成本身是否有缺陷。比较 criteria 级结果和反复出现的失败。原文明确提醒自动 Judge 可能出错，做决定时要人工复核证据。预期结果：能说清「改的是哪一处、哪条 criteria 变了、反复失败是否减少」；如果 criteria 通过率上升且反复失败减少，才认为这次改动改善了智能体使用产品的结果。
+85. **用 CLI 和 REST API 把 benchmark 提交与结果获取接入脚本或流水线。** 在产品或智能体集成变化时持续跑同一组场景，跟踪改进和回归；Portal 用于配置和检查实验。原文没有给出命令级配置。预期结果：同一组场景能在变更后自动复跑，而不是每次手工搭环境。
+86. **与已有评测层怎么选。** Scope 适合产品/SDK/CLI 文档与工具描述层面的评测，能驱动 Claude Code 等编码智能体；A 组 claude-api 适合文本类改进对象（prompt、skill、tool 描述、模型参数）的快速爬坡；RSI Eval 适合 agent benchmark 的统一评测边界。Scope 需要自部署，成本更高。做法：先用 A 组或 RSI Eval 跑小范围，确认要长期跟踪产品级场景，再上 Scope。预期结果：不要同时上多套评测层，避免同一改动无法归因。
+
+### J 组对照清单
+
+87. **试用前对照五条：** 任务是否对产品真正重要；是否固定任务和标准、只改一个变量；是否多次运行并保留 trace 与工作区快照；是否人工复核 Judge 判定；是否用 CLI/REST 接入持续回归。缺一条，Scope 的结论就只能当线索，不能当证据。
 
 ## 怎么判断变好了
 
-- baseline 与最终结果都带置信区间；最终报的是 test 集（留出集）相对 baseline 的表现。
-- 过拟合信号：train 升而 test 平。
-- 噪声控制：先确认评测噪声小于你愿意据以行动的最小改进；增益落在噪声内就按不建议合并处理。
+- baseline 与最终结果都带置信区间；最终报的是 test 集（留出集）相对 baseline 的表现。过拟合信号：train 升而 test 平。先确认评测噪声小于你愿意据以行动的最小改进；增益落在噪声内就按不建议合并处理。
 - 评测器质量：同一输出跑两次 grader 看判定是否变化；抽样读打分 transcript 人工校验；检查 plumbing（超时、API 错误、截断）。
-- 评测质检（元评估）侧：审查代理发现的真实评估缺陷数（人工确认为真的条数）；误报率（代理提出但人工判定不成立的条数 / 总提出条数）；新陷阱发现率（超出预置清单之外、且人工确认为真的陷阱条数，这一项直接检验第 10 步找其他陷阱是否有效）。
-- 修复后的评估区分度：修完评估后，用一批已知的好答案/坏答案再跑，看评估能否正确区分；区分度提升说明质检循环确实改善了验证环节。
-- 人工复核耗时：若流程有效，单位评估迭代所需的人工时间应下降，或同样时间能覆盖更多评估。
-- 无效信号：某个任务无论跑多少次都失败、且无法用不可能或模糊解释时，是任务或 grader 有问题的信号（案例中通过重写任务措辞、纠正 grader 与文档的矛盾来修复）。
-- 代码验收侧：新引入的失败用例数应恒为 0——这个指标最能直接判断 AI 改动是否可接受；只要有新失败，任务分就是 0，而不是按比例扣分。
-- 代码验收侧：任务得分（通过的 subtask 数 / subtask 总数）是否上升；跨模型或跨配置横向比较用 micro-average（平均每个任务的 bug 数 × 任务得分）。
-- 重要限制：swe-sweep 原文没有给任何实测基线分数，所以第一次跑出来的数字只能作为自己前后的对照，不能与论文或其他团队的数字比较。
-- 上线验收侧：一次交付能否拿到 ≥80 分；因为一次运行只交付一次，这个分数比反复提交后通过更有参考价值。
-- 上线验收侧：有无人可用信息的对照——同一人 + 同一编码智能体，在可以问客户员工与不可以问两种条件下分别记分，同时把占用客户人员时间的扣分算进去，看边际收益是否为正。
-- 上线验收侧：人机对照——用 `harness/` 从命令行跑同一个 case，一次由人主导、一次交给 AI 智能体主导，比较交付分数。
-- 上线验收侧：口径迁移是否成立——把该 case 的判分方式搬到团队真实任务上（先定义什么都不改的 0 分基线和参考解的 100 分，用业务方自己那个数字做上线后度量，并设一条出事故即归零的红线），检查这样得到的分数是否可复现、能否区分不同做法。
-- 上线验收侧的重要限制：FDE Gym 的打分规则是 README 陈述的机制设计，没有附带任何实测数据——没有案例通过率、分数分布或对照实验；三个公开 case 的具体内容、难度、领域在 README 中也没有列出。所以它给的是可复制的评测流程与判分机制，不是一套已验证过的 AI 使用法。
-- 行为 harness 侧：主指标是外部验收通过率（必须应用能启动且全部检查通过才算通过，部分通过不算）；可靠性是同一模型重复运行中通过次数的一致性（原文是 10 次里的通过数）；效率是每次尝试的 token、墙钟时间、估算成本，且把 harness 的编写/维护成本单列，别混进单次运行成本。
-- 行为 harness 侧经济性判据：有 harness 的便宜模型单次成本是否低于无 harness 的前沿模型，同时通过率不下降（原文 $0.273 vs $0.406）。
-- 行为 harness 侧缺口指标：失败是否集中在契约与示例覆盖不到的地方——这些应当转成新增契约/示例或人工审查清单，而不是放宽断言。
-- RSI Eval 侧：先看 `preview` 和 `check` 是否通过，再看 oracle 基线是否完成，最后才看候选 reward；`result.json` 的状态要区分 `completed`、`partial`、`failed`，并确认基础设施/鉴权失败没有混进判分结果。
-- RSI Eval 侧：中断后 `resume` 是否保留已完成测量、只重试未完成任务；方法恢复是否按各方法 checkpoint 行为执行。
-- RSI Eval 侧的限制：没有实测数据佐证可靠性；只能作为自己实验的评测脚手架，不能拿它的数字当能力结论。
-- 上下文改动对照实验侧：通过率——lint / 类型检查 / 已有测试 / 隐藏测试，任一失败即为不合格。本文中六次运行全部通过，说明这类任务上该指标区分度低，需要更细的评分。
-- 上下文改动对照实验侧：盲评分数（满分制，原文小任务满分 19、大任务满分 23），看均值与三次运行的波动。
-- 上下文改动对照实验侧：token 消耗与成本——**必须看三次的分布**，不要用单次差值。原文大任务三次分别是：有注释 8.21M / 8.79M / 10.17M，无注释 7.01M / 9.70M / 10.64M；单次对比可以得出「贵 30%」或「便宜 31%」两种相反结论。
-- 上下文改动对照实验侧的判据：只有当差异大于同一分支三次运行之间的波动时，才认为该改动「有效果」。
-- 上下文改动对照实验侧的数据参考（三次运行均值）：小任务（平铺所有打开窗口，满分 19）有注释 18.3 分 / 2.18M tokens / $1.42，无注释 19.0 分 / 1.71M tokens / $1.04；大任务（窗口保持置顶，满分 23）有注释 21.7 分 / 9.06M tokens / $3.84，无注释 22.0 分 / 9.12M tokens / $3.95。小任务上无注释版本 token 少约 22%，作者解释是「要读的东西本来就少了」；大任务上成本无差异。
-- 行为等价性验收侧：逐字节一致率——真实输入下新旧输出相等的比例，目标是 100%；未通过项就是需要人工确认的行为差异清单。
-- 行为等价性验收侧：自造 10 个输入的通过率，以及这些输入实际触发的分支数（只看通过率不看覆盖会自欺）。
-- 行为等价性验收侧：变异自检结果——改坏一行后测试是否变红；红 = 有效，绿 = 前面的通过不可信，必须先修测试再谈验收。
-- 行为等价性验收侧：人工抽查发现的行为差异数——把 AI 重写 + 这套验收的结果，与自己逐行读 diff 的结果对比，看这套流程有没有漏掉人会发现的差异。这是判断「值不值得继续用」的关键对照。
-- 行为等价性验收侧：投入产出对比——搭对比回路的一次性成本 vs 每次重写节省的审查时间，用它决定是只在大改动上用，还是变成常规步骤。
-- earshot 侧（以下为自拟建议，原文未提供任何指标）：闭环完成率——在无人工逐条指点的情况下，代理能否独立走完「生成 → 与真实录音对照 → 修改」一轮。
-- earshot 侧：人工干预次数——同一任务下，「有真实录音对照」相比「无对照/只有盲测」，人工需要介入的次数是否下降。
-- earshot 侧：人类评审结果——修改后的输出被人类评审认为「更接近真实录音」的比例。
-- earshot 侧失败判据：如果代理对音频给不出有效反馈，或无法完成一轮修改，则判定该工具在当前环境下不适用，本条降级为待观察。
-- earshot 侧的最小试用：按第 74–77 步，在一台已装 Claude Code、且能运行 Python 的机器上执行接入命令；选一个你手上已经有真实录音作为对照的小音频任务（例如一段配音、一段环境声或音效），让代理生成或评审，并把真实录音同时给它作为参照；观察代理能否自己指出差异并据此做出一轮修改；保留最后一步的人类品味判断，记录人类在这轮里做了哪些代理做不到的判断。原文没有给时长、指标或样本量，小范围试一轮即可判断回路是否值得继续。
-- 最小试用方式：文本侧，原文建议先在一个任务上小范围试，节奏是流程自身的收敛条件——先跑出 baseline，再让爬坡跑到收敛或连续 2–3 轮停滞为止（原文没有给固定的天数或轮数）。代码侧约半天：clone + `uv sync` + `sweep infra doctor`，再跑一个任务的完整流程，并加上第 22 步的两个对照。元评估侧最省的一轮：挑一个你已经在用的评估（不要新造），选 2–3 个能力档位不同的模型各跑一遍并留轨迹，取几条失败或判定有争议的轨迹交给能读验证器逻辑的审查代理，附上一份至少包含评判过于严格的陷阱清单，然后人工核对它提出的每一条。原文没有给固定时长；先跑一轮看误报率和新陷阱发现率——误报率很高、或提出的全是已知陷阱，就说明这一步没有产生增量价值，应降级为参考思路。上线验收侧的最小试用：本机按第 29 步起站点，让一名工程师带编码智能体跑通一个公开 case 的完整交付，记录最终得分；报告没有给时长或轮数，且项目自述处于早期，不要一上来就用它下能力结论。行为 harness 侧的最小试用：按第 34–43 步做一次配对设计，缩小规模：选一个接口契约清晰、有明确外部验收标准的绿地服务，不要先拿遗留系统试；写详细 brief；做契约、示例、`examples validate`、契约驱动 mock、统一测试命令；准备独立验收套件；至少选一个成本优化模型和一个前沿模型各跑 10 次配对，每次干净容器/干净 agent home；记录通过与否、token、耗时、估算成本，并把失败按位置聚类。RSI Eval 侧的最小试用：先按第 44–50 步做零成本预览和单任务三段跑（check → oracle → candidate），不要一开始就扩大基准范围；原文没有给时长，先跑通一个任务再判断是否值得接入自有循环。上下文改动对照实验侧的最小试用（半天到一天）：选一个团队真实的、能跑测试的代码库，复制一份，做一处你怀疑有/没有影响的上下文改动（删注释、删 docs、改 AGENTS.md、换 prompt 等）；编译两份并确认产出等价；选一大一小两个真实任务，两条分支用同一 prompt、同一 agent、同一套设置；每分支每任务跑 3 次并交替跑；检查走项目自带 lint / 类型检查 / 测试，再加一个 agent 完成后才写的隐藏测试；用一个独立会话按事先写好的清单盲评（改动贴随机标签）。可直接迁移到本项目的两条结论：不必为了 AI 而特意写代码注释，注释按人类读者的需要决定去留；测量任何 agent 效果时，运行次数少于三次的对比不要采信。行为等价性验收侧的最小试用（最小半天）：挑一个规模小、能独立运行、输出确定的遗留函数或模块（避免一上手就选跨服务、带随机性的部分）；让 AI 重写这一个单元并保持接口不变；写一个最小对比脚本，同一批真实输入分别调用新旧两份实现，比较输出是否逐字节相同；再手工构造 10 个新输入（边界、空值、非法参数、长输入各覆盖一些）重复对比；在新实现里随机改坏一行，重跑对比确认它报错，再把这一行改回去。原文没有给时长，按这条最小回路跑通一次即可判断值不值得常态化。
+- 元评估侧：审查代理发现的真实评估缺陷数（人工确认为真的条数）；误报率（代理提出但人工判定不成立的条数 / 总提出条数）；新陷阱发现率（超出预置清单之外、且人工确认为真的陷阱条数）。修复后的评估区分度：用一批已知的好答案/坏答案再跑，看评估能否正确区分。人工复核耗时：若流程有效，单位评估迭代所需的人工时间应下降。
+- 无效信号：某个任务无论跑多少次都失败、且无法用不可能或模糊解释时，是任务或 grader 有问题的信号。
+- 代码验收侧：新引入的失败用例数应恒为 0；只要有新失败，任务分就是 0，而不是按比例扣分。任务得分（通过的 subtask 数 / subtask 总数）是否上升；跨模型或跨配置横向比较用 micro-average。swe-sweep 原文没有给任何实测基线分数，第一次跑出来的数字只能作为自己前后的对照。
+- 上线验收侧：一次交付能否拿到 ≥80 分；有无人可用信息的对照——同一人 + 同一编码智能体，在可以问客户员工与不可以问两种条件下分别记分，同时把占用客户人员时间的扣分算进去；人机对照——用 harness/ 从命令行跑同一个 case；口径迁移是否成立——把该 case 的判分方式搬到团队真实任务上，检查分数是否可复现、能否区分不同做法。FDE Gym 的打分规则是 README 陈述的机制设计，没有附带任何实测数据，所以它给的是可复制的评测流程与判分机制，不是一套已验证过的 AI 使用法。
+- 行为 harness 侧：主指标是外部验收通过率（必须应用能启动且全部检查通过才算通过）；可靠性是同一模型重复运行中通过次数的一致性；效率是每次尝试的 token、墙钟时间、估算成本，且把 harness 的编写/维护成本单列。经济性判据：有 harness 的便宜模型单次成本是否低于无 harness 的前沿模型，同时通过率不下降（原文 $0.273 vs $0.406）。缺口指标：失败是否集中在契约与示例覆盖不到的地方——这些应当转成新增契约/示例或人工审查清单，而不是放宽断言。
+- RSI Eval 侧：先看 preview 和 check 是否通过，再看 oracle 基线是否完成，最后才看候选 reward；result.json 的状态要区分 completed、partial、failed，并确认基础设施/鉴权失败没有混进判分结果。中断后 resume 是否保留已完成测量、只重试未完成任务。它没有实测数据佐证可靠性，只能作为自己实验的评测脚手架。
+- 上下文改动对照实验侧：通过率——lint / 类型检查 / 已有测试 / 隐藏测试，任一失败即为不合格；本文中六次运行全部通过，说明这类任务上该指标区分度低。盲评分数（原文小任务满分 19、大任务满分 23），看均值与三次运行的波动。token 消耗与成本必须看三次的分布，不要用单次差值。判据：只有当差异大于同一分支三次运行之间的波动时，才认为该改动「有效果」。数据参考（三次运行均值）：小任务（平铺所有打开窗口，满分 19）有注释 18.3 分 / 2.18M tokens / $1.42，无注释 19.0 分 / 1.71M tokens / $1.04；大任务（窗口保持置顶，满分 23）有注释 21.7 分 / 9.06M tokens / $3.84，无注释 22.0 分 / 9.12M tokens / $3.95。小任务上无注释版本 token 少约 22%，作者解释是「要读的东西本来就少了」；大任务上成本无差异。
+- 行为等价性验收侧：逐字节一致率，真实输入下新旧输出相等的比例，目标是 100%；未通过项就是需要人工确认的行为差异清单。自造 10 个输入的通过率，以及这些输入实际触发的分支数。变异自检结果——改坏一行后测试是否变红；红 = 有效，绿 = 前面的通过不可信。人工抽查发现的行为差异数——把 AI 重写 + 这套验收的结果，与自己逐行读 diff 的结果对比。投入产出对比——搭对比回路的一次性成本 vs 每次重写节省的审查时间。
+- earshot 侧（以下为自拟建议，原文未提供任何指标）：闭环完成率——在无人工逐条指点的情况下，代理能否独立走完「生成 → 与真实录音对照 → 修改」一轮；人工干预次数——同一任务下，「有真实录音对照」相比「无对照/只有盲测」，人工需要介入的次数是否下降；人类评审结果——修改后的输出被人类评审认为「更接近真实录音」的比例。失败判据：如果代理对音频给不出有效反馈，或无法完成一轮修改，则判定该工具在当前环境下不适用。
+- Scope 侧：任务级成功率、各 criteria 的通过率、反复出现的失败类型数量、因该任务产生的文档/工具 issue 数及其关闭情况、trace 中错误 API 选择或漏指令的出现频率。关键是复跑前后使用同一任务和同一标准，并对 LLM Judge 的判定做人工复核；如果 criteria 通过率上升且反复失败减少，才可认为这次改动改善了智能体使用产品的结果。原文给出的案例数据：Azure Cosmos DB 团队用 Scope 在 8 个端到端场景、5 种语言中比较裸模型与其 Agent Kit，评测促成 20 个 Agent Kit issue 和 27 个文档 issue 被解决；一次有针对性的 Agent Kit 更新后，hierarchical partition-key 采用率从 47% 升到 100%，OFFSET/LIMIT 使用率从 47% 降到 0%。这些是特定产品场景的案例，不是对智能体的通用排名。
+- 最小试用方式：文本侧，先在一个任务上小范围试，先跑出 baseline，再让爬坡跑到收敛或连续 2–3 轮停滞为止。代码侧约半天：clone + uv sync + sweep infra doctor，再跑一个任务的完整流程，并加上第 22 步的两个对照。元评估侧最省的一轮：挑一个你已经在用的评估，选 2–3 个能力档位不同的模型各跑一遍并留轨迹，取几条失败或判定有争议的轨迹交给能读验证器逻辑的审查代理，附上一份至少包含评判过于严格的陷阱清单，然后人工核对它提出的每一条。上线验收侧：本机按第 29 步起站点，让一名工程师带编码智能体跑通一个公开 case 的完整交付，记录最终得分。行为 harness 侧：按第 34–43 步做一次配对设计，缩小规模，选一个接口契约清晰、有明确外部验收标准的绿地服务，至少选一个成本优化模型和一个前沿模型各跑 10 次配对。RSI Eval 侧：先按第 44–50 步做零成本预览和单任务三段跑，不要一开始就扩大基准范围。上下文改动对照实验侧（半天到一天）：选一个团队真实的、能跑测试的代码库，复制一份，做一处你怀疑有/没有影响的上下文改动；编译两份并确认产出等价；选一大一小两个真实任务，每分支每任务跑 3 次并交替跑；检查走项目自带 lint / 类型检查 / 测试，再加一个 agent 完成后才写的隐藏测试；用一个独立会话按事先写好的清单盲评。行为等价性验收侧（最小半天）：挑一个规模小、能独立运行、输出确定的遗留函数或模块；让 AI 重写这一个单元并保持接口不变；写一个最小对比脚本，同一批真实输入分别调用新旧两份实现，比较输出是否逐字节相同；再手工构造 10 个新输入重复对比；在新实现里随机改坏一行，重跑对比确认它报错，再把这一行改回去。Scope 侧：选一个真实且重要的 SDK/CLI 任务（例如给示例应用添加集成并处理一个文档化错误），固定起始代码库、智能体配置和 criteria DAG，先用基线跑多次并保存 trace；随后只改一处文档、SDK 示例或工具错误信息，再用同一任务和同一标准复跑。原文未给具体运行次数，建议至少覆盖多次运行并人工抽查失败样本；如果 criteria 通过率上升且反复失败减少，才可认为这次改动有效。
 
 ## 常见坑
 
-- 用例偏向好生成或好判分，而不是生产真正关心的任务。
-- 不读打分 transcript 就相信 grader；判分错误是评测配错最常见的原因之一。
+- 用例偏向好生成或好判分，而不是生产真正关心的任务；不读打分 transcript 就相信 grader。
 - grader 用 1–5 分制、judge 模型就是被测模型、有 baseline 却不做随机顺序的盲比。
-- 噪声大于你愿意据以行动的最小改进，还继续拿分数差异当结论；该加重复次数或用例数。
-- baseline 已经 ≥95% 还在追质量，而不是转向成本或延迟。
-- 把失败内容粘进 prompt；把答案放在模型够得到的地方，被 reward hack。
-- 把模糊用例、harness 错误、run-to-run 方差当成模型能力问题。
+- 噪声大于你愿意据以行动的最小改进，还继续拿分数差异当结论；baseline 已经 ≥95% 还在追质量。
+- 把失败内容粘进 prompt；把答案放在模型够得到的地方，被 reward hack；把模糊用例、harness 错误、run-to-run 方差当成模型能力问题。
 - 环境不干净：上一轮的残留文件、git 历史把答案递给 agent；effort 等配置没有一致应用。
-- 对抗采样按今天模型在这些用例上失败来选用例，或盲信用户流量（用户常常只试他们预期能成的东西）。
-- 给开放式目标（提升性能）或界定不清的面（笼统的更新 harness），导致爬坡卡住。
-- 增益落在噪声内仍然合并。
+- 对抗采样按今天模型在这些用例上失败来选用例，或盲信用户流量。
+- 给开放式目标或界定不清的面，导致爬坡卡住；增益落在噪声内仍然合并。
 - 把作者内部基准上的数字直接外推到自己的任务，或假定该 skill 一定可用。
-- 代码验收省掉重置测试文件这一步，AI 改了测试就作弊通过；或者忘了先 reset 到 base commit 再打补丁，基线本身就是脏的。
-- 把引入了新失败的任务当成部分得分处理——协议里它是直接判 0。
-- 拿 swe-sweep 的数字当能力结论：它的 README 标题设问没有任何答案，没给模型名、分数、bug 数量或案例结果；官网与论文链接仍是占位符；它只能当验证方法模板。
-- 忽略环境约束：Harbor 0.23 不支持这些任务所需的独立 verifier 环境和 collect hooks，需要 pin 指定 revision，直到 Harbor 0.24 发布。
-- 把元评估当成一次性动作：它是跑 → 审 → 改评估 → 再跑的循环，第 11 步的人工复核不是可选项。
-- 审查代理自己也会误判（原文用过于严格的评判举例，说明陷阱是双向的），不校准误报率就照单全收。
-- 只看审查代理提出了多少条结论，不看其中有多少是清单之外的新陷阱——全是已知陷阱就说明这一步没有增量。
-- 审查代理拿不到验证器逻辑或环境状态，只凭轨迹猜，结论无法定位到具体判定，也就无法据以修评估。
-- 期待有现成的提示词、配置或数据：元评估原文只有 4 条步骤，其余都要自己搭。
-- 上线验收的 0 分基线设错：把我们现在的版本当成 0 分，那样基线分永远是 0，分不出改进；0 分必须是什么都没改。
-- 按多试几次总能过的心态去准备一次性交付——协议里一次运行只交付一次。
-- 忘了把占用客户人员时间的扣分算进去，于是多问人看起来是免费的。
-- 把生产事故只当扣分项，而不是一票归零的红线。
-- 在客户已经展示过的流量上验证，分数虚高。
-- 把 FDE Gym 的机制数字（80 分通过线、事故归零）当成已验证的结论：README 没有任何通过率、分数分布或对照实验，三个公开 case 的内容与难度也没列。
-- 把 AI 现在能把代码写对，所以对的代码不再能区分工程师当论据——那是作者主张，不是论证。
-- 忽略项目的早期状态：数据库 schema 会在版本间变化且只能向前迁移，升级前必须备份数据库与对象存储；roadmap 上更多公开案例、题解、自选模型/自带 key、agent 单轮操作的 undo、真 PTY、可直接拉取的镜像都未完成——要自己 build 镜像，而且没有 undo。
-- 站点会执行用户写的代码，默认只监听本机；共享部署不做安全处理就接人。
-- 拿这些公开 case（或其数据）做训练数据——README 明确请求不要这样做。
-- 行为 harness 的坑：把 guides 与 sensors 一起加，却想区分各自贡献；实验本身也无法区分。
-- 行为 harness 的坑：把 harness 单次运行成本当成全部成本，漏掉契约、示例、断言与 harness 的编写、评审、维护投入，以及发现、诊断、修复不可接受结果的人力。
-- 行为 harness 的坑：只有前沿模型且已能一次做对，却仍在开发全程挂 harness——Sol 的例子是成本推到约 7 倍而通过率没有变化。
-- 行为 harness 的坑：把新实验直接外推到遗留代码修改、其他语言或推理设置、模糊或不完整需求——这些边界作者明确说未验证。
-- 行为 harness 的坑：让 agent 自己解释需求、自己写测试、失败后再改期望，把同一个误读或遗漏同时写进实现和测试。
-- 行为 harness 的坑：检查只能执行人类编码进去的期望，覆盖不到的地方仍要靠人工审查，不能因为挂了 harness 就省人工。
-- RSI Eval 的坑：不先跑 `preview` 就装 Docker/Harbor，或跳过 `check` 直接跑候选；零成本步骤就是用来省钱的。
-- RSI Eval 的坑：忘了改 `examples/evaluate.json` 三处，或 `codex_version` 不是 `profile.json` 里的精确版本。
-- RSI Eval 的坑：把凭据放在候选产物或仓库里；凭据必须放在仓库外。
-- RSI Eval 的坑：每次新评测复用同一个输出目录；每次新评测要用新输出目录。
-- RSI Eval 的坑：不先跑 oracle 直接跑候选，导致无法区分任务环境问题和候选问题。
-- RSI Eval 的坑：忽略 Harbor 0.18.0 pin 和 `PATH` 要求；Harbor 可执行文件不在 `PATH` 时必须用 `options.harbor_executable` 指定。
-- RSI Eval 的坑：Apple Silicon 上不处理平台模拟；任务要求时设 `DOCKER_DEFAULT_PLATFORM=linux/amd64`，按任务选平台的配置则要清掉它。
-- RSI Eval 的坑：以为所有任务都能本地跑；部分任务需要 NVIDIA GPU、原生 Linux amd64 或外部资产，JobBench、Harvey LAB、APEX 还需要单独的 native judge 凭据。
-- RSI Eval 的坑：中断后不显式 `resume`，或把方法恢复当成不会重复调用。
-- RSI Eval 的坑：把基础设施/鉴权失败当成判分结果；产物设计里它们应与判分结果分开。
-- RSI Eval 的坑：把未知 token 数当成已知，或把基准自己的汇总改得面目全非。
-- RSI Eval 的坑：把 RSI Eval 当成通用文本 prompt 评测工具，或拿它当能力结论；它只覆盖 agent/基准评测，且没有实测数据。
-- RSI Eval 的坑：期望原文给出完整的接自有循环代码；最后一段代码被截断，需要自己按 SDK 文档补齐。
-- 上下文改动对照实验的坑：用单次运行的结果下结论——原文大任务的方差说明单次对比可以得出 ±30% 的相反结论（10.64M 对 8.21M 是「贵 30%」，7.01M 对 10.17M 是「便宜 31%」）。
-- 上下文改动对照实验的坑：隐藏测试在 agent 完成之前就加上，agent 会为了通过测试而写代码。
-- 上下文改动对照实验的坑：评委知道哪个改动来自哪个分支，或评分清单是跑完之后才写的。
-- 上下文改动对照实验的坑：不交替分支跑，时段等外部因素没有均等作用到两个分支上。
-- 上下文改动对照实验的坑：只看通过率——本文六次运行全部通过，这个指标区分度低，需要更细的盲评分数。
-- 上下文改动对照实验的坑：把「注释对 agent 不帮忙也不添乱」当成已证明的结论——作者自己声明「不能证明注释效果为零」。
-- 上下文改动对照实验的坑：把「删掉 docs/ 和 AGENTS.md 有影响」当成已有证据——那是作者说的下一篇内容，本文没有给出证据，只能当线索。
-- 上下文改动对照实验的坑：把单一模型、两个任务、每分支三次的样本外推到其他模型、其他任务或更大的代码库。
-- 行为等价性验收的坑：把逐字节比对用在带随机数、时间戳、并发顺序、外部服务或浮点误差的输出上——这套验收会变成噪音源，必须先做确定性隔离。
-- 行为等价性验收的坑：只跑真实输入那一轮对比，不补至少 10 个自造输入，覆盖不到重写后容易偏的分支（边界、空值、异常路径、极端长度、非法参数）。
-- 行为等价性验收的坑：跳过变异自检——改坏一行测试还是绿的，说明前面的对比根本没覆盖到那行，前两步的通过没有意义。
-- 行为等价性验收的坑：只看通过率，不看这 10 个输入实际触发了多少分支。
-- 行为等价性验收的坑：以为这三条规则是插件自动执行的——原文没给安装、命令、配置、目录结构或提示词，也没说它是自动跑还是人工按标准做。
-- 行为等价性验收的坑：把「官方插件」当成已确认事实——原文没贴仓库、文档或安装链接，无法确认是否官方发布、正式名称与维护状态。
-- 行为等价性验收的坑：拿它验证重写带来的性能、可读性、安全性改善——它只验证行为没变。
-- 行为等价性验收的坑：把三条验收规则当成有覆盖度保证，或以为 10 个输入一定够——原文没给覆盖率指标。
-- 行为等价性验收的坑：一上手就选跨服务、带随机性的模块（噪音压过信号），或反过来在单点小改动上套这套重验收（成本不划算）。
-- earshot 的坑：把这条推文当已验证的方法——原文只是推文片段，仓库 README、技能细节、评测流程、指标全部未获取。
-- earshot 的坑：只做盲测、不给代理真实录音作对照——这正是原文主张要避免的；但原文没有任何实验、对比数据或案例支撑「盲测可能产生误导」这一主张。
-- earshot 的坑：把「品味判断留给人类」当成客套——原文明确代理仍无法判断品味，最终判断要人来做，不要在验收里省掉人。
-- earshot 的坑：以为接入命令一行就能在任意环境跑通——原文没有交代 Python 版本、earshot 安装方式、是否需要额外的音频/模型依赖。
-- earshot 的坑：把「Forge」当成确定的具体代理或流水线——原文未定义，无法确认它指什么。
-- earshot 的坑：拿它当音频能力的结论——原文互动量很小（96 赞、3 转发、1 回复），传播范围小，没有实测数据。
+- 代码验收省掉重置测试文件这一步，AI 改了测试就作弊通过；或者忘了先 reset 到 base commit 再打补丁。把引入了新失败的任务当成部分得分处理——协议里它是直接判 0。拿 swe-sweep 的数字当能力结论：它的 README 标题设问没有任何答案，只能当验证方法模板。
+- 忽略环境约束：Harbor 0.23 不支持这些任务所需的独立 verifier 环境和 collect hooks，需要 pin 指定 revision。
+- 把元评估当成一次性动作：它是跑 → 审 → 改评估 → 再跑的循环，人工复核不是可选项。审查代理自己也会误判，不校准误报率就照单全收；只看它提出了多少条结论，不看其中有多少是清单之外的新陷阱。审查代理拿不到验证器逻辑或环境状态，只凭轨迹猜，结论无法定位到具体判定。
+- 上线验收的 0 分基线设错：把我们现在的版本当成 0 分，那样基线分永远是 0。按多试几次总能过的心态去准备一次性交付；忘了把占用客户人员时间的扣分算进去；把生产事故只当扣分项，而不是一票归零的红线；在客户已经展示过的流量上验证。把 FDE Gym 的机制数字当成已验证的结论；忽略项目的早期状态；共享部署不做安全处理就接人；拿这些公开 case 做训练数据。
+- 行为 harness 的坑：把 guides 与 sensors 一起加，却想区分各自贡献；把 harness 单次运行成本当成全部成本，漏掉契约、示例、断言与 harness 的编写、评审、维护投入，以及发现、诊断、修复不可接受结果的人力；只有前沿模型且已能一次做对，却仍在开发全程挂 harness；把新实验直接外推到遗留代码修改、其他语言或推理设置、模糊或不完整需求；让 agent 自己解释需求、自己写测试、失败后再改期望；因为挂了 harness 就省人工。
+- RSI Eval 的坑：不先跑 preview 就装 Docker/Harbor，或跳过 check 直接跑候选；忘了改 examples/evaluate.json 三处，或 codex_version 不是 profile.json 里的精确版本；把凭据放在候选产物或仓库里；每次新评测复用同一个输出目录；不先跑 oracle 直接跑候选；忽略 Harbor 0.18.0 pin 和 PATH 要求；Apple Silicon 上不处理平台模拟；以为所有任务都能本地跑；中断后不显式 resume；把基础设施/鉴权失败当成判分结果；把未知 token 数当成已知；把 RSI Eval 当成通用文本 prompt 评测工具或拿它当能力结论；期望原文给出完整的接自有循环代码。
+- 上下文改动对照实验的坑：用单次运行的结果下结论；隐藏测试在 agent 完成之前就加上；评委知道哪个改动来自哪个分支，或评分清单是跑完之后才写的；不交替分支跑；只看通过率；把「注释对 agent 不帮忙也不添乱」当成已证明的结论；把「删掉 docs/ 和 AGENTS.md 有影响」当成已有证据；把单一模型、两个任务、每分支三次的样本外推到其他模型、其他任务或更大的代码库。
+- 行为等价性验收的坑：把逐字节比对用在带随机数、时间戳、并发顺序、外部服务或浮点误差的输出上；只跑真实输入那一轮对比，不补至少 10 个自造输入；跳过变异自检；只看通过率，不看这 10 个输入实际触发了多少分支；以为这三条规则是插件自动执行的；把「官方插件」当成已确认事实；拿它验证重写带来的性能、可读性、安全性改善；把三条验收规则当成有覆盖度保证；一上手就选跨服务、带随机性的模块，或反过来在单点小改动上套这套重验收。
+- earshot 的坑：把这条推文当已验证的方法；只做盲测、不给代理真实录音作对照；把「品味判断留给人类」当成客套；以为接入命令一行就能在任意环境跑通；把「Forge」当成确定的具体代理或流水线；拿它当音频能力的结论。
+- Scope 的坑：把自动 Judge 当最终裁判，不人工复核证据；只跑一次 CI 或只看一次演示就下结论；一次改多处，导致无法归因；把 Azure Cosmos DB 案例当成对智能体的通用排名；没人分析 trace 就上平台；忽略自部署、凭证管理和模型/智能体提供方接入成本；以为它是托管服务；用 Scope 替代 A 组的快速文本爬坡——Scope 更重，先跑小范围。
 
 ## 证据与来源
 
-- 主要依据（建评测与爬坡）：调研《Automating eval design and hillclimbing with Claude》（作者 Lance Martin，发布在 claude.dev 博客，原文标注日期 2026-09-28）。两个子命令、访谈与人工确认点、诊断检查项、保留/回滚规则、自查清单、反过拟合三件事与三条选择标准，都出自该文描述。
-- 带数字的案例（客服 benchmark，均为作者内部基准）：44 张工单，30 张用于搜索、14 张留出；起点 Opus 4.8、default（high）effort，搜索集决策准确率 74.4%，每工单 token 成本 4.6 美分。先审计 prompt，再试 Opus 5.5 + low effort，达 87.8%、成本降到 1.9 美分/工单（不到起点一半）；部分节省来自 Opus 5.5 的定价——输入输出 token 比 Opus 4.8 便宜 20%，cache read 便宜 60%。因为达标，继续降一档：Sonnet 5 + low effort 约 88.9%、成本约 1 美分/工单。原文随后提到 routing rules 和退款上限，报告正文在此处截断，后续细节未能确认。
-- 只是作者主张、没有对照实验支撑的部分（建评测与爬坡）：grader 选型规则、评测设计自查清单、反过拟合三件事、选择爬坡对象的三条标准，都是作者的经验规则；内部和客户多数把爬坡集中在文本上也是作者的观察，未给数据。
-- 主要依据（评测质检 / 元评估）：调研《@Vtrivedy10：「评估评估」的最佳方式仍然是：》（X/Twitter 帖子）。四步流程——用多个不同智能模型的代理跑当前版本评估、让一个拥有环境与验证器逻辑读取权限的审查代理审这些轨迹、给它挂一份常见陷阱技能并要求主动寻找其他陷阱、人类复核后回到第一步形成循环——出自该帖。
-- 元评估部分只有作者主张，没有数据：原推文没有任何数据、案例、对比实验、提示词或配置；互动量很小（61 赞、3 转发、11 回复），不构成效果证据。第 8–11 步的补充说明（权限边界、预期结果）都是按其 4 条步骤做的整理，不是原文细节。
-- 元评估的适用条件：已经存在一个可运行的评估和验证器；审查代理能读到验证器逻辑与环境状态；能同时跑多个不同模型的代理；愿意投入人工复核。风险是审查代理的判断本身也可能出错（原文用过于严格的评判举例，说明陷阱是双向的），所以人工复核不是可选项；原文没有说明如何校准审查代理的误报率。
-- 与已有做法的关系：第 5 步（人工抽样读打分 transcript）与元评估方向一致，差别是元评估把读打分记录扩成一个独立审查代理 + 一份陷阱清单，并用多个能力档位的模型做对照；两者不冲突——可以先用第 5 步做最低成本的人工校验，再用元评估做系统性质检，误报率高或全是已知陷阱时降级为参考思路。
-- 主要依据（代码改动验收）：调研《facebookresearch/swe-sweep》（README 标注为 2026 preprint，作者 Kilian Lieret、Jeffrey Jian Ma、Rahul Kindi、Yuxiang Wei、Jeremy Ma、Sten Sootla、Parth Thakkar、Chao Beyond Zhou、Pengcheng Yin、Rui Hou、Ofir Press、John Yang）。安装与自检命令、单任务评测命令、原始 Harbor 命令及其 `--agent swesweep.patch_agent:PatchAgent`、`--jobs-dir`、`--n-concurrent 1` 等参数、可照抄的评测伪代码、评分公式与两条汇总命令，都出自该报告。
-- swe-sweep 缺数据的部分：标题设问「How many bugs can LMs find & fix in large codebases?」在 README 中没有任何答案——没有模型名、分数、bug 数量或案例结果；官网与论文链接仍是占位符（原文注释写明 `TODO: fill in the public links once available`），无法从这份材料核实结论，也没有和同类基准（如 SWE-bench 一类）做对比。因此它只能当验证方法模板，不能当能力结论的依据。
-- swe-sweep 的适用条件：必须能使用 Harbor 框架并拉到它指定的源码 revision；需要能构建目标仓库、且任务自带 base commit、可见测试与隐藏测试；README 只提到一个具体任务路径 `tasks/pandora-bench__dateutil`，没有给出任务清单，任务总量未知（36 stars，规模有限）。
-- 主要依据（上线验收口径）：调研《deeplethe/fde-gym》（仓库 README）。0 分 = 什么都没改、100 分 = 参考解、≥80 通过、生产事故最高 0 分、一次运行只交付一次、占用客户人员时间扣分、验证发生在客户从未展示过的流量上并按客户自己的指标打分，以及第 29 步的三条命令与 `harness/` 说明，都出自该 README。
-- FDE Gym 缺数据的部分：打分规则（0 分基线 / 100 分参考解 / 80 分通过线 / 事故最高 0 分 / 占用客户时间扣分）是 README 陈述的机制设计，没有附带任何实测数据——没有案例通过率、分数分布或对照实验；三个公开 case 的具体内容、难度、所属领域在 README 中也没有列出；仓库 76 stars，README 自述「FDE Gym is early」，数据库 schema 会在版本间变化且只能向前迁移。
-- 只是作者主张（FDE Gym）：AI 现在能把代码写对，所以对的代码不再能区分工程师是作者主张，不是论证；听出真问题 / 找出没人写下来的规则 / 做判断 / 为线上后果负责是 README 列出的人侧能力清单，报告里没有给出 AI 侧的能力清单。
-- FDE Gym 的适用与风险：需要 Docker、Python 3.9+ 和 OpenRouter key（key 放仓库外）；共享部署必须额外做安全处理，因为站点会执行用户写的代码；README 请求不要用这些案例做训练数据；本报告只依据 README 与初筛元数据，未核实站点实际运行情况、案例质量或评分是否公正。
-- 与已有做法的关系（上线验收）：D 组与前三条腿不冲突。前三条腿是离线、可回滚、可重跑的验收（评测集 + 回归闸门 + 元评估）；D 组是不可重来的上线闸门，一次运行只交付一次。同一份改动可以两者都过：先在离线评测里确认没有新失败、增益超出噪声，再用 0 / 100 / 一票否决的口径看线上改善。差异在于可反复性——离线可以回滚重跑，上线只有一次，所以 D 组更适合当最终闸门，而不是迭代手段。
-- 主要依据（行为 harness 成本）：调研《Are Harnesses Worth the Cost?》，作者 Naresh Jain，发表于 martinfowler.com。任务、guides/sensors 框架、详细 brief、OpenAPI/AsyncAPI 契约、请求-响应示例、`examples validate`、契约驱动 mock、统一测试命令、独立验收套件、干净容器与 Codex home、Specmatic 实现与等价工具，都出自该文。
-- 行为 harness 的数据（10 次运行均值，成本为按 token 用量和模型价格折算的 API 等价估算，非实际账单）：GPT-6 Sol 有 harness：11,331,970 tokens、19m53s、约 $2.679、10/10；GPT-6 Sol 无 harness：1,076,371 tokens、6m51s、约 $0.406、10/10；GPT-6 Luna 有 harness：22,933,648 tokens、35 min、约 $0.273、10/10；GPT-6 Luna 无 harness：5,860,736 tokens、15m56s、约 $0.086、3/10。harness 让 Luna 每次平均多花 17,072,912 tokens、19 分 4 秒自主运行时间、约 $0.187；有 harness 的 Luna 总 token 约为无 harness Luna 的 3.9 倍；无 harness 的 Luna 通过 94.8% 的功能检查；失败的 Java 应用也都至少通过 178 项中的 144 项。失败聚类：超时边界上 4 个应用返回 503、2 个返回 400、1 个返回 429（应为 202+monitor link），7 次运行因缺 monitor URL 引发次生失败，3 次 Kafka 消息实际送达但违反线上契约（Spring JSON 序列化器多加 `__TypeId__` 头；`"categories": null` 而该可选字段存在时必须是数组），另有 415（brief 明确要求 400）、非法请求落到通用 500、缺失 monitor 返回错误表示、配置名分歧（生成客户端读 `ORDER_API_API_KEY`，启动脚本提供 `ORDER_API_KEY`）导致普通创建返回 503。探索性运行中 Claude Sonnet 4.6、Claude Opus 4.6、Gemini 3.8 Flash（低推理努力）也都在无 harness 下一次完成。
-- 行为 harness 中只是作者主张的部分：executable attention、attention lapse 是作者对失败机制的解释性框架，作者自己也说实验未确立因果关系——例如超时识别失败，只记录了错误响应，没记录实际客户端异常，所以窄异常类型匹配只是可能解释。
-- 行为 harness 的适用边界：每个模型 10 组配对运行、1 个绿地 Java 服务、两个模型都是低推理努力；样本不足以判断长期失败率或得到一个可接受应用的总成本；brief 异常详细，未测试模糊需求、遗留代码、其他语言或推理设置；guides 与 sensors 是一起加的，无法区分各自贡献；成本口径不含契约、示例、断言与 harness 的编写、评审和维护投入，也不含发现、诊断、修复不可接受结果的人力，作者未测量跨实现复用带来的摊薄。
-- 主要依据（RSI Eval 评测脚手架）：调研《Danielxu0208/rsi_eval》。安装、零成本预览、Harbor extra、Docker 校验、专用 Codex 登录、`configure`、三段跑、Python SDK 示例、打包方法、产物路径、恢复命令，以及 catalog 覆盖范围，都出自该仓库 README/正文。
-- RSI Eval 缺数据的部分：原文没有给任何实测数据佐证可靠性；只覆盖 agent/基准评测场景；最后一段接自有 RSI 循环的代码被截断，无法据以写出完整示例。因此它只能作为小范围试用的评测脚手架，不能当能力结论的依据。
-- 主要依据（上下文改动对照实验）：调研《I Deleted 168,000 Lines of Comments. My AI Agent Didn't Notice》（作者 Roberto Aranda，OpenStation）。两个分支的等价校验、一大一小两个任务、固定 agent 与设置、盲评清单、每分支三次交替跑、隐藏测试在 agent 完成后才加、大任务里「刷新后置顶状态存活」的暗坑与六次运行都发现该陷阱，都出自该文。
-- 上下文改动对照实验的数据（三次运行均值）：小任务（平铺所有打开窗口，满分 19）有注释 18.3 分 / 2.18M tokens / $1.42，无注释 19.0 分 / 1.71M tokens / $1.04；大任务（窗口保持置顶，满分 23）有注释 21.7 分 / 9.06M tokens / $3.84，无注释 22.0 分 / 9.12M tokens / $3.95。大任务三次 token：有注释 8.21M / 8.79M / 10.17M，无注释 7.01M / 9.70M / 10.64M，单次对比可得出「贵 30%」或「便宜 31%」两种相反结论。代码行数（用 `scc` 统计）：整仓库 765,491 → 597,332；插件源码（src/、includes/、apps/ 和 CSS，不含测试、文档、工具）408,527 → 280,421。删除范围包含所有注释，只保留工具本身需要的注释约 800 行。
-- 上下文改动对照实验中只是作者主张的部分：「注释对 agent 不帮忙也不添乱」（作者自己声明不能证明注释效果为零）；「下一篇会报告删掉 docs/ 和 AGENTS.md 有影响」是本文没有给出证据的线索；小任务 22% token 差异的解释「要读的东西本来就少了」也是作者解释，不是对照实验结论。
-- 上下文改动对照实验的适用条件与局限：只覆盖一个模型（Claude Code + Opus 5.5 high effort）、两个任务、每分支三次运行，足以排除大效应、不足以排除小效应；评分由另一个 Claude 会话完成，未给出评委与人工评分的一致性数据；小任务上有 22% 的 token 差异、大任务上没有，说明这种量级的差异在不同任务间不稳定；「无注释」版本并非零注释。
-- 主要依据（AI 重写老代码的行为等价性验收）：调研《@yupi996: 来感受一下 Claude Code 官方插件，验收 AI 重写的老代码有多严！》（X/Twitter 推文）。三条验收规则——老代码能跑就用相同输入喂新旧代码、逐字节对比输出；自己再编至少 10 个新输入接着比；故意改坏一行新代码，测试必须变红——以及插件名 `code-modernization`，都出自该帖。把这三条读成「不只让 AI 写代码，还让 AI 参与重写后的一致性验收」是调研报告对原文的解读，不是原文的直接主张。
-- 行为等价性验收缺数据的部分：原文没有给出任何命令、配置、目录结构、提示词，也没有说明这三条规则是插件自动执行、还是需要人工按这个标准去做；没有重写项目的规模、语言/框架、对比失败案例数、误报率、耗时或成本数据；「至少 10 个新输入」只是一个门槛，原文没有说明它是否足够，也没有给覆盖率指标。「官方插件」这一说法来自推文作者，原文没有贴插件仓库、文档或安装链接，无法确认它是否为官方发布、插件正式名称、以及是否仍在维护。互动数据为 38 赞、0 转发、22 回复，不构成效果证据。
-- 只是整理、不是原文细节的部分（行为等价性验收）：把三条规则拆成第 67–71 步的可执行动作、判定与回退规则、以及「输出必须确定可捕获、否则先做确定性隔离」这个前提，都是按其三条规则做的整理。「改坏一行 → 测试必须变红」可以挂在代码变更事件上持续自动执行，这一点是从原文推得的合理推论，不是原文主张。
-- 与已有做法的关系（行为等价性验收）：C 组（回归闸门）判的是 AI 改完之后是否引入新失败、通过多少隐藏子任务，产出的是一个分数；H 组判的是 AI 重写之后新旧两份实现的行为是否逐字节一致、以及测试本身是否有效，产出的是「一致 / 不一致」的差异清单加一次变异自检。两者可以叠加：重写完成后先过 H 组的行为等价性验收，再按 C 组的回归闸门判分。差异是 H 组需要一份仍能运行的老版本和确定可捕获的输出，C 组不需要。
-- 主要依据（给编码代理接听觉评审的试用条目）：调研《@LexnLin: Forge 还会将生成的声音与真实录音进行比较，因为单纯的盲测可能会产生误导。》（X/Twitter 推文）。接入命令 `claude mcp add earshot -- python -m earshot mcp`、earshot 是 CPU-only 的 MCP、仓库里有一个「从真实授权录音中制作原声音轨」的技能、「应与真实录音比较而不是只做盲测」、「代理仍无法判断品味，这部分仍由人类来做」，都出自该帖。
-- earshot 缺数据的部分：原文极短，正文之外只有一张被截断的 GitHub 链接卡片（`GitHub - Leonxlnx/earshot: Ears for coding agents: let AI hear, review and make sound. CPU-only,...`）；仓库 README、技能名称、评测指标、适用条件均未获取；「Forge」在原文中未定义；命令的依赖前提（Python 版本、earshot 安装方式、是否需要额外的音频/模型依赖）原文未交代；互动量 96 赞、3 转发、1 回复，传播范围很小，只能视为社区分享而非经过检验的实践报告。
-- 只是作者主张、没有数据支撑的部分（earshot）：「单纯的盲测可能会产生误导」未给任何实验、对比数据或案例；「它仍然无法判断品味，那是仍由我们人类来做的事情」是观点，不是可验证的结论。第 74–78 步的拆解与「怎么判断变好了」里的自拟指标都是按其推文内容做的整理，不是原文细节。
-- 与已有做法的关系（earshot）：清单中相关条目是 Claude Code；本条给出的是通过 `claude mcp add` 给 Claude Code 增加一项外部能力（听觉评审）的具体命令，属于对已有做法的能力扩展，而不是替代方案。
-- 局限（八份材料共通）：claude-api 流程依赖该 skill 的实际可用性，案例全部来自作者内部基准，未经第三方复现；元评估只有 4 条无数据支撑的步骤；swe-sweep 无任何结果数字；FDE Gym 的打分机制无实测数据、项目处于早期；行为 harness 实验样本小、场景单一、成本口径不含维护与人力；RSI Eval 无实测数据、只覆盖 agent/基准评测；注释对照实验只有一个模型、两个任务、每分支三次运行，只能排除大效应；行为等价性验收只有一条推文转述的三条规则，无命令、无配置、无失败案例；earshot 只有一条推文片段，仓库内容、评测指标与适用条件未获取，只能算试用线索。八个做法都需要在自己的任务上验证后再推广。
+- 主要依据（建评测与爬坡）：调研《Automating eval design and hillclimbing with Claude》（作者 Lance Martin，发布在 claude.dev 博客，原文标注日期 2026-09-28）。两个子命令、访谈与人工确认点、诊断检查项、保留/回滚规则、自查清单、反过拟合三件事与三条选择标准，都出自该文描述。带数字的案例（客服 benchmark，均为作者内部基准）：44 张工单，30 张用于搜索、14 张留出；起点 Opus 4.8、default（high）effort，搜索集决策准确率 74.4%，每工单 token 成本 4.6 美分。先审计 prompt，再试 Opus 5.5 + low effort，达 87.8%、成本降到 1.9 美分/工单（不到起点一半）；部分节省来自 Opus 5.5 的定价——输入输出 token 比 Opus 4.8 便宜 20%，cache read 便宜 60%。因为达标，继续降一档：Sonnet 5 + low effort 约 88.9%、成本约 1 美分/工单。原文随后提到 routing rules 和退款上限，报告正文在此处截断。grader 选型规则、评测设计自查清单、反过拟合三件事、选择爬坡对象的三条标准，都是作者的经验规则；内部和客户多数把爬坡集中在文本上也是作者的观察，未给数据。
+- 主要依据（评测质检 / 元评估）：调研《@Vtrivedy10：「评估评估」的最佳方式仍然是：》（X/Twitter 帖子）。四步流程——用多个不同智能模型的代理跑当前版本评估、让一个拥有环境与验证器逻辑读取权限的审查代理审这些轨迹、给它挂一份常见陷阱技能并要求主动寻找其他陷阱、人类复核后回到第一步形成循环——出自该帖。元评估部分只有作者主张，没有数据：原推文没有任何数据、案例、对比实验、提示词或配置；互动量很小（61 赞、3 转发、11 回复）。第 8–11 步的补充说明（权限边界、预期结果）都是按其 4 条步骤做的整理，不是原文细节。风险是审查代理的判断本身也可能出错，所以人工复核不是可选项；原文没有说明如何校准审查代理的误报率。与已有做法的关系：第 5 步（人工抽样读打分 transcript）与元评估方向一致，差别是元评估把读打分记录扩成一个独立审查代理 + 一份陷阱清单，并用多个能力档位的模型做对照；两者不冲突。
+- 主要依据（代码改动验收）：调研《facebookresearch/swe-sweep》（README 标注为 2026 preprint，作者 Kilian Lieret、Jeffrey Jian Ma、Rahul Kindi、Yuxiang Wei、Jeremy Ma、Sten Sootla、Parth Thakkar、Chao Beyond Zhou、Pengcheng Yin、Rui Hou、Ofir Press、John Yang）。安装与自检命令、单任务评测命令、原始 Harbor 命令及其参数、可照抄的评测伪代码、评分公式与两条汇总命令，都出自该报告。swe-sweep 缺数据的部分：标题设问在 README 中没有任何答案——没有模型名、分数、bug 数量或案例结果；官网与论文链接仍是占位符，无法从这份材料核实结论，也没有和同类基准做对比。因此它只能当验证方法模板，不能当能力结论的依据。适用条件：必须能使用 Harbor 框架并拉到它指定的源码 revision；需要能构建目标仓库、且任务自带 base commit、可见测试与隐藏测试；README 只提到一个具体任务路径，没有给出任务清单，任务总量未知（36 stars，规模有限）。
+- 主要依据（上线验收口径）：调研《deeplethe/fde-gym》（仓库 README）。0 分 = 什么都没改、100 分 = 参考解、≥80 通过、生产事故最高 0 分、一次运行只交付一次、占用客户人员时间扣分、验证发生在客户从未展示过的流量上并按客户自己的指标打分，以及第 29 步的三条命令与 harness/ 说明，都出自该 README。FDE Gym 缺数据的部分：打分规则是 README 陈述的机制设计，没有附带任何实测数据——没有案例通过率、分数分布或对照实验；三个公开 case 的具体内容、难度、所属领域在 README 中也没有列出；仓库 76 stars，README 自述「FDE Gym is early」，数据库 schema 会在版本间变化且只能向前迁移。作者主张：AI 现在能把代码写对，所以对的代码不再能区分工程师是作者主张，不是论证；听出真问题 / 找出没人写下来的规则 / 做判断 / 为线上后果负责是 README 列出的人侧能力清单，报告里没有给出 AI 侧的能力清单。本报告只依据 README 与初筛元数据，未核实站点实际运行情况、案例质量或评分是否公正。与已有做法的关系：D 组与前三条腿不冲突；前三条腿是离线、可回滚、可重跑的验收，D 组是不可重来的上线闸门，同一份改动可以两者都过，但 D 组更适合当最终闸门，而不是迭代手段。
+- 主要依据（行为 harness 成本）：调研《Are Harnesses Worth the Cost?》，作者 Naresh Jain，发表于 martinfowler.com。任务、guides/sensors 框架、详细 brief、OpenAPI/AsyncAPI 契约、请求-响应示例、examples validate、契约驱动 mock、统一测试命令、独立验收套件、干净容器与 Codex home、Specmatic 实现与等价工具，都出自该文。数据（10 次运行均值，成本为按 token 用量和模型价格折算的 API 等价估算，非实际账单）：GPT-6 Sol 有 harness：11,331,970 tokens、19m53s、约 $2.679、10/10；GPT-6 Sol 无 harness：1,076,371 tokens、6m51s、约 $0.406、10/10；GPT-6 Luna 有 harness：22,933,648 tokens、35 min、约 $0.273、10/10；GPT-6 Luna 无 harness：5,860,736 tokens、15m56s、约 $0.086、3/10。harness 让 Luna 每次平均多花 17,072,912 tokens、19 分 4 秒自主运行时间、约 $0.187；有 harness 的 Luna 总 token 约为无 harness Luna 的 3.9 倍；无 harness 的 Luna 通过 94.8% 的功能检查；失败的 Java 应用也都至少通过 178 项中的 144 项。失败聚类：超时边界上 4 个应用返回 503、2 个返回 400、1 个返回 429（应为 202+monitor link），7 次运行因缺 monitor URL 引发次生失败，3 次 Kafka 消息实际送达但违反线上契约，另有 415、非法请求落到通用 500、缺失 monitor 返回错误表示、配置名分歧导致普通创建返回 503。探索性运行中 Claude Sonnet 4.6、Claude Opus 4.6、Gemini 3.8 Flash（低推理努力）也都在无 harness 下一次完成。作者主张：executable attention、attention lapse 是作者对失败机制的解释性框架，作者自己也说实验未确立因果关系。适用边界：每个模型 10 组配对运行、1 个绿地 Java 服务、两个模型都是低推理努力；样本不足以判断长期失败率或得到一个可接受应用的总成本；brief 异常详细，未测试模糊需求、遗留代码、其他语言或推理设置；guides 与 sensors 是一起加的，无法区分各自贡献；成本口径不含契约、示例、断言与 harness 的编写、评审和维护投入，也不含发现、诊断、修复不可接受结果的人力，作者未测量跨实现复用带来的摊薄。
+- 主要依据（RSI Eval 评测脚手架）：调研《Danielxu0208/rsi_eval》。安装、零成本预览、Harbor extra、Docker 校验、专用 Codex 登录、configure、三段跑、Python SDK、打包方法、产物路径、恢复命令，以及 catalog 覆盖范围，都出自该仓库 README/正文。缺数据的部分：原文没有给任何实测数据佐证可靠性；只覆盖 agent/基准评测场景；最后一段接自有 RSI 循环的代码被截断，无法据以写出完整示例。因此它只能作为小范围试用的评测脚手架，不能当能力结论的依据。
+- 主要依据（上下文改动对照实验）：调研《I Deleted 168,000 Lines of Comments. My AI Agent Didn't Notice》（作者 Roberto Aranda，OpenStation）。两个分支的等价校验、一大一小两个任务、固定 agent 与设置、盲评清单、每分支三次交替跑、隐藏测试在 agent 完成后才加、大任务里「刷新后置顶状态存活」的暗坑与六次运行都发现该陷阱，都出自该文。数据（三次运行均值）：小任务（平铺所有打开窗口，满分 19）有注释 18.3 分 / 2.18M tokens / $1.42，无注释 19.0 分 / 1.71M tokens / $1.04；大任务（窗口保持置顶，满分 23）有注释 21.7 分 / 9.06M tokens / $3.84，无注释 22.0 分 / 9.12M tokens / $3.95。大任务三次 token：有注释 8.21M / 8.79M / 10.17M，无注释 7.01M / 9.70M / 10.64M，单次对比可得出「贵 30%」或「便宜 31%」两种相反结论。代码行数（用 scc 统计）：整仓库 765,491 → 597,332；插件源码（src/、includes/、apps/ 和 CSS，不含测试、文档、工具）408,527 → 280,421。删除范围包含所有注释，只保留工具本身需要的注释约 800 行。作者主张：「注释对 agent 不帮忙也不添乱」（作者自己声明不能证明注释效果为零）；「下一篇会报告删掉 docs/ 和 AGENTS.md 有影响」是本文没有给出证据的线索；小任务 22% token 差异的解释「要读的东西本来就少了」也是作者解释。适用条件与局限：只覆盖一个模型、两个任务、每分支三次运行，足以排除大效应、不足以排除小效应；评分由另一个 Claude 会话完成，未给出评委与人工评分的一致性数据；小任务上有 22% 的 token 差异、大任务上没有，说明这种量级的差异在不同任务间不稳定；「无注释」版本并非零注释。
+- 主要依据（AI 重写老代码的行为等价性验收）：调研《@yupi996: 来感受一下 Claude Code 官方插件，验收 AI 重写的老代码有多严！》（X/Twitter 推文）。三条验收规则——老代码能跑就用相同输入喂新旧代码、逐字节对比输出；自己再编至少 10 个新输入接着比；故意改坏一行新代码，测试必须变红——以及插件名 code-modernization，都出自该帖。缺数据的部分：原文没有给出任何命令、配置、目录结构、提示词，也没有说明这三条规则是插件自动执行、还是需要人工按这个标准去做；没有重写项目的规模、语言/框架、对比失败案例数、误报率、耗时或成本数据；「至少 10 个新输入」只是一个门槛，原文没有说明它是否足够，也没有给覆盖率指标。「官方插件」这一说法来自推文作者，原文没有贴插件仓库、文档或安装链接，无法确认它是否为官方发布、插件正式名称、以及是否仍在维护。互动数据为 38 赞、0 转发、22 回复，不构成效果证据。把三条规则拆成第 67–71 步的可执行动作、判定与回退规则、以及「输出必须确定可捕获、否则先做确定性隔离」这个前提，都是按其三条规则做的整理。与已有做法的关系：C 组判的是 AI 改完之后是否引入新失败、通过多少隐藏子任务，产出的是一个分数；H 组判的是 AI 重写之后新旧两份实现的行为是否逐字节一致、以及测试本身是否有效，产出的是「一致 / 不一致」的差异清单加一次变异自检。两者可以叠加：重写完成后先过 H 组的行为等价性验收，再按 C 组的回归闸门判分。
+- 主要依据（给编码代理接听觉评审的试用条目）：调研《@LexnLin: Forge 还会将生成的声音与真实录音进行比较，因为单纯的盲测可能会产生误导。》（X/Twitter 推文）。接入命令 claude mcp add earshot -- python -m earshot mcp、earshot 是 CPU-only 的 MCP、仓库里有一个「从真实授权录音中制作原声音轨」的技能、「应与真实录音比较而不是只做盲测」、「代理仍无法判断品味，这部分仍由人类来做」，都出自该帖。缺数据的部分：原文极短，正文之外只有一张被截断的 GitHub 链接卡片；仓库 README、技能名称、评测指标、适用条件均未获取；「Forge」在原文中未定义；命令的依赖前提原文未交代；互动量 96 赞、3 转发、1 回复，传播范围很小，只能视为社区分享而非经过检验的实践报告。作者主张：「单纯的盲测可能会产生误导」未给任何实验、对比数据或案例；「它仍然无法判断品味，那是仍由我们人类来做的事情」是观点。第 74–78 步的拆解与「怎么判断变好了」里的自拟指标都是按其推文内容做的整理。与已有做法的关系：本条给出的是通过 claude mcp add 给 Claude Code 增加一项外部能力（听觉评审）的具体命令，属于对已有做法的能力扩展，而不是替代方案。
+- 主要依据（Scope 产品级编码智能体评测）：调研《Introducing Scope: Open-source evaluation for AI coding agents》。Scope 是微软以 MIT 许可证开源的、基于 Kubernetes 的 AI 编码智能体评测平台；可驱动 GitHub Copilot、Claude Code、VS Code with Copilot 等；支持定义代表性任务、起始代码库、智能体配置、模拟用户 personas、版本化 profiles、DAG 形式的评价标准、LLM Judge、运行轨迹和工作区快照；提供 Portal、CLI 和 REST API；需要自行部署，不是托管服务。证据主要是 Azure Cosmos DB 团队的引述：使用 Scope 在 8 个端到端 Azure Cosmos DB 场景、5 种语言中比较裸模型与其 Agent Kit，评测促成 20 个 Agent Kit issue 和 27 个文档 issue 被解决；一次有针对性的 Agent Kit 更新后，hierarchical partition-key 采用率从 47% 升到 100%，OFFSET/LIMIT 使用率从 47% 降到 0%。这些是特定产品场景的案例，原文明确说不是对智能体的通用排名。原文还包含较强的作者主张：DevAx 应成为持续学习闭环、开放评测基础能减少重复基础设施、Scope 可帮助团队判断下一步改什么；文章没有给出完整方法论、任务细节、Judge 提示词、运行次数或独立复现结果。原文也承认：可重复配置不保证智能体行为完全一致，自动 Judge 可能犯错，因此必须使用代表性任务、重复运行并人工复核证据。适用条件是团队愿意自管理部署、能接入模型和智能体提供方，并有人力分析 trace 和做产品改进。与已有做法的关系：Scope 不是编码智能体，而是可驱动 Claude Code 等智能体的评测层；如果团队继续采用 Claude Code，可用 Scope 对其在具体 SDK/CLI 任务上的表现做回归验证；Scope 支持 GitHub Copilot 不改变清单中该条目的 drop 状态，除非团队另有使用该工具的需要。
+- 局限（十份材料共通）：claude-api 流程依赖该 skill 的实际可用性，案例全部来自作者内部基准，未经第三方复现；元评估只有 4 条无数据支撑的步骤；swe-sweep 无任何结果数字；FDE Gym 的打分机制无实测数据、项目处于早期；行为 harness 实验样本小、场景单一、成本口径不含维护与人力；RSI Eval 无实测数据、只覆盖 agent/基准评测；注释对照实验只有一个模型、两个任务、每分支三次运行，只能排除大效应；行为等价性验收只有一条推文转述的三条规则，无命令、无配置、无失败案例；earshot 只有一条推文片段，仓库内容、评测指标与适用条件未获取；Scope 原文只有流程与入口，没有命令级配置，Azure Cosmos DB 案例是特定产品场景，不能当通用排名。十个做法都需要在自己的任务上验证后再推广。
 
 ## 依据的调研
 
@@ -642,3 +448,4 @@ A 组（第 1–7 步）先建评测，A 组续（第 8–11 步）给这套评�
 - [I Deleted 168,000 Lines of Comments. My AI Agent Didn't Notice](../research/radar/2026-10-15/3441-i-deleted-168-000-lines-of-comments-my-ai-agent-di.md)：值得一试，照做这篇的验证方法：任何“改动上下文对 AI 产出有没有影响”的对比，都要同一任务在两份代码库上各跑多次、加隐藏测试、盲评打分，别用单次结果下结论；至于“注释对 agent 无用”这个结论本身，只能当作不必为 agent 特意写注释的初步依据。理由是作者给出了完整的对比数据（两个任务、每分支三次、盲评+隐藏测试），但样本只有一个模型、两个任务，只能排除大效应。
 - [@yupi996: 来感受一下 Claude Code 官方插件，验收 AI 重写的老代码有多严！](../research/radar/2026-10-15/3739-claude-code-ai.md)：值得一试，可以小范围照它的三步验收法做：先对老代码跑逐字节输出对比，再自造至少 10 个新输入继续比，最后故意改坏一行新代码确认测试会变红；理由是这三条是可直接落地的验收判据，但原文只是推文转述，没有给出插件安装、命令、配置和失败案例，需要自己搭对比环境。
 - [@LexnLin: Forge 还会将生成的声音与真实录音进行比较，因为单纯的盲测可能会产生误导。](../research/radar/2026-10-16/3998-forge.md)：值得一试，可以小范围试：在 Claude Code 里按原文给出的一条命令接入 earshot，验证“让编码代理自己听声音、并把生成结果与真实录音对照”这条评测回路是否跑得通；理由是有可直接复制的接入命令，且“用真实参考对照、而不是只做盲测”这一点可迁移到其他效果验证场景。但原文只是推文片段，仓库内容、评测指标和适用条件都未给出，暂不宜作为手册的成型方法，只能作为待验证的试用条目。
+- [Introducing Scope: Open-source evaluation for AI coding agents](../research/radar/2026-10-23/6015-introducing-scope-open-source-evaluation-for-ai-co.md)：值得一试，建议小范围试用：选一个真实 SDK/CLI 任务，按 Scope 的闭环跑基线、基于 trace 改一处文档或工具、再用同一标准复跑，以 criteria 级成功率和反复失败类型判断收益。暂不直接全面采用，因为原文只给流程和入口，没有命令级配置，且平台需自部署并自行接入模型与智能体提供方。
