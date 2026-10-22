@@ -1,10 +1,10 @@
-# 在重建陌生系统前，让 agent 交出可核验的证据与交接规格
+# 搞懂陌生系统并重建：先取证、再推导、用验收器判对错
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：当你要重建一个没有源码或只有 Web 界面的系统时，让 agent 不只“看懂”，而是产出带证据、可校验、能交接给编码 agent 的规格，并用机器验收挡住语义错误。
-> 先试这一步：先选一个单特性小目标跑通闭环：有现成二进制/JS 包就用做法 B 跑一次静态分析并检查 Evidence/limitations；是 Web 产品就按 RES 的 L1 单特性研究，最后跑 `check-kb` 看知识库是否完整。
-> 最近修订：2026-10-20
+> 解决的问题：当你要搞懂一个陌生系统——没有源码的二进制、前端包、APK、固件、网页，或源码在手但设计意图不明的代码库——并据此重建功能或上手维护时，本手册给出一条可核验的流程：先取证，再推导，最后用机器或证据验收，避免把 agent 的合理猜测当结论。
+> 先试这一步：先拿一个最小目标跑通一次“证据→结论→验收”闭环：源码在手就用 /rederive 回答 5–10 个设计问题，没有源码就跑一次静态分析拿到 Evidence 与 limitations。
+> 最近修订：2026-10-22
 
 ## 解决什么问题
 
@@ -17,6 +17,8 @@ REA 给出的是一条可以照做的主线：**Decompile（反编译取回可�
 **REA-Reconstruction-Companion** 补的是“拿到证据之后”这一段：把证据转成可执行的规格、架构、实现计划和验证流程，作用范围由你指定（整个应用、一个功能、一个函数、一个接口或一种数据格式）。它与 REA 在同一任务内同时生效，不是第二个后台 agent，也不含 REA 本体。
 
 **RES（Reverse Engineering SaaS）** 补的是另一类目标：当你要研究的不是二进制，而是一个正在运行的 Web 产品/SaaS，agent 可以用真实浏览器在你控制的试用账号里逐屏研究，把屏幕与状态、业务规则、数据模型、API 形状、设计 token、上线障碍写成磁盘上的结构化知识库，最后产出人读的 `REPORT.html` 与交给编码智能体的交接 zip。它把“先摸清一个陌生系统，再产出别人能照着重建的结构化知识”拆成可执行、可校验、可交接的七阶段流程；但只适用于 Web 产品（需要 DOM 和网络），二进制、Electron 内部、桌面/移动应用仍用 REA。
+
+**rederive** 补的是另一类“搞懂”：源码在手，但设计意图、约束和搭建顺序不清楚，让 agent 直接讲解容易变成记忆 agent 的说法。rederive 把 AI 放在“只提问、不解释”的位置，用后台 agent 读代码、import 关系和设计变更提交，生成 5–10 个按系统搭建顺序排列的问题，逼你从第一性原理重新推导；`.rederive/map.md` 存问题、约束和真实设计，`.rederive/log.md` 记录你卡住和独立推导的地方。它不产出可机器验收的结论，只有 README 宣传、没有效果数据，适合小范围试用，不适合替代 REA/Oracle/Companion/RES 的取证与验收。
 
 注意 REA 的边界：这是一个 agent + MCP 的逆向调查流程，不是通用工作方法；作者明确不声称恢复原始源码，也不自动克隆应用。做法 E 的字节比对也有边界：反编译天然有 ground truth 是因为保留原始二进制与原始编译器，大多数工作流没有这种奢侈条件。RES 的边界同样明确：需要你自己拥有或被授权研究的账号，很多产品条款禁止逆向工程或竞品用途，用前要自行确认；它产出的是行为等价的设计与规则，不是代码，也明确禁止复制素材。
 
@@ -54,6 +56,10 @@ REA 给出的是一条可以照做的主线：**Decompile（反编译取回可�
 - 没有可控账号，或产品条款/司法辖区不允许逆向工程、竞品研究。
 - 想复制素材或直接产出代码：RES 产出行为等价的设计与规则，复制素材被明确禁止。
 - 把它当成熟平台：版本 0.4.0，32 stars，小规模早期项目，方法仍在逐版本补漏；安全承诺与“可整夜跑”目前只有作者自述和设计文档，没有第三方复现。
+
+**rederive 适用**：新人上手、陌生代码库学习、理解设计决策；需要 `git`、`bash`、`python3`；需要支持 Skill 的编码 Agent；目标仓库可在本地打开，或可通过 URL 克隆；使用者愿意用自然语言回答并遵守“不提前打开 map”的约束。
+
+**rederive 不适用**：需要快速直接答案的排障或紧急修改；原文没有说明大型仓库、多语言仓库、权限受限仓库上的表现；只有 README 宣传，没有用户研究、学习效果对比、准确率、耗时或失败案例；它只提问、不解释，目标是理解推导而非记忆 agent 说法。README 声称兼容 Claude Code、Codex、Cursor、Gemini CLI、GitHub Copilot、opencode、Windsurf、Amp、Goose 等，但只有 README，且 GitHub Copilot 在清单中状态为 drop，需自测。
 
 REA 的分析在本地运行，不上传到托管分析服务。
 
@@ -93,6 +99,15 @@ REA 的分析在本地运行，不上传到托管分析服务。
 - 选定 L1–L4 授权级别（见做法 G 第 40 步）。
 - 产品的公开文档、API 参考、定价、集成清单和条款（用 web fetch 读取）。
 - 明确写入范围；所有级别一律禁止发消息或邀请、指派或 @ 他人、碰账单、创建账号、输入密码；自动保存、已读回执、关闭横幅、持久的视图变更都算“写”。
+
+**做法 H / rederive 侧**：
+
+- 本机有 `git`、`bash`、`python3`。
+- 已安装至少一个支持 Skill 的编码 Agent。
+- 目标代码库可在本地打开，或可通过 URL 克隆。
+- 能运行 `npx`；手工安装路线需要 `git`。
+- 愿意用自然语言回答；遵守“会话完成前不打开 `.rederive/map.md`”的约束。
+- README 称所有内容留在本机，`.rederive/` 会被加入仓库的本地 git exclude 列表，不会出现在提交中；rederive 不发送 telemetry。以上均为作者说明，未见第三方复现。
 
 ## 操作步骤
 
@@ -517,11 +532,59 @@ Continue the Pipedrive study.
 
 47. 安全与法律核对（不能跳过）。前提：用前确认产品条款与司法辖区是否允许逆向工程/竞品研究。原文明确不提供法律建议：工具只记录相关条款、按行为重建而不复制素材、并把法律问题标记给法务。预期结果：你明确知道这次研究的授权级别、可写范围、退出与还原方式；不确定就停。
 
+### 做法 H：源码在手但设计意图不明时，让 agent 只提问、你重新推导设计
+
+前提：本机有 `git`、`bash`、`python3`；已装至少一个支持 Skill 的编码 Agent；目标仓库可在本地打开或可通过 URL 克隆。差异：做法 A–G 重点在取证、重建与验收；做法 H 只解决“源码已有，但设计意图和搭建顺序不清楚”的学习型任务。它不产出代码，也不提供机器验收，不要用它替代做法 E/F/G。
+
+48. 准备环境和目标仓库。前提：本机有 `git`、`bash`、`python3`；已安装至少一个支持 Skill 的编码 Agent；目标代码库可在本地打开，或可通过 URL 克隆。预期结果：你有一个明确要学的仓库，并知道它是自己的仓库还是别人的仓库。
+
+49. 在项目目录安装 Skill。前提：能运行 `npx`。预期结果：Skill 被放进项目里找到的每个 Agent 文件夹；若要对所有项目安装，在命令后加 `-g`。
+
+```bash
+npx skills add EricJujianZou/rederive
+```
+
+Claude Code 插件方式：
+
+```text
+/plugin marketplace add EricJujianZou/rederive
+/plugin install rederive@rederive
+```
+
+手工克隆后复制：
+
+```bash
+git clone https://github.com/EricJujianZou/rederive
+cp -r rederive/skills/rederive ~/.agents/skills/
+```
+
+50. 启动一次推导会话。前提：已经在目标仓库上下文。按目标选择命令：
+
+```text
+/rederive
+/rederive ~/code/myapp
+/rederive https://github.com/expressjs/express
+```
+
+第一条用于当前仓库，第二条用于本地仓库，第三条会把 URL 仓库克隆到当前文件夹。预期结果：会话启动，Agent 开始提问；自己的仓库会被问为什么做它，别人的仓库会由 Agent 先推断原始问题，再问你将如何解决。
+
+51. 从项目为什么存在开始回答。前提：愿意用自然语言交互。预期结果：你开始用自己的语言描述问题、约束和设计选择，而不是让 Agent 直接讲解代码。
+
+52. 在回答期间让后台 Agent 建图。前提：不要提前打开答案。Agent 会读代码、文件间 import 关系和设计发生变化的提交；它不信任 commit message，因此用 AI 少量大提交构建的仓库也可用。图会写入 `.rederive/map.md`，包含 5 到 10 个按系统搭建顺序排列的问题、各自的约束和真实设计。完成前不要打开这个文件。预期结果：会话结束时你得到一张按搭建顺序排列的设计问题图，而不是一份 agent 讲解稿。
+
+53. 卡住时要求缩小问题。前提：先自己尝试。README 说它会将问题收窄成几种可选方案；连续两次答错后，它会提出帮你勾勒问题。你可以用自然语言说卡住了、跳过一个问题或重新开始。预期结果：你继续独立推导，而不是直接要答案。
+
+54. 结束后读记录并复盘。前提：会话完成后再看。`.rederive/log.md` 记录你在哪里卡住、哪些是你自己推导出来的；读它来决定后续练什么。预期结果：你知道自己的理解缺口，而不是只记住 agent 的说法。
+
+55. 隐私与版本控制。前提：使用本地 Agent 环境。README 称所有内容留在本机，`.rederive/` 会被加入仓库的本地 git exclude 列表，不会出现在提交中；rederive 不发送 telemetry。预期结果：本地文件保留，但不会自动进入提交；不要假设它会团队共享。
+
+56. 与其他做法配合。前提：你已经用 rederive 重新推导出设计。若还要重建或验证，继续用做法 A–F 取证/接规格/加验收器；若目标是运行中的 Web 产品/SaaS，用做法 G；rederive 本身不产出可机器验收的结论，也不直接实现或验证重建。预期结果：学习归学习，取证、实现和验收各有独立闭环。
+
 ### 怎么选
 
 原文对照表：想让 agent 自己调查并实现特性 → 做法 A；想在终端里查/反编译某个部分 → `rea analyze` / `rea decompile`；想校验、规范化、比较 Evidence → `rea evidence-import` / `evidence-export` / `compare`；想不执行应用就映射本地 JS/Electron 应用 → `rea analyze PATH` 或 `analyze-javascript-application`；想复用不可变分析结果 → 给深层分析命令传 `--snapshot /path/to/analysis.json`；想导入历史源码 → `rea import-reference-source`；想抓取或比较受控进程行为 → 受控浏览器场景 / V8 Inspector。
 
-再按本次合并补充：单点搞懂并重建一个功能，先用做法 A；不想配 MCP/分析引擎，先用做法 B；只想要 agent 指令，做法 C；要 CLI、诊断、快照、证据、浏览器/V8 观察，做法 D；要长期多 agent 反编译且存在 ground truth，做法 E；要把 REA 证据接成规格、路线图、实现计划与验证流程，做法 F；目标是运行中的 Web 产品/SaaS，且你有可控试用账号，用做法 G；如果目标是二进制、Electron 内部、桌面/移动应用，回到 REA（做法 A–F），不要用 RES。
+再按本次合并补充：单点搞懂并重建一个功能，先用做法 A；不想配 MCP/分析引擎，先用做法 B；只想要 agent 指令，做法 C；要 CLI、诊断、快照、证据、浏览器/V8 观察，做法 D；要长期多 agent 反编译且存在 ground truth，做法 E；要把 REA 证据接成规格、路线图、实现计划与验证流程，做法 F；目标是运行中的 Web 产品/SaaS，且你有可控试用账号，用做法 G；源码在手、目标是学习/设计理解/新人上手，用做法 H；需要快速排障或紧急修改不要用 H；如果目标是二进制、Electron 内部、桌面/移动应用，回到 REA（做法 A–F），不要用 RES。rederive 不替代取证和验收：它只帮你重新推导设计，不产出可机器验收的结论，也不直接实现或验证重建。
 
 REA 的 Evidence/limitations 与做法 E 的字节级 PASS/FAIL 不冲突但不等价：能比对时，把做法 E 的验收器作为提交门；不能比对时，至少按 REA 口径标 unknown，或用做法 F 的“与证据挂钩的验收标准”兜底。RES 的 `check-kb` 和证据标签是“知识库完整性 + 可追溯”级别的校验，不等同于机器 PASS/FAIL；它能防止无标签结论和丢失证据，但不能证明重建后的行为与目标一致，后者要靠 parity tests 或 Oracle。
 
@@ -545,6 +608,8 @@ REA 的 Evidence/limitations 与做法 E 的字节级 PASS/FAIL 不冲突但不�
   2. 走 L1：独立 browser profile + 试用账号，只研究一个特性，不让它问，要求它把需人工事项写进 `STATUS.md`。
   3. 结束时跑 `check-kb`，看知识库是否完整、证据标签是否齐全、ledger 是否清点干净；再看交接 zip 能否让编码智能体从 `BUILD.md` 开始开工。
   4. 通过后再考虑扩大到一个完整产品；原文的端到端案例是 ClickUp（L2，55 规则 / 19 组件 / 14 障碍）和 Pipedrive（L3，46 规则 / 8 组件 / 15 障碍），均为作者自述、仓库 `examples/` 可查，未第三方复现。
+- **做法 H / rederive 的可观察指标**：完成一次会话所需时间；卡住次数；连续答错后需要提示的次数；结束后不看资料解释系统设计要点的准确度；能否预测某个设计变更的影响；一周后是否还能复述核心设计决策。多人试用时，可让新人在同仓库分别用直接讲解和 rederive，再比较上手任务完成时间和提问质量。
+- **做法 H 最小试用**：选一个你熟悉但新人陌生的仓库，或直接用 README 的 Express 示例；安装后完整跑一次 `/rederive`，完成 5–10 个问题；会话结束前不打开 `.rederive/map.md`，结束后读 `.rederive/log.md`。同时保留基线：同一人先只读 README/文档并让 Agent 直接讲解，记录理解结果；再用 rederive 跑同类仓库。只有出现可重复的理解改善，才考虑扩大到团队；否则保持小范围试。README 没有学习效果数据、对照实验或准确性指标，验证需自行设计。
 - **判定方式**：同一任务做引入 oracle 前后的对照；若通过率明显上升、返工下降，即为改善；若通过率不变但同等质量下 token 成本与所用模型等级下降，也按改善计（这正是原文观察到的主要收益）。
 - **原文数据**：做法 E 项目约 3 个月；token 消耗为作者估算的 600–700B（因为 agent 用畸形命令周期性地把 VM 清空，丢了一批 session log，作者不知道确切数字）；第一月 4 个 agent 完成约 80% 的游戏反编译，游戏能启动、主菜单可见、地图能加载；末期 99% 函数存在、83% 逐字节精确；末期 14 个 Luna 与 2 个 Opus 5.5 agent。RES 每次会话约增加 130 token，运行时约 4600 token（用 `claude plugin details` 测得，作者自述）；版本 0.4.0。材料没有给出成功率、时间节省等任何量化收益数字，本文也不据此做承诺。
 
@@ -583,6 +648,13 @@ REA 的 Evidence/limitations 与做法 E 的字节级 PASS/FAIL 不冲突但不�
 - 交接 zip 里带 `sandbox/`、`log/` 或未脱敏的对象 ID/URL：打包脚本应排除，变更账本要去掉对象 ID、位置和 URL。
 - 以为 RES 安全承诺已被第三方验证：目前只有作者自述和设计文档；“可以整夜跑”同理。
 - 把 RES 当成熟平台：0.4.0、32 stars，方法仍在逐版本补漏；ClickUp 研究暴露的缺口仍挂在 issue #5。
+- rederive：提前打开 `.rederive/map.md`，等于放弃“自己推导”的核心约束。
+- rederive：把它用于排障或紧急修改。它只提问、不解释，目标是理解推导，不是快速直接答案。
+- rederive：期待 agent 直接讲解或给结论；它的设计是只提问，答案来自你的回答。
+- rederive：在大型、多语言或权限受限仓库上未验证就推广；原文没有说明这些场景的表现。
+- rederive：把 README 的兼容列表当已验证；它声称兼容 Claude Code、Codex、Cursor、Gemini CLI、GitHub Copilot、opencode、Windsurf、Amp、Goose 等，但只有 README，且 GitHub Copilot 在清单中状态为 drop，需自测。
+- rederive：忽略 `.rederive/` 是本地 git exclude；不要假设它会进入提交或团队共享。
+- rederive：URL 模式会把仓库克隆到当前文件夹，先确认当前目录和权限，避免污染。
 
 ## 证据与来源
 
@@ -601,6 +673,10 @@ REA 的 Evidence/limitations 与做法 E 的字节级 PASS/FAIL 不冲突但不�
 - RES 部分：来自调研报告 **alextnetto/res**（仓库 README）。安装命令、提示词、七阶段、证据标签、L1–L4、四个脚本、`STATUS.md`、交接 zip、token 数、ClickUp/Pipedrive 案例条数均来自该 README；报告只依据 README，未获取 `SKILL.md`、`references/safety.md`、`references/exploration.md` 等细节文件，也未复现任何一次研究；所有条数、token 数均为原文自述。
 - RES 属于作者主张、需自行核实：安全性承诺（各级别不碰生产、不输密码、不触账单、写入可全部还原）目前只有作者自述和设计文档，没有第三方复现；“可以整夜跑”同理；法律问题作者明确甩锅，不提供法律建议。
 - RES 适用条件与硬限制：只适用于 Web 产品（要 DOM + 网络）；必须有你自己拥有或被授权研究的账号；很多产品条款禁止逆向工程或竞品用途；32 stars，小规模早期项目，方法仍在逐版本补漏；重建产出是行为等价的设计与规则，不是代码，复制素材被明确禁止。
+- 做法 H / rederive：来自调研报告 **EricJujianZou/rederive**（仓库 README）。安装命令、三种启动方式、`.rederive/map.md` 与 `.rederive/log.md` 的机制、后台 Agent 读取代码/import/设计变更提交、Express 会话示例、`.rederive/` 本地 git exclude 与不发送 telemetry 的说明，均来自该 README。
+- 该报告没有给出用户研究、学习效果对比、准确率、耗时或失败案例；40 stars 只是仓库指标，不能证明效果。作者关于“通过推导而非记忆来理解”的主张属于设计理念，尚未被原文数据验证。适用条件主要是学习型、设计理解型任务，且依赖 Agent 对仓库的读取和 Skill 兼容性；对大型仓库、多语言仓库、权限受限仓库或需要直接答案的任务，原文没有说明表现。
+- 调研作者的试用建议：选熟悉但新人陌生的仓库或 Express 示例，完整跑一次 `/rederive`，会话结束前不打开 map，结束后读 log；同时保留“直接讲解”基线。该建议是作者判断，不是实测收益。
+- 兼容性声称与清单状态有张力：README 声称可在 GitHub Copilot 中使用，但清单中 GitHub Copilot 当前状态是 drop；这条线索不足以改变状态，只能说明可能可用，需自测。
 - 材料没有给出成功率、时间节省等任何量化收益数字，本文也不据此做承诺。
 
 ## 依据的调研
@@ -609,3 +685,4 @@ REA 的 Evidence/limitations 与做法 E 的字节级 PASS/FAIL 不冲突但不�
 - [500B Tokens Later: Letting AI Agents Decompile a First-Person Shooter](../research/radar/2026-10-11/2476-500b-tokens-later-letting-ai-agents-decompile-a-fi.md)：值得一试，先给智能体任务配一个「机器可判定的 PASS/FAIL 验收器」，再配合定时重读指令文档和更早的上下文压缩来维持长期自主运行；理由是作者用三个月、约 600–700B token 的实践发现，没有客观验收标准时评审 agent 会被 worker 的注释说服而放行语义错误（第一月代码可读但语义错误），引入字节级比对后 83% 函数达到逐字节一致、连廉价小模型也能胜任。
 - [ShadowSwaps/REA-Reconstruction-Companion](../research/radar/2026-10-16/3893-shadowswaps-rea-reconstruction-companion.md)：值得一试，建议在本地、项目作用域内小范围试装（先 --integration off 并用 --dry-run/--check 确认改动），用它自带的 Pocket Tasks 参考流程加一个真实小目标跑通“证据→需求→实现→验证”闭环；理由是原文给出了可直接复制的安装命令、安装提示词和成套验证机制，但依赖独立的 REA、全部示例均为维护者自写、无独立评测，且本次只拿到 README。
 - [alextnetto/res](../research/radar/2026-10-20/5013-alextnetto-res.md)：值得一试，建议小范围试一次：用 Claude Code 安装 RES 技能，在独立浏览器 profile 的试用账号上只研究一个特性，检查它产出的带证据知识库（含 `check-kb` 校验）和交接 zip 能否直接交给编码智能体开工。理由是原文给出了安装命令、提示词、七阶段流程、证据标注规则、沙箱分级和四个可直接运行的脚本，属于可照做的流程；但适用范围只限 Web 产品、方法仍在 0.4.x 迭代、且需要你自己拥有可研究的账号，因此先试再定。
+- [EricJujianZou/rederive](../research/radar/2026-10-22/5701-ericjujianzou-rederive.md)：值得一试，建议在小范围新人上手或陌生代码库理解中试用：安装后用 /rederive 让 AI 只提问，按 .rederive/map.md 的 5 到 10 个问题重新推导设计，并用 .rederive/log.md 复盘。流程和命令具体可照做，但只有 README 宣传、没有效果数据，因此先试再扩大。
