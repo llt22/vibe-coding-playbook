@@ -60,6 +60,7 @@
 | [herdr-link](skills/herdr-link/SKILL.md) | Herdr 多 Agent 间基于 pane ID 的消息协议 |
 | [ai-tool-radar](skills/ai-tool-radar/SKILL.md) | 扫描和验证开发者社区中值得关注的 AI 与 Agent 工具 |
 | [paseo-senior-advisor](skills/paseo-senior-advisor/SKILL.md) | 在放弃、缩减范围或将未决工程决策交还用户前咨询 Paseo 高级顾问 |
+| [paseo-tidy](skills/paseo-tidy/SKILL.md) | 整理 Paseo 会话：按主线改名、归档、合并及分工作区，附摘要与移动脚本 |
 | [human-writing](skills/human-writing/SKILL.md) | 中文说人话写作、去 AI 味与翻译腔，包含静态检查脚本和回归评测 |
 
 所有 Skill 采用标准 `<skill-name>/SKILL.md` 结构。安装和注册时先阅读
