@@ -1,16 +1,18 @@
-# 让编码 agent 按规格、证据和门禁交付改动
+# 让编码 agent 按可复用工作流干活，并在宣布完成前拿出证据
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：这篇手册解决如何把编码 agent 的重复流程固化成技能与工作流，并用提交门禁、测试自证和项目契约防止「假完成」「假绿」「规则漂移」。
-> 先试这一步：先在单个项目里把一条可判定的硬约束做成 pre-commit 门禁，并在一个小任务上试一次先规格后 TDD 的流程。
-> 最近修订：2026-10-22
+> 解决的问题：解决编码 agent 每次从零写提示、流程漂移、项目约定散落、「做完了」却没有证据、测试被改绿的问题。
+> 先试这一步：先在一个真实项目里只复制 /optimize、项目 CLAUDE.md 和 code-review-specialist 三件套，跑 5 次真实任务并记录返工与误报，再决定是否加 hooks。
+> 最近修订：2026-10-23
 
 ## 解决什么问题
 
-用编码 agent 干活时，一次性对话会在几件事上反复消耗：同一个流程每次重写提示词、上下文质量差导致 agent 跑偏、项目约定散落在多个提示文件里会漂移、「做完了」却没有证据、绿色测试套件可能是代理改测试改出来的假绿、以及「这次怎么做对的」要靠人手工整理成规则。本手册以 Claude Code 为主线，另一条可试路线是自托管的 MyAgent，再加一条叠加在已用 harness 上的 Ryugi 工作流；同时保留提交门禁、测试常驻约束，以及把 AGENTS.md 工程化成可 lint 的项目契约。文件大小门禁用预提交钩子检查暂存文件，按 bytes/4 估算 tokens，单文件超过 5,000 就阻止提交，并在失败输出里给出拆分说明。
+用编码 agent 干活时，一次性对话会在几件事上反复消耗：同一个流程每次重写提示词、上下文质量差导致 agent 跑偏、项目约定散落在多个提示文件里会漂移、「做完了」却没有证据、绿色测试套件可能是代理改测试改出来的假绿、以及「这次怎么做对的」要靠人手工整理成规则。
 
-这篇手册解决的是：把重复的提示词和流程固化成技能、钩子和子智能体，用固定工作流控制「先探索、再计划、后写代码、最后提交」的节奏，也提供「先批准规格、再逐任务 TDD、最后 UI 验收」的较重路线；把可判定的硬约束从「写在提示文件里靠提醒」搬到「提交时强制门禁」，并用五段式 AGENTS.md + 零依赖 linter + SessionStart 钩子让项目契约可检查、可复用、能在会话开始时自检。同时保留三条证据较弱的试验路线：MyAgent 的「只读计划审批 + 反馈自动沉淀成技能」、Ryugi 的「规格前置 + TDD + UI 验收」、以及「绝不改测试凑绿 + 新测试必须在空实现下失败」的常驻规则。
+本手册以 Claude Code 为主线，把重复的提示词和流程固化成技能、钩子和子智能体，用固定工作流控制「先探索、再计划、后写代码、最后提交」的节奏；把可判定的硬约束从「写在提示文件里靠提醒」搬到「提交时强制门禁」；并用五段式 AGENTS.md + 零依赖 linter + SessionStart 钩子让项目契约可检查、可在会话开始时自检。
+
+另有三条证据较弱的试验路线：MyAgent 的「只读计划审批 + 反馈自动沉淀成技能」、Ryugi 的「规格前置 + TDD + UI 验收」、以及 claude-howto 的「教程层最小三件套」。三条都只建议小范围试，不直接全员采用。提交门禁、测试常驻约束、文件大小门禁和 AGENTS.md 工程化仍按原有步骤执行。
 
 ## 适用与不适用
 
@@ -61,6 +63,12 @@
 - 你愿意用 Python 3.9+ 跑一个零依赖 linter，并接受把 lint 接进 CI。
 - 你用 Claude Code，想让会话开始或恢复时自动跑 linter、装依赖、跑测试，把结果送进上下文。
 
+**适用于 claude-howto 教程层（本次新增）**
+
+- 你已经在用 Claude Code 2.1+，想找一个按文件取用的模板和配置参考，而不是引入新 runtime。
+- 你想先验证一个 slash command、一个项目 CLAUDE.md 和一个 code-review-specialist skill 是否值得进项目。
+- 你能接受先只做两周、单项目、三类任务的小范围试用。
+
 **不适用（原有）**
 
 - 只是问一次性问题，不值得固化成 skill。
@@ -108,7 +116,14 @@
 - 你想照 README 手写 Cursor / Copilot 的配置：原文只把它们列在「读 AGENTS.md 的工具名单」里，没有配置步骤，也没有实测。
 - 你不接受 Python 3.9+，或者不想维护一份会随项目演进的契约。
 
-**范围说明**：原有调研来源在子智能体、动态工作流、Agent Teams、MCP 四节被截断，本手册对这四项只写「什么时候用 / 什么时候跳过」的判定，不给配置步骤。提交门禁做法 A 的来源只有一段第一人称口述，没有代码、没有匹配模式、没有量化数据；第 11 步会逐条标出哪些是实现细节、哪些只是作者主张。文件大小门禁用到的来源是一条推文，只给出 5,000 令牌阈值、bytes/4 估算、只查暂存文件、忽略锁文件和生成文件、错误信息给拆分说明；没有完整钩子代码、框架配置或效果数据，本手册只把它当低成本试验，不当作已验证结论。MyAgent 材料只有仓库 README，未核对源代码，且它的「怎么试、怎么验证」一节在材料里被截断。测试规则材料只有一条推文，只完整给出 7 条中的第 1 条。项目契约材料来自 AntoGA/agents-contract 的 README，约 40 stars、单人维护、俄文，A/B 日期写作 18.10.2026，无法核实，可能是笔误。Ryugi 材料只有 README，47 stars，未验证实际安装后的行为；它是 Superpowers v7.0.0 的 fork，原文没有量化效果数据，以下相关步骤都当小范围试验。
+**不适用（claude-howto 教程层，本次新增）**
+
+- 你想把它当新工具或完整工作流一键安装：它只是 Claude Code 的教程/模板层，README 没有展开每个模板的完整提示词。
+- 你希望先看到生产力、缺陷率或 ROI 数据：README 没有基准测试、前后对比或客户案例。
+- 你打算一次装完 10 个模块：应先只装三件套，两周后再决定是否加 hooks、MCP 或插件。
+- 你不能提供 MCP 所需凭据，或不能接受 hooks 脚本以本地权限执行。
+
+**范围说明**：原有调研来源在子智能体、动态工作流、Agent Teams、MCP 四节被截断，本手册对这四项只写「什么时候用 / 什么时候跳过」的判定，不给配置步骤。提交门禁做法 A 的来源只有一段第一人称口述，没有代码、没有匹配模式、没有量化数据。文件大小门禁用到的来源是一条推文，只给出 5,000 令牌阈值、bytes/4 估算、只查暂存文件、忽略锁文件和生成文件、错误信息给拆分说明，没有完整钩子代码、框架配置或效果数据。MyAgent 材料只有仓库 README，未核对源代码，且「怎么试、怎么验证」一节被截断。测试规则材料只有一条推文，只完整给出 7 条中的第 1 条。项目契约材料来自 AntoGA/agents-contract 的 README，约 40 stars、单人维护、俄文，A/B 日期写作 18.10.2026，无法核实，可能是笔误。Ryugi 材料只有 README，47 stars，未验证实际安装后的行为；它是 Superpowers v7.0.0 的 fork，原文没有量化效果数据。claude-howto 材料只有 README，模板正文未展开，效果主张没有数据。
 
 ## 前置条件
 
@@ -160,6 +175,14 @@
 - 钩子能取到本次暂存文件列表。
 - 你能维护排除列表，至少排除锁文件和代码生成文件。
 - 你接受 bytes/4 只是估算，不是精确 token 计数。
+
+**claude-howto 教程层（本次新增）**
+
+- Claude Code 2.1+；README 版本标注为 v2.1.302，但实际用前核对当前 Claude Code 版本、hook 事件和模型兼容性。
+- 本地有一个项目目录；下文用 /path/to/your-project 代替实际路径。
+- MCP 步骤需要相应凭据，例如 GitHub PAT 和 DATABASE_URL；不要硬编码凭据，不要提交敏感数据。
+- hooks 脚本按 README 是 shell 脚本，需要可执行权限；注册 hooks 要改 settings.json，已有文件时手动合并，不要覆盖。
+- 插件以本地目录方式加载；README 明确说仓库没有 marketplace，/plugin install 不适用。
 
 ## 操作步骤
 
@@ -215,7 +238,7 @@ find and fix the failing test in src/api.test.ts
 /init
 ```
 
-生成项目级指令文件，Claude 每次会话都会读。原文的关键提醒：CLAUDE.md 会成为 prompt 的一部分，所以要像维护常用提示词一样反复迭代，不要一次性堆一大堆内容就不再管。
+生成项目级指令文件，Claude 每次会话都会读。CLAUDE.md 会成为 prompt 的一部分，所以要像维护常用提示词一样反复迭代，不要一次性堆一大堆内容就不再管。
 
 预期结果：项目约定写进了 CLAUDE.md，而且你会隔一段时间回来改它。
 
@@ -246,30 +269,33 @@ find and fix the failing test in src/api.test.ts
 - xhigh：长时间自主 agent 会话。
 - max：只用于架构、微妙 bug、安全评审这类真难的问题，且仅限单会话。
 
-API 认识 5 个等级（low 到 max，默认值取决于模型），Claude Code 在其上加了 ultracode 开关。原文还推荐一个模式：用 Opus 规划、用 Sonnet 执行。
-
 预期结果：你用 /effort 能在自己环境里看到当前等级，而不是照抄原报告里那串按模型分的默认值。
 
-### 6. 用「五个扩展点」对照表决定你要建什么
+### 6. 用「任务形态」对照表决定你要建什么
 
-先判断该用哪个，再动手建。原文的对照表：
+先判断该用哪个，再动手建。多数打磨过的配置会用到其中 2–3 个。前五行走原 Claude Code 教程；后五行走 claude-howto README 的 Feature Comparison，模板正文未展开，先用小任务验证。
 
-| 工具 | 什么时候用 | 什么时候跳过 | 存放位置 |
+| 形态 | 什么时候用 | 什么时候跳过 | 存放/做法 |
 |---|---|---|---|
 | Skills（slash 命令） | 同一个 prompt 或流程重复 ≥3 次 | 一次性任务 | .claude/commands/*.md |
 | Hooks | 想让代码在工具调用、会话开始等时刻自动跑，含提交时门禁 | 只想手动触发 | .claude/settings.json |
 | Subagents | 子任务大到需要独立的隔离上下文 | 任务在主会话里放得下 | .claude/agents/*.md |
 | Workflows | 需要的智能体数量超过一次对话能协调的量 | 两三个子智能体就够 | .claude/workflows/*.js |
 | MCP servers | 需要 Claude 调用外部工具 | 数据都在本地文件里 | 按项目配置 |
+| Memory | 跨会话的团队/项目规范 | 只影响本轮会话 | 项目 CLAUDE.md、目录级或个人级 CLAUDE.md |
+| Plugins | 需要成套流程，且愿意用本地目录加载 | 单个 skill 就够 | claude --plugin-dir ./插件目录 |
+| Planning Mode | 复杂实现、需要先出计划 | 小改动、直接可做 | 会话内先规划；对应第 7 步做法 A 或 MyAgent 的 /plan |
+| Background Tasks | 长运行任务，不想一直盯着 | 短任务 | 按 README 的背景任务用法，原文未展开细节 |
+| Checkpoints | 高风险试验，想随时回退 | 已有干净 git 分支且不需要对话回退 | /rewind 选择恢复代码、对话或两者 |
 
-原文强调这五个可以组合，多数打磨过的配置会用到其中 2–3 个。预期结果：你说得出自己这次要用哪 2–3 个，以及另外几个为什么跳过。
+预期结果：你说得出自己这次要用哪 2–3 个，以及另外几个为什么跳过。
 
 ### 7. 三条可直接照做的工作流
 
 **做法 A：Explore → Plan → Code → Commit**（什么时候选：复杂问题）
 
 1. Explore：读相关文件、图片、URL，用子智能体做验证。先不要写代码。
-2. Plan：让 Claude 出计划。要更深推理就在这句 prompt 里加 ultrathink。原文明确：Claude Code 只识别 ultrathink，think、think hard、think harder 会被当普通提示文本透传。计划可选保存下来。
+2. Plan：让 Claude 出计划。要更深推理就在这句 prompt 里加 ultrathink。Claude Code 只识别 ultrathink，think、think hard、think harder 会被当普通提示文本透传。
 3. Code：实现方案，边做边判断合理性。
 4. Commit：提交、开 PR、更新 README/changelog。
 
@@ -349,6 +375,8 @@ claude       # then type: /analyze
 
 Hooks 是 Claude Code 生命周期上的可编程检查点，脚本检查拟执行的动作并返回 allow / deny / modify。原文「最先说服团队的三类用途」中，本次抓取到的完整两条是：保存后自动格式化；拦截敏感路径。第三类用途来自原有调研：提交时门禁，在 commit 时刻检查 diff，发现违反架构约定的写法就让提交失败，并把纠正指令写进失败输出。文件大小门禁也做成提交时的门禁，做法见第 11 步做法 C。
 
+claude-howto README 补充了 hooks 的范围：5 种类型、33 个事件、4 个类别，包括 PreToolUse、PostToolUse、PostToolUseFailure、SessionStart、Stop、TaskCompleted、TaskCreated、FileChanged、PreCompact、PostCompact、PreModelSwitch、Notification 等，可按事件或状态自动执行命令/HTTP/prompt/mcp_tool/agent。这些是 README 声称，未逐一核对；不要一次全配，先只启用一个低风险 hook。
+
 预期结果：格式化不再靠人提醒；.env 这类路径即使 Claude 想动也动不了；第 11 步配好后，违反硬约束的提交进不去。
 
 ### 11. 把一条硬约束做成提交门禁（做法 A / 做法 B / 做法 C）
@@ -403,8 +431,6 @@ tokens = bytes / 4
 5. 在错误信息中写清该文件应如何拆分。原文没有给出提示词模板，你要自己写明可执行的拆分建议，例如按职责拆成多个小文件后再提交。
 
 6. 先只观察这道门禁，不动其他提交规范。重点看误报：正常文件是否被频繁拦截；代理收到拆分说明后是否减少单文件过大问题。二进制文件、超大文件、不同编码如何处理，原文没有说明，需要你先定规则或排除。
-
-预期结果：超限的暂存文件被阻止提交；错误信息能让提交者或代理知道怎么拆；锁文件和生成文件不会被误拦。
 
 **怎么选**
 
@@ -734,7 +760,7 @@ Let's make a react todo list
 
 3. 进入 brainstorming。让 agent 先问「你真正想做什么、为什么」，一次一个问题；当工作跨模块、涉及架构，或你要求 upfront design 时，问题转入文档，按轮次回答。视觉方案在 Artboard 上一轮轮给出选项；小改动在聊天中确认，项目则产出 builder 可据此实现的设计文档。预期结果：你在写代码前先对齐需求和视觉方向。
 
-4. 批准规格并选择执行方式。批准 spec 后，executing-specs 激活。若你明确说 `just code it`，则跳过该流程直接写代码。预期结果：默认路径是先有已批准 spec，再进入实现；只有你明确要求时才直接写代码。
+4. 批准规格并选择执行方式。批准 spec 后，executing-specs 激活。若你明确说 just code it，则跳过该流程直接写代码。预期结果：默认路径是先有已批准 spec，再进入实现；只有你明确要求时才直接写代码。
 
 5. 执行规格。agent 把 spec 切成任务，每个任务在 TDD 下实现；用 ledger 跨 compaction 记录每个判断（ruling）；完成后做一次 fresh review，然后停下并报告如何落地。默认 squash，也支持 rebase、PR、keep；原文明确 never a merge commit。预期结果：每个任务有实现记录，最后只有一次全新复审，并给出落地方式。
 
@@ -766,6 +792,155 @@ npx ryugi-artifacts --no-open
 
 预期结果：小任务走完一条完整链路后，你手上有已批准 spec、每任务红绿记录、一次 fresh review、UI 验收记录和落地方式报告；如果没有这些证据，先别扩大使用范围。
 
+### 19. 用 claude-howto 做两周单项目最小试用（可选教程层，本次新增）
+
+来源背景：luongnv89/claude-howto 是一个 MIT 许可的 Claude Code 教程仓库，README 声称包含 10 个模块，覆盖 slash commands、memory、skills、subagents、MCP、hooks、plugins、checkpoints、advanced features 和 CLI，并提供可复制的配置/模板与 15 分钟、1 小时和 11–13 小时学习路径。它不是新工具，而是把 Claude Code 已有功能组合成工作流的教程层。README 中的「90% 的能力没用上」「10x productivity」「production-ready templates」「Trusted by Developers」属于作者主张，没有基准测试、前后对比或客户案例数据。材料只读到 README，模板正文未展开。
+
+前提：Claude Code 2.1+；本地有一个项目目录；下文用 /path/to/your-project 代替实际路径；MCP 步骤需要相应凭据；hooks 脚本按 README 是 shell 脚本，需可执行权限；已有 settings.json 时手动合并，不要覆盖。
+
+**做法 A：只装最小三件套（推荐起点）**（什么时候选：你第一次试这个教程层，想先验证模板质量）
+
+1. 克隆指南仓库。
+
+```bash
+git clone https://github.com/luongnv89/claude-howto.git
+cd claude-howto
+```
+
+2. 复制一个 slash command 到项目，建立最小闭环。
+
+```bash
+mkdir -p /path/to/your-project/.claude/commands
+cp 01-slash-commands/optimize.md /path/to/your-project/.claude/commands/
+```
+
+在 Claude Code 中输入：
+
+```text
+/optimize
+```
+
+3. 放入项目记忆，让后续会话自动加载团队/项目规范。
+
+```bash
+cp 02-memory/project-CLAUDE.md /path/to/your-project/CLAUDE.md
+```
+
+需要目录级或个人级记忆时：
+
+```bash
+cp 02-memory/directory-api-CLAUDE.md /path/to/project/src/api/CLAUDE.md
+cp 02-memory/personal-CLAUDE.md ~/.claude/CLAUDE.md
+```
+
+4. 安装一个可自动调用的 skill。
+
+```bash
+cp -r 03-skills/code-review-specialist ~/.claude/skills/
+```
+
+或装到项目内：
+
+```bash
+cp -r 03-skills/code-review-specialist /path/to/project/.claude/skills/
+```
+
+5. 用 /optimize 和代码审查任务跑 5 次真实工作。每次记录：耗时、返工次数、审查发现的有效问题数/误报数、测试通过率。预期结果：你能判断这三个模板是否值得留在项目里；如果没有明显收益或误报太多，先不要加 hooks/MCP。
+
+**做法 B：再加一个低风险 hook**（什么时候选：做法 A 稳定，你想试自动格式化与安全扫描）
+
+1. 复制 hooks 脚本并赋权：
+
+```bash
+mkdir -p ~/.claude/hooks
+cp 06-hooks/*.sh ~/.claude/hooks/
+chmod +x ~/.claude/hooks/*.sh
+```
+
+2. 在 ~/.claude/settings.json 注册。先只启用 format-code.sh，确认不会破坏文件；再加 security-scan.sh，记录每次扫描耗时（原文此处截断，不要编造指标）。README 给出的配置如下，注意已有 settings.json 时手动合并，不要覆盖：
+
+```json
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write",
+        "hooks": [
+          { "type": "command", "command": "~/.claude/hooks/format-code.sh" },
+          { "type": "command", "command": "~/.claude/hooks/security-scan.sh" }
+        ]
+      }
+    ]
+  }
+}
+```
+
+这表示每次 Write 后自动格式化并做安全扫描。预期结果：格式化不再靠人提醒；安全扫描没有产生你无法处理的误报；现有文件没有被破坏。
+
+**做法 C：用 checkpoints、CLI 和自评做试验与验证**（什么时候选：你想回退试验、把 Claude Code 放进脚本/CI，或找知识缺口）
+
+1. 用 /rewind 做安全试验。Claude Code 中执行：
+
+```text
+/rewind
+```
+
+然后按 README 的六个选项选择：恢复代码和对话、只恢复对话、只恢复代码、从此处总结、总结到此处、取消。预期结果：你能在不污染主分支的情况下比较不同实现方案。注意：checkpoints 不是 git 的替代。
+
+2. 用 headless/CLI 方式把 Claude Code 放进脚本或 CI：
+
+```bash
+claude -p "Run tests and generate report"
+cat error.log | claude -p "explain this error"
+claude -p --output-format json "list functions"
+claude -r "feature-auth" "continue implementation"
+```
+
+预期结果：命令能在无交互环境下返回结果；需要机器可读输出时用 --output-format json。
+
+3. 用内置自评和测验找差距：
+
+```text
+/self-assessment
+/lesson-quiz hooks
+```
+
+预期结果：你知道自己缺哪一块，而不是把「看完 README」当掌握。注意：这是学习自评，不是生产力或效果证明。
+
+**做法 D：需要外部数据时再配 MCP（可选）**
+
+前提：有 GitHub PAT；数据库示例需要 DATABASE_URL。不要硬编码凭据，不要提交敏感数据。
+
+```bash
+export DATABASE_URL="postgresql://..."
+claude mcp add --transport http github https://api.githubcopilot.com/mcp/ --header "Authorization: Bearer YOUR_GITHUB_PAT"
+```
+
+README 也允许手动写入项目 .mcp.json，示例在 05-mcp/。预期结果：Claude 能调用外部工具；如果只是本地文件任务，跳过 MCP。
+
+**按需加载成套插件**
+
+README 明确说仓库没有 marketplace，/plugin install 不适用。要用成套流程时，以本地插件目录方式加载：
+
+```bash
+claude --plugin-dir ./07-plugins/pr-review
+claude --plugin-dir ./07-plugins/devops-automation
+claude --plugin-dir ./07-plugins/documentation
+```
+
+预期结果：插件只在这次会话加载；不要把 /plugin install 当成这个仓库的安装方式。
+
+**怎么选**
+
+- 第一次试 → 做法 A，只装三件套，跑两周。
+- A 稳定且你需要自动格式化/安全扫描 → 做法 B，先 format-code.sh 再加 security-scan.sh。
+- 需要脚本/CI、回退试验或自评 → 做法 C。
+- 需要外部数据 → 做法 D；否则跳过 MCP。
+- 需要成套流程且接受本地目录加载 → 按需用 --plugin-dir，不要用 /plugin install。
+- 与第 8 步的关系：第 8 步是从另一个示例仓库按文件拷贝命令、agents、hooks；第 19 步是教程层的最小三件套。二者都按文件读、按文件拷，不要整目录复制。
+
+预期结果：两周后你能用自己记录的耗时、返工、有效问题/误报、测试通过率判断这三件套是否值得留下；没有数据前不要扩大安装范围。
+
 ## 怎么判断变好了
 
 **流程固化与工作流**
@@ -787,7 +962,7 @@ npx ryugi-artifacts --no-open
 - UI 验收的 pass/reject 轮次和返工次数；是否有截图或录屏与已批准设计并排比对。
 - 人工干预次数，尤其是否频繁被问 should I continue。
 - 最终落地方式是否符合你的选择。
-- 最小试用：在 Claude Code 按第 18 步安装，开干净会话发送 `Let's make a react todo list`，确认写代码前触发 brainstorming；然后选一个规模小、带测试和 UI 验收需求的任务，完整走一遍 brainstorm → 批准 spec → executing-specs → 每任务 TDD → fresh review → verifying-ui → 落地报告。
+- 最小试用：在 Claude Code 按第 18 步安装，开干净会话发送 Let's make a react todo list，确认写代码前触发 brainstorming；然后选一个规模小、带测试和 UI 验收需求的任务，完整走一遍 brainstorm → 批准 spec → executing-specs → 每任务 TDD → fresh review → verifying-ui → 落地报告。
 - 怎么判定：与同类任务不用该工作流的基线对比；若 spec 前置、红绿测试、UI 验收和复审减少了返工与遗漏，同时没有显著增加人工协调成本，再考虑扩大使用范围。
 - 试多久：原文没有给出时长；以一个任务为一轮，先看是否减少返工和遗漏，不要把作者主张当效果证明。
 
@@ -845,6 +1020,15 @@ npx ryugi-artifacts --no-open
 - 怎么判定：如果你自己的 A/B 里，得分不降、步数/时间/成本下降，且主要收益出现在「从代码里推不出来」的规则上，说明契约有用；如果强模型在小仓库上不要契约也能过，别把满分当普遍结论。作者自己说明：5 次/条件远不足以统计显著；只有一个任务、仓库很小；只测了 Claude Code；模型与版本会影响结果；强模型在小仓库上自己能看到 DO NOT EDIT 注释并找到 run_tests.py，真正的质量差异只出现在从代码里根本推不出来的规则（CHANGELOG）上，其余收益是省掉探索步骤与降低时间波动。
 - 试多久：作者称整套约一小时落地；A/B 以 5 次/条件为一轮先看方向，不要当统计结论。
 
+**claude-howto 最小试用（本次新增）**
+
+- 基线：选一个真实代码仓库，记录 3 类任务（代码审查、PR 准备、API 文档）各做 3 次的耗时、返工次数、审查发现的有效问题数/误报数、测试通过率。
+- 只装三样：optimize.md slash command、project-CLAUDE.md、code-review-specialist skill；用 /optimize 和代码审查任务跑 5 次真实工作。
+- 再加一个低风险 hook：先只启用 format-code.sh，确认不会破坏文件；再加 security-scan.sh，记录每次扫描耗时（原文此处截断）。
+- 看什么：返工是否减少、有效问题数是否增加、误报是否可接受、测试通过率是否稳定；如果三件套没有明显收益，先不要加 hooks/MCP/插件。
+- 不要拿 README 的「90% 能力没用上」「10x productivity」「production-ready templates」「Trusted by Developers」当效果数据；也不要拿仓库自身的 pytest、ruff、bandit、mypy、coverage 当使用效果——那是维护该指南脚本的测试。
+- 试多久：建议两周、单项目，不要一次性全装。
+
 ## 常见坑
 
 1. 把 think / think hard / think harder 当开关用。Claude Code 只识别 ultrathink，其它会被当普通文本透传。
@@ -891,14 +1075,24 @@ npx ryugi-artifacts --no-open
 42. 把 Ryugi 当已量化验证。材料只有 README、47 stars，没有效果数据；两小时自主推进、自动触发等只是作者主张。
 43. 在多个 harness 只装一个。原文要求每个 harness 分别安装；同时用多个 harness 时不要只装一个就以为都生效。
 44. 没装 Node.js 却用 ryugi-artifacts。该 CLI 需要 Node.js；不预览产物不影响主流程，但不要误判安装失败。
-45. 干净会话里没看到 brainstorming 就继续写代码。应先用 `Let's make a react todo list` 验证触发，没触发就停下检查安装。
+45. 干净会话里没看到 brainstorming 就继续写代码。应先用 Let's make a react todo list 验证触发，没触发就停下检查安装。
 46. 忽略项目自有技能。原文说设计系统、verify、ship 等项目技能在对应步骤优先；不要让 Ryugi 覆盖它们。
-47. 把 `just code it` 当常态。它会跳过 executing-specs 直接写代码；只有你明确想绕过规格流程时再用。
+47. 把 just code it 当常态。它会跳过 executing-specs 直接写代码；只有你明确想绕过规格流程时再用。
 48. 把默认 squash、从不 merge commit 当团队规范。这是原文作者主张，落地方式要按团队实际选择。
 49. UI 验收只看代码不看证据。verifying-ui 要求真实截图或录屏与已批准设计并排 pass/reject；没有证据不要宣布完成。
 50. 默认开 worktree。原文说没有偏好时默认就地工作，只有冲突风险才开；不要把隔离当成默认动作。
 51. 把 Ryugi 与第 7 步手工工作流同时跑。会重复规格和计划；小任务用第 7 步，需要规格前置和 UI 验收时选 Ryugi。
 52. 在 Cursor / OpenCode 照猜完整命令。原文只给本地插件源和 .opencode/INSTALL.md，没有完整命令，不能编造。
+53. 把 claude-howto 当新工具或一次全装。它是 Claude Code 的教程/模板层，不是替代品；先只装 /optimize、项目 CLAUDE.md、code-review-specialist 三件套。
+54. 照 README 用 /plugin install 装 claude-howto 的插件。仓库没有 marketplace，/plugin install 不适用；要用 claude --plugin-dir 本地目录加载。
+55. 注册 hooks 时覆盖已有 settings.json。应手动合并 hooks 块，尤其团队已有其他钩子时。
+56. 一次把 33 个 hook 事件全配上。先只启用 PostToolUse + Write 的 format-code.sh，确认不破坏文件，再加 security-scan.sh。
+57. 把 /self-assessment 和 /lesson-quiz 当效果证明。它们是学习自评和测验，不是生产力、缺陷率或 ROI 数据。
+58. 把 claude-howto 仓库自身的 pytest、ruff、bandit、mypy、coverage 当使用效果。那是维护指南脚本的测试，不是使用该指南后工作改善的证据。
+59. MCP 命令里硬编码 PAT 或提交凭据。README 提醒不要硬编码凭据、不要提交敏感数据；用环境变量或本地配置。
+60. 把 README 的「90% 的能力没用上」「10x productivity」「production-ready templates」「Trusted by Developers」当数据。这些是作者主张，没有基准测试或客户案例。
+61. 把 checkpoints 当版本控制替代。/rewind 用于高风险试验回退，不是 git 的替代。
+62. 在材料截断处补写指标。claude-howto 的 security-scan.sh 说明在「记录每次扫描耗」处截断，不要编造耗时阈值或误报率。
 
 ## 证据与来源
 
@@ -908,8 +1102,9 @@ npx ryugi-artifacts --no-open
 - **来源四**：一条推文 @kloss_xyz，标题称 vibe 编码时应在 AGENTS.md 中加入 7 条规则。采集时原文被截断：标题说 7 条，正文只完整给出第 1 条，第 2 条只出现编号 2. 就中断。可核对内容：第 1 条的完整文字，即绝不编辑、跳过或删除测试来让测试通过；对自己编写的每个测试，都要确认如果被测代码什么都不做这个测试会失败；如果仍然通过就重写这个测试。数据只有推文互动量：91 赞、4 次转发、31 条回复，没有项目案例、失败率或前后对比数据。一个绿色的测试套件是代理最容易伪造的东西属于作者主张，原文未给出证据。原文被截断，不能据此推断其余 6 条；第 16 步中空实现检查的步骤与 pytest 命令示例来自来源四原文；git diff --stat HEAD~1 HEAD -- '*test*' '*spec*' 是调研报告补写的最小可执行检查方式，不是推文给出的。
 - **来源五**：GitHub 仓库 AntoGA/agents-contract 的 README，约 40 stars、单人维护、俄文。可核对的内容：五个必填分节与可选 Lessons；linter 的错误级检查与警告级检查；--json、--strict、--check-commands、-r 与退出码 0/1/2；SessionStart 钩子跑 linter、装依赖、跑测试，输出进上下文，永远退出 0；AGENTS_SETUP / AGENTS_TEST / AGENTS_SKIP_TESTS 环境变量；Windows 用 .claude/settings.windows.example.json。数据：linter 速度基线；A/B 结果得分 4.8→5.0、平均步数 5.6→3.8、中位时间 18.2 s→12.9 s、平均成本 $0.091→$0.084；linter 自身 15 个单元测试，CI 在三平台跑。属于作者主张、没有数据：Cursor / Copilot 也读 AGENTS.md；一小时落地；大仓库上差距应该更大；Lessons 长期收益最大；不绑厂商。A/B 日期写作 18.10.2026，无法核实，可能是笔误。局限：5 次/条件远不足以统计显著；只有一个任务、仓库很小；只测了 Claude Code；模型与版本会影响结果；强模型在小仓库上不要契约也能过；仓库仅约 40 stars、单人维护，未见第三方复现。本手册把它当小范围试验、不直接全员采用。
 - **来源六**：@mattpocockuk 的一条推文，建议在小范围代码库试装预提交钩子。可核对的内容：只检查暂存文件；按 tokens = bytes / 4 估算；单文件超过 5,000 就阻止提交；忽略锁文件、代码生成文件等非代理编写文件；错误信息中给出明确的文件拆分说明。属于作者主张、没有数据：这是其代码库中「最简单的投资。太好了。」；推文有 4,084 次点赞、170 次转发、223 条回复，只能说明关注度，不能证明该做法在结果上有效。原文没有完整钩子代码、具体框架配置或实际案例数据；没有说明如何处理二进制文件、超大文件、不同编码或误报，也没有给出拆分错误信息的具体写法。第 11 步做法 C 的步骤与指标是把推文建议落成可操作检查，其中取暂存文件的示意命令和错误信息写法由本手册补写，不是推文原文。
-- **来源七**：GitHub 仓库 Innei/ryugi 的 README，47 stars。可核对的内容：Claude Code 安装命令、部分 harness 安装命令、`Let's make a react todo list` 安装验证方法、brainstorming / executing-specs / per-task TDD / one fresh review / verifying-ui 的流程描述、`just code it` 跳过执行规格、ledger 跨 compaction、worktree 触发条件、默认 squash 与 never a merge commit、npx ryugi-artifacts 及 start/stop/publish 子命令。属于作者主张、没有数据：两小时自主推进、不问 should I continue、技能自动触发无需手动 invoke、ledger 能跨 compaction 保留判断、默认落地方式适合所有团队。原文是 README，未验证实际安装后的行为；作为 Superpowers v7.0.0 的 fork，还需关注与上游差异和后续维护；Cursor、OpenCode 没有完整安装命令。本手册把它当可选工作流小范围试，不直接全员采用。
-- 调研结论给的取舍：重点抄三个工作流、skills/hooks 的文件级配置步骤和两张对照表；原文在子智能体、动态工作流、Agent Teams、MCP 四节被截断，且 2026 年模型名与价格无法核验，不要照抄具体数字。提交门禁做法的结论是：思路清晰但实现空白，需自行补齐 hook 实现后小范围验证，不要照抄 ten out of ten 这类说法。文件大小门禁的结论是：规则具体、成本低，可先在一个代理参与的分支上试，重点观察误报率以及代理收到拆分说明后是否减少单文件过大问题；原文没有实现代码和效果数据。MyAgent 的结论是：可以小范围试，重点验证 Plan Mode 的只读审批和 Skills 自进化能否把反馈沉淀成可复用规则，但只有作者主张、没有评测数据。测试规则的结论是：把原文唯一完整给出的那条规则抄进单个项目的 AGENTS.md 试一轮；原文只露出 7 条中的第 1 条，不宜直接全面采用。项目契约的结论是：五段式 AGENTS.md + linter + SessionStart 钩子具体可照做、成本约一小时、跨工具复用，但作者自己说明只有 5 次单任务、且只测了 Claude Code，所以先在一个有隐性规则的真实仓库里小范围试，暂不直接全员采用。Ryugi 的结论是：安装命令和工作流步骤足够具体，可以小范围试；但原文只有作者主张，没有量化效果证据，试用时重点看是否先出规格、红绿测试记录、UI 验收轮次和返工次数。
+- **来源七**：GitHub 仓库 Innei/ryugi 的 README，47 stars。可核对的内容：Claude Code 安装命令、部分 harness 安装命令、Let's make a react todo list 安装验证方法、brainstorming / executing-specs / per-task TDD / one fresh review / verifying-ui 的流程描述、just code it 跳过执行规格、ledger 跨 compaction、worktree 触发条件、默认 squash 与 never a merge commit、npx ryugi-artifacts 及 start/stop/publish 子命令。属于作者主张、没有数据：两小时自主推进、不问 should I continue、技能自动触发无需手动 invoke、ledger 能跨 compaction 保留判断、默认落地方式适合所有团队。原文是 README，未验证实际安装后的行为；作为 Superpowers v7.0.0 的 fork，还需关注与上游差异和后续维护；Cursor、OpenCode 没有完整安装命令。本手册把它当可选工作流小范围试，不直接全员采用。
+- **来源八（本次新增）**：GitHub 仓库 luongnv89/claude-howto 的 README，MIT 许可，版本标注 v2.1.302，兼容 Claude Code 2.1+。可核对的内容：10 个模块的目录与用途、/optimize、project-CLAUDE.md、directory-api-CLAUDE.md、personal-CLAUDE.md、code-review-specialist、04-subagents、05-mcp、06-hooks 脚本与 settings.json JSON、07-plugins 的 --plugin-dir 用法、/rewind 六个选项、claude -p / -r / --output-format json、/self-assessment 与 /lesson-quiz、claude mcp add 命令。数据：README 称 10 个模块；完整学习路径 11–13 小时；15 分钟可完成第一个 slash command；1 小时 essential setup；hooks 有 5 种类型、33 个事件、4 个类别；GitHub 指标为 43,460 stars、今日 177 stars。属于作者主张、没有数据或未展开：模板正文与脚本质量未在材料中展开；90% 的能力没用上、10x productivity、production-ready templates、Trusted by Developers 属于作者主张，没有基准测试、前后对比或客户案例；示例工作流只有流程描述，没有实际输出和失败率；模型列表在材料末尾被截断。仓库自身的 pytest、ruff、bandit、mypy、coverage 是维护该指南脚本的测试，不是使用该指南后工作改善的证据。本手册只把第 19 步当两周单项目小范围试用，不直接全员采用；MCP 与 hooks 的安全前提按 README 提醒执行，未展开的部分不补写。
+- 调研结论给的取舍：重点抄三个工作流、skills/hooks 的文件级配置步骤和两张对照表；原文在子智能体、动态工作流、Agent Teams、MCP 四节被截断，且 2026 年模型名与价格无法核验，不要照抄具体数字。提交门禁做法的结论是：思路清晰但实现空白，需自行补齐 hook 实现后小范围验证，不要照抄 ten out of ten 这类说法。文件大小门禁的结论是：规则具体、成本低，可先在一个代理参与的分支上试，重点观察误报率以及代理收到拆分说明后是否减少单文件过大问题；原文没有实现代码和效果数据。MyAgent 的结论是：可以小范围试，重点验证 Plan Mode 的只读审批和 Skills 自进化能否把反馈沉淀成可复用规则，但只有作者主张、没有评测数据。测试规则的结论是：把原文唯一完整给出的那条规则抄进单个项目的 AGENTS.md 试一轮；原文只露出 7 条中的第 1 条，不宜直接全面采用。项目契约的结论是：五段式 AGENTS.md + linter + SessionStart 钩子具体可照做、成本约一小时、跨工具复用，但作者自己说明只有 5 次单任务、且只测了 Claude Code，所以先在一个有隐性规则的真实仓库里小范围试，暂不直接全员采用。Ryugi 的结论是：安装命令和工作流步骤足够具体，可以小范围试；但原文只有作者主张，没有量化效果证据，试用时重点看是否先出规格、红绿测试记录、UI 验收轮次和返工次数。claude-howto 的结论是：命令与配置可照抄，但模板正文未展开、效果主张无数据；建议先做两周单项目、三类任务各 3 次基线，只装 /optimize、项目 CLAUDE.md、code-review-specialist 三件套跑 5 次，再加 format-code.sh 和 security-scan.sh，记录耗时与误报，不要一次装全套。
 
 ## 依据的调研
 
@@ -920,3 +1115,4 @@ npx ryugi-artifacts --no-open
 - [AntoGA/agents-contract](../research/radar/2026-10-19/4924-antoga-agents-contract.md)：值得一试，按照 README 的做法，在一个有隐性规则的真实仓库里落地五段式 AGENTS.md、零依赖 linter 和 Claude Code SessionStart 钩子，并把 bench 脚本换成自己的任务做小规模 A/B 验证；这些步骤具体可照做、成本约一小时、跨工具复用，但作者自己说明只有 5 次单任务、且只测了 Claude Code，质量提升也只体现在从代码里推不出来的规则上，所以先小范围试，暂不直接全员采用。
 - [@mattpocockuk: 今天的提示：](../research/radar/2026-10-19/4969-item.md)：值得一试，建议在小范围代码库试装这个预提交钩子：只检查暂存文件，按“字节数/4”估算令牌数，单文件超过 5,000 就阻止提交并给出拆分说明；规则具体、成本低，但原文没有实现代码和效果数据，需先验证误报率及对代理写码行为的改善。
 - [Innei/ryugi](../research/radar/2026-10-22/5940-innei-ryugi.md)：值得一试，建议在已使用的编码智能体 harness 中小范围试用 Ryugi：选一个带测试和 UI 验收需求的小任务，按“头脑风暴→批准规格→TDD 实现→一次复审→UI 验收”走完，并用是否先出规格、红绿测试记录、UI 验收轮次和返工次数判断效果。理由是安装命令和工作流步骤足够具体，但原文只有作者主张，缺少量化效果证据。
+- [luongnv89/claude-howto](../research/radar/2026-10-23/6224-luongnv89-claude-howto.md)：值得一试，建议小范围试：先在单个项目复制 `/optimize`、项目 `CLAUDE.md` 和 `code-review-specialist` skill，再按需加 hooks/MCP；理由是 README 给出了可照抄的安装命令、hooks 配置和 CLI 用法，但模板正文与效果数据未在材料中展开，需先验证再推广。

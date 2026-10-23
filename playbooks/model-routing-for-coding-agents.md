@@ -1,16 +1,18 @@
-# 让编码 agent 在多供应商、多模型之间稳定跑完任务
+# 让编码会话在配额耗尽前自动换道，并留下验收证据
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：用一套本地可试的路由、回退、分层和验收做法，减少编码 agent 因配额、限流、死 key、成本或验收不清导致的中断和返工。
-> 先试这一步：先只把一个你日均用得最多的客户端接到本地网关，用同一批真实任务与直连对照一到两周，记录中断次数、单位任务成本和返工率；暂时不接网关，就先运行 claude --help 确认 /advisor 或 --advisor 是否存在。
-> 最近修订：2026-10-22
+> 解决的问题：把跨供应商配额、限流、死 key、模型选择和完成验收从人手切换变成可回退的本地路由与证据检查。
+> 先试这一步：先挑一个非关键任务，只把一个工具或一个 haiku 别名接到本地路由，保留直连做 A/B，并用 /provider doctor --ping 或 curl 确认链路通。
+> 最近修订：2026-10-23
 
 ## 解决什么问题
 
 编码过程中经常遇到几种中断：某个供应商的订阅配额到期没用完、编码到一半被限流、某个 key 死掉导致整条流程卡住、工具输出烧 token。这些事本身没有谁专门负责，于是变成你手动换模型、换 key。另一类问题是模型选择：要么一直用最重最贵的模型，要么靠手动切换；agent 宣布完成时，也可能只看进程退出，不看任务是否真的通过确定性检查。还有一种浪费是：主力模型已经成为日常，另一个模型的配额一直闲置，却没有把它挂进当前会话。
 
-本手册给出一套本地可试的做法：用 OmniRoute 这类 OpenAI 兼容网关统一接多个供应商，并按配额、失败或成本自动回退；在 Codex 内用 Adaptive Router 按本地难度启发式选择轻/重模型；用“有证据的验收”判断是否真的完成；用 Gluon 为每次会话选择 harness × model × effort 并观察成本与上下文；用 LiteLLM 的 SDK 或网关把多家供应商统一成 OpenAI 格式，并做按项目/用户的成本追踪；Claude Code 内还有一条线：把次要模型挂成顾问，避免贵模型全程主持。
+Claude Code 里还有两个更具体的中断：模型设置会全局绑定所有终端窗口，切 provider 会影响全部会话；Anthropic 返回 429 用量上限时，整条会话卡住，只能手动换 key 或等冷却。model-relay 用一个本机 127.0.0.1:8950 的路由守护进程把“按窗口切模型、按别名路由、429 自动故障转移、provider 重试”接过来；它要求 provider 能接 Anthropic 的 /v1/messages 格式，定位是单人本地守护进程，不是团队多租户代理。
+
+本手册给出一套本地可试的做法：用 OmniRoute 这类 OpenAI 兼容网关统一接多个供应商，并按配额、失败或成本自动回退；在 Codex 内用 Adaptive Router 按本地难度启发式选择轻/重模型；用“有证据的验收”判断是否真的完成；用 Gluon 为每次会话选择 harness × model × effort 并观察成本与上下文；用 LiteLLM 的 SDK 或网关把多家供应商统一成 OpenAI 格式，并做按项目/用户的成本追踪；Claude Code 内还有一条线：把次要模型挂成顾问，避免贵模型全程主持。最后再加一条 Claude Code 内的本地路由线：用 model-relay 按窗口/别名切 provider，并在 429 时自动转到备用端点。
 
 OmniRoute 的新调研把四类痛点明确列为可接管项：订阅配额到期未用完、编码中途被限流、工具输出烧 token、死 key 导致阻塞。它的核心概念是 combo：一条模型链，配额耗尽、provider 故障或成本飙升时自动切到下一个健康目标；不建 combo 也可以直接用 auto 系列虚拟 combo。本次材料能确认的别名包括 auto、auto/coding、auto/fast、auto/cheap、auto/subscription、auto/thrifty、auto/offline、auto/smart、auto/lkgp、auto/chaos。注意：安装/首次运行章节、combo 完整策略语义和压缩配置在本次材料中被截断，落地前必须回仓库 README 补齐。
 
@@ -33,6 +35,9 @@ agent-smith 的核心主张是：常规工作交给更轻的模型，困难任�
 - 你使用 Claude Code，且版本支持 /advisor 或 --advisor；主模型已设为日常主力，同时还有另一个模型的可用配额（F1）。
 - 你使用 Claude Code，账号/计划允许在 Sonnet、Opus、Haiku 等模型之间切换，主要任务是代码编辑、对成本敏感，并愿意先在一个 1–2 小时的中等复杂度改动上做 A/B（F2a/F2b）。
 - 你使用 Claude Code，任务可以拆出子代理，愿意让较弱模型处理子任务，并愿意用同一批任务做 token 与质量的对照（F3）。
+- 你长期在 Claude Code 里工作，模型设置全局绑定所有终端窗口，想按窗口/会话切 provider。
+- 你有至少一个备用的 Anthropic 兼容端点（内置 preset：zai、deepseek、kimi、minimax、openrouter，或用 --url 指定自己的网关），想把 haiku/sonnet/opus 别名或某个子代理导到别的 provider。
+- 你遇到 Anthropic 429 用量上限，想自动转到备用 provider 并钉住会话 7 天；愿意接受 Node.js 20+、Claude Code 2.1.287+、单人本机守护进程。
 - 你只想先在非敏感、非生产任务上小范围试。
 
 不适用或需要谨慎：
@@ -58,6 +63,14 @@ agent-smith 的核心主张是：常规工作交给更轻的模型，困难任�
 - 想把 F3 与 F2b 叠加：F3 是环境变量，F2b 是启动参数；材料未说明可叠加，先分开试。
 - 想把“停止支付 opus 来做 haiku 的家庭作业”“简直是黄金”“不为不需要 Opus 的工作付 Opus 的价格”当结论：都是作者主张，原文没有数据、基准、案例或成本对比。
 - 想把 F1、F2a、F2b、F3 混着抄，或把 /advisor、--advisor、CLAUDE_CODE_SUBAGENT_MODEL 与 A–E 的网关/路由自动叠加：材料都未说明可集成，先分开试。
+- 想给整个组织做多租户云代理：model-relay 作者自己说那种场景应该用 LiteLLM；它是单人本地守护进程。
+- 只有 OpenAI Chat Completions 格式的 provider：model-relay 要求 provider 能接 Anthropic /v1/messages；只会说 OpenAI Chat Completions 的服务需要本地翻译层。
+- 想在已经跑着 Claude Code 的 shell 里 export key 就生效：key 由 router 进程从它继承的环境里读，要写成永久变量并开新终端。
+- 想装完就自动把请求导出去：不加 alias，haiku 及所有请求默认留在 Claude，不会外流。
+- 想把 proxy mode 当无感隧道：HTTPS_PROXY 写进 settings.json 的 env，Claude Code 跑的命令也会走 relay 当盲隧道，router 挂了 git/curl/gh 会失败；proxy 模式下 router 停了 Claude Code 连不上。
+- 想从 0.6 及更早版本升级只更新插件：0.7+ 只读 "format": 2，要迁移。
+- 想拿 model-relay 的效果当结论：给定调研没有效果数据，且正文在“对应研究问题”处被截断。
+- 想让 model-relay 与 A–F 自动叠加：材料未说明可集成；若用 --url 接本地网关，该端点必须能接 Anthropic /v1/messages。
 
 ## 前置条件
 
@@ -70,6 +83,7 @@ agent-smith 的核心主张是：常规工作交给更轻的模型，困难任�
 - Claude Code “Sonnet 主跑 + Opus 顾问”（F2a）：本机已安装并可运行 Claude Code CLI；账号/方案支持在 Sonnet、Opus 等模型之间切换；额度允许调用 Opus；已对照官方文档核对 /model、advisor 相关开关以及 Haiku 的用法。原文只给出一行箭头写法。
 - Claude Code 启动参数分层（F2b）：本机已安装并可运行 Claude Code CLI；先在终端运行 claude --help，或在会话内用 /help，确认存在 --model 与 --advisor；账号/方案允许在 sonnet、opus、haiku 等模型之间切换；额度允许调用 opus；原文没有给出支持该参数的版本号。
 - Claude Code 子代理固定为 Haiku（F3）：本机已安装并可运行 Claude Code；当前版本支持 CLAUDE_CODE_SUBAGENT_MODEL 环境变量（原文未给版本要求，需自行确认）；任务可以拆出子代理；你愿意让较弱模型处理子任务，并接受用同一批任务做质量对照。原文只给出一条启动命令，没有给主模型和顾问的配置方式。
+- model-relay：Node.js 20+；Claude Code 2.1.287 或更新（作者在 Node.js 22.23.2 与 Claude Code 2.1.306 上测过）；至少一个备用的 Anthropic 兼容端点（内置 preset：zai、deepseek、kimi、minimax、openrouter，或用 --url 指定自己的网关）；接受这是单用户本机工具，不是团队共享代理；先设好 BACKUP_API_KEY 等环境变量，再启动 Claude Code；手动路径下 node tools/setup.mjs 要在插件安装目录里跑：~/.claude/plugins/cache/model-relay/model-relay/<version>/（设了 CLAUDE_CONFIG_DIR 时是 $CLAUDE_CONFIG_DIR/plugins/cache/model-relay/model-relay/<version>/）；默认端口 8950，Claude Code settings.json 的 ANTHROPIC_BASE_URL 会指向 http://127.0.0.1:8950。
 
 ## 操作步骤
 
@@ -594,7 +608,137 @@ CLAUDE_CODE_SUBAGENT_MODEL=haiku claude
 - 三者模型名（Opus 5.5、Fable 5.1、Sonnet、Haiku 5.5）与命令语法在给定材料里都无法核实；F2a/F2b 的原文都在关键处被截断，F3 原文只给一条环境变量。先确认命令或环境变量存在，再小范围试。
 - 材料未说明它们能与 A–E 的网关/路由自动集成，也未说明 F1/F2a/F2b/F3 之间可以叠加；先分开试。
 
-**做法 A / B / C / D / E / F 怎么选**
+**做法 G：在 Claude Code 内按窗口/别名路由，并把 429 故障转移钉住（model-relay）**
+
+前提：Node.js 20+，Claude Code 2.1.287+；至少一个备用 Anthropic 兼容端点；接受这是单人本机守护进程，不是团队多租户代理。
+
+1. 先把 API key 设进环境变量，再启动 Claude Code。前提：key 由 router 进程从它继承的环境里读，你在已经跑着 Claude Code 的 shell 里 export 是看不到的。要写成永久变量，然后开新终端。
+
+```sh
+export BACKUP_API_KEY="your-api-key"      # macOS/Linux，写进 ~/.zshrc
+setx BACKUP_API_KEY "your-api-key"        # Windows
+```
+
+预期结果：新开的 Claude Code 进程能继承到 key；旧终端里的 export 不会补进已启动的 router。
+
+2. 安装插件。前提：如果 Claude Code 之前已经开着，先执行 /reload-plugins。
+
+```sh
+claude plugin marketplace add cablate/model-relay
+claude plugin install model-relay@model-relay
+```
+
+预期结果：插件装好，后续可使用 /provider 命令。
+
+3. 让 Claude 陪你完成配置。
+
+```text
+/provider setup
+```
+
+原文说明：setup 工具会替你跑，不会让你把 key 粘到聊天里，改 ~/.claude/settings.json 之前会征求同意。可以直接带目标，例如：
+
+```text
+/provider setup use deepseek for haiku
+```
+
+预期结果：在输入框上方的 /provider 交互面板里，你可以把“当前这个窗口”切到某个 provider，其他窗口不受影响。
+
+4. 手动路径（不想用交互 setup 时）。先执行：
+
+```text
+/provider init
+```
+
+这会创建 ~/.claude/model-relay.json（先不含任何 provider，所以所有请求仍走 Claude），并把 ~/.claude/settings.json 里的 ANTHROPIC_BASE_URL 指向 relay。然后加 provider：
+
+```bash
+node tools/setup.mjs add <name> --preset <preset> --model <model id> --token env:<VAR>
+```
+
+前提：node tools/setup.mjs 要在插件安装目录里跑，即 ~/.claude/plugins/cache/model-relay/model-relay/<version>/（设了 CLAUDE_CONFIG_DIR 时是 $CLAUDE_CONFIG_DIR/plugins/cache/model-relay/model-relay/<version>/，ls 一下看版本号）；在别处要用该目录下 tools/setup.mjs 的完整路径。presets 子命令列内置 preset。改完重启 Claude Code。
+
+5. 自检，这一步是关键，别跳。
+
+```text
+/provider doctor --ping
+```
+
+期望看到 Config OK、provider 出现在 Providers 下、Upstream ping 下有一个 ✓。原文给的样例输出：
+
+```text
+Config OK (~/.claude/model-relay.json)
+  Port: 8950
+  Providers: backup -> your-model-id
+  Failover: backup (back to Claude after 10 min)    Retry: on
+  Aliases:  none (run "node tools/setup.mjs alias haiku <provider>" to route haiku)
+  Claude settings: ✓ settings.json ANTHROPIC_BASE_URL=http://127.0.0.1:8950
+  Router health: ✓ up on 127.0.0.1:8950 (pid 38780, <version>, pinned sessions: 0, 429 failover: idle, proxy off (0 routed / 0 tunnelled))
+  Upstream ping:
+    ✓ backup     (your-model-id) -> answers, first byte after 640 ms
+```
+
+doctor 默认只报告、不改动；加 --fix 才让它自己修能修的问题。doctor --json 给同样的结论，每条带修复参数（fix）和是否需要你确认（needsConsent），适合挂脚本。
+
+6. 把 haiku 类请求导到便宜/备用 provider。前提：新配置下 haiku 及所有请求默认都留在 Claude，不加 alias 就不会外流。这一步是显式打开。
+
+```bash
+node tools/setup.mjs alias                        # 查看 haiku / sonnet / opus / subagent 默认
+node tools/setup.mjs alias haiku backup           # 同时改 settings.json 与 model-relay.json
+node tools/setup.mjs alias haiku claude           # 改回 Anthropic Claude
+node tools/setup.mjs alias subagent sonnet        # 设 CLAUDE_CODE_SUBAGENT_MODEL=sonnet
+```
+
+原文解释了两处联动：settings.json 里写 env.ANTHROPIC_DEFAULT_HAIKU_MODEL = "your-model-id[1m]"，让 Claude Code 自己把 haiku 别名解析成该模型；model-relay.json 里给 providers.backup.matchModels 加 "haiku"，接住 Claude Code 内部硬编码 claude-haiku-* 的调用。预期结果：haiku 请求走 backup，其他窗口/别名不受影响。
+
+7. 给单个 provider 配专属子代理。前提：router 会为每个 provider 动态注册全能力 Agent 类型 model-relay:<name>，不用写 .claude/agents/*.md，也不用重启会话。在 ~/.claude/model-relay.json 里：
+
+```json
+"providers": {
+  "backup": {
+    "model": "your-model-id",
+    "agent": {
+      "description": "Use for routine, well-scoped tasks: code search, summaries, small edits.",
+      "effort": "medium",
+      "maxTurns": 40
+    }
+  }
+}
+```
+
+description 是 Claude 在挑子代理时读到的那行，要写清“什么时候选它”——这是把任务类型和模型对上号的关键字段。改 agent 从下一条消息起生效。原文列了实测限制：permissionMode 无法松动或收紧处于 bypassPermissions 的父会话；initialPrompt 对 Agent 工具起的子代理不生效；memory 无效。
+
+8. 配 429 故障转移链。前提：需要一个能接 Anthropic /v1/messages 的本地或远端端点；原文示例 local 指向 http://127.0.0.1:4000，若该端点只会 OpenAI Chat Completions，需要翻译层。
+
+```bash
+node tools/setup.mjs providers
+node tools/setup.mjs add local --url http://127.0.0.1:4000 --model your-local-model-id --token env:LOCAL_GATEWAY_TOKEN
+node tools/setup.mjs set failover.chain backup,local
+node tools/setup.mjs set providers.local.fallback none
+```
+
+相关默认值（原文配置表）：failover.enabled 默认 true；failover.chain 默认空（空则 429 原样返回；add 会把新配置的第一个 provider 放进来）；failover.cooldownMs 默认 600000（10 分钟，允许 60000–7200000）；retry.attempts 默认 3（0 = 无限重试）；retry.delayMs 默认 2000；retry.backoff 默认 2；retry.maxDelayMs 默认 10000；retry.failover 默认 false（显式打开后，重试耗尽才转下一个 provider，且不会转回已试过的）。本地网关可设 launch: { command, args }，端口关着时 router 自动拉起。预期结果：Anthropic 返回 429 时，请求转给 failover.chain 里的第一个 provider，并把这个会话钉住 7 天；冷却期后新会话再回去试 Claude，已钉住的会话保持不动。
+
+9. 把状态接进自己的 statusline。前提：每个窗口把状态写到 ~/.claude/model-relay-status/<session id>，一行 kind<TAB>label；session_id 就是 Claude Code 传给 statusLine 命令的那个 id。kind 取值：claude / pinned / failover / limit / offline / direct。一周没更新的文件 router 会删。
+
+10. （可选）用 Remote Control 又不想丢掉路由：
+
+```bash
+node tools/setup.mjs proxy enable --go
+node tools/setup.mjs rc
+```
+
+前提与代价（原文明确写了）：HTTPS_PROXY 写在 settings.json 的 env 里，所以 Claude Code 跑的命令（git、curl、gh）也会走 relay 当盲隧道，router 挂了它们就失败；proxy 模式下 router 停了 Claude Code 连不上，得 node tools/setup.mjs rc 重启；proxy disable --go 可逆，旧 settings 保留为 settings.json.model-relay-backup，但已在 proxy 模式的会话要重启才能恢复。
+
+11. 从 0.6 及更早版本升级的额外动作。只更新插件不够，0.7+ 只读 "format": 2。要么：
+
+```text
+/provider setup upgrade my model-relay config
+```
+
+要么手动（node tools/setup.mjs migrate → migrate --go → /provider restart）。不迁移的话，后台跑着的 0.6 router 会一直跑旧代码。
+
+**做法 A / B / C / D / E / F / G 怎么选**
 
 - 主要痛点是跨供应商配额、限流、死 key、工具输出烧 token：先做 A。预算红线先用 auto/subscription；想先榨干套餐额度再降到最便宜付费选项用 auto/thrifty；auto/chaos 会成倍消耗上游调用，除非你就是要多模型交叉验证，否则别日常开。
 - 已经在用 Codex，痛点是“常规任务也调用最重模型”且想用确定性 grader 验收：先做 B。
@@ -604,13 +748,15 @@ CLAUDE_CODE_SUBAGENT_MODEL=haiku claude
 - 日常用 Claude Code、主模型已就位、另有闲置模型配额：先做 F1。F1 只动 Claude Code 会话内的两个命令，不碰网关；但必须先确认命令真实存在。
 - 日常用 Claude Code、对成本敏感、主要任务是代码编辑，想让贵模型只出现在判断点上：先试 F2b（启动参数），用 claude --help 确认 --advisor；不存在则试 F2a（会话内命令）。两者都必须先核对官方文档或 help。
 - 日常用 Claude Code、只想让子任务用更轻的模型，且能接受输出质量对照：先试 F3。用 CLAUDE_CODE_SUBAGENT_MODEL=haiku claude 启动，先用 5–10 个任务对比 token 与质量；不要把 F3 当成完整三模型方案，也不要默认它能与 F2b 叠加。
+- 日常用 Claude Code、痛点是“模型设置全局绑定所有窗口”或 429 限流，且你有备用 Anthropic 兼容端点：先试 G。先只给 haiku 别名接一个备用 provider，用 /provider doctor --ping 确认链路，再按窗口逐步放开；不要一上来把所有别名和故障转移链都打开。
 - A 和 C 是同一层的本地 OpenAI 兼容网关，功能重叠，且默认端口都是 20128：先选一个跑通，不要同时按默认端口启动。E 也是请求层网关，但默认 4000 端口，与 A/C 不撞；端口不撞不代表能自动叠加，材料没有说明它们可以集成。
 - A/C/E 与 D 不是同一层：A/C/E 在请求层按供应商/模型别名路由；D 在会话层把已有 harness 并排跑起来，按 harness × model × effort 路由。E 的 harness 抽象能在自己的网关上跑 Claude Code / Codex / OpenCode / Deep Agents，与 D 的“并排多个 harness”语义不同。两者材料都未说明可互相集成。
 - B 与 D 都涉及 Codex：B 是在 Codex 内装插件按难度选模型，D 是把 Codex 当作可并排的一个 harness；材料未说明两者关系。
 - F（F1/F2a/F2b/F3）与 A–E 不是同一层：F 是 Claude Code 内部命令、启动参数或环境变量，材料未说明能与网关/路由自动集成；先单独试。
-- 七个项目与 F3 这条推文的材料都未说明可以集成。如果确实要同时装，先把各自跑通，再自行验证请求实际走哪条路径；不要默认叠加。D 会把多个 harness 接到同一框架里，建议先在一个非关键、已纳入版本控制的仓库里试。
+- G 是 Claude Code 插件 + 本机 127.0.0.1:8950 的 Anthropic 兼容路由守护进程，和 A/C 的 OpenAI 兼容网关（20128）、E 的 AI Gateway（默认 4000）不是同一层。G 可以用 --url 指向本地/远端端点，但该端点必须能接 Anthropic /v1/messages；只会 OpenAI Chat Completions 的端点需要翻译层。材料未说明 G 能与 A–F 自动集成，先分开试。
+- 七个项目、F3 这条推文和 model-relay 的材料都未说明可以集成。如果确实要同时装，先把各自跑通，再自行验证请求实际走哪条路径；不要默认叠加。D 会把多个 harness 接到同一框架里，建议先在一个非关键、已纳入版本控制的仓库里试；G 也建议先在非关键仓库、只接一个备用 provider。
 
-**暂时不要碰的部分**：OmniRoute README 提到的 MCP（110 个工具）、A2A、memory、guardrails、evals、TLS stealth、key pools 公平配额，在给定材料里只有名词，没有配置步骤；安装/首次运行章节、combo 完整策略语义、压缩的具体配置项也不在本次材料里。agent-smith 的“多 agent 协作、重试、失败升级带来的收益”需要单独实验，材料未给步骤。FlagshipRouter 的 Media Models 页面和 Agent Skills 页面同样只有存在性描述，没有用法。Gluon 的 routing.yaml、权限与工具供给、安全隐私、成本分析示例、故障排查都不在给定材料里。LiteLLM 的 MCP 登记细节、Docker 快速上手、E2E 教程都在 README 指向的 docs 里，本页未展开；A2A 与 MCP Bridge 的原文被截断。Claude Code /advisor 的顾问介入方式、效果说明、与网关集成都未在原文中展开；F2b 那一支的原文连 Haiku 只读怎么配都没写全；F3 只给了一条环境变量，主模型和任务划分未展开。
+**暂时不要碰的部分**：OmniRoute README 提到的 MCP（110 个工具）、A2A、memory、guardrails、evals、TLS stealth、key pools 公平配额，在给定材料里只有名词，没有配置步骤；安装/首次运行章节、combo 完整策略语义、压缩的具体配置项也不在本次材料里。agent-smith 的“多 agent 协作、重试、失败升级带来的收益”需要单独实验，材料未给步骤。FlagshipRouter 的 Media Models 页面和 Agent Skills 页面同样只有存在性描述，没有用法。Gluon 的 routing.yaml、权限与工具供给、安全隐私、成本分析示例、故障排查都不在给定材料里。LiteLLM 的 MCP 登记细节、Docker 快速上手、E2E 教程都在 README 指向的 docs 里，本页未展开；A2A 与 MCP Bridge 的原文被截断。Claude Code /advisor 的顾问介入方式、效果说明、与网关集成都未在原文中展开；F2b 那一支的原文连 Haiku 只读怎么配都没写全；F3 只给了一条环境变量，主模型和任务划分未展开。model-relay 的调研正文在“对应研究问题”处被截断，效果数据、与 A–F 的集成方式、团队多租户用法都不在给定材料里。
 
 ## 怎么判断变好了
 
@@ -624,6 +770,7 @@ CLAUDE_CODE_SUBAGENT_MODEL=haiku claude
 - Claude Code /advisor（F1，单个项目、单个会话）：按做法 F1 执行 /model fable（如提示计费则确认）与 /advisor fable，然后照常完成一个日常任务（例如修一个 bug 或做一次代码审查），全程记录顾问模型是否真的产出了可见内容。原文未给试用时长建议；先按单个任务/单会话判断，若 /advisor 不存在、顾问不介入，或多次任务中没有可观察差异，就停用并把结论降为 study。
 - Claude Code “Sonnet 主跑 + Opus 顾问”（F2a/F2b，单个真实的中等复杂度代码改动）：先在官方文档或 claude --help 核对命令语法，再挑一个真实的中等复杂度改动任务跑两次——A 组按本配置（Sonnet 主跑 + Opus 顾问），B 组全程用 Opus（或你原本的默认方式）；任务、提示词、仓库状态保持一致。F2b 的具体操作：先用 claude --help 确认 --advisor，再挑一个 1–2 小时能做完的真实小任务，用默认模型跑一遍，再用 claude --model sonnet --advisor opus 跑一遍同类任务。
 - Claude Code 子代理固定为 Haiku（F3，5–10 个有代表性的任务）：同一提示词分别跑默认配置与 CLAUDE_CODE_SUBAGENT_MODEL=haiku claude；记录总 token 或费用、任务完成率、输出被人工修改的比例、返工次数、延迟和主观质量评分。原文没有给试用时长建议；先按这一批任务判断。只有在 token 明显下降且质量不下降或可接受时，才纳入日常；若质量下降，只对低风险子任务使用。若环境变量不存在或命令报错，停止并把结论降为 study。
+- model-relay（先一个别名、一个备用 provider）：先设好永久环境变量并开新终端；装插件；用 /provider setup 或 /provider init + add 只加一个备用 provider；用 /provider doctor --ping 看到 Config OK 与 Upstream ping ✓；先只做 alias haiku backup，不动 sonnet/opus；用 /provider 面板确认只有当前窗口切了 provider，其他窗口仍走 Claude；再挑一次真实 429 或配额耗尽，确认会话被钉到 failover.chain 第一个 provider，冷却后新会话回 Claude。原文未给试用时长；先以一次真实 429/配额耗尽事件和一周内人工切换次数为观察窗口，不要一上来开 proxy 模式。
 
 要记录的指标：
 
@@ -632,12 +779,12 @@ CLAUDE_CODE_SUBAGENT_MODEL=haiku claude
 3. 该次会话的 token 消耗与费用（用 Claude Code 自带的用量/费用查看方式，具体命令以文档为准）；
 4. 复杂决策点上 Opus 被实际调用的次数与效果（是帮上忙，还是白花钱）；
 5. “后悔没用 opus”的次数（决策被顾问模型纠正或放行的次数）；
-6. 子代理相关调用的 token 是否下降（F3），以及子任务输出被人工修改的比例。
-7. OmniRoute 的中断次数：一周内因 rate limit/额度耗尽导致的任务失败或等待次数（核心指标）。
-8. OmniRoute 的单位任务成本：同一批任务的 token 数与花费，网关组 vs 直连组。
-9. OmniRoute 的 p95 延迟：看板里的 p95 与实际体感；auto/fast 是否真的更快。
-10. OmniRoute 的压缩收益：挑 3 个“工具输出很长”的典型任务，记录开启压缩前后的输入 token 数，验证 15–95% 的宣传在你这里落在哪个区间。
-11. 质量对照：同批任务两组的返工率/一次通过率，防止“省了钱但答案变差”。
+6. 子代理相关调用的 token 是否下降（F3），以及子任务输出被人工修改的比例；
+7. OmniRoute 的中断次数：一周内因 rate limit/额度耗尽导致的任务失败或等待次数（核心指标）；
+8. OmniRoute 的单位任务成本：同一批任务的 token 数与花费，网关组 vs 直连组；
+9. OmniRoute 的 p95 延迟：看板里的 p95 与实际体感；auto/fast 是否真的更快；
+10. OmniRoute 的压缩收益：挑 3 个“工具输出很长”的典型任务，记录开启压缩前后的输入 token 数，验证 15–95% 的宣传在你这里落在哪个区间；
+11. 质量对照：同批任务两组的返工率/一次通过率，防止“省了钱但答案变差”；
 12. 稳定性：网关自身宕机时长、回退触发次数与回退后的成功率。
 
 指标（都自己测，不采信 README 的百分比）：
@@ -665,6 +812,13 @@ CLAUDE_CODE_SUBAGENT_MODEL=haiku claude
 - 贵模型实际被调用几次（Claude Code，F2a/F2b）：复杂决策点上 Opus 被实际调用的次数与效果；这个数字过高会把成本优势吃掉，过低则复杂改动的质量可能下降。
 - 子代理 token 占比（F3）：设置变量前后，子代理相关调用的 token 是否下降；原文没有给测量方法，需自己从会话用量里拆分。
 - 子任务质量（F3）：输出被人工修改的比例、返工次数、主观质量评分；若子任务降级导致返工增加，省下的 token 可能被抵消。
+- 429 中断与自动故障转移（model-relay）：一周内因 429 导致的任务失败/等待次数是否下降；failover.chain 实际触发几次，触发后任务是否继续。
+- 按窗口切换是否真的隔离（model-relay）：在 /provider 面板切当前窗口后，其他窗口是否仍走原 provider；pinned sessions 数量是否符合预期。
+- 钉住与冷却（model-relay）：429 后会话是否被钉住 7 天；10 分钟冷却后新会话是否回 Claude，已钉住会话是否保持不动。
+- 别名路由是否精确（model-relay）：haiku 请求是否走 backup，sonnet/opus 是否留在 Claude；子代理 model-relay:<name> 是否被选中，description 是否匹配任务类型。
+- 重试与最终成功率（model-relay）：retry.attempts / retry.delayMs / retry.backoff / retry.maxDelayMs 的实际效果；打开 retry.failover 后是否只转下一个且不回头。
+- proxy 模式副作用（model-relay）：如果启用，router 宕机时 git/curl/gh 是否失败，Claude Code 是否能重连；proxy disable 后会话是否恢复。
+- 成本与质量对照（model-relay）：同批任务开/不开 alias 或 failover 的 token/费用、返工率、任务完成率；材料没有效果数据，必须自己测。
 
 试多久、什么情况下停：
 
@@ -676,10 +830,11 @@ CLAUDE_CODE_SUBAGENT_MODEL=haiku claude
 - Claude Code /advisor（F1）：原文没有试用时长建议。先按单个项目、单个会话判断；若 /advisor 不存在、顾问全程不介入，或多次任务中开/不开顾问没有可观察差异，就停用并把结论降为 study。
 - Claude Code “Sonnet 主跑 + Opus 顾问”（F2a/F2b）：原文没有试用时长建议，先按单个任务、单个会话、单个中等复杂度改动判断；若命令或参数不存在、语法对不上、质量下降、或顾问调用次数高到费用接近全程 Opus，就退回原方式并把结论降为 study。
 - Claude Code 子代理固定为 Haiku（F3）：原文没有试用时长建议，先按 5–10 个任务的一批判断；若 token 没有明显下降或质量下降，就停用或只限低风险子任务，并把结论降为 study。
+- model-relay：原文没有试用时长建议。先只接一个备用 provider、只开 haiku alias，至少覆盖一次真实 429 或配额耗尽事件；若 429 中断/人工切换次数没有下降，或按窗口切换没有隔离，或 alias 没有按预期路由，或 proxy 模式让 git/curl/gh 变得不稳定，就停用并把结论降为 study。
 
 ## 常见坑
 
-- 把 README 的自述数字当结论。OmniRoute：375 个 provider、1475 个 chat 模型 ID、20 种路由策略、37 个集成、MCP 110 工具、56,000+ 静态测试声明、~1.62B 免费 token/月（首月含注册赠送最高 ~2.22B）、压缩省 15–95%（平均约 89%）、$0 起步，都没有给出可复现的测量方法或对照实验；免费额度数字依赖第三方条款，原文承认每两周重新审计、会双向波动；provider 数量与“可用”是两回事，新装可能没有可用 keyless 目标。agent-smith：86.89%/0.75% 来自 6 个合成任务 × 三种策略 × 单次尝试，没有第三方复现记录。FlagshipRouter：只有 37 stars 这类仓库元信息，没有任何性能、成本、质量或用户案例数据。Gluon：同样没有任何效果数据、对比实验或用户案例，“选择最具性价比的 agent”“成本与上下文可观测性”只是项目主张。LiteLLM：README 是特性索引 + 宣传，A2A agent 网关、MCP 工具网关、harness 跑任意模型、多租户成本追踪都只有概述，没有数据或对照实验。
+- 把 README 的自述数字当结论。OmniRoute：375 个 provider、1475 个 chat 模型 ID、20 种路由策略、37 个集成、MCP 110 工具、56,000+ 静态测试声明、~1.62B 免费 token/月（首月含注册赠送最高 ~2.22B）、压缩省 15–95%（平均约 89%）、$0 起步，都没有给出可复现的测量方法或对照实验；免费额度数字依赖第三方条款，原文承认每两周重新审计、会双向波动；provider 数量与“可用”是两回事，新装可能没有可用 keyless 目标。agent-smith：86.89%/0.75% 来自 6 个合成任务 × 三种策略 × 单次尝试，没有第三方复现记录。FlagshipRouter：只有 37 stars 这类仓库元信息，没有任何性能、成本、质量或用户案例数据。Gluon：同样没有任何效果数据、对比实验或用户案例，“选择最具性价比的 agent”“成本与上下文可观测性”只是项目主张。LiteLLM：README 是特性索引 + 宣传，A2A agent 网关、MCP 工具网关、harness 跑任意模型、多租户成本追踪都只有概述，没有数据或对照实验。model-relay：给定调研没有效果数据，正文还在“对应研究问题”处被截断。
 - 以为零凭证一定能 curl 通 OmniRoute。新调研的 README 要 Authorization 头，且全新安装可能没有可用 keyless 目标；早期材料里的无 key curl 只在存在 keyless 免费后端时可能可用。先用 Dashboard → Endpoints 的 key 走通，再决定要不要试 keyless。
 - 照抄 OmniRoute 的安装命令。本次材料在安装/首次运行章节被截断，npm i -g omniroute 和 Docker 镜像名只是线索；执行前回 README Quick Start 补齐。
 - 照抄 OmniRoute 的 combo 策略表。本次原文在策略表第 3 条处被截断，round-robin 及后续策略语义不完整；不要凭名字猜。
@@ -690,7 +845,7 @@ CLAUDE_CODE_SUBAGENT_MODEL=haiku claude
 - 把多把第三方 key 交给一个本地服务。OmniRoute README 称 key 本地加密（AES-256-GCM）、本地优先，但没有给出可照做的验证方法；网关 key 也不要泄露。
 - 只信 dashboard。savings 卡片不等于你自己的 p95 和账单；把 /dashboard/free-tiers 的 used/remaining 与供应商后台对照。
 - 一次把所有工具都切到网关。先只接一个，保留直连对照，否则无法判断是网关起了作用还是任务本身变简单了。
-- 端口撞车。OmniRoute 与 FlagshipRouter 默认都监听 localhost:20128，同时按默认端口启动会冲突；FlagshipRouter 可用 -p 换端口，OmniRoute 的材料没有给出改端口方式。LiteLLM 默认 4000，与上面两个不撞，但材料没有说明三家网关能叠加使用。
+- 端口撞车。OmniRoute 与 FlagshipRouter 默认都监听 localhost:20128，同时按默认端口启动会冲突；FlagshipRouter 可用 -p 换端口，OmniRoute 的材料没有给出改端口方式。LiteLLM 默认 4000，与上面两个不撞；model-relay 默认 8950，也不撞，但材料没有说明任何两家能叠加使用。
 - FlagshipRouter 默认面板密码是 123456。README 明确说暴露到 localhost 之外以前必须改；建议先用 --host 127.0.0.1 只本地监听。
 - 把 FlagshipRouter 的测试不全绿当成自己装坏了。README 自陈套件带已知失败：live-provider 测试、缺失的 cloud/ worker、对时序敏感的 DB 测试；引擎测试还在 tests/setup/providerPolicy.js 里把 free-only 策略关掉。
 - 拿 README 的示例模型名当真实模型。FlagshipRouter 的 gpt-6-astra 只是 README 示例，必须换成你自己 Ready 的模型。
@@ -723,13 +878,24 @@ CLAUDE_CODE_SUBAGENT_MODEL=haiku claude
 - 把 F1、F2a、F2b、F3 混着抄。四者目标不同，模型分工和入口也不同；材料未说明可叠加。
 - 把“别让配额白白浪费”当成效果结论。F1 的原文没有给出任何成本、效果或对比数据；可核实的互动量只有 70 赞、8 次转发、14 条回复。
 - 把 /advisor、--advisor 或 CLAUDE_CODE_SUBAGENT_MODEL 与 A–E 的网关/路由混为一谈。前者是 Claude Code 内部命令、启动参数或环境变量，材料未说明能与本地网关、Adaptive Router、Gluon 或 LiteLLM 集成；先分开试。
-- 材料本身是截断的。OmniRoute 本次原文在策略表第 3 条处被截断，安装/首次运行章节不完整；早期材料曾称在 19 种策略表第 12 行处截断，说明版本不同。Gluon 的给定文本也只是 README landing page。Claude Code 的三支原文都在关键处中断：F1 停在“Opus 5.5 继续工作 / Fable 5.1”；F2a 停在「Haiku 5.5」；F2b 停在“→ 只读 haiku 5.5”，没有文档链接、版本号和确切命令语法。F3 只给了一条环境变量，主模型与任务划分未展开。
+- 以为装了 model-relay 就自动把请求导出去。新配置下 haiku 及所有请求默认留在 Claude，不加 alias 不会外流；先 /provider doctor --ping，再显式 alias haiku backup。
+- 在已经跑着 Claude Code 的 shell 里 export key。key 由 router 进程从它继承的环境里读，旧 shell 的 export 补不进去；要写成永久变量并开新终端。
+- 在任意目录直接跑 node tools/setup.mjs。手动路径要在插件安装目录里跑，即 ~/.claude/plugins/cache/model-relay/model-relay/<version>/；否则用该目录下 tools/setup.mjs 的完整路径。
+- 把 key 粘到聊天里。用 /provider setup 时，setup 工具会替你跑，不会让你把 key 粘到聊天里，改 settings.json 前会征求同意；不要自己绕过这个流程。
+- 拿只会 OpenAI Chat Completions 的端点直接接 model-relay。model-relay 要求 provider 能接 Anthropic /v1/messages；只会说 OpenAI Chat Completions 的服务需要本地翻译层。原文第 8 步的 --url http://127.0.0.1:4000 只是示例，前提是该端点能接 Anthropic 格式。
+- 把 429 故障转移理解成“全局切换”。429 时只把请求转给 failover.chain 第一个 provider，并把这个会话钉住 7 天；冷却期（默认 10 分钟）后新会话再回去试 Claude，已钉住的会话保持不动。
+- 把 proxy 模式当无感隧道。HTTPS_PROXY 写在 settings.json 的 env 里，Claude Code 跑的命令（git、curl、gh）也会走 relay 当盲隧道，router 挂了它们就失败；proxy 模式下 router 停了 Claude Code 连不上，得 node tools/setup.mjs rc 重启；proxy disable --go 可逆，但已在 proxy 模式的会话要重启才能恢复。
+- 从 0.6 及更早版本升级只更新插件。0.7+ 只读 "format": 2，不迁移的话后台跑着的 0.6 router 会一直跑旧代码；用 /provider setup upgrade my model-relay config 或 migrate → migrate --go → /provider restart。
+- 把 doctor 当成会自动修。doctor 默认只报告、不改动；加 --fix 才让它自己修能修的问题；--json 给修复参数和是否需要确认。
+- 把 /provider 面板当成全局切换。它切的是“当前这个窗口”，其他窗口不受影响；这正是它和全局模型设置的区别。
+- 把 model-relay 当团队多租户代理。作者自己说那种场景应该用 LiteLLM；它是单人本地守护进程。
+- 材料本身是截断的。OmniRoute 本次原文在策略表第 3 条处被截断，安装/首次运行章节不完整；早期材料曾称在 19 种策略表第 12 行处截断，说明版本不同。Gluon 的给定文本也只是 README landing page。Claude Code 的三支原文都在关键处中断：F1 停在“Opus 5.5 继续工作 / Fable 5.1”；F2a 停在「Haiku 5.5」；F2b 停在“→ 只读 haiku 5.5”，没有文档链接、版本号和确切命令语法。F3 只给了一条环境变量，主模型与任务划分未展开。model-relay 的调研正文在“对应研究问题”处被截断，效果数据与集成方式未展开。
 - 名称相近但关系不明。OmniRoute 材料里作为 keyless 免费后端的 “OpenCode Free”（oc/…）与别处提到的 OpenCode 名称相近，但原文没有说明两者是否同一项目，不能确认；FlagshipRouter 也把 OpenCode Free 列为免注册可用模型来源，同样没有说明它与 OmniRoute 那边的 OpenCode Free 是不是同一回事。
 - agent-smith 的 USD 数值是“实测用量 × 冻结的 API Standard 参考价”，不是 Codex 订阅账单。
 - agent-smith 的难度打分是本地、未校准的启发式；缓存效应与用量覆盖不全（partial usage coverage）会如何影响成本对比，作者自己列为待解决问题。
 - agent-smith 除 Astra、6.1 Sol 外，原文没有给出被路由模型清单、支持的任务类型或失败案例。
 - agent-smith 分发为源码优先，无预打包 DMG，构建为 ad-hoc 签名；Float 仅 macOS 14+。
-- 七个项目与 F3 这条推文的材料都未说明可集成；同时安装或叠加配置时不要假设请求一定经过你以为的那一层。
+- 七个项目、F3 这条推文和 model-relay 的材料都未说明可集成；同时安装或叠加配置时不要假设请求一定经过你以为的那一层。
 
 ## 证据与来源
 
@@ -961,10 +1127,42 @@ CLAUDE_CODE_SUBAGENT_MODEL=haiku claude
 - 适用条件：使用 Claude Code、任务可拆出子代理、愿意用较弱模型处理子任务；对质量要求高且不能接受子代理降级的任务需谨慎。
 - 调研结论：可小范围试——先用 CLAUDE_CODE_SUBAGENT_MODEL=haiku claude 做一次 token 与质量的对照，若 token 明显下降且质量不下降或可接受，再考虑日常使用；否则只对低风险子任务使用。
 
+**model-relay（调研《cablate/model-relay》）**
+
+可当证据、可照做的操作性内容：
+
+- 定位：Claude Code 插件，本机 127.0.0.1:8950 上的轻量路由守护进程；按窗口/会话切模型，按 matchModels + ANTHROPIC_DEFAULT_*_MODEL 路由 haiku/sonnet/opus 别名请求，动态注册 model-relay:<name> 子代理类型，429 自动故障转移，provider 重试。
+- 安装：claude plugin marketplace add cablate/model-relay、claude plugin install model-relay@model-relay。
+- 配置：/provider setup、/provider setup use deepseek for haiku、/provider init；手动路径用 node tools/setup.mjs add <name> --preset <preset> --model <model id> --token env:<VAR>，且要在插件安装目录里跑。
+- 自检：/provider doctor --ping；doctor 默认只报告，--fix 才修，--json 给 fix 与 needsConsent。
+- alias：node tools/setup.mjs alias、alias haiku backup、alias haiku claude、alias subagent sonnet；settings.json 写 env.ANTHROPIC_DEFAULT_HAIKU_MODEL = "your-model-id[1m]"，model-relay.json 给 providers.backup.matchModels 加 "haiku"。
+- 子代理：providers.<name>.agent 的 description / effort / maxTurns；实测限制 permissionMode、initialPrompt、memory。
+- 429 故障转移：failover.enabled 默认 true；failover.chain 默认空；failover.cooldownMs 默认 600000（10 分钟，允许 60000–7200000）；retry.attempts 默认 3（0 = 无限重试）；retry.delayMs 默认 2000；retry.backoff 默认 2；retry.maxDelayMs 默认 10000；retry.failover 默认 false；429 后钉住会话 7 天，冷却后新会话回 Claude。
+- statusline：~/.claude/model-relay-status/<session id>，一行 kind<TAB>label；kind 为 claude / pinned / failover / limit / offline / direct；一周没更新会被删。
+- proxy：node tools/setup.mjs proxy enable --go、rc、proxy disable --go；HTTPS_PROXY 写进 settings.json 的 env，Claude Code 跑的命令也会走 relay 当盲隧道；proxy disable --go 可逆，旧 settings 保留为 settings.json.model-relay-backup，但已在 proxy 模式的会话要重启才能恢复。
+- 升级：0.6 及更早版本要 /provider setup upgrade my model-relay config 或 node tools/setup.mjs migrate → migrate --go → /provider restart；0.7+ 只读 "format": 2。
+- 前提：Node.js 20+，Claude Code 2.1.287+（作者在 Node.js 22.23.2 与 Claude Code 2.1.306 上测过）；provider 必须能接 Anthropic /v1/messages；只会 OpenAI Chat Completions 的服务需要本地翻译层。
+
+只是项目自述、未经验证的主张：
+
+- 按窗口/别名路由、429 故障转移、子代理类型、statusline 这些能力有命令和配置可照做，但给定调研没有给出成本、质量、稳定性或用户案例数据。
+- “单人本地守护进程，不是给整个组织用的多租户云代理”是作者自己的定位；多租户场景作者说应该用 LiteLLM。
+
+原文自己给出的限制说明与材料局限：
+
+- 本次调研正文在“对应研究问题”处被截断（停在“Agent 类型 model-rela”），没有完整问答与效果数据。
+- 所有 provider 必须能接 Anthropic /v1/messages；只会 OpenAI Chat Completions 的服务需要本地翻译层。
+- 环境变量必须在启动 Claude Code 前设好；在已跑着 Claude Code 的 shell 里 export 看不到。
+- 手动路径的 node tools/setup.mjs 要在插件安装目录里跑；在别处要用完整路径。
+- proxy 模式下 router 停了 Claude Code 连不上，Claude Code 跑的命令也会走 relay 当盲隧道；proxy disable 后已在 proxy 模式的会话要重启才能恢复。
+- 升级 0.6 及更早版本要迁移，否则后台旧 router 会一直跑旧代码。
+- 调研结论：如果你长期在 Claude Code 里工作，可以小范围试用：先只把 haiku 这类子任务和 429 故障转移接到一个备用 provider，用 /provider doctor --ping 确认链路通，再按窗口逐步放开。理由是 README 给出了可直接复制的安装、配置和自检命令，并有默认保守的开关；但它仍是单人用的本地守护进程，缺少效果数据，先小范围试、别急着全量替换。
+
 **材料边界**
 
-- 七个项目与 F3 这条推文的材料都未说明可以互相集成；同时安装或叠加配置时不要假设请求一定经过你以为的那一层。
+- 七个项目、F3 这条推文和 model-relay 的材料都未说明可以互相集成；同时安装或叠加配置时不要假设请求一定经过你以为的那一层。
 - 所有效果数字都需要自测；本手册只把可复制的命令、配置和提示词当作操作依据，把项目自述数字和作者主张当作待验证信息。
+- model-relay 的调研正文不完整，本手册只采用其中可复制的安装、配置、自检和默认值；没有把它写成已验证的成本/质量方案。
 
 ## 依据的调研
 
@@ -978,3 +1176,4 @@ CLAUDE_CODE_SUBAGENT_MODEL=haiku claude
 - [@sector_sol: 停止支付 opus 来做 haiku 的家庭作业。这个 claude 代码设置简直是黄金。](../research/radar/2026-10-16/3761-opus-haiku-claude.md)：值得一试，先在本地确认 Claude Code 是否支持 --advisor，再用 `claude --model sonnet --advisor opus` 做一次分层对照（sonnet 主会话、opus 只在决策点介入、haiku 承担只读杂活），验证成本与返工率是否改善；思路明确可试，但原文只有一条命令加几句分工、正文还被截断，没有任何成本或质量数据，参数与模型名也无法从材料内核实。
 - [@skunzu: 这是一个真正他妈的金矿](../research/radar/2026-10-22/5773-item.md)：值得一试，可小范围试：用 CLAUDE_CODE_SUBAGENT_MODEL=haiku 启动 Claude Code，把子代理固定为 Haiku，并对比 token 消耗与输出质量；但原文只给了一条环境变量，没有给出 Sonnet、Opus、Haiku 的完整分工和触发方式，不能当作完整多模型方案照搬。
 - [cheaper-inference/OmniRoute](../research/radar/2026-10-22/5842-cheaper-inference-omniroute.md)：值得一试，建议小范围试：在本地启动 OmniRoute，把 Claude Code 或 Cursor 的 base URL 指向 http://localhost:20128/v1，模型用 auto/subscription 或 auto/coding 跑一到两周，对比中断次数、单位任务 token 成本和 p95 延迟，再决定是否常态化。理由是它给出了可照做的接入方式与回退/路由配置，但省 token、免费额度等关键数字均为项目自述，且依赖第三方 provider 条款，必须先自测。
+- [cablate/model-relay](../research/radar/2026-10-23/6217-cablate-model-relay.md)：值得一试，如果你长期在 Claude Code 里工作，可以小范围试用：先只把 haiku 这类子任务和 429 故障转移接到一个备用 provider，用 /provider doctor --ping 确认链路通，再按窗口逐步放开。理由是 README 给出了可直接复制的安装、配置和自检命令，并有默认保守的开关；但它仍是单人用的本地守护进程，缺少效果数据，先小范围试、别急着全量替换。
