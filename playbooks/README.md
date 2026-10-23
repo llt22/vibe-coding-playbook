@@ -4,10 +4,10 @@
 
 | 手册 | 解决的问题 | 先试这一步 | 最近修订 |
 |---|---|---|---|
+| [让 agent 把计划和决策写回仓库，而不是留在聊天里](adopt-coding-agent-workflows.md) | 用编码 agent 干活时，把重复流程固化成技能和门禁，并让计划、决策、验收标准随代码签入仓库，避免上下文只留在人脑和聊天里。 | 先在一个多人协作的仓库里建 docs/plan.md 和 docs/decisions/，要求 agent 每个任务结束写一条决策记录并随 PR 提交。 | 2026-10-23 |
 | [让 AI 写的代码在合并前被读懂、被验证、留下证据](code-review-with-agents.md) | AI 写得比人读得快，代码评审容易退化成看 diff 猜结构、等告警、走形式；这篇手册给出一组可照做的关卡，让每个改动在合并前都有结构图、可复核的证据和明确的人类决策点。 | 先挑一个 1 到 2 个文件的小改动，让 Codex 用 simple-reviewer-v1 只审不改，生成代码拆解，并确认每个绿色状态背后都有命令输出或日志，而不是只靠静态阅读。 | 2026-10-23 |
 | [给 agent 加技能或约束前后：先做小范围对照，再决定是否纳入流程](build-and-install-agent-skills.md) | 这篇手册解决：给编码、写作或文档 agent 加技能、经验卡、领域包或最少代码约束时，如何用小范围对照确认它真的减少了返工，而不是只装上了。 | 先做做法 A：在一个非关键项目上只装一个候选技能，用同一任务做有/无各 3 次对照；若目标是编码 agent 过度工程，再按做法 BB 在带测试的代码库上跑 3–5 个任务。 | 2026-10-23 |
 | [让 agent 在说“完成”前拿出证据：七类交付物的验收做法](build-ui-components-with-agents.md) | 编码 agent 交出来的东西常常“看着完成了”——图表数据错、组件发明路由、架构图脱离真实系统、UI 全是模板味、特效没在真实引擎里跑过、界面文案塞满分隔符和冗余解释；这份手册把检查、渲染、评审和确认挪到 agent 交付之前，让你不必每次都自己开浏览器、开游戏窗口、手动点一遍。 | 挑一类你天天要验收的交付物（图表最容易起步）装一个对应 skill，或者先把“不要用中点‘·’分隔文案、不要加冗余解释性描述”两条规则发给 Codex/Claude Code 只做检索；同一 agent 在装与不装、改与不改的情况下各做一次同样任务，留一份基线对照。 | 2026-10-23 |
-| [让编码 agent 按可复用工作流干活，并在宣布完成前拿出证据](adopt-coding-agent-workflows.md) | 解决编码 agent 每次从零写提示、流程漂移、项目约定散落、「做完了」却没有证据、测试被改绿的问题。 | 先在一个真实项目里只复制 /optimize、项目 CLAUDE.md 和 code-review-specialist 三件套，跑 5 次真实任务并记录返工与误报，再决定是否加 hooks。 | 2026-10-23 |
 | [面对没有源码的系统，让 agent 先取证再重建](reverse-engineer-software-with-agents.md) | 当目标没有源码或设计意图不明时，如何让 agent 沿“取证—理解—重建—验收”推进，并用可核验的 Evidence 与验收器防止把合理猜测当结论。 | 先不配 MCP 和分析引擎，对一个已提取的 JavaScript/Electron 目录跑一次 `npx -y rea-agents@latest analyze-javascript-application /absolute/path/to/app --json`，看它能否返回内联 Evidence、恢复出的图与 limitations/unknowns。 | 2026-10-23 |
 | [让 AI 跨会话接续工作，而不是把旧笔记当事实](persistent-memory-for-coding-agents.md) | 解决 AI 每次新会话都要重复交代背景、把旧笔记或记忆当事实继续施工，以及团队内多 agent 记忆各自为政的问题。 | 先做最轻的做法 A：建 second-brain/memory 和 CLAUDE.md 规则，连续 1～2 周记录重复交代率；若你需要团队分层记忆，再按做法 H 在单团队、SQLite、一个客户端上试 2～3 次真实会话。 | 2026-10-23 |
 | [让编码会话在配额耗尽前自动换道，并留下验收证据](model-routing-for-coding-agents.md) | 把跨供应商配额、限流、死 key、模型选择和完成验收从人手切换变成可回退的本地路由与证据检查。 | 先挑一个非关键任务，只把一个工具或一个 haiku 别名接到本地路由，保留直连做 A/B，并用 /provider doctor --ping 或 curl 确认链路通。 | 2026-10-23 |
