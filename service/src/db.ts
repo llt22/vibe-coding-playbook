@@ -151,6 +151,7 @@ export class Store {
     this.db.exec('PRAGMA journal_mode = WAL;' + SCHEMA);
     const cols = (this.db.prepare(`PRAGMA table_info(items)`).all() as { name: string }[]).map((c) => c.name);
     if (!cols.includes('deep')) this.db.exec(`ALTER TABLE items ADD COLUMN deep INTEGER`);
+    if (!cols.includes('liked_at')) this.db.exec(`ALTER TABLE items ADD COLUMN liked_at TEXT`);
     const rcols = (this.db.prepare(`PRAGMA table_info(research)`).all() as { name: string }[]).map((c) => c.name);
     if (!rcols.includes('playbook')) this.db.exec(`ALTER TABLE research ADD COLUMN playbook TEXT; ALTER TABLE research ADD COLUMN merged_at TEXT`);
     // 进程被杀时遗留的 running 记录不会再结束，标成失败以免页面误以为仍在运行
@@ -316,5 +317,22 @@ export class Store {
 
   pushers(): { name: string; last_seen_at: string; last_count: number }[] {
     return this.db.prepare(`SELECT * FROM pushers ORDER BY name`).all() as { name: string; last_seen_at: string; last_count: number }[];
+  }
+
+  pendingLikes(limit = 3): { id: number; url: string; title: string }[] {
+    return this.db.prepare(`
+      SELECT i.id, i.url, i.title
+      FROM items i
+      LEFT JOIN research r ON r.item_id = i.id
+      WHERE i.source = 'ingest:x'
+        AND (i.relevance = 3 OR r.verdict IN ('adopt', 'try'))
+        AND i.liked_at IS NULL
+      ORDER BY i.first_seen_at DESC
+      LIMIT ?
+    `).all(limit) as { id: number; url: string; title: string }[];
+  }
+
+  markLiked(id: number): void {
+    this.db.prepare(`UPDATE items SET liked_at = ? WHERE id = ?`).run(now(), id);
   }
 }

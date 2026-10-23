@@ -324,6 +324,22 @@ export function handler(store: Store, catalog: Catalog) {
         return json(res, 200, { received: items.length, added });
       }
 
+      if (req.method === 'GET' && url.pathname === '/x/pending-likes') {
+        if (!config.ingestToken) return json(res, 503, { error: '未启用' });
+        if (!safeEqual(req.headers.authorization ?? '', `Bearer ${config.ingestToken}`)) return json(res, 401, { error: 'token 无效' });
+        const limit = Math.min(Number(url.searchParams.get('limit')) || 3, 10);
+        return json(res, 200, store.pendingLikes(limit));
+      }
+
+      if (req.method === 'POST' && url.pathname === '/x/mark-liked') {
+        if (!config.ingestToken) return json(res, 503, { error: '未启用' });
+        if (!safeEqual(req.headers.authorization ?? '', `Bearer ${config.ingestToken}`)) return json(res, 401, { error: 'token 无效' });
+        const body = JSON.parse(await readBody(req)) as { id?: number };
+        if (typeof body.id !== 'number') return json(res, 400, { error: 'id required' });
+        store.markLiked(body.id);
+        return json(res, 200, { ok: true, id: body.id });
+      }
+
       if (config.webPassword) {
         const expected = `Basic ${Buffer.from(`radar:${config.webPassword}`).toString('base64')}`;
         if (!safeEqual(req.headers.authorization ?? '', expected)) {

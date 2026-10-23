@@ -1,6 +1,5 @@
-// X 采集：用 Ego 里已登录的 X 会话只读搜索，结果推到本机服务的 /ingest。
+// X 采集与算法调教联动：用 Ego 搜索 X 推送到 /ingest，并对模型初筛/研报高分推文自动点赞。
 // 运行：service/x/run.sh（Ego 的 Node 进程不在当前目录，由 run.sh 注入 service 目录）
-// 只读：不发帖、不点赞、不关注。遇到登录墙直接失败，不尝试绕过。
 const { readFile } = await import('node:fs/promises');
 const DIR = '__SERVICE_DIR__';
 
@@ -50,6 +49,45 @@ try {
       if (/未登录/.test(e.message)) break;
     }
     await page.waitForTimeout(3000 + Math.random() * 3000);
+  }
+
+  // 联动点赞：根据本地雷达判定的高价值推文（relevance=3 或 adopt/try），在已开启的 Ego 会话里顺带点赞（每轮最多 3 条）
+  try {
+    const apiBase = endpoint.replace(/\/ingest$/, '');
+    const pendingRes = await fetch(`${apiBase}/x/pending-likes?limit=3`, {
+      headers: { authorization: `Bearer ${token}` }
+    });
+    if (pendingRes.ok) {
+      const pending = await pendingRes.json();
+      for (const item of pending) {
+        try {
+          await page.goto(item.url);
+          await page.waitForLoadState('domcontentloaded');
+          await page.waitForTimeout(2000);
+          const liked = await page.evaluate(() => {
+            const main = document.querySelector('article[data-testid="tweet"]');
+            if (!main) return false;
+            if (main.querySelector('button[data-testid="unlike"]')) return true;
+            const btn = main.querySelector('button[data-testid="like"]');
+            if (btn) { btn.click(); return true; }
+            return false;
+          });
+          if (liked) {
+            await fetch(`${apiBase}/x/mark-liked`, {
+              method: 'POST',
+              headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+              body: JSON.stringify({ id: item.id })
+            });
+            console.log(`[自动点赞成功] ${item.title.slice(0, 50)}`);
+          }
+          await page.waitForTimeout(2000);
+        } catch (e) {
+          console.error(`[自动点赞失败] ${item.url}:`, e.message);
+        }
+      }
+    }
+  } catch (e) {
+    console.error('获取待点赞任务失败:', e.message);
   }
 } finally {
   await task.finish({ keep: [] });
