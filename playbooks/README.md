@@ -4,6 +4,7 @@
 
 | 手册 | 解决的问题 | 先试这一步 | 最近修订 |
 |---|---|---|---|
+| [让 agent 在说“完成”前拿出证据：七类交付物的验收做法](build-ui-components-with-agents.md) | 编码 agent 交出来的东西常常“看着完成了”——图表数据错、组件发明路由、架构图脱离真实系统、UI 全是模板味、特效没在真实引擎里跑过、界面文案塞满分隔符和冗余解释；这份手册把检查、渲染、评审和确认挪到 agent 交付之前，让你不必每次都自己开浏览器、开游戏窗口、手动点一遍。 | 挑一类你天天要验收的交付物（图表最容易起步）装一个对应 skill，或者先把“不要用中点‘·’分隔文案、不要加冗余解释性描述”两条规则发给 Codex/Claude Code 只做检索；同一 agent 在装与不装、改与不改的情况下各做一次同样任务，留一份基线对照。 | 2026-10-23 |
 | [让编码 agent 按可复用工作流干活，并在宣布完成前拿出证据](adopt-coding-agent-workflows.md) | 解决编码 agent 每次从零写提示、流程漂移、项目约定散落、「做完了」却没有证据、测试被改绿的问题。 | 先在一个真实项目里只复制 /optimize、项目 CLAUDE.md 和 code-review-specialist 三件套，跑 5 次真实任务并记录返工与误报，再决定是否加 hooks。 | 2026-10-23 |
 | [面对没有源码的系统，让 agent 先取证再重建](reverse-engineer-software-with-agents.md) | 当目标没有源码或设计意图不明时，如何让 agent 沿“取证—理解—重建—验收”推进，并用可核验的 Evidence 与验收器防止把合理猜测当结论。 | 先不配 MCP 和分析引擎，对一个已提取的 JavaScript/Electron 目录跑一次 `npx -y rea-agents@latest analyze-javascript-application /absolute/path/to/app --json`，看它能否返回内联 Evidence、恢复出的图与 limitations/unknowns。 | 2026-10-23 |
 | [让 AI 跨会话接续工作，而不是把旧笔记当事实](persistent-memory-for-coding-agents.md) | 解决 AI 每次新会话都要重复交代背景、把旧笔记或记忆当事实继续施工，以及团队内多 agent 记忆各自为政的问题。 | 先做最轻的做法 A：建 second-brain/memory 和 CLAUDE.md 规则，连续 1～2 周记录重复交代率；若你需要团队分层记忆，再按做法 H 在单团队、SQLite、一个客户端上试 2～3 次真实会话。 | 2026-10-23 |
@@ -47,7 +48,6 @@
 | [AI 起草后，做一道“AI 味”清单检查再交付](detect-ai-slop-in-writing.md) | AI 起草的稿子读着假但说不出哪里假，缺少可逐条检查、按对照改写的清单流程。 | 挑一篇最近由 AI 起草、你觉得“读着有点假但说不出哪里假”的稿子，贴进对话并附上 FeedHive/ai-slop-detector 的清单，要求逐条列出命中的模式并给出行号。 | 2026-10-13 |
 | [让研究构思 agent 交出可证伪提案：冻结基线、精确版本证据、结构校验](research-ideation-with-agents.md) | 怎么把「研究构思」拆成一条可执行、有预算边界、产物可校验的多 agent 流水线，让 agent 交出带精确版本证据和可证伪预测的提案，而不是一个无法追溯的结论。 | 在 Claude Code 里装上 ideascientist 插件，拿自己熟悉的一个窄研究问题跑一次 `/ideascientist:ideate`，再用 `check_artifacts.py` 校验产物结构。 | 2026-10-13 |
 | [离开工位后，让手机接管本地正在跑的开发会话](remote-control-coding-sessions.md) | 如何在离开工位或切换设备时，不重开云端白板会话，而是让手机接管本地正在运行的 Claude Code 会话并尽量保持上下文连续。 | 在本地 Claude Code 会话里先聊几轮并植入一条只有该会话知道的信息，然后输入 /rc，用手机扫码接管，在手机上追问那条信息，看上下文是否连续。 | 2026-10-12 |
-| [让 agent 的交付物在真实环境里跑一遍，再交给另一个 agent 独立评审](build-ui-components-with-agents.md) | 编码 agent 交出的图表、组件、架构图、前端 UI 和游戏特效常常只是“看着完成了”，缺的是真实环境里的验证和第二方独立评审。 | 挑一类你已有的交付物（图表 / 组件 / 架构图 / 前端 UI / 特效），让 agent 在真实环境里渲染或运行一遍并留下证据，再让另一个看不到生成脚本的 agent 按固定评分表做一次独立评审。 | 2026-10-12 |
 | [给 AI 的写操作和外部执行装上可审批、可回滚、可拒绝的边界](agent-operations-with-permissions.md) | 让 AI 在审计、改代码、调外部服务和跨机器执行时，不拿到超出任务所需的权限，并对写操作保留审批、回滚与可核验记录。 | 先选一个不重要的项目或账号，只读跑一轮；再把一次写操作改成“出草案→人工核准→存还原点→沙箱执行”；如果你在 Windows 11，用 MXC 的 Permissive 模式跑一个无害任务并看活动报告。 | 2026-10-11 |
 | [让 AI 做数据分析：口径统一、结论可核对、动作可执行](data-analysis-with-agents.md) | 如何让 AI（编码代理或 Claude Dashboard）在数据分析中产出可核对、可行动的结论，而不是口径不一致或无法落地的文字。 | 先用一份自己手头的小数据（如先导出 X 账号一个 Tab 的数据，或本地 DuckDB 官方示例项目）跑一遍最小流程，看 AI 能否给出带具体数字和可执行动作的结论，不要一上来就接入关键业务数据。 | 2026-10-10 |
 | [让 agent 在提交漏洞报告前先分出证据与推断并否掉弱报告](triage-vulnerability-reports-with-agents.md) | 如何用 agent skill 做漏洞报告的分诊与提交前把关，做到证据与推断分离、拒绝弱报告、不夸大严重性，而不是直接把报告交出去。 | 先只做静态试用：装好 bug-bounty-triage，拿 3～5 份你已知结论的历史漏洞报告，逐份用给定模板跑一遍，看它能否拒掉你混进去的假阳性报告。 | 2026-10-10 |
