@@ -1,16 +1,18 @@
-# 给 agent 加技能或约束前后：先做小范围对照，再决定是否纳入流程
+# 让 agent 在迁移站点、建站和写代码前先拿基线与门禁证据
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：这篇手册解决：给编码、写作或文档 agent 加技能、经验卡、领域包或最少代码约束时，如何用小范围对照确认它真的减少了返工，而不是只装上了。
-> 先试这一步：先做做法 A：在一个非关键项目上只装一个候选技能，用同一任务做有/无各 3 次对照；若目标是编码 agent 过度工程，再按做法 BB 在带测试的代码库上跑 3–5 个任务。
-> 最近修订：2026-10-23
+> 解决的问题：这篇手册解决如何用可对照的最小试用和可复核的门禁，判断 agent 技能与流程是否真的减少返工，而不是拿安装成功、star 数或作者自述当效果。
+> 先试这一步：先在一个非关键项目上选一个真实小任务，记录不用技能时的基线，再只装一个技能做同任务对照，并保留截图、门禁输出或证明视频。
+> 最近修订：2026-10-24
 
 ## 解决什么问题
 
 你已经在用编码 agent、写作 agent 或通用 agent，但经常遇到五类问题：一是每次都要重复描述同一套规范，装了一个技能包也不确定是否真的减少返工；二是同类排障反复出现，agent 每次都从头试错，踩过的坑没有变成下一次可直接调用的经验；三是让 agent 复刻一段动效视频或 UI 录屏时，它看不到画面，只能凭想象写节拍、缓动、颜色和文字，最后用“看起来对”交差；四是读过的技术书或内部文档三个月后连第 7 章都记不起，想把书或文档变成 agent 可按需调用的技能，却只有一条命令和星标数，无法确认它是否真的能答对书内问题；五是编码 agent 过度工程：重复造轮子、写占位符或注释掉的代码、留下零散备份文件，任务结束时自测仍失败却不回去修，你无法判断加一个“少写代码”的约束层是否真的在测试不下降的前提下减少代码量和成本。
 
-这篇手册给出一套可照做的流程：先用做法 A 在一个非关键项目上试装一个现成技能包，用同一任务做有/无技能对照；确认有效后再把自己的重复工作写成 SKILL.md；同时用做法 AX 把重复踩坑写成短经验卡，放在 procedures/ 目录，用全局钩子让 agent 在动手前按现象定向读卡；如果编码 agent 过度工程，用做法 BB 在带测试的代码库上试装 lessloc，先记录基线，再看测试通过率不下降时代码量和成本是否下降；动效视频复刻用做法 BA，先让 agent 看片，再按页面契约写代码，用 frame_diff 逐帧打分、check_anim --runtime 体检、side_by_side 出证明视频；要把技术书、PDF 或内部文档变成技能，用做法 M，先记录不用技能时的基线问答，再小范围对照生成技能后的回答。专门场景（仪表盘截图验收、BA/PO 规格追溯、Android、SwiftUI、Elixir/Phoenix、Go 终端 UI、论文翻译、学术写作、长任务监督等）保留为索引，统一要求先小范围对照再采用。
+新增两个常见场景：六是要把线上内容站迁移成静态 Astro 站，却担心 URL、内容、SEO 标签、重定向、媒体路径和 390 / 768 / 1440 三档视觉不一致；七是要让 agent 建站，但它先写代码后补设计，最后反复返工，你希望先出设计图、人工审图，再照图实现。
+
+这篇手册给出一套可照做的流程：先用做法 A 在一个非关键项目上试装一个现成技能包，用同一任务做有/无技能对照；确认有效后再把自己的重复工作写成 SKILL.md；同时用做法 AX 把重复踩坑写成短经验卡，放在 procedures/ 目录，用全局钩子让 agent 在动手前按现象定向读卡；如果编码 agent 过度工程，用做法 BB 在带测试的代码库上试装 lessloc，先记录基线，再看测试通过率不下降时代码量和成本是否下降；动效视频复刻用做法 BA，先让 agent 看片，再按页面契约写代码，用 frame_diff 逐帧打分、check_anim --runtime 体检、side_by_side 出证明视频；要把技术书、PDF 或内部文档变成技能，用做法 M，先记录不用技能时的基线问答，再小范围对照生成技能后的回答；站点静态迁移用做法 BC，先在低流量站点或 20–50 页子站上跑到 PR + noindex staging，按十类门禁和三宽度像素对照验收；先出图再建站用做法 BD，先逐区或逐屏生成设计图，人工审图后再让编码 agent 照图实现。专门场景（仪表盘截图验收、BA/PO 规格追溯、Android、SwiftUI、Elixir/Phoenix、Go 终端 UI、论文翻译、学术写作、长任务监督等）保留为索引，统一要求先小范围对照再采用。
 
 ## 适用与不适用
 
@@ -27,6 +29,8 @@
 - 你需要 BA/PO 规格文档、用户故事、验收标准、测试用例和追溯矩阵，且宿主支持 Agent Skills（做法 AZ）。
 - 你要把扁平矢量动效、排版动画或 UI 动效录屏复刻成内联 SVG + GSAP 时间线，并希望用逐帧对照而不是口头判断验收（做法 BA）。
 - 你发现编码 agent 过度工程：重复造轮子、产生占位符/注释代码/零散备份文件，或任务结束时自测失败不继续修复；你愿意在带测试的代码库上做 3–5 个任务对照（做法 BB）。
+- 你要把一个 HTTP 可访问的内容站迁移成静态 Astro 站，且站点没有站内搜索、评论、购物车、登录、UGC 等静态站做不到的功能；你愿意先在低流量站点或 20–50 页子站上试（做法 BC）。
+- 你要让 agent 先产出落地页分区视觉稿、App 屏幕与流程或品牌规范板，人工审图后再建站；你的智能体具备图像生成能力，image-to-code 还需要同一智能体能写代码（做法 BD）。
 
 不适用：
 
@@ -41,6 +45,8 @@
 - 做法 AZ 适合愿意维护 Markdown 规格、按阶段调用命令的团队；不需要规格文档、只想快速写代码的团队价值有限；Windows 安装需另行适配；README 只有自述效果，没有独立验证。
 - 做法 BA 只覆盖扁平矢量风格的动效/排版动画/UI 动效录屏到代码，绑定 GSAP 生态；不适合实拍、复杂 3D、需要保留原始视频或逐帧描摹的任务；没有 Python 3.9+、ffmpeg、Playwright + chromium 的环境不要硬上；案例全部出自作者自证，没有独立 benchmark。
 - 做法 BB 当前材料只有 README，没有完整文档、配置说明或独立复现；无法判断隐藏测试是否覆盖真实质量，也无法判断代码减少是否以可维护性为代价；安装需要代理访问外部 URL，README 所称无网络调用与安装过程的关系未说明；更适合有现成代码库和测试的编码任务；对无测试、非编码任务或不同代理的实际效果没有证据；Cursor 和 OpenCode 虽被列为支持工具，但材料没有给出专属安装步骤，维持 watch；GitHub Copilot 在既有索引里为 drop，材料也没有给出具体设置步骤，不要仅凭支持列表采用。
+- 做法 BC 只适合内容型、可通过 HTTP 只读拿到内容的站点，WordPress 最佳；静态化后不能有站内搜索、评论、购物车、登录、UGC，这些会在 Intake 被判为 out of scope；需要 macOS 或 Linux，不支持 Windows；需要 Node 22/24，拒绝 EOL 的 Node 20；一次只跑一个站；默认构建会连线上问题一起复现，修不修由你批；像素一致不等于功能一致，第三方脚本、表单 endpoint、重定向规则依赖托管商配置，需在 staging 实测；45 站 / 83 分钟 / 45-45 像素一致与 PageSpeed 提升都来自作者自述，材料只有 README，不能独立复现门禁实现。
+- 做法 BD 当前只有 README，未拿到 SKILL.md 正文，无法核实技能内部提示词、参数与判定标准；没有第三方评测、对比数据、客户案例或生成图示例；“worth building from”“readable type”“consistent across a set”只是作者主张；仓库 30 stars，属小体量项目；纯出图三个技能要配能出图的智能体，image-to-code 要配既能出图又能写代码的智能体；Codex 装完必须新开会话；人工审图应作为闸门。
 - 各专门做法的边界见索引条目：E 只针对中文技术文档；F 只针对生物医学论文；M 不得再分发第三方版权书生成的 skill；P 只对自有或书面授权资产；T 不支持直接驱动交易或投顾建议；U 需要 Apple Silicon Mac 加 Codex desktop 加私有仓库访问权；AU 输出语言固定为韩语；AV 只有一条推文和一段被截断的安装提示词；AW 只有隔离模拟测试，不能当成真实客户端端到端可靠。
 
 ## 前置条件
@@ -97,11 +103,29 @@
 - 能记录新增/删除代码行数、改动文件数、token 或成本、测试通过率、review 评论数、返工次数、是否出现占位符/注释代码/备份文件、任务完成时间。
 - 注意 README 声称无需账号、API key、依赖和网络调用，但安装步骤本身要求代理访问链接，二者关系材料未展开；先确认网络和权限。
 
-专门做法 C–BB（含 M）另有前置，按索引条目和对应仓库 README 准备；不要跳过 A 的对照方法直接纳入常规流程。
+做法 BC 额外前置：
+
+- Node 22.23.4+（22 线）或 24.22.1+；Node 20 已 EOL，工具会拒绝运行。
+- git；若想让它自动建 repo 与 PR，需要 GitHub 账号且 `gh` 已登录。
+- Vercel 或 Cloudflare 账号（staging/生产用；只做转换可以不备）。
+- Playwright 的 Chromium，用于截图与视觉复核。
+- macOS 或 Linux；本版本不支持 Windows。
+- 一个能执行 shell 命令的编码智能体；若它有自带浏览器或能跑子智能体，技能会用上，没有也能跑完。
+- 一个低流量站点或 20–50 页的子目录/子站；对目标站只需只读访问，不需要 admin 登录、插件或数据库导出。
+- 明确不许碰 DNS；表单先指向测试 endpoint；只跑到 PR + noindex staging，不直接上线。
+
+做法 BD 额外前置：
+
+- 本机可用 `npx`（Node/npm 环境），或能用 Claude Code / Codex 的插件市场。
+- 纯出图的 imagegen-frontend-web、imagegen-frontend-mobile、brandkit 要配一个能生成图片的智能体；image-to-code 要配一个既能生成图片又能写代码的智能体。
+- Codex 安装后必须新开一个会话，技能才会被加载。
+- 仓库只提供 README，未提供 SKILL.md 正文；装好后需自行读 `skills/*/SKILL.md` 确认内部提示词和判定标准。
+
+专门做法 C–BD（含 M）另有前置，按索引条目和对应仓库 README 准备；不要跳过 A 的对照方法直接纳入常规流程。
 
 ## 操作步骤
 
-怎么选：先做做法 A；A 里某个技能确实有效、且你有一件每周重复且规范明确的工作，再做做法 B；如果你有一类重复排障任务，先做做法 AX；如果你要约束编码 agent 过度工程，先做做法 BB 的 3–5 个带测试任务试用；如果你要把技术书、PDF 或内部文档变成按需加载技能，先做做法 M 的最小试用；如果你要做仪表盘/数据屏，先做 AY 的半天试用；如果你要 BA/PO 规格链，先做 AZ 的一个小需求试用；如果你要把动效视频复刻成代码，先做 BA 的 10 秒小片闭环，并套用 A 的有/无对照方法。其余按场景从专门做法索引里选，且 C–BB（含 M）都必须套用 A 的对照方法。
+怎么选：先做做法 A；A 里某个技能确实有效、且你有一件每周重复且规范明确的工作，再做做法 B；如果你有一类重复排障任务，先做做法 AX；如果你要约束编码 agent 过度工程，先做做法 BB 的 3–5 个带测试任务试用；如果你要把技术书、PDF 或内部文档变成按需加载技能，先做做法 M 的最小试用；如果你要做仪表盘/数据屏，先做 AY 的半天试用；如果你要 BA/PO 规格链，先做 AZ 的一个小需求试用；如果你要把动效视频复刻成代码，先做 BA 的 10 秒小片闭环；如果你要把内容站迁成静态 Astro 站，先做 BC 的低流量站点或 20–50 页子站试用；如果你要先出设计图再建站，先做 BD 的一个真实落地页需求对照。以上都套用 A 的对照方法，其余按场景从专门做法索引里选。
 
 ### 做法 A：先用现成技能包做小范围试装（推荐先做）
 
@@ -492,7 +516,79 @@ Remove lessloc by following https://lessloc.org/remove.md
 
 预期结果是能回滚。材料没有给出更多移除细节。
 
-### 专门做法索引（C–BB）
+### 做法 BC：把内容站迁成静态 Astro 站，并用门禁与三宽度截图验收（先做低流量站点或子站）
+
+定位：ethanplusai/astro-conversion-kit 是一组 Agent Skills，把“把线上站点迁移成静态 Astro 站”交给编码智能体。README 的定位是迁完之后仍是同一个站：同样的 URL、内容、title/description/canonical/结构化数据、同样路径的媒体文件、旧站每一条重定向，以及 390 / 768 / 1440 三个宽度上逐像素校验过的设计。成品里没有 PHP、插件、数据库。分工写得明确：必须精确的部分由普通 Node 脚本做，每个阶段用门禁证明做完了才往下走；智能体负责抽象、修补、生成与提案。一次运行以一个 PR、一个 noindex 的 staging 部署、一份上线 runbook 收尾。
+
+1. 选一个低流量站点或 20–50 页的子目录/子站，确认它是内容型、可通过 HTTP 只读拿到内容。前提：不需要 admin 登录、插件或数据库导出；静态化后不能有站内搜索、评论、购物车、登录、UGC，这些会在 Intake 被判为 out of scope 并给替代方案。预期结果是你能在一个可回滚范围内试完整流程。
+2. 装技能包，三选一。前提：任意支持 Agent Skills 的智能体，或 Claude Code 插件市场，或愿意克隆仓库手动跑脚本。
+
+```bash
+npx skills add ethanplusai/astro-conversion-kit
+```
+
+Claude Code 插件市场：
+
+```text
+/plugin marketplace add ethanplusai/astro-conversion-kit
+/plugin install astro-conversion@astro-conversion-kit
+```
+
+或克隆下来：
+
+```bash
+git clone https://github.com/ethanplusai/astro-conversion-kit
+cd astro-conversion-kit
+npm install
+npx playwright install chromium
+node skills/convert-site/scripts/preflight.mjs
+```
+
+`preflight.mjs` 会列出本次运行需要的工具（Node、git、gh、托管 CLI、Playwright 浏览器）以及是否已安装、已登录。预期结果是缺什么当场知道，而不是跑到一半才发现。
+3. 用一句话发起整件事，把 example.com 换成你的站：
+
+```text
+Convert https://example.com to Astro with https://github.com/ethanplusai/astro-conversion-kit
+```
+
+智能体自己装技能、只问你一条消息的问题（repo 放哪、用哪个托管、表单怎么处理），每个问题都带默认值；回一句 `defaults` 就全用默认，然后一路跑到 PR 不再停。预期结果是你能在 Intake 阶段把 repo 位置、托管商、表单 endpoint 和静态站做不到的功能一次说清。
+4. 让它按八个阶段跑，中途不要插手：Intake 最多 4 个请求探测平台特征；Capture 限速、只读爬取 sitemap、WordPress REST API、页内链接，把每页 HTML、head 标签、重定向、媒体清单、字体、feed、截图存进 `capture/`；Plan 产出 `docs/plan.md`，模板、数量、媒体方案和每个异常点各占一行；Scaffold + baseline 在新 Astro repo 的 `astro-rebuild` 分支上搭骨架，把 capture 冻结成 `baseline/`，此后门禁不再依赖旧站；Build 先布局后页面，页面从抓下来的 markup 生成，CSS 按覆盖率裁剪，媒体放原路径（含 WordPress 生成的 `photo-300x200.jpg` 这类尺寸变体和 `srcset` 里列的所有副本），表单与第三方脚本按清单原样带过来；Gates 每次提交都对照 baseline 校验路由、重定向、SEO 标签、可见文本、链接、媒体、sitemap、feed、表单、脚本共十类；Visual review 每个模板在 390/768/1440 三个宽度出“线上 vs 新版”截图并做像素 diff，加一道 computed-style 检查，直到每一对都过，再把每一页在 390 和 1440 再扫一遍；Launch checks 在 repo 上跑 `pre-launch`，部署 staging，对 staging 跑 `launch-audit`，出一份建议报告，开 PR。预期结果是每个阶段都有产出物和门禁证据，而不是只看到一版页面。
+5. 停在 PR + noindex staging，不碰 DNS。前提：你已明确只做转换和 staging 验收。看 PR 里附的门禁输出、各项计数、每一条例外与提案，以及各上线技能 “Not covered” 章节的全文引用；看 contact sheet（每模板 × 每宽度的 线上/新版/diff 三联图）与 `docs/suggestions.md`（智能体发现但没动的问题：死链、缺 alt、重复 title、大图，每条带证据/工作量/风险）。确认 staging 是 noindex；按 `docs/LAUNCH.md` 里按顺序、带你所用托管商具体命令的 runbook 上线；合并 PR 由你点。上线后跑 `post-launch` 盯前 30 天，并可用 `npm run verify` 复跑门禁。
+6. 明确它拒绝做的事：在 EOL 的 Node 上跑；在线上站提交表单或登录；碰 DNS；往 `main` 提交除脚手架以外的任何东西（所有工作在 `astro-rebuild`，经你合并的 PR 进 `main`）；放宽任何一道门禁；一次只做一个站。不要把“像素一致”当成“功能一致”，第三方脚本、表单 endpoint、重定向规则（含 `www`、尾斜杠）依赖托管商配置，需在 staging 实测。
+7. 按可观察指标验收。门禁通过率：最终提交上十类门禁全部通过，例外必须逐条列出并由人签字，任何未解释的失败即未达标。重定向覆盖：抽样 30 条旧 URL（含 `?p=` 短链、`www`、尾斜杠变体），全部落到同内容页；覆盖率不到 100% 不上线。SEO 保真：抽 20 页比对 title / description / canonical / 结构化数据，差异数应为 0。媒体保真：抽样包含 WordPress 尺寸变体在内的图片 URL，内容（或字节/尺寸）与旧站一致。视觉：每模板 × 390/768/1440 出三联 contact sheet，未通过的配对必须为 0 才允许进入全站扫描；全站 390/1440 再复查一遍。人工成本：从“拿到 PR”到“可合并”的人工小时数，与自建迁移或上一次迁移对比。
+8. 把它当模板参考时，只抄骨架：单一提示词入口 + 只问一轮、每个问题带默认值；先把旧系统冻结成 baseline，门禁不依赖线上；一切要求精确的环节写成确定性脚本，用脚本产出而非模型自觉作为放行条件；开跑前用 preflight 探环境，缺什么当场说；Intake 阶段就把“静态站做不到的”（站内搜索、评论、购物车、登录、UGC）列出来并给三个选项：第三方嵌入 / 该部分留在原子域 / 另立项目；交付物是“你合并的 PR”，不是直接推送；上线后仍能用 `npm run verify` 复跑门禁。
+
+### 做法 BD：先出设计图、人工审图，再让编码 agent 照图建站（先做真实落地页对照）
+
+定位：Leonxlnx/imagegen-skills 是一个开源（MIT）技能仓库，把“让智能体产出值得照着做的设计图”拆成四个可安装技能：imagegen-frontend-web 做网站分镜稿，落地页每个分区一张图，构图有变化、文字可读；imagegen-frontend-mobile 做 iOS / Android / 跨端的 App 界面与流程，成套之间保持一致；brandkit 做品牌规范板，含 logo 方向、符号系统、色板、字体与应用；image-to-code 做整条流水线，先生成设计图，研究这些图，再照着建站。关键分工：前三个只产出图片，要配一个能出图的智能体，再把图交给编程智能体；image-to-code 需要既能出图又能写代码的智能体。材料只有 README，未拿到 SKILL.md 正文，无法核实内部提示词、参数与判定标准。
+
+1. 选一个真实但范围小的落地页需求（例如 5 个分区）或一组 App 屏幕流程，同时保留“不用任何设计图、直接让同一编程智能体建站”的基线。前提：失败可回滚，人工审图作为闸门。预期结果是你能拿到基线返工轮次和图片流水线的返工轮次。
+2. 装单个技能，把 `--skill` 的值换成 imagegen-frontend-web、imagegen-frontend-mobile、brandkit 或 image-to-code 之一；省略 `--skill` 则安装全部四个技能。前提：本机可用 `npx`。
+
+```bash
+npx skills add https://github.com/Leonxlnx/imagegen-skills --skill "imagegen-frontend-web"
+```
+
+3. 用 Claude Code 的话，走插件市场方式：
+
+```text
+/plugin marketplace add Leonxlnx/imagegen-skills
+/plugin install imagegen-skills@imagegen-skills
+```
+
+用 Codex 的话，走 Codex 插件命令；前提是装完必须新开一个 Codex 会话，技能才会被加载：
+
+```bash
+codex plugin marketplace add Leonxlnx/imagegen-skills
+codex plugin add imagegen-skills@imagegen-skills
+```
+
+如果以前是从 taste-skill 装的这批技能，改从本仓库安装即可，安装名没变，原有调用方式不用改。预期结果是技能能被目标智能体发现，而不是只在安装日志里成功。
+4. 按目标选型。只要设计图，选 imagegen-frontend-web、imagegen-frontend-mobile 或 brandkit 之一，配一个能出图的智能体；要“图 → 代码”闭环，选 image-to-code，配一个既能出图又能写代码的智能体。预期结果是出图与写码可以拆给两个智能体，用图作为交接物，而不是让同一个智能体边想设计边写代码。
+5. 跑流水线：先逐张生成设计图（web 按落地页分区，每区一张；mobile 按屏幕/流程成组生成，保证成套一致），人工看过图之后，再让编程智能体照图实现，而不是先写代码再补设计。前提：你已读 `skills/*/SKILL.md` 确认内部提示词和判定标准。预期结果是审图通过后再进入实现，减少“先写代码再返工”的轮次。
+6. 做对照与判定。可观察指标：审图通过率 = 可直接采用的图 / 生成的图；从图到可运行页面的返工轮次，对照基线“无图直接建站”的返工轮次；分区之间的风格一致性（构图、字级、间距是否成套）；文字可读性硬问题数（换行溢出、对比度不足、字被裁切）；端到端总耗时（出图 + 审图 + 实现 vs 直接实现）。品牌素材方向可加一个独立小测：用 brandkit 对同一品牌简报连出 3 组规范板，看 logo 方向、色板、字体、应用是否成套一致，以及人工挑选所需时间是否下降。若 3 组都跑不出可用方向，说明该技能在此场景暂不值得纳入手册。
+
+### 专门做法索引（C–BD）
 
 下表保留各专门做法的用途和入口，完整边界以对应仓库 README 和本手册的判断原则为准。所有条目都先套用做法 A 的对照方法。
 
@@ -549,6 +645,8 @@ Remove lessloc by following https://lessloc.org/remove.md
 | AZ | 做 BA/PO 规格文档、需求追溯与测试用例 | 安装 spmtitsolution/OpenBA-Kit；按 /brainstorm→/srs→/userstory→/ac→/test-cases→/preview 跑；用追溯矩阵和歧义词检查；保留原流程对照 |
 | BA | 把扁平动效视频或 UI 录屏复刻成 SVG + GSAP 代码，并用逐帧对照验收 | 安装 lovisdotio/motion2code；先跑 study_video 看片；按页面契约写页面；用 frame_diff 打分；用 check_anim --runtime 体检；用 render_anim 和 side_by_side 出证明视频；先做 10 秒小片试用 |
 | BB | 给编码 agent 加“只写满足需求的最少代码”约束，减少过度工程 | 安装 rextail-ai/lessloc；Claude Code 用 /plugin marketplace add https://get.lessloc.org/claude/lessloc.git 与 /plugin install lessloc@lessloc；其他代理说 Install lessloc for this project by following https://lessloc.org/install.md；在带测试代码库上做 3–5 个任务有/无对照；测试通过率不下降再看代码量、成本、review 返工 |
+| BC | 把内容站迁成静态 Astro 站，并用门禁与三宽度截图验收 | 安装 ethanplusai/astro-conversion-kit；跑 preflight.mjs；用 Convert https://example.com to Astro with https://github.com/ethanplusai/astro-conversion-kit 发起；按八阶段跑到 PR + noindex staging；十类门禁逐提交对照 baseline；390/768/1440 像素 diff；不碰 DNS |
+| BD | 先出设计图、人工审图，再让编码 agent 照图建站 | 安装 Leonxlnx/imagegen-skills；纯出图选 imagegen-frontend-web、imagegen-frontend-mobile 或 brandkit；图到代码选 image-to-code；先逐区/逐屏出图并人工审图，再让编程智能体照图实现；与直接写代码基线比返工轮次 |
 
 ## 怎么判断变好了
 
@@ -568,9 +666,13 @@ Remove lessloc by following https://lessloc.org/remove.md
 
 做法 BB 的最小试用方式：选一个代码库和 3–5 个有代表性、带测试的编码任务；同一代理和模型下，分别跑未安装基线组和安装试验组，任务顺序可交替以减少偏差；先在一名开发者、一个项目内试用，不要一开始全团队铺开。记录新增/删除代码行数、改动文件数、token 或成本、测试通过率、review 评论数、返工次数、是否出现占位符/注释代码/备份文件、任务完成时间。判断改善：同一任务测试通过率不低于基线；代码改动量中位数明显下降（可先以 15% 作为观察阈值）；成本不高于基线；review 没有因代码过少而增加返工。若测试通过率下降或 review 返工明显增加，应停用或仅保留为研究项。README 自述在 3 个开源项目的 117 个真实变更上，以隐藏测试判定，代码少 27%、成本低 23%、结果相同；单项目代码少 23%–36%、成本低 15%–26%。这些是项目方自述，材料中没有实验设计、任务分布、模型版本、成本计算方式和原始结果，不能当独立结论。
 
-专门做法 C–BB（含 M）的统一试用方式：选一个与所装技能对应的真实小任务，先在不装该技能的会话里做一次并保存输出，再装上做一次；同一任务至少跑 3 次，或换 2–3 个任务再下结论。通用指标是首稿可用率、人工修改次数、返工轮数、查文档时间、命令或配置正确率、权限申请次数、耗时和成本。各条目的特别指标按索引执行：M 看事实准确率、定位能力、完整性、稳定性和失败率；H 看测试是否通过、非空文件、git 改动；I 看交付前检查清单；J 看按 diagnostics 修的轮数；Y 看命题核对是否拦下方向改变；Z 看失败→通过证据；AH 看 tier 计数与 frontier 已解决比例；AI 看 /discover 是否产出假设清单与实验设计；AJ 看 diff 是否只含被请求改动；AK 看真实研究任务的前后差异；AP 看审计是否通过和 token 溯源比例；AQ 看 estack-doctor 是否只读并给出带证据的改进；AR 看技能是否按预期作用域安装和更新卸载；AS 看技能是否自动同步、blocked 是否下次同步移除；AT 看一次通过率、返工轮数和触发可靠性；AU 看图表公式位置、术语一致性、第二次翻译是否复用术语；AV 看动手前轮数和输出长度是否同时保住一次成功率；AW 看误报成功次数是否为 0、blocking objection 每轮关闭数、预算触顶是否记为未完成停止；AY 看问题清单命中率、可执行性、截图 QA 独有价值、数字一致性和 Sign-off 副作用；AZ 看歧义词数量、追溯覆盖率、评审轮次与返工、图与原型可用性、变更影响完整性；BA 看 frame_diff 最差五处、运行时体检、循环接缝、seek 确定性、是否内嵌视频或位图、渲染丢帧与并排对照视频；BB 看测试通过率、代码改动量、成本、review 返工、占位符/注释代码/备份文件和任务完成时间。
+做法 BC 的最小试用方式：选一个低流量站点或 20–50 页子目录/子站，先把 `preflight.mjs` 跑通；用第 3 步那句提示词发起，Intake 回 `defaults`（表单先指向测试 endpoint），明确不许碰 DNS；让它跑到 PR + noindex staging 就停，不上线。全程记录耗时与人工介入次数。判断指标：门禁通过率，最终提交上十类门禁全部通过，例外逐条列出并由人签字；重定向覆盖，抽样 30 条旧 URL（含 `?p=` 短链、`www`、尾斜杠变体）全部落到同内容页，覆盖率不到 100% 不上线；SEO 保真，抽 20 页比对 title / description / canonical / 结构化数据，差异数应为 0；媒体保真，抽样包含 WordPress 尺寸变体在内的图片 URL，内容（或字节/尺寸）与旧站一致；视觉，每模板 × 390/768/1440 出三联 contact sheet，未通过配对为 0 才进入全站扫描，全站 390/1440 再复查；人工成本，从拿到 PR 到可合并的人工小时数，与自建迁移或上一次迁移对比。以上阈值来自调研建议，不是独立实验结果。
 
-反向指标：加了技能后仍要口头纠正同一件事，先改 SKILL.md 或 description；文档改完只是删空话没补事实，先把代码、配置和真实报错给它读；agent 只凭自己的声明就宣布完成，而 git status 和测试报告不支持，作废重跑；同一断言连续失败 3 次还在本地重试，升级到强模型；出图技能每次失败都盲重试，说明没用上 diagnostics；plugin-eval 分数不错但真实任务没改善，说明把筛子当成了结论；AX 跑几个会话后 observation-log 或读卡行为仍不存在，先补钩子、触发词或探针，不要先加卡；M 只跑通 `/book-to-skill` 但同组问题的事实准确率、定位能力和完整性没有改善，就保留为待验证候选；AY 三档截图 QA 抓不出代码看不出的问题，就降级为 study；AZ 只是文档变多而追溯和评审返工没改善，就降级为 study/watch；BA 的 frame_diff 只给出整体分数却定位不到最差时刻，或 agent 仍在偷偷内嵌视频、描帧、改文字，说明页面契约和硬规则没被遵守，先修契约和硬规则，不要继续盲出片；BB 只在代码变少上看效果，不看测试通过率和 review 返工，或安装后仍产生占位符/注释代码/备份文件、自测失败不继续修复，先停用或只保留为研究项。
+做法 BD 的最小试用方式：装 `imagegen-frontend-web`，拿一个真实落地页需求（例如 5 个分区），让智能体逐区出图，共 5 张；装 `image-to-code`，对同一需求跑完整流水线：出图 → 读图 → 建站；设基线：同一需求、同一编程智能体，不用任何设计图直接建站。判断指标：审图通过率 = 可直接采用的图 / 生成的图；从图到可运行页面的返工轮次，对照基线的“无图直接建站”返工轮次；分区之间的风格一致性（构图、字级、间距是否成套）；文字可读性硬问题数（换行溢出、对比度不足、字被裁切）；端到端总耗时（出图 + 审图 + 实现 vs 直接实现）。品牌素材方向可加一个独立小测：用 `brandkit` 对同一品牌简报连出 3 组规范板，看 logo 方向、色板、字体、应用是否成套一致，以及人工挑选所需时间是否下降。如果 3 组都跑不出可用方向，说明该技能在此场景暂不值得纳入手册。
+
+专门做法 C–BD（含 M）的统一试用方式：选一个与所装技能对应的真实小任务，先在不装该技能的会话里做一次并保存输出，再装上做一次；同一任务至少跑 3 次，或换 2–3 个任务再下结论。通用指标是首稿可用率、人工修改次数、返工轮数、查文档时间、命令或配置正确率、权限申请次数、耗时和成本。各条目的特别指标按索引执行：M 看事实准确率、定位能力、完整性、稳定性和失败率；H 看测试是否通过、非空文件、git 改动；I 看交付前检查清单；J 看按 diagnostics 修的轮数；Y 看命题核对是否拦下方向改变；Z 看失败→通过证据；AH 看 tier 计数与 frontier 已解决比例；AI 看 /discover 是否产出假设清单与实验设计；AJ 看 diff 是否只含被请求改动；AK 看真实研究任务的前后差异；AP 看审计是否通过和 token 溯源比例；AQ 看 estack-doctor 是否只读并给出带证据的改进；AR 看技能是否按预期作用域安装和更新卸载；AS 看技能是否自动同步、blocked 是否下次同步移除；AT 看一次通过率、返工轮数和触发可靠性；AU 看图表公式位置、术语一致性、第二次翻译是否复用术语；AV 看动手前轮数和输出长度是否同时保住一次成功率；AW 看误报成功次数是否为 0、blocking objection 每轮关闭数、预算触顶是否记为未完成停止；AY 看问题清单命中率、可执行性、截图 QA 独有价值、数字一致性和 Sign-off 副作用；AZ 看歧义词数量、追溯覆盖率、评审轮次与返工、图与原型可用性、变更影响完整性；BA 看 frame_diff 最差五处、运行时体检、循环接缝、seek 确定性、是否内嵌视频或位图、渲染丢帧与并排对照视频；BB 看测试通过率、代码改动量、成本、review 返工、占位符/注释代码/备份文件和任务完成时间；BC 看十类门禁通过率、30 条旧 URL 重定向覆盖、20 页 SEO 差异、媒体保真、三宽度像素 diff 和可合并人工小时数；BD 看审图通过率、图到页面返工轮次、风格一致性、文字可读性硬问题和端到端耗时。
+
+反向指标：加了技能后仍要口头纠正同一件事，先改 SKILL.md 或 description；文档改完只是删空话没补事实，先把代码、配置和真实报错给它读；agent 只凭自己的声明就宣布完成，而 git status 和测试报告不支持，作废重跑；同一断言连续失败 3 次还在本地重试，升级到强模型；出图技能每次失败都盲重试，说明没用上 diagnostics；plugin-eval 分数不错但真实任务没改善，说明把筛子当成了结论；AX 跑几个会话后 observation-log 或读卡行为仍不存在，先补钩子、触发词或探针，不要先加卡；M 只跑通 `/book-to-skill` 但同组问题的事实准确率、定位能力和完整性没有改善，就保留为待验证候选；AY 三档截图 QA 抓不出代码看不出的问题，就降级为 study；AZ 只是文档变多而追溯和评审返工没改善，就降级为 study/watch；BA 的 frame_diff 只给出整体分数却定位不到最差时刻，或 agent 仍在偷偷内嵌视频、描帧、改文字，说明页面契约和硬规则没被遵守，先修契约和硬规则，不要继续盲出片；BB 只在代码变少上看效果，不看测试通过率和 review 返工，或安装后仍产生占位符/注释代码/备份文件、自测失败不继续修复，先停用或只保留为研究项；BC 只看“转换成功”或像素一致，不检查重定向、SEO、媒体和 staging 功能，或把作者自述的 45 站 / 83 分钟当独立证据，就降级为 study；BD 只看生成的图好看，不看审图通过率、图到页面的返工轮次和文字可读性硬问题，或把 30 stars 当质量证据，就降级为 study。
 
 ## 常见坑
 
@@ -584,7 +686,7 @@ Remove lessloc by following https://lessloc.org/remove.md
 - 做法 M：把第三方版权书生成的技能再分发；只处理自有或已获书面授权的文档。
 - 做法 M：原文提到支持“文档文件夹”但没有给出文件夹用法示例，不要自行编造命令，需以工具说明为准。
 - 做法 AX：把 procedures/ 当成启动时全量扫描的注入库；正确做法是钩子常驻、按现象定向搜卡。
-- 做法 AX：等到收尾才回忆补卡；实测收尾补卡不容易自发发生，踩坑当下记 inbox 更可靠。
+- 做法 AX：等到收尾才回忆补卡；实测收尾补卡不容易在会话中自然发生，踩坑当下记 inbox 更可靠。
 - 做法 AX：一次写十几张卡；先从最近 2–3 个复发坑开始，每张不超过 2 KB。
 - 做法 AX：卡片写成复盘报告，缺少命令、参数、路径、报错原文、判据和证据。
 - 做法 AX：agent 不读卡时先加卡；应先查钩子位置、措辞和触发词，再用探针验证。
@@ -608,6 +710,18 @@ Remove lessloc by following https://lessloc.org/remove.md
 - 做法 BB：把 hooks 当已可配置；材料没给 hook 细节和配置文件，需观察实际行为。
 - 做法 BB：不先记录基线就安装；没有基线无法判断测试通过率、代码量和成本是否改善。
 - 做法 BB：一开始全团队铺开；先一名开发者、一个项目、3–5 个带测试任务试用。
+- 做法 BC：把“像素一致”当“功能一致”；第三方脚本、表单 endpoint、重定向规则（含 www、尾斜杠）依赖托管商配置，必须在 staging 实测。
+- 做法 BC：在 Windows 上硬跑或使用 EOL 的 Node 20；本版本要求 macOS/Linux 和 Node 22/24。
+- 做法 BC：让 agent 碰 DNS、在线上站提交表单或登录、直接推 main、放宽门禁；这些是设计上拒绝做的事，不要绕过。
+- 做法 BC：一次跑多个站或拿生产高流量站做第一次试用；先低流量站点或 20–50 页子站。
+- 做法 BC：只看转换成功，不抽样旧 URL、SEO 标签、媒体路径和三宽度截图；没有门禁输出和 staging 验收就不算完成。
+- 做法 BC：把作者自述的 45 站 / 83 分钟 / 45-45 像素一致 / PageSpeed 提升当独立结论；材料只有 README，门禁实现和其余文档不在材料里。
+- 做法 BD：没装 SKILL.md 正文就宣称技能内部提示词和判定标准已验证；本次只有 README。
+- 做法 BD：把出图当终点，不安排人工审图就进入实现；审图通过率是必要闸门。
+- 做法 BD：先写代码再补设计图；这会回到“边想设计边写代码”的返工模式，应先生成图、研究图、再照图建站。
+- 做法 BD：用纯出图的 imagegen-frontend-web、imagegen-frontend-mobile 或 brandkit 时不配能出图的智能体；image-to-code 不配既能出图又能写代码的智能体。
+- 做法 BD：Codex 安装后不新开会话，技能未加载就下结论。
+- 做法 BD：把 30 stars 或「worth building from」「readable type」「consistent across a set」当测量结果；没有第三方评测、对比数据或生成图示例。
 - 做法 AV：把作者的一条推文当效果结论；材料里的安装提示词被截断，不能照抄成完整提示词；不要直接让 Codex 自行安装未经审阅的第三方仓库。
 - 做法 AW：把 28 个本地测试通过、skill validator 通过或隔离模拟 UI 测试当成真实客户端端到端可用；误报成功一次就说明验证环节不可靠。
 - 其他专门做法的坑按索引条目和对应 README 执行；例如 AU 不要把 kopaper ready 当翻译质量证据，AT 不要把 evaluations 当成公开评测集，AS 不要把 skillcrew doctor 通过当团队工作变好。
@@ -621,7 +735,9 @@ Remove lessloc by following https://lessloc.org/remove.md
 - 做法 AZ 来自调研《spmtitsolution/OpenBA-Kit》README。可核查信息包括：README 自述 56 个 Agent Skills、19 条需求工程规则、47 个模板、9 个 SDLC 阶段、45 种图类型、diagram-design 为 v2.6；安装命令包括 mkdir -p ~/.claude/skills 与 ln -s 挂载 skills/，Hermes 示例用 ~/.hermes/skills；斜杠命令表与一天工作流；scripts/render_diagrams.py 的两条命令；追溯矩阵 Idea → PRD → SRS → Flows → User Stories → AC → Test Cases；外部指标只有 36 stars。作者主张而非证据：README 说可自动化完整软件规格生命周期、能消除歧义、避免幻觉假设和 bug 与返工及失败 sprint、能一键交接干系人，这些都没有附 benchmark、客户案例、前后对比数据或失败案例。关键内容未展示：原文只列出技能、规则和模板名称，没有给出具体提示词、规则全文、模板内容或脚本实现，因此无法验证技能质量、规则是否真的能自动检测歧义、渲染脚本是否稳定。适用条件是适合需要规范化 BA/PO 文档且团队愿意按阶段调用命令、维护 Markdown 规格和图表，宿主需支持 Agent Skills；README 的安装示例是 mkdir 和 ln -s，未给 Windows 命令，Windows 环境需另行适配；对只需要快速写代码、没有规格文档流程的团队价值有限。手册中的 AZ 指标是基于其可检查产出提出的试用指标，不是原文效果数据。
 - 做法 BA 来自调研《lovisdotio/motion2code》。可核查信息包括：Claude Code 的 claude plugin marketplace add 与 claude plugin install motion2code@motion2code、手工 cp -R skills/motion2code ~/.claude/skills/、npx skills add lovisdotio/motion2code、Codex/Cursor/Copilot/Gemini CLI/Hermes/claude.ai 的适配路径；scripts/study_video.py、palette.py、frame_diff.py、check_anim.py --runtime、render_anim.py、side_by_side.py 的命令与输出说明；页面契约 window.anim = { tl, duration, seek(t), play(from), pause() }，?t=6.5、?external=1、data-ready 标记；硬规则包括只用源视频、不内嵌视频、不描帧、文字照抄、SVG 采样颜色、GSAP 单一时间线、frame(duration) 等于 frame(0)、每个时刻并排对照。原文给出的 gallery 有 6 个重建案例：动效排版 10 s、24 KB；匹配剪辑 10 s、40 KB；节日站点回放 15 s、52 KB，含 real site；天气站回放 15 s、60 KB，含 real site；贴纸作品集回放 15 s、56 KB，含 real site；播客播放页回放 15 s、36 KB，含 real site。每个案例带 compare.html 逐帧对照与 480p 源片。哪些只是作者主张：原文称支持约 70 多个 agent、能堵住 agent 看不到视频时凭想象写节拍/缓动/颜色/拼写甚至偷偷嵌视频或描帧的问题，但案例全部出自作者自证，没有独立 benchmark、第三方复现或失败案例统计；只覆盖扁平矢量风格并绑定 GSAP 生态，不能证明可推广到实拍、复杂 3D 或其他动画技术栈；原文没有给出定时或事件触发的自动化编排，?external=1、纯函数 seek 与 frame_diff 分数只是让“渲染 → 打分 → 定位最差时刻 → 回去改”可脚本化，仓库 README 未声明已实现该循环。手册中的 BA 指标是基于其可检查产出提出的试用指标，不是原文效果数据。
 - 做法 BB 来自调研《rextail-ai/lessloc》README。可核查信息包括：项目为 Apache-2.0 开源工具层；README 把 Claude Code、Codex、OpenCode、GitHub Copilot、Gemini CLI、Cursor 列为支持工具；Claude Code 安装命令为 `/plugin marketplace add https://get.lessloc.org/claude/lessloc.git` 与 `/plugin install lessloc@lessloc`；其他受支持代理的安装提示词为 `Install lessloc for this project by following https://lessloc.org/install.md`，移除提示词为 `Remove lessloc by following https://lessloc.org/remove.md`；README 声称无需账号、API key、依赖和网络调用，但安装步骤本身要求代理访问链接，二者关系材料未展开；README 称代理会设置 hooks，并在任务到 done 时若自测仍失败会回去修复，但材料没有说明触发条件、hook 实现和持续运行方式；npm 场景也用安装提示词，材料没有给出独立的 npm 安装命令。README 给出的基准数字是：最多减少 36% 代码、降低 26% 成本且结果相同；在 3 个开源项目的 117 个真实变更上，以隐藏测试判定，代码少 27%、成本低 23%、结果相同；每个测试项目减少 23%–36% 代码、降低成本 15%–26%。这些是项目方自述，材料中没有实验设计、任务分布、模型版本、成本计算方式和原始结果，不能当独立结论。作者主张而非证据：代理会复用项目已有代码、拒绝占位符/注释掉的代码/零散备份文件、任务结束时自测失败会继续修复；这些行为描述没有可复制的配置项。局限：当前材料只有 README，没有完整文档、配置说明或独立复现，无法判断隐藏测试是否覆盖真实质量，也无法判断代码减少是否以可维护性为代价；更适合有现成代码库和测试的编码任务；对无测试、非编码任务或不同代理的实际效果没有证据；Cursor 和 OpenCode 虽列为支持工具但没有专属安装步骤，维持 watch；GitHub Copilot 在既有索引里为 drop，材料也没有给出具体设置步骤。手册中的 BB 指标是基于其可检查产出提出的试用指标，不是原文效果数据。
-- 做法 C–BB 的证据与局限按本手册现有正文所合并的各篇调研保留；本版新增了 BB 的可核查命令、试用指标、作者主张与局限，但没有新增 BB 的独立效果数据，也没有把它升级为已验证结论。各条目的可照做命令、作者主张、无效果数据的部分，均以对应仓库 README 和原文限制为准。
+- 做法 BC 来自调研《ethanplusai/astro-conversion-kit》README。可核查信息包括：MIT 许可；`npx skills add ethanplusai/astro-conversion-kit`、Claude Code 的 `/plugin marketplace add ethanplusai/astro-conversion-kit` 与 `/plugin install astro-conversion@astro-conversion-kit`、克隆后 `npm install`、`npx playwright install chromium`、`node skills/convert-site/scripts/preflight.mjs`；发起提示词 `Convert https://example.com to Astro with https://github.com/ethanplusai/astro-conversion-kit`；八阶段流程与十类门禁；390/768/1440 三宽度像素 diff 与 computed-style 检查；PR + noindex staging + 上线 runbook；`pre-launch`、`launch-audit`、`post-launch`、`npm run verify`；明确拒绝碰 DNS、在线上站提交表单或登录、放宽门禁、一次做多个站。原文给出的数据/案例：45 个 WordPress 站在套件上完成转换，平均耗时 83 分钟；45/45 通过三个宽度的像素一致性复核；Google PageSpeed 移动端 74→98、桌面端 87→99；三个公开 demo 为 sxsw.com（WordPress VIP、区块主题、71 页）、harvard.edu（WordPress 多站点、457 页）、angrybirds.com（WP Engine、388 页、媒体放 Vercel Blob）。这些平均数、通过率和 PageSpeed 提升均来自 README 的 `docs/examples/results.png` 与文字描述，demo 站是否确由该套件按其发布版本生成无法核实；抓取到的内容只有 README，门禁具体实现、各脚本、`docs/process.md`/`docs/platforms.md`/`docs/faq.md` 都不在材料内，因此“步骤级可照做”只到命令与阶段这一层，页面级转换细节无法据此复现。手册中的 BC 指标（30 条旧 URL、20 页 SEO、媒体抽样、contact sheet 未通过配对为 0）来自调研建议，不是独立实验数据。
+- 做法 BD 来自调研《Leonxlnx/imagegen-skills》README。可核查信息包括：MIT 许可；四个技能 imagegen-frontend-web、imagegen-frontend-mobile、brandkit、image-to-code 的分工；`npx skills add https://github.com/Leonxlnx/imagegen-skills --skill "imagegen-frontend-web"`，省略 `--skill` 安装全部四个；Claude Code 的 `/plugin marketplace add Leonxlnx/imagegen-skills` 与 `/plugin install imagegen-skills@imagegen-skills`；Codex 的 `codex plugin marketplace add Leonxlnx/imagegen-skills` 与 `codex plugin add imagegen-skills@imagegen-skills`，装完必须新开 Codex 会话；前三个只产出图片，要配能出图的智能体，image-to-code 要配既能出图又能写代码的智能体；README 一句话描述流水线是 generate the design images, study them, then build the website to match；作者也是 taste-skill 的作者，2026 年 10 月从 taste-skill 移到本仓库，安装名不变。原文没有第三方评测、对比数据、客户案例或生成图示例；「worth building from」「readable type」「consistent across a set」都是作者主张，不是测量结果；仓库 30 stars 来自搜索元数据；最大局限是本次只拿到 README，未拿到 SKILL.md 正文，无法核实技能内部提示词、参数与判定标准，也无法判断它相对直接在对话里要求出图有什么实质差别。手册中的 BD 指标（审图通过率、图到页面返工轮次、风格一致性、文字可读性硬问题数、端到端耗时）来自调研建议，不是原文效果数据。
+- 做法 C–BD 的证据与局限按本手册现有正文所合并的各篇调研保留；本版新增了 BC、BD 的可核查命令、试用指标、作者主张与局限，但没有新增 BC、BD 的独立效果数据，也没有把它们升级为已验证结论。各条目的可照做命令、作者主张、无效果数据的部分，均以对应仓库 README 和原文限制为准。
 - 文中提到的 star 数来自 metrics 或作者主张，不构成有效性证据。
 
 ## 依据的调研
@@ -686,3 +802,5 @@ Remove lessloc by following https://lessloc.org/remove.md
 - [lovisdotio/motion2code](../research/radar/2026-10-21/5453-lovisdotio-motion2code.md)：值得一试，可在 Claude Code / Cursor 等已装技能的智能体里装这个技能，先用一段 10 秒左右的扁平动效视频跑通“study_video 看片 → 写页面 → frame_diff 逐帧打分 → check_anim --runtime 体检 → side_by_side 出证明视频”这条闭环；它把“看起来对”换成了可打分、可复现的逐帧对照，并给看不见视频的 agent 补上了“眼睛”。但它只覆盖扁平矢量动效、绑定 GSAP 生态、案例全部出自作者自证，所以先小范围试，重点是把这套“确定性 seek + 逐帧对照”的验证方式搬到其他视觉产出任务上。
 - [@RoundtableSpace: 你曾经读过一本很棒的书。三个月后，你甚至记不起第7章的存在。](../research/radar/2026-10-23/6274-7.md)：值得一试，建议小范围试用：用一本结构清晰的技术书或内部文档跑通 `/book-to-skill`，再把生成的技能接入 Claude Code 对比问答效果。原文只给了单条命令和星标数，缺少安装、输出格式与验证细节，暂不宜直接写成成熟手册流程。
 - [rextail-ai/lessloc](../research/radar/2026-10-23/6306-rextail-ai-lessloc.md)：值得一试，建议在现有编码代理流程中做小范围试用：先用 Claude Code 插件命令或让代理按 install.md 安装，在受控任务上对比代码量、成本和测试通过率。理由是 README 给出了可复制的安装方式和带隐藏测试的基准数字，但材料仅限 README，缺少配置细节与独立验证，暂不宜直接全面采用。
+- [ethanplusai/astro-conversion-kit](../research/radar/2026-10-24/6510-ethanplusai-astro-conversion-kit.md)：值得一试，挑一个低流量站点或 20–50 页的子站，按 README 用一条提示词跑到「PR + noindex staging」为止、不要动 DNS，同时把它「环境预检 → 冻结基线 → 逐提交门禁 → 只出 PR → 留 verify 命令」的技能包骨架参考为自建 Agent Skill 的模板。理由是安装命令、发起提示词、八阶段流程与验收门禁都写得具体、可照做；但 45 站 / 83 分钟 / 45-45 像素一致这类成效全部来自作者自述且未经独立验证，具体门禁实现与其余文档也不在抓取到的材料里，所以先小范围试而不是直接采用。
+- [Leonxlnx/imagegen-skills](../research/radar/2026-10-24/6511-leonxlnx-imagegen-skills.md)：值得一试，先把 imagegen-frontend-web 与 image-to-code 装进现有的 Claude Code 或 Codex 工作流，在真实落地页需求上按“先出图、审图、再按图建站”走一遍，再和“直接写代码”的基线比返工轮次；理由是安装与调用步骤在原文里给全了，且流水线思路明确，但技能内部提示词（SKILL.md）未提供，只能小范围试。
