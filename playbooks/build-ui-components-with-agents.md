@@ -1,22 +1,22 @@
-# 让 agent 在说“完成”前拿出证据：七类交付物的验收做法
+# 让编码 agent 在宣布完成前过验收门禁：从图表、组件、架构图到前端与特效
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：编码 agent 交出来的东西常常“看着完成了”——图表数据错、组件发明路由、架构图脱离真实系统、UI 全是模板味、特效没在真实引擎里跑过、界面文案塞满分隔符和冗余解释；这份手册把检查、渲染、评审和确认挪到 agent 交付之前，让你不必每次都自己开浏览器、开游戏窗口、手动点一遍。
-> 先试这一步：挑一类你天天要验收的交付物（图表最容易起步）装一个对应 skill，或者先把“不要用中点‘·’分隔文案、不要加冗余解释性描述”两条规则发给 Codex/Claude Code 只做检索；同一 agent 在装与不装、改与不改的情况下各做一次同样任务，留一份基线对照。
-> 最近修订：2026-10-23
+> 解决的问题：编码 agent 的交付物常“看着完成了”，这份手册给出八条可落地做法，把检查、真实渲染、独立评审和前后快照前置到 agent 宣布完成之前。
+> 先试这一步：先拿一个已有网页跑 `/hallmark audit <path>` 只出报告，或按做法 A 用 evident-charts 审一张已有图表，建立基线后再决定扩展到哪条做法。
+> 最近修订：2026-10-25
 
 ## 解决什么问题
 
-编码 agent 交出来的东西常常“看着完成了”：图表用了没说清的对数轴、把 EU 总量和它的成员国排在一起、来源行靠猜或直接写文件名、图上还留着 TODO；组件会发明路由、引入第二套设计系统、漏掉加载/取消/无效输入/结果恢复这类状态；架构图则可能脱离真实系统、与部署漂移、无法增量维护；前端界面则是“所有模型都在同一套 SaaS 模板上训练”，不加指导就产出同样的坏味道——Inter 字体、紫到蓝渐变、卡片套卡片、彩色背景上的灰字、每个标题上方一个圆角方块图标；界面文案里塞满中点“·”分隔符和重复标题含义的解释性描述，把界面弄脏、分散用户注意力；游戏实时特效则可能“代码编译通过、linter 通过”，但没有任何人在真实引擎里看过它长什么样。更麻烦的是，改完前端 UI 或特效后，你往往还要自己开浏览器、起 localhost、开 Godot 窗口、手动点一遍才能确认。
+编码 agent 交出来的东西常常“看着完成了”：图表用了没说清的对数轴、把 EU 总量和它的成员国排在一起、来源行靠猜或直接写文件名、图上还留着 TODO；组件会发明路由、引入第二套设计系统、漏掉加载/取消/无效输入/结果恢复这类状态；架构图则可能脱离真实系统、与部署漂移、无法增量维护；前端界面则是“所有模型都在同一套 SaaS 模板上训练”，不加指导就产出同样的坏味道——Inter 字体、紫到蓝渐变、卡片套卡片、彩色背景上的灰字、每个标题上方一个圆角方块图标；界面文案里塞满中点“·”分隔符和重复标题含义的解释性描述，把界面弄脏、分散用户注意力；游戏实时特效则可能“代码编译通过、linter 通过”，但没有任何人在真实引擎里看过它长什么样；网页页面还容易落入模型默认套路——每个标题上方的 eyebrow、字距拉开的大写标签、标题里一个彩色词、整页空框或全是照片、hero 撑不满一屏、每页结尾都塞订阅框、表单点“谢谢”却没真提交——重设计时还可能把原有链接、表单字段、事件处理器和标题弄丢。更麻烦的是，改完前端 UI 或特效后，你往往还要自己开浏览器、起 localhost、开 Godot 窗口、手动点一遍才能确认。
 
-这份手册给七条可落地的做法，把“检查”和“展示”从你手里挪到 agent 交付之前：图表过三道检查、组件写代码前先签契约、架构图从真实来源生成并在合并前校验、前端 UI 先固定持久事实再用确定性规则当门禁、让 Claude Code 在终端里直接展示截图/录屏/前后对比 QA、让游戏特效在真实 Godot 视口里渲染成胶片条再交由另一个 agent 独立评审，以及把两条界面文案规则变成“先检索列清单 → 人工确认 → 再改 → 前后截图对照”的流程。特效那条的骨架——生成 → 真实渲染验证 → 独立评审 → 防篡改证据绑定到具体构建——不限于特效，可以直接搬到别的交付物；文案那条则是反面补充：规则本身主观，必须留人工确认这一环，不能全自动。
+这份手册给八条可落地的做法，把“检查”和“展示”从你手里挪到 agent 交付之前：图表过三道检查、组件写代码前先签契约、架构图从真实来源生成并在合并前校验、前端 UI 先固定持久事实再用确定性规则当门禁、让 Claude Code 在终端里直接展示截图/录屏/前后对比 QA、让游戏特效在真实 Godot 视口里渲染成胶片条再交由另一个 agent 独立评审、把两条界面文案规则变成“先检索列清单 → 人工确认 → 再改 → 前后截图对照”的流程，以及用 Hallmark 的三层门禁 + sloplint + 冷上下文复审 + before/kept 快照验收网页设计与重设计。特效那条的骨架——生成 → 真实渲染验证 → 独立评审 → 防篡改证据绑定到具体构建——不限于特效，可以直接搬到别的交付物；文案那条则是反面补充：规则本身主观，必须留人工确认这一环，不能全自动；Hallmark 那条补的是网页页面级的“可判定检查 + 冷上下文终审 + 不丢功能”的组合。
 
 ## 适用与不适用
 
 **适用：**
 
-- 你已经在用支持 Agent Skills 的编码代理（evident-charts 声明支持 Claude Code、Codex、Cursor、Gemini CLI、GitHub Copilot、Antigravity；Bricks 要求支持 skills 的代理；drawio-skill 声明兼容 Claude Code、Cursor、Copilot、OpenClaw、Codex、Autohand Code、Hermes 等 Agent Skills 格式的智能体；show-your-work 是 Claude Code 插件，要求 Claude Code v2.1.287+；effekseer-vfx 声明支持 Claude Code、Codex、Cursor、Gemini CLI、GitHub Copilot、OpenCode 等 Agent Skill 宿主），并且任务落在这些交付物上：
+- 你已经在用支持 Agent Skills 的编码代理（evident-charts 声明支持 Claude Code、Codex、Cursor、Gemini CLI、GitHub Copilot、Antigravity；Bricks 要求支持 skills 的代理；drawio-skill 声明兼容 Claude Code、Cursor、Copilot、OpenClaw、Codex、Autohand Code、Hermes 等 Agent Skills 格式的智能体；show-your-work 是 Claude Code 插件，要求 Claude Code v2.1.287+；effekseer-vfx 声明支持 Claude Code、Codex、Cursor、Gemini CLI、GitHub Copilot、OpenCode 等 Agent Skill 宿主；Hallmark 装在 Claude Code、Codex CLI、Cursor、OpenCode 里），并且任务落在这些交付物上：
   - 用数据画图：matplotlib、seaborn、pandas `.plot`、ggplot2、Plotly、Vega-Lite/Altair、D3；输出尺寸有博客、X、LinkedIn、Instagram、幻灯片、报告、手机预设。
   - 实现一个有明确边界的命名组件或有界组合（Footer、FAQ、Task Input、Agent Workspace 这类容易翻车的类型）。
   - 架构图/系统图/架构文档维护：从自然语言、代码、Terraform、Kubernetes、docker-compose、SQL DDL、OpenAPI/AsyncAPI/Protobuf/GraphQL、CI 配置生成可编辑 `.drawio`，或对已有图做增量同步、漂移 diff、规则校验。
@@ -24,7 +24,8 @@
   - 在终端里用 Claude Code 做前端/UI、视频/动画类产出或需要视觉回归验证的修复，且你不想每完成一件事就切到浏览器手动 QA。
   - 用 Godot + Effekseer 做实时游戏特效（火焰、冰、毒、暗四组远程“投射物 + 命中”，加上 hit、slash、charge、shield、heal），或者你想把“真实渲染验证 + 独立评审 + 证据绑定到具体构建”这套闭环搬到别的领域。
   - 清理界面文案：项目有可让 Codex/Claude Code 读写的 UI 代码仓库（组件、模板或页面文件），能截改动前后的对比图，且有人愿意逐条确认为哪些解释性文本真的该删。
-- 项目已有代码库、组件、设计令牌、框架、路由和响应式约定（Bricks 的前提），或者项目里已有图表脚本与源数据，或者手上有可导入的真实架构来源（Terraform/K8s 配置、SQL、API 定义、代码目录、白板照片/截图），或者一个有前端界面的项目（Impeccable 的前提），或者一份可重复运行的 Playwright 脚本和能画图的终端环境（show-your-work 的前提），或者一个 Godot 4 游戏项目与 macOS Apple silicon / Windows x64 机器（effekseer-vfx 的构建前提），或者一个信息密度中等、含元信息行和说明文本的真实页面（文案做法的前提）。
+  - 做网页/前端页面的新建、重设计或 audit：你想让 agent 避开“AI 味”，把设计验收拆成可执行门禁，并在重设计时用 before/kept 快照防止丢链接、字段、handler、标题。
+- 项目已有代码库、组件、设计令牌、框架、路由和响应式约定（Bricks 的前提），或者项目里已有图表脚本与源数据，或者手上有可导入的真实架构来源（Terraform/K8s 配置、SQL、API 定义、代码目录、白板照片/截图），或者一个有前端界面的项目（Impeccable 的前提），或者一份可重复运行的 Playwright 脚本和能画图的终端环境（show-your-work 的前提），或者一个 Godot 4 游戏项目与 macOS Apple silicon / Windows x64 机器（effekseer-vfx 的构建前提），或者一个信息密度中等、含元信息行和说明文本的真实页面（文案做法的前提），或者一个有可访问页面的网页项目（Hallmark 的前提：Node 18+、项目已有字体/配色/框架/design.md 更好、能提供真实照片/截图/真实数字，跑 `--render` 还需要 Chrome + puppeteer-core）。
 
 **不适用：**
 
@@ -35,7 +36,11 @@
 - show-your-work 只支持 macOS 与 Ghostty/kitty；iTerm2、macOS Terminal、VS Code 内置终端目前画不了这类图片；Linux 和 Windows 尚不支持；tmux 内“还不可靠”，可尝试在 tmux 配置里开 `set -g allow-passthrough on`。它也不适合已经工作在 VS Code/Cursor 编辑器里的用户（原文 FAQ 直接这么说）。
 - 实时特效这条链路的前提很硬：build 只在 macOS Apple silicon 与 Windows x64 已验证；Windows ARM64 会装上匹配的 .NET 运行时但**未验证**；Linux **只能跑 authoring，build 路径未验证**。如果你不做 Godot + Effekseer，只想复用那套闭环结构，那 F 只是参照，不必装它。沙箱内的 agent（例如 Codex 工作区沙箱）打不开 Godot 窗口，`review`/`preview`/`showcase` 需要用户在桌面终端放行。
 - 界面文案做法不适合无人工复核的全自动批量改写，尤其不适合文案涉及合规、错误提示、表单说明的界面；也不适合分隔符真的承担结构作用的场景（英文界面、数据表格、面包屑、元信息行里“·”常是分隔结构的一部分，直接删可能损害可读性）。
-- 想要现成的量化改善数据：七份材料都没有给出效果数字，文案那条连案例和前后对比图都没有，只能自己跑基线对照。
+- Hallmark 仅覆盖网页/前端设计；README 没有列出 Floor/Reflex/Finish 的具体条目，不能直接把它的验收规范照搬到别的领域；也没有前后对比数据、评测结果、误报/漏报率。
+- 没有 Chrome + puppeteer-core 时，Hallmark 的 `--render` 和截图检查会降级为静态检查，别当成完整检查。
+- Hallmark 的照片来自 Wikimedia Commons（755 张），需按 CC0/公有领域/CC BY/CC BY-SA 逐张署名；不要用 Unsplash/Pexels/Pixabay（其条款禁止 AI 工具选图）。
+- 重设计前要能访问被改页面，`--before`/`--kept` 依赖它；`audit` 只报告不改，`redesign` 不点名就不动手。
+- 想要现成的量化改善数据：八份材料都没有给出效果数字，文案那条连案例和前后对比图都没有，只能自己跑基线对照。
 
 ## 前置条件
 
@@ -77,6 +82,14 @@
   - 一个范围很小的试验对象：一个页面或一组组件。
   - 有人工逐条确认清单的环节（这一步不能省）。
   - 一个可写入的 agent 指令文件（如 CLAUDE.md / AGENTS.md 一类持久上下文文件）或代码审查清单，用来把一次性提示变成长期约束。
+- 网页设计做法（做法 H）：
+  - Node 18+。
+  - 要跑浏览器检查（`--render`、截图）还需 `npm i -g puppeteer-core` 和已安装 Chrome；缺了只剩静态检查。
+  - 项目已有字体、配色、框架、锁定的 `design.md`（若有），agent 能读到。
+  - 开工前一次性提供真实素材：照片、截图、真实数字；Hallmark 明确“Nothing is invented”。
+  - 被改页面可访问（`--before` / `--kept` 依赖）。
+  - 可选：Claude Code 插件市场安装；编辑时门禁用 `install-hook.mjs`（仅 Claude Code）。
+  - 照片授权：755 张 Wikimedia Commons 开放授权照片，按每张的 CC0 / 公有领域 / CC BY / CC BY-SA 逐张署名；不要用 Unsplash/Pexels/Pixabay。
 
 ## 操作步骤
 
@@ -537,13 +550,13 @@
    ~\.cache\effekseer-vfx\venv\Scripts\python.exe -X utf8 -m pytest -q tests
    ```
 
-10. 把这套闭环搬到别的领域。F 真正可迁移的不是 Effekseer，而是这条骨架：**生成 → 在真实环境里渲染/运行 → 截图或截帧成可评审的产物 → 只看产物、看不到生成脚本的第二个 agent 独立评审 → 评审提交前不给 verified**。做法 A 里“只看得到 PNG 的新审阅者”是同一结构在图表上的版本；做法 E 的 before/after 录制是它在 UI 上的版本。如果你在别的领域要复用，需要自己补三样：一个能把产物落到可观察形态的真实环境、一份固定评分表、一份把评审绑定到“那次确切构建”的证据。
+10. 把这套闭环搬到别的领域。F 真正可迁移的不是 Effekseer，而是这条骨架：**生成 → 在真实环境里渲染/运行 → 截图或截帧成可评审的产物 → 只看产物、看不到生成脚本的第二个 agent 独立评审 → 评审提交前不给 verified**。做法 A 里“只看得到 PNG 的新审阅者”是同一结构在图表上的版本；做法 E 的 before/after 录制是它在 UI 上的版本；做法 H 的 fresh-context 子代理终审也是同一结构。如果你在别的领域要复用，需要自己补三样：一个能把产物落到可观察形态的真实环境、一份固定评分表、一份把评审绑定到“那次确切构建”的证据。
 
 ### 做法 G：把界面文案的卫生规则前置成约束，再人工确认
 
 用一条 X 帖子（@ZaynHao）里的两条提示词规则。它的思路是：界面文案层有一类“可判定、低风险”的清理工作——统一分隔符、删掉重复标题含义的解释性文本——不需要模型有设计品味，只需要按明示规则全库检索并替换，适合交给 Codex / Claude Code；但“哪些解释性文本是冗余的”带主观性，必须留一道人工确认。
 
-注意这条与前六条的分工：A–F 是“让 agent 拿出证据”，G 是“把可判定的规则前置成约束 + 人工逐条确认”，它不是门禁，也不该自动执行。
+注意这条与 A–F、H 的分工：A–F 和 H 是“让 agent 拿出证据/过门禁”，G 是“把可判定的规则前置成约束 + 人工逐条确认”，它不是门禁，也不该自动执行。
 
 1. 选定范围很小的试验对象：一个页面或一组组件，最好信息密度中等、含元信息行和说明文本。前提：你有可让 agent 读写的 UI 文件、能看到界面。预期结果：先截一张改动前的界面图作为对照。
 
@@ -570,17 +583,81 @@
 
 8. 原帖第 3 条及之后的 7 条在给定材料里被截断（第 3 条只剩“review”），无法复原。需要完整 10 条就回到原链接重新抓取全文后再评估，不要凭标题推测内容，也不要替作者补写。
 
-### 怎么选 A / B / C / D / E / F / G
+### 做法 H：用三层门禁、sloplint 和前后快照验收网页设计
 
-按交付物分：要的是数据图表，走 A；要的是一个命名组件或有界组合，走 B；要的是架构图/系统图/架构文档维护，走 C；要的是前端界面的设计与实现，走 D；要的是在终端里直接看截图/录屏/前后对比 QA，走 E；要的是在真实 Godot 里可运行的实时特效，或者想把“生成 → 真实渲染验证 → 独立评审 → 证据绑定具体构建”的闭环搬到别的领域，走 F；要的是界面文案层的清理（分隔符统一、删冗余解释文本），走 G。
+用 Nutlope/hallmark。它的核心不是主题包，而是把设计验收拆成可执行的分层门禁：**Floor（底线）**永不放行——对比度、焦点、减少动效、编造事实、手机布局崩坏；**Reflex（反射）**是模型默认会掉进的套路——每个标题上方的 eyebrow、字距拉开的大写标签、标题里一个彩色词、整页空框或全是照片、hero 撑不满一屏、每页结尾都塞订阅框、表单点“谢谢”却没真提交——有理由可以破例，但要记录在案；**Finish（工艺）**是细节，从不阻断发布。流程上先由 `scripts/theme.mjs` 从 48 个“材质”主题里发三个，再由 `draw` 按页面**要做的事**给出结构；产出自包含 HTML/CSS，并在第一条 CSS 注释里盖戳记录做过的决策；最后由 `scripts/sloplint.mjs` 在真实浏览器里按八种宽度渲染检查，再加一个**全新上下文的复审者**说最后一句话。
 
-A、B、D、E 是请求驱动、在对应事件（生成/审阅图表、收到组件任务、编辑 UI 文件或调用 `/impeccable` 命令、Claude 做完一件事）时触发，都不是常驻巡检；D 的确定性检测还能独立于 LLM 跑，适合直接接 CI。C 也是 Agent Skill/MCP 形态，可生成与校验，并可按 README 接入 CI。D 和 E 有分工：D 用 61 条确定性规则做可自动执行的守门人，E 把视觉验证留在终端、不额外开浏览器；原文没有给出 D 与 E 联动的做法。F 与 A 最像的是“独立评审”这一环——A 是同一个 skill 里换一个只看到 PNG 的审阅者，F 是**另一个 agent、另一个技能**，而且评审未提交就不给 verified。
+1. 安装。前提：Node 18+；全局安装后所有项目可用，去掉 `-g` 只装当前项目。预期结果：技能装好，`/hallmark <prompt>` 可触发。
+   ```bash
+   npx skills add nutlope/hallmark -g
+   ```
+   只装一个 harness：
+   ```bash
+   npx skills add nutlope/hallmark -g --agent claude-code
+   ```
+   `--agent` 可取 `codex` / `opencode` / `cursor` / `github-copilot`。作为 Claude Code 插件：
+   ```text
+   /plugin marketplace add nutlope/hallmark
+   /plugin install hallmark@hallmark
+   ```
+   从 clone 安装：
+   ```bash
+   node skills/hallmark/scripts/install.mjs
+   ```
+   安装脚本会先校验每个主题和引用再复制。
 
-G 是唯一一条不建议全自动执行的做法：它的规则来自个人经验、带主观性，所以流程里必须有逐条确认和前后截图对照。G 和 D 可以叠（把文案规则写进持久上下文或代码审查清单，用 D 的 detect 兜底可判定的部分），但材料没有给出两者联动的实测做法，这一步属于你自己要补的工程拼装。七者都需要你在请求里带足上下文。
+2. 触发。前提：步骤 1 完成。预期结果：进入 Hallmark 流程；没自动触发就点名。
+   ```text
+   /hallmark <prompt>
+   ```
+   Codex CLI 用：
+   ```text
+   $hallmark <prompt>
+   ```
+   也可以直接描述要建的页面，例如“use hallmark to build ...”。
+
+3. Pre-flight（必须先做）。前提：项目可读。预期结果：先读项目已有字体、配色、框架、锁定的 `design.md`；**一次性索要素材**：照片、截图、真实数字。原文明确“Nothing is invented”。不要边做边猜素材。
+
+4. 选题材与结构。前提：步骤 3 完成。预期结果：`scripts/theme.mjs deal` 给出三个匹配 prompt 且通过日志的主题；`draw` 按页面的“任务”给出结构。注意**主题只是材质，不是方案**——它不规定页面放什么、什么顺序，所以同一主题两次 prompt 出两个不同页面。一次构建只读一个主题文件（每个 ≤8KB）。
+
+5. 先只建 hero，单独渲染、冷读评审，**再建页面其余部分**。前提：已有题材与结构。预期结果：错误结构不会在整页复制；hero 先过一遍冷读。这是强制隔离步骤。
+
+6. 全页检查。前提：页面已建。预期结果：八种宽度渲染 + 静态检查，然后起一个 fresh-context 子代理复审终审。任何页面都能单独跑：
+   ```bash
+   node skills/hallmark/scripts/sloplint.mjs <file-or-dir> --render
+   ```
+   没有 Chrome + puppeteer-core 时，`--render` 和截图检查会降级为静态检查；别把降级结果当成完整检查。
+
+7. 改已有页面——**不点名就不动手**。前提：已有页面可访问。预期结果：先拿报告或先做重设计，不要自作主张改。
+   ```text
+   /hallmark redesign ./src/app
+   /hallmark audit ./index.html
+   ```
+   全量重设计保留内容与接线，只换系统与布局；说 *keep the layout* 是换皮，说 *polish* 是只去 AI 味。`audit` 只报告不改。
+
+8. 用快照防回归。前提：重设计前页面可访问。预期结果：重设计前先跑 `sloplint --before` 记录每一条链接、字段、handler、标题；改完跑 `sloplint --kept`，**丢一件就判定失败**；交付物是前后并排对比。材料没有给出 `--before` / `--kept` 的完整参数形式，按 `sloplint.mjs` 的实际帮助补路径，不要凭猜写参数。
+
+9. 加编辑时门禁（Claude Code）。前提：步骤 1 已装 Claude Code 版本。预期结果：编辑阶段的 Floor 检查被挂上。运行 `install-hook.mjs`；材料没有给出更完整的命令形式，按仓库脚本帮助执行。
+
+10. 按三层语义裁定，不要把所有检查都变成阻断：Floor 硬阻断；Reflex 可破例但要在第一条 CSS 注释或记录里写明理由；Finish 不阻断发布。README 只给了分类名和例子，没有列出具体条目，所以这份分层规则可以当流程骨架，不能当完整验收清单照搬。
+
+11. 用照片时逐张署名。前提：页面用到 Hallmark 的 755 张 Wikimedia Commons 开放授权照片。预期结果：按每张的 CC0 / 公有领域 / CC BY / CC BY-SA 署名；不要用 Unsplash/Pexels/Pixabay（其条款禁止 AI 工具选图）。
+
+### 怎么选 A / B / C / D / E / F / G / H
+
+按交付物分：要的是数据图表，走 A；要的是一个命名组件或有界组合，走 B；要的是架构图/系统图/架构文档维护，走 C；要的是前端界面的设计与实现，走 D；要的是在终端里直接看截图/录屏/前后对比 QA，走 E；要的是在真实 Godot 里可运行的实时特效，或者想把“生成 → 真实渲染验证 → 独立评审 → 证据绑定具体构建”的闭环搬到别的领域，走 F；要的是界面文案层的清理（分隔符统一、删冗余解释文本），走 G；要的是网页页面级的设计、重设计、去 AI 味并防止改版丢功能，走 H。
+
+A、B、D、E、H 是请求驱动、在对应事件（生成/审阅图表、收到组件任务、编辑 UI 文件或调用 `/impeccable` 命令、Claude 做完一件事、`/hallmark <prompt>` 或 `/hallmark audit/redesign`）时触发，都不是常驻巡检；D 的确定性检测和 H 的 `sloplint` 都能独立于 LLM 跑，适合直接接 CI；H 的 `--before` / `--kept` 是重设计回归快照。C 也是 Agent Skill/MCP 形态，可生成与校验，并可按 README 接入 CI。
+
+D 和 H 有重叠，也有分工：D 用持久事实（`PRODUCT.md` / `DESIGN.md`）+ 61 条确定性规则做持续守门，适合已有前端系统的日常检测；H 用 Floor/Reflex/Finish 三层门禁 + `sloplint` 八宽度渲染 + 冷上下文复审 + before/kept 快照做页面级设计与重设计验收，且明确只覆盖网页设计。材料没有给出 D 与 H 联动的实测做法，先分别小范围试，不要假设它们能自动合流。
+
+D 和 E 有分工：D 用确定性规则做可自动执行的守门人，E 把视觉验证留在终端、不额外开浏览器；原文没有给出 D 与 E 联动的做法。F 与 A、H 最像的是“独立评审”这一环——A 是同一个 skill 里换一个只看到 PNG 的审阅者，F 是另一个 agent、另一个技能，H 是 fresh-context 子代理做终审；F 还有“评审未提交就不给 verified”的硬约束。
+
+G 是唯一一条不建议全自动执行的做法：它的规则来自个人经验、带主观性，所以流程里必须有逐条确认和前后截图对照。G 和 D、H 可以叠（把文案规则写进持久上下文或代码审查清单，用 D 的 detect 或 H 的 sloplint 兜底可判定的部分），但材料没有给出联动实测，这一步属于你自己要补的工程拼装。八者都需要你在请求里带足上下文。
 
 ## 怎么判断变好了
 
-最小试用：在单个代理上装一次（图表优先 Claude Code，命令最短），用一个已有图表脚本，或一个已有类似实现的组件任务，或一两个真实架构来源，或一个现有前端页面来试；如果符合 macOS + Ghostty/kitty + Claude Code ≥2.1.287，再跑一次 show-your-work 的 examples/pricing；如果你有 Godot 4 游戏项目且机器是 macOS Apple silicon / Windows x64，再跑一次 effekseer-vfx 的 fire 示例；文案做法不需要装任何东西，挑一个真实页面跑一遍第 1–6 步即可。并做基线对照——让同一 agent 在不装技能、不给这两条规则的情况下做同样任务，再比一次。
+最小试用：在单个代理上装一次（图表优先 Claude Code，命令最短），用一个已有图表脚本，或一个已有类似实现的组件任务，或一两个真实架构来源，或一个现有前端页面来试；如果符合 macOS + Ghostty/kitty + Claude Code ≥2.1.287，再跑一次 show-your-work 的 examples/pricing；如果你有 Godot 4 游戏项目且机器是 macOS Apple silicon / Windows x64，再跑一次 effekseer-vfx 的 fire 示例；文案做法不需要装任何东西，挑一个真实页面跑一遍第 1–6 步即可；网页设计做法先拿一个已有页面跑 `/hallmark audit <path>` 只出报告，再拿一个新建小页面走完 pre-flight → deal/draw → 单独建 hero 冷读 → `sloplint --render` + 子代理复审，对已有页面做一次 `/hallmark redesign <path>`，前后各跑 `sloplint --before` / `sloplint --kept`。并做基线对照——让同一 agent 在不装技能、不给这两条规则的情况下做同样任务，再比一次。
 
 图表侧可直接观察的指标（都能从一次试用里看到）：
 
@@ -642,13 +719,20 @@ G 是唯一一条不建议全自动执行的做法：它的规则来自个人经
 - 判定标准：如果“不该删”的比例很低、盲评偏向新版、关键路径无理解障碍，就把这两条固化进项目 agent 指令长期使用；否则只保留“移除中点分隔符”这类低风险规则，弃用“删解释文本”这条主观规则。
 - 试多久：原文没给时长。控制在一个 PR 内、只动文案层、挑一个信息密度中等的真实页面跑一遍，就足以判断该不该固化。
 
-这些指标是验证方法建议，七份材料都没有给出对应的量化结果。试多久：原文没有给时长，按任务数量定——若干张历史图表、一个边界清晰的组件任务、一两个真实架构来源导入并接入一次 PR、一个现有前端页面的检测基线、一次 show-your-work 的官方 demo 和 3–5 个真实前端修复任务、一次 effekseer-vfx 的 fire 示例和一条真实特效需求，再加一个真实页面的文案清理 PR。
+网页设计侧（做法 H）：
+
+- 改动前后 sloplint 条目数；`--kept` 缺件数（必须为 0）；八宽度渲染有无布局崩坏；冷读复审列出的问题数；从 prompt 到可发布的耗时与返工轮次。
+- Floor 类问题（对比度、焦点、动效、手机布局）在 lint 中归零；重设计后链接/字段/handler/标题一个不少；盲评新旧页面；流程指标返工轮次下降、复审问题数下降。
+- 反面信号：为了过 lint 把业务动作牺牲掉（删掉表单、去掉订阅入口），说明门禁被当成了目标而不是底线，需要回到“页面为谁而来做什么”的定义上修，而不是加更多规则。
+- 试多久：原文没给时长；按一个已有页面 audit + 一个新建小页面 build + 一次 redesign 快照比对来试，连续几个页面看是否稳定。
+
+这些指标是验证方法建议，八份材料都没有给出对应的量化结果。试多久：原文没有给时长，按任务数量定——若干张历史图表、一个边界清晰的组件任务、一两个真实架构来源导入并接入一次 PR、一个现有前端页面的检测基线、一次 show-your-work 的官方 demo 和 3–5 个真实前端修复任务、一次 effekseer-vfx 的 fire 示例和一条真实特效需求、一个真实页面的文案清理 PR，以及一个已有页面 audit + 一个新建小页面 build + 一次 redesign 快照比对。
 
 ## 常见坑
 
-- 七份材料的兼容性声明和效果描述都来自各自 README、作者自述或一条社交帖子，没有安装实测、没有 issue/失败案例；evident-charts、Bricks、effekseer-vfx 星标分别只有 52、77、32；drawio-skill 同样缺乏第三方验证；show-your-work 只有 36 stars，属早期小项目；界面文案那条只有两条规则和互动数据（304 赞、26 转发、19 回复）。先小范围试，不要直接全量采用。
+- 八份材料的兼容性声明和效果描述都来自各自 README、作者自述或一条社交帖子，没有安装实测、没有 issue/失败案例；evident-charts、Bricks、effekseer-vfx 星标分别只有 52、77、32；drawio-skill 同样缺乏第三方验证；show-your-work 只有 36 stars，属早期小项目；界面文案那条只有两条规则和互动数据（304 赞、26 转发、19 回复）；Hallmark 约 3.2 万 stars（当日 +455），但 README 同样没有列出 Floor/Reflex/Finish 的具体条目，也没有前后对比数据、评测结果、误报/漏报率。先小范围试，不要直接全量采用。
 - 没有 headless Chrome 时，非 matplotlib 库的代码级 lint 会直接缺失，只剩规格检查和图像复审——别把降级结果当成完整检查。
-- 技能是事件触发（生成/审阅图表、收到组件任务、处理架构图任务、编辑 UI 文件、收到特效需求时加载或运行），不会主动巡检；你不给源数据、PNG、脚本、项目上下文、真实架构来源或游戏项目目录，它就没有可查的东西。
+- 技能是事件触发（生成/审阅图表、收到组件任务、处理架构图任务、编辑 UI 文件、收到特效需求、`/hallmark <prompt>` 时加载或运行），不会主动巡检；你不给源数据、PNG、脚本、项目上下文、真实架构来源、游戏项目目录或真实素材，它就没有可查的东西。
 - style guide 的覆盖权限只到 `[T]`，别指望用项目风格去关掉柱状图零基线这类 `[E]` 完整性规则。
 - 组件任务边界不清（整页、整产品）会跑偏；复杂域组件不要重复造轮子。
 - Bricks 明确不声称未在目标项目中实际验证过的性能、可访问性、合规或转化结果。
@@ -686,6 +770,13 @@ G 是唯一一条不建议全自动执行的做法：它的规则来自个人经
 - 不适合无人工复核的全自动批量改写，尤其文案涉及合规、错误提示、表单说明的界面；错误提示与权限说明被误删就是负向信号。
 - 原文只说“移除”，没给替代方案；不先定替代约定（空格、竖线、换行、拆成两个字段），团队里会各改各的。
 - 先只检索再改：跳过“列清单 + 人工确认”直接让 agent 删文案，是最容易造成误删的一步。
+- Hallmark 仅网页/前端设计；不要把它当通用验收规范。README 只给 Floor/Reflex/Finish 的分类名和例子，没有具体条目，不能直接照搬。
+- Hallmark 的浏览器检查依赖 Chrome + puppeteer-core；缺了只剩静态检查，别把静态结果当成完整检查。
+- Hallmark 的 755 张照片需逐张署名；不要用 Unsplash/Pexels/Pixabay（其条款禁止 AI 工具选图）。
+- 主题只是材质，不是方案；一次构建只读一个主题文件（≤8KB）；同一主题两次 prompt 出两个不同页面，别把主题当完整设计系统。
+- `audit` 只报告不改；`redesign` 不点名就不动手；`keep the layout` 是换皮，`polish` 只去 AI 味。
+- `--before` / `--kept` 丢一件就失败；需要页面可访问。为了过 lint 牺牲表单/订阅入口等业务动作是反面信号。
+- 三层裁定要照做：Floor 硬阻断、Reflex 可破例但要记录、Finish 不阻断；别把所有检查都变成阻断。
 
 ## 证据与来源
 
@@ -738,6 +829,13 @@ G 是唯一一条不建议全自动执行的做法：它的规则来自个人经
 - 作者主张（弱论证）：中点分隔符不该用、解释性描述都是冗余。这两条在中文界面里有道理（“作者 · 时间”这类排版常见），但并非普适。
 - 未提供：任何量化改善结果；剩下 7 条规则内容未知，无法评估。
 
+**网页设计做法：**
+
+- 依据 Nutlope/hallmark 的 README（Together AI 的设计技能）。可操作材料是安装命令（`npx skills add nutlope/hallmark -g`、`--agent` 选择、Claude Code 插件市场）、`/hallmark <prompt>` / `$hallmark <prompt>` 触发、`scripts/theme.mjs deal`、`draw`、`sloplint.mjs <file-or-dir> --render`、`/hallmark redesign` / `audit`、`sloplint --before` / `--kept`、`install-hook.mjs`。
+- 原文给出的具体数据：48 个主题（每个一文件、≤8KB、旁附成品图）、755 张 Wikimedia Commons 开放授权照片、八种宽度渲染检查、三层门禁（Floor 永不放行、Reflex 可破例但要记录、Finish 不阻断）、Node 18+、`--render`/截图需 `npm i -g puppeteer-core` + Chrome、MIT 许可、仓库约 3.2 万 stars（当日 +455）。
+- 作者主张：“主题能避免 AI 味”“冷读评审更严”“Floor 拦得住”；README 没有任何前后对比数据、评测结果、误报/漏报率，也没有列出 Floor / Reflex / Finish 的具体条目内容（只有分类名和例子），所以不能直接把它的验收规范照搬到别的领域。
+- 适用条件：仅限网页/前端设计；浏览器检查依赖 Chrome 环境；照片使用需按每张的 CC0 / 公有领域 / CC BY / CC BY-SA 逐张署名；主题是一次构建读一个文件，不等于完整设计系统。
+
 ## 依据的调研
 
 - [rhiever/evident-charts](../research/radar/2026-10-01/21-rhiever-evident-charts.md)：值得一试，按 README 给出的安装命令在 Claude Code（或 Cursor/Codex/Gemini CLI）里装上 evident-charts，然后照常提图表需求、让它在出图前自查，是最小可试的用法；理由是它把“数据核对 + 代码级 lint + 渲染图复审”做成了自动加载的 Agent Skill，步骤和检查项都写得很具体，但改善幅度只有作者自述和一张对比图，需要自己跑一遍验证。
@@ -747,3 +845,4 @@ G 是唯一一条不建议全自动执行的做法：它的规则来自个人经
 - [iamumeransari/claude-show-your-work](../research/radar/2026-10-11/2567-iamumeransari-claude-show-your-work.md)：值得一试，在 macOS + Ghostty/kitty 的 Claude Code 终端工作流里小范围试装这个插件，先跑官方 examples/pricing 的 before/after 录制、确认 QA 视频、勾选清单和对比视图都能在终端内正常呈现，再把「Claude 改完前端 UI 后录一段前后对比 QA」纳入日常；理由是原文给出了可复制的安装命令、demo 脚本和前后对比的参数结构，能把视觉验证留在终端、不额外开浏览器，但目前只支持 macOS 与两种终端、项目仅 36 stars，属早期工具，不宜直接全量采用。
 - [kanaworksai-hue/effekseer-vfx-skill](../research/radar/2026-10-12/2652-kanaworksai-hue-effekseer-vfx-skill.md)：值得一试，若团队做 Godot + Effekseer 实时特效，可按 README 给出的安装与 vfx doctor/setup/init/build/review 命令小范围试装；它的核心可迁移之处是把「生成 → 真实渲染验证 → 独立评审 → 证据绑定到具体构建」做成可复用闭环，即使不做特效也值得把这套结构搬到别的领域。
 - [@ZaynHao: 分享 10 条优化界面 UI 的提示词，其中一些可能带有个人经验，发送给你的 Codex 或 Claude Code，立即提升 UI 视觉设计：](../research/radar/2026-10-23/6263-10-ui-codex-claude-code-ui.md)：值得一试，把这两条完整提示词（去掉“·”分隔符、删掉冗余解释文案）当作 UI 审查清单加入 Codex/Claude Code 的日常改界面流程，先在一个页面上小范围试；因为它们只是可直接复制使用的文案约束规则，具体且成本低，但原帖的 10 条只抓取到 2 条完整、第 3 条被截断，也没有任何效果数据。
+- [Nutlope/hallmark](../research/radar/2026-10-25/6887-nutlope-hallmark.md)：值得一试，先挑一两个前端页面装上 Hallmark 跑完整流程，重点抄它的结构——三层门禁 + 可判定的自动 lint + 冷上下文终审 + 改动前后快照比对——而不只是用它换主题。它把“验收标准”写成了智能体能执行的文件与脚本，命令、流程、层级都是照做得了的；但原文只有 README，门禁的具体条目和任何效果数据都没给出，且只覆盖网页设计，所以先小范围试。
