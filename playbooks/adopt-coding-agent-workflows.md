@@ -1,9 +1,9 @@
-# 让编码 agent 从写代码到合并 PR 都有据可查
+# 让编码 agent 的改动在提交前被可验证的门禁拦住
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：用编码 agent 干活时，重复提示词、上下文跑偏、约定漂移、假绿测试和「做完了」没证据，本手册把这些固化成技能、门禁和可核对的产物。
-> 先试这一步：先挑一条团队在 review 里反复提出的硬约束，做成 pre-commit 门禁并在失败输出里写清怎么改；或者先把重复 ≥3 次的流程写成第一个 slash skill。
+> 解决的问题：用编码 agent 干活时，如何把重复流程固化成技能、把硬约束做成门禁，并让每次「做完了」都有可验证的证据。
+> 先试这一步：挑一条团队在 code review 中反复提出的硬约束，先按第 11 步做成 pre-commit 门禁；或按第 23 步让代理先出质量门禁计划，只接入 2–3 个能失败的门禁。
 > 最近修订：2026-10-25
 
 ## 解决什么问题
@@ -12,7 +12,9 @@
 
 本手册以 Claude Code 为主线，把重复的提示词和流程固化成技能、钩子和子智能体，用固定工作流控制「先探索、再计划、后写代码、最后提交」的节奏；把可判定的硬约束从「写在提示文件里靠提醒」搬到「提交时强制门禁」；并用五段式 AGENTS.md + 零依赖 linter + SessionStart 钩子让项目契约可检查、可在会话开始时自检。MyAgent、Ryugi、claude-howto、Tenex、Skill Recorder、tstack 是可选路线，分别补自动沉淀、规格前置、教程模板、团队文档层、人工示范录制和 PR 生命周期托管。
 
-本次新增 tstack 路线：它把「提 PR → 盯 CI → 处理 review → 合并」拆成 9 个窄技能，用口头触发词调用，技能之间有显式依赖图。它补的是代码写完之后那段尾巴，不替代提交门禁、测试真实性检查和项目契约。材料只有 README，技能本体不在材料里，也没有任何量化数据，所以只建议先启用 file-pr 和 babysit-pr 两个技能小范围试。
+本次新增 dev-quality-gates 路线：它是一份按任务推荐质量门禁工具的清单，不追求每种语言都列全，而是要求代理按 README 提示词先出计划，只挑与项目栈匹配的少量条目，接入 hooks 和 CI，并逐个证明门禁能失败。它补的是「从清单挑门禁并验证阻断能力」，不替代第 11 步的提交门禁、第 16 步的测试真实性检查或第 17 步的项目契约 linter。材料只有 README，adopt.md、patterns.md 正文未包含，所以只建议在单个代码库小范围试用。
+
+本次也保留 tstack 路线：它把「提 PR → 盯 CI → 处理 review → 合并」拆成 9 个窄技能，用口头触发词调用，技能之间有显式依赖图。它补的是代码写完之后那段尾巴，不替代提交门禁、测试真实性检查和项目契约。
 
 ## 适用与不适用
 
@@ -36,7 +38,9 @@
 
 **适用于 Skill Recorder**：想先用手动示范把桌面或终端任务录成技能，再让代理复跑；任务步骤稳定、每周至少重复 3 次、单次约 5–15 分钟、以点击和终端命令为主；能接受录制过程在本机进行，并愿意先到仓库确认安装方式、停止录制方式、技能产物形态和代理接入方式。不适用：一次性任务；含敏感凭证或客户数据且未确认录制数据落盘位置与清除方式；依赖外部不可控界面；不愿承担 v0.7.0 早期版本接口变动；把推文里的「教会你的 AI 代理」当成已验证能力。
 
-**适用于 tstack（本次新增）**：你的工作在 GitHub PR 流程里；仓库有可用的 CI 和 review bot；已安装并认证 GitHub CLI；有 python3；愿意先把合并权留在人手里，只让 agent 提 PR 和盯 CI。不适用：非 GitHub、非 PR 式协作；仓库没有 CI，或改动不可回滚却想用 full-send；要用 council/sol-loop 但 harness 不能调用其他厂商模型；想先看到合并成功率、PR 数量或前后对比数据。
+**适用于 tstack**：你的工作在 GitHub PR 流程里；仓库有可用的 CI 和 review bot；已安装并认证 GitHub CLI；有 python3；愿意先把合并权留在人手里，只让 agent 提 PR 和盯 CI。不适用：非 GitHub、非 PR 式协作；仓库没有 CI，或改动不可回滚却想用 full-send；要用 council/sol-loop 但 harness 不能调用其他厂商模型；想先看到合并成功率、PR 数量或前后对比数据。
+
+**适用于质量门禁清单（dev-quality-gates，本次新增）**：有真实代码库；编码代理能读取 GitHub 原始文件、检查项目文件、修改仓库并运行项目命令；已有或愿意接入 Git hooks 和 CI；你愿意先让代理只出计划，人工审阅后只选与项目语言和跨切面风险匹配的少量门禁；愿意对每个新门禁制造一次已知违规，确认它返回非零退出码并阻断构建。不适用：想「全部安装」；项目没有 hooks/CI 或不愿接入；不愿逐个验证门禁能否失败；材料只有 README，adopt.md 和 patterns.md 正文未包含，不能照抄完整安装命令或配置；小项目全量套用会过重。
 
 ## 前置条件
 
@@ -58,7 +62,9 @@
 
 **Skill Recorder 路线**：先装好 Skill Recorder 应用；原文只给 GitHub Release 链接卡片，安装方式、系统要求、停止录制快捷键、技能产物形态、支持哪些代理、如何触发复跑均未说明，必须到仓库确认；录制时需要本机点击、窗口切换、页面和终端命令的观察权限；需要一次干净、可重复的执行环境；录制内容可能含敏感信息，先确认落盘位置与清除方式；原文提到录制过程在本机进行，但这是产品侧表述，未经第三方核对。
 
-**tstack 路线（本次新增）**：安装并完成认证的 GitHub CLI，先跑 `gh auth login`；python3，因为 babysit-pr 的 pr-wait 脚本需要它；若要用 council 或 sol-loop，需要一个能调用其他厂商模型 subagent 的 harness，T3 Code 用 delegate_task 实现，其他 harness 必须自己能跑这些模型，否则这两个技能不可用；仓库需要 push / PR / merge 权限，full-send 的合并动作隐含这一点；CI 结果与 review bot 评论要能被 agent 读到，作为 babysit-pr 的输入信号。
+**tstack 路线**：安装并完成认证的 GitHub CLI，先跑 `gh auth login`；python3，因为 babysit-pr 的 pr-wait 脚本需要它；若要用 council 或 sol-loop，需要一个能调用其他厂商模型 subagent 的 harness，T3 Code 用 delegate_task 实现，其他 harness 必须自己能跑这些模型，否则这两个技能不可用；仓库需要 push / PR / merge 权限，full-send 的合并动作隐含这一点；CI 结果与 review bot 评论要能被 agent 读到，作为 babysit-pr 的输入信号。
+
+**质量门禁清单路线（dev-quality-gates，本次新增）**：从目标仓库根目录开始；编码代理需要能读取 GitHub 原始文件、检查项目文件、修改仓库并运行项目命令；人工审阅计划后才允许修改；若使用 README 推荐的 toolchain 与 hooks 组合，需要能安装 mise 和 hk；CI 中要能运行全量检查，因为本地 hook 可被 `--no-verify` 绕过；材料未包含 adopt.md 和 patterns.md 正文，不能从原文提取完整安装命令或配置。
 
 ## 操作步骤
 
@@ -631,7 +637,7 @@ cp 06-hooks/*.sh ~/.claude/hooks/
 chmod +x ~/.claude/hooks/*.sh
 ```
 
-2. 在 ~/.claude/settings.json 注册。先只启用 format-code.sh，确认不会破坏文件；再加 security-scan.sh，记录每次扫描耗时（原文此处截断，不要编造指标）。README 给出的配置是在 PostToolUse 的 Write matcher 上挂这两个脚本；已有 settings.json 时手动合并，不要覆盖。预期结果：格式化不再靠人提醒；安全扫描没有产生你无法处理的误报；现有文件没有被破坏。
+2. 在 ~/.claude/settings.json 注册。先只启用 format-code.sh，确认不会破坏文件；再加 security-scan.sh，记录每次扫描耗时（原文此处截断，不要编造指标）。README 给出的配置是在 PostToolUse 的 Write matcher 上挂这两个脚本；已有 settings.json 时手动合并，不覆盖。预期结果：格式化不再靠人提醒；安全扫描没有产生你无法处理的误报；现有文件没有被破坏。
 
 **做法 C：用 checkpoints、CLI 和自评做试验与验证**（什么时候选：你想回退试验、把 Claude Code 放进脚本/CI，或找知识缺口）
 
@@ -749,7 +755,7 @@ Windows: Ctrl+Shift+R
 8. 同一任务你自己手工做 3 次，作为对照。记录完成情况、耗时、需要人工接管的次数。预期结果：你有代理复跑与手工执行的对照，而不是只看一次演示。
 9. 与已有技能路线区分。手写 slash skill 是你把流程写成提示词；MyAgent 的 Skills 自进化是从反馈中抽取候选并写入 .bear/skills/；Skill Recorder 是录制人工操作再让代理复跑。三者可以并存，但不要混目录、混来源。录制产物要先人工读一遍，不要直接全量信任。预期结果：你知道这个技能是人示范录出来的，还是手写或自动沉淀的，出了问题能回到源头修。
 
-### 22. 用 tstack 把 PR 生命周期交给窄技能（可选，本次新增）
+### 22. 用 tstack 把 PR 生命周期交给窄技能（可选）
 
 来源背景：t3dotgg/tstack 是 Theo 把自己每天在 Claude Code 和 Codex 上使用的 agent skills 整理成的公开仓库（MIT，约 32 stars）。共 9 个技能，围绕「把一个改动一路推进成合并的 PR」组织：full-send（无人值守推到 merged PR）、full-stop（同 full-send 但停在可合并，由人点合并）、council（三个不同 provider 的模型评审到一致）、sol-loop（用 GPT Sol 循环评审到两个 agent 一致）、file-pr（提简短 PR，开头先讲问题）、takeover（接手别人的 PR、分支或 agent 线程，保留原作者署名）、babysit-pr（盯 CI 和 review bot，只修真正的问题）、modernize（给老 PR rebase 并判断是否还该存在）、leaving-pr-comments（格式化 agent 代你发布的 PR 评论，自动触发）。材料只有 README，技能本体不在材料里，也没有任何量化数据，所以只做小范围试用。
 
@@ -791,6 +797,53 @@ cp -R tstack/skills/* ~/.codex/skills/    # Codex
 
 **怎么选**：你只想让 agent 提 PR、盯 CI，合并仍由人做 → 做法 A，先只启用 file-pr 和 babysit-pr；你想让 agent 推进到可合并、但保留最后一道人工合并 → 做法 B；你有完整 CI 和 review bot 兜底、改动可回滚、仓库非关键路径 → 才考虑做法 C。与第 7 步的关系：第 7 步管写代码前后的节奏，tstack 管代码写完之后 PR 的尾巴，可以叠加，但不要因此跳过测试和门禁。与第 11 步的关系：tstack 的 babysit-pr 只修 CI 和 review bot 报出的问题，不替代你的提交门禁；硬约束仍按第 11 步做 hook。与第 20 步的关系：Tenex 的双模型评审是团队文档层，tstack 的 council/sol-loop 是 PR 评审循环，二者可以并存，但都要自己验证评审质量。
 
+### 23. 用 dev-quality-gates 清单让代理先出计划、再接入少量门禁（可选，本次新增）
+
+来源背景：mokevnin/dev-quality-gates 是一份有明确取舍的开发质量门禁工具清单：每个任务推荐一个工具（少数两个），说明为什么选、哪里不适用；原则包括按任务选一个工具、覆盖优先于数量、优先快速原生工具链、必须能阻断构建（非零退出码）而不只是出报告、对 AI 编码代理友好（非交互、机器可读输出、安全自动修复）、没有可靠推荐就留空。README 明确说这不是通用技术栈，不要全部安装。材料只有 README，adopt.md、patterns.md、tools.json 和 research 目录正文未包含，原文还在 Under review 表格处被截断，因此无法核对完整接入步骤和逐条配置。
+
+前提：从目标仓库根目录开始；编码代理需要能读取 GitHub 原始文件、检查项目文件、修改仓库并运行项目命令；先让代理只出计划，不改文件；人工审阅计划后才允许修改；若采用 README 推荐的 toolchain 与 hooks 组合，需要能安装 mise 和 hk；CI 中运行全量检查，因为本地 hook 可被 `--no-verify` 绕过。
+
+**做法 A：让代理按 README 提示词先出计划（推荐起点）**（什么时候选：你第一次试这个清单，想先看它会给你的项目挑什么门禁）
+
+1. 确认前置：你从目标仓库根目录开始；代理能读取 GitHub 原始文件、检查项目文件、修改仓库并运行项目命令。预期结果：代理能看到仓库结构，也能访问清单。
+
+2. 在仓库根目录向编码代理原样发送 README 给出的提示词：
+
+```text
+Apply https://github.com/mokevnin/dev-quality-gates to this repository.
+Read and follow https://raw.githubusercontent.com/mokevnin/dev-quality-gates/main/docs/adopt.md.
+Show me the plan before you change anything.
+```
+
+预期结果：代理先返回一份计划，不修改文件。
+
+3. 审阅计划，不直接放行。按 README 原则检查：是否只选了与项目语言和跨切面风险匹配的条目；是否避免「全部安装」；是否优先能非零退出、对代理友好的工具；是否诚实标出没有可靠推荐的类别。预期结果：你手里有一份范围受控、理由清楚的计划；若代理倾向安装过多工具，先要求它缩小到主语言加一个跨切面风险类别。
+
+4. 计划确认后再让代理修改。README 描述的预期行为是：代理检查项目、只挑适合条目、把检查接入 hooks 和 CI，并证明每个检查都能失败。预期结果：仓库里只多出你批准的门禁配置，没有全量安装。
+
+5. 若手工执行：按语言和跨切面类别从清单中挑条目，再使用 README 指向的 `docs/patterns.md` 中的 setup patterns。注意：本次材料没有包含 adopt.md 和 patterns.md 的正文，因此无法从原文提取完整安装命令或配置；不要凭猜测补写。预期结果：你只使用材料中能确认的提示词和原则，未确认的配置到仓库原文核对。
+
+6. 若采用 README 推荐的 toolchain 与 hooks 组合：用 `mise.toml` 固定工具版本，用 `hk.pkl` 让本地 hook 和 CI 跑同一套检查；CI 中运行全量检查，因为 hook 可被 `--no-verify` 绕过。原文给出的相关命令包括：
+
+```text
+mise use hk
+hk check
+hk fix
+hk check --all
+```
+
+预期结果：本地和 CI 使用同一套检查入口；hook 快速反馈，CI 做全量兜底。
+
+7. 对每个新接入的门禁做一次「能否失败」的验证：制造或选择一个已知违规，确认该检查返回非零退出码并阻断 CI；只出报告、不阻断的检查不算完成。预期结果：每个门禁都至少失败过一次，而且你能看到非零退出码。
+
+**做法 B：小范围扩展类别**（什么时候选：做法 A 已稳定，你想覆盖更多跨切面风险）
+
+8. 先只覆盖一个主语言加一个跨切面风险类别（例如密钥扫描或依赖漏洞），不要全量安装。预期结果：门禁范围可控，误报和 CI 延迟可观察。
+
+9. 若至少一个门禁捕获了真实问题或成功拦截构造违规，且误报和 CI 延迟可接受，再扩大到更多类别；若代理倾向安装过多工具、或门禁无法失败，则停止推广，只保留已验证的单个工具。预期结果：扩展由证据驱动，不是按清单从头装到尾。
+
+**怎么选**：你第一次试这个清单 → 做法 A，只让代理出计划并批准 2–3 个最匹配的门禁；做法 A 稳定且你需要覆盖更多风险类别 → 做法 B；你想一次装完清单 → 不要这样做，README 明确说不是通用技术栈。与第 11 步的关系：第 11 步是把一条你能判定的硬约束做成 pre-commit 门禁；第 23 步是用清单挑出现成门禁工具并接入 hooks/CI，两者可以并存，但都要验证「违规时是否非零退出并阻断」。与第 17 步的关系：第 17 步的 linter 查 AGENTS.md 结构与事实，第 23 步接的是代码质量门禁工具，不互相替代。与第 16 步的关系：第 23 步的门禁能阻断构建，但不验证「测试是否真的在验证行为」，测试真实性仍按第 16 步做空实现检查。
+
 ## 怎么判断变好了
 
 **流程固化与工作流**：同一个 prompt 或流程重复 ≥3 次，就该去建 skill，而不是继续手打；Plan 阶段真的没写代码，Explore 阶段只读文件、出计划，ultrathink 只出现在需要更深推理的那句计划 prompt 上；TDD 的测试在实现之前确实失败过一次，最后全绿才提交；视觉迭代通常 2–3 轮就能对齐稿子；effort 别照抄默认值，用 /effort 在自己环境核对，发现自己在常规任务上想开 max 时，原文说约 80% 的情况正解在上游——更锋利的 CLAUDE.md、原子化的计划、点名的文件。最小试用：先在自己的项目里小范围试，一次只引入一个扩展点。
@@ -811,7 +864,9 @@ cp -R tstack/skills/* ~/.codex/skills/    # Codex
 
 **Skill Recorder**：完成率——3 次复跑中有几次完整走到预期终态；人工接管次数——中途需要你接手（含被卡住、点错要回退）的次数，这是最关键的指标；耗时比——代理复跑耗时 / 手工耗时，包含你事后检查与返工的时间；录制成本回收周期——录一次加修一次技能花的时间，除以每次节省的时间；失败集中点——记录卡在什么动作上，例如弹窗、等待加载、窗口焦点切换，这些就是该工具当前的能力边界。最小试用（半天内可完成）：选一个你每周至少做 3 次、单次 5–15 分钟、以点击和终端命令为主、步骤基本固定的任务，避开含敏感凭证或客户数据的任务；到仓库确认安装方式、停止录制的方式、技能产物形态与代理接入方式；录一次，全程口述判断规则，回看记录是否覆盖关键步骤；让代理用该技能复跑 3 次，每次都从同样的初始状态出发；同一任务你自己手工做 3 次作为对照。判定建议：3 次里至少 2 次无需人工接管完成，且含检查时间后的总耗时低于手工，可以考虑纳入日常；否则保留为特定任务专用，或等版本成熟。材料只有推文，没有成功率、耗时或案例数据，以上验证方法需自建。
 
-**tstack（本次新增）**：最小试用 1 周，选一个低风险、有 CI 的仓库，只启用 file-pr 和 babysit-pr（连带 leaving-pr-comments），跑 2–3 个真实 PR，合并权仍由人掌握。观察：file-pr 的 PR 描述首段是否真的先讲问题而不是罗列改动，可直接人工判 yes/no；babysit-pr 每个 PR 需要几轮修复才让 CI 变绿；它提交的修复里被人工判定为误报/噪声的比例；leaving-pr-comments 代发的评论是否可直接发给同事、不需改写；人工总耗时与不用技能时相比是增是减。第二步 2 周，加入 full-stop，仍保留人工点合并，核心指标是人工干预次数/PR，每个 PR 仍需你介入 3 次以上就不升级。第三步仅在「CI 能拦住问题 + 改动可回滚 + 非关键仓库」范围内试 1–2 次 full-send，记录是否出现需要 revert 的合并，出现一次即回退到 full-stop。开始试之前，先把 council 的模型组合、项目约定写进 CLAUDE.md/AGENTS.md，否则后续更新技能会丢掉配置，导致前后结果不可比。注意：原文没有给出任何验证指标或数据，以上是调研报告建议的自建验证方式，不是 tstack 的效果证明。
+**tstack**：最小试用 1 周，选一个低风险、有 CI 的仓库，只启用 file-pr 和 babysit-pr（连带 leaving-pr-comments），跑 2–3 个真实 PR，合并权仍由人掌握。观察：file-pr 的 PR 描述首段是否真的先讲问题而不是罗列改动，可直接人工判 yes/no；babysit-pr 每个 PR 需要几轮修复才让 CI 变绿；它提交的修复里被人工判定为误报/噪声的比例；leaving-pr-comments 代发的评论是否可直接发给同事、不需改写；人工总耗时与不用技能时相比是增是减。第二步 2 周，加入 full-stop，仍保留人工点合并，核心指标是人工干预次数/PR，每个 PR 仍需你介入 3 次以上就不升级。第三步仅在「CI 能拦住问题 + 改动可回滚 + 非关键仓库」范围内试 1–2 次 full-send，记录是否出现需要 revert 的合并，出现一次即回退到 full-stop。开始试之前，先把 council 的模型组合、项目约定写进 CLAUDE.md/AGENTS.md，否则后续更新技能会丢掉配置，导致前后结果不可比。注意：原文没有给出任何验证指标或数据，以上是调研报告建议的自建验证方式，不是 tstack 的效果证明。
+
+**质量门禁清单（dev-quality-gates，本次新增）**：选一个真实仓库，先只覆盖一个主语言加一个跨切面风险类别，不要全量安装。在可回滚的工作分支上运行 README 提示词，要求代理只输出计划；审阅计划是否满足「只选匹配条目、能非零退出、先证明能失败」。先批准 2 到 3 个最匹配的门禁，让代理接入 hooks 和 CI；对每个门禁制造一次已知违规，确认本地 hook 或 CI 确实失败。记录指标：计划中推荐数、实际接入数、成功证明能失败的数量、误报数量、CI 时长变化、修复一个违规所需时间。核心判断是「违规能否被稳定阻断」，而不是「报告是否好看」。若至少一个门禁捕获了真实问题或成功拦截构造违规，且误报和 CI 延迟可接受，再扩大到更多类别；若代理倾向安装过多工具、或门禁无法失败，则停止推广，只保留已验证的单个工具。试多久：材料没有给出固定时长，建议以 1–2 周或若干次提交为一轮，先看误报和阻断可靠性，不要拿 README 的策展声明当效果数据。
 
 ## 常见坑
 
@@ -903,6 +958,12 @@ cp -R tstack/skills/* ~/.codex/skills/    # Codex
 86. 在非 GitHub、非 PR 式协作里硬套 tstack。整套东西假设你的工作在 GitHub PR 流程里，且愿意把 PR 生命周期交给 agent。
 87. 把 full-send 用在生产关键路径。至少要有能拦住的 CI、review bot、改动可回滚；不具备时不要用，出现一次需要 revert 的合并就回退到 full-stop。
 88. 只触发 file-pr 就以为 PR 描述合格。要人工判首段是否先讲问题，而不是罗列改动；不合格就改技能或提示。
+89. 把 dev-quality-gates 当通用技术栈全量安装。README 明确说不是通用技术栈，不要全部安装；先只覆盖一个主语言加一个跨切面风险类别。
+90. 跳过「证明能失败」这一步。只出报告、不阻断的检查不算完成；每个新门禁都要制造一次已知违规，确认非零退出并阻断 CI。
+91. 在材料未提供 adopt.md / patterns.md 正文时照猜配置。本次材料只有 README，原文还在 Under review 表格处截断；完整安装命令和配置要到仓库原文核对，不能编造。
+92. 让代理一次改太多。先要求代理只出计划，人工审阅后再改；如果代理倾向安装过多工具，先缩小范围。
+93. 把本地 hook 当 CI 的替代。hook 可被 `--no-verify` 绕过，CI 中仍要运行全量检查。
+94. 把清单的策展声明当效果证明。README 说所有条目在 2026-10-23 做过一次检查，但这是一次 sweep，不是独立评审；没有给出采用后代码质量改善的量化数据。
 
 ## 证据与来源
 
@@ -916,7 +977,8 @@ cp -R tstack/skills/* ~/.codex/skills/    # Codex
 - **来源八**：GitHub 仓库 luongnv89/claude-howto 的 README，MIT 许可，版本标注 v2.1.302，兼容 Claude Code 2.1+。可核对的内容：10 个模块的目录与用途、/optimize、project-CLAUDE.md、directory-api-CLAUDE.md、personal-CLAUDE.md、code-review-specialist、04-subagents、05-mcp、06-hooks 脚本与 settings.json JSON、07-plugins 的 --plugin-dir 用法、/rewind 六个选项、claude -p / -r / --output-format json、/self-assessment 与 /lesson-quiz、claude mcp add 命令。数据：README 称 10 个模块；完整学习路径 11–13 小时；15 分钟可完成第一个 slash command；1 小时 essential setup；hooks 有 5 种类型、33 个事件、4 个类别；GitHub 指标为 43,460 stars、今日 177 stars。属于作者主张、没有数据或未展开：模板正文与脚本质量未在材料中展开；90% 的能力没用上、10x productivity、production-ready templates、Trusted by Developers 属于作者主张，没有基准测试、前后对比或客户案例；示例工作流只有流程描述，没有实际输出和失败率；模型列表在材料末尾被截断。仓库自身的 pytest、ruff、bandit、mypy、coverage 是维护该指南脚本的测试，不是使用该指南后工作改善的证据。本手册只把第 19 步当两周单项目小范围试用，不直接全员采用；MCP 与 hooks 的安全前提按 README 提醒执行，未展开的部分不补写。
 - **来源九**：播客转写 Alex Lieberman & CJ Hess 关于 Tenex 的访谈，经 Latent Space 渠道。可核对内容：Tenex 约 75 人，约 90% 为工程师或 AI 策略师；客户约一半 Fortune 2000、一半营收 1–5 亿美元中型企业；MetaHarness 由共享技能集、标准化项目文档和外层 CLI 组成；计划、决策、验收标准、证据随代码签入 Git；agent 把决策和进度写回仓库；双模型 Opus 驱动 + Codex 评审，同一台机器来回，云端用 AMP orb；每季度校准故事点评分；主指标为全公司工程师人均月故事点；企业非工程场景先解决数据权限/RBAC。数据：工程师之间薪酬差距约 4 倍（作者否定 10 倍说法）；token 支出 : 人力支出 ≈ 1:1 到 2:1；大多数公司每人 10–200 美元，AI 原生公司约折合人力支出 10%；约 100 家在谈企业的落地阶梯为通用 LLM 90%、培训赋能 60%、工程团队编码代理约 50%、非工程生产级智能体约 5%；今年工程师产出约 2 倍；Kill My SaaS 72 份提交中人类评委第一名在 AI 评委排行榜只排第 19，被替换工具年费 4.3 万美元。属于作者主张、没有数据：2 倍产出是 CJ 的口头估计；Opus 覆盖全区间、Codex 做 review 效果最好是个人偏好；各阶梯百分比来自 Tenex 自身在谈客户样本，作者是卖 AI 转型服务的利益相关方；上下文全进 repo 就能让 agent 自己推进是机制解释，没有对照数据。局限：原文是自动转写播客稿，开头声明可能有误、说话人未标注；模型名无法独立核实；MetaHarness 没有模板、目录结构、CLI 命令、提示词；文本在 Is there anythi 处截断，权限网关后续缺失；单公司、无对照实验。第 20 步的 docs 目录和决策记录字段是本手册按原文要素拼装的最小示意，不是原文内容。
 - **来源十**：@RoundtableSpace 的推文，称微软开源 Skill Recorder（仓库 microsoft/skill-recorder，原文提到最新 Release 为 v0.7.0，4.3K 星）。可核对的信息：录制快捷键 macOS 为 ⌘⇧R、Windows 为 Ctrl+Shift+R；捕获鼠标点击、应用/窗口切换、页面、终端命令；录制过程在本机进行；支持边做边大声讲解；推文互动 137 赞 / 16 转发 / 15 回复。属于作者主张、未见数据：「教会你的 AI 代理为你执行它」没有复跑成功率、演示案例或失败场景说明；「都在你的机器上进行」是产品侧隐私表述，未经第三方核对。局限：材料仅一条推文，仓库文档、输出格式、支持的代理、平台覆盖、停止录制方式、触发方式全部缺失；v0.7.0 属于早期迭代，接口与行为可能变动。本手册第 21 步只把它当小范围试用，不当作已验证的日常流程。
-- **来源十一（本次新增）**：GitHub 仓库 t3dotgg/tstack 的 README，MIT，约 32 stars。可核对的内容：9 个技能的名称、口头触发词与作用；安装命令 git clone 后 cp -R 到 ~/.claude/skills/ 和 ~/.codex/skills/；前置条件 gh auth login、python3、council/sol-loop 需要能调用其他厂商模型 subagent 的 harness；技能依赖图（full-send 依赖 sol-loop、file-pr、babysit-pr；full-stop 依赖 full-send；takeover 依赖 modernize、file-pr、babysit-pr、leaving-pr-comments；file-pr、babysit-pr、modernize 依赖 leaving-pr-comments）；把个人配置写进 CLAUDE.md / AGENTS.md；先 full-stop 后 full-send 的保守起步建议。属于作者主张、没有数据：「每天在用」是作者自述；没有 benchmark、PR 数量、合并成功率或前后对比；约 32 stars 是个人工作流仓库，成熟度未经外部检验；技能本体（提示词、脚本、pr-wait 实现）不在材料中，无法核验它怎么拆解任务、怎么配置、质量如何；部分技能依赖 T3 Code 的 delegate_task，没有等价 harness 时 council / sol-loop 不可用。局限：原文是 README，未验证实际安装后的行为；接口和文件随时可能变。本手册第 22 步的 1 周/2 周试用顺序和观测指标是调研报告建议的自建验证方式，不是 tstack 原文的数据或效果证明。
+- **来源十一**：GitHub 仓库 t3dotgg/tstack 的 README，MIT，约 32 stars。可核对的内容：9 个技能的名称、口头触发词与作用；安装命令 git clone 后 cp -R 到 ~/.claude/skills/ 和 ~/.codex/skills/；前置条件 gh auth login、python3、council/sol-loop 需要能调用其他厂商模型 subagent 的 harness；技能依赖图（full-send 依赖 sol-loop、file-pr、babysit-pr；full-stop 依赖 full-send；takeover 依赖 modernize、file-pr、babysit-pr、leaving-pr-comments；file-pr、babysit-pr、modernize 依赖 leaving-pr-comments）；把个人配置写进 CLAUDE.md / AGENTS.md；先 full-stop 后 full-send 的保守起步建议。属于作者主张、没有数据：「每天在用」是作者自述；没有 benchmark、PR 数量、合并成功率或前后对比；约 32 stars 是个人工作流仓库，成熟度未经外部检验；技能本体（提示词、脚本、pr-wait 实现）不在材料中，无法核验它怎么拆解任务、怎么配置、质量如何；部分技能依赖 T3 Code 的 delegate_task，没有等价 harness 时 council / sol-loop 不可用。局限：原文是 README，未验证实际安装后的行为；接口和文件随时可能变。本手册第 22 步的 1 周/2 周试用顺序和观测指标是调研报告建议的自建验证方式，不是 tstack 原文的数据或效果证明。
+- **来源十二（本次新增）**：GitHub 仓库 mokevnin/dev-quality-gates 的 README。可核对的内容：按任务推荐一个质量门禁工具（少数两个）、说明为什么选和不适用；核心原则包括按任务选一个工具、覆盖优先于数量、优先快速原生工具链、必须能阻断构建（非零退出码）而不只是出报告、对 AI 编码代理友好、没有可靠推荐就留空；README 给出的代理提示词（Apply https://github.com/mokevnin/dev-quality-gates to this repository. Read and follow ... Show me the plan before you change anything.）；推荐用 mise.toml 固定工具版本、hk.pkl 让本地 hook 和 CI 跑同一套检查；命令包括 mise use hk、hk check、hk fix、hk check --all；要求对每个门禁证明能失败；清单按语言和跨切面类别组织，并明确说不是通用技术栈、不要全部安装。属于作者主张、没有数据或未展开：采用后代码质量改善的量化数据没有给出；主要论据是设计原则、工具限制说明和少量实测标注；adopt.md、patterns.md、tools.json 和 research 目录正文未包含，原文还在 Under review 表格处截断，因此无法核对完整接入步骤、具体配置和逐条研究证据；README 说所有条目在 2026-10-23 做过一次检查，但这是一次 sweep，不是独立评审；多个推荐工具较新、pre-1.0 或由单一维护者维护，部分工具未验证退出码、部分需要额外插件或付费能力。局限：材料只有 README，未验证实际安装后的行为；第 23 步的试用顺序、指标和「先覆盖一个主语言加一个跨切面风险类别」是调研报告建议的自建验证方式，不是 dev-quality-gates 原文的效果证明。
 
 ## 依据的调研
 
@@ -931,3 +993,4 @@ cp -R tstack/skills/* ~/.codex/skills/    # Codex
 - [AI for the Fortune 2000: How Tenex Builds an AI-Native SDLC — Alex Lieberman & CJ Hess](../research/radar/2026-10-23/6323-ai-for-the-fortune-2000-how-tenex-builds-an-ai-nat.md)：值得一试，建议小范围试：在一个多人协作的代码仓库里照搬 Tenex 的 MetaHarness 最小版——把计划、决策和验收标准随代码一起签入 Git，并要求智能体把过程写回仓库，再配一套“主力模型驱动 + 第二个模型评审”双模型互查，用每月人均故事点趋势判断是否有效。理由是原文给出了可照做的流程轮廓和衡量口径，但没有模板与命令，2 倍产出也只是作者口头估计，所以先在一个项目上验证，再决定是否铺开。
 - [@RoundtableSpace: 微软开源了一款应用，它可以观察你执行一次任务，然后教会你的 AI 代理为你执行它。4.3K 星。](../research/radar/2026-10-24/6644-ai-4-3k.md)：值得一试，先用快捷键录一遍你自己反复做的桌面或终端任务，把录下来的技能交给代理复跑 3 次，并对照手工执行结果，再决定是否纳入日常流程；理由是这条线索把“人示范一次”直接转换成“代理可复用技能”，正好对应任务移交与条件供给问题，但原文只有三步概述，产物格式、触发方式和可靠性都需到仓库和实测中确认。
 - [t3dotgg/tstack](../research/radar/2026-10-25/6799-t3dotgg-tstack.md)：值得一试，先把 tstack 装到单个低风险仓库，只用 file-pr 和 babysit-pr 跑两三个真实 PR，暂不给自动合并权限；因为 README 给出了可直接复制的安装命令、技能依赖图和明确的前置条件，但技能本体内容不在材料里，效果没有数据支撑。
+- [mokevnin/dev-quality-gates](../research/radar/2026-10-25/6885-mokevnin-dev-quality-gates.md)：值得一试，建议在单个代码库小范围试用：在仓库根目录让编码代理按 README 的提示词先出计划，只接入与项目栈匹配的少量质量门禁，并逐个证明能失败。理由是该仓库给出了可复制的代理提示词和按任务选工具的清单，但 adopt.md、patterns.md 未包含在材料中，且清单明确声明不是通用栈，需要先验证再推广。

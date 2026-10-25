@@ -1,14 +1,14 @@
-# 让编码 agent 在可控环境里被监督、审批和复现
+# 把编码 agent 放进可控边界：沙箱、项目护栏、移动审批与审计链
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：把编码 agent 从本机随手跑一次，变成在可控环境里按项目规则反复跑，能看清读写、需要时在真实或仿真系统执行，并能对远程托管、审批和断点恢复做小范围验证。
-> 先试这一步：先选一个非生产仓库，用做法 C 的短 CLAUDE.md、permissions 和一个 PostToolUse hook 跑 3–5 次同类任务建立基线；若需要远程托管，再用做法 Q 的 Cloud quickstart 跑一个只读诊断代理做对照。
-> 最近修订：2026-10-22
+> 解决的问题：如何让编码 agent 在可回退、可观察、可审批的边界里反复执行，而不是在本机随手跑一次。
+> 先试这一步：先在一个可回退的真实项目里落地短 CLAUDE.md、allow/ask/deny 权限和一个 PostToolUse hook（做法 C），再按需要叠加沙箱、云端会话或移动审批。
+> 最近修订：2026-10-25
 
 ## 解决什么问题
 
-本手册把编码 agent（Claude Code / Codex CLI / OpenCode / goose / pi / agentbox / Xiryn / Omnara 等）从「在本机随手跑一次」变成「在可控环境里、按项目规则反复跑」，并能实时看到它在读什么、写什么，需要时在真实（仿真）系统里执行并拿到可判定结果。十七条做法 A-Q 覆盖：A 自托管工作区；B MCP 供给；C 项目级护栏；D 只读规划/放权编辑；E Codex CLI 起步；F Claude Mods 受控试点；G pi 容器化；H 观察面与危险命令闸门；I 手机审批与通知；J QEMU guest 验证；K 云端一次性 VM；L 每 agent 独立沙箱桌面；M 换实现对比迁移；N tmux 保活与脚本化外壳；O Harp 多会话状态侧栏与 tmux 接管；P openspaces 多机线程与沙箱；Q Omnara 托管代理平台小范围试用。
+本手册把编码 agent（Claude Code / Codex CLI / OpenCode / goose / pi / agentbox / Xiryn / Omnara 等）从「在本机随手跑一次」变成「在可控环境里、按项目规则反复跑」，并能实时看到它在读什么、写什么，需要时在真实（仿真）系统里执行并拿到可判定结果。十八条做法 A-R 覆盖：A 自托管工作区；B MCP 供给；C 项目级护栏；D 只读规划/放权编辑；E Codex CLI 起步；F Claude Mods 受控试点；G pi 容器化；H 观察面与危险命令闸门；I 手机审批与通知；J QEMU guest 验证；K 云端一次性 VM；L 每 agent 独立沙箱桌面；M 换实现对比迁移；N tmux 保活与脚本化外壳；O Harp 多会话状态侧栏与 tmux 接管；P openspaces 多机线程与沙箱；Q Omnara 托管代理平台小范围试用；R WardenDeck 飞书审批闸门与审计链。
 
 ## 适用与不适用
 
@@ -31,16 +31,17 @@
 | O | 在 macOS 上并排跑多个 Claude Code/Codex 长任务、需要按状态排序的侧栏、想让 tmux 会话在重启后仍保留分组与顺序、想从手机 ssh 接管同一会话 | 非 macOS、不能接受非官方 Warp fork 与 AGPL-3.0、上游登录未测试却要求稳定登录、想把它当自动化编排器、需要精确完成事件而不是侧栏状态、没有能力维护额度环 JSON；它只显示状态与同步 tmux 布局，不做定时触发、失败重试或任务队列 |
 | P | 想把同一任务发到多台计算机或沙箱、需要线程续聊/日志/人工接管、愿意先在两三台机器小范围试跑只读诊断和单仓库修测试 | 需要内置定时器/cron/webhook/事件触发器/任务队列/重试；把 codex/gemini/opencode 适配器直接上生产（README 按文档写、未实机验证）；把 local/ssh 默认权限当强隔离；需要中继/计量/账号体系 |
 | Q | 需要跨机器/跨用户、由 app/Slack/GitHub/定时触发的云代理，希望把长期运行/远程监督/审批/断点恢复放到托管运行层，且有工程运维能力愿意小范围试用 | 简单一次性任务不必上平台；没有独立评测/成熟度证据，不宜全面 adopt；自托管本地默认配置故意不安全；沙箱需 public URL；权限具体配置、cron 完整参数、memory/subagents 配置材料只给链接，不能照抄 |
+| R | 已在用 Claude Code，想把审批和观察搬到手机/飞书，需要逐工具审批、macOS 内核沙箱和只追加哈希链审计 | 自标 prototype、40 stars，执行端只有 Claude Code（Codex 能探测到但没接通），内核级沙箱仅 macOS、Linux 需自行用专用用户或容器兜底，笔记本休眠即离线，无定时/状态触发，单条消息 10 分钟无输出/30 分钟/100 次工具调用上限 |
 
 ## 前置条件
 
 通用：非生产、可回退的仓库或环境；受管/涉密环境先审阅所有 `curl | bash`、`irm | iex`、`./install.sh`、`./setup.sh` 类脚本，或改用包管理器/源码审阅后执行。
 
-A：Linux 服务器 + systemd + 本地 Docker；Ubuntu 22.04+/Debian 12+ 可自动补依赖；源码构建需 Docker 访问权限。B：本机可装 CLI，有受支持供应商 key 或订阅，非生产环境。C：macOS/Linux/WSL、Node+npm 或 curl、真实 Git 项目、可回退。D：macOS/Linux/Windows 开发机，安装前清 0.1.x 前旧版。E：Mac/Linux/Windows；ChatGPT 订阅需 Plus/Pro/Business/Edu/Enterprise；API key 需 additional setup。F：一次性项目、合成数据、无生产凭据、已批准 Claude Code、能设 `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`、能生成 `/plugin-types`、有回滚负责人。G：Node.js 22.19+、非关键可回退仓库、优先容器环境、模型订阅或 API key。H：Claude Code 2.1.287+（README 自述，无法独立验证）、Code 视图需 macOS+Chrome+图片终端、非关键 Git 仓库。I：macOS/Windows 10/11、已运行 Codex App、电脑保持唤醒联网、手机同局域网、通知需 Bark/ntfy。J：Python 3.8+、QEMU、Go 1.22+、首次联网、非关键环境。K：Pro/Max/Team/Enterprise 且 claude.ai 登录；GitHub 连接；private repo 装 Claude GitHub App；终端路径已用 `gh` 且可 `/web-setup`；`claude --cloud` 前先 push。L：约 4 GB 空闲磁盘、至少一个 provider key（必需）、Firecrawl 可选、Node ≥20.9、Docker；Telegram 可选。M：Node 18+、可用 provider key、非关键小仓库；Homebrew 路径会拉 Rust 工具链。N：较新的 Claude Code，`claude --help` 能看到 `-w/--worktree` 与 `--tmux`；本机有 tmux；远程机器可 SSH；iTerm2 上内置路径用 native panes 而非真 tmux，脚本化必须加 `=classic`。O：macOS；从 Releases 下载 dmg 或按源码构建；源码构建需 `rust-toolchain.toml` 指定的 Rust 工具链；接受非官方 Warp fork、AGPL-3.0、上游登录未测试；要 tmux 同步需 tmux；额度环需能定期生成 `docs/limit-rings.md` 格式 JSON；Claude Code 后台任务 hook 可选。P：已装 Node.js / npm；目标机可 SSH 登录（README 建议用 Tailscale 处理 NAT）且已安装要用的智能体 CLI；macOS 26 可用 Apple 开源 `container` 运行时，或改用 Docker / Podman；Claude Code 订阅或 API key 用于 `claude setup-token`；人工接管需 Mac 开启屏幕共享或 Linux 运行绑定 localhost 的 VNC 服务；SDK 路径需 Node/TS 工程。Q：Omnara Cloud 账号；Node.js 22 或更新；使用首项目自带的模型 provider 和 sandbox pool。SDK 路径需 dashboard 创建 API key、导出 `OMNARA_TOKEN`、`npm install @omnara/sdk`、用 `npx omnara config` 获得 org/project ID。自托管需 Docker 和 Compose；新实例需在控制台添加 model provider 和 model、在 Machines 连接本机并共享给项目；沙箱还需实例有 public URL。工具权限、cron 完整参数、memory/subagents 配置需查 docs.omnara.com，本次材料只给链接。
+A：Linux 服务器 + systemd + 本地 Docker；Ubuntu 22.04+/Debian 12+ 可自动补依赖；源码构建需 Docker 访问权限。B：本机可装 CLI，有受支持供应商 key 或订阅，非生产环境。C：macOS/Linux/WSL、Node+npm 或 curl、真实 Git 项目、可回退。D：macOS/Linux/Windows 开发机，安装前清 0.1.x 前旧版。E：Mac/Linux/Windows；ChatGPT 订阅需 Plus/Pro/Business/Edu/Enterprise；API key 需 additional setup。F：一次性项目、合成数据、无生产凭据、已批准 Claude Code、能设 `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`、能生成 `/plugin-types`、有回滚负责人。G：Node.js 22.19+、非关键可回退仓库、优先容器环境、模型订阅或 API key。H：Claude Code 2.1.287+（README 自述，无法独立验证）、Code 视图需 macOS+Chrome+图片终端、非关键 Git 仓库。I：macOS/Windows 10/11、已运行 Codex App、电脑保持唤醒联网、手机同局域网、通知需 Bark/ntfy。J：Python 3.8+、QEMU、Go 1.22+、首次联网、非关键环境。K：Pro/Max/Team/Enterprise 且 claude.ai 登录；GitHub 连接；private repo 装 Claude GitHub App；终端路径已用 `gh` 且可 `/web-setup`；`claude --cloud` 前先 push。L：约 4 GB 空闲磁盘、至少一个 provider key（必需）、Firecrawl 可选、Node ≥20.9、Docker；Telegram 可选。M：Node 18+、可用 provider key、非关键小仓库；Homebrew 路径会拉 Rust 工具链。N：较新的 Claude Code，`claude --help` 能看到 `-w/--worktree` 与 `--tmux`；本机有 tmux；远程机器可 SSH；iTerm2 上内置路径用 native panes 而非真 tmux，脚本化必须加 `=classic`。O：macOS；从 Releases 下载 dmg 或按源码构建；源码构建需 `rust-toolchain.toml` 指定的 Rust 工具链；接受非官方 Warp fork、AGPL-3.0、上游登录未测试；要 tmux 同步需 tmux；额度环需能定期生成 `docs/limit-rings.md` 格式 JSON；Claude Code 后台任务 hook 可选。P：已装 Node.js / npm；目标机可 SSH 登录（README 建议用 Tailscale 处理 NAT）且已安装要用的智能体 CLI；macOS 26 可用 Apple 开源 `container` 运行时，或改用 Docker / Podman；Claude Code 订阅或 API key 用于 `claude setup-token`；人工接管需 Mac 开启屏幕共享或 Linux 运行绑定 localhost 的 VNC 服务；SDK 路径需 Node/TS 工程。Q：Omnara Cloud 账号；Node.js 22 或更新；使用首项目自带的模型 provider 和 sandbox pool。SDK 路径需 dashboard 创建 API key、导出 `OMNARA_TOKEN`、`npm install @omnara/sdk`、用 `npx omnara config` 获得 org/project ID。自托管需 Docker 和 Compose；新实例需在控制台添加 model provider 和 model、在 Machines 连接本机并共享给项目；沙箱还需实例有 public URL。工具权限、cron 完整参数、memory/subagents 配置需查 docs.omnara.com，本次材料只给链接。R：Node.js >= 22.13（依赖内置 `node:sqlite`）；macOS 或 Linux（内核级沙箱仅 macOS 提供，Linux 需自行用专用用户或容器兜底）；Claude Code 已安装并登录、`claude` 在 `PATH` 上；一个飞书/Lark 账号，手机能打开授权链接；`init` 会创建 `~/.wardendeck`（权限 0700），需备份 `master.key` 与数据库。
 
 ## 操作步骤
 
-按环境选：A 要服务器工作区；B 要通用 agent+MCP；C 要 Claude Code 项目护栏；D 要 OpenCode build/plan 分工；E 要 Codex CLI 起步；F 要 Claude Mods 受控试点；G 要 pi 容器化+多 provider；H 要观察面与危险命令闸门；I 要 Codex 会话接手机；J 要 QEMU guest 验证；K 要云端一次性 VM；L 要每 agent 独立 Linux 桌面；M 要 opencode-rust 对比；N 要 tmux 保活/脚本化/读回；O 要 Harp 侧栏多会话状态与 tmux 接管；P 要 openspaces 多机线程与沙箱；Q 要 Omnara 托管代理平台小范围试用。做法 C 可与 A 叠加；F 是 C 的扩展面试点；H 是第三方插件集合，不替代 F；I 与 E 并存；J 补执行目标；K 补会话跑在哪里；L 与 A 不同层；M 与 D 是同一层两个实现；N 是 C/E/K 等做保活外壳；O 是 C/E/N 等做状态侧栏与 tmux 布局同步，不替代 N 的脚本化外壳，也不是自动化编排器；P 与 A/L 不同层，是发起方统一管理多机线程的直连层，可与 C/E 的 agent 规则叠加，不替代 N 的 tmux 脚本化，也不替代 O 的状态侧栏，且不提供定时/重试；Q 与 C/E/K 等互补：Claude Code/Codex/OpenCode 是单终端/单机 agent loop，Omnara 补云托管、跨机器、跨用户、Slack/GitHub/定时触发，可用 MCP 让 Claude Code 管理 Omnara 代理；Q 不替代 C 的项目护栏，也不替代 N/O/P 的本地/多机外壳。
+按环境选：A 要服务器工作区；B 要通用 agent+MCP；C 要 Claude Code 项目护栏；D 要 OpenCode build/plan 分工；E 要 Codex CLI 起步；F 要 Claude Mods 受控试点；G 要 pi 容器化+多 provider；H 要观察面与危险命令闸门；I 要 Codex 会话接手机；J 要 QEMU guest 验证；K 要云端一次性 VM；L 要每 agent 独立 Linux 桌面；M 要 opencode-rust 对比；N 要 tmux 保活/脚本化/读回；O 要 Harp 侧栏多会话状态与 tmux 接管；P 要 openspaces 多机线程与沙箱；Q 要 Omnara 托管代理平台小范围试用；R 要 WardenDeck 飞书审批与审计链。做法 C 可与 A 叠加；F 是 C 的扩展面试点；H 是第三方插件集合，不替代 F；I 与 E 并存；J 补执行目标；K 补会话跑在哪里；L 与 A 不同层；M 与 D 是同一层两个实现；N 是 C/E/K 等做保活外壳；O 是 C/E/N 等做状态侧栏与 tmux 布局同步，不替代 N 的脚本化外壳，也不是自动化编排器；P 与 A/L 不同层，是发起方统一管理多机线程的直连层，可与 C/E 的 agent 规则叠加，不替代 N 的 tmux 脚本化，也不替代 O 的状态侧栏，且不提供定时/重试；Q 与 C/E/K 等互补：Claude Code/Codex/OpenCode 是单终端/单机 agent loop，Omnara 补云托管、跨机器、跨用户、Slack/GitHub/定时触发，可用 MCP 让 Claude Code 管理 Omnara 代理；Q 不替代 C 的项目护栏，也不替代 N/O/P 的本地/多机外壳；R 是 C/E/K 等的授权与审计层：Claude Code 仍是唯一执行引擎，WardenDeck 在其上补移动触发、逐工具审批、macOS 内核沙箱和哈希链审计，不替代 C 的项目护栏，也不替代 N/O/P 的本地/多机外壳，且不提供定时触发。
 
 ### 做法 A：Linux 服务器 agentbox
 
@@ -509,6 +510,37 @@ codex mcp add omnara --url https://app.omnara.com/mcp
 
 7. 选用示例或触发器扩展（前提：按 `examples/` 中对应目录的 `agent.yaml` 和 `SKILL.md` 操作；触发器细节需查文档）。README 列出 Slack coding agent、PR review agent、SRE agent、Browser agent、PostHog analytics agent、Reddit/X/LinkedIn signal agent、Video generation agent 等示例。Cron trigger 可按时区给已有代理发消息、从 profile 启动新代理、开新的 Slack/Discord thread；GitHub 代理可在 PR 打开或被提及时启动；Slack/Discord 提及 bot 可在 thread 启动代理。README 没有给出 cron 的完整命令/JSON，只给了 API 链接。
 
+### 做法 R：WardenDeck 飞书审批闸门与审计链
+
+1. 确认前提：Node.js >= 22.13（依赖内置 `node:sqlite`）；macOS 或 Linux（内核级沙箱仅 macOS 提供，Linux 需自行用专用用户或容器兜底）；Claude Code 已安装并登录、`claude` 在 `PATH` 上；一个飞书/Lark 账号，手机能打开授权链接。预期：`node -v` 看到 >= 22.13，`claude --version` 有输出。
+2. 安装：`git clone https://github.com/bocoboho/wardendeck.git`、`cd wardendeck`、`npm install && npm run build`、`npm link`。预期：`wardendeck` 出现在 PATH；不执行 `npm link` 则改用 `node dist/cli.js <command>`。
+3. 初始化并建项目：`wardendeck init --admin-email you@example.com`；`mkdir -p ~/code/demo`；`wardendeck project create --name demo --workdir ~/code/demo`。预期：创建 `~/.wardendeck`（权限 0700），生成 `master.key`、数据库和一次性 Web 控制台 token，自动探测本地 agent。`--workdir` 决定 agent 实际能碰的目录，建议指向可丢弃的仓库副本。
+4. 备份密钥：把 `~/.wardendeck/master.key` 与数据库一起备份。预期：换机后能解密已存凭据；不备份则凭据不可恢复。
+5. 连接飞书。做法 A（自动建应用）：`wardendeck feishu setup --project demo`，在手机上打开打印出的链接并授权。预期：自动创建应用、把凭据存为 `feishu_demo`、自动绑定私聊。随后到飞书开放平台确认：事件订阅→长连接开启，并订阅 `im.message.receive_v1`；想要卡片按钮审批，添加 `card.action.trigger` 回调；没有它就在对话里回 `1 / 2 / 3` 审批。做法 B（复用已有飞书应用）：建自建应用（国际版 `open.larksuite.com`）；开启机器人，申请 `im:message`、`im:message:send_as_bot`、`im:chat:readonly`；按上文设置长连接+事件订阅，发布版本；然后：
+
+```sh
+wardendeck secret set feishu_demo --value "cli_xxx
+app_secret_xxx"
+
+wardendeck platform bind --project demo --platform feishu \
+  --credential feishu_demo --channel oc_xxx
+```
+
+第一行 App ID、第二行 App Secret；国际版再加第三行 `lark`。不写 `--allowed-users` 时只允许应用所有者。怎么选：能用自动建应用就用 A；已有应用或需要群聊就用 B。
+6. 绑定群聊（可选，前提：先把 bot 拉进群）：
+
+```sh
+wardendeck feishu chats --credential feishu_demo
+wardendeck platform bind --project demo --platform feishu \
+  --credential feishu_demo --channel oc_xxx --allowed-users ou_aaa,ou_bbb
+```
+
+预期：群里只有 @ 这个 bot 才响应；务必用 `oc_...` 群 ID，不是个人 `ou_...` ID。
+7. 启动：`wardendeck serve`。预期：Web 控制台在 `http://127.0.0.1:8787`（用 `init` 打印的 token 登录）；不需要就 `wardendeck serve --no-web`。笔记本休眠即离线，常驻写法 `caffeinate -is wardendeck serve`，或在常开主机/服务器上跑。
+8. 在聊天里派活与审批：发自然语言，例如“你好，看一下这个目录里有什么”。预期：卡片随工具调用原地刷新，遇到需要审批的调用会停下。指令：`1`/`允许` 允许本次工具调用；`2`/`允许30分钟` 30 分钟内允许工具调用；`3`/`拒绝` 拒绝本次工具调用；`/stop` 停止当前任务并取消待审批；`/remember <text>` 存记忆（私聊→user 作用域，群→chat 作用域）；`/memory` 列出可见的长期记忆；`/forget <id>` 删除当前作用域内某条记忆；`AW_ATTACH: /path/image.png` 在最终回答里回传本地图片。单条消息上限：10 分钟无输出、30 分钟实际耗时、100 次工具调用。
+9. 收紧权限模式与沙箱（前提：先在一个低风险目录试）：`wardendeck project permission --name demo --mode default`。可选模式：`default`、`acceptEdits`、`plan`、`dontAsk`、`auto`、`bypassPermissions`（危险）。环境变量：`WARDENDECK_DIR` 数据目录（默认 `~/.wardendeck`）；`WARDENDECK_DENY_PATHS` agent 不得读/执行的额外路径，按系统路径分隔符；`WARDENDECK_SANDBOX=0` 关闭 macOS 沙箱（不推荐）；`WARDENDECK_CLAUDE_AUTO_MEMORY=1` 重新开启 Claude Code 内置自动记忆（默认关，避免事实跨 bot 泄漏）。
+10. 核对审计与自检：`wardendeck status`、`wardendeck doctor`、`wardendeck audit list --limit 20`、`wardendeck audit verify`。预期：看到绑定、健康状态、最近审计事件；`audit verify` 校验哈希链完整性。排查顺序：bot 不回 → 看 `serve` 是否在跑 → `status` 看绑定 → 控制台确认长连接与 `im.message.receive_v1` → `audit list` 找 `message.inbound`：没有说明事件没到（查事件订阅）；有说明被 `allowed_users` 挡了（比对发送者 `open_id`）。
+
 ## 怎么判断变好了
 
 A：用量页按用户/模型/时间过滤 tokens、成本来源、单轮延迟，可 CSV 导出；缓存命中率 `cache reads / (uncached input + cache reads + cache writes)`；每条回复显示时间、模型、设置快照和记录成本；变更页看 diff 和整文件。无效果评测。
@@ -545,6 +577,8 @@ P：先在两三台机器上用 `openspaces` 小范围试跑只读诊断任务�
 
 Q：最小试用：先用 Omnara Cloud 的 quickstart 跑通一个只读诊断代理（报告 OS 和磁盘空间），确认 dashboard 能看到 tool calls、能发消息、能触发审批（若配置了）；再选低风险 PR 审查或 SRE 排查任务，与现有 Claude Code 流程做对照，重点验证远程托管、审批和断点恢复是否减少人工盯守。可观察：每一步事件是否存入 Postgres 并可查询/流式接收；审批是否按工具权限（立即运行/先问人/禁止）生效；崩溃/重启/机器断连后是否可断点恢复；Slack/Discord/GitHub/Cron 触发是否按预期启动代理；人工介入次数、返工、到可审查结果耗时、并行代理数。注意：原文没有效果指标、基准或案例数据，只能验证运行可观测性，不能据此证明任务结果改善；建议小范围、多轮重复后再决定是否扩大。
 
+R：最小试用半天到一天，在一台可丢弃或低风险机器上跑。按步骤 1-10 跑通一个只读诊断任务（如“看一下这个目录里有什么”），再跑一个单仓库修测试；用手机发任务、在卡片上审批、用 `/stop` 中断一次；用 `audit list --limit 20` 和 `audit verify` 检查审计链。可观察：卡片是否原地更新工具调用；审批是否只有发起者能批；`audit verify` 是否通过；`message.inbound`/`message.outbound` 是否成对；`/stop` 是否取消待审批；Linux 上是否自己补了沙箱兜底；单任务 token/成本。止损：bot 不回且按排查顺序查不到、审批卡不生效、或你需要定时触发/多 agent 执行端，则不采用 R。原文没有任务质量、成功率或效率的量化数据，只能验证过程可审计性。
+
 ## 常见坑
 
 - A：agentbox 默认 bypassPermissions、凭据可被终端用户读、单机单进程；撤销账号访问不会收回已下发凭据、不会终止运行进程；Web 提交不 push、不跑 Git hooks/签名；默认备份不含工作区；持久文件只放 `/workspace`、`/home/agent`、每用户 `/shared`；容器停止或重建就终止进程。
@@ -564,6 +598,7 @@ Q：最小试用：先用 Omnara Cloud 的 quickstart 跑通一个只读诊断�
 - O：仅 macOS；AGPL-3.0，改后通过网络提供给别人需提供源码；非官方 Warp fork，不受 Warp 制作、背书或支持；通过 Harp 登录未测试，可能卡在第一步；额度环不主动抓取，需要你自建数据管道，否则形同虚设；tmux 集成每 10 秒轮询，状态判定准确性未给验证结果，可能滞后或竞态；侧栏状态不是完成事件，不能当自动化编排器；内部命名仍沿用 Warp（`warp-oss` 二进制、`WARPOSS_*` 开关、`@warp_*` tmux 选项），与其他 tmux 客户端共享这些选项，需注意别名冲突；`agents.third_party.should_render_cli_agent_toolbar` 默认 `false`，关掉后需通过 Claude Code plugin marketplace 更新 Warp 的 Claude Code 插件；侧栏布局下标签栏的搜索框、视图选项、标签配置按钮被移除，新标签来自 Cmd+T、双击或侧栏空白处右键；`WARP_DATA_PROFILE` 只用于 debug 构建；没有基准、案例或效果数据。
 - P：原文没有内置定时器、cron、webhook 或事件触发器，也没有任务队列/重试；它只提供可被外部触发的原语（`start` 后台运行并打印 thread id、`send <id> --wait` 续聊、SDK `startThread`/`fanOut`/`openThread`、`status` 查询、`interrupt()` 只停本轮但保留线程）。`codex`、`gemini`、`opencode` 适配器按文档写、未实机验证；已实机验证的是 `claude-code` 与 `shell`。默认只在隔离环境（`docker:`、`cua:`）跳过权限询问；在 `local` 和 `ssh:` 上 Claude Code 拿到 `--permission-mode acceptEdits`，文件编辑自动批准，其它原本会询问的一律拒绝；只有信任这台机器时才加 `--auto-approve`。Cua 的 `sandbox exec` 不接受 stdin，走 Cua 时密钥会作为参数出现在本机命令行上。`close` 只删目标机上的 `~/.openspaces/work/<thread>`，不删你传的 `--cwd`；pid 文件只在本轮存在，`close` 只杀它能确认属于该线程的进程。目标机除智能体 CLI 外无需守护进程/账号/中继，但线程状态存在发起方机器的 `~/.openspaces/threads/`。`view` 需要 Mac 屏幕共享或 Linux 绑定 localhost 的 VNC。面板只监听 `127.0.0.1` 且链接带随机 token；外部网站无法驱动它。
 - Q：只有 README/项目自述，没有独立评测、用户案例、性能数据、成本数据、失败率；Show HN 51 points/15 comments 只是早期关注信号。权限具体配置、cron trigger 完整参数、memory/subagents 配置、示例内容等只给链接，本次材料未包含，不能照抄完整配置。自托管本地默认配置故意不安全，真实部署要按 self-hosting guide 和 configuration reference 操作。沙箱还需要实例有 public URL。Cloud 示例模型名按原文，实际使用要确认 provider 可用模型。工具权限可设为立即运行、先问人、禁止，但具体界面/字段未在 README 给出，需按 `docs.omnara.com/tools/permissions` 操作。Omnara 是运行层，不是 agent framework 替代；简单一次性任务不必上平台。
+- R：自标 prototype、40 stars、MIT；执行端只有 Claude Code（Codex 能探测到但没接通）；内核级沙箱仅 macOS，Linux 需自行用专用用户或容器兜底；笔记本休眠即离线；无定时触发/状态触发，任务只能由人发消息启动；单条消息有 10 分钟无输出、30 分钟实际耗时、100 次工具调用上限，长批处理要拆多条；`--workdir` 指向的目录就是 agent 能碰的范围，别指向生产仓库；`master.key` 不备份则换机后凭据不可恢复；`allowed_users` 不写默认只允许应用所有者；群聊必须用 `oc_...` 群 ID 且只有 @ bot 才响应；`bypassPermissions` 危险；macOS 沙箱可用 `WARDENDECK_SANDBOX=0` 关闭但不推荐；默认关闭 Claude Code 内置自动记忆以避免事实跨 bot 泄漏。
 
 ## 证据与来源
 
@@ -584,7 +619,8 @@ Q：最小试用：先用 Omnara Cloud 的 quickstart 跑通一个只读诊断�
 - 做法 O 依据《dominikmartn/harp》：macOS-only、AGPL-3.0、非官方 Warp fork、状态侧栏、固定分组、额度环、tmux 同步与 10 秒轮询、`@warp_adopt`、Claude Code hook、`WARPOSS_STATUS_TRACE` 日志、默认配置与移除项来自 README 与报告转述；157 stars 为报告数据；登录未测试；无效果指标、案例或 benchmark；状态准确率与并行收益为作者主张或本手册提出的自测指标；最小试用与止损为报告建议。
 - 做法 P 依据《migasrias2/geckobox》：MIT、`openspaces` 安装、`computers add/test`、`sandbox create`、`secrets set`、`start/logs/send/status/close`、`run --on`、SDK `startThread`/`fanOut`/`openThread`、`view`、默认权限策略、Cua 的 stdin 例外、线程状态位置、无守护进程/账号/中继来自 README 与报告转述；`claude-code` 与 `shell` 适配器已实机验证，`codex`/`gemini`/`opencode` 未实机验证；原文没有定时器/cron/webhook/事件触发器/任务队列/重试；无独立评测或效果数据；先在两三台机器小范围试跑为报告建议。
 - 做法 Q 依据《Show HN: Omnara – Open-source alternative to Claude Managed Agents》：`agent.yaml`、CLI、TypeScript SDK、Docker Compose 自托管、MCP 接入、工具权限/审批、Cron/GitHub/Slack/Discord 触发、每步事件存 Postgres、断点恢复、示例目录来自 README/项目自述；Apache 2.0；Show HN 51 points/15 comments 为早期关注信号；无独立评测、用户案例、性能/成本/失败率数据；权限具体配置、cron 完整参数、memory/subagents 配置只给链接；自托管本地默认不安全；沙箱需 public URL；Cloud 示例模型名按原文；小范围试用建议来自报告结论。
-- 十七条做法都没有「AI 是否让结果变好了」的对照评测或基准数据；A 是记账维度，F 是验收矩阵/成本公式，J 是退出码/probe/dry-run，K 是点名命令证据，M 是工具自检数据，N 是保活/读回能力，O 是侧栏状态与 tmux 布局同步，P 是线程续聊/日志/清理/权限行为与 fan-out 能力，Q 是运行可观测性/审批/断点恢复；均非独立基准。
+- 做法 R 依据《bocoboho/wardendeck》：安装、init/project create、备份 master.key、feishu setup、复用已有应用、绑定群聊、serve、聊天指令、权限模式、环境变量、审计命令、排查顺序来自 README；40 stars、MIT、自标 prototype 为报告数据；执行端只有 Claude Code、内核沙箱仅 macOS、Linux 需自行兜底、无定时触发、单条消息限额为报告结论；无任务质量/成功率/效率量化数据，只有过程可验证性（哈希链审计、卡片状态、doctor/status）；建议小范围试、不直接写进手册为调研结论。
+- 十八条做法都没有「AI 是否让结果变好了」的对照评测或基准数据；A 是记账维度，F 是验收矩阵/成本公式，J 是退出码/probe/dry-run，K 是点名命令证据，M 是工具自检数据，N 是保活/读回能力，O 是侧栏状态与 tmux 布局同步，P 是线程续聊/日志/清理/权限行为与 fan-out 能力，Q 是运行可观测性/审批/断点恢复，R 是逐工具审批/哈希链审计/内核沙箱；均非独立基准。
 
 ## 依据的调研
 
@@ -605,3 +641,4 @@ Q：最小试用：先用 Omnara Cloud 的 quickstart 跑通一个只读诊断�
 - [dominikmartn/harp](../research/radar/2026-10-21/5344-dominikmartn-harp.md)：值得一试，值得在 macOS 上小范围试用 Harp，把多个 Claude Code / Codex 长任务并排跑，并用侧栏状态提示减少“哪个会话在等我”的切换成本；但它是非官方 Warp 分支、登录未测试、指标全靠自建，所以先按最小验证跑一轮再决定是否长期使用。
 - [migasrias2/geckobox](../research/radar/2026-10-21/5610-migasrias2-geckobox.md)：值得一试，先在两三台机器上用 `openspaces` 小范围试跑只读诊断任务和单仓库修测试，验证线程恢复、日志、清理与权限行为之后，再扩展到多机并行；理由是 README 给出了可直接复制的安装、沙箱、凭据注入和多机 fan-out 命令与 SDK 片段，但它本身没有调度能力、codex/gemini/opencode 适配器未实机验证、且默认权限策略会自动放行文件编辑，不宜一次性铺开。
 - [Show HN: Omnara – Open-source alternative to Claude Managed Agents](../research/radar/2026-10-22/5714-show-hn-omnara-open-source-alternative-to-claude-m.md)：值得一试，建议小范围试用：先用 Omnara Cloud 的 quickstart 跑通一个只读诊断代理，再选低风险 PR 审查或 SRE 排查任务与现有 Claude Code 流程做对照，重点验证远程托管、审批和断点恢复是否减少人工盯守。理由是 README 给出了可复制的配置、CLI/SDK 和自托管步骤，但缺少独立效果数据与成熟度证据，暂不宜全面 adopt。
+- [bocoboho/wardendeck](../research/radar/2026-10-25/6882-bocoboho-wardendeck.md)：值得一试，建议小范围试：按 README 的 init→project create→feishu setup→serve 跑通一遍，把 WardenDeck 当作 Claude Code 的“审批闸门 + 沙箱 + 审计链”控制面，验证离开终端时也能安全派活；因其自标 prototype、执行端只有 Claude Code、内核沙箱仅 macOS，暂不直接写进手册。
