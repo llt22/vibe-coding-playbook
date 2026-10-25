@@ -1,31 +1,34 @@
-# 把多步文书任务做成可验收流水线：起草、独立审阅、脚本验收
+# 让模型只提议，由证据链和验收门决定能不能提交
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：让模型写的文书不再靠“看着还行”验收，而是用独立审阅和机器可检的验收标准决定能不能交付。
-> 先试这一步：挑一件你手上真实的多步文书任务，先写出三条机器可检的验收标准（页数、文本可抽取、关键词覆盖等），再让一个全新上下文的审阅者只拿草稿做批评。
-> 最近修订：2026-10-22
+> 解决的问题：模型会把“我觉得对”当成“已经对”；这篇手册给出把提议、独立验证、残差重试、证据落盘和人工判断分开的可操作回路。
+> 先试这一步：先跑一个离线 demo（如 `python -m resimind demo --domain scheduling`）看清“提议—拒绝—重试—复用”的回路，再把它迁移到你有明确验收标准的任务。
+> 最近修订：2026-10-25
 
 ## 解决什么问题
 
 模型会把“我觉得对”当成“已经对”。关键不是换一个更强的模型，而是改变提交规则：模型只负责提议，独立检查负责决定能不能提交，未通过只回原因，残差驱动下一次尝试，所有决定和拒绝都落盘。
 
-还有一条同源问题：模型自报的置信度只是逐 token 生成的文本延续，不是对内部状态的测量，也没有针对“它是否答对”校准；换措辞、重复问都可能变。可信的置信度需要反映预测所依据的信息量，并在同类问题上与实际结果核对过。替代方案是像天气预报员一样，用可观测信息建立“信息到置信度”的规则，持续记录结果并按实际正确率校准。LLM 仍可写回答、做摘要，但置信度来自规则，不来自 LLM 自我报告。
+模型自报的置信度只是逐 token 生成的文本延续，不是对内部状态的测量，也没有针对“它是否答对”校准；换措辞、重复问都可能变。可信的置信度需要反映预测所依据的信息量，并在同类问题上与实际结果核对过。替代方案是像天气预报员一样，用可观测信息建立“信息到置信度”的规则，持续记录结果并按实际正确率校准。LLM 仍可写回答、做摘要，但置信度来自规则，不来自 LLM 自我报告。
 
-三份材料给的是同一条回路在不同场景里的实现：
+几份材料给的是同一条回路在不同场景里的实现：
 
 - 有客观对错的任务（对账、排班、行程规划、约束优化、工程校核等）：ResiMind README 的流程是 `Propose → check → diagnose what remains → change strategy → check again → 完成证明 → 准入规则 → 复用并复检`。
 - 由固定规则和一串数字决定结果的决策（例如永续合约交易）：trading-research-agents 的一句话是 **“The agents propose; the system decides.”** 模型只负责读数据、给判断；取数、算数字、给往返成本定价、套用限额、定仓位由系统做。
 - 多步文书任务（例如按岗位改写简历、写求职信、准备面试）：ai-job-search 把流程拆成 drafter 起草、fresh context 的 reviewer 独立批评、`verify_pdf.py` / `verify_layout.py` / ATS 检查等机器可检验收，外部写操作前留人工批准位。
+- 科研/可复现分析写作：DeepScient 把“选题 → 检索 → 实验 → 分析 → 作图 → 写作 → 投稿 → 审稿回应”拆成 12 个阶段、55 个可判定门，配 36 个科研工具、98 条技能和证据链；要求结论追到数据、数据追到可重跑的实验。
 
 共用的提交规则：
 
 - 模型只负责提议下一步候选与证据引用。
-- 可信的领域代码独立重算结果，检查引用、前提、作用域、精确有理数运算和单位；模型不能靠置信度或一个 `verified` 字段给自己发验证。文书任务里对应的是页数、文本可抽取、版式、关键词覆盖、发布信息完整性等可脚本检查项。
+- 可信的领域代码独立重算结果，检查引用、前提、作用域、精确有理数运算和单位；模型不能靠置信度或一个 `verified` 字段给自己发验证。文书任务里对应的是页数、文本可抽取、版式、关键词覆盖、发布信息完整性等可脚本检查项；科研任务里对应的是阶段门对库内真实状态判定。
 - 置信度不是模型自报，而是由可观测信号和已校准规则产生；低置信度走人工复核。规则置信度用于分级/分流，不替代独立重算与校验。
 - 未通过不改变状态，只把原因回给提议方；未完成目标、未知量和硬约束构成残差，从已提交事实重建后驱动下一次提议。文书任务里残差可以是缺页、缺关键词、版式碰撞、未回答的面试缺口。
 - 每个决定和每次拒绝都连同理由落盘，事后可查“发生了什么、为什么”，而且不重写。
 - 任务完成后才从已完成的推导中抽取候选规则，经独立准入、重载复检、每次新应用再检查，存进持久规则库。模型权重不变，知识长在模型之外。
+- 阶段门必须对着库里的真实状态判定，不能凭模型“觉得可以了”就通过；系统算不出来的判断（构念效度、创新性、伦理取舍）只给检查清单，人保留判断权。
+- 可复现性要落盘：实验记录、环境、版本、随机种子都保存到磁盘，换机器能重跑出同样的表。
 
 ## 适用与不适用
 
@@ -37,10 +40,11 @@
 - 想先比较“已验证规则的预览、化简、本地展开”三种本地手段，再决定是否叫模型的场景。
 - 需要给输出分级或分流、且任务是重复出现的同类问题、每条回答可以事后判定对错、已有真人复核通道的场景（客服回复、工单回复、文档问答等）。这时可用做法 D 产生置信度，但置信度规则不能替代独立验证器。
 - 多步、有材料可核、有可写死验收标准的文书工作：岗位匹配打分与排序、按岗位改写 CV 与求职信、公司调研与草稿批评、面试 prep pack、技能 gap heatmap、跟进信起草、从邮件识别申请状态、生成 HTML 仪表盘、注册并试编译模板、为本地招聘站点生成搜索 CLI。这里迁移的是“起草—独立审阅—机器验收—人工批准外发”的结构，不是整套求职工具。
+- 科研或可复现分析写作：需要多阶段推进、每阶段有可判定门、结论能追到数据、数据能追到可重跑实验、实验记录/环境/版本/随机种子要落盘。可借鉴 DeepScient 的“12 阶段 + 55 门 + 证据链”结构，不必照搬整套工具。
 
 **不适用或要谨慎**
 
-- 没有独立验证标准的任务。写不出“什么算通过”的独立检查，就不要照搬这套回路。文书任务里如果只有“读起来不错”，至少要先写出可检查的页数、结构、事实引用和必填项。
+- 没有独立验证标准的任务。写不出“什么算通过”的独立检查，就不要照搬这套回路。文书任务里如果只有“读起来不错”，至少要先写出可检查的页数、结构、事实引用和必填项；科研任务里如果写不出可判定门和可重跑记录，也不要假装有证据链。
 - 把 `solved` 当成“存在可行解或满足工程限值”。`solved` 只表示“声明的义务已完成”，每个适配器有自己的有界范围。
 - 想靠它直接提升模型准确率或节省总体算力。ResiMind 原文明确：十题离线对照只测“已发布开发任务上的复用”，不测模型准确率提升，也不测总体算力节省。
 - trading-research-agents 处于 alpha，真实资金路径作者自己没跑过，且强绑定永续合约交易场景——只适合小范围试，不要用真钱起步。
@@ -51,6 +55,10 @@
 - ai-job-search 的门户搜索开箱可用范围是丹麦四家加 `linkedin-search` 与 `freehire-search`；其他市场要 `/add-portal` 或社区 fork。`linkedin-search` 明确个人使用、低频率，自动化访问违反 LinkedIn ToS。
 - ai-job-search 的实证只有作者一人的求职漏斗，无法区分框架贡献与个人背景、市场、时间投入；时间是未来式的（2025 年底被裁、2026 年 6 月入职），数据本身不可独立复核。
 - 它的安全边界是指令级防护，不是沙箱；陌生门户的抓取与写入建议人工过目。
+- DeepScient 强依赖 DeepSeek Harness，运行时本身不稳定会传导到工作台；成熟度证据主要来自作者自述，原文只在 Windows 上验证过，macOS 虽有安装包和构建脚本，但不能当作已充分验证。
+- 不能把 DeepScient 的 `science_campaign_run` / `science_campaign_status` 当成自动定时推进：原文只有长跑与状态查询的间接依据，没有说明触发器类型、重试策略或中断恢复机制。
+- 原文没有给出单道门的具体判定条件、36 个工具中除 5 个调度工具和 3 个本地计算工具之外的名称与用法，也没有给出提示词模板；这些不能凭空补。
+- 系统算不出来的判断（构念效度、创新性、伦理取舍）不要交给模型自动下结论；它只给检查清单，人保留判断权。
 
 ## 前置条件
 
@@ -59,7 +67,8 @@
 - 要为自己的任务写适配器，前提是能先明确写出“什么算通过”的独立检查；ResiMind 核心不 import 任何参考领域。
 - 做法 D 的前提：任务是重复出现的同类问题；每个回答可以事后判定对错；能记录每条回复的可观测信号、规则给出的置信度、最终是否正确；能按周或固定周期汇总；有人工复核通道和可接受的延迟。
 - 做法 E（ai-job-search 结构）的前提：Claude Code（无免费层，需 Pro/Max/Team 订阅或 API credits）、Python 3.10+、Bun、带 `lualatex` 与 `xelatex` 的 LaTeX 发行版；可选 `pypdf`（ATS 检查用），Poppler `pdftotext` 为 fallback。自用要建私有仓库，不要用公开 fork，因为 `/setup` 会把姓名、联系方式、履历、薪资期望写进 tracked 文件。模板必须能从命令行编译出 PDF；新增门户前提是目标站点无登录墙。
-- 版本认知：ResiMind v0.12.1 / Experimental，MIT，30 stars，领域示例多为合成/脚本化 fixture，效果数据由作者自报且未隔离因果；trading-research-agents 为 MIT、PyPI 包、README 标注 Status: alpha；ai-job-search 为单一样本、自我报告、无对照，仓库 stars 63187。都先小范围试，不要直接采用。
+- 做法 F（DeepScient）的前提：桌面版 Windows 10/11 不需要 clone 仓库，也不需要单独安装 DeepSeek Harness；macOS Apple Silicon 桌面版不需要 Node.js、pnpm，也不需要单独安装 DeepSeek Harness；Web 工作台形态需要 Windows 10/11、Node ≥ 22.5、已装 DeepSeek Harness 桌面版；源码构建需要对应平台的 DeepSeek Harness 桌面壳或运行时。数据写在 `%USERPROFILE%\.deepscient` 或 `~/.deepscient`，不写 `~/.dsh`。第三方技能安装与 MCP 工具层是可选层；MCP 需要 `npx`，并显式设置 `$env:DSH_ENABLE_MCP = '1'`。
+- 版本认知：ResiMind v0.12.1 / Experimental，MIT，30 stars，领域示例多为合成/脚本化 fixture，效果数据由作者自报且未隔离因果；trading-research-agents 为 MIT、PyPI 包、README 标注 Status: alpha；ai-job-search 为单一样本、自我报告、无对照，仓库 stars 63187；DeepScient 0.12.0、dsh-science 0.5.0，成熟度证据来自作者自述，强依赖 DeepSeek Harness，且只在 Windows 上验证过。都先小范围试，不要直接采用。
 
 ## 操作步骤
 
@@ -418,19 +427,133 @@ claude
 
 前提：仓库里已有个人材料。预期结果：不把公开 fork 当私有仓库；从其他 fork 拷门户技能前先通读代码、离线跑测试、检查 `dependencies` 与生命周期脚本；陌生门户的抓取与写入人工过目；`/gmail-sync` 与 `followup` 只起草/提议，不自动发送。
 
-### 怎么选用 A / B / C / D / E
+### 做法 F：科研/可复现分析写作用阶段门和证据链（借鉴结构，不必照搬整套工具）
+
+这条与 A–E 的差别：A/B 用领域验证器裁决事实，C 用固定规则裁决交易，D 给输出分级，E 做文档交付验收；F 是科研工作台，把流程拆成 12 个阶段、55 个可判定门，要求结论追到数据、数据追到可重跑实验。它强依赖 DeepSeek Harness，成熟度证据主要来自作者自述，先小范围试装，重点借鉴“阶段 + 可判定门 + 证据链”的结构。
+
+**步骤 30：选安装形态并跑通启动**
+
+前提：桌面版 Windows 10/11 不需要 clone 仓库，也不需要单独安装 DeepSeek Harness；macOS 桌面版需要 Apple Silicon；Web/源码形态需要 Windows 10/11、Node ≥ 22.5、已装 DeepSeek Harness 桌面版。
+
+Windows 桌面版：下载 `DeepScient-desktop-v0.12.0.zip`（约 635 MB），解压到短路径（如 `D:\DeepScient`，不要放在很深的目录里），双击根目录 `DeepScient 启动.cmd`，等待首次启动自动装配桌面 profile（作者实测约 30–40 秒），点「登录 DeepScient」在浏览器完成授权。数据写在 `%USERPROFILE%\.deepscient`。
+
+macOS Apple Silicon 桌面版：下载 `DeepScient-0.12.0-mac-arm64.dmg`（479 MB；同页也有 499 MB 的 `.zip`），挂载后把 `DeepScient.app` 拖进 `Applications`；首次打开会被 Gatekeeper 拦一次（未签名构建），二选一放行：
+
+```bash
+xattr -dr com.apple.quarantine /Applications/DeepScient.app
+```
+
+或右键 →「打开」→「打开」。首次启动自动装配桌面 profile（约 30–60 秒），点「登录 DeepScient」完成授权。
+
+源码构建（Windows）：
+
+```powershell
+git clone https://github.com/yzlin286-wq/Deepscient.git
+cd Deepscient
+powershell -File deepscient/desktop/assemble-profile.ps1   # 装配 ~/.deepscient/profiles/desktop
+powershell -File deepscient/desktop/build-desktop.ps1      # 派生独立应用（约 1.5 GB）
+powershell -File deepscient/desktop/deepscient-desktop.ps1 -CreateShortcuts
+```
+
+源码构建（macOS）：
+
+```bash
+git clone https://github.com/yzlin286-wq/Deepscient.git
+cd Deepscient
+bash deepscient/desktop/build-desktop.sh --shell "/path/to/DeepSeek Harness.app"
+bash deepscient/desktop/assemble-profile.sh
+bash deepscient/desktop/deepscient-desktop.sh
+```
+
+Web 工作台形态：
+
+```powershell
+git clone https://github.com/yzlin286-wq/Deepscient.git
+cd Deepscient
+
+# 1) 把科研后端挂进一个独立 profile（只需一次）
+#    在 dsh 会话里执行：
+#      plugin_manager install_bundle <仓库根>\dsh-science
+#    或打开 dsh 的 Plugins 页，安装本目录下的 dsh-science/
+
+# 2) 从你现有 dsh profile 抽供应商层（不含密钥，只抽 apiKeyEnv 这类变量名）
+node scripts/deepscient-sync-models.mjs
+
+# 3) 起实例
+deepscient\bin\deepscient.cmd
+```
+
+浏览器自动打开 `http://127.0.0.1:3081`（端口占用则顺延 3082–3099）。首次打开有六步引导。
+
+预期结果：能进入工作台并看到 12 阶段流程；安装包内含 `deepscient` 0.12.0 与 `dsh-science` 0.5.0，带调度层（M7）：5 个工具（`science_org_chart`、`science_campaign_plan`、`science_campaign_run`、`science_campaign_status`、`science_campaign_report`）与 4 级 13 岗编制。
+
+**步骤 31：可选装第三方技能与 MCP 工具层**
+
+前提：主流程已跑通；愿意联网安装并接受按 commit pin 的可卸载技能。
+
+```powershell
+# 装 81 条第三方科研技能（联网一次，pin 到 commit，可校验可卸载）
+node deepscient/scripts/install-skills.mjs --plan     # 先看会装什么
+node deepscient/scripts/install-skills.mjs --apply    # 真装
+
+# 开 MCP 工具层（多源文献检索 + PubMed 全文）
+$env:DSH_ENABLE_MCP = '1'
+deepscient\bin\deepscient.cmd
+```
+
+预期结果：`--plan` 先列出会装什么；`--apply` 真正安装；MCP 工具层需要 `npx`，出错时用 `node deepscient/scripts/probe-mcp.mjs pubmed` 单独握手。
+
+**步骤 32：按 12 阶段和 55 门工作**
+
+前提：已经能进入工作台。按 12 阶段推进；每道门对着库里的真实状态判定，不要凭模型「觉得可以了」就通过。结论必须能追到数据，数据能追到可重跑的实验；实验记录、环境、版本、随机种子都保存到磁盘，换机器能重跑出同样的表。构念效度、创新性、伦理取舍这类系统算不出来的判断，由人看着检查清单决定。原文没有给出单道门的具体判定条件、36 个工具中除上述 5 + 3 个本地工具之外的名称与用法，也没有给出提示词模板，这些不能凭空补。
+
+预期结果：每次阶段推进都有可判定依据；被拒绝时能说清是哪道门、缺什么证据、下一步补什么。
+
+**步骤 33：跑工程验收与端到端检查**
+
+前提：`verify-packaging.mjs` 零依赖，可在本地/CI 跑；`verify-deepscient.mjs` 需要实例在跑并带本次启动的 token；`e2e-science-run.mjs` 需要真 key、真模型、真回答；`probe-mcp.mjs` 绕开 dsh 单独测 MCP 服务器。
+
+```powershell
+# 打包面（零依赖，CI 与本地同一份）：语法、files 完整性、清单 pin、.ps1 BOM、隐私、文档链接
+node tools/verify-packaging.mjs
+
+# 活实例验收（需要实例在跑）：294 项 HTTP/文件断言
+node deepscient/scripts/verify-deepscient.mjs --token <本次启动的 token>
+
+# 端到端：真 key 真模型真回答 + 建课题 + 预设体检 + 技能与 MCP 装配
+node deepscient/scripts/e2e-science-run.mjs --run --base http://127.0.0.1:3081
+
+# 第三方技能安装器自检（10 项）与干跑
+node deepscient/scripts/install-skills.mjs --self-test
+node deepscient/scripts/install-skills.mjs --plan
+
+# 运行时面的便携性检查（78 个文件：无提示词变量、无本机路径、无私有插件痕迹）
+node dsh-science/scripts/verify-portability.mjs
+
+# MCP 服务器单独握手（绕开 dsh，出错时把 npx 的报错打出来）
+node deepscient/scripts/probe-mcp.mjs pubmed
+```
+
+预期结果：`verify-packaging.mjs` 覆盖 20 项；`verify-deepscient.mjs` 覆盖 294 项 HTTP/文件断言（不带 token 为 285 项）；`e2e-science-run.mjs` 跑端到端六段；`install-skills.mjs --self-test` 覆盖 10 项；`verify-portability.mjs` 检查 78 个文件。这些是工程与流程验收，不证明科研结论本身正确，也不证明比人做得更好。
+
+**步骤 34：判断是只借鉴结构还是整套采用**
+
+前提：你已经跑通启动和至少一次验收。若你只需要“模型提议、独立检查决定提交”，优先走 A/B；若你做多步文书交付，优先走 E；若你做科研/可复现分析写作，且能接受 DeepSeek Harness 依赖和 Windows 优先的验证状态，再小范围采用 F。只借鉴结构时，至少保留三件事：阶段划分、每阶段可判定门、结论到数据到可重跑实验的证据链；不必照搬 36 个工具、98 条技能和整套桌面壳。
+
+### 怎么选用 A / B / C / D / E / F
 
 - 第一次接触、只想看清回路：走 A。
 - 已经有明确“什么算通过”的检查、要把回路搬到自己的任务：走 B。
 - 决策由固定规则+数字决定、不想自己写 Verifier，且场景就是永续合约交易研究：走 C。
 - 需要给模型输出分级/分流、已有真人复核和结果标签、又不想让模型自评置信度：走 D；D 可以独立于 A/B/C 使用，但最好和独立验证器一起用。
 - 多步文书任务、验收能写成页数/文本层/版式/关键词/发布信息等检查：走 E；先只取“起草—独立审阅—脚本验收—人工批准”四件事，不要整体照搬求职工具。
-- 只想评估值不值得继续投入：先 A，再小范围 B 或 C 或 D 或 E。
+- 科研/可复现分析写作、需要阶段门和证据链：走 F；先小范围试装，重点借鉴结构，不要因为工具多就整体照搬。
+- 只想评估值不值得继续投入：先 A，再小范围 B 或 C 或 D 或 E 或 F。
 
 ### 不管走哪条路，都要守住的约束
 
-1. **证据先于主张**：证据必须由注册的 `EvidenceTool` 先收集成类型化输入，再谈主张。文书任务里对应的是先拿到 JD、profile、已提交材料，再写。
-2. **验证器必须独立**：检查引用、前提、作用域、精确有理数算术、单位；提交时原子地检查引用与冲突。模型不能靠置信度或一个 `verified` 字段给自己发验证。做法 C 的等价物是：模型引用的每一个数字都要对着发给它的 brief 校验，连值一起校验。做法 E 的等价物是：草稿之外另起 fresh context 的 reviewer，并用脚本检查页数、版式、文本层。
+1. **证据先于主张**：证据必须由注册的 `EvidenceTool` 先收集成类型化输入，再谈主张。文书任务里对应的是先拿到 JD、profile、已提交材料，再写；科研任务里对应的是先有实验记录和数据，再写结论。
+2. **验证器必须独立**：检查引用、前提、作用域、精确有理数算术、单位；提交时原子地检查引用与冲突。模型不能靠置信度或一个 `verified` 字段给自己发验证。做法 C 的等价物是：模型引用的每一个数字都要对着发给它的 brief 校验，连值一起校验。做法 E 的等价物是：草稿之外另起 fresh context 的 reviewer，并用脚本检查页数、版式、文本层。做法 F 的等价物是：阶段门对库内真实状态判定，结论追到数据、数据追到可重跑实验。
 3. **成本先算**：fee、spread、impact、funding、slippage 组成往返成本，在订单存在之前就定价，声称的 edge 覆盖不了就直接拒。
 4. **每个角色只看它工作需要的数字**：brief 由系统按角色写；宏观分析师永远不能提方向，情绪分析师不能编造没有数字支持的 mood。文书任务里 reviewer 只拿内联草稿批评，不重读全部文件。
 5. **闭 schema 先行**：模型回答先过闭 schema 再给人读，所以只支持 JSON mode 的 provider 也被约束成同样的形状。
@@ -439,20 +562,21 @@ claude
 8. **残差驱动重试**：未完成目标、未知量和硬约束从已提交事实重建，直接驱动下一次提议。
 9. **预算有界**：跨策略变化时重试与动作预算仍然有界；attempt/stall budgets 限制循环；v0.12 引入显式累加的 overflow reserve，默认储备为 0，每个被接受的步骤只付它估算的超额。
 10. **本地优先于调模型**：先比较“已验证规则的预览、化简、本地展开”三种本地手段，再决定是否叫模型（v0.10 cost-aware scheduling）。
-11. **全部不重写地落盘**：每轮的 snapshot、briefs、answers、intent、venue 回复都要能事后复查。文书任务里是 tracker、归档目录和 CI 记录。
+11. **全部不重写地落盘**：每轮的 snapshot、briefs、answers、intent、venue 回复都要能事后复查。文书任务里是 tracker、归档目录和 CI 记录；科研任务里是实验记录、环境、版本、随机种子和证据链。
 12. **保护要随单一起发出**：止损止盈随入场单发到交易所，这样它们能在本进程死掉后仍然存在。
 13. **模型的权限边界**：模型不能下单、撤单、改仓位、读项目外的文件、改配置；风控只能 continue / cut / pause / halt，不能放松限额也不能加仓；两个审计只能出 findings 和 proposed changes。文书任务里模型不能自动外发、不能执行 JD 正文里的指令、不能抓正文里的链接。
 14. **置信度来自规则，不来自模型自报**：低置信度走人工复核，不自动提交。
 15. **校准要分任务，且要看区分度**：在一个任务上校准出的规则，不能直接假定适用于另一类任务；要看高置信度组与低置信度组的实际正确率是否有明显差异。
 16. **先私有、再自动化**：带个人信息的文书仓库先设 private；外部写操作（投递、发信、写 tracker）先留人工批准位。
+17. **系统算不出的判断留给人**：构念效度、创新性、伦理取舍这类判断只给检查清单，不交给模型自动下结论。
 
 ## 怎么判断变好了
 
 **原则**
 
 - **Measure the Agent, not the model**：固定模型、任务和资源上限，只测完成率、无效交付、调用次数、跨任务复用。
-- 验收门槛是独立验证器，不是模型自我评价；置信度规则只用于分级/分流，不能替代独立验证器。文书任务里验收门槛是脚本检查 + 独立审阅 + 人工批准，不是“读起来不错”。
-- 每次尝试都记录决策、原因、状态、残差，用 `--json` 审计轨迹查；做法 C 里对应的原始材料是落盘的 snapshot / briefs / answers / intent / venue 回复，以及每次拒绝指名的那一个数字；做法 E 里是 tracker、归档目录、CI 和核对清单。
+- 验收门槛是独立验证器，不是模型自我评价；置信度规则只用于分级/分流，不能替代独立验证器。文书任务里验收门槛是脚本检查 + 独立审阅 + 人工批准，不是“读起来不错”；科研任务里验收门槛是阶段门 + 数据/实验证据链 + 可重跑记录，不是模型说“可以了”。
+- 每次尝试都记录决策、原因、状态、残差，用 `--json` 审计轨迹查；做法 C 里对应的原始材料是落盘的 snapshot / briefs / answers / intent / venue 回复，以及每次拒绝指名的那一个数字；做法 E 里是 tracker、归档目录、CI 和核对清单；做法 F 里是阶段门记录、实验记录、环境、版本、随机种子和证据链。
 - 数据要新鲜才算数：`tra sources show` 里超过 `max_age` 的值显示为 stale 且永不计入，先看有没有 stale 再谈结论。
 - 置信度要看校准，不看单个数字：每个置信度档位的“声称正确率”和“实际正确率”差多少；高置信度组的实际正确率是否明显高于低置信度组。
 
@@ -466,10 +590,11 @@ claude
 - 做法 D：选一个窄而重复、已有真人复核的流程（客服回复、工单回复或文档问答）；按步骤 17 记录可观测信号；用已复核历史数据算初始基率；对每条新输出记录规则置信度和最终是否正确；先做影子模式，不自动发送；把低置信度输出送人工复核；按周或固定周期生成校准表。可观察指标：校准偏差、信息利用程度、稳定性、分流效果、记录覆盖度。
 - 做法 E：先挑一件真实多步文书任务，不装全家桶。最小试用是：写 3 条机器可检的验收标准（页数、文本可抽取、联系方式是字面文本、关键词覆盖率、发布信息完整性等）→ 让 drafter 出草稿 → 另起 fresh context 的 reviewer 只拿草稿批评 → 按批评修改 → 跑脚本检查 → 人工批准后才外发。试 5–10 个真实任务，记录每次被脚本拒绝的原因、审阅者指出的问题、人工改了什么、最终是否被接受；不要用“感觉写得更好了”当结论。
 - 做法 E 的可观察指标：脚本一次通过率；被脚本拒绝的具体原因分布（页数、版式、文本层、关键词、隐藏字符等）；人工返工次数；审阅者指出的问题中，修改后确实消失的比例；外发后是否出现事实错误或格式事故；从草稿到可交付的端到端时长。原文没有给出这些指标的目标值，先记录基线再比较。
+- 做法 F：最小试用是在 Windows 桌面版跑通启动与登录，跑一次 `node tools/verify-packaging.mjs`；再选一个小课题按 12 阶段推进，记录每道门拒绝的原因、补了什么证据、换机器能否重跑出同样的表。`verify-deepscient.mjs` 要等实例在跑并带 token；`e2e-science-run.mjs` 要真 key、真模型。可观察指标：阶段门一次通过率、被拒绝的具体门与原因分布、结论到数据到实验的可追踪比例、换机器重跑一致率、验证脚本通过项数。原文没有给这些指标的目标值，先记录基线再比较。
 
 **试多久**
 
-材料没有给出统一时间长度。它给出的可比单位是“十题离线对照”“每题 8 次调用上限”，做法 C 的 bar 粒度（15 分钟 bar 决策、`--every 15m`），做法 D 的按周或固定周期汇总，做法 E 的“5–10 个真实任务”是这里建议的最小观察窗口而非原文数字。按这些粒度做最小对照，不要用“感觉聪明了”当结论。
+材料没有给出统一时间长度。它给出的可比单位是“十题离线对照”“每题 8 次调用上限”，做法 C 的 bar 粒度（15 分钟 bar 决策、`--every 15m`），做法 D 的按周或固定周期汇总，做法 E 的“5–10 个真实任务”是这里建议的最小观察窗口而非原文数字；做法 F 原文没有给试用时长，可用“一个小课题端到端跑完”作为观察窗口，这是建议而非原文数字。按这些粒度做最小对照，不要用“感觉聪明了”当结论。
 
 ## 常见坑
 
@@ -480,7 +605,7 @@ claude
 - **缺前提也强行给完成态**：缺配送日期、缺回程路线测量时都应保持 open。
 - **拒绝时改动状态**：正确做法是保留状态、只回传原因；而且要指名背后的那个数字。
 - **实时失败没有回退却当成离线用**：ResiMind 材料明确实时请求失败后没有离线回退；实时调用还会产生费用，也可能一直保持未解决状态。
-- **把领域示例当生产证据**：ResiMind v0.12.1 为 Experimental，领域示例多为合成/脚本化 fixture，效果数据由作者自报且未隔离因果；trading-research-agents 为 alpha，真实资金路径作者自己没跑过；ai-job-search 只有作者一人的求职漏斗，无对照。
+- **把领域示例当生产证据**：ResiMind v0.12.1 为 Experimental，领域示例多为合成/脚本化 fixture，效果数据由作者自报且未隔离因果；trading-research-agents 为 alpha，真实资金路径作者自己没跑过；ai-job-search 只有作者一人的求职漏斗，无对照；DeepScient 成熟度证据主要来自作者自述，只在 Windows 上验证过。
 - **用 GitHub 的 `develop` 分支而不是 PyPI release**：README 明确那里的 commit 不是 release。
 - **`.env` 放错位置**：命令只在 `strategy.toml` 旁边的 `.env` 里找 key。
 - **把练习账户和 mainnet 混着来**：想发真单先在交易所的练习账户试，不要上 mainnet 起步。
@@ -488,7 +613,7 @@ claude
 - **把验证者的投票当裁决**：投票永远不决定结果，只按权重移动 conviction。
 - **指望审计或风控替你放宽限制**：审计只能出 findings 和 proposed changes；风控只能更保守，不能放松限额也不能加仓。
 - **拿 stale 数据当依据**：超过 `max_age` 的值显示为 stale 且永不计入。
-- **把触发机制搞混**：ResiMind 只有状态触发；`tra run --every 15m` 是另一套材料的时钟循环；ai-job-search 的 followup 是手动触发的规则，不是定时调度。
+- **把触发机制搞混**：ResiMind 只有状态触发；`tra run --every 15m` 是另一套材料的时钟循环；ai-job-search 的 followup 是手动触发的规则，不是定时调度；DeepScient 的 campaign 工具原文没有说明自动触发机制。
 - **误把它当成“更强模型”**：这些结构的定位都是把模型放进先验证后提交的回路；模型权重不变，知识长在模型之外。
 - **只校准不区分**：一个永远输出历史基率的规则也可能校准，但没有利用新信息。
 - **跨任务套用校准规则**：在一个任务上校准出的规则，不能直接假定适用于另一类任务。
@@ -503,6 +628,13 @@ claude
 - **把 reviewer 的批评当自动裁决**：它只是第二双眼睛；能不能交付仍要看脚本检查和人工批准。
 - **让 followup 自动发送**：原文只起草不发送；`/gmail-sync` 只批量提议，批准后才写 tracker。
 - **忽略时区与未来式数据**：ai-job-search 的求职数据是作者自述且未来式的，不能当独立可复核证据。
+- **把阶段门当模型主观确认**：DeepScient 的门要对着库里的真实状态判定，不是模型说“可以了”。
+- **结论追不到数据**：科研任务里如果结论不能追到数据、数据不能追到可重跑实验，证据链就是断的。
+- **把系统算不出的判断交给模型**：构念效度、创新性、伦理取舍只给检查清单，人保留判断权。
+- **忽略 DeepScient 的依赖与验证状态**：强依赖 DeepSeek Harness，运行时不稳定会传导；成熟度证据主要来自作者自述，只在 Windows 上验证过，先小范围试装。
+- **忘记 MCP 开关或 npx**：MCP 工具层要显式 `$env:DSH_ENABLE_MCP = '1'`，并依赖 `npx`；出错先用 `probe-mcp.mjs` 单独握手。
+- **把 12 阶段 55 门的具体判定条件当成已给出**：原文没有给单道门具体判定条件、36 工具完整名称与用法、提示词模板，不能凭空补。
+- **把 campaign 工具当自动定时推进**：原文只有长跑与状态查询的间接依据，没有说明触发器类型、重试策略或中断恢复。
 
 ## 证据与来源
 
@@ -510,7 +642,8 @@ claude
 - 做法 C（trading-research-agents）：`“The agents propose; the system decides.”` 的主张、安装与 `tra init` / `tra check` / `tra run` / `tra mandate` / `tra venues` / `tra sources show` / `tra data get` / `tra backtest` / `tra paper` / `tra live` 命令、角色分工表、闭 schema 与 provider 结构化输出差异、conviction 算术、只能收紧的风控、两个只汇报的审计、默认值表、TOML 配置样例：来自本次 trading-research-agents 调研报告正文（依据其 README 的 “Get started” 等章节）。该材料没有给出收益类效果数字；alpha、真实资金路径作者自己没跑过、强绑永续合约、免费 groq 档与 provider 表、`develop` 分支不是 release，也来自该报告正文与结论。
 - 做法 D（置信度校准）：核心主张“不要用 LLM 自报置信度”、天气预报员类比、客户支持回复分流 6 步流程、200 条/150 条正确→75%、有匹配文章且两次回答一致 95%、无匹配文章 40%、90% 档实际 70% 的说明性例子：来自本次“Using LLM for confidence scoring is a bad idea”调研报告。报告说明这些是解释性示例，不是真实实验数据；原文没有代码、配置文件或完整系统实现；没有给出具体阈值。可观测信号清单、按周左右检查校准表、影子模式、人工复核分流也来自该报告。该报告局限：核心论证取决于是否有同类问题历史记录、是否能判定每次输出正确与否、记录是否足够支撑分组；规则只和记录一样好；校准必须针对同类问题；校准本身不等于有用。
 - 做法 E（ai-job-search）：把个人知识拆成 `01-candidate-profile.md` … `07-interview-prep.md`、`.claude/commands/*.md`、`verify_pdf.py`、`verify_layout.py`、`posting_guard.py`、`lint_skills.py`、drafter 写 + fresh context 的 reviewer 批评、LaTeX 页数与版式规则、ATS 文本层与关键词覆盖、CI 的 LaTeX 冒烟编译与 skill lint、`framework_version` bump 检查、私有仓库警告、`/setup` / `/scrape` / `/rank` / `/apply` / `/interview` / `/outcome` / `/gmail-sync` / `/expand` / `/upskill` / `/html-report` / `/notion-sync` / `/add-template` / `/add-portal` 的用法与前提：来自本次 ai-job-search 调研报告正文，依据其 README 与 `SETUP.md`。其中 `verify_pdf.py`、`verify_layout.py`、ATS 检查、CI、`posting_guard.py` 属于仓库中可直接核对的机器检查；reviewer 能抓出漏关键词/弱框架/套话、框架“编码了职业指导最佳实践”、模式可迁移到其他多步文书任务，属于作者主张，原文没有非求职用例，也没有对照实验。作者自述数据为 69 份定制申请、20 次一面、1 份签约、2026 年 6 月入职；仓库 stars 63187；这是单一样本、自我报告、无对照，且时间是未来式的，不能独立复核。门户绑定丹麦市场、Claude Code 无免费层、需要 LaTeX/Bun/Python、`/apply` 编译-检视循环多花 token、LinkedIn 自动化违反 ToS、安全边界是指令级不是沙箱、原文没有 cron/CI 定时调度配置：均来自该报告。
-- 需要区分的两类信息：命令、接口契约、审计方式、默认值表、脚本名与 CI 检查属于仓库/README 材料可直接核对；完成率、提议次数、复用次数、69→20→1 等效果数字属于作者自报，ResiMind 原文说明未隔离因果，ai-job-search 无对照；trading-research-agents 材料未给出任何收益类效果数字；置信度调研的 75%/95%/40%/90%/70% 均为解释性示例。采用前先按“怎么判断变好了”自行验证。
+- 做法 F（DeepScient）：12 阶段、55 个可判定门、36 个科研工具、98 条技能（随包 17 条 + 第三方 81 条）、证据链、可复现、人保留判断权、桌面版 Windows/macOS 安装包与大小、首次装配约 30–40/30–60 秒、数据写在 `%USERPROFILE%\.deepscient`、源码构建命令、Web 工作台命令与端口 3081–3099、M7 调度层 5 个工具与 4 级 13 岗、第三方技能安装 `--plan`/`--apply`、MCP 开关与 `probe-mcp.mjs`、`verify-packaging.mjs`（20 项）、`verify-deepscient.mjs`（294 项，不带 token 285 项）、`e2e-science-run.mjs`（端到端六段）、`install-skills.mjs --self-test`（10 项）、`verify-portability.mjs`（78 个文件）：来自本次 DeepScient 调研报告正文，依据其 README 与仓库脚本。成熟度证据主要来自作者自述，强依赖 DeepSeek Harness，只在 Windows 上验证过；原文没有给出单道门具体判定条件、36 工具完整名称与用法、提示词模板，也没有说明 campaign 工具的触发器类型、重试策略或中断恢复机制：这些同样来自该报告结论与正文。采用前先按“怎么判断变好了”自行验证。
+- 需要区分的两类信息：命令、接口契约、审计方式、默认值表、脚本名与 CI 检查属于仓库/README 材料可直接核对；完成率、提议次数、复用次数、69→20→1 等效果数字属于作者自报，ResiMind 原文说明未隔离因果，ai-job-search 无对照；trading-research-agents 材料未给出任何收益类效果数字；置信度调研的 75%/95%/40%/90%/70% 均为解释性示例；DeepScient 的成熟度与效果主要来自作者自述，且只在 Windows 上验证过。采用前先按“怎么判断变好了”自行验证。
 
 ## 依据的调研
 
@@ -518,3 +651,4 @@ claude
 - [BijectiveLabs/trading-research-agents](../research/radar/2026-10-18/4632-bijectivelabs-trading-research-agents.md)：值得一试，建议先照 README 的六步在沙箱里跑一遍（免费 groq key + `tra init` / `tra check` / `tra run --every 15m`），把它的“模型只提议、系统算数并执行、每次拒绝都指名背后的数字”这套结构抽出来复用；理由是这个仓库把该结构的每一步都写成了可复制的命令、配置和角色分工表，但项目处于 alpha、真实资金路径作者自己没跑过，且强绑定永续合约交易场景，所以只适合小范围试。
 - [Using LLM for confidence scoring is a bad idea](../research/radar/2026-10-22/5721-using-llm-for-confidence-scoring-is-a-bad-idea.md)：值得一试，不要采用 LLM 自报置信度来做校验或分流；改用可观测信号、历史正确率和定期校准的规则，并先在有人工复核的窄流程中小范围验证。原文给出了可操作的记录与校准步骤，但证据以论证和示例为主，尚不足以直接全面采用。
 - [ai-job-search-dev/ai-job-search](../research/radar/2026-10-22/5843-ai-job-search-dev-ai-job-search.md)：值得一试，把它的“起草—独立审阅—机器可检验收”流水线（drafter/reviewer 双 agent、把验收标准写成脚本、把个人知识拆成编号 profile 文件）抽出来小范围试，而不是整体照搬求职工具；理由是把多步文书任务拆成可复用命令、并用脚本而非“看着还行”来验收，正是最值得迁移到其他工作的部分，但原文的实证只有作者一人的求职漏斗，门户工具绑定丹麦市场，且需要付费 Claude 加 LaTeX/Bun 环境。
+- [yzlin286-wq/Deepscient](../research/radar/2026-10-25/6803-yzlin286-wq-deepscient.md)：值得一试，若你正在做科研或需要可复现的分析写作流程，可以按 README 的桌面安装步骤小范围试装，重点借鉴它“12 阶段 + 55 个可判定门 + 证据链”的结构；不必照搬整套工具。理由是：原文给出了可直接执行的安装、配置和验收命令，但成熟度证据全部来自作者自述，且强依赖 DeepSeek Harness，只在 Windows 上验证过。
