@@ -1,13 +1,15 @@
-# 面对没有源码的系统，让 agent 先取证再重建
+# 搞懂一个没有源码的功能，让 agent 拿出证据再重建
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：当目标没有源码或设计意图不明时，如何让 agent 沿“取证—理解—重建—验收”推进，并用可核验的 Evidence 与验收器防止把合理猜测当结论。
-> 先试这一步：先不配 MCP 和分析引擎，对一个已提取的 JavaScript/Electron 目录跑一次 `npx -y rea-agents@latest analyze-javascript-application /absolute/path/to/app --json`，看它能否返回内联 Evidence、恢复出的图与 limitations/unknowns。
-> 最近修订：2026-10-23
+> 解决的问题：面对没有源码的二进制、Electron/JS 包、.NET 程序成、APK、固件或已打开的网页，让 agent 沿“反编译→理解→重建”给出可核验的证据，并在有 ground truth 时用机器 PASS/FAIL 验收，而不是接受听起来合理的猜测。
+> 先试这一步：先不装 MCP，选一个已提取的 JS/Electron 目录跑 `npx -y rea-agents@latest analyze-javascript-application /absolute/path/to/app --json`，看返回里有没有内联 Evidence、limitations 与 unknowns。
+> 最近修订：2026-10-25
 
 ## 解决什么问题
 当目标没有源码——原生二进制、Electron/JS 前端包、.NET 程序集、APK、固件，或一个已打开的网页——而你需要搞懂某个功能并在自己的项目里重建，靠“让 agent 随便看看”只会得到看着合理但无法核验的猜测。REA 给出一条可照做的主线：Decompile → Understand → Recreate，并让每条结论带 Evidence 与 limitations。500B Tokens Later 补充更硬的前提：没有机器可判定的 PASS/FAIL，reviewer 会被 worker 写在 commit/代码里的理由说服（非故意 prompt injection），第一月代码“极其可读但语义错误”。因此，只要存在可机器比对的 ground truth，就应在 Evidence 之上加客观验收器（Oracle）；没有 ground truth 时，至少保留 Evidence/limitations，把 unknown 标出来。Companion 把证据接成规格、架构、实现计划和验证流程；RES 面向运行中的 Web 产品/SaaS；rederive 面向“源码在手但设计意图不明”的学习型任务。aidbg 补的是 Windows x86/x64 动态调试：把每条调试命令输出成一行 JSON，让 agent 驱动断点、寄存器、调用栈，但它的输出仍是证据，不是结论。
+
+如果目标恰好是桌面二进制，而你已经在用 Ghidra，还有一条更薄的接入线：GhidraMCP 把 Ghidra 的分析结果以 MCP 形式交给 Claude Code。它和 REA 的差别是：REA 自己管证据、limitations、快照与导出；GhidraMCP 只是把工具输出递给 agent，而且本次材料只讲到“重启 Ghidra”，完整接入要按 GhidraMCP 仓库文档补齐。两者都遵循同一条原则：别让模型猜，让它读真实产物。
 
 ## 适用与不适用
 **REA 适用**：原生二进制（Mach-O、ELF、PE、macOS .app，经 Hopper 或 Ghidra）；JavaScript/Electron（ASAR、source map、IPC、原生插件，可不运行应用静态映射）；.NET 程序集；网站（本机 Chrome 系浏览器 loopback CDP 被动观察）；Android APK（Linux + headless JADX，静态）；固件（Linux 上自备 Binwalk/Unblob）。**不适用**：当作通用工作方法推广；它不是“搞懂别人的东西并重建”之外的任务。
@@ -16,6 +18,7 @@
 **RES 适用**：Web 产品/SaaS，智能体能驱动浏览器并在页面内执行 JavaScript；有试用/授权账号；需要先摸清界面、规则、数据模型、API 形状，再产出可交接重建规格；适合一次一个特性、写盘后再下一个。**不适用**：桌面与移动应用（需要 DOM 和网络，二进制/Electron 内部用 REA）；没有可控账号或条款不允许逆向/竞品研究；想复制素材或直接产出代码；把它当成熟平台（0.4.0，32 stars，安全承诺只有作者自述）。
 **rederive 适用**：新人上手、陌生代码库学习、理解设计决策；需要 git、bash、python3；需要支持 Skill 的编码 Agent；仓库可本地打开或 URL 克隆；愿意用自然语言回答并遵守“不提前打开 map”。**不适用**：快速排障或紧急修改；大型、多语言、权限受限仓库表现未说明；只有 README 宣传，无用户研究/学习效果对比/准确率/耗时/失败案例；它只提问、不解释。
 **aidbg 适用**：授权的 Windows x86/x64 调试/逆向任务；需要把调试会话拆成命令序列交给 agent；`--json` + JSONL 适合程序解析，`-c` 适合固定批处理，`--script` 适合脚本化流程，`--mcp` 适合把调试器作为 MCP 工具接入 agent；需要核对固定基址与 IDA/Ghidra 静态地址（作者声称一致，需自测）；调试 DLL、导出、反反调试自查。**不适用**：非 Windows 平台；未授权目标；不是通用工作方法；只做静态理解时用 REA 更直接；本次只读到 README，MCP 配置、完整命令参数、输出字段、错误处理与稳定性未展开，“逐字节一致”“反反调试”均为作者主张，未给独立测试数据或案例。
+**GhidraMCP 路线适用**：已安装 Ghidra 12.1.4、本机能跑 Java、已在用 Claude Code、要分析本地二进制样本，并愿意按 GhidraMCP 仓库文档补齐 MCP 启动、注册与验证。**不适用**：本次只有一条 X 推文，正文在“重启”处截断；不能把它当完整配置手册；原文没有准确率、耗时或案例对比；安全与合规完全未涉及；不要外推为“任何工作都该接 MCP”。如果你已经用 REA 并把 Ghidra 配成分析引擎，不要再叠 GhidraMCP：两者都在把 Ghidra 结果交给 agent，叠用只会让 agent 在两套 MCP 之间切换。
 
 ## 前置条件
 **REA**：macOS 12+ 或 Ubuntu 24.04+/Fedora 41+/64 位 Arch；Node.js 22.x（≥22.19）/24.x（≥24.11）/26+，已装 npm；纯静态 JS 检查只需 Node/npm；原生二进制需 Hopper（独立 license，demo 有厂商限额）或 Ghidra 12.1.4 + 64 位 JDK 21（macOS 还需带本机架构的 native decompiler）；可接入 Claude Code、Claude Desktop、Codex、Cursor、Gemini CLI、Windsurf、Devin、OpenCode、Antigravity、GitHub Copilot CLI、Command Code、VS Code，其他 agent 可手工配 MCP。
@@ -24,6 +27,7 @@
 **RES**：Node.js 22+；能读磁盘技能、驱动浏览器、在页面内执行 JavaScript 的智能体（Claude Code + Claude in Chrome / Playwright MCP / Chrome DevTools MCP）；自己邮箱注册的试用账号；独立 Chrome profile；选定 L1–L4；公开文档、API 参考、定价、集成清单和条款；明确写入范围；所有级别禁止发消息/邀请、指派/@、碰账单、创建账号、输入密码；自动保存、已读回执、关闭横幅、持久视图变更都算“写”。
 **rederive**：本机 git、bash、python3；至少一个支持 Skill 的编码 Agent；目标代码库可本地打开或 URL 克隆；能运行 npx；愿意用自然语言回答；遵守会话完成前不打开 `.rederive/map.md`；README 称内容留本机、`.rederive/` 加入本地 git exclude、不发 telemetry，均为作者说明。
 **aidbg**：Windows 10+；Visual Studio 2019/2022/18 MSVC 工具链（自行构建时）；已生成 `aidbg.exe`；一个你有权调试的测试 exe 或 dll；agent 能逐行读取 stdout 并解析 JSONL；走 MCP 时还需要 MCP 客户端和 `Manual.md` 中的配置（本材料只给出 `--mcp` 开关，没有完整参数）。
+**GhidraMCP 路线**：Ghidra 12.1.4（从 ghidra-sre.org 下载安装）；本机有 Java 运行环境（推文未写，属 Ghidra 运行前提，需自行确认）；Claude Code 可用；一个本地可运行的二进制样本；已下载 GhidraMCP 发行版。原文缺失：GhidraMCP 服务端启动方式（端口、是否随 Ghidra 启动）、Claude Code 侧 MCP 注册命令/配置、连接成功验证方法。
 
 ## 操作步骤
 ### 做法 A：注册 REA，跑一次完整的“搞懂 + 重建”
@@ -363,8 +367,22 @@ aidbg --json ^
 61. 反反调试与自查：README 称可用 `hide` 配置档（兼容 `scylla_hide.ini`）和 `detect` 自查（al-khaser 清单）。前提：仅在授权环境使用；具体命令见 `Manual.md`，本材料未展开。预期：记录自查结果和配置档来源，不把作者声称当保证。
 62. 把 aidbg 输出接回同一套证据与验收流程：保存 `.jsonl`，用 IDA/Ghidra 核对静态地址，把动态命中点、寄存器、栈和内存转储作为 Evidence；有 ground truth 时交给 Oracle，没有时交给 Companion 或至少标 unknown。预期：每条结论能追溯到具体命令与输出行，而不是“我调试过了”。
 
+### 做法 J：用 GhidraMCP 让 Claude Code 直接读编译产物（只照抄前半段，后半段按仓库文档补齐）
+前提：桌面二进制、已装 Ghidra 12.1.4、Java 可用、Claude Code 可用、你拥有该样本的分析授权。差异：A–F 的 REA 自带证据结构；J 只是把 Ghidra 的反编译/符号结果通过 MCP 递给 agent，原文未给完整接入与效果数据。若已用 REA+Ghidra，跳过 J。
+63. 安装 Ghidra 12.1.4。从 ghidra-sre.org 下载并安装。推文称该工具免费、由 NSA 发布。前提：本机已装 Java 运行环境（推文未提，需自行确认）。预期：Ghidra 能正常启动。
+64. 下载 GhidraMCP 发行版（release）。
+65. 在 Ghidra 里安装扩展：打开 `File -> Install Extensions`，添加刚下载的 GhidraMCP。预期：扩展出现在已安装列表。
+66. 重启 Ghidra。原文到此结束。不要以为此时 Claude Code 已经能读二进制。
+67. 补齐原文缺失的三件事，全部以 GhidraMCP 仓库 README 为准，不要照抄臆造配置：
+   - 启动 GhidraMCP 服务端（端口、是否随 Ghidra 启动）；
+   - 在 Claude Code 中注册该 MCP server；
+   - 验证连接：让 agent 列出已加载的函数/符号，或读取一个你已知的函数。
+   预期：agent 能拿到真实反编译结果，而不是凭文件名和字符串猜行为。
+68. 做最小 A/B 验证。选一个你自己写过、已知答案的小程序；同一组问题跑两次：A 组不给工具，B 组接 GhidraMCP 后让模型读分析结果。问题至少覆盖“这个函数做什么/调用了哪些 API/关键分支条件”。预期：B 组事实正确率更高、幻觉更少；若只是回答更长而错误率没降，降级为 study，只保留“别让模型猜，先读工具输出”这一原则。
+69. 合规自查。分析二进制、让 agent 访问本地分析结果，可能触及所在组织的安全与合规要求；推文完全未涉及。没有授权就不要做，不要把“本地运行”当成合规豁免。
+
 ### 怎么选
-想让 agent 自己调查并实现特性 → 做法 A；不想配 MCP/分析引擎 → B；只想要 agent 指令 → C；要 CLI、诊断、快照、证据、浏览器/V8 观察 → D；要长期多 agent 反编译且存在 ground truth → E；要把 REA 证据接成规格、路线图、实现计划与验证流程 → F；目标是运行中的 Web 产品/SaaS 且有可控试用账号 → G；源码在手、目标是学习/设计理解/新人上手 → H；需要在授权的 Windows x86/x64 目标上做动态调试、并让 agent 逐行解析 JSON → I。二进制、Electron 内部、桌面/移动应用回到 REA（A–F），不要用 RES。rederive 不替代取证和验收。REA 的 Evidence/limitations 与 E 的字节级 PASS/FAIL 不冲突但不等价：能比对时把 E 的验收器作为提交门；不能比对时至少按 REA 口径标 unknown，或用 F 的“与证据挂钩的验收标准”兜底。RES 的 `check-kb` 和证据标签是“知识库完整性 + 可追溯”级别，不等同于机器 PASS/FAIL；它能防无标签结论和丢证据，但不能证明重建行为与目标一致，后者要靠 parity tests 或 Oracle。aidbg 的 JSONL 是动态调试证据，不是 PASS/FAIL；地址一致性、断点命中和反反调试效果都要交叉验证。
+想让 agent 自己调查并实现特性 → 做法 A；不想配 MCP/分析引擎 → B；只想要 agent 指令 → C；要 CLI、诊断、快照、证据、浏览器/V8 观察 → D；要长期多 agent 反编译且存在 ground truth → E；要把 REA 证据接成规格、路线图、实现计划与验证流程 → F；目标是运行中的 Web 产品/SaaS 且有可控试用账号 → G；源码在手、目标是学习/设计理解/新人上手 → H；需要在授权的 Windows x86/x64 目标上做动态调试、并让 agent 逐行解析 JSON → I；已用 Ghidra、只想把反编译结果直接喂给 Claude Code、且愿意自己补齐 MCP 文档 → J。二进制、Electron 内部、桌面/移动应用回到 REA（A–F），不要用 RES。rederive 不替代取证和验收。REA 的 Evidence/limitations 与 E 的字节级 PASS/FAIL 不冲突但不等价：能比对时把 E 的验收器作为提交门；不能比对时至少按 REA 口径标 unknown，或用 F 的“与证据挂钩的验收标准”兜底。RES 的 `check-kb` 和证据标签是“知识库完整性 + 可追溯”级别，不等同于机器 PASS/FAIL；它能防无标签结论和丢证据，但不能证明重建行为与目标一致，后者要靠 parity tests 或 Oracle。aidbg 的 JSONL 是动态调试证据，不是 PASS/FAIL；地址一致性、断点命中和反反调试效果都要交叉验证。J 与 REA+Ghidra 重叠：REA 走自己的 MCP 工具并带 Evidence/limitations/快照/导出；J 走 GhidraMCP，原文未闭环、无效果数据。二选一，不要在同一目标上同时接两套 MCP。
 
 ## 怎么判断变好了
 - **REA**：每条结论是否带 Evidence 与 limitations；reconstruction check 是否给出明确 pass/fail/unknown，而不是“看起来懂了”；出现 unknown 应继续调查或明确标注。最小试用：做法 B，对一个已提取的 JS/Electron 目录跑一次静态分析，不需要 Hopper/Ghidra，不改动、不执行目标应用，看能否返回内联 Evidence、恢复图与 limitations/unknowns。另看第 6 步重建特性能否在你的技术栈通过测试；导出的 Evidence 经 `compare` 后能否复现同一结论。
@@ -373,6 +391,7 @@ aidbg --json ^
 - **做法 G / RES**：`check-kb` 是否通过；每条规则是否带 `[obs]`/`[net]`/`[doc]`/`[inf]` 标签，`[inf]` 是否挂开放问题；规则是否写成 Given/When/Then 并带证据 ID，能否派 parity tests；`sandbox/ledger.csv` 每条改动是否在结束时还原、删除或列出待处理；交接 zip 是否只含去掉对象 ID、位置和 URL 的变更账本；障碍清单是否带严重度、市场权重、前置时间和缓解方案；是否出现越级写入、对外发送、邀请、碰账单、输入密码等禁止动作。最小试用半天：选一个有试用账号且条款不禁止研究的 SaaS，走 L1 只研究一个特性，不让它问，要求把需人工事项写进 `STATUS.md`；结束时跑 `check-kb`，看知识库、证据标签、ledger；再看交接 zip 能否让编码智能体从 `BUILD.md` 开工。原文案例 ClickUp（L2，55 规则/19 组件/14 障碍）和 Pipedrive（L3，46 规则/8 组件/15 障碍）均为作者自述，仓库 `examples/` 可查，未第三方复现。
 - **做法 H / rederive**：完成一次会话所需时间；卡住次数；连续答错后需要提示的次数；结束后不看资料解释系统设计要点的准确度；能否预测某个设计变更的影响；一周后是否还能复述核心设计决策。多人试用可让新人在同仓库分别用直接讲解和 rederive，比较上手任务完成时间和提问质量。最小试用：选一个你熟悉但新人陌生的仓库，或 README 的 Express 示例；装后完整跑一次 `/rederive`，完成 5–10 个问题；会话结束前不打开 `.rederive/map.md`，结束后读 `.rederive/log.md`。保留基线：同一人先只读 README/文档并让 Agent 直接讲解，记录理解结果；只有出现可重复理解改善才扩大。README 没有学习效果数据、对照实验或准确性指标。
 - **做法 I / aidbg**：JSONL 逐行解析成功率；命令成功率；断点命中准确率；固定基址与 IDA/Ghidra 静态地址的一致性（README 声称一致，需自测）；完成同一调试任务所需时间（与手工基线对比）；MCP 调用失败率。原文没有给出达标数值，需先用小目标建立自己的基线。最小试用：选一个你有权调试的小型测试 exe，按 README 构建并跑上面的 6 条命令，把 stdout 保存为 `.jsonl`；用脚本逐行 `json.loads`，统计解析成功率；检查 `regs`、`stack 5` 是否返回预期字段，断点是否在 `continue` 后命中；对同一目标用 IDA/Ghidra 查看静态地址，核对固定基址一致性；若走 MCP，先查 `Manual.md` 配好客户端，再让 agent 调用 `file`、`run`、`regs` 等最小命令，确认返回仍可解析 JSONL。只有稳定性、地址一致性和断点命中都可重复，才扩大使用。
+- **做法 J / GhidraMCP**：A/B 两组的事实正确率（逐条与你自己已知的答案比对）、幻觉率（凭空编造的函数名/库名/行为描述次数）、返工成本（你需要纠正模型多少次才能得到可用结论）、接入成本（从零到跑通第一次查询的实际耗时；调研作者建议，若明显超过一两个小时，说明该集成还不适合写进日常流程）。最小试用半天：按 J 的 63–68 步走，先在自己写的小程序上跑；只有 B 组明显优于 A 组才扩大。原文只有 Ghidra 94k 星和推文互动数据（99 赞/18 转发/7 回复），这些只说明热度，不是效果证据。
 - **判定方式**：同一任务做引入 oracle 前后的对照；通过率明显上升、返工下降即改善；通过率不变但同等质量下 token 成本与模型等级下降，也按改善计。原文数据：做法 E 项目约 3 个月；token 消耗为作者估算 600–700B（agent 用畸形命令周期性清空 VM，丢了一批 session log，作者不知道确切数字）；第一月 4 个 agent 完成约 80% 游戏反编译，游戏能启动、主菜单可见、地图能加载；末期 99% 函数存在、83% 逐字节精确；末期 14 个 Luna 与 2 个 Opus 5.5 agent。RES 每次会话约增加 130 token，运行时约 4600 token（用 `claude plugin details` 测得，作者自述）；版本 0.4.0。材料没有给出成功率、时间节省等量化收益数字，本文不据此承诺。
 
 ## 常见坑
@@ -424,6 +443,13 @@ aidbg --json ^
 - aidbg：不核对固定基址就假定与 IDA/Ghidra 地址一致；不一致时记录差异，不要拿错地址下结论。
 - aidbg：把 `hide` / `detect` 当完整文档；README 只给能力名和兼容文件，具体命令见 `Manual.md`，且只在授权环境用。
 - aidbg：把动态命中当 PASS/FAIL；它只是证据，正确性仍要靠 Oracle、parity tests 或人工复核。
+- GhidraMCP：照抄推文四步就以为接好了；原文在“重启 Ghidra”处截断，服务端启动、Claude Code 注册、验证都缺失。
+- GhidraMCP：在 Claude Code 侧臆造 MCP 配置；以 GhidraMCP 仓库文档为准。
+- GhidraMCP：把 94k 星、99 赞/18 转发/7 回复当效果证据；它们只说明话题热度。
+- GhidraMCP：没确认 Java 环境就装 Ghidra；推文未提这个前提。
+- GhidraMCP：已用 REA 的 Ghidra 引擎还叠一套 GhidraMCP，让 agent 在两套 MCP 间切换；二选一。
+- GhidraMCP：不做 A/B 就宣布“接上后更准”；原文没有任何准确率、耗时或案例对比。
+- GhidraMCP：忽略安全与合规；原文完全未涉及，需自行确认组织要求与样本授权。
 
 ## 证据与来源
 - REA 的命令、路径、版本要求、六步调查流程与工具名、snapshot 与 Evidence 语义、浏览器/V8 Inspector 边界、卸载行为，来自调研报告 **morluto/rea**（仓库 README）。作者主张（非实测）：不声称恢复原始源码、不自动克隆；分析本地运行、不上传托管分析服务；snapshot 复用条件与不缓存范围；`doctor` 只检查不修改。调研作者对适用面的判断“应用面局限在逆向与互操作场景，不适合当作通用工作方法推广”是结论性主张，不是量化数据。
@@ -432,6 +458,7 @@ aidbg --json ^
 - RES 的安装命令、提示词、七阶段、证据标签、L1–L4、四个脚本、`STATUS.md`、交接 zip、token 数、ClickUp/Pipedrive 案例条数，来自 **alextnetto/res**（仓库 README）。报告只依据 README，未获取 `SKILL.md`、`references/safety.md`、`references/exploration.md` 等细节文件，也未复现任何一次研究；所有条数、token 数均为原文自述。作者主张需自行核实：安全性承诺（各级别不碰生产、不输密码、不触账单、写入可全部还原）目前只有作者自述和设计文档，没有第三方复现；“可以整夜跑”同理；法律问题作者明确不提供法律建议。适用硬限制：只适用于 Web 产品（要 DOM + 网络）；必须有自己拥有或被授权研究的账号；很多产品条款禁止逆向工程或竞品用途；32 stars，小规模早期项目；重建产出是行为等价的设计与规则，不是代码，复制素材被明确禁止。
 - rederive 的安装命令、三种启动方式、`.rederive/map.md` 与 `.rederive/log.md` 的机制、后台 Agent 读取代码/import/设计变更提交、Express 会话示例、`.rederive/` 本地 git exclude 与不发送 telemetry 的说明，来自 **EricJujianZou/rederive**（仓库 README）。该报告没有用户研究、学习效果对比、准确率、耗时或失败案例；40 stars 只是仓库指标，不能证明效果。作者关于“通过推导而非记忆来理解”的主张属于设计理念，尚未被原文数据验证。适用条件主要是学习型、设计理解型任务，依赖 Agent 对仓库的读取和 Skill 兼容性；对大型仓库、多语言仓库、权限受限仓库或需要直接答案的任务，原文没有说明表现。调研作者的试用建议是判断，不是实测收益。兼容性声称与清单状态有张力：README 声称可在 GitHub Copilot 中使用，但清单中 GitHub Copilot 当前状态是 drop，需自测。
 - aidbg 的构建命令、典型 AI 调用命令、`-c`/`--script`/`--mcp` 三种驱动方式、JSONL 输出契约、固定基址与 IDA/Ghidra 一致的声明、零 VC 运行时依赖、Windows 10+ 可运行、DLL 调试与 `hide`/`detect` 能力，来自调研报告 **A-new/aidbg**（仓库 README）。仓库指标只有 30 stars。本次只读到 README，没有读到 `Manual.md`、`dev.md` 和实际发布包；MCP 配置、完整命令参数、输出字段、错误处理和稳定性都没有展开。README 的功能列表和“逐字节一致”“反反调试”等属于作者主张，未给独立测试数据或案例。适用条件：Windows x86/x64 调试/逆向任务且有明确授权；需要 MSVC 构建或直接使用 Release；不适合非 Windows 平台、非调试类通用工作，也不适合在未授权目标上使用。
+- GhidraMCP 的 Ghidra 12.1.4、ghidra-sre.org、免费且由 NSA 发布、`File -> Install Extensions`、重启、下载 release、94k 星，来自调研报告 **@ArchiveExplorer 推文（GhidraMCP 接入 Claude Code）**。原文是一条 X 推文，正文极短且在“重启”处截断；GhidraMCP 服务端启动、Claude Code 注册、验证方法均未给出，需查 GhidraMCP 仓库文档。效果主张（“让你的代理读取编译后的程序，而不是猜测它做什么”“这变得他妈的危险了”）是作者断言，没有对比数据、案例或复现结果；互动数据（99 赞/18 转发/7 回复）只说明热度。安全与合规原文未涉及。适用条件：本地桌面版 Ghidra、Java 环境、Claude Code、二进制/逆向任务；不能外推为通用工作方法。
 - 材料没有给出成功率、时间节省等任何量化收益数字，本文不据此做承诺。
 
 ## 依据的调研
@@ -442,3 +469,4 @@ aidbg --json ^
 - [alextnetto/res](../research/radar/2026-10-20/5013-alextnetto-res.md)：值得一试，建议小范围试一次：用 Claude Code 安装 RES 技能，在独立浏览器 profile 的试用账号上只研究一个特性，检查它产出的带证据知识库（含 `check-kb` 校验）和交接 zip 能否直接交给编码智能体开工。理由是原文给出了安装命令、提示词、七阶段流程、证据标注规则、沙箱分级和四个可直接运行的脚本，属于可照做的流程；但适用范围只限 Web 产品、方法仍在 0.4.x 迭代、且需要你自己拥有可研究的账号，因此先试再定。
 - [EricJujianZou/rederive](../research/radar/2026-10-22/5701-ericjujianzou-rederive.md)：值得一试，建议在小范围新人上手或陌生代码库理解中试用：安装后用 /rederive 让 AI 只提问，按 .rederive/map.md 的 5 到 10 个问题重新推导设计，并用 .rederive/log.md 复盘。流程和命令具体可照做，但只有 README 宣传、没有效果数据，因此先试再扩大。
 - [A-new/aidbg](../research/radar/2026-10-23/6221-a-new-aidbg.md)：值得一试，可在授权的 Windows 逆向/调试任务中小范围试用：按 README 用 `build.bat Release` 构建，以 `--json` + `-c` 批处理或 `--mcp` 驱动，并把每行 JSON 交给 agent 解析；理由是它给出了具体命令和稳定输出契约，但目前只有 README、仓库很新，需先验证稳定性和地址一致性。
+- [@ArchiveExplorer: 这变得他妈的危险了：NSA 自己的逆向工程工具现在直接接入 Claude Code - Ghidra 有 94k 星，GhidraMCP 让你的代理读取编译后的程序，而不是猜测它做什么](../research/radar/2026-10-25/6976-nsa-claude-code-ghidra-94k-ghidramcp.md)：值得一试，按推文给出的三步把 Ghidra 12.1.4 与 GhidraMCP 扩展装起来，再把 MCP 端点接进 Claude Code，先在一个自己写的小程序或开源二进制上试；理由是这条线索给的是“让智能体读取真实编译产物”的具体接入路径，但原文只讲到重启，Claude Code 侧的配置需要去 GhidraMCP 仓库文档补齐。

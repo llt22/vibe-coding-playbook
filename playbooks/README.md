@@ -4,6 +4,7 @@
 
 | 手册 | 解决的问题 | 先试这一步 | 最近修订 |
 |---|---|---|---|
+| [搞懂一个没有源码的功能，让 agent 拿出证据再重建](reverse-engineer-software-with-agents.md) | 面对没有源码的二进制、Electron/JS 包、.NET 程序成、APK、固件或已打开的网页，让 agent 沿“反编译→理解→重建”给出可核验的证据，并在有 ground truth 时用机器 PASS/FAIL 验收，而不是接受听起来合理的猜测。 | 先不装 MCP，选一个已提取的 JS/Electron 目录跑 `npx -y rea-agents@latest analyze-javascript-application /absolute/path/to/app --json`，看返回里有没有内联 Evidence、limitations 与 unknowns。 | 2026-10-25 |
 | [把散落文档和笔记变成可追溯问答：四条本地优先路线](self-hosted-document-qa.md) | 这篇手册解决如何把散落文档与 Markdown/Obsidian 笔记变成带来源引用的问答或知识库入口，并用同一批问题判断该走哪条路线、是否值得继续投入的问题。 | 先挑 20–50 份同主题、答案位置明确的文档，或复制一个 vault 放 3–5 份 Markdown 来源，按最小流程跑通一条端到端链路，并记录 10 个已知答案问题的正确数与引用命中率。 | 2026-10-25 |
 | [让编码 agent 少烧上下文、少返工：从工具输出、会话交接到目录级规则](manage-agent-context.md) | 编码 agent 的上下文和规则一旦失控，就会反复压缩、失忆、返工；本手册给出从工具输出拦截、会话交接、常驻规则维护到按目录分层规则的试用方法。 | 先做一次上下文预算审计：在真实任务中运行 /context，记录 CLAUDE.md、聊天记录、MCP 工具各占多少 token，然后一次只改一项。 | 2026-10-25 |
 | [让编码 agent 在宣布完成前过验收门禁：从图表、组件、架构图到前端与特效](build-ui-components-with-agents.md) | 编码 agent 的交付物常“看着完成了”，这份手册给出八条可落地做法，把检查、真实渲染、独立评审和前后快照前置到 agent 宣布完成之前。 | 先拿一个已有网页跑 `/hallmark audit <path>` 只出报告，或按做法 A 用 evident-charts 审一张已有图表，建立基线后再决定扩展到哪条做法。 | 2026-10-25 |
@@ -16,7 +17,6 @@
 | [给 AI 配算力：按任务分档，先低档起稿、验证再升档](tune-agent-effort.md) | 同一件事该给 AI 多少算力，怎么按任务类型分档、什么时候值得升档，并避开把升档当万能药和把一条配置当完整方案这两种误用。 | 下次做新功能时先让 Claude 采访你补齐 spec，用 low/medium 实现，只在验证与测试阶段升到 high；如果想先做最小改动，就先用 `/model opus` + `/effort medium` 建基线，再对验证环节试 `/effort high`。 | 2026-10-25 |
 | [在陌生代码库里定位实现：把逐文件摸索换成一次查询或图谱探索](code-search-for-agents.md) | 编码 agent 在陌生代码库里定位行为、调用链和改动影响时，常靠 grep/Read 逐文件试错；本手册给出七种检索与图谱做法，帮你按隐私边界、平台和问题类型选一种并做小范围对照。 | 先选一个你熟悉的中等仓库和一个“知道行为不知道位置”的问题，只接一种做法，跑 3–5 次对照再决定是否推广。 | 2026-10-24 |
 | [让 AI 写的代码在合并前被读懂、被验证、留下证据](code-review-with-agents.md) | AI 写得比人读得快，代码评审容易退化成看 diff 猜结构、等告警、走形式；这篇手册给出一组可照做的关卡，让每个改动在合并前都有结构图、可复核的证据和明确的人类决策点。 | 先挑一个 1 到 2 个文件的小改动，让 Codex 用 simple-reviewer-v1 只审不改，生成代码拆解，并确认每个绿色状态背后都有命令输出或日志，而不是只靠静态阅读。 | 2026-10-23 |
-| [面对没有源码的系统，让 agent 先取证再重建](reverse-engineer-software-with-agents.md) | 当目标没有源码或设计意图不明时，如何让 agent 沿“取证—理解—重建—验收”推进，并用可核验的 Evidence 与验收器防止把合理猜测当结论。 | 先不配 MCP 和分析引擎，对一个已提取的 JavaScript/Electron 目录跑一次 `npx -y rea-agents@latest analyze-javascript-application /absolute/path/to/app --json`，看它能否返回内联 Evidence、恢复出的图与 limitations/unknowns。 | 2026-10-23 |
 | [让编码会话在配额耗尽前自动换道，并留下验收证据](model-routing-for-coding-agents.md) | 把跨供应商配额、限流、死 key、模型选择和完成验收从人手切换变成可回退的本地路由与证据检查。 | 先挑一个非关键任务，只把一个工具或一个 haiku 别名接到本地路由，保留直连做 A/B，并用 /provider doctor --ping 或 curl 确认链路通。 | 2026-10-23 |
 | [把已有的 fuzz 测试升级成机器可校验的无崩溃证明](formal-verification-with-agents.md) | 团队已有 fuzz 测试却只能靠跑更多输入碰运气，本条目解决如何把它升级为可被 Rocq 内核校验的“无崩溃”定理，并用证明失败的反例发现和修复传统 fuzzing 难触发的 bug。 | 先选一个在 OSS-Fuzz 中、已有 fuzz 入口点的共享库，用 1–3 个入口点和固定预算，通过 Theorem 的流水线或其 Claude skill 跑一次最小证明，并只人工审查语义模型、定理陈述和 Rocq 检查器三样。 | 2026-10-23 |
 | [让编码助手先给答案，再给下一步](concise-actionable-agent-responses.md) | 编码助手的回答常把结论和下一步埋在寒暄、回顾和长铺垫之后，读者还得自己追问“所以我现在该做什么”。 | 先把下面这组输出约束加入你现有编码助手的系统提示词或自定义指令，再选 5-10 个常用任务做同一模型的前后对照。 | 2026-10-23 |
