@@ -1,18 +1,18 @@
-# 让 AI 在新会话里接得上手：记忆落盘、事实核对、冲突裁决
+# 让 AI 跨会话接手时不把旧笔记、旧文档和旧记忆当事实
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：AI 每次开新会话都要重新交代背景，而上一轮留下的笔记、handoff 或 memory 又可能把已失败的任务、未推送的分支、已完成的待办当成事实带进新会话；这套手册给出从本地目录、常驻指令到事实核对与团队记忆的分层做法。
-> 先试这一步：先在一个真实项目旁建 `second-brain` 目录，放入 `notes/` 和 `people/`（或单一 `memory/`），并在 `CLAUDE.md` 写一条“开始新任务前先读、确认后的长期信息追加进去”的规则，连续用 1–2 周看重复交代是否减少。
-> 最近修订：2026-10-24
+> 解决的问题：AI 跨会话接手时会把上次的笔记、知识库旧结论、过时文档当成事实继续施工；这套做法让它在动手前先核对事实、冲突先问你，并在文档与代码矛盾时以代码为准、把冲突点列出来。
+> 先试这一步：先在你每天用的 `CLAUDE.md`/`AGENTS.md` 里加两句常驻规则：开始任务前先读知识库、与我说法冲突时先标记并问我；文档与现有代码冲突时以代码为准，并在最后回复里列出所有冲突点。
+> 最近修订：2026-10-25
 
 ## 解决什么问题
 
-AI 每次开新会话都要重新交代背景，跨会话的资料和结论无法沉淀；更糟的是，上次的笔记、handoff 或 memory 只是“主张”，如果直接当作事实继续施工，会把已失败的后台任务、未推送的分支、已完成的待办带进新会话。另一种反向失败是第二大脑已经建好，却没告诉 AI 什么时候读它、读到的旧结论和用户当下说的话冲突时该听谁的，于是它要么没被用上，要么被原样沿用。编码场景还有一类失真：模型训练截止之后依赖库改了 API，agent 不会主动查 changelog，仍按旧 API 写代码。
+AI 每次开新会话都要重新交代背景，跨会话的资料和结论无法沉淀；更糟的是，上次的笔记、handoff 或 memory 只是“主张”，如果直接当作事实继续施工，会把已失败的后台任务、未推送的分支、已完成的待办带进新会话。另一种反向失败是第二大脑已经建好，却没告诉 AI 什么时候读它、读到的旧结论和用户当下说的话冲突时该听谁的，于是它要么没被用上，要么被原样沿用。编码场景还有两类失真：模型训练截止之后依赖库改了 API，agent 不会主动查 changelog，仍按旧 API 写代码；项目文档落后于代码，agent 按旧文档改代码，把本来正确的实现改坏。
 
 当团队里多个人、多个 agent 各记各的，或者记忆只存在某台机器、某份手写笔记里，重复交代和“把旧结论当事实”会同时发生；做法 H 针对的正是这种需要自托管、按部门/团队/成员隔离、自动捕获与召回的记忆层。
 
-这套做法分八层。先让长期信息在本地 Markdown 文件夹落盘（做法 A/B/C）。做法 A 有两个变体：A-1 用单一 `memory/` 目录加 `CLAUDE.md` 规则；A-2 用 `notes/` 与 `people/` 按材料类型分目录，它来自一条新线索，但原文在 `people/` 处截断，第三个目录和后续用法缺失，只能当目录组织变体，不能当完整工作流。再用常驻指令让 agent 每次任务前先读知识库、发现冲突就标记并同时引用两版、等用户裁决后给出对知识库的确切编辑（做法 E）。再用 truongfelix/workflow 在两个会话边界跑同一个事实采集脚本，报告主张与 git/GitHub/本机事实的不一致，然后才决定当天做什么（做法 D）。如果跨 agent、跨机器、跨项目的记忆需求更强，可以加做法 F：用 akitaonrails/ai-memory 把捕获、汇总、召回、交接做成一条常驻管线；它的真相源仍是 git 托管的 Markdown，数据库可重建，默认路径零 LLM 调用，但所有收益说法目前只有项目自述，需要先小范围试。如果项目是 JS/TS，且依赖有大版本跨越或紧贴发布节奏，再加做法 G：用 stalemap 把“模型训练截止前已知的最后一个稳定版”与“项目实际 pin 的版本”之间的差异压缩成短笔记，通过会话开始注入、编辑后 guard 和 MCP 检索交给 agent；它补的是依赖 API 盲区，不替代 A-F 的记忆与事实核对。如果小团队需要自托管的团队记忆，能按部门/团队/成员/agent 隔离，并接受 Docker 和 LLM 后端，加做法 H：用 AgentMemory 把对话捕获、L1 facts、L2 scenes、L3 persona 和召回做成服务；它仍不能替代 D 的事实核对。
+这套做法分九层。先让长期信息在本地 Markdown 文件夹落盘（做法 A/B/C）。做法 A 有两个变体：A-1 用单一 `memory/` 目录加 `CLAUDE.md` 规则；A-2 用 `notes/` 与 `people/` 按材料类型分目录，它来自一条新线索，但原文在 `people/` 处截断，第三个目录和后续用法缺失，只能当目录组织变体，不能当完整工作流。再用常驻指令让 agent 每次任务前先读知识库、发现冲突就标记并同时引用两版、等用户裁决后给出对知识库的确切编辑（做法 E）。再用 truongfelix/workflow 在两个会话边界跑同一个事实采集脚本，报告主张与 git/GitHub/本机事实的不一致，然后才决定当天做什么（做法 D）。如果跨 agent、跨机器、跨项目的记忆需求更强，可以加做法 F：用 akitaonrails/ai-memory 把捕获、汇总、召回、交接做成一条常驻管线；它的真相源仍是 git 托管的 Markdown，数据库可重建，默认路径零 LLM 调用，但所有收益说法目前只有项目自述，需要先小范围试。如果项目是 JS/TS，且依赖有大版本跨越或紧贴发布节奏，再加做法 G：用 stalemap 把“模型训练截止前已知的最后一个稳定版”与“项目实际 pin 的版本”之间的差异压缩成短笔记，通过会话开始注入、编辑后 guard 和 MCP 检索交给 agent；它补的是依赖 API 盲区，不替代 A-F 的记忆与事实核对。如果小团队需要自托管的团队记忆，能按部门/团队/成员/agent 隔离，并接受 Docker 和 LLM 后端，加做法 H：用 AgentMemory 把对话捕获、L1 facts、L2 scenes、L3 persona 和召回做成服务；它仍不能替代 D 的事实核对。最后，如果项目同时维护文档和代码，加做法 I：在 `CLAUDE.md`/`AGENTS.md` 里写一条静态规则——文档与现有代码冲突时以代码为准，并在最后回复中列出所有冲突点；它成本最低，但只是一条指令，不替代 D 的事实核对。
 
 ## 适用与不适用
 
@@ -29,6 +29,7 @@ AI 每次开新会话都要重新交代背景，跨会话的资料和结论无�
 - 小团队想自托管团队记忆，需要按部门→团队→成员/agent 做权限隔离，并希望自动捕获对话、蒸馏出 facts/scenes/persona、每次提示前召回；能接受 Docker、git 和一个 LLM 后端（OpenAI 兼容端点或本机 CLI），走做法 H。
 - 想把原始对话 L0、事实 L1、场景 L2、persona L3 分层，且团队内共用某个 agent 的 scenes/persona；数据可以留在内网，SQLite 或 PostgreSQL 自选，走做法 H。
 - 想通过 hooks/MCP 接 Claude Code、Codex、Antigravity、Hermes 或任意 MCP 客户端，走做法 H。
+- 项目同时维护文档和代码，且编码 agent 会读取 `CLAUDE.md`/`AGENTS.md`；你希望它在文档落后于代码时按现有代码改，并把冲突点摆出来，走做法 I。
 
 不适用：
 - 还没有安装 Claude Code 或任何可读 Markdown 的 agent，或没有本地文件系统写权限。
@@ -48,6 +49,8 @@ AI 每次开新会话都要重新交代背景，跨会话的资料和结论无�
 - 需要现成的 `amem` 安装命令：README 没有在正文给出，只指向 `docs/REMOTE-CLIENTS.md`，没查证前不能照抄。
 - 需要独立效果验证才采用：做法 H 的 README 没有给效果数据。
 - 期待 `notes/` 和 `people/` 一建好就自动生效：它们只是目录结构，不会自动让 agent 读取；必须配常驻规则或 `CLAUDE.md`。
+- 代理不读取 `CLAUDE.md`/`AGENTS.md`，或项目没有文档与代码并存，或你无法接受“以代码为准”这个前提（代码本身可能就是错的）：先别把做法 I 当成默认规则。
+- 期待做法 I 给出效果数据：原文只有一条规则和一句目的说明，且在“据说Claude”处截断，没有数据、案例或前后对比。
 
 ## 前置条件
 
@@ -60,11 +63,12 @@ AI 每次开新会话都要重新交代背景，跨会话的资料和结论无�
 - 做法 F：能访问 GitHub releases 和 curl（Linux/macOS）；Windows 用 PowerShell，无需管理员，或只考虑 WSL2；Arch/Fedora 走包管理器；macOS 菜单栏 App 需要 Rust 工具链 + Xcode / Swift 6；Docker 路线需要 Docker 或 Podman + 一个支持 MCP 的 agent CLI。先在测试机、单仓库、只接一个 agent 上做第 1 步，确认有效再推到主力环境。要常驻服务并采集提示词与工具调用，先用非敏感账号或受限范围试。
 - 做法 G：Node 项目；有 lockfile 或 `node_modules` 以确定 pin 的版本；能访问 npm registry 与 GitHub（读 changelog/releases）；知道当前会话用的模型（可用 `--model` 指定，或依赖 Claude Code / Codex / OpenCode / Gemini CLI 的配置、`$ANTHROPIC_MODEL`；截止日来自 models.dev，也可显式传 `--cutoff YYYY-MM-DD`）；可选 GitHub token 或 `gh` 登录以取 changelog/releases；选择 LLM 通道时需 Anthropic API 或 `claude -p`；comment 模式的 CI 需 `pull-requests: write` 权限。
 - 做法 H：Docker、git；一个 LLM 后端（OpenAI 兼容 API key，或本机可调用的 `claude`、`codex`、`agy` 等 CLI）；默认 SQLite 无需额外安装；只有要多副本时才需要 Redis，要规模化或换掉 SQLite 时才需要 PostgreSQL/pgvector；从源码构建需要 Rust MSRV 1.88。生产使用前先看许可证：0.4.0 起服务端为 BUSL-1.1，免费范围是评估、个人、非营利，以及最多 1 个部门、10 个成员的组织。
+- 做法 I：确认你的编码代理会读取项目中的 `CLAUDE.md` 或 `AGENTS.md`；项目允许创建或修改这类代理指令文件；任务附近存在已知的文档与代码不一致点，便于检查规则是否生效。不需要额外服务或 key。
 - 涉及隐私与凭据安全：先用非敏感账号或受限范围试，不要一上来就接真实收件箱或公司级知识库。做法 H 会捕获每次对话并蒸馏，先用测试团队和测试 agent。
 
 ## 操作步骤
 
-先选路线，八条路线可以叠加：
+先选路线，九条路线可以叠加：
 - 只需要跨会话记住项目背景，先做做法 A。A 有两种组织方式：A-1 用单一 `memory/` 目录加 `CLAUDE.md` 规则；A-2 用 `notes/` 与 `people/` 按材料类型分目录。目录本身不会自动生效，必须配读取/追加规则。
 - 还需要 AI 读取 Gmail、日历、云端硬盘，在 A 之上做做法 B。原文缺安装与授权细节，必须先查证再操作。
 - 想把材料变成可摄入、可提问、可引用、可清洗的库，或想找回想不起名字的历史会话，做做法 C。C 可以独立于 A，也可以直接建在 A 的 second-brain 目录上。
@@ -73,6 +77,7 @@ AI 每次开新会话都要重新交代背景，跨会话的资料和结论无�
 - 如果主要痛点是跨 agent、跨项目、跨机器的长期记忆，并且能接受常驻服务和采集提示词与工具调用，试做法 F。F 可以替代 A 的 memory 骨架和 C 的部分 vault/query 能力，但不能替代 D 的事实核对；E 的冲突裁决指令也可以和 F 叠加。
 - 如果是 JS/TS 单 package.json 项目、依赖有大版本跨越或紧贴发布节奏，加做法 G。G 可以独立使用，也可以叠加在 A/D/E/F/H 上：它把依赖变更笔记写进 AGENTS.md/CLAUDE.md，或用插件在会话开始注入；但它的笔记仍来自 changelog/release note，是“主张”，编辑后 guard 和 CI check 才是编译层的事实核对。G 不能替代 D 的 git/机器事实核对。
 - 如果是小团队、要自托管、要按部门/团队/成员/agent 隔离、要自动捕获和分层召回，做做法 H。H 可以替代 A 的 memory 骨架和 F 的部分团队共享需求，但它仍把“记忆”当主张，不能替代 D；E 的冲突裁决指令可以叠加在 H 的召回结果上。
+- 如果项目同时维护文档和代码、编码 agent 会读 `CLAUDE.md`/`AGENTS.md`，且你希望它在文档落后于代码时按代码改、把冲突点列出来，加做法 I。I 是一条静态规则，成本最低，可以写进 A 的 `CLAUDE.md`，也可以和 E 的常驻指令放在一起；但它不替代 D 的事实核对，也不证明代码本身正确。
 
 ### 做法 A：只搭本地记忆骨架
 
@@ -197,14 +202,14 @@ https://github.com/Ar9av/obsidian-wiki — set up my wiki
 
 ```bash
 obsidian-wiki sessions-build
-obsidian-wiki sessions-query \"the auth bug with the weird retry loop\"
+obsidian-wiki sessions-query "the auth bug with the weird retry loop"
 ```
 
 8. 定期清洗 vault：
 
 ```text
 /wiki-lint            # broken links, orphans, contradictions
-/wiki-dedup           # \"RSC\" and \"React Server Components\" are one page now
+/wiki-dedup           # "RSC" and "React Server Components" are one page now
 /wiki-status          # what's ingested, what's pending, where the hubs are
 ```
 
@@ -214,10 +219,10 @@ obsidian-wiki sessions-query \"the auth bug with the weird retry loop\"
 ```python
 from obsidian_wiki import Memory
 
-memory = Memory(\"~/brain\")
-memory.remember(\"stack\", \"Python, FastAPI\", confidence=0.9)
-memory.add(\"Postgres was chosen over MySQL for partial indexes.\")
-memory.search(\"postgres\")
+memory = Memory("~/brain")
+memory.remember("stack", "Python, FastAPI", confidence=0.9)
+memory.add("Postgres was chosen over MySQL for partial indexes.")
+memory.search("postgres")
 memory.recap()                       # inject at session start
 ```
 
@@ -250,7 +255,7 @@ workflow/bin/adopt.sh ~/code/my-project     # copies the template; never overwri
 3. 在项目里打开 Claude Code，直接给这段提示词：
 
 ```text
-Set up the workflow: follow \"Adopt in a new project\" in /path/to/workflow/README.md
+Set up the workflow: follow "Adopt in a new project" in /path/to/workflow/README.md
 ```
 
 前提：已 clone workflow。预期：Claude 会替你填空（项目是什么、有哪些 repo、规则是什么），反复运行 ground truth 直到干净，然后跑一次 `/handoff` 写出第一份 handoff。
@@ -320,7 +325,7 @@ ai-memory setup
 
 相关开关：`--plan` 只打印计划不做任何改动；`--web` 把计划显示成浏览器页面、勾选后应用；`--yes` 跳过询问；再次运行不会改动任何东西；`--agent` 指定要接的 agent。装完后重启你的 agent，问它一句 “What do you remember about this project?”，如果它通过 ai-memory 回答，就说明接线成功。
 
-2. Windows 走 PowerShell。前提：Windows 环境，或只考虑 WSL2。预期：校验 release zip 的 SHA-256，解到 `%LOCALAPPDATA%\\Programs\\ai-memory` 并加进用户 `PATH`；`setup` 做的事与 Linux/macOS 相同，只是用登录项代替系统服务。README 把“原生 Windows”标为 Experimental，更稳的路子是 WSL2 或 Docker Desktop（见 `docs/windows.md`）。
+2. Windows 走 PowerShell。前提：Windows 环境，或只考虑 WSL2。预期：校验 release zip 的 SHA-256，解到 `%LOCALAPPDATA%\Programs\ai-memory` 并加进用户 `PATH`；`setup` 做的事与 Linux/macOS 相同，只是用登录项代替系统服务。README 把“原生 Windows”标为 Experimental，更稳的路子是 WSL2 或 Docker Desktop（见 `docs/windows.md`）。
 
 ```powershell
 irm https://github.com/akitaonrails/ai-memory/releases/latest/download/install.ps1 | iex
@@ -346,12 +351,12 @@ ai-memory setup
 git clone https://github.com/akitaonrails/ai-memory
 cd ai-memory
 ./companions/ai-memory-macos/build.sh
-open \"companions/ai-memory-macos/dist/AI Memory.app\"
+open "companions/ai-memory-macos/dist/AI Memory.app"
 ```
 
 ```bash
-BIN=\"/Applications/AI Memory.app/Contents/Resources/runtime/ai-memory\"
-\"$BIN\" setup --no-service
+BIN="/Applications/AI Memory.app/Contents/Resources/runtime/ai-memory"
+"$BIN" setup --no-service
 ```
 
 5. Docker 路线。前提：Docker 或 Podman + 一个支持 MCP 的 agent CLI。注意：这段官方 quick-start 没有认证——容器没跑 `init`，所以不带 token 启动；服务只绑 loopback（`127.0.0.1:49374`），机器外面的东西够不着，但本机进程和浏览器页面可以。想要零 LLM 模式就删掉 LLM / EMBEDDING 那几行。完整 wrapper 安装、checksum 校验、`docker run` 和环境变量命令较长，按 README 的 Docker quick-start 原样执行；在 Linux/macOS 上，Docker wrapper 会通过校验过 checksum 的原生宿主客户端去跑 `install-hooks`。用 Podman 就把 `docker` 换成 `podman`；wrapper 在没装 Docker 时会自动用 Podman，两者都有时用 `AI_MEMORY_DOCKER=podman` 强制。两条接线命令：
@@ -435,7 +440,7 @@ stalemap setup --agent codex --dry-run    # print the changes, write nothing
 7. 任意 MCP client：
 
 ```json
-{ \"mcpServers\": { \"stalemap\": { \"command\": \"npx\", \"args\": [\"-y\", \"stalemap@latest\", \"mcp\"] } } }
+{ "mcpServers": { "stalemap": { "command": "npx", "args": ["-y", "stalemap@latest", "mcp"] } } }
 ```
 
 前提：client 支持 MCP。预期：agent 可以通过 `search_changes` 等工具按需检索依赖变更。
@@ -506,7 +511,7 @@ docker compose up -d
 ```bash
 cp .env.example .env        # set at least AGENT_MEMORY_API_KEY
 docker compose up -d --build
-curl -s -X POST http://localhost:8420/v3/internal/meta/user/init-admin -H \"Authorization: Bearer $AGENT_MEMORY_API_KEY\" -H \"x-memory-department-id: default\" -H \"content-type: application/json\" -d '{\"username\":\"admin\"}'
+curl -s -X POST http://localhost:8420/v3/internal/meta/user/init-admin -H "Authorization: Bearer $AGENT_MEMORY_API_KEY" -H "x-memory-department-id: default" -H "content-type: application/json" -d '{"username":"admin"}'
 ```
 
 也可以分别启动服务：
@@ -539,7 +544,7 @@ llm:
   timeoutMs: 180000
   cli:
     command: claude              # or ollama, or any tool that reads stdin and prints a text answer
-    args: [\"-p\"]                 # ollama example: [\"run\", \"llama3.1\"]
+    args: ["-p"]                 # ollama example: ["run", "llama3.1"]
     promptMode: stdin            # use arg for tools that only take arguments, and put {prompt} in args
     workingDir: ~/projects/my-app
     maxConcurrency: 2
@@ -571,6 +576,25 @@ cd panel && npm install && npm run dev
 11. 最小试用：先以单团队、SQLite、本地 CLI 或 OpenAI 兼容端点做最小部署，只接入一个客户端，用 2—3 次真实会话验证跨会话召回能否减少重复交代。前提：用测试团队、测试 agent、非敏感对话；先不要接真实公司知识库。预期：你能看到召回块被注入，且下一次会话不需要重复交代同一背景。
 12. 与做法 A-G 的关系：H 可以替代 A 的 memory 骨架和 F 的部分团队共享需求；H 的 L1/L2/L3 仍是“主张”来源，不能替代 D 的 git/GitHub/本机事实核对；E 的冲突裁决指令可以叠加在 H 的召回结果上，要求 agent 在“召回内容 vs 用户当下说法”冲突时标记并请你裁决；G 的依赖 API 笔记与 H 无关，可单独叠加。
 
+### 做法 I：文档与代码冲突时以代码为准，并在回复里列出冲突点（@ai_database）
+
+针对的问题是：项目文档（README、设计文档、旧说明）落后于代码，编码 agent 按旧文档改代码，把本来正确的实现改坏。原文给出的规则只有一句：当文档与现有代码存在冲突时，以代码为准，并在最后回复中列出所有冲突点。它的目的就是减少代理依据过时文档改代码。注意：原文在“据说Claude”处截断，能确认的只有这条规则及其简要理由；没有数据、案例、前后对比或具体实验。
+
+1. 确认你的编码代理会读取项目中的 `CLAUDE.md` 或 `AGENTS.md`。前提：项目允许创建或修改这类代理指令文件。预期：规则会在每次任务中生效。
+2. 在对应文件中加入以下原文规则：
+
+```text
+当文档与现有代码存在冲突时，应遵循代码的写法，并在最后回复中列出发现的所有冲突点。
+```
+
+前提：确认写进哪个文件。Claude Code 读 `CLAUDE.md`；若规则写在 `AGENTS.md`，需在 `CLAUDE.md` 里加 `@AGENTS.md` 或用对应机制引入。预期：规则随每次任务生效。
+3. 让代理执行一个涉及既有代码修改的小任务，并要求它照常给出最终回复。前提：任务附近存在已知的文档与代码不一致点，便于检查规则是否生效。预期：能看到它是否按代码改、是否列出冲突。
+4. 检查最终回复是否列出冲突点，并核对代码修改是否以现有代码为准，而不是按旧文档反向改动。预期：冲突被显式列出，改动遵循现有行为。
+5. 若误报太多，先收紧规则措辞或限定“文档”的范围（例如只指 README/设计文档，不含代码注释），再试一次。预期：噪声下降。
+6. 小范围试用：选一个有已知“文档落后于代码”问题的小仓库，加规则，做一个小型代码修改任务；与未加规则的同类任务对比返工次数。原文未给试用时长与量化指标。
+
+与做法 D/E 的差异：D 是笔记/记忆 vs git/GitHub/本机事实，靠脚本采集；E 是用户当下说法 vs 知识库记录，靠常驻指令 + 人裁决；I 是项目文档 vs 现有代码，靠常驻指令 + 最终回复列出冲突。三者可叠加：I 可以写进 A 的 `CLAUDE.md`，也可以和 E 的规则放在一起，但不要把 I 当成 D 的事实核对替代——代码也可能有 bug，“以代码为准”只是减少按旧文档改坏的概率，不是证明代码正确。
+
 ## 怎么判断变好了
 
 最小试用方式（做法 A-1/A-2、B、C、D、F、H）：
@@ -595,6 +619,12 @@ cd panel && npm install && npm run dev
 3. Claude Code 侧装插件：`/plugin marketplace add Umair/stalemap`、`/plugin install stalemap@stalemap`；观察 SessionStart 注入和编辑后 guard 是否触发。
 4. 用同一模型、同一批任务、同一项目做对照：一组不装 stalemap，一组装 stalemap；记录会话通过率、首次编辑使用过期 API 的比例、单会话成本与时长。原文未给试用时长；先小范围试，不要直接 adopt。
 
+最小试用方式（做法 I，一次任务到 2—3 个同类任务）：
+1. 选一个有已知“文档落后于代码”问题的小仓库。
+2. 把规则加入 `CLAUDE.md` 或 `AGENTS.md`。
+3. 让代理完成一个小型代码修改任务，要求照常给出最终回复。
+4. 与未加规则前的同类任务对比：是否列出冲突点、是否按现有代码改、返工是否减少。
+
 观察指标（做法 A-1/A-2、B）：
 - 重复交代率：同一背景信息需要重新告诉 AI 的次数是否下降。
 - 召回成功率：跨会话提问“上次关于 X 的结论是什么”，能否从 `memory`、`notes` 或 `people` 中正确取回；错答或答不上来的比例。
@@ -612,7 +642,7 @@ cd panel && npm install && npm run dev
 | 工具调用次数 | 9.9 | 4.6 |
 | API 成本 | $0.202 | $0.208（基本不变） |
 
-逐题数据：\"How is X connected to Y?\" 122s → 18s；\"What topic clusters do I have?\" 117s → 21s；\"Which pages hold my vault together?\" 61s → 12s；\"What breaks if I delete X?\" 26s → 24s（这一题几乎无改善）。收益集中在结构性/图关系类问题上，删除影响类问题别期待明显改善。
+逐题数据："How is X connected to Y?" 122s → 18s；"What topic clusters do I have?" 117s → 21s；"Which pages hold my vault together?" 61s → 12s；"What breaks if I delete X?" 26s → 24s（这一题几乎无改善）。收益集中在结构性/图关系类问题上，删除影响类问题别期待明显改善。
 
 观察指标（做法 D）：
 - 脚本是否以 `GROUND TRUTH: complete` 结束；出现 UNKNOWN 或退出码 2 时，当作没通过。
@@ -652,7 +682,14 @@ cd panel && npm install && npm run dev
 - 运维成本：SQLite 单节点是否够用；什么时候需要 Redis/PostgreSQL；Panel 死信和重试是否可处理。
 - 许可证：部门数、成员数是否仍在免费范围；超过 1 个部门、10 个成员的生产使用要付费。
 
-试多久：做法 A-1/A-2、B 用 1～2 周。如果重复交代率与召回成功率没有可观察的改善，或噪声清理成本高于收益，则放弃这条做法，退回到把 Claude Code 当作单次会话工具使用。做法 A-2 的原文只给到 `people/`，没有提示词和效果数据；连续 2—3 个真实任务中重复解释和纠正次数下降，且没有新增隐私或权限问题，再考虑扩大；下降不明显就保留为 study。做法 C 作者自评 early、样本 n=2，先小范围试再谈全面采用。做法 D 本次材料只到 README，脚本实现与效果未经验证，先小范围试，再谈全面采用。做法 E 一次就能跑完（5 个任务），判定标准是：冲突召回高、误报低、编辑可采纳率高，且额外成本可接受，就把这组指令固化为默认配置，再考虑推广到团队；如果误报频繁或给的编辑基本用不上，降级为“只在明确要求核对大脑时才启用”。做法 F 先单机、单仓库、只接一个 agent 跑 1～2 周；收益说法只有项目自述，没有独立验证，若“新会话是否还要重新交代背景”没有改善，就不要推到主力环境或团队。做法 G 原文未给试用时长；先在一个 JS/TS 单 package.json 项目小范围试，用会话通过率、首次编辑使用过期 API 的比例、单会话成本与时长判断是否继续，不要直接 adopt。做法 H 先用 2—3 次真实会话验证接线和召回，再给 1～2 周观察重复交代率；README 没有效果数据，先不要扩到多团队、多副本。
+观察指标（做法 I）：
+- 最终回复是否明确列出发现的文档与代码冲突点。
+- 代码修改是否遵循现有代码行为，而不是按旧文档改坏。
+- 与未加规则前的同类任务相比，因过时文档导致的返工是否减少。
+- 误报冲突数：把本来不矛盾的内容标成冲突的次数——太高说明规则需要收紧。
+- 成本：最终回复变长带来的阅读与核对开销。
+
+试多久：做法 A-1/A-2、B 用 1～2 周。如果重复交代率与召回成功率没有可观察的改善，或噪声清理成本高于收益，则放弃这条做法，退回到把 Claude Code 当作单次会话工具使用。做法 A-2 的原文只给到 `people/`，没有提示词和效果数据；连续 2—3 个真实任务中重复解释和纠正次数下降，且没有新增隐私或权限问题，再考虑扩大；下降不明显就保留为 study。做法 C 作者自评 early、样本 n=2，先小范围试再谈全面采用。做法 D 本次材料只到 README，脚本实现与效果未经验证，先小范围试，再谈全面采用。做法 E 一次就能跑完（5 个任务），判定标准是：冲突召回高、误报低、编辑可采纳率高，且额外成本可接受，就把这组指令固化为默认配置，再考虑推广到团队；如果误报频繁或给的编辑基本用不上，降级为“只在明确要求核对大脑时才启用”。做法 F 先单机、单仓库、只接一个 agent 跑 1～2 周；收益说法只有项目自述，没有独立验证，若“新会话是否还要重新交代背景”没有改善，就不要推到主力环境或团队。做法 G 原文未给试用时长；先在一个 JS/TS 单 package.json 项目小范围试，用会话通过率、首次编辑使用过期 API 的比例、单会话成本与时长判断是否继续，不要直接 adopt。做法 H 先用 2—3 次真实会话验证接线和召回，再给 1～2 周观察重复交代率；README 没有效果数据，先不要扩到多团队、多副本。做法 I 一次任务就能看出是否列出冲突；要判断返工是否下降，至少跑 2—3 个同类任务；原文没有量化指标和试用时长。
 
 ## 常见坑
 
@@ -715,6 +752,12 @@ cd panel && npm install && npm run dev
 - 做法 H 的 `/health` 的 `stores.vectorIndex` 可能显示 `none`、`brute-force` 等；先确认它符合你的预期，再判断召回质量。
 - 做法 H 的 `amem` 在服务器不可达时会排队，但排队不是无限可靠；远程部署要按 `docs/REMOTE-CLIENTS.md` 处理 TLS、发 key 和客户端升级。
 - 做法 H 的 `agy` 作为 CLI 后端时，prompt 作为参数传入，受 Linux 单参数 128 KiB 限制，且需要 CPU 支持 AES-NI；长 prompt 要换后端。
+- 做法 I 的原文只有一条规则和一句目的说明，且在“据说Claude”处截断，无法确认后续解释；不要把它当作完整规范。
+- 做法 I 的“以代码为准”是一个前提假设：代码本身可能有 bug 或正处于重构中；按代码改之前仍要人复核，别把规则当成“代码永远正确”。
+- 规则写进 `AGENTS.md` 而 agent 只读 `CLAUDE.md` 时不会生效；要么写进 `CLAUDE.md`，要么用 `@AGENTS.md` 引入。
+- 冲突点全列进最终回复会增加噪声；误报频繁时先收紧“文档”的范围和“冲突”的判定，而不是继续加规则。
+- 只写规则不做小任务验证，无法知道它是否生效；至少用一个已知不一致点试一次。
+- 做法 I 不能替代做法 D 的事实核对：代码和文档都可能过时，git/机器事实仍要脚本核对。
 
 ## 证据与来源
 
@@ -726,10 +769,11 @@ cd panel && npm install && npm run dev
 - akitaonrails/ai-memory 侧：来源是该仓库 README（MIT，Rust 单二进制）。README 给出 capture→consolidate→recall→handoff 管线、Linux/macOS 两条安装命令、Windows PowerShell、Arch/Fedora 包管理器、macOS 菜单栏 App、Docker quick-start、`ai-memory run` 启动方式；并称默认路径零 LLM 调用，捕获、搜索、handoff 都不需要 API key，真相源是 git 托管的普通 `.md` 文件，数据库只是可随时从文件重建的派生索引，跨 agent 交接是显式的、带类型的 claim-once 协议。收益说法（跨二十多个 harness、跨项目、跨机器、团队共享、多用户认证、审计日志不是付费档、纯 Markdown、静默捕获、无 LLM 记忆老化、可选 LLM dream、写入上限约 700/s）目前只有项目自述，没有独立验证。调研结论明确建议：先在单机、单仓库、只接一个 agent（Claude Code 或 Codex）的情况下按 README 的两条命令装上并跑一到两周，用“新会话是否还要重新交代背景”来判断是否值得留下。
 - Umair/stalemap 侧：来源是该仓库 README。调研报告称预注册盲测 held-out v4：66 个任务，按种子从 33 个流行 npm 包在某三个月窗口内发布的所有 breaking / deprecation / behavior change 中抽取；每任务每臂每模式每模型 3 个 session；构建在任何 v4 结果产生前冻结为 `freeze/v4-final`；只有两层 bootstrap（先任务后运行）求出的区间不含 0 才算胜。调研结论给出 89% vs 无辅助 68% vs 普通 tsc 钩子 73%，但报告正文在“通过率：”处截断，具体表格无法引用。只支持 JS/TS 与单个 package.json；只测了两个 Claude 模型且为作者自测。Cursor/Codex/OpenCode 的 `setup --agent` 原文明确说尚未在真实安装中验证过；Cursor 目前不把 `postToolUse` hook 的上下文传给模型，需 stop-hook 兜底。数据边界：包名与版本发往 npm registry、GitHub、models.dev；源码不上传；`--llm` / `--examples` / `--guides` 会把类型 diff、release note 片段、指南文本与导入的 API 名发往 Claude（不含代码）；`probe` 提示词发给你选的 provider；`$STALEMAP_PRECOMPUTED_URL` 只发包名不发版本。
 - hsuanshao/AgentMemory 侧：来源是该仓库 README。它描述了一个自托管、面向团队的长期记忆服务：捕获每次对话，后台蒸馏为 L1 facts、L2 scenes、L3 persona，并在每次提示前召回；L0 原始对话存 SQLite/FTS5，L1 做上下文分段与 persona/episodic/instruction 抽取，L2 按 team+agent 共享 scenes，L3 汇总为 `persona.md`；召回用 BM25 + 向量 + RRF；权限结构是部门→团队→成员/agent，成员对话和事实私有，agent 的 scenes/persona 由使用该 agent 的人共享。README 给出交互式安装、非交互安装、手动 Docker 部署、Panel 建用户/团队/agent、`amem` 客户端文档入口、OpenAI 兼容或本地 CLI 的 LLM 后端、SQLite/PostgreSQL/Redis 选择、默认触发参数、`/v3/recall` 输出结构、Panel Monitor、`/health`、升级/卸载和本地测试命令。材料明确说明：README 没有在正文给出 `amem` 安装命令，只指向 `docs/REMOTE-CLIENTS.md`；没有效果数据；0.4.0 起服务端为 BUSL-1.1，免费范围是评估、个人、非营利，以及最多 1 个部门、10 个成员的组织。调研结论建议：先以单团队、SQLite、本地 CLI 或 OpenAI 兼容端点做最小部署，接入一个客户端，用 2—3 次真实会话验证跨会话召回能否减少重复交代。
-- 证据强度提示：做法 A-1、B 只有步骤清单和传播数据，没有效果验证；做法 A-2 只有目录设置和传播数据，原文截断且无效果验证；做法 C 有对照实验数据，但样本极小且作者自评 early；做法 D 只有 README、样例输出和模板自身 CI，缺少独立效果验证；做法 E 只有一条推文和三条指令要点，推广、成本和风险均无数据；做法 F 只有 README 和可复制命令，收益只有项目自述，缺少独立效果验证；做法 G 有预注册盲测设计，但只支持 JS/TS、只测两个 Claude 模型且为作者自测，报告正文在通过率处截断，缺少独立复现；做法 H 只有 README，缺少效果数据和独立复现，且许可证对团队规模有约束。所有数据都不能当作“这套做法一定有效”的证明。
-- 作者主张（缺少支撑）：建独立文件夹、接入 GWS CLI 打通 Gmail/日历/云端硬盘、单开 `memory` 子目录、在 `CLAUDE.md` 写死记忆规则；second-brain 目录变体的“可直接复制的第二大脑设置”；obsidian-wiki 的“知识是编译而非堆积”、manifest 增量摄入、每条主张打标 extracted / inferred / ambiguous、查询成本随规模基本不变；workflow 的“主张和事实是两回事”“做完删除不打勾”“UNKNOWN 绝不算通过”“没被点名的东西不算只存在一块盘上”“先建议再等”；@coreyganim 的“不告诉 AI 怎么用第二大脑就毫无用处”“90 秒修复”；ai-memory 的跨 agent/项目/机器、团队共享、无 LLM 记忆老化、写入上限约 700/s 等；stalemap 的“训练截止后依赖 API 变化是 agent 默认不知道自己不知道的工作”“普通 tsc 钩子是 guard 的子集，二者不等价”“probe 测的是被指到时知不知道，比主动发现容易”；AgentMemory 的 L0-L3 分层、团队共享 scenes/persona、BM25 + 向量 + RRF、默认触发参数和“可服务多种客户端”等。
-- 调研报告给出的建议（不是原文）：规则示例“把每次会话中确认的长期有效信息追加到 `memory` 下的文件中；开始新任务前先读取 `memory`”；先只开一项权限跑通；重复交代率、召回成功率、记忆文件质量、越权与泄漏、对照组等指标；1～2 周试用期；用同一模型、同一 vault、同一批问题做对照验证；在长期项目上小范围试做法 D；做法 E 的提示词草稿、5 个已知答案任务的试用方式，以及读取命中率、冲突召回、误报数、编辑可采纳率、成本五项指标，先只挂在自己日常任务上，不要推给团队或改公司级知识库；做法 F 先单机、单仓库、只接一个 agent 跑 1～2 周，用“新会话是否还要重新交代背景”判断是否留下；做法 G 先 `npx stalemap` 预览、再 `npx stalemap sync` 写入、CI 加 `npx stalemap check`、Claude Code 侧装插件，先在一个 JS/TS 单 package.json 项目小范围试，不要直接 adopt；做法 H 先单团队、SQLite、本地 CLI 或 OpenAI 兼容端点、一个客户端，2—3 次真实会话验证，不要直接推到多团队或多副本；做法 A-2 先选一个最近反复解释过的真实项目，建 `second-brain/notes` 与 `second-brain/people`，用同一任务做“无目录上下文 vs 有目录上下文”对照，连续 2—3 个真实任务观察重复解释和纠正次数。
-- 仅为推测的部分：second-brain 原有第 4 步规则的目标位置推测指向 `memory` 目录；原文未界定“重要细节”；未说明记忆召回机制、GWS CLI 授权范围、凭证存储与撤销方式；second-brain 目录变体的第三个目录、`people/` 内容与更新规则、提示词和效果均缺失；obsidian-wiki 的 Cursor / Hermes / OpenClaw 支持细节也尚未证实；workflow 的脚本实现与效果未验证；做法 E 中“具体在哪个入口写常驻指令”原文只说要“添加一组自定义指令”，落点需按你手头的工具确认；做法 F 的 `ai-memory run --f` 处原文截断，Docker quick-start 未包含认证步骤；做法 G 的通过率表格在报告正文中截断，无法核对每个任务与每种模式的具体结果；做法 H 的 `amem` 安装命令、TLS 细节和客户端升级流程未在 README 正文展开，需查 `docs/REMOTE-CLIENTS.md`；AgentMemory 的效果数据缺失，默认触发参数是否适合你的团队需要实测。
+- @ai_database 侧：来源是一条推文/调研报告，建议在 `CLAUDE.md` 和 `AGENTS.md` 中预先加入一条规则：当文档与现有代码冲突时以代码为准，并在最后回复中列出所有冲突点。原文在“据说Claude”处截断，能确认的只有这条规则及其简要理由；没有数据、案例、前后对比或具体实验，推文互动数据只能说明传播情况。适用条件是项目同时维护文档和代码且代理会读取 `CLAUDE.md`/`AGENTS.md`；对非代码工作或没有这类指令文件的项目不能直接套用。
+- 证据强度提示：做法 A-1、B 只有步骤清单和传播数据，没有效果验证；做法 A-2 只有目录设置和传播数据，原文截断且无效果验证；做法 C 有对照实验数据，但样本极小且作者自评 early；做法 D 只有 README、样例输出和模板自身 CI，缺少独立效果验证；做法 E 只有一条推文和三条指令要点，推广、成本和风险均无数据；做法 F 只有 README 和可复制命令，收益只有项目自述，缺少独立效果验证；做法 G 有预注册盲测设计，但只支持 JS/TS、只测两个 Claude 模型且为作者自测，报告正文在通过率处截断，缺少独立复现；做法 H 只有 README，缺少效果数据和独立复现，且许可证对团队规模有约束；做法 I 只有一条规则和一句目的说明，原文截断且无效果验证。所有数据都不能当作“这套做法一定有效”的证明。
+- 作者主张（缺少支撑）：建独立文件夹、接入 GWS CLI 打通 Gmail/日历/云端硬盘、单开 `memory` 子目录、在 `CLAUDE.md` 写死记忆规则；second-brain 目录变体的“可直接复制的第二大脑设置”；obsidian-wiki 的“知识是编译而非堆积”、manifest 增量摄入、每条主张打标 extracted / inferred / ambiguous、查询成本随规模基本不变；workflow 的“主张和事实是两回事”“做完删除不打勾”“UNKNOWN 绝不算通过”“没被点名的东西不算只存在一块盘上”“先建议再等”；@coreyganim 的“不告诉 AI 怎么用第二大脑就毫无用处”“90 秒修复”；ai-memory 的跨 agent/项目/机器、团队共享、无 LLM 记忆老化、写入上限约 700/s 等；stalemap 的“训练截止后依赖 API 变化是 agent 默认不知道自己不知道的工作”“普通 tsc 钩子是 guard 的子集，二者不等价”“probe 测的是被指到时知不知道，比主动发现容易”；AgentMemory 的 L0-L3 分层、团队共享 scenes/persona、BM25 + 向量 + RRF、默认触发参数和“可服务多种客户端”等；@ai_database 的“文档与代码冲突时以代码为准”能减少代理按过时文档改代码。
+- 调研报告给出的建议（不是原文）：规则示例“把每次会话中确认的长期有效信息追加到 `memory` 下的文件中；开始新任务前先读取 `memory`”；先只开一项权限跑通；重复交代率、召回成功率、记忆文件质量、越权与泄漏、对照组等指标；1～2 周试用期；用同一模型、同一 vault、同一批问题做对照验证；在长期项目上小范围试做法 D；做法 E 的提示词草稿、5 个已知答案任务的试用方式，以及读取命中率、冲突召回、误报数、编辑可采纳率、成本五项指标，先只挂在自己日常任务上，不要推给团队或改公司级知识库；做法 F 先单机、单仓库、只接一个 agent 跑 1～2 周，用“新会话是否还要重新交代背景”判断是否留下；做法 G 先 `npx stalemap` 预览、再 `npx stalemap sync` 写入、CI 加 `npx stalemap check`、Claude Code 侧装插件，先在一个 JS/TS 单 package.json 项目小范围试，不要直接 adopt；做法 H 先单团队、SQLite、本地 CLI 或 OpenAI 兼容端点、一个客户端，2—3 次真实会话验证，不要直接推到多团队或多副本；做法 A-2 先选一个最近反复解释过的真实项目，建 `second-brain/notes` 与 `second-brain/people`，用同一任务做“无目录上下文 vs 有目录上下文”对照，连续 2—3 个真实任务观察重复解释和纠正次数；做法 I 把规则原样加入 `CLAUDE.md`/`AGENTS.md`，在一个存在文档与代码不一致的代码库中小范围试用，暂不宜直接采纳为通用规范。
+- 仅为推测的部分：second-brain 原有第 4 步规则的目标位置推测指向 `memory` 目录；原文未界定“重要细节”；未说明记忆召回机制、GWS CLI 授权范围、凭证存储与撤销方式；second-brain 目录变体的第三个目录、`people/` 内容与更新规则、提示词和效果均缺失；obsidian-wiki 的 Cursor / Hermes / OpenClaw 支持细节也尚未证实；workflow 的脚本实现与效果未验证；做法 E 中“具体在哪个入口写常驻指令”原文只说要“添加一组自定义指令”，落点需按你手头的工具确认；做法 F 的 `ai-memory run --f` 处原文截断，Docker quick-start 未包含认证步骤；做法 G 的通过率表格在报告正文中截断，无法核对每个任务与每种模式的具体结果；做法 H 的 `amem` 安装命令、TLS 细节和客户端升级流程未在 README 正文展开，需查 `docs/REMOTE-CLIENTS.md`；AgentMemory 的效果数据缺失，默认触发参数是否适合你的团队需要实测；做法 I 的“据说Claude”之后的内容缺失，“以代码为准”在代码本身有错时的边界原文未讨论。
 
 ## 依据的调研
 
@@ -741,3 +785,4 @@ cd panel && npm install && npm run dev
 - [Umair/stalemap](../research/radar/2026-10-21/5613-umair-stalemap.md)：值得一试，在 JS/TS 项目里小范围试用：先 `npx stalemap` 预览、再 `npx stalemap sync` 把变更笔记写进 AGENTS.md/CLAUDE.md，CI 加 `npx stalemap check`，Claude Code 侧装插件拿到 SessionStart 注入和编辑后 guard。理由是原文给出了可直接复制的安装、配置、CI 与 MCP 步骤，并有预注册盲测数据（89% vs 无辅助 68% vs 普通 tsc 钩子 73%）；但仅支持 JS/TS 与单个 package.json、只测了两个 Claude 模型且为作者自测，所以先试不直接 adopt。
 - [hsuanshao/AgentMemory](../research/radar/2026-10-23/6218-hsuanshao-agentmemory.md)：值得一试，建议先以单团队、SQLite、本地 CLI 或 OpenAI 兼容端点做最小部署，接入一个客户端，用 2—3 次真实会话验证跨会话召回能否减少重复交代；README 给出了可照做的安装、配置和触发参数，但缺少效果数据，且 BUSL 对超过 1 个部门、10 人的生产使用收费。
 - [@kinderlayer: 这太他妈的牛逼了。](../research/radar/2026-10-24/6540-item.md)：值得一试，建议小范围试：按原文先搭 second-brain/notes 与 people/，在 Claude Code 中用真实项目材料验证能否减少重复解释；但原文截断，第三个目录和完整用法缺失，不能直接 adopt。
+- [@ai_database: 研究人员表示，建议在CLAUDE.md和AGENTS.md中预先添加以下一句话。](../research/radar/2026-10-25/6845-claude-md-agents-md.md)：值得一试，建议把这句话原样加入项目的 CLAUDE.md/AGENTS.md，并在一个存在文档与代码不一致的代码库中小范围试用；它是可直接复制的冲突处理规则，但原文只有一句建议且内容被截断，缺少效果证据，暂不宜直接采纳为通用规范。
