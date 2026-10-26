@@ -1,14 +1,14 @@
-# 给 AI 的写操作和外部执行装上可审批、可回滚、可拒绝的边界
+# 在真实账户、仓库和磁盘上给 AI 放权：先只读测量，再逐条授权
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：让 AI 在审计、改代码、调外部服务和跨机器执行时，不拿到超出任务所需的权限，并对写操作保留审批、回滚与可核验记录。
-> 先试这一步：先选一个不重要的项目或账号，只读跑一轮；再把一次写操作改成“出草案→人工核准→存还原点→沙箱执行”；如果你在 Windows 11，用 MXC 的 Permissive 模式跑一个无害任务并看活动报告。
-> 最近修订：2026-10-11
+> 解决的问题：AI 一旦能改账户、写代码或删文件，错误就从“说错话”变成真金白银和不可逆损失；本手册给出一套可照做的权限边界与审批流程。
+> 先试这一步：挑一个可回滚的小场景（无关紧要的仓库或非关键机器的磁盘），在必须人工确认工具调用的模式下，让 AI 只做测量和分层报告，不批准任何改动。
+> 最近修订：2026-10-26
 
 ## 解决什么问题
 
-付费媒体账户、外部服务账号、本地代码仓库都是真金白银或真实代码的操作面。AI 只读做审计、计划、创意、报告没问题；一旦能直接改账户、调外部服务或写代码，风险升级。本手册给六套做法：A 付费媒体账户默认只读、写操作逐条过六项门控；B 默认零权限、按任务只引入单个资源、有副作用动作先本地模拟再批量批准；C 本地仓库用 Claude 只读规划 + Codex 工作卡核准 + 沙箱执行 + git 还原点；D 在 Apple silicon Mac 上用 Strands Box 验证默认拒绝、凭证注入、OTLP 决策记录；E 云端 Claude Code 通过反向 SSH 隧道落到 Windows 本机执行，靠端口最小放行与凭据管理夹住边界；F 用 MXC 做沙箱化代码执行，并在 Windows 11 上用 Permissive→Learning→Enforcement 三模式为 agent 收敛权限边界。
+付费媒体账户、外部服务账号、本地代码仓库、沙箱执行环境、跨机器执行链路、磁盘空间都是真金白银、真实代码或不可逆删除的操作面。AI 只读做审计、计划、创意、报告没问题；一旦能直接改账户、调外部服务、写代码或删文件，风险升级。本手册给七套做法：A 付费媒体账户默认只读、写操作逐条过六项门控；B 默认零权限、按任务只引入单个资源、有副作用动作先本地模拟再批量批准；C 本地仓库用 Claude 只读规划 + Codex 工作卡核准 + 沙箱执行 + git 还原点；D 在 Apple silicon Mac 上用 Strands Box 验证默认拒绝、凭证注入、OTLP 决策记录；E 云端 Claude Code 通过反向 SSH 隧道落到 Windows 本机执行，靠端口最小放行与凭据管理夹住边界；F 用 MXC 做沙箱化代码执行，并在 Windows 11 上用 Permissive→Learning→Enforcement 三模式为 agent 收敛权限边界；G 磁盘清理先测量、出三层报告、人工批准后逐步删除，全程在需确认的工具调用模式下。
 
 ## 适用与不适用
 
@@ -22,6 +22,7 @@
 - Windows 10/11 x64 本机 + 自己控制的 Linux 服务器（x86_64，推荐 Ubuntu，已装 Docker），想让云端 Claude Code 在本机读写文件并执行命令。
 - Windows 11，想用 MXC 把自主编码/操作 agent 放进策略驱动执行层，先观测再收紧权限边界；低延迟负载先用进程容器，敏感数据或不可信代码用更强隔离。
 - 需要把执行能力嵌入应用，运行 model output、plugins、tools；Node SDK 最小试用在 Linux/macOS 最省事。
+- 需要清理磁盘空间，能先做可信备份，并愿意在“工具调用需要你确认”的模式下运行通用编码 agent（Claude Code、Cursor、Codex 等）。
 
 **不适用：**
 
@@ -40,6 +41,8 @@
 - 想用 `--audit` 给不可信代码补权限；依赖 experimental 后端作为稳定生产。
 - 源码构建环境不满足：Rust 1.93、Node.js 24+。
 - MXC：原文没有一行配置示例、字段名、SDK 调用或命令，必须回 SDK 仓库补全；会话容器与 WSL 容器仅 Windows 11；MicroVM 实验性；Intune 与 Entra agent 身份区分尚不可用。
+- 不能备份、不能接受删除不可逆、想用自动批准或无人值守模式跑磁盘清理，或以为删除会进回收站。
+- 需要跨平台磁盘清理的实测数据：材料只有 macOS 一次运行。
 
 ## 前置条件
 
@@ -49,10 +52,11 @@
 - Strands Box：Apple silicon Mac、macOS 15+、Homebrew Node.js 22.21+、`us-west-2` Bedrock Claude Opus 5；下载脚本校验 checksum 到 `./box-core`；源码构建用 Cargo workspace；写策略细节读 `docs/user/getting-started.md`、`security.md`、`policy.md`。
 - cc-desk-tunnel：一台有公网 IP 或域名的 Linux 服务器（x86_64，推荐 Ubuntu，已装 Docker）+ Windows 10/11 x64；记录服务地址、证书指纹、服务凭据；防火墙放行 8787 和 7000；客户端安装包自带 PowerShell 7、OpenSSH、frpc，无代码签名。
 - MXC：Windows 11（会话容器、WSL 容器仅 Windows 11；进程容器支持 Windows 11/macOS/Linux）；从 MXC 仓库获取 SDK、configuration schema、文档与 samples；先只试进程容器；源码构建 Rust 1.93、Node.js 24+。
+- ai-disk-cleanup：通用编码 agent（Claude Code、Cursor、Codex 等）能读文件、跑 shell；必须在需要人工确认工具调用的模式（Claude Code 普通权限提示、Cursor ask mode）；先做可信备份；从仓库取 `prompts/disk-cleanup.<语言>.md`，把 `---` 行以下内容贴进 agent；语言版本决定汇报语言，shell 命令在各语言版本里保持英文。
 
 ## 操作步骤
 
-下面分成六套做法。A 付费媒体账户；B 可迁移的权限与审批模式；C 本地代码仓库双 AI 协作；D Strands Box 底层沙箱验证；E 跨机器执行位置边界；F MXC 代码执行沙箱 + Windows 11 三模式权限收敛。A/B/C/D/F 不冲突，E 不是沙箱，只宜自用小范围试。
+下面分成七套做法。A 付费媒体账户；B 可迁移的权限与审批模式；C 本地代码仓库双 AI 协作；D Strands Box 底层沙箱验证；E 跨机器执行位置边界；F MXC 代码执行沙箱 + Windows 11 三模式权限收敛；G 磁盘空间审计与分层批准清理。A/B/C/D/F 不冲突，E 不是沙箱，只宜自用小范围试；G 删除不可逆，先只出报告。
 
 ### 做法 A：付费媒体账户（claude-ads）——默认只读、写操作逐条过门控
 
@@ -306,7 +310,30 @@ Learning 下边界仍生效，未授予操作被阻断并写入 JSON 活动报�
 59. 接入方式：用你常用的编码 agent 去集成 MXC SDK 并起草初版策略，然后 review、测试、迭代控制项。组织侧可叠加管理策略（Intune 策略即将可用于管理 Windows 11 上 MXC 集成 agent 的进程容器，控制 Windows 如何评估 agent 发出的容器创建请求以及容器强制的资源边界），同一个 agent 能在不同企业边界内运行，不用把组织安全姿态写进应用里。
 60. 最小试用（Windows 11）：从 MXC 仓库拉 SDK 与样例，确认本机版本与后端可用性，先只试进程容器；选一个无害任务，例如让编码 agent 在本地仓库改一个 README 并跑一次测试；第一轮用 Permissive 跑同一任务，拿 JSON 活动报告，看清实际碰了哪些文件、哪些网络目标；按报告写最小权限策略（仓库读写、必要工具/命令，其余不授予），切 Learning 复跑；处理每次拒绝，确认确实需要还是可换安全做法，只补前者，重复到拒绝清单收敛；切 Enforcement 跑同一任务，作为生产态基线；再故意让 agent 触碰明确不该碰的资源（用户文档目录或外部网络地址），确认被拦下且 agent 显式报告失败，而不是静默失败。
 
-**怎么选（做法 A / B / C / D / E / F1 / F2）：**
+### 做法 G：磁盘空间审计（ai-disk-cleanup）——先测量、三层报告、人工批准后逐步删除
+
+61. 前提：先做一份你信得过的备份。README 明确：这些命令不进回收站，删除不可逆，批 Tier 2 / Tier 3 之前尤其要先备份。必须在“工具调用需要你确认”的模式下运行：Claude Code 的普通权限提示、Cursor 的 ask mode 等；不要用 auto-approve / “yolo” 模式。提示词只是“要求”批准，真正保证暂停的是你的 agent 权限模式；无人值守的 agent 可能在你看分层表之前就删完了。自己心里有数：它报告的大小、以及它判断“能否再生”都可能错，它只是从 `du` 输出推断。
+62. 选语言，打开对应文件，把 `---` 行以下的全部内容粘贴进 agent：英文（基准）`prompts/disk-cleanup.en.md`；简体中文 `prompts/disk-cleanup.zh-CN.md`；其余 `prompts/disk-cleanup.tr.md`、`es`、`ru`、`pt-BR`、`ja`。提示词的语言是有功能的：它同时决定 agent 用什么语言向你汇报；shell 命令在所有语言版本里都保持英文。
+63. agent 会先探测操作系统，之后只用该平台的命令和路径。
+64. 测量，不要猜：自顶向下走到真正的元凶，而不是停在它的父目录。README 举的例子包括：`Docker.raw` 显示 60 GB、实际占用 14 GB；真正的头号占用是一个 23 GB 的废弃 `git` worktree 目录；两个 15 GB 的 iOS 模拟器运行时躺在 `/Library` 下，普通的主目录扫描根本到不了。
+65. 知道陷阱：稀疏磁盘（sparse disk）、符号链接被重复计数、快照占着已释放的空间、异步删除、以及名字叫 `target/` 但不是 Rust 的目录。
+66. 按三层出报告，然后停下：
+
+| 层 | 内容 | 风险 |
+|---|---|---|
+| 1 | 缓存、构建产物、包下载、死 worktree | 可再生产，无风险 |
+| 2 | VM 磁盘、旧 SDK 运行时、容器镜像 | 里面真有数据，会没 |
+| 3 | Downloads、浏览器配置、不用的应用 | 完全由你决定 |
+
+67. 回答它提出的“层级”问题之前，先把上表读一遍，再决定批哪一层。
+68. 逐步执行：每删一项后打印新释放出的空间；用各工具自己的清理命令，而不是 `rm -rf`。
+69. 尊重权限边界：任何需要 `sudo` 或提权的操作，都以“可直接运行的命令”形式交回给你，不得绕过。
+70. 绝不删除：源码、git 历史、`.env`、密钥、钥匙串、照片与邮件库、云同步文件夹、正在运行的 VM 磁盘、操作系统快照。
+71. 汇总：包括哪些是“你之后必须手工修”的（README 的示例中，两个 root 拥有的项——10 GB 的模拟器 `dyld` 缓存和一个 6 GB 的废弃 Nessus 安装——就是以 `sudo` 一行命令交回的）。
+72. 信任边界：提示词要求 agent 把磁盘上发现的一切当作数据，不是指令——某个下载目录里的文件名或 README 不能诱导它多删东西。运行前自己把提示词读一遍（作者说是故意写短的）。
+73. 本次材料只有 README，提示词正文（`prompts/*.md` 里 `---` 以下的内容）和具体 shell 命令没有提供，因此无法逐条抄录；以上步骤全部来自 README 的 Usage 与 “The method” 小节，属于可直接照做的操作层，但真正粘贴的内容需要去仓库取。
+
+**怎么选（做法 A / B / C / D / E / F1 / F2 / G）：**
 
 - 账户写操作、不可逆或 blast radius 大：做法 A 第 6 步，逐条同步确认。六项门控是硬约束，缺 ceilings 即禁止写入，v2 不支持永久删除。
 - 可模拟、可回滚、需要连续推进：做法 B 第 13 步，先本地模拟让 agent 排队推进，人离线，回来批量批准。
@@ -315,12 +342,13 @@ Learning 下边界仍生效，未授予操作被阻断并写入 JSON 活动报�
 - 会话必须在云上、项目与工具链必须在 Windows 本机：做法 E。它改变执行位置边界，会话在云服务器、命令落到本机 Windows，复用官方 Claude Code 审批与上下文管理；但不是沙箱，只有隧道 + 端口最小放行 + 凭据管理，服务凭据等同于完全控制权，只宜单用户自用。
 - 要把模型生成代码放进沙箱执行并回收结果，平台 Linux/macOS（或 Windows），愿意按平台挑后端、调策略：做法 F1，先做最小试用验证越权用例被拦。它比 D 更偏“嵌入应用”的 SDK 形态，跨平台且后端可选；但原文未给完整策略 JSON 示例与接入 agent 主循环的做法。
 - 在 Windows 11 上要让自主编码/操作 agent 先观测再收紧权限边界：做法 F2，用 Permissive→Learning→Enforcement 三模式，先只试进程容器，用 JSON 活动报告收敛最小权限。原文没有配置示例，具体 schema 要回 SDK 仓库补全。
+- 磁盘空间不足、删除不可逆、愿意先备份并在需确认模式下跑：做法 G。第一轮只跑到三层报告为止，不批准任何一项；人工抽查通过后只批 Tier 1，Tier 2/3 先不动。材料只有 macOS 一次运行数据，Linux/Windows 只有声明。
 - 拿不到 Apple silicon 机器或 Bedrock 模型访问：不要强行套用做法 D，退回借鉴默认拒绝、凭证注入、决策记录三件事。
-- 只读审计与报告：做法 A 第 2–4 步；想验证权限链路，再用 B 第 10–13 步，或 C 第 16–18 步，或 D 第 24–31 步，或 E 第 35–44 步，或 F1 第 45–48 步 / F2 第 53–60 步。
+- 只读审计与报告：做法 A 第 2–4 步；想验证权限链路，再用 B 第 10–13 步，或 C 第 16–18 步，或 D 第 24–31 步，或 E 第 35–44 步，或 F1 第 45–48 步 / F2 第 53–60 步，或 G 第 61–67 步（只出报告不批准）。
 
 ## 怎么判断变好了
 
-六份材料都没有给准确率、节省工时、误报/漏报率这类结果数据，所以只能看过程信号：
+七份材料都没有给准确率、节省工时、误报/漏报率这类结果数据，所以只能看过程信号：
 - claude-ads：audit run 的 findings 是否带日期证据和显式置信度；报告是否为版本化 JSON run bundle；证据覆盖率是否 ≥80%（可评级），60–79% 暂定，低于 60% 证据不足；`/ads status` / `/ads next` 是否稳定给出状态和最高优先级阻塞项；写操作是否一直停在草案直到六项门控齐备；发布侧四条硬规则是否守住。
 - Cloudflare OS：从下提示词到可用产出需要中途介入几次；审批能否真的延后批量完成；Gatekeeper 日志能否复盘 agent 对外的每个动作以及限定在哪个具体资源；同一任务换通用编码 agent 对比 token 消耗、失败次数与返工量（原文声称更快更好更省 token，是作者主张）。
 - ai-meeting-room：会议结束是否产出 `meetings/` 里的 markdown 决议；每次核准前是否成功存 git 还原点，夹标旁绿色 `GIT` 是否表示还原点可正常运作，按“回到执行前”能否一键回复；Codex 是否只写工作卡明列文件，越界时是否停下并还原；风险分级是否合理；模型被替换时设定区与会议纪录是否写明，原模型恢复后是否自动换回；唯读讨论失败是否自动换模型重试一次，会改档工单是否不自动重跑、提示按“重试”；`node --test test/*.test.js` 是否通过，环境检查是否显示 `claude` 和 `codex` 版本号。
@@ -328,6 +356,7 @@ Learning 下边界仍生效，未授予操作被阻断并写入 JSON 活动报�
 - cc-desk-tunnel：Claude 能否在客户端成功读写指定路径的本机文件并在本机执行命令看到输出；编译、测试等命令是否确实在 Windows 本机跑；Windows 一侧是否没有放行任何入站端口，本机 SSH 是否只监听回环、随连接启停，试完断开后本机没有常驻服务；服务凭据是否只存在密码管理器里，没有被截图或贴聊天/issue，需要更换时能在服务器执行 `manage.sh token`；证书指纹是否来自你自己登录服务器看到的安装汇总；是否清楚会话记录和 Claude 登录凭据留在服务器上、备份同样含密，并确认服务器所在地在 Anthropic 支持的国家和地区。用量侧只能看客户端额度、重置时间和调用统计。
 - MXC F1：隔离有效性——越权用例（写系统路径、联网、读敏感文件）被拦比例，目标 100%；同时记录合法用例被误拦比例与策略返工次数。可用性——合法工作负载首次运行成功率、修策略后成功率、单次执行延迟与资源占用。集成效果——接进“生成代码 → 隔离执行 → 回结果”循环后，任务端到端成功率、超时/拒绝后的重试次数、人工介入次数。原文没有业务结果指标。
 - MXC F2：Enforced 策略下同一任务成功率与耗时相比不加容器时没有明显退化；活动报告中出现的资源集合 ⊆ 策略声明的集合；Learning→Enforcement 后不再出现“策略本会拒绝”的条目；越界尝试 100% 被阻断，且 agent 显式说明权限不足；策略文本可复核，每条授予都能对应任务的一个具体需要，没有图省事全放开；企业场景下同一条 agent 在更严格组织策略下仍能运行或优雅失败。
+- ai-disk-cleanup：误报数（最关键）——Tier 1 里出现必须保留的文件（源码、`.env`、密钥、云同步目录、运行中的 VM 磁盘）的次数，应为 0；未经批准的操作次数，应为 0；测量准确率——抽查项中“它报的大小”与你自己 `du` 实测一致的条数 / 抽查总数，特别看 `Docker.raw` 这类稀疏文件是否被识别；发现力（相对基线）——与你自己手工 `du | sort` 得出的 top 10 占用项对比，它多找出了几个你没注意到的、且确实可删的项；Tier 1 释放量——实际释放 / 它预估的 Tier 1 可释放量；人工负担——需要你手工处理的残留项数量（如 root 拥有的项）、以及整轮耗时是否显著低于你自己清理。
 
 **最小试用方式：**
 - claude-ads：只挑一个广告平台，`/ads setup` → `/ads audit` → `/ads report` → `/ads next`，全程只读不触碰账户。
@@ -337,8 +366,9 @@ Learning 下边界仍生效，未授予操作被阻断并写入 JSON 活动报�
 - cc-desk-tunnel：限定两台机器、一个非关键项目——云厂商安全组只允许自己的出口 IP 访问 8787 和 7000，服务器跑一次安装脚本（凭据只进密码管理器），Windows 装客户端填三项信息连接，登录 Claude，只添加一个不重要测试项目目录，让 Claude 读取一个本机文件并汇报，再在本机执行一条无害命令，试完断开并确认本机无常驻服务、SSH 监听已停止。
 - MXC F1：Linux 或 macOS + Node SDK，安装 `@microsoft/mxc-sdk`，照第 46 步写脚本，跑三组用例（允许目录读写、被拒路径写入、出网），用 `wxc-exec.exe --debug config.json` 诊断失败原因。
 - MXC F2：一台 Windows 11；从 MXC 仓库拉 SDK 与样例，先只试进程容器；选无害任务（改 README 并跑测试）；Permissive 跑同一任务拿 JSON 活动报告；写最小权限策略；Learning 复跑并处理拒绝；Enforcement 跑作为基线；再故意触碰不该碰的资源确认被拦且显式报告失败。
+- ai-disk-cleanup：选一台非关键机器，或先做完整备份；用 Claude Code 普通权限模式或 Cursor ask mode，粘贴 `prompts/disk-cleanup.zh-CN.md` 里 `---` 以下的内容；第一轮只跑到三层报告为止，不批准任何一项；人工抽查至少 5 条（其中必须包含 1 条“看起来特别大”的项和 1 条 `/Library`、`/var` 之类主目录之外的项），自己跑 `du` 核对实际占用，验证它是否区分了表观大小与实际占用、是否把符号链接重复计数；抽查通过后，第二轮只批准 Tier 1，逐步执行，每步之后自己核对释放量；Tier 2/3 先不动；全程记录它交回的需 `sudo` 命令，自己审一遍再决定跑不跑。
 
-**试多久：** claude-ads 材料在“怎么试”被截断，没有建议时长；Cloudflare OS 原文建议最小试用控制在半天内；ai-meeting-room 原文没有建议时长，建议至少跑通一轮完整会议并故意制造一次越界或失败看还原与重试；Strands Box、cc-desk-tunnel、MXC 原文都没有建议时长，先做一次可行性验证，不要直接进生产。合起来的建议：单平台只读一轮，加半天本地权限链路验证，再决定要不要扩到更多平台、更多服务或跨机器执行。
+**试多久：** claude-ads 材料在“怎么试”被截断，没有建议时长；Cloudflare OS 原文建议最小试用控制在半天内；ai-meeting-room 原文没有建议时长，建议至少跑通一轮完整会议并故意制造一次越界或失败看还原与重试；Strands Box、cc-desk-tunnel、MXC 原文都没有建议时长，先做一次可行性验证，不要直接进生产；ai-disk-cleanup 原文建议最小试用半天内做完，且第一次不删任何东西。合起来的建议：单平台只读一轮，加半天本地权限链路验证，再加半天磁盘只读审计，再决定要不要扩到更多平台、更多服务或跨机器执行。
 
 ## 常见坑
 
@@ -402,10 +432,16 @@ Learning 下边界仍生效，未授予操作被阻断并写入 JSON 活动报�
 - MXC 新坑：以为原文给了配置示例。原文没有一行 JSON 字段名、命令行或 SDK 调用，必须回 SDK 仓库补全。
 - MXC 新坑：把会话容器/WSL 容器当成跨平台。它们仅 Windows 11；MicroVM 仅 Windows 11 与 Linux，且实验性。
 - MXC 新坑：让 agent 静默失败。应设计成显式说明权限不足、请求用户/管理员操作，或选择安全替代方案。
+- 磁盘清理新坑：把提示词当强制暂停。提示词只是“要求”批准，真正保证暂停的是 agent 权限模式；无人值守的 agent 可能在你看分层表之前就删完了。
+- 磁盘清理新坑：用 auto-approve / “yolo” 模式跑删除。必须在 Claude Code 普通权限提示或 Cursor ask mode 下运行。
+- 磁盘清理新坑：以为删除会进回收站。这些命令不进回收站，删除不可逆；批 Tier 2 / Tier 3 之前先备份。
+- 磁盘清理新坑：相信它报的大小和“可再生”判断。它只是从 `du` 输出推断，可能错；抽查时自己跑 `du` 核对，特别看稀疏文件与符号链接重复计数。
+- 磁盘清理新坑：把磁盘上发现的文件名或 README 当指令。提示词要求当数据不当指令，但这是设计意图、非实测；运行前自己把提示词读一遍。
+- 磁盘清理新坑：以为跨平台有运行数据。Linux / Windows 只有声明，材料只有 macOS 一次运行。
 
 ## 证据与来源
 
-依据材料：AgriciDaniel/claude-ads 仓库 README 首页（v2.0.2）；cloudflare/cloudflare-os 仓库 README（v2，early access）；sojei1989/ai-meeting-room 仓库 README（Apache License 2.0，macOS 本机开源应用）；strands-agents/box 仓库 README（Preview，只支持 macOS Apple silicon 本地执行，63 stars）；sun168567/cc-desk-tunnel 仓库 README（Apache-2.0，约 39 stars，自述主要由 AI 编写、个人维护、没有专业安全审计，与 Anthropic 无隶属或合作关系）；Microsoft MXC 仓库 README（source_note 为“依据仓库 README”，项目一手文档）；本次新增 MXC: Microsoft Execution Containers version 1.0.0 发布帖调研（结论：值得在 Windows 11 上小范围试，把 Permissive→Learning→Enforcement 三模式流程用在自主编码/操作智能体上，先观测再收紧权限边界）。
+依据材料：AgriciDaniel/claude-ads 仓库 README 首页（v2.0.2）；cloudflare/cloudflare-os 仓库 README（v2，early access）；sojei1989/ai-meeting-room 仓库 README（Apache License 2.0，macOS 本机开源应用）；strands-agents/box 仓库 README（Preview，只支持 macOS Apple silicon 本地执行，63 stars）；sun168567/cc-desk-tunnel 仓库 README（Apache-2.0，约 39 stars，自述主要由 AI 编写、个人维护、没有专业安全审计，与 Anthropic 无隶属或合作关系）；Microsoft MXC 仓库 README（source_note 为“依据仓库 README”，项目一手文档）；本次新增 MXC: Microsoft Execution Containers version 1.0.0 发布帖调研（结论：值得在 Windows 11 上小范围试，把 Permissive→Learning→Enforcement 三模式流程用在自主编码/操作智能体上，先观测再收紧权限边界）；riza/ai-disk-cleanup 仓库 README（30 stars，只有 README，提示词正文与具体命令未提供）。
 
 可以直接照抄的部分：
 - claude-ads：插件与脚本安装命令、`install.sh` / `install.ps1` / `uninstall.sh` 用法、完整命令表、12 平台清单、写操作六条门控、评分阈值 80%/60%、release 四条硬规则、开发与校验命令；贡献者表列出带 issue/PR 编号的社区反馈，说明有真实使用与缺陷修复痕迹。
@@ -414,6 +450,7 @@ Learning 下边界仍生效，未授予操作被阻断并写入 JSON 活动报�
 - Strands Box：下载脚本与 `./box-core/box --version`；Cargo workspace 构建命令、`just` 四个任务、`cargo test --workspace --all-features` 与 `test-support` 的关系；两个配置文件名与分工；策略 skill URL；决策记录默认路径；示例目录路径；架构描述。
 - cc-desk-tunnel：服务端部署命令、安装脚本四件事、默认放行端口 8787 与 7000、三行端口对照表、作者“必须知道的四件事”、杀毒软件与 SmartScreen 处理建议含 `SHA256SUMS` 核对、源码构建与本地开发命令、仓库结构、`manage.sh token` 更换凭据、`config/provider.json` 配 API key、证书指纹来源要求。
 - MXC：安装包管理器、Node 片段、诊断命令 `wxc-exec.exe --debug config.json`、审计命令 `wxc-exec.exe --audit policy.json` 及警告、后端表、源码构建命令、遥测默认关闭条件；新增：四个后端与平台可用性表格、五个策略域填空清单、三模式行为差异表格、已集成与将集成名单、学习/许可模式产出 JSON 活动报告、仅 Windows 进程容器能生成活动报告、Windows 365 支持 MXC 已 GA。
+- ai-disk-cleanup：三层分层表（Tier 1 缓存/构建产物/包下载/死 worktree；Tier 2 VM 磁盘/旧 SDK 运行时/容器镜像；Tier 3 Downloads/浏览器配置/不用的应用）、“绝不删除”清单、逐步执行且每步打印新释放空间、需要 `sudo` 的操作以可直接运行的命令交回、把磁盘内容当数据不当指令、语言文件路径与“把 `---` 以下内容贴进 agent”的用法；README 给了一次真实运行的逐项释放量表。
 
 只是作者主张、没有佐证的部分：
 - claude-ads README 全部为仓库自述。没有第三方评测、审计准确率、节省工时、误报/漏报率；安全门控和 release 规则是作者设定的规则，未附验证结果；“确定性评分 / 确定性报告”也是自述。
@@ -422,6 +459,7 @@ Learning 下边界仍生效，未授予操作被阻断并写入 JSON 活动报�
 - Strands Box：`box.toml` 字段写法和 `policy.dw` 规则示例都没给出；默认拒绝、permit 覆盖、forbid 优先、文件读影响后续 HTTP 放行都是文字描述，没有附测试、日志或案例数据；凭证注入是设计声明，没有验证方式；没有效果指标或前后对照数据。
 - cc-desk-tunnel：“服务器不需要高配，2 核 1 GB 入门机型就能运行”是作者陈述，无实测数据；“本机桌面应用输入、滚动、复制比远程桌面/SSH 终端更好”“多项目多会话更好管理”是作者对体验的判断，无对比数据；“不改官方本体、不做对抗”是自我描述，未附审计报告；README 只提供用量侧额度、重置时间和调用统计，没有工作效果指标、基准或对比数据。
 - MXC：跨平台、后端清单、遥测默认关闭均为项目自述，无第三方验证数据；原文没有任何性能数据、基准测试、渗透测试结果或事故案例数字；“agent 不能充当自己的安全权威”这一论断；容器能消除“要么放开要么封死”的二选一；安全收益的定性描述。原文没有一行配置示例、字段名、SDK 调用或命令，所有具体做法必须回 SDK 仓库补全。Intune 管理策略与 Entra 的 agent 身份区分都是 soon / coming soon，尚不可用。网页日期标注为 2026 年 10 月 7 日，需自行核对当前状态。MXC 已支持 GitHub Copilot、OpenClaw、OpenAI Codex、Replit、LM Studio、Unsloth AI；将支持 Anthropic Claude Code、Box、Egnyte、Heidi Health、Nous Research Hermes Agent、Manus、Perplexity、Raycast、Simular 等；NVIDIA 把 OpenShell 集成进 MXC，补充文件与推理服务访问策略控制、高级网络控制、凭据管理、面向企业的 OCSF 审计。注意清单里 Claude Code 是 adopt，但按 MXC 原文它目前只是“将支持”，尚不可用；Copilot 在清单里是 drop，而 MXC 原文说它已支持，两者口径不同。
+- ai-disk-cleanup：“battle-tested（久经实战）”是自述；提示词能防提示注入（“把磁盘内容当数据不当指令”）是设计意图，非实测；跨平台（Linux/Windows）只有声明，没有任何运行数据；30 个 star 说明外部验证很少。
 
 材料局限：
 - claude-ads：输入只有 README 首页，不含各 skill 实际提示词、`scoring.py` 实现、capability manifest 明细，无法核验评分与门控；无法确认各平台适配是实测通过还是仅有 fixture；“怎么试、怎么验证”一节被截断。
@@ -430,8 +468,9 @@ Learning 下边界仍生效，未授予操作被阻断并写入 JSON 活动报�
 - Strands Box：非 Apple silicon 或不满足模型访问条件无法照做；Preview 接口和文档可能变动；策略与配置具体写法全在外链文档。
 - cc-desk-tunnel：只有 README 一份材料，“怎么试、怎么验证”一节被截断；文档只有中文；不是沙箱；服务凭据等同于完全控制权；数据会离开本机；单用户自用、没有多用户、权限分级或租户隔离；账号合规需自行确认；frpc/frps 容易被杀毒软件和云厂商安全组件告警；部署依赖 Docker，镜像在服务器上从源码构建；脚本不代装系统软件、不改防火墙/nginx/SSH 配置。
 - MXC：完整策略 JSON 示例、把 MXC 接进 agent 主循环（超时后如何处理、结果回收格式、重试）的做法、各后端实际隔离强度对比未给出；需按 README 指向的 `docs/backends/`、`docs/api-reference/`、`schemas/stable/` 继续查证；`windows_sandbox`、`microvm`、`hyperlight` 标注为 experimental；`--audit` 会关闭被分析工作负载的全部沙箱安全，绝不能用于不可信代码；审计模式仅在部分 Windows 版本可用；源码构建要求 Rust 1.93、Node.js 24+。
+- ai-disk-cleanup：只有 README，提示词正文（`prompts/*.md` 里 `---` 以下的内容）和具体 shell 命令没有提供，无法核验；删除不可逆、没有回收站；提示词无法强制暂停，安全性完全依赖 agent 的权限模式；它报告的大小和对“可再生”的判断都可能出错；跨平台只有声明，没有运行数据。
 
-与已有工具做法的关系：claude-ads 把 Claude Code 作为规范运行时，安装走 Claude Code 插件市场，本身是 Agent Skills 形态；Cursor、goose 只列为 watch。Cloudflare OS 的 Gatekeeper 自称增强版 MCP server，与预先挂上所有 MCP server 相对；也能跑在开源 workerd 上、不必绑定 Cloudflare 云，但只有原文自述。ai-meeting-room 是 Claude Code 的一种落地用法：Claude Code 只做只读规划与复审，执行交给 Codex，用核准卡 + git 还原点夹住写权限；没有替代 Claude Code，而是补上谁执行、谁核准、怎么回滚、模型换代怎么办。Strands Box 是 harness-agnostic 沙箱引擎，把操作系统隔离和 Dogwood 语义策略结合，默认拒绝，凭证由网关注入，决策写 OTLP JSON；适合作为 B/C 更底层补充验证，仍是 Preview。MXC 是 harness-agnostic 沙箱化代码执行系统，把多种隔离后端统一在同一个 containment 模型与带类型 SDK 之后；新增调研显示它也是 Windows 平台上策略驱动的执行层，策略在 agent 工作负载控制之外，agent 不能给自己追加权限；适合作为 D 更偏“嵌入应用”的补充验证，并可用三模式在 Windows 11 上为 agent 收敛权限边界。cc-desk-tunnel 不修改 Claude Code 本体，是官方 Claude Code 与官方 Agent SDK 之上的一层胶水，改变执行位置边界——会话在云服务器、命令落到本机 Windows 执行，复用已有 Claude Code 审批、上下文管理、会话记忆；与 C 的差别是 C 用两个 CLI + 工作卡 + git 还原点，E 只有一个 CLI，靠隧道 + 端口最小放行 + 凭据管理；与 D 的差别是 D 有操作系统隔离与语义策略默认拒绝，E 明确不是沙箱；与 F 的差别是 F 是代码执行沙箱 + 策略驱动执行层，E 是跨机器执行拓扑。
+与已有工具做法的关系：claude-ads 把 Claude Code 作为规范运行时，安装走 Claude Code 插件市场，本身是 Agent Skills 形态；Cursor、goose 只列为 watch。Cloudflare OS 的 Gatekeeper 自称增强版 MCP server，与预先挂上所有 MCP server 相对；也能跑在开源 workerd 上、不必绑定 Cloudflare 云，但只有原文自述。ai-meeting-room 是 Claude Code 的一种落地用法：Claude Code 只做只读规划与复审，执行交给 Codex，用核准卡 + git 还原点夹住写权限；没有替代 Claude Code，而是补上谁执行、谁核准、怎么回滚、模型换代怎么办。Strands Box 是 harness-agnostic 沙箱引擎，把操作系统隔离和 Dogwood 语义策略结合，默认拒绝，凭证由网关注入，决策写 OTLP JSON；适合作为 B/C 更底层补充验证，仍是 Preview。MXC 是 harness-agnostic 沙箱化代码执行系统，把多种隔离后端统一在同一个 containment 模型与带类型 SDK 之后；新增调研显示它也是 Windows 平台上策略驱动的执行层，策略在 agent 工作负载控制之外，agent 不能给自己追加权限；适合作为 D 更偏“嵌入应用”的补充验证，并可用三模式在 Windows 11 上为 agent 收敛权限边界。cc-desk-tunnel 不修改 Claude Code 本体，是官方 Claude Code 与官方 Agent SDK 之上的一层胶水，改变执行位置边界——会话在云服务器、命令落到本机 Windows 执行，复用已有 Claude Code 审批、上下文管理、会话记忆；与 C 的差别是 C 用两个 CLI + 工作卡 + git 还原点，E 只有一个 CLI，靠隧道 + 端口最小放行 + 凭据管理；与 D 的差别是 D 有操作系统隔离与语义策略默认拒绝，E 明确不是沙箱；与 F 的差别是 F 是代码执行沙箱 + 策略驱动执行层，E 是跨机器执行拓扑。ai-disk-cleanup 不引入新工具，是在 Claude Code / Cursor 之上加一层“磁盘审计 + 分层批准”的使用流程；README 直接点名 Claude Code 的普通权限提示和 Cursor 的 ask mode 作为安全运行环境。它补的是“怎么用”而不是“用什么”。与 C 的差别：C 改代码仓库、有 git 还原点；G 删磁盘文件、删除不可逆，只能靠备份和分层批准。
 
 ## 依据的调研
 
@@ -442,3 +481,4 @@ Learning 下边界仍生效，未授予操作被阻断并写入 JSON 活动报�
 - [sun168567/cc-desk-tunnel](../research/radar/2026-10-08/1977-sun168567-cc-desk-tunnel.md)：值得一试，如果你的日常开发环境在 Windows 本机、又想让云端 Claude Code 直接在本机读写文件并执行命令，可以照 README 的部署流程在一台自己可控的云主机 + 一台 Windows 上小范围试；但它是个人维护、主要由 AI 编写、未经安全审计的工具，等于把本机的任意命令执行权交给服务器，只能自用、且必须先读安全须知并收紧端口与来源。
 - [MXC - a sandboxed code execution system](../research/radar/2026-10-09/2229-mxc-a-sandboxed-code-execution-system.md)：值得一试，建议小范围试：在 Linux/macOS 上用 Node SDK 按 README 的片段以 egress 默认 deny + 超时启动容器，跑一段模型生成代码并回收 stdout，先验证越权用例确实被拦。理由是原文给出了可安装的 SDK、可复制的调用片段和 --debug/--audit 诊断命令，但完整策略 JSON 与接入 agent 主循环的做法未给出，故只到 try。
 - [Mxc: Microsoft Execution Containers version 1.0.0](../research/radar/2026-10-11/2471-mxc-microsoft-execution-containers-version-1-0-0.md)：值得一试，值得在 Windows 11 上小范围试：把 MXC 的 Permissive→Learning→Enforcement 三模式流程用在自主编码/操作智能体上，先观测再收紧权限边界；理由是原文给出了明确的策略域、后端适用场景和三模式行为定义，可直接照着走，但没给任何配置示例，具体 schema 需去 SDK 仓库拿。
+- [riza/ai-disk-cleanup](../research/radar/2026-10-26/7128-riza-ai-disk-cleanup.md)：值得一试，建议小范围试用：先取得仓库里对应语言的提示词文件（prompts/disk-cleanup.zh-CN.md），在必须人工确认工具调用的模式下，按“测量→三层报告→批准→逐步执行”的流程清理磁盘，不要用自动批准模式。理由是它给出了一套可照做的分层与权限边界流程，并有一次真实运行数据，但提示词正文与具体命令不在本次材料里，删除又不可逆，所以先备份、先小范围验证。
