@@ -4,6 +4,7 @@
 
 | 手册 | 解决的问题 | 先试这一步 | 最近修订 |
 |---|---|---|---|
+| [给 AI 代理装上「操作单」：可校验、可整批回退、敏感改动先过人](agent-operation-interfaces.md) | 让 AI 代理改结构化文件或共享工作区时，把它的动作收敛成可校验、可整批回退、按对象限权的操作，而不是让它自由改文件或看截图逐步操作。 | 先拿一份真实文件走一遍做法 A 的最小闭环：`pnpm opencalque new` 建空文档，手写一个两三条操作的 ops.json，`apply` 后 `describe` 看是否落地，`validate` 应无输出、退出 0。 | 2026-10-27 |
 | [先在一台一次性环境里验收 agent 技能，再让它碰生产运维](sre-practice-with-agents.md) | 面对只有 README 或作者自测的运维类 agent 技能包，如何用一次性环境和外部验收标准，小范围验证它真的能安全执行，而不是凭宣传直接上生产。 | 选一台一次性 VPS 或一个真实 SRE 任务，先让 agent 只读审计或出草稿、不改任何东西，并确认它确实加载了技能。 | 2026-10-27 |
 | [在 Windows 上让编码 agent 把命令真正跑通](windows-shell-for-coding-agents.md) | 在 Windows 上使用编码智能体时，命令失败往往不是模型不会做，而是 shell 与 Windows 的边界把参数、路径、编码、后台进程和缺失工具弄坏了；这篇手册给出用 sill 替换 shell 层并用对照验证的做法。 | 先在一台 Windows 机器上装好 sill，把 Claude Code 的 Bash 工具指向它的 bash.exe，然后拿你最常失败的 3–5 条命令做一次前后对照。 | 2026-10-27 |
 | [把任务写进仓库，让编码智能体先出计划再改代码](repo-task-files-for-coding-agents.md) | 把开发任务从外部工单搬进 Git 仓库，并用“读任务→出计划→人工批准→实现并回写报告”的流程，解决智能体缺少任务上下文、需求到代码不可追溯的问题。 | 先选一个仓库，建一个私有任务目录，把一个小任务写成 Markdown，让智能体只做分析和计划，你审阅后再让它改代码。 | 2026-10-27 |
@@ -51,7 +52,6 @@
 | [让跨境电商 Listing 从生成到复测走一条可自检的闭环](cross-border-ecommerce-with-agents.md) | 把有明确 SOP、可模板化输入、可清单自检的跨境电商运营环节，拆成可复用 Agent 工作流，并用广告/评论数据回流复测 Listing。 | 选 1 个 Shopee 或 Mercado Livre 产品，只跑 01 市场分析→02 产品策略→03 Listing→自检 这条短闭环。 | 2026-10-15 |
 | [把简单判断交给快脑前，先做一次可回退的小范围验证](route-judgments-to-small-models.md) | 如何用可对照、可回退的小范围实验，验证把简单判断交给 Jev 决策模型或 Claude Code 的 jev-mcp 快脑分流是否真的改善工作流。 | 挑一个你现在用通用 LLM 做的是/否门禁任务，取 100–200 条已知答案的历史样本，按字符串 state 跑一次 Jev 与现有方案的对照。 | 2026-10-14 |
 | [为 AI 功能和关键服务准备可演练的降级与备援](resilience-and-disaster-recovery.md) | 当第三方模型不可用、被限流、涨价或基础设施故障时，如何事先定目标、准备降级/备援路径，并用演练与 eval 验证，而不是等故障发生。 | 选一个最依赖模型的 AI 功能，先加模型调用抽象和一条备用供应商通道，补上按 token 数动态超时与流式首字节监控，并为它整理一小组功能测试 + eval 回归用例。 | 2026-10-14 |
-| [给 AI 代理一套改不坏、能整体回退的操作接口](agent-operation-interfaces.md) | 当 AI 代理要直接改文档、图纸这类结构化文件时，怎么把它的动作收敛到可校验的结构化操作上，做到改不坏、一次撤销整体回退。 | clone OpenCalque 仓库后，用 `pnpm opencalque new` 建一个空文档，手写一个两三条 operation 的 ops.json，跑通 apply → describe → validate 这个最小闭环。 | 2026-10-14 |
 | [让编码 agent 把 runbook 改写成低歧义的操作步骤](controlled-language-explanations.md) | 如何让编码 agent 按简化技术英语规则改写 runbook、操作步骤和解释，并在文本仍不够时按最低理解阶梯升级，减少歧义和误读，同时保住事实与限定条件。 | 挑一份团队真实在用的 runbook 或 API how-to，用 STE-Prompt 的 `/ste`（或把 10 条 STE 规则粘贴进对话）改写，保留原文，并让 2–3 位同事按改写稿实际执行一次。 | 2026-10-13 |
 | [AI 起草后，做一道“AI 味”清单检查再交付](detect-ai-slop-in-writing.md) | AI 起草的稿子读着假但说不出哪里假，缺少可逐条检查、按对照改写的清单流程。 | 挑一篇最近由 AI 起草、你觉得“读着有点假但说不出哪里假”的稿子，贴进对话并附上 FeedHive/ai-slop-detector 的清单，要求逐条列出命中的模式并给出行号。 | 2026-10-13 |
 | [让研究构思 agent 交出可证伪提案：冻结基线、精确版本证据、结构校验](research-ideation-with-agents.md) | 怎么把「研究构思」拆成一条可执行、有预算边界、产物可校验的多 agent 流水线，让 agent 交出带精确版本证据和可证伪预测的提案，而不是一个无法追溯的结论。 | 在 Claude Code 里装上 ideascientist 插件，拿自己熟悉的一个窄研究问题跑一次 `/ideascientist:ideate`，再用 `check_artifacts.py` 校验产物结构。 | 2026-10-13 |
