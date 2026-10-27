@@ -4,6 +4,7 @@
 
 | 手册 | 解决的问题 | 先试这一步 | 最近修订 |
 |---|---|---|---|
+| [先在一台一次性环境里验收 agent 技能，再让它碰生产运维](sre-practice-with-agents.md) | 面对只有 README 或作者自测的运维类 agent 技能包，如何用一次性环境和外部验收标准，小范围验证它真的能安全执行，而不是凭宣传直接上生产。 | 选一台一次性 VPS 或一个真实 SRE 任务，先让 agent 只读审计或出草稿、不改任何东西，并确认它确实加载了技能。 | 2026-10-27 |
 | [在 Windows 上让编码 agent 把命令真正跑通](windows-shell-for-coding-agents.md) | 在 Windows 上使用编码智能体时，命令失败往往不是模型不会做，而是 shell 与 Windows 的边界把参数、路径、编码、后台进程和缺失工具弄坏了；这篇手册给出用 sill 替换 shell 层并用对照验证的做法。 | 先在一台 Windows 机器上装好 sill，把 Claude Code 的 Bash 工具指向它的 bash.exe，然后拿你最常失败的 3–5 条命令做一次前后对照。 | 2026-10-27 |
 | [把任务写进仓库，让编码智能体先出计划再改代码](repo-task-files-for-coding-agents.md) | 把开发任务从外部工单搬进 Git 仓库，并用“读任务→出计划→人工批准→实现并回写报告”的流程，解决智能体缺少任务上下文、需求到代码不可追溯的问题。 | 先选一个仓库，建一个私有任务目录，把一个小任务写成 Markdown，让智能体只做分析和计划，你审阅后再让它改代码。 | 2026-10-27 |
 | [换模型和改服务前，先量出可对比的速度、成本与工具调用可靠性](benchmark-agent-model-serving.md) | 换模型、改推理框架或调 effort 时，如何用可对比的基线判断快慢、成本、工具调用可靠性，而不是凭感觉。 | 先对已经在跑的服务做一次 attached 回放，拿到 summary.json 基线；如果服务的是 Kimi/DeepSeek 且工具调用常出错，固定 schema 和 harness 先测 K2VV ToolCall 基线。 | 2026-10-26 |
@@ -30,7 +31,6 @@
 | [把已有的 fuzz 测试升级成机器可校验的无崩溃证明](formal-verification-with-agents.md) | 团队已有 fuzz 测试却只能靠跑更多输入碰运气，本条目解决如何把它升级为可被 Rocq 内核校验的“无崩溃”定理，并用证明失败的反例发现和修复传统 fuzzing 难触发的 bug。 | 先选一个在 OSS-Fuzz 中、已有 fuzz 入口点的共享库，用 1–3 个入口点和固定预算，通过 Theorem 的流水线或其 Claude skill 跑一次最小证明，并只人工审查语义模型、定理陈述和 Rocq 检查器三样。 | 2026-10-23 |
 | [让编码助手先给答案，再给下一步](concise-actionable-agent-responses.md) | 编码助手的回答常把结论和下一步埋在寒暄、回顾和长铺垫之后，读者还得自己追问“所以我现在该做什么”。 | 先把下面这组输出约束加入你现有编码助手的系统提示词或自定义指令，再选 5-10 个常用任务做同一模型的前后对照。 | 2026-10-23 |
 | [让 AI 按专家流程带你把主线 Linux 移植到安卓设备](android-porting-with-agents.md) | 主线 Linux 移植到安卓手机/平板是跨领域、经验密集的活，怎么让 AI 助手按一套经过实战的九步流程、选型规则和踩坑库工作，而不是每次都从零摸索。 | 先按 README 装好 skill（推荐 `npx skills add yzddmr6/android-mainline-port -g`，要求 Node.js 22+），然后给 AI 一个真实任务：“我想把主线 Linux 移植到一台骁龙 8 Gen 3 平板上，先帮我评估能不能做、大概要多久”。 | 2026-10-23 |
-| [先在一个真实 SRE 任务上试用技能包，再人工核对产出](sre-practice-with-agents.md) | 如何把 SRE 技能包小范围接入现有 agent 工作流，用真实任务验证产出是否完整、可执行、可复核，而不是直接相信技能包宣传。 | 先选一个真实 SRE 任务（例如用团队 4 周指标让 SLO 技能产出草稿），只安装需要的技能，跑通一次后按 README 产出项人工核对。 | 2026-10-23 |
 | [让 AI 在授权范围内做 Web 安全测试并交出可复核报告](web-pentest-with-agents.md) | 把多阶段 Web 渗透测试交给 Claude Code 技能时，如何先卡住授权与范围，再按可复核流程产出技术报告和管理层摘要。 | 先在一个自有 staging 或合法练习环境里按项目级安装技能，只做 recon 和报告整理，确认授权门禁与产出可用后再扩大范围。 | 2026-10-23 |
 | [让 AI 修安全 bug 时同时控制攻击面与回归风险](security-review-with-agents.md) | 解决在大型代码库中用 AI 做安全修复时，如何系统缩减攻击面，并证明补丁没有引入回归。 | 先选一个可构建、有测试基线的仓库，固定版本；取 1 个已合入的历史 bug 修复 PR，按回归猎取四步流程跑一遍，并用动态 trace 确认至少一个发现。 | 2026-10-22 |
 | [给能执行 shell 的 agent 补上可控的读取能力](web-access-for-agents.md) | 在不一次性全量接入、不重写代码的前提下，给能执行 shell 的 agent 补上外部平台读取能力，并在读网页/PDF 时控制进入上下文的 token 与成本。 | 先跑 `agent-reach install --env=auto --dry-run` 看它会改什么，再默认安装并跑 `agent-reach doctor`；若你更关心单页/PDF 的 token 成本，另用 `fats <url> dry:true` 做一次预估。 | 2026-10-22 |
