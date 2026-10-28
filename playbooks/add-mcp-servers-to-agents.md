@@ -1,14 +1,14 @@
-# 给代理接第三方工具包：先隔离试用、核对清单、再决定去留
+# 给代理接第三方工具：先隔离试用、核对清单、用对照证据决定去留
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：在不污染主力环境、不越过数据外发边界的前提下，把第三方 MCP、CLI、技能包或插件接给代理，用可观察对照决定继续、降级还是停止。
-> 先试这一步：先选一个低风险真实任务做未接入基线，再把目标工具装进隔离环境，只跑一次冒烟并对照。
+> 解决的问题：在把第三方 MCP、CLI、技能包、插件或浏览器扩展加本地 bridge 接给代理时，如何不污染主力环境、不越过数据外发边界，完成接入、工具清单核对、冒烟测试和对照验证，并据证据决定继续试、只当思路参考还是停止。
+> 先试这一步：先选一个可回退的低风险真实任务，在容器、虚拟机或专用账号里按做法 A 或 D1 跑通注册、核对工具清单、冒烟测试、与未接入对照这一轮，再决定是否扩大。
 > 最近修订：2026-10-29
 
 ## 解决什么问题
 
-把第三方工具以 MCP、CLI、技能包或插件形式接给代理时，常见供给方式是一句注册/安装命令就完事：能不能用、多出哪些工具、花了多少钱、数据发到哪里、和现有做法比是不是真的更好，全靠感觉。本章解决的是：怎么在不污染主力环境、不越过数据外发边界的前提下，完成接入、核对工具清单、冒烟测试和对照验证，并据证据决定「继续试」「只当思路参考」还是「停止」。现在覆盖 16 条工具路径：jevcrawl、REA/Hermes、arcmira、CLI-Anything/CLI-Hub、reason network、idx、Blender 扩展、jevreel、WhatsApp MCP、im-mcp、claude-security-scan、vulnerator-ai、TradingView-Unified-MCP、agent-toolkit-for-aws、flashmind、mcode-stack；做法 C 是不接入的降级做法。WhatsApp MCP、im-mcp 这两条私人消息路径有一个共同前提：先只读、只用自己的个人账号、只在一台机器上试；发送、多人共享、媒体转写都不在范围内。claude-security-scan 路径也要先只读、只对一个低风险域、确认脱敏和「未能确认」标注可靠后再扩大。vulnerator-ai 更极端：它是默认无 scope-guard、无 consent、无 audit、无授权闸门的自主渗透循环，只在隔离靶场、只对明确授权的目标试，先把它当「自主循环 + 工具供给」的架构模板，而不是当生产工具。TradingView-Unified-MCP 只验证「Claude Code 通过本地 MCP 接触外部数据平台」的接入动作；原文在启动命令后被截断、零效果证据，不能据此上真实资金。agent-toolkit-for-aws 则把 MCP 服务、Agent Skills、插件、项目级 rules 和审计控制打包给支持的编码 agent；先只装 aws-core，并在只读或沙箱权限下小范围试用，不要先放开写操作。flashmind 是另一类打包插件：它把 MCP 记忆、防幻觉规则和 4 个按需技能一起装进编码客户端，但原文只给了接线方式，规则正文与技能正文都缺失、也没有效果数据；先只选一个仓库、一个客户端，只启用 `verify-before-done` 一个技能，用两周对照决定去留。mcode-stack 是「技能/工作流包」：它把团队习惯做成 15 个 `SKILL.md` 技能、检查清单和 `WORKFLOW.md`，可装到 MiniMax Code，部分也可用于 Claude Code 和其他支持 skills 的代理；但本次只有 README，没有各技能正文，先只选 2–3 个技能，打开对应 `SKILL.md` 核对具体检查项后再决定是否照做。
+把第三方工具以 MCP、CLI、技能包、插件或浏览器扩展加本地 bridge 形式接给代理时，常见供给方式是一句注册/安装命令就完事：能不能用、多出哪些工具、花了多少钱、数据发到哪里、和现有做法比是不是真的更好，全靠感觉。本章解决的是：怎么在不污染主力环境、不越过数据外发边界的前提下，完成接入、核对工具清单、冒烟测试和对照验证，并据证据决定「继续试」「只当思路参考」还是「停止」。现在覆盖 17 条工具路径：jevcrawl、REA/Hermes、arcmira、CLI-Anything/CLI-Hub、reason network、idx、Blender 扩展、jevreel、WhatsApp MCP、im-mcp、claude-security-scan、vulnerator-ai、TradingView-Unified-MCP、agent-toolkit-for-aws、flashmind、mcode-stack、snapgent-connector；做法 C 是不接入的降级做法。WhatsApp MCP、im-mcp 这两条私人消息路径有一个共同前提：先只读、只用自己的个人账号、只在一台机器上试；发送、多人共享、媒体转写都不在范围内。claude-security-scan 路径也要先只读、只对一个低风险域、确认脱敏和「未能确认」标注可靠后再扩大。vulnerator-ai 更极端：它是默认无 scope-guard、无 consent、无 audit、无授权闸门的自主渗透循环，只在隔离靶场、只对明确授权的目标试，先把它当「自主循环 + 工具供给」的架构模板，而不是当生产工具。TradingView-Unified-MCP 只验证「Claude Code 通过本地 MCP 接触外部数据平台」的接入动作；原文在启动命令后被截断、零效果证据，不能据此上真实资金。agent-toolkit-for-aws 则把 MCP 服务、Agent Skills、插件、项目级 rules 和审计控制打包给支持的编码 agent；先只装 aws-core，并在只读或沙箱权限下小范围试用，不要先放开写操作。flashmind 是另一类打包插件：它把 MCP 记忆、防幻觉规则和 4 个按需技能一起装进编码客户端，但原文只给了接线方式，规则正文与技能正文都缺失、也没有效果数据；先只选一个仓库、一个客户端，只启用 `verify-before-done` 一个技能，用两周对照决定去留。mcode-stack 是「技能/工作流包」：它把团队习惯做成 15 个 `SKILL.md` 技能、检查清单和 `WORKFLOW.md`，可装到 MiniMax Code，部分也可用于 Claude Code 和其他支持 skills 的代理；但本次只有 README，没有各技能正文，先只选 2–3 个技能，打开对应 `SKILL.md` 核对具体检查项后再决定是否照做。snapgent-connector 是浏览器扩展加本地 bridge：聊天网页里的 AI 回复 snapgentV3 命令，扩展转发给本地 bridge，bridge 路由到 VS Code MCP server，结果回传聊天继续处理；默认 VS Code MCP server 标注有 24 个 workspace 工具。它可能读写工作区，先只在非敏感、可丢弃仓库试用，保持 bridge 可见，并接受 unpacked 扩展站点权限和 MCP 写权限风险。
 
 ## 适用与不适用
 
@@ -30,6 +30,7 @@
 - agent-toolkit-for-aws：团队在 AWS 上开发；使用 Claude Code、Codex、Cursor、Devin、Kiro、fx 或其他受支持的编码智能体；目标任务属于 AWS 构建、部署、管理、数据分析或 DevSecOps；本地已配置 AWS 账号凭据（仅做文档检索或技能发现不需要认证）；Kiro、fx 和其他 agent 的手动安装路径已装 `uv`；愿意先只装 aws-core，并在只读或沙箱账号下小范围试用。
 - flashmind：使用 Gemini CLI / Antigravity / Cursor / VS Code(Copilot) / Windsurf / Claude Code 等支持 MCP 的客户端；Node ≥18；想让 agent 在任务开始回忆历史决策、写代码前核对符号与版本、宣布完成前跑测试并报告终端输出；愿意只选一个仓库、一个客户端、只启用 `verify-before-done` 一个技能做两周对照；能接受原文没有规则与技能正文、没有效果数据，需要自己补规则措辞并做对照。
 - mcode-stack：已安装 MiniMax Code；若走 Claude Code 市场命令，已安装 Claude Code；本地有 git；想从长命令/后台任务审计、干净上下文独立评审、小评估实验这三个高频痛点开始；能接受本次只有 README、具体检查项要打开各 `SKILL.md`；愿意一次只装 2–3 个技能并保留不调用技能的对照会话。
+- snapgent-connector：Edge 或 Chrome（Manifest V3）、VS Code、Windows/macOS/Linux 之一；macOS/Linux 需要 Python 3.9+；使用期间愿意保持 bridge 运行；目标项目在 VS Code 打开；想让原本只在聊天窗口里的 AI 读改项目文件、解释登录流程、给页面加搜索栏并接现有 API；接受扩展站点权限和本地 MCP 可能读写工作区；只在非敏感、可丢弃仓库试用。
 
 不适用：
 - 通用：不能隔离、必须直接在主力工作目录上试用；需要稳定可复现的生产接入；依赖被截断的完整工具清单来规划任务；需要量化效果数据但原文只有作者自述。
@@ -48,6 +49,7 @@
 - agent-toolkit-for-aws：非 AWS 工作；使用 README 未支持的编码智能体且不愿手动配置 MCP 与 skills；不愿配置 AWS 凭据或只读/最小权限；需要独立效果数据、检出率、成功率或客户案例；需要 README 未给出的 IAM/CloudWatch/CloudTrail 配置样例、rules 内容或提示词模板；想直接放开写操作或生产账号；把官方 README 当独立评测。
 - flashmind：需要现成的量化效果证据；不愿维护规则文件与记忆库；不能接受记忆污染风险；需要原文未提供的防幻觉规则正文或四个 `SKILL.md` 正文；客户端不支持 MCP；Node <18。
 - mcode-stack：需要现成的量化效果数据或案例；不愿打开 `SKILL.md` 核对具体检查项；需要仓库提供定时/事件触发式自动工作流；MiniMax Code 版本不支持插件市场且只能走 `mcode plugin add` 从官方目录安装；想一次装整套 15 个技能。
+- snapgent-connector：敏感仓库或生产工作区；需要独立安全审计、性能基准或用户案例；要求所有平台完全无终端；不能保持 bridge 窗口或终端开启；需要定时、事件触发或长期自主推进；不能接受 unpacked 扩展的站点权限和 MCP 写权限；所在浏览器不是 Edge/Chrome MV3；macOS/Linux 没有 Python 3.9+。
 
 ## 前置条件
 
@@ -88,9 +90,11 @@ flashmind：Node ≥18；git；目标客户端支持 MCP；自动安装器需要
 
 mcode-stack：已安装 MiniMax Code；若走 Claude Code 市场命令需已安装 Claude Code；本地有 git；每个技能是一个包含 `SKILL.md` 的子目录；技能可放全局 `~/.agents/skills/`、`~/.claude/skills/`、`~/.codex/skills/` 或项目级 `.minimax/skills/`、`.claude/skills/`、`.agents/skills/`；整栈插件路径需要先跑 `mcode plugin marketplace list` 找到本地插件目录；`mcode plugin add` 只从官方目录安装，不接受 GitHub URL 或本地路径；MiniMax Code 桌面端市场安装功能在逐步开放，部分版本可能没有。
 
+snapgent-connector：Edge 或 Chrome（Manifest V3）；VS Code；Windows/macOS/Linux 之一；macOS/Linux 需要 Python 3.9+；下载并解压最新 release（当前 V3.3）；使用期间 bridge 必须运行；目标项目已在 VS Code 打开；Windows 在解压后的 release 文件夹运行 `start.bat`；macOS 双击 `MacOS_Start.command`；Linux 在解压目录运行 `bash Linux_Start.sh`；首次可能遇到 Gatekeeper 警告或安装 `websockets`；可选 EffectCraft 要装 CLI 并把 `effectcraft-cli` 放到 `PATH`；可选 Roblox Studio MCP 在 macOS 默认检测 `/Applications/RobloxStudio.app/Contents/MacOS/StudioMCP`，其他位置用 `ZS_STUDIO_MCP_PATH`；Linux 不自动检测 Roblox Studio MCP；保持 bridge 窗口或终端开启；只在非敏感、可丢弃仓库试用。
+
 ## 操作步骤
 
-先做 A 或 D1：它们能在半天内给出可观察结论，也顺带把隔离环境、基线记录这套流程跑通。若目标就是私人消息只读检索，再考虑 J 或 K；不要从发送、多人共享或媒体转写开始。若你已有支持远程 MCP 的宿主且目标就是口语内容检索，直接做 E；团队已在 Reason 且找得到第二个人，可做 F；只想用最小成本看清「CLI 与 MCP 共用一份输出」的结构，做 G 的第 1、3、4 步；手上就有 Windows x64 + Blender 4.2+，做 H 的第 1–4 步；有一段本地短视频要检索，做 I 的第 1–3 步；有个人 WhatsApp 且接受条款风险，做 J 的 1–8 步；要在本机补微信/钉钉沟通上下文，做 K 的 1–6 步；想做跨系统的例行只读安全检查，做 L 的 1–8 步，先 `--demo`，再只对一个低风险域 `--skip repos`；想验证「自主循环 + 工具供给」这套架构，做 M 的 1–4 步，先在 `--with-juice-shop` 靶场里跑，确认前门只暴露 run 生命周期、且没有越出靶场，再考虑第 5 步以后；只想验证 Claude Code 接外部数据平台，做 N 的 1–6 步，先只读、不碰真实资金；团队在 AWS 上开发且使用支持的 agent，做 O 的 1–10 步，先只装 aws-core，在沙箱或只读权限下跑一个边界清晰任务；若你想给编码 agent 补记忆、防幻觉规则和「宣布完成前先验证」的技能，做 P 的 1–9 步，先只接 MCP + 规则 + `verify-before-done` 一个技能，两周对照，不要一次启用四个技能；若你想补一套可移植的工程习惯技能，做 Q 的 1–8 步，先只装 2–3 个技能并保留不调用技能的对照。
+先做 A 或 D1：它们能在半天内给出可观察结论，也顺带把隔离环境、基线记录这套流程跑通。若目标就是私人消息只读检索，再考虑 J 或 K；不要从发送、多人共享或媒体转写开始。若你已有支持远程 MCP 的宿主且目标就是口语内容检索，直接做 E；团队已在 Reason 且找得到第二个人，可做 F；只想用最小成本看清「CLI 与 MCP 共用一份输出」的结构，做 G 的第 1、3、4 步；手上就有 Windows x64 + Blender 4.2+，做 H 的第 1–4 步；有一段本地短视频要检索，做 I 的第 1–3 步；有个人 WhatsApp 且接受条款风险，做 J 的 1–8 步；要在本机补微信/钉钉沟通上下文，做 K 的 1–6 步；想做跨系统的例行只读安全检查，做 L 的 1–8 步，先 `--demo`，再只对一个低风险域 `--skip repos`；想验证「自主循环 + 工具供给」这套架构，做 M 的 1–4 步，先在 `--with-juice-shop` 靶场里跑，确认前门只暴露 run 生命周期、且没有越出靶场，再考虑第 5 步以后；只想验证 Claude Code 接外部数据平台，做 N 的 1–6 步，先只读、不碰真实资金；团队在 AWS 上开发且使用支持的 agent，做 O 的 1–7 步，先只装 aws-core，在沙箱或只读权限下跑一个边界清晰任务；若你想给编码 agent 补记忆、防幻觉规则和「宣布完成前先验证」的技能，做 P 的 1–6 步，先只接 MCP + 规则 + `verify-before-done` 一个技能，两周对照，不要一次启用四个技能；若你想补一套可移植的工程习惯技能，做 Q 的 1–8 步，先只装 2–3 个技能并保留不调用技能的对照；若你想让网页聊天 AI 经本地 bridge 操作 VS Code，做 R 的 1–8 步，先在非敏感可丢弃仓库、保持 bridge 可见、每次接受修改前看 `git status` 和 `git diff`。
 
 ### 做法 A：接入有完整参数与回执的工具集（以 jevcrawl 为例）
 
@@ -432,16 +436,38 @@ mcode plugin marketplace list
 7. 打开你选中的技能正文再照做：本次材料只有 README，没有 `SKILL.md` 正文；先打开 `~/mcode-stack/stacks/ronny/skills/<skill>/SKILL.md`，核对具体检查项、输入条件和停止条件。检查清单也可直接读 `checklists/` 下的纯文本；工作流读对应 stack 的 `WORKFLOW.md`。预期结果：你能复述该技能要求先做什么、检查什么、什么时候停；不能复述就先不要把它写进团队流程。
 8. 最小试用：选 2–3 个与当前痛点最直接的技能，优先组合 `long-command-check` + `independent-review` + `harness-experiment`；在真实任务中调用，同时保留一个不调用技能的对照会话。记录：技能是否被正确发现、`/skills` 是否列出、调用后是否按预期执行；长命令阻塞/人工中断/重试/后台任务失败或丢失/等待时间（前后各 5–10 次长命令任务）；同一 diff 的干净上下文评审发现的问题数、其中普通评审漏掉的问题数、无效评论数、评审耗时；同一评估任务重复运行的通过率波动、翻转任务数量、一次只改一项时能否定位变化来源；团队是否愿意持续调用、是否减少返工或评审往返。预期结果：与不调用技能的对照相比，至少一个目标指标改善且没有明显负作用；若只有安装成功、没有可观察任务结果改善，就停在 try，不要升级为 adopt。
 
+### 做法 R：把网页聊天 AI 经本地 bridge 接到 VS Code（以 snapgent-connector 为例）
+
+选 R 的条件：你在 Edge/Chrome 的聊天站点里用 AI，希望它经本地 bridge 和 MCP 读改 VS Code 工作区，且只做非敏感、可丢弃仓库的小范围试用。原文只有 README，没有独立安全审计、性能基准或用户案例；扩展是 unpacked 加载，涉及站点权限和本地 MCP 写权限，先隔离验证。
+
+1. 前提检查：准备 Edge 或 Chrome（Manifest V3）、VS Code、Windows/macOS/Linux 之一；macOS/Linux 需要 Python 3.9+；使用期间 bridge 必须运行；先下载并解压最新 release（当前 V3.3）；目标项目要在 VS Code 打开。预期结果：你已有一个非敏感测试仓库，并接受把浏览器聊天与本地工作区连接。
+2. 加载扩展：解压 V3.3 release 后，打开 `edge://extensions` 或 `chrome://extensions`，启用 Developer mode，点击 Load unpacked，选择 `snapgent-extension` 文件夹；工具栏出现 snapgentV3 图标。预期结果：扩展已启用，图标可见。
+3. 设置 MCP 目标：在 VS Code 中打开要操作的项目文件夹，再在聊天栏点击 Start；bridge 可以先于 VS Code 启动，agent 会等待 workspace 可用，且 README 说明不会回退到 Snapgent release 文件夹。预期结果：VS Code target 可用，目标项目就是当前工作区。
+4. 启动 bridge（按系统选择）：Windows 双击 `start.bat`；它会自动配置 VS Code MCP，可以在 VS Code 之前启动，机器相关设置写入被忽略的本地 `config.json`。macOS 双击 `MacOS_Start.command`；它会检测 bundled VS Code MCP server、Roblox Studio 的 MCP executable、已安装的 EffectCraft CLI，并把机器相关路径写入本地 `config.json`；使用 `bridge.py`，不运行 Windows-only 的 `bridge.exe`；首次启动可能遇到 Gatekeeper 警告，需要在系统设置中允许；保持终端窗口开启。Linux 在解压后的 release 文件夹打开终端并运行：
+```bash
+bash Linux_Start.sh
+```
+它会检测 bundled VS Code MCP server 和已安装的 EffectCraft CLI，写入本地 `config.json`，使用 `bridge.py`；首次启动会为用户安装 `websockets`，或在发行版阻止用户安装时创建本地 Python 环境。预期结果：bridge 终端保持开启，没有断连报错。
+5. 可选连接 EffectCraft 或 Roblox Studio MCP：Windows 下 `start.bat` 会检测 EffectCraft 常见安装位置并启动其控制通道；macOS/Linux 需安装 EffectCraft CLI 并把 `effectcraft-cli` 放到 `PATH`，launcher 检测到后会启动控制通道；如果 EffectCraft 已打开但未带控制通道，先保存工作并关闭 EffectCraft 再重启 launcher；连接后在聊天栏的 MCP target selector 选择 EffectCraft。Roblox Studio MCP 在 macOS 默认检测 `/Applications/RobloxStudio.app/Contents/MacOS/StudioMCP`；安装在其他位置时，启动前设置 `ZS_STUDIO_MCP_PATH`。Linux 不自动检测 Roblox Studio MCP；如有兼容的 Linux MCP executable，运行 launcher 前把 `ZS_STUDIO_MCP_PATH` 设为它的路径；Roblox Studio 本身在部分 Linux 发行版上可能不可用。预期结果：只有在你确实需要时才接这些额外目标。
+6. 开始会话：打开支持的 AI 聊天站点并新建聊天；在 VS Code 打开项目文件夹后，在聊天栏点击 Start，然后用自然语言描述任务。README 示例提示词是：
+```text
+Inspect the files in my project and explain how the login flow works.
+Add a search bar to the books page and wire it to the existing API.
+```
+前提：bridge 窗口保持开启，VS Code 工作区已打开，所用站点在支持列表中。预期结果：AI 能通过 snapgentV3 命令调用工具，结果回到聊天继续处理。
+7. 运行要点与排障：保持 bridge 窗口开启，关闭会断开 agent；保持目标项目在 VS Code 打开；Arena 使用 Direct 模式；Gemini 或 Kimi 在长会话中停止使用工具时，提醒它使用 snapgentV3 commands 或新建聊天。扩展栏缺失时检查扩展是否启用、当前聊天站点是否允许访问并刷新标签页；bridge offline 时重新启动对应 launcher；AI 不使用工具时提醒或新建聊天；VS Code target 不可用时，从解压后的 release 文件夹运行 `start.bat` 并保持项目在 VS Code 打开。
+8. 最小对照：先不接 connector，用同一个 AI 聊天手动复制粘贴完成 2–3 个边界清楚的任务，例如检查文件并解释登录流程、给页面加搜索栏并接现有 API；记录耗时、人工复制粘贴和终端步骤数、返工次数。再接 connector 重复同类任务；每次接受修改前用 `git status` 和 `git diff` 检查改动范围。记录任务完成情况、从开始到首个有用结果的时间、总完成时间、人工复制粘贴和终端步骤数、工具调用失败次数、bridge 断连次数、返工次数、非预期文件改动数；如果测试仓库有测试或构建命令，记录是否通过。与手动基线相比，若完成时间或人工步骤明显减少，且非预期改动和返工没有增加，可认为小范围有效；若出现 bridge 不稳定、AI 不使用工具、权限过大或工作区意外改动，应停止扩大范围，并优先收紧权限和隔离环境。原文没有给出效果数字，以上指标需在试用中自行采集。
+
 ## 怎么判断变好了
 
 可观察指标：
-- 通路：`uvx jevcrawl doctor` 是否报通路正常；`rea` 是否出现在 Hermes 服务器列表；CLI-Hub 的 `cli-hub info/install/launch` 是否成功；`arcmira_describe` 是否返回方法表与版本行；`reason network who` 是否稳定列出对方 session 及当前任务；`idx mcp setup <client>` 是否打印绝对路径、客户端里 `idx` 是否出现且工具数可枚举；Blender 扩展是否能打开 MCP Pro 面板、选中支持 tool calling 的模型、跑通「检查场景 → 建对象 → 复制排列」；jevreel 是否 `index` 打印 video id、`ask` 返回时间/概率/帧、`zoom` 取到全分辨率帧；WhatsApp MCP 的 `/debug` 是否为 `phase: idle` 且 `paired: true`；im-mcp 的 `wechat-init` / `dingtalk-init` 是否成功；claude-security-scan 的 `--demo --open` 能否打开示例报告、`--skip repos` 能否生成 `reports/<日時>/report.html`；vulnerator-ai 的 `docker compose ps` 是否四容器健康、前门是否只暴露 6 个 run 生命周期工具；TradingView MCP 是否 `node src/cli.mjs launch` 无报错、Claude Code 是否识别 server 与工具列表；agent-toolkit-for-aws 是否装出 aws-core 插件、skills 是否可见、MCP Server 是否被客户端识别；flashmind 客户端里是否出现 `flashmind` MCP 服务、规则文件是否落到对应路径、技能是否只有一份副本；mcode-stack 的 `/skills` 是否列出已装技能、`/<skill-name>` 调用后是否按技能执行。
-- 工具清单：注册后必须去客户端确认工具真的出现、数量可枚举；不能把「注册成功」当「验证完成」。
-- 任务效果：同一组真实任务，挂载 vs 未挂载/人工，比较任务完成率、答案正确性、漏掉已知消息数、人工步骤数、耗时、工具报错次数。vulnerator-ai 另有：发现数与人工 checklist 的比值、误报数、重复命令比例、`steer_run` 干预次数、`stop_run` 后是否真的停止。TradingView 路径只比只读问答。agent-toolkit-for-aws 比较同一 AWS 任务未装 vs 只装 aws-core：完成情况、耗时、调用到的 AWS API、CloudTrail 审计是否可见、IAM 条件键是否区分 agent 与人类动作。flashmind 比较同一仓库、同一类任务试用前后两类幻觉事件计数、返工时长、测试通过率。mcode-stack 比较调用技能 vs 不调用技能：长命令阻塞/人工中断/重试/后台任务失败或丢失/等待时间；同一 diff 的干净上下文评审发现的问题数、普通评审漏掉的问题数、无效评论数、评审耗时；同一评估任务重复运行的通过率波动、翻转任务数量、一次只改一项时能否定位变化来源；团队是否愿意持续调用、返工或评审往返是否减少。
+- 通路：`uvx jevcrawl doctor` 是否报通路正常；`rea` 是否出现在 Hermes 服务器列表；CLI-Hub 的 `cli-hub info/install/launch` 是否成功；`arcmira_describe` 是否返回方法表与版本行；`reason network who` 是否稳定列出对方 session 及当前任务；`idx mcp setup <client>` 是否打印绝对路径、客户端里 `idx` 是否出现且工具数可枚举；Blender 扩展是否能打开 MCP Pro 面板、选中支持 tool calling 的模型、跑通「检查场景 → 建对象 → 复制排列」；jevreel 是否 `index` 打印 video id、`ask` 返回时间/概率/帧、`zoom` 取到全分辨率帧；WhatsApp MCP 的 `/debug` 是否为 `phase: idle` 且 `paired: true`；im-mcp 的 `wechat-init` / `dingtalk-init` 是否成功；claude-security-scan 的 `--demo --open` 能否打开示例报告、`--skip repos` 能否生成 `reports/<日時>/report.html`；vulnerator-ai 的 `docker compose ps` 是否四容器健康、前门是否只暴露 6 个 run 生命周期工具；TradingView MCP 是否 `node src/cli.mjs launch` 无报错、Claude Code 是否识别 server 与工具列表；agent-toolkit-for-aws 是否装出 aws-core 插件、skills 是否可见、MCP Server 是否被客户端识别；flashmind 客户端里是否出现 `flashmind` MCP 服务、规则文件是否落到对应路径、技能是否只有一份副本；mcode-stack 的 `/skills` 是否列出已装技能、`/<skill-name>` 调用后是否按技能执行；snapgent-connector 是否出现 snapgentV3 图标、bridge 是否保持开启、VS Code target 是否可用、聊天 AI 是否实际调用工具。
+- 工具清单：注册后必须去客户端确认工具真的出现、数量可枚举；不能把「注册成功」当「验证完成」。snapgent 默认 VS Code MCP server 标注有 24 个 workspace 工具，但原文只给标注，不是完整能力清单，仍要在客户端核对。
+- 任务效果：同一组真实任务，挂载 vs 未挂载/人工，比较任务完成率、答案正确性、漏掉已知消息数、人工步骤数、耗时、工具报错次数。vulnerator-ai 另有：发现数与人工 checklist 的比值、误报数、重复命令比例、`steer_run` 干预次数、`stop_run` 后是否真的停止。TradingView 路径只比只读问答。agent-toolkit-for-aws 比较同一 AWS 任务未装 vs 只装 aws-core：完成情况、耗时、调用到的 AWS API、CloudTrail 审计是否可见、IAM 条件键是否区分 agent 与人类动作。flashmind 比较同一仓库、同一类任务试用前后两类幻觉事件计数、返工时长、测试通过率。mcode-stack 比较调用技能 vs 不调用技能：长命令阻塞/人工中断/重试/后台任务失败或丢失/等待时间；同一 diff 的干净上下文评审发现的问题数、普通评审漏掉的问题数、无效评论数、评审耗时；同一评估任务重复运行的通过率波动、翻转任务数量、一次只改一项时能否定位变化来源；团队是否愿意持续调用、返工或评审往返是否减少。snapgent 比较手动复制粘贴基线 vs 接 connector：任务完成情况、首个有用结果时间、总完成时间、人工复制粘贴和终端步骤数、工具调用失败次数、bridge 断连次数、返工次数、非预期文件改动数、测试/构建是否通过。
 - 成本与停止原因：jevcrawl 看 `jev_cost_usd`、`stopped_because`、`degraded`、`needs_js_urls`；arcmira 看 `quote` 预估与实际消耗、错误码是否可按 `code` 分支；jevreel 看 `jevreel measure` 与实际计费、重复 `ask` 是否 0 请求 0 成本、`query` 是否不产生请求。
-- 安全负向指标：是否出现越权访问、读取工作目录之外文件、执行非预期命令；Blender 侧看 `execute_code` 是否超出预期；jevreel 侧确认视频帧与问题允许外发到 TypeSafe；WhatsApp MCP 侧确认没有发送消息、没有多人共享；im-mcp 侧确认只读、明文数据库已按需清理；claude-security-scan 侧确认没有明文秘密、没有对测试仓库/账号产生写入或发送、报告权限 700；vulnerator-ai 侧确认没有越出靶场或授权范围的动作、前门没有暴露原始 `kali_run`；TradingView 侧确认没有接真实账户、没有下单；agent-toolkit-for-aws 侧确认先只读/最小权限、CloudTrail 能看到 agent 动作；flashmind 侧确认规则文件与技能只有一份、记忆库没有存进未经核实的结论；mcode-stack 侧确认技能只从可信仓库安装、没有把密钥写进技能目录或日志。
+- 安全负向指标：是否出现越权访问、读取工作目录之外文件、执行非预期命令；Blender 侧看 `execute_code` 是否超出预期；jevreel 侧确认视频帧与问题允许外发到 TypeSafe；WhatsApp MCP 侧确认没有发送消息、没有多人共享；im-mcp 侧确认只读、明文数据库已按需清理；claude-security-scan 侧确认没有明文秘密、没有对测试仓库/账号产生写入或发送、报告权限 700；vulnerator-ai 侧确认没有越出靶场或授权范围的动作、前门没有暴露原始 `kali_run`；TradingView 侧确认没有接真实账户、没有下单；agent-toolkit-for-aws 侧确认先只读/最小权限、CloudTrail 能看到 agent 动作；flashmind 侧确认规则文件与技能只有一份、记忆库没有存进未经核实的结论；mcode-stack 侧确认技能只从可信仓库安装、没有把密钥写进技能目录或日志；snapgent 侧确认只在非敏感仓库、没有非预期文件改动、扩展站点权限和 MCP 写权限没有超出预期。
 
-对照试验设计：所有系统从同一入口、同样预算、同一个问题出发，抓到的内容交给同一个回答 LLM，由同一个 judge 打分，只让被试工具这个变量变。没有对比性指标的工具，先用流程内建测试和真实重复任务做前后对照。vulnerator-ai 的对照要额外固定靶场和目标。TradingView 接入的对照只比接入与只读查询。agent-toolkit-for-aws 的对照要固定 AWS 账号/沙箱、区域和任务。flashmind 的对照要固定仓库、客户端和任务类型。mcode-stack 的对照要固定仓库、任务类型和技能组合，只比较调用技能与不调用技能；不要同时装整套 15 个技能。
+对照试验设计：所有系统从同一入口、同样预算、同一个问题出发，抓到的内容交给同一个回答 LLM，由同一个 judge 打分，只让被试工具这个变量变。没有对比性指标的工具，先用流程内建测试和真实重复任务做前后对照。vulnerator-ai 的对照要额外固定靶场和目标。TradingView 接入的对照只比接入与只读查询。agent-toolkit-for-aws 的对照要固定 AWS 账号/沙箱、区域和任务。flashmind 的对照要固定仓库、客户端和任务类型。mcode-stack 的对照要固定仓库、任务类型和技能组合，只比较调用技能与不调用技能；不要同时装整套 15 个技能。snapgent 的对照要固定同一个聊天站点、同一个测试仓库和同类任务，只比较手动复制粘贴与接 connector；不要同时改 prompt、模型和任务类型。
 
 可参考的作者自测数据（非独立验证）：
 - jevcrawl：50 个 WebWalkerQA 任务答对 40%、找到答案页 54%、$0.025/任务；与 Crawl4AI 0.9.4 的 20 任务对照答案页 10 vs 5；docs.python.org 示例 80,034 tokens 压到 1,873 tokens。
@@ -458,6 +484,7 @@ mcode plugin marketplace list
 - agent-toolkit-for-aws：官方 README；约 3196 stars 只是关注度；没有独立测评、客户案例或 skills 端到端指标。
 - flashmind：31 stars；没有防幻觉规则正文、没有 4 个 `SKILL.md` 正文、没有基准或前后对比；能照抄的是接线方式。
 - mcode-stack：README 列出 15 个技能，有 MIT、GitHub Actions `validate` 徽章和配套文章；作者称团队每天实际使用，但本次没有使用前后对比、缺陷率、节省时间、采用率等量化数据，也没有真实案例细节；只有 README，没有各 `SKILL.md`、`checklists/`、`WORKFLOW.md` 正文。
+- snapgent-connector：README 给出支持站点、系统要求、分平台安装、启动方式、使用示例、架构说明、项目结构、排障表和测试文件；53 stars、release V3.3、GPL-3.0。没有独立安全审计、性能基准或用户案例；没有任务成功率、时间节省、错误率或基准数据。作者主张无需 API key、订阅或登录、无需终端、无需复制粘贴；但支持站点是有限列表，Linux 步骤需要在终端运行 launcher，各平台也要求保持 bridge 窗口或终端开启。README 还标注 Gemini/Kimi 长会话可能停止使用工具、ChatGPT/Claude 禁用图片输入和截图、Grok 需要登录 xAI、Arena 要用 Direct 模式。
 
 最小试用方式与试多久：
 - jevcrawl：半天内完成。准备一个答案埋在首页几跳之下、站点不依赖 JS 的真实问题；先跑现有方式，再接 jevcrawl 跑同一个问题，交给同一个评审对照打分。
@@ -476,12 +503,13 @@ mcode plugin marketplace list
 - agent-toolkit-for-aws：先选一个 AWS 仓库和一个边界清晰任务，只装 aws-core，在沙箱账号或只读权限下做一轮；先跑未装基线，再跑装后同任务，记录完成、耗时、CloudTrail 审计、权限边界。
 - flashmind：两周。选一个真实仓库、只选一个客户端，只装 MCP 记忆 + 规则文件 + `verify-before-done` 一个技能；记录两类幻觉事件计数、返工时长、记忆库过期比例、测试通过率，与试用前对照。
 - mcode-stack：建议 2–3 个技能，不要一次装整套；优先 `long-command-check` + `independent-review` + `harness-experiment`；装到 `~/.agents/skills/`，新开会话用 `/skills` 确认可见，再在真实任务中调用；同时保留一个不调用技能的对照会话；先打开对应 `SKILL.md` 核对具体检查项。原文没给试多久，按前后各 5–10 次长命令任务、同一 diff 对照评审、同一评估任务重复运行来收数；没有可观察改善就停在 try。
+- snapgent-connector：原文未给时长；至少用 2–3 个边界清楚的任务做手动复制粘贴基线和接 connector 的前后对照。每次接受修改前看 `git status` 和 `git diff`；记录完成情况、首个有用结果时间、总完成时间、人工步骤、工具失败、bridge 断连、返工、非预期改动、测试/构建通过。完成时间或人工步骤明显减少且非预期改动和返工不增加，才小范围有效；出现 bridge 不稳定、AI 不使用工具、权限过大或工作区意外改动就停止扩大。
 
 在得到明确正负结果前，不要扩展到长期使用或生产环境。
 
 ## 常见坑
 
-- 把「注册成功」当成「验证完成」。REA 原文没有 list/枚举命令，要查 Hermes 文档补上；jevcrawl 至少还有 `uvx jevcrawl doctor`；arcmira 至少还有 `arcmira_describe`；reason network 至少还有 `reason network who`；idx 至少还要去客户端确认 `idx` 出现、工具数可枚举；Blender 扩展至少还要跑一遍「检查场景 → 建对象 → 复制排列」；jevreel 至少还要 `ask` 真问一次、`zoom` 真看一次；WhatsApp MCP 至少还要看 `/debug` 的 `paired` 与 `last_pull`；im-mcp 至少还要初始化成功、客户端真调一次检索工具；claude-security-scan 至少还要 `--demo` 打开报告、再只对一个低风险域 `--skip repos` 跑一次并人工复核；vulnerator-ai 至少还要四容器健康、前门 6 个工具各走一次、`stop_run` 真能停；TradingView MCP 至少还要看到 server 被识别、工具列表可枚举；agent-toolkit-for-aws 至少还要看到 aws-core 插件、skills 和 MCP Server 在客户端出现；flashmind 至少还要看到 `flashmind` MCP 服务、规则文件落到正确路径、技能只有一份副本；mcode-stack 至少还要 `/skills` 列出技能、在真实任务中调用一次并保留对照。
+- 把「注册成功」当成「验证完成」。REA 原文没有 list/枚举命令，要查 Hermes 文档补上；jevcrawl 至少还有 `uvx jevcrawl doctor`；arcmira 至少还有 `arcmira_describe`；reason network 至少还有 `reason network who`；idx 至少还要去客户端确认 `idx` 出现、工具数可枚举；Blender 扩展至少还要跑一遍「检查场景 → 建对象 → 复制排列」；jevreel 至少还要 `ask` 真问一次、`zoom` 真看一次；WhatsApp MCP 至少还要看 `/debug` 的 `paired` 与 `last_pull`；im-mcp 至少还要初始化成功、客户端真调一次检索工具；claude-security-scan 至少还要 `--demo` 打开报告、再只对一个低风险域 `--skip repos` 跑一次并人工复核；vulnerator-ai 至少还要四容器健康、前门 6 个工具各走一次、`stop_run` 真能停；TradingView MCP 至少还要看到 server 被识别、工具列表可枚举；agent-toolkit-for-aws 至少还要看到 aws-core 插件、skills 和 MCP Server 在客户端出现；flashmind 至少还要看到 `flashmind` MCP 服务、规则文件落到正确路径、技能只有一份副本；mcode-stack 至少还要 `/skills` 列出技能、在真实任务中调用一次并保留对照；snapgent 至少还要看到 snapgentV3 图标、bridge 保持开启、VS Code target 可用、聊天 AI 实际调用工具。
 - 把名字当 id 传。arcmira 的过滤器只接受原样 id，传名字会在发网络请求前抛 `id_required`；必须先 `resolve`。
 - 连上就开始猜方法签名。先调 `arcmira_describe`，把 id 规则、参数与返回字段、计量规则、错误码一次读全。
 - 不看清计量规则就批量跑。arcmira 搜索按超出前 5 条的每条 passage 收 4 credits；Premium 转录每开始 15 分钟收 300 credits；贵操作前先 `arcmira.quote`。
@@ -490,8 +518,8 @@ mcode plugin marketplace list
 - 建了 arcmira monitor 就以为能删。它不提供删除，只能 `paused`。
 - 把厂商自述当独立证据。arcmira 的数据覆盖与说话人/赞助识别准确性全是厂商自述。
 - 把「安装成功」当「任务有效」。CLI-Hub 装完 harness 后，要接进 agent 跑一条真实重复任务。
-- 把作者自测当独立证据。jevcrawl、CLI-Anything、reason network、idx、Blender 扩展、jevreel、WhatsApp MCP、im-mcp、claude-security-scan、vulnerator-ai、TradingView、agent-toolkit-for-aws、flashmind、mcode-stack 都只有 README、作者自测或关注度，不等于独立效果证据。
-- 在主力环境里直接跑第三方包。REA 依赖 `npx`、jevcrawl 依赖 `uvx`、CLI-Hub 依赖 `pip`，都会拉取并执行第三方包；arcmira 在厂商沙箱里执行；idx 是静态二进制直连公开数据源；Blender 扩展的 Python 工具验证不是安全沙箱；jevreel 的视频帧与问题会发到 TypeSafe；WhatsApp MCP 使用非官方协议；im-mcp 会把本地数据库解密后明文落盘；claude-security-scan 会读取多账户敏感信息；vulnerator-ai 默认没有 scope-guard、consent、audit；TradingView MCP 是本地 Node 进程；agent-toolkit-for-aws 会访问 AWS API；flashmind 通过 `npx` 拉取 npm 包；mcode-stack 是技能文件，安装前要确认来源和目录权限，不要把密钥写进技能目录或日志。
+- 把作者自测当独立证据。jevcrawl、CLI-Anything、reason network、idx、Blender 扩展、jevreel、WhatsApp MCP、im-mcp、claude-security-scan、vulnerator-ai、TradingView、agent-toolkit-for-aws、flashmind、mcode-stack、snapgent 都只有 README、作者自测或关注度，不等于独立效果证据。
+- 在主力环境里直接跑第三方包。REA 依赖 `npx`、jevcrawl 依赖 `uvx`、CLI-Hub 依赖 `pip`，都会拉取并执行第三方包；arcmira 在厂商沙箱里执行；idx 是静态二进制直连公开数据源；Blender 扩展的 Python 工具验证不是安全沙箱；jevreel 的视频帧与问题会发到 TypeSafe；WhatsApp MCP 使用非官方协议；im-mcp 会把本地数据库解密后明文落盘；claude-security-scan 会读取多账户敏感信息；vulnerator-ai 默认没有 scope-guard、consent、audit；TradingView MCP 是本地 Node 进程；agent-toolkit-for-aws 会访问 AWS API；flashmind 通过 `npx` 拉取 npm 包；mcode-stack 是技能文件，安装前要确认来源和目录权限，不要把密钥写进技能目录或日志；snapgent 是 unpacked 浏览器扩展加本地 bridge，可能读写 VS Code 工作区，先只在非敏感仓库试用。
 - 忽略版本写死。`rea-agents@6.3.0`、`jev-1.13.0`、`jev-1.14.0`、微信/钉钉版本都是写死或强依赖的；换版本要重新核对。
 - 以为 jevcrawl 能爬任何站点。它不执行 JavaScript、不读 `robots.txt`、不登录、不绕付费墙和 CAPTCHA。
 - 忽略内容外发。jevcrawl 会把页面文本发送到 TypeSafe；API key 只从环境变量读，不落盘、不写日志。
@@ -532,6 +560,13 @@ mcode plugin marketplace list
 - 忽略 mcode-stack 的技能发现路径。技能可放 `~/.agents/skills/`、项目级 `.minimax/skills/`、`.claude/skills/`、`.agents/skills/`，全局还会读 `~/.claude/skills/`、`~/.codex/skills/`；放错位置 `/skills` 看不到。
 - 把 `harness-experiment` 当一次跑完就算。README 要求小评估、一次只改一项、重复运行、看翻转任务；不重复运行无法判断波动。
 - 把 `independent-review` 的干净上下文当普通评审。它要求只提供 diff、需求和测试结果；把完整会话和历史都塞进去就失去「独立」条件。
+- 把浏览器聊天接本地工作区当无风险。snapgent 扩展是 unpacked 加载，涉及站点权限；bridge 路由到 VS Code MCP，可能读写工作区；先只在非敏感、可丢弃仓库试用，每次接受修改前看 `git status` 和 `git diff`。
+- 关掉 bridge 后以为 agent 还能工作。使用期间 bridge 窗口或终端必须保持开启；bridge offline 时重新启动对应 launcher。
+- 在敏感仓库或生产工作区试 snapgent。README 没有独立安全审计，扩展权限和 MCP 写权限需要先隔离验证；不要直接在主力工作目录上试。
+- 把「无需终端」当成所有平台都成立。Linux 需要在终端运行 `bash Linux_Start.sh`，各平台也要求保持 bridge 窗口或终端开启。
+- 把默认 24 个 workspace 工具当完整能力清单。原文只说默认 VS Code MCP server 标注有 24 个 workspace 工具，仍要在客户端核对实际工具名称与参数。
+- 忽略 snapgent 的站点限制。ChatGPT/Claude 禁用图片输入和截图；Grok 需要登录 xAI；Gemini 或 Kimi 长会话可能停止使用工具；Arena 要用 Direct 模式。
+- 以为 snapgent 有定时或事件触发。原文没有时间、事件或状态触发的自动任务；会话由用户点击 Start 并发出指令启动。
 
 ## 证据与来源
 
@@ -553,6 +588,7 @@ mcode plugin marketplace list
 - 做法 O agent-toolkit-for-aws：证据来自 AWS 官方 README，仓库状态为 GA，许可证 Apache-2.0，约 3196 stars。可核查：多 agent 安装命令、Kiro/fx 的 MCP JSON 配置、skills 安装命令、插件覆盖范围、项目级 rules 目录、IAM 条件键/CloudWatch 指标/CloudTrail 审计的陈述。局限：只有官方文档，没有独立测评或客户案例；没有 skills 端到端评估指标；没有 IAM/CloudWatch/CloudTrail 配置样例；没有 rules 文件内容；没有提示词模板。
 - 做法 P flashmind：可核查的是 npm 包名 `flashmind`、MIT、31 stars、Node ≥18、可直接复制的 MCP JSON、六种客户端配置映射表、技能触发条件表、更新与去重规则、Gemini CLI 斜杠命令、隐私承诺。属于作者主张、原文未提供支撑的：「消除幻觉」「让快模型记得住、会规划、会验证」；没有任何基准、案例、前后对比数据或用户反馈。关键缺失：防幻觉规则的实际正文和 4 个 `SKILL.md` 的正文都没有出现在抓取到的文本里。
 - 做法 Q mcode-stack：证据来自仓库 README，MIT（部分 stack 的 `NOTICE.md` 可能另有说明），有 15 个技能徽章、GitHub Actions `validate` 徽章、01–04 和即将发布的 06 篇配套文章；安装命令、目录发现规则、插件市场命令和技能清单是具体可执行的。六个 `engineering-*` 技能注明改编自 Google Engineering Practices，改编材料保持 CC-BY 3.0。只是作者主张：README 称这些是团队「每天实际使用」的工作流，并称真正拉开差距的是代理周围的工程习惯；本次材料没有使用前后对比、缺陷率、节省时间、采用率等量化数据，也没有真实案例细节。关键局限：只拿到 README，没有各 `SKILL.md`、`checklists/`、`WORKFLOW.md` 正文，无法验证每个技能的具体检查项是否足够可照做；部分安装方式依赖 MiniMax Code 版本（插件市场在逐步开放），`mcode plugin add` 也不支持 GitHub URL 或本地路径。结论强度：try，先选 2–3 个技能小范围试用，打开 `SKILL.md` 后再决定是否采用其具体流程。
+- 做法 R snapgent-connector：证据主要来自仓库 README：支持 provider 列表、系统要求、分平台安装步骤、启动方式、使用示例、架构说明、项目结构、排障表和测试文件；仓库 53 stars、release V3.3、GPL-3.0。可核查的接入动作是：加载 `snapgent-extension` 扩展、按系统启动 bridge、在 VS Code 打开项目、聊天栏点击 Start、用示例提示词发任务。作者主张包括：无需 API key、订阅或登录；无需终端、无需复制粘贴；Turn any AI chatbot browser to VS Code。但实际支持站点是有限列表，Linux 步骤需要在终端运行 launcher，各平台也要求保持 bridge 窗口或终端开启，因此「no terminal」不是完全无条件成立。README 还标注了 Gemini/Kimi 长会话可能停止使用工具、ChatGPT/Claude 禁用图片输入和截图、Grok 需要登录 xAI、Arena 要用 Direct 模式。局限：只有 README，没有独立安全审计、性能基准或用户案例；扩展以 unpacked 方式加载，涉及浏览器站点权限和本地 MCP 路由，VS Code MCP 可能读写工作区；README 对 provider 激活只给出文件位置，没有给出可直接复制的完整配置值；没有证据支持定时、事件触发或长期自主推进。结论强度：try，只在非敏感、可丢弃仓库小范围验证。
 
 ## 依据的调研
 
@@ -572,3 +608,4 @@ mcode plugin marketplace list
 - [aws/agent-toolkit-for-aws](../research/radar/2026-10-25/6886-aws-agent-toolkit-for-aws.md)：值得一试，如果团队在 AWS 上开发且已使用 Claude Code、Codex、Cursor、Devin、Kiro 或 fx，建议先安装 aws-core 并在只读权限下小范围试用；它把 MCP 服务、Agent Skills、插件和审计控制打包，能直接补齐智能体访问 AWS 的能力与权限供给，但证据主要来自官方 README，缺少独立效果数据。
 - [Hvftpie13/Flashmind_Gemini-3.8-Flash_Smart-agent](../research/radar/2026-10-27/7314-hvftpie13-flashmind-gemini-3-8-flash-smart-agent.md)：值得一试，先在一个仓库、一个 MCP 客户端上照着 README 接线（npx 启动的 MCP 配置、规则文件、verify-before-done 单个技能），小范围试用两周，再用「未跑测试就说已修复」和「虚构包名或函数」两类事件计数判断去留；理由是原文提供了可直接照抄的安装命令、MCP JSON 和客户端配置映射，但没有给出任何效果数据，且防幻觉规则正文与四个技能正文均未提供，只能复用其接线方式。
 - [MiniMax-AI/mcode-stack](../research/radar/2026-10-29/7996-minimax-ai-mcode-stack.md)：值得一试，建议小范围试用：先在 MiniMax Code 或 Claude Code 中安装 long-command-check、independent-review、harness-experiment 等技能，按 README 的目录和插件方式接入，并用 /skills 调用，验证能否改善长命令、评审和实验流程。理由是它给出了可执行的安装与调用步骤，且来自团队日常使用；但当前材料只有 README，具体检查项需打开各 SKILL.md 才能照做。
+- [herdodp/snapgent-connector](../research/radar/2026-10-29/7994-herdodp-snapgent-connector.md)：值得一试，建议小范围试用：在非敏感仓库按 README 加载浏览器扩展并启动本地桥接，让浏览器聊天 AI 经 MCP 操作 VS Code；理由是安装、启动、使用和排障步骤较完整，但项目成熟度、扩展权限与 MCP 写权限需先隔离验证，暂不宜直接全量采用。
