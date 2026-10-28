@@ -1,45 +1,44 @@
-# 把第三方工具接给编码代理：先隔离跑通，再用对照证据决定去留
+# 给代理接第三方工具包：先隔离试用、核对清单、再决定去留
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：这篇手册解决的是：怎么在不污染主力环境、不越过数据外发边界的前提下，完成第三方工具/MCP/技能接入、核对工具清单、冒烟测试和对照验证，并据证据决定“继续试”“只当思路参考”还是“停止”。
-> 先试这一步：先挑一个能在半天内跑完的最小路径：只接一个工具、只在一个隔离环境或低风险账号里试，先记录未接入时的基线，再跑接入后的同一任务并对比。
-> 最近修订：2026-10-27
+> 解决的问题：在不污染主力环境、不越过数据外发边界的前提下，把第三方 MCP、CLI、技能包或插件接给代理，用可观察对照决定继续、降级还是停止。
+> 先试这一步：先选一个低风险真实任务做未接入基线，再把目标工具装进隔离环境，只跑一次冒烟并对照。
+> 最近修订：2026-10-29
 
 ## 解决什么问题
 
-把第三方工具以 MCP、CLI 或技能形式接给代理时，常见供给方式是一句注册/安装命令就完事：能不能用、多出哪些工具、花了多少钱、数据发到哪里、和现有做法比是不是真的更好，全靠感觉。本章解决的是：怎么在不污染主力环境、不越过数据外发边界的前提下，完成接入、核对工具清单、冒烟测试和对照验证，并据证据决定“继续试”“只当思路参考”还是“停止”。现在覆盖 15 条工具路径：jevcrawl、REA/Hermes、arcmira、CLI-Anything/CLI-Hub、reason network、idx、Blender 扩展、jevreel、WhatsApp MCP、im-mcp、claude-security-scan、vulnerator-ai、TradingView-Unified-MCP、agent-toolkit-for-aws、flashmind；做法 C 是不接入的降级做法。WhatsApp MCP、im-mcp 这两条私人消息路径有一个共同前提：先只读、只用自己的个人账号、只在一台机器上试；发送、多人共享、媒体转写都不在范围内。claude-security-scan 路径也要先只读、只对一个低风险域、确认脱敏和“未能确认”标注可靠后再扩大。vulnerator-ai 更极端：它是默认无 scope-guard、无 consent、无 audit、无授权闸门的自主渗透循环，只在隔离靶场、只对明确授权的目标试，先把它当“自主循环 + 工具供给”的架构模板，而不是当生产工具。TradingView-Unified-MCP 只验证“Claude Code 通过本地 MCP 接触外部数据平台”的接入动作；原文在启动命令后被截断、零效果证据，不能据此上真实资金。agent-toolkit-for-aws 则把 MCP 服务、Agent Skills、插件、项目级 rules 和审计控制打包给支持的编码 agent；先只装 aws-core，并在只读或沙箱权限下小范围试用，不要先放开写操作。flashmind 是另一类打包插件：它把 MCP 记忆、防幻觉规则和 4 个按需技能一起装进编码客户端，但原文只给了接线方式，规则正文与技能正文都缺失、也没有效果数据；先只选一个仓库、一个客户端，只启用 `verify-before-done` 一个技能，用两周对照决定去留。
+把第三方工具以 MCP、CLI、技能包或插件形式接给代理时，常见供给方式是一句注册/安装命令就完事：能不能用、多出哪些工具、花了多少钱、数据发到哪里、和现有做法比是不是真的更好，全靠感觉。本章解决的是：怎么在不污染主力环境、不越过数据外发边界的前提下，完成接入、核对工具清单、冒烟测试和对照验证，并据证据决定「继续试」「只当思路参考」还是「停止」。现在覆盖 16 条工具路径：jevcrawl、REA/Hermes、arcmira、CLI-Anything/CLI-Hub、reason network、idx、Blender 扩展、jevreel、WhatsApp MCP、im-mcp、claude-security-scan、vulnerator-ai、TradingView-Unified-MCP、agent-toolkit-for-aws、flashmind、mcode-stack；做法 C 是不接入的降级做法。WhatsApp MCP、im-mcp 这两条私人消息路径有一个共同前提：先只读、只用自己的个人账号、只在一台机器上试；发送、多人共享、媒体转写都不在范围内。claude-security-scan 路径也要先只读、只对一个低风险域、确认脱敏和「未能确认」标注可靠后再扩大。vulnerator-ai 更极端：它是默认无 scope-guard、无 consent、无 audit、无授权闸门的自主渗透循环，只在隔离靶场、只对明确授权的目标试，先把它当「自主循环 + 工具供给」的架构模板，而不是当生产工具。TradingView-Unified-MCP 只验证「Claude Code 通过本地 MCP 接触外部数据平台」的接入动作；原文在启动命令后被截断、零效果证据，不能据此上真实资金。agent-toolkit-for-aws 则把 MCP 服务、Agent Skills、插件、项目级 rules 和审计控制打包给支持的编码 agent；先只装 aws-core，并在只读或沙箱权限下小范围试用，不要先放开写操作。flashmind 是另一类打包插件：它把 MCP 记忆、防幻觉规则和 4 个按需技能一起装进编码客户端，但原文只给了接线方式，规则正文与技能正文都缺失、也没有效果数据；先只选一个仓库、一个客户端，只启用 `verify-before-done` 一个技能，用两周对照决定去留。mcode-stack 是「技能/工作流包」：它把团队习惯做成 15 个 `SKILL.md` 技能、检查清单和 `WORKFLOW.md`，可装到 MiniMax Code，部分也可用于 Claude Code 和其他支持 skills 的代理；但本次只有 README，没有各技能正文，先只选 2–3 个技能，打开对应 `SKILL.md` 核对具体检查项后再决定是否照做。
 
 ## 适用与不适用
 
 适用：
-
-- 通用：本机有可用的 MCP 客户端；愿意在容器、虚拟机或专用账号里先跑第三方包；目标是让代理获得一整套外部工具或一类新能力；需要反复调用外部软件、需要可复现操作；愿意做“挂载 vs 未挂载”的对照。
+- 通用：本机有可用的 MCP 客户端或支持 skills 的代理；愿意在容器、虚拟机或专用账号里先跑第三方包；目标是让代理获得一整套外部工具或一类新能力；需要反复调用外部软件、需要可复现操作；愿意做「挂载 vs 未挂载」或「调用技能 vs 不调用技能」的对照。
 - jevcrawl：站内多跳资料检索，答案埋在首页几跳之下，且目标站点不依赖 JavaScript 渲染。
 - REA/Hermes：已有 Hermes CLI，想试一条 `npx` 拉起的 MCP 工具集；但原文只给一条命令、能力清单被截断，只适合试。
 - arcmira：要在 YouTube 视频与直播转录里检索谁在什么时间说了什么、品牌赞助、谁在推荐某个实体；接受远程 MCP + 写程序调用；有付费计划与预算。
 - CLI-Anything：要反复调用 GIMP、Blender、LibreOffice 等软件，愿意先装上游软件；或想让编码 agent 为内部工具生成 CLI。
 - reason network：团队里每个人都在用 Reason CLI、成员都在同一个 Reason workspace，想让一个 session 直接问另一个 session。
-- idx：目标就是印尼股市，或想照抄它的结构——“一份数据三种界面”、`mcp setup` 自动填绝对路径、统一 envelope 与退出码。
+- idx：目标就是印尼股市，或想照抄它的结构——「一份数据三种界面」、`mcp setup` 自动填绝对路径、统一 envelope 与退出码。
 - Blender 扩展：Windows x64 + Blender 4.2+，想让 AI 在场景里做可回退操作，并要审批、取消、命名撤销与视口截图。
-- jevreel：有一段本地或 URL 视频，要在里面找“某个瞬间在哪儿”；接受底层 Jev 图像能力仍是实验性、验证只基于单个测试视频。
+- jevreel：有一段本地或 URL 视频，要在里面找「某个瞬间在哪儿」；接受底层 Jev 图像能力仍是实验性、验证只基于单个测试视频。
 - WhatsApp MCP：个人 WhatsApp 账号，只做只读检索、摘要、补看群聊、给未命名聊天补名；愿意在自己的 Cloudflare 付费 Workers 上部署；能接受非官方协议和违反 WhatsApp 条款的风险；一个部署只对应一个账号和一个 owner。
 - im-mcp：Windows x64 或 macOS，微信 4.x / 钉钉 7.x，客户端已登录；要给 agent 补一段私有沟通上下文；只读检索；能接受本地数据库解密后明文落盘、强依赖客户端版本。
-- claude-security-scan：已安装 Claude Code、git、bash；Python 3.11+；能访问 GitHub；想用一句自然语言或定时任务做跨 Mac 本体、本地 git 仓库、GitHub、Vercel/公开站点、AWS、GCP、Azure、Cloudflare、Supabase、Gmail 的只读例行检查；愿意按域准备只读登录；接受缺工具或权限时进入“未能确认”而不是“无问题”；想按重要度、领域、NEW 过滤报告。
-- vulnerator-ai：已经能在隔离环境里接入单个 MCP 工具集；想在授权靶场上验证“模型自己决定下一步并直接执行”的 OODA 循环；有 docker、docker compose v2、openssl 与 OpenRouter key；能接受默认无 scope-guard、无 consent、无 audit、无授权闸门；目标已获书面授权，且能把 kali 容器与宿主机/内网隔开。
-- TradingView-Unified-MCP：已装 Claude Code 与 Node.js；想验证“Claude Code 通过本地 MCP 进程接触外部数据平台”的接入形态；只做只读行情/图表查询，不接真实资金；愿意先读仓库 README 补齐注册、账号/订阅与权限要求。
+- claude-security-scan：已安装 Claude Code、git、bash；Python 3.11+；能访问 GitHub；想用一句自然语言或定时任务做跨 Mac 本体、本地 git 仓库、GitHub、Vercel/公开站点、AWS、GCP、Azure、Cloudflare、Supabase、Gmail 的只读例行检查；愿意按域准备只读登录；接受缺工具或权限时进入「未能确认」而不是「无问题」；想按重要度、领域、NEW 过滤报告。
+- vulnerator-ai：已经能在隔离环境里接入单个 MCP 工具集；想在授权靶场上验证「模型自己决定下一步并直接执行」的 OODA 循环；有 docker、docker compose v2、openssl 与 OpenRouter key；能接受默认无 scope-guard、无 consent、无 audit、无授权闸门；目标已获书面授权，且能把 kali 容器与宿主机/内网隔开。
+- TradingView-Unified-MCP：已装 Claude Code 与 Node.js；想验证「Claude Code 通过本地 MCP 进程接触外部数据平台」的接入形态；只做只读行情/图表查询，不接真实资金；愿意先读仓库 README 补齐注册、账号/订阅与权限要求。
 - agent-toolkit-for-aws：团队在 AWS 上开发；使用 Claude Code、Codex、Cursor、Devin、Kiro、fx 或其他受支持的编码智能体；目标任务属于 AWS 构建、部署、管理、数据分析或 DevSecOps；本地已配置 AWS 账号凭据（仅做文档检索或技能发现不需要认证）；Kiro、fx 和其他 agent 的手动安装路径已装 `uv`；愿意先只装 aws-core，并在只读或沙箱账号下小范围试用。
 - flashmind：使用 Gemini CLI / Antigravity / Cursor / VS Code(Copilot) / Windsurf / Claude Code 等支持 MCP 的客户端；Node ≥18；想让 agent 在任务开始回忆历史决策、写代码前核对符号与版本、宣布完成前跑测试并报告终端输出；愿意只选一个仓库、一个客户端、只启用 `verify-before-done` 一个技能做两周对照；能接受原文没有规则与技能正文、没有效果数据，需要自己补规则措辞并做对照。
+- mcode-stack：已安装 MiniMax Code；若走 Claude Code 市场命令，已安装 Claude Code；本地有 git；想从长命令/后台任务审计、干净上下文独立评审、小评估实验这三个高频痛点开始；能接受本次只有 README、具体检查项要打开各 `SKILL.md`；愿意一次只装 2–3 个技能并保留不调用技能的对照会话。
 
 不适用：
-
 - 通用：不能隔离、必须直接在主力工作目录上试用；需要稳定可复现的生产接入；依赖被截断的完整工具清单来规划任务；需要量化效果数据但原文只有作者自述。
 - jevcrawl：目标站点需要 JavaScript、需要登录、有付费墙/CAPTCHA；这些它都不做。
 - arcmira：不想开账号、不想设预算；需要可删除的持续跟踪生命周期（monitor 只能 `paused`，不提供删除）。
 - CLI-Anything：所选 harness 包装真实软件但你不想装上游软件；Windows 上没有 Git for Windows（含 `bash`/`cygpath`）或 WSL。
-- reason network：团队不在 Reason workspace，或找不到第二个人配合；单人无法自测出“团队通信”的价值。
+- reason network：团队不在 Reason workspace，或找不到第二个人配合；单人无法自测出「团队通信」的价值。
 - idx：目标不是印尼股市；它领域窄，值得抄的是供给结构，不是行情本身。
-- Blender 扩展：不在 Windows x64 / Blender 4.2+；把“Python 工具验证”当安全沙箱；需要量化效果证据。
+- Blender 扩展：不在 Windows x64 / Blender 4.2+；把「Python 工具验证」当安全沙箱；需要量化效果证据。
 - jevreel：需要成熟、有独立验证的图像理解能力；不装 FFmpeg、不用 Python 3.11+ 或不用 uv；需要向量检索式的跨大库存量查询。
 - WhatsApp MCP：要发送消息、多人共享、媒体转写；用免费 Cloudflare 计划（README 要求 Workers Paid，免费计划未验证）；不能接受非官方协议与条款风险；希望一个部署服务多个账号或多个 owner。
 - im-mcp：Linux（原文未提支持）；微信/钉钉版本不在支持表；Windows 没有管理员终端或微信未登录；macOS 4.1+ 没有 64 位 hex passphrase；不能接受本地解密明文落盘；需要 README 未给出的定时/事件触发实现；需要效果指标而只有兼容性验证表。
@@ -48,11 +47,11 @@
 - TradingView-Unified-MCP：想照推文直接得到可运行交易机器人；需要策略、回测、风控或收益证据；不能先读 README 补齐 MCP 注册与账号/订阅要求；工具可能直接下单而无法限制为只读；需要把账号密码明文写进配置。
 - agent-toolkit-for-aws：非 AWS 工作；使用 README 未支持的编码智能体且不愿手动配置 MCP 与 skills；不愿配置 AWS 凭据或只读/最小权限；需要独立效果数据、检出率、成功率或客户案例；需要 README 未给出的 IAM/CloudWatch/CloudTrail 配置样例、rules 内容或提示词模板；想直接放开写操作或生产账号；把官方 README 当独立评测。
 - flashmind：需要现成的量化效果证据；不愿维护规则文件与记忆库；不能接受记忆污染风险；需要原文未提供的防幻觉规则正文或四个 `SKILL.md` 正文；客户端不支持 MCP；Node <18。
+- mcode-stack：需要现成的量化效果数据或案例；不愿打开 `SKILL.md` 核对具体检查项；需要仓库提供定时/事件触发式自动工作流；MiniMax Code 版本不支持插件市场且只能走 `mcode plugin add` 从官方目录安装；想一次装整套 15 个技能。
 
 ## 前置条件
 
 通用：
-
 - 一个隔离环境：容器、虚拟机或专用账号，避免第三方工具直接接触主力工作目录。
 - 到包分发源与目标服务的网络出口。
 - 一个可回退的低风险真实任务，用来做冒烟测试和对照。
@@ -61,7 +60,7 @@ jevcrawl：TypeSafe Jev API key（付费，`jev-1.13.0` 输入 token 单价 $0.0
 
 REA/Hermes：`hermes` 命令存在；Node.js/npx 可用；能访问 npm registry；在隔离环境执行。
 
-arcmira：Arcmira 账号；MCP 宿主为 Claude Code / Codex / Claude Desktop / claude.ai / ChatGPT / Cursor / Gemini CLI 之一；付费计划与 on-demand 预算（README 只说 “Plan limits apply”，未给免费额度上限）；到 `https://mcp.arcmira.com/mcp` 与 `https://api.arcmira.com` 的网络出口。
+arcmira：Arcmira 账号；MCP 宿主为 Claude Code / Codex / Claude Desktop / claude.ai / ChatGPT / Cursor / Gemini CLI 之一；付费计划与 on-demand 预算（README 只说 Plan limits apply，未给免费额度上限）；到 `https://mcp.arcmira.com/mcp` 与 `https://api.arcmira.com` 的网络出口。
 
 CLI-Anything：Python 3.10+；若 harness 包装真实软件，先装该上游软件；meta-skill 需要支持 SKILL 的 agent；Claude Code 生成器需已装 Claude Code，Windows 需 Git for Windows 或 WSL；Cursor 需已装 Cursor 并 clone 仓库。
 
@@ -81,92 +80,63 @@ claude-security-scan：Claude Code、git、bash；Python 3.11+；能访问 GitHu
 
 vulnerator-ai：docker、docker compose v2、openssl；一个 OpenRouter API key；可隔离的靶场（安装器的 `--with-juice-shop` 起 OWASP Juice Shop，或自有授权靶机）；目标已获书面授权；能自己生成或让安装器生成 32 字节 hex token（`HERMES_API_SERVER_KEY`、`VULNERATOR_MCP_INBOUND_TOKEN`）；知道四个端口的角色：kali-mcp `:8900`、playwright-mcp `:8931`、Hermes `:8642`、vulnerator-mcp 内部 `:8700`。
 
-TradingView-Unified-MCP：Claude Code 已安装并可正常对话；Node.js 运行时（命令用 `node` 执行，原文未明说但必要）；能访问 GitHub 并下载解压仓库；终端在仓库根目录；按仓库 README 确认 TradingView 账号/订阅、是否需要 API 凭据、MCP 如何注册、`launch` 后进程是否常驻；只读凭据或只读权限；不接真实资金。
+TradingView-Unified-MCP：Claude Code 已安装并可正常对话；Node.js 运行时；能访问 GitHub 并下载解压仓库；终端在仓库根目录；按仓库 README 确认 TradingView 账号/订阅、是否需要 API 凭据、MCP 如何注册、`launch` 后进程是否常驻；只读凭据或只读权限；不接真实资金。
 
 agent-toolkit-for-aws：AWS 账号及本地凭据（API 调用和脚本执行需要；仅文档检索或技能发现不需要）；使用 README 支持的编码智能体；Kiro、fx 和其他 agent 的手动安装路径需安装 `uv`；Claude Code 需默认已添加 `claude-plugins-official` marketplace；首次接入只装 `aws-core`，覆盖服务选择、CDK/CloudFormation、无服务器、容器、存储、可观测性、账单、SDK 使用和部署；按任务再加 `aws-agents`、`aws-data-analytics`、`aws-agents-for-devsecops`、`aws-startup-advisor`；先准备只读或最小权限策略，再逐步放开写操作；示例区域为 `us-west-2`，实际使用按自己的区域和权限调整。
 
 flashmind：Node ≥18；git；目标客户端支持 MCP；自动安装器需要能安装 Engram 二进制；一个真实仓库和隔离分支/worktree；决定只保留一份 MCP 配置、一份规则文件、一份技能副本；对记忆库有清理纪律，知道信任前要用 `mem_review` 对照当前代码复核；知道原文没有给出 `AGENTS.md` / `GEMINI.md` 规则正文和 4 个 `SKILL.md` 正文。
 
+mcode-stack：已安装 MiniMax Code；若走 Claude Code 市场命令需已安装 Claude Code；本地有 git；每个技能是一个包含 `SKILL.md` 的子目录；技能可放全局 `~/.agents/skills/`、`~/.claude/skills/`、`~/.codex/skills/` 或项目级 `.minimax/skills/`、`.claude/skills/`、`.agents/skills/`；整栈插件路径需要先跑 `mcode plugin marketplace list` 找到本地插件目录；`mcode plugin add` 只从官方目录安装，不接受 GitHub URL 或本地路径；MiniMax Code 桌面端市场安装功能在逐步开放，部分版本可能没有。
+
 ## 操作步骤
 
-先做 A 或 D1：它们能在半天内给出可观察结论，也顺带把隔离环境、基线记录这套流程跑通。若目标就是私人消息只读检索，再考虑 J 或 K；不要从发送、多人共享或媒体转写开始。若你已有支持远程 MCP 的宿主且目标就是口语内容检索，直接做 E；团队已在 Reason 且找得到第二个人，可做 F；只想用最小成本看清“CLI 与 MCP 共用一份输出”的结构，做 G 的第 1、3、4 步；手上就有 Windows x64 + Blender 4.2+，做 H 的第 1–4 步；有一段本地短视频要检索，做 I 的第 1–3 步；有个人 WhatsApp 且接受条款风险，做 J 的 1–8 步；要在本机补微信/钉钉沟通上下文，做 K 的 1–6 步；想做跨系统的例行只读安全检查，做 L 的 1–8 步，先 `--demo`，再只对一个低风险域 `--skip repos`；想验证“自主循环 + 工具供给”这套架构，做 M 的 1–4 步，先在 `--with-juice-shop` 靶场里跑，确认前门只暴露 run 生命周期、且没有越出靶场，再考虑第 5 步以后；只想验证 Claude Code 接外部数据平台，做 N 的 1–6 步，先只读、不碰真实资金；团队在 AWS 上开发且使用支持的 agent，做 O 的 1–10 步，先只装 aws-core，在沙箱或只读权限下跑一个边界清晰任务；若你想给编码 agent 补记忆、防幻觉规则和“宣布完成前先验证”的技能，做 P 的 1–9 步，先只接 MCP + 规则 + `verify-before-done` 一个技能，两周对照，不要一次启用四个技能。
+先做 A 或 D1：它们能在半天内给出可观察结论，也顺带把隔离环境、基线记录这套流程跑通。若目标就是私人消息只读检索，再考虑 J 或 K；不要从发送、多人共享或媒体转写开始。若你已有支持远程 MCP 的宿主且目标就是口语内容检索，直接做 E；团队已在 Reason 且找得到第二个人，可做 F；只想用最小成本看清「CLI 与 MCP 共用一份输出」的结构，做 G 的第 1、3、4 步；手上就有 Windows x64 + Blender 4.2+，做 H 的第 1–4 步；有一段本地短视频要检索，做 I 的第 1–3 步；有个人 WhatsApp 且接受条款风险，做 J 的 1–8 步；要在本机补微信/钉钉沟通上下文，做 K 的 1–6 步；想做跨系统的例行只读安全检查，做 L 的 1–8 步，先 `--demo`，再只对一个低风险域 `--skip repos`；想验证「自主循环 + 工具供给」这套架构，做 M 的 1–4 步，先在 `--with-juice-shop` 靶场里跑，确认前门只暴露 run 生命周期、且没有越出靶场，再考虑第 5 步以后；只想验证 Claude Code 接外部数据平台，做 N 的 1–6 步，先只读、不碰真实资金；团队在 AWS 上开发且使用支持的 agent，做 O 的 1–10 步，先只装 aws-core，在沙箱或只读权限下跑一个边界清晰任务；若你想给编码 agent 补记忆、防幻觉规则和「宣布完成前先验证」的技能，做 P 的 1–9 步，先只接 MCP + 规则 + `verify-before-done` 一个技能，两周对照，不要一次启用四个技能；若你想补一套可移植的工程习惯技能，做 Q 的 1–8 步，先只装 2–3 个技能并保留不调用技能的对照。
 
 ### 做法 A：接入有完整参数与回执的工具集（以 jevcrawl 为例）
 
 1. 申请 key，确认外发边界。页面文本（段落、链接标签、URL）会被发送到 TypeSafe 打分。预期结果：拿到 key，并列出哪些站点不能碰。
-
 2. 装成 Claude Code 的 MCP server：
-
 ```bash
 claude mcp add jevcrawl -e TYPESAFE_API_KEY=<your key> -- uvx jevcrawl
 ```
-
-3. 或写进其他 MCP 客户端的 `mcpServers` 段：`command` 用 `uvx`，`args` 用 `jevcrawl`，`env` 里放 `TYPESAFE_API_KEY`。预期结果：客户端配置里出现 jevcrawl。
-
-4. 自检配置：
-
+3. 自检配置：
 ```bash
 uvx jevcrawl doctor
 ```
-
-预期结果：doctor 报告通路正常。这是后面所有验证的前提。
-
-5. 用自然语言提示词验证通路：
-
+预期结果：doctor 报告通路正常。
+4. 用自然语言提示词验证通路：
 ```text
 Use jevcrawl to find which Python version added the walrus operator, starting from docs.python.org
 ```
-
-预期结果：代理不需要用户点名工具，就自动调用 jevcrawl 并返回带出处的原文段落。
-
-6. 或不走 MCP，直接用 CLI：
-
+预期结果：代理自动调用 jevcrawl 并返回带出处的原文段落。
+5. 或不走 MCP，直接用 CLI：
 ```bash
 uv tool install jevcrawl
 jevcrawl crawl https://docs.python.org/3/ --goal 'What does the walrus operator do?' --json
 jevcrawl scrape https://example.com/help/returns --goal '...' --json
 jevcrawl map https://example.com --goal '...' --limit 20
-jevcrawl doctor
 ```
-
-`crawl(goal, start_url, max_pages=30, max_seconds=120, return_tokens=4000, max_decision_usd=0.05)` 用于答案可能在几层链接之下；`scrape(url, goal=None)` 用于已知单页；`map(start_url, goal, limit=50, max_pages=10)` 只返回排序 URL。
-
-7. 按需设置环境变量：`TYPESAFE_API_KEY`、`JEVCRAWL_BASE_URL`（默认 `https://api.typesafe.ai`）、`JEVCRAWL_MODEL`（默认 `jev-1.13.0`，固定版本，阈值按版本校准）、`JEVCRAWL_CACHE_DIR`（默认 `~/.jevcrawl/cache`）。
-
-8. 用预算参数和回执字段核对每次调用：`max_pages`、`max_seconds`、`max_decision_usd`、`return_tokens` 限定每次调用；`max_decision_usd` 是硬上限，可能超限的请求不会发出；用 `stopped_because`（`answered` / `frontier_empty` / `max_pages` / `max_seconds` / `budget` / `auth_error`）判断是找到答案还是撞上限；同一 goal 同一页面的 Jev 结果会缓存；需要 JS 的 URL 列在 `stats.needs_js_urls`；返回还含 `blocks`、`uncertain`、`pages`、`stats`（`pages_fetched`、`tokens_raw`、`tokens_returned`、`jev_calls`、`cache_hits`、`jev_cost_usd`、`model`、`degraded`、`needs_js_urls`、`stopped_because`、`elapsed_seconds`）。
-
-9. 观察降级：连续三次 Jev 请求失败后，爬取转为广度优先，所有 block 以未打分形式放进 `uncertain`，并置 `stats.degraded`。不要把降级结果当成打分结果。
+6. 用预算参数和回执字段核对每次调用：`max_pages`、`max_seconds`、`max_decision_usd`、`return_tokens` 限定每次调用；用 `stopped_because`、`stats.degraded`、`stats.needs_js_urls`、`jev_cost_usd` 判断是找到答案、撞上限还是降级。连续三次 Jev 请求失败后爬取转为广度优先，所有 block 以未打分形式放进 `uncertain`，不要把降级结果当成打分结果。
 
 ### 做法 B：接入只有一条命令、清单不完整的工具集（以 REA 接入 Hermes 为例）
 
 1. 在隔离环境确认 `hermes` 命令存在、`npx` 可用、能访问 npm registry。
-
 2. 注册：
-
 ```bash
 hermes mcp add rea --command npx --args -y rea-agents@6.3.0 mcp
 ```
-
-3. 核对注册与工具清单。原文没有给出查看已注册 MCP 服务器或工具列表的命令，需查 Hermes 文档补上。记录 `rea` 是否存在、实际工具数量和名称；作者声称有 139 个工具，这个数量未验证。
-
-4. 做低风险冒烟测试：在 Hermes 会话里提一个需要外部工具的自然语言请求，观察代理会不会自动选中 rea 工具。原文在能力列举处被截断，只作为核对参照。
-
+3. 核对注册与工具清单。原文没有给出查看已注册 MCP 服务器或工具列表的命令，需查 Hermes 文档补上；记录 `rea` 是否存在、实际工具数量和名称。作者声称有 139 个工具，这个数量未验证。
+4. 做低风险冒烟测试：在 Hermes 会话里提一个需要外部工具的自然语言请求，观察代理会不会自动选中 rea 工具。
 5. 与未挂载时做对照：同一任务，不挂载 rea 再跑一次，比较能否自主选用工具、人工干预、步骤数和耗时。
 
-6. 版本与安全检查：确认 `rea-agents@6.3.0` 是否当前可用；记录实际拉取版本、权限范围，以及是否出现越权访问、读取工作目录之外文件或执行非预期命令。
-
-### 做法 C：不实际接入，只当作“用 MCP 批量接工具”的思路参考
+### 做法 C：不实际接入，只当作「用 MCP 批量接工具」的思路参考
 
 当注册失败、注册后工具无法被代理实际调用、无法提供隔离环境、或需要完整工具清单和失败排查步骤而原文没有时，选做法 C。只记录设计点：MCP 批量供给、远程 MCP 只暴露少量工具让模型写程序、团队 agent 三工具接口（`list_team` / `send_message` / `check_inbox`）、CLI 与 MCP 共用一份 JSON envelope 并把退出码带进工具错误、零嵌入视频检索的类型化回答 + contact sheet + 全分辨率复核、MCP server 与可视化工作区一起长在宿主软件内部并用审批与命名撤销兜底、前门只暴露 run 生命周期而不暴露原始执行工具。
 
 ### 做法 D：用 CLI-Anything / CLI-Hub 把软件包成 agent-native CLI
 
 选 D 当你要反复调用外部软件、需要可复现操作，而且目标软件有现成 harness 或愿意让编码 agent 生成。先做 D1。
-
 #### D1：直接用现成 CLI
-
-前提：Python 3.10+；若 harness 包装真实软件，先装上游软件。
-
 ```bash
 pip install cli-anything-hub
 cli-hub list
@@ -175,1022 +145,414 @@ cli-hub info gimp
 cli-hub install gimp
 cli-hub launch gimp
 ```
-
-需要时 `cli-hub update <name>`、`cli-hub uninstall <name>`。预期结果：跑通一条真实重复任务，并记录与不用 CLI 时的差异。
-
+跑通一条真实重复任务，并记录与不用 CLI 时的差异。
 #### D2：让 agent 自己发现并安装 CLI
-
-前提：支持 SKILL 的 agent。
-
 ```bash
 npx skills add HKUDS/CLI-Anything --skill cli-hub-meta-skill -g -y
 ```
-
 ```text
 Find appropriate CLI software in CLI-Hub and complete the task: ...
 ```
-
-预期结果：agent 自行搜索、安装并启动合适 CLI，再完成任务。
-
 #### D3：用 Claude Code 生成新 CLI
-
-前提：Python 3.10+；目标软件或源码在本机或可在线获取；已装 Claude Code；Windows 需 Git for Windows 或 WSL。
-
 ```bash
 /plugin marketplace add HKUDS/CLI-Anything
 /plugin install cli-anything
 /cli-anything ./gimp
 /cli-anything:refine ./gimp
-/cli-anything:refine ./gimp 'I want more CLIs on image batch processing and filters'
 ```
+排错顺序：先 `/reload-plugins`；再 `/help cli-anything`；旧版不识别 `/cli-anything` 时改用 `/cli-anything:cli-anything`。
 
-排错顺序：先 `/reload-plugins`；再 `/help cli-anything`；必要时重装 marketplace 与插件；旧版不识别 `/cli-anything` 时改用 `/cli-anything:cli-anything`。生成物可用 `/cli-anything:test`、`/cli-anything:validate` 校验。
+### 做法 E：接入远程 MCP，用「写程序」的方式调用（以 arcmira 为例）
 
-#### D4：其他宿主的最小安装动作
-
-- Cursor：clone 后 `bash CLI-Anything/cursor-plugin/scripts/install.sh`；Windows PowerShell 用同目录的 `install.ps1`；默认装到 `~/.cursor/plugins/local/cli-anything`（可用 `CURSOR_PLUGINS_HOME` 覆盖）；Reload Window 后用 `/cli-anything ./gimp` 等命令。
-- Pi Coding Agent：`bash .pi-extension/cli-anything/install.sh`，装到 `~/.pi/agent/extensions/cli-anything/`，`/reload` 或重启生效。
-- OpenCode：`cp CLI-Anything/opencode-commands/*.md ~/.config/opencode/commands/`，并把 `HARNESS.md` 复制到同目录。
-- OpenClaw：把 `openclaw-skill/SKILL.md` 复制到 `~/.openclaw/skills/cli-anything`，会话里用 `@cli-anything build a CLI for ./gimp`。
-- Codex：`bash CLI-Anything/codex-skill/scripts/install.sh`（Windows 用 `install.ps1`），装到 `$CODEX_HOME/skills/cli-anything`（未设置时 `~/.codex/skills/cli-anything`）。
-- Qodercli：`bash CLI-Anything/qoder-plugin/setup-qodercli.sh` 注册到 `~/.qoder.json`，新开会话用 `/cli-anything ./gimp`。
-
-### 做法 E：接入远程 MCP，用“写程序”的方式调用（以 arcmira 为例）
-
-1. 偷懒路径：把这段原样丢给 coding agent：
-
-```text
-Fetch and execute the appropriate instructions to set me up for Arcmira from https://arcmira.com/agent-setup/prompt.md
-```
-
-2. 标准路径：用宿主登录（OAuth）添加远程 MCP，无 key：
-
+1. 标准路径：用宿主登录（OAuth）添加远程 MCP，无 key：
 ```bash
 claude mcp add --transport http --scope user arcmira https://mcp.arcmira.com/mcp
 codex mcp add arcmira --url https://mcp.arcmira.com/mcp
 ```
-
-Claude Desktop、claude.ai、ChatGPT、Cursor：把 URL 作为 custom connector / MCP server 添加，不带 header，按提示登录。预期结果：宿主里出现 arcmira，凭证由宿主管理，可在 Settings → Connected apps 撤销。
-
-3. 备用路径：用 Bearer key（`arc_sk_...`）。没有账号也没有浏览器时，可纯 API 注册；注册接口是 `/v1/signups` 与 `/v1/signups/verify`。拿到 key 后：
-
-```bash
-claude mcp add --transport http --scope user arcmira https://mcp.arcmira.com/mcp --header 'Authorization: Bearer $ARCMIRA_API_KEY'
-```
-
-4. 连上后先调用 `arcmira_describe` 拿参考手册，别猜方法签名。可用 `topic` 只取某个方法及其示例。预期结果：拿到 id 规则、方法表、参数与返回字段、可运行示例、计量与监控规则、错误码。
-
-5. 遵守 id 规则：先用 `resolve` 拿 id，再用 id 查询。过滤器只接受原样 id；把名字当 id 会抛 `id_required`。`resolve` 返回 `best` / `suggested` / `ask`；`suggested` 时说明假设与理由，`ask` 时把候选交回用户。
-
-6. 需要整段转录时用 Premium 质量，并处理“还没转好”：未就绪时返回 `202` + `Retry-After`，按它重读不重复计费；仍 `pending` 会带 `eta_seconds`；`failed` / `refunded` 除非传 `retry: true`（只在用户要求时传）不会重开。
-
-7. 先查价再跑贵操作：`arcmira.quote(video)` 返回整段 Premium 读取会用多少 credits，本身不计费。计量规则：搜索按返回结果中超出前 5 条的每条 passage 收 4 credits；字幕读取按其窗口每开始的 15 分钟收 4 credits；Premium 转录按整段视频每开始的 15 分钟收 300 credits；`momentum` 每次 10 credits；`start` / `end` 不会降低 Premium 计费。
-
-8. 预算由 dashboard 控制，工具本身不接受金额参数。被拦住时按错误码分支处理：`paid_plan_required`、`quota_exceeded`、`spend_limit_exceeded`、`member_limit`、`fair_use_cap`、`on_demand_paused`。
-
-9. 用示例提示词快速验证接通：Which brands sponsor both TBPN and the All-In Podcast? / How hot is Linear on the spoken web right now? / Find a moment on TBPN from the last 90 days where someone talks about stablecoins, and quote it. / Who is speaking in the first minute of the latest TBPN episode, according to the Premium transcript? / On TBPN, how many episodes mentioned Cursor in July versus August? 可直接用的初始 id：TBPN 频道 `UC-DRzaGnL_vtBUpCFH5M0tg`，All-In Podcast `UCESLZhusAkFfsNsApnjF_Cg`，Ramp `ent_14`。
-
-10. 要持续盯着就建 monitor（必须走 `arcmira_execute_write`）：`monitors.create`、`monitors.update`、`monitors.addEntities`（一次最多 90 个 id）、`monitors.addName`、`monitors.attachTrackers`（迁移 tracker 需用户先同意）。不提供删除；退出方式是 `paused`。
-
-11. 可选装插件拿 6 个任务技能：
-
-```bash
-claude plugin marketplace add arcmira/mcp
-claude plugin install arcmira@arcmira
-gemini extensions install https://github.com/arcmira/mcp
-npx skills add arcmira/mcp
-```
-
-12. 远程 MCP 本身不需要更新；行为与参考手册不符时，先看 `arcmira_describe` 的版本行。
+2. 连上后先调用 `arcmira_describe` 拿参考手册，别猜方法签名。
+3. 遵守 id 规则：先用 `resolve` 拿 id，再用 id 查询。过滤器只接受原样 id；把名字当 id 会抛 `id_required`。
+4. 需要整段转录时用 Premium 质量，并处理「还没转好」：未就绪时返回 `202` + `Retry-After`，按它重读不重复计费；`failed` / `refunded` 除非传 `retry: true` 不会重开。
+5. 先查价再跑贵操作：`arcmira.quote(video)` 返回整段 Premium 读取会用多少 credits，本身不计费。预算由 dashboard 控制，工具本身不接受金额参数。
+6. 用示例提示词快速验证接通：Which brands sponsor both TBPN and the All-In Podcast? / Find a moment on TBPN from the last 90 days where someone talks about stablecoins, and quote it.
+7. 要持续盯着就建 monitor（必须走 `arcmira_execute_write`）；它不提供删除，退出方式是 `paused`。
 
 ### 做法 F：把团队里各人的 agent session 连成一张网（以 reason network 为例）
 
-选 F 的条件：团队都在 Reason workspace，想让一个 session 直接问另一个 session。README 没有效果数据，只建议小范围试用。
-
 1. 初始化本机 agent 接线：
-
 ```sh
 reason network
 ```
-
 2. 看谁在线：
-
 ```sh
 reason network who
 ```
-
-状态来自 session 自己的 title 和 todo；标题和 todo 要有意义。
-
 3. 直接向某个 session 提问并等回答：
-
 ```sh
 reason network alice/api-claude 'did the token format change?'
 ```
-
-适合同步问答的 agent：Claude Code、Codex、opencode、pi、Reason。
-
 4. 只发不等：
-
 ```sh
 reason network send alice/api-claude 'heads up: main is red'
 ```
+5. MCP server 名为 `reason-network`，对 agent 暴露 `list_team`、`send_message`、`check_inbox` 三个工具。
+6. 最小试用：找 2 名已经在用 Reason 的同事，各自开 Claude Code session，分别跑 `reason network who` 互相确认；A 用 `reason network <b的session> '...'` 提一个只有 B 的 agent 凭会话上下文才能回答的问题。
 
-适合异步通知的 agent：Cursor、Gemini、Copilot 在下一步才收到消息。
-
-5. 需要时重新接线：
-
-```sh
-reason network setup
-```
-
-6. MCP server 名为 `reason-network`，对 agent 暴露 `list_team`、`send_message`、`check_inbox` 三个工具。
-
-7. 网络与安全：同 Wi-Fi 直连，跨公网走 iroh，直连失败经中继（中继只看到加密字节）；只有团队成员能连；一台电脑只能代表它自己的主人说话；发给离线者的消息会排队；状态存放在 `~/.reason/network`。
-
-8. 最小试用：找 2 名已经在用 Reason 的同事，各自开 Claude Code session，分别跑 `reason network who` 互相确认；A 用 `reason network <b的session> '...'` 提一个只有 B 的 agent 凭会话上下文才能回答的问题。
-
-### 做法 G：接入“现成 CLI 自带 MCP server”的工具（以 idx / ihsg-cli 为例）
-
-注意领域：idx 是印尼股市（IDX / IHSG）工具，值得试的是流程与结构，不是行情本身。
+### 做法 G：接入「现成 CLI 自带 MCP server」的工具（以 idx / ihsg-cli 为例）
 
 1. 零安装先跑通：
-
 ```sh
 npx github:fzn0x/idx stocks quote BBCA
 ```
-
 2. 正式安装（四选一）：
-
 ```sh
 cargo install ihsg-cli
 npm install -g github:fzn0x/idx
 curl -fsSL https://raw.githubusercontent.com/fzn0x/idx/main/install.sh | sh
 ```
-
-Windows 无 npm 时从 releases 下载 `idx-<version>-x86_64-pc-windows-msvc.zip`。npm 安装的是小启动器，第一次运行 `idx` 会下载预编译二进制并用 release 的 `SHA256SUMS` 校验。npm 12 加 `--allow-git=all`。
-
 3. 先用 JSON 模式核对输出契约：
-
 ```sh
-idx -o json stocks quote BBCA | jq '.data[0] | {price, change_pct, pe_trailing, dividend_yield_pct}'
+idx -o json stocks quote BBCA
 ```
-
-stdout 只放一个 JSON 文档，其余走 stderr；envelope 带 `provider`、`fetched_at`、`cached`、`stale`、`warnings`；来源没返回的字段是 `null`，不做估算。退出码：`0` 正常、`2` 用法错、`3` 网络/来源错、`4` 未找到、`5` 离线缓存未命中、`6` 配置错。字段定义用 `idx schema quotes` 查看。
-
-4. 启动 MCP server：
-
+stdout 只放一个 JSON 文档，其余走 stderr；来源没返回的字段是 `null`，不做估算。退出码：`0` 正常、`2` 用法错、`3` 网络/来源错、`4` 未找到、`5` 离线缓存未命中、`6` 配置错。
+4. 启动 MCP server 并注册：
 ```sh
 idx mcp
-idx mcp --http 127.0.0.1:8765 --token T --allowed-host '*'
-idx mcp setup --list
 idx mcp setup codex
-```
-
-`idx mcp setup <client>` 会把二进制绝对路径填进配置，因为 GUI 应用通常不继承 shell 的 `PATH`。
-
-5. 按客户端注册，例如：
-
-```sh
 claude mcp add --scope user idx -- idx mcp
-codex mcp add idx -- idx mcp
-gemini mcp add -s user idx idx mcp
-copilot mcp add idx -- idx mcp
 ```
-
-其他客户端可用 `idx mcp setup <client>` 生成；注册后去客户端确认 `idx` 出现、工具数可枚举。
-
-6. 只支持远程 URL 的产品：把 HTTP 形态放在 HTTPS 隧道后，作为 connector 添加，请求头 `Authorization: Bearer T`。
-
-7. 离线 / 弱网：
-
-```sh
-idx --offline stocks quote BBCA
-idx cache stats
-```
-
-命中缓存置 `cached` / `stale`；未命中退出码为 `5`。
-
-8. 让 agent 直接用工具（23 个，`idx_brief` 起手）：`idx_brief`、`idx_market`、`idx_quote`、`idx_history`、`idx_profile`、`idx_financials`、`idx_earnings`、`idx_dividends`、`idx_returns`、`idx_fundamental`、`idx_technical`、`idx_compare`、`idx_screen`、`idx_news`、`idx_sentiment`、`idx_broker`、`idx_bandar`、`idx_bandar_screen`、`idx_ownership_ticker`、`idx_ownership_entity`、`idx_ownership_changes`、`idx_ownership_foreign`、`idx_ownership_releases`。筛选示例：
-
-```sh
-idx stocks screen -f 'pe<15,roe>15,sector=financial'
-idx bandar screen --preset quiet-accumulation
-```
-
-9. 可迁移的设计约束：23 个工具用每个 harness 都接受的类型化输入 schema；工具返回与 `-o json` 完全相同的 envelope；失败以工具错误返回 `{error: {code, message}, exit_code}`，把退出码语义带进 MCP。
-
-10. 数据保鲜结构：GitHub Actions 定时抓取、用 `idx` 导入验证可解析、发布到 release；因为 idx.co.id 拦截云网络，任务跑在自托管 runner（`OWNERSHIP_RUNNER=self-hosted`）；Worker 每 30 分钟检查 `index.json`、校验 SHA-256、装入 D1，Worker 没有写端点。迁移的是结构，不是印尼股市本身。
-
-11. 与未挂载时做对照：接好后跑一条真实任务，再不挂 MCP 用原方式做同一件事，比较调用次数、人工步骤、耗时、工具选择是否正确。
+`idx mcp setup <client>` 会把二进制绝对路径填进配置，因为 GUI 应用通常不继承 shell 的 `PATH`。
+5. 接好后跑一条真实任务，再不挂 MCP 用原方式做同一件事，比较调用次数、人工步骤、耗时、工具选择是否正确。
 
 ### 做法 H：把 AI 助手接进宿主软件内部（以 Blender 扩展 mcp-for-blender-pro 为例）
 
-注意证据等级：README 没有量化指标或基准测试，价值描述均为作者主张。
-
-1. 在 Windows x64 + Blender 4.2+ 中，从 Releases 下载 `mcp-for-blender-pro.zip`；`Edit → Preferences → Get Extensions → menu → Install from Disk`，选中 ZIP，启用 **mcp-for-blender-pro**。
-
-2. 打开 **3D Viewport → N → MCP Pro**。
-
-3. 配置 provider 与模型：OpenAI、Anthropic Claude、Google Gemini、OpenRouter、OpenCode Zen、Ollama 或自定义 API；必须选支持 tool calling 的模型；要解读视口截图还需模型有图像能力。
-
-4. 先用单助手跑通，按 README 提示词依次跑：
-
+1. 在 Windows x64 + Blender 4.2+ 中，从 Releases 下载 `mcp-for-blender-pro.zip`；`Edit → Preferences → Get Extensions → menu → Install from Disk`，选中 ZIP，启用 mcp-for-blender-pro。
+2. 打开 3D Viewport → N → MCP Pro，配置 provider 与模型；必须选支持 tool calling 的模型；要解读视口截图还需模型有图像能力。
+3. 先用单助手跑通，按 README 提示词依次跑：
 ```text
 Inspect this scene and explain its object structure before making any changes.
 ```
-
 ```text
 Create a simple product-display scene with a pedestal, a camera and three lights. Give the pedestal a matte blue material.
 ```
-
-```text
-Duplicate the selected object into a neatly spaced row of five and show the viewport.
-```
-
-```text
-Find an appropriate Poly Haven asset for this scene and ask before importing it.
-```
-
 观察审批、取消、命名撤销与 `viewport_screenshot` 是否按预期出现。
-
-5. 核对 21 个工具：`get_scene_info`、`list_objects`、`get_object_info`、`add_cube`、`add_sphere`、`add_cylinder`、`add_plane`、`add_light`、`add_camera`、`move_object`、`duplicate_object`、`delete_object`、`parent_objects`、`set_material`、`viewport_screenshot`、`execute_code`、`bpy_api_lookup`、`describe_node_type`、`export_scene`、`search_assets`、`import_asset`。其中 `execute_code`、`export_scene`、`import_asset` 是高影响操作。
-
-6. 多步任务再换 Manager/Worker/Reviewer 团队链做同一件事。任务按顺序执行；被阻塞任务有一次纠正机会，第二次审核失败则停止工作流。比较单助手与团队链的耗时、人工接管次数、Reviewer 退回次数。
-
-7. 需要外部客户端时，从侧边栏启动 OpenCode Portable，或其他兼容 MCP 客户端连接经过认证的本地端点。外部客户端的审批策略由该客户端自己管理。
-
-8. 核对边界：连接凭证存用户设置；聊天历史仅当前会话有效；Studio 本地运行并对发往 Blender 的请求做认证；Python 工具验证用于拦截不允许操作，不是安全沙箱；资产服务可能需要 key，并须遵守许可。
+4. 核对 21 个工具；其中 `execute_code`、`export_scene`、`import_asset` 是高影响操作。
+5. 多步任务再换 Manager/Worker/Reviewer 团队链做同一件事，比较单助手与团队链的耗时、人工接管次数、Reviewer 退回次数。
 
 ### 做法 I：把视频检索接给 agent（以 jevreel 为例）
 
-注意证据等级：底层 Jev 图像能力仍是实验性，验证只基于单个测试视频；调研原文在 Claude Code 插件部分被截断。
-
 1. 装 CLI 并配置 key：
-
 ```bash
 uv tool install 'jevreel[all]'
 export TYPESAFE_API_KEY=...
 ```
-
-无 key 时，不带时间线的索引、zoom、字幕和 query 仍可用。
-
 2. 索引、提问、放大看：
-
 ```bash
 jevreel index talk.mp4
 jevreel ask talk 'a slide with a bar chart'
 jevreel zoom talk 12:00 12:10
 ```
-
-3. 用 lens 把自定义问题挂到每一分钟上：lens TOML 里定义 `name` 和多个 `[[questions]]`，问题类型可用 `noul`、`choice`、`score`；示例字段包括 `ask`、`options`、`levels`。挂载命令：
-
-```bash
-jevreel index drive.mp4 --lens driving.toml
-jevreel lens drive driving.toml
-jevreel query drive 'on_bridge > 0.7'
-```
-
-`query` 过滤不产生请求；lens 随索引请求一起走几乎免费，事后再跑是每分钟视频一次请求。
-
-4. 接到 agent（插件 / 手动 MCP / skill 任选）：
-
+3. 接到 agent（插件 / 手动 MCP / skill 任选）：
 ```bash
 claude plugin marketplace add DeepAleph/jevreel
 claude plugin install jevreel@jevreel
-uvx --from 'jevreel[url]==0.2.0' jevreel login
-codex plugin marketplace add DeepAleph/jevreel
-codex plugin add jevreel@jevreel
-```
-
-```bash
 claude mcp add jevreel -e TYPESAFE_API_KEY=your-key -- uvx --from 'jevreel[all]' jevreel mcp
-codex mcp add jevreel --env TYPESAFE_API_KEY=your-key -- uvx --from 'jevreel[all]' jevreel mcp
-npx skills add DeepAleph/jevreel
 ```
-
-5. 关键环境变量：`JEVREEL_HOME`（缓存位置）、`JEVREEL_MODEL`（默认 `jev-1.14.0`，故意锁定，别名会漂移）、`JEVREEL_FPS`（默认 1，最高 5）、`JEVREEL_TILES_PER_SHEET`（默认 60）、`JEVREEL_VERIFY_TOP`（默认 6，0 关闭验证）、`JEVREEL_CACHE`（默认 1）、`JEVREEL_CONCURRENCY`（默认 16，速率限制按 TypeSafe 账号计）、`JEVREEL_ASR_MODEL`（默认 `small`）、`JEVREEL_CAPTION_LANGUAGES`。
-
-6. 成本自测：`jevreel measure <video>` 报告某个网格尺寸下一张 contact sheet 在你账号上的成本。四步工作流：Index（1 fps 抽帧 + 固定问题集 + lens）→ Screen（每张 sheet 一次请求）→ Verify（按排名取 top 窗口，在全帧上每半秒做一次 yes/no）→ Look closer（`zoom`、`locate`、`whole`）。MCP 工具与 CLI 对照：`index_video`/`index`、`ask_video`/`ask`、`find_in_video`/`find`、`locate_in_frame`/`locate`、`zoom_video`/`zoom`、`video_transcript`/`transcript`、`ask_whole_video`/`whole`、`run_lens`/`lens`、`query_timeline`/`query`、`list_videos`/`list`。
+4. 成本自测：`jevreel measure <video>` 报告某个网格尺寸下一张 contact sheet 在你账号上的成本。四步工作流：Index → Screen → Verify → Look closer。
 
 ### 做法 J：只读 WhatsApp MCP（Cloudflare 自部署）
 
-选 J 的条件：你只想用自己的个人 WhatsApp 账号做只读检索、摘要、补看群聊、给未命名聊天补名；愿意在自己的 Cloudflare 付费 Workers 上部署；能接受非官方协议和违反 WhatsApp 条款的风险；一个部署只对应一个账号和一个 owner。不要用来发送消息或多人共用。
-
-1. 准备 Cloudflare 账户（README 要求 Workers Paid；免费计划未验证，作者建议删掉 `limits` 块并预期首次导入不稳定）、Node 20+、自己的手机和 WhatsApp 账号。
-
+1. 准备 Cloudflare 付费 Workers、Node 20+、自己的手机和 WhatsApp 账号。
 2. 克隆并安装依赖：
-
 ```sh
 git clone https://github.com/finereli/whatsapp-mcp
 cd whatsapp-mcp
 npm install
 ```
-
 3. 创建 OAuth KV 命名空间，把打印出的 id 填进 `wrangler.jsonc`：
-
 ```sh
 npx wrangler kv namespace create OAUTH_KV
 ```
-
 4. 设置 owner 密码（至少 12 个字符）：
-
 ```sh
 npx wrangler secret put OWNER_PASSWORD
 ```
-
 5. 部署：
-
 ```sh
 npm run deploy
 ```
-
-6. 打开 Wrangler 打印的部署 URL，按页面提示扫码链接 WhatsApp（设置 → 已链接设备 → 链接设备）。首次链接会导入历史，页面显示进度，可关闭页面。
-
-7. 接入 MCP 客户端，以 Claude Code 为例：
-
+6. 打开部署 URL，扫码链接 WhatsApp；首次链接会导入历史。
+7. 接入 MCP 客户端：
 ```sh
 claude mcp add --transport http whatsapp https://your-url/mcp
 ```
-
-然后输入 `/mcp` 并用密码登录；其他客户端指向同一个 `/mcp` URL。
-
-8. 调用只读工具：`list_chats`、`get_messages`、`search_messages`、`unnamed_chats`、`set_contact_names`、`sync_now`、`link_status`、`relink`。可直接对 agent 说：
-
-```text
-What did Dana say about the flights?
-Find every message where someone mentioned the lease, across all my chats.
-Summarize what I missed in the family group this week.
-```
-
-9. 补全未命名聊天：对 agent 说 `find names for my unnamed chats`；agent 会调用 `unnamed_chats`，用已有联系人工具匹配号码，再用 `set_contact_names` 保存姓名。前提是 agent 已有 Google Contacts、Gmail 等联系人访问工具；服务器本身不连接联系人服务。
-
-10. 可选调试：设置 `PIN`（32+ 随机字符）后，可用 `x-pin` 头访问 `/debug`、`/debug/pull`、`/debug/chats?q=`、`/debug/messages?chat=`、`/debug/search?q=`、`/debug/types`、`/debug/unnamed`、`/debug/sql?q=`、`/debug/logout`。不设置则关闭这些路由。
-
-11. 验证：`npm run typecheck`、`npm test`；部署后 `GET /debug` 应为 `phase: idle` 且 `paired: true`；`GET /debug/pull` 在安静账号上约十秒返回 `reason: idle`；再调用 `list_chats`、`get_messages`、`search_messages`，并用 `unnamed_chats` 和 `set_contact_names` 验证补名；改过 ingest 后重新链接，确认消息计数不增长。
-
-12. 最小试用：在自己的个人 Cloudflare 账户部署，链接一个个人 WhatsApp 账号，接入 Claude Code，只做只读查询。选一组真实任务（按人找航班信息、跨聊天找租约、补看家庭群、给未命名聊天补名），先人工完成并记录耗时和结果，再用 MCP 工具完成同样任务。若出现导入失败、隐私/合规不可接受、或结果明显不如人工，就停止试用。
+8. 只调用只读工具：`list_chats`、`get_messages`、`search_messages`、`unnamed_chats`、`set_contact_names`、`sync_now`、`link_status`、`relink`。不要用来发送消息或多人共用。
 
 ### 做法 K：本地只读微信/钉钉检索（以 im-mcp 为例）
 
-选 K 的条件：Windows x64 或 macOS，微信 4.x / 钉钉 7.x，客户端已登录；要给 agent 补私有沟通上下文；只读检索；能接受本地数据库解密后明文落盘和强版本依赖。它把微信/钉钉本地数据库解密为 SQLite、建 FTS5 全文索引，再通过 MCP 工具暴露给 Claude Desktop、Cursor、Cline、Pi 等客户端；微信侧 16 个工具，钉钉侧 5 个工具，全部声明为只读。
-
-1. 确认前置条件：Windows 初始化需管理员权限终端且微信已登录（扫描 `Weixin.exe` 内存取密钥）；macOS 4.1+ 需 64 位 hex passphrase；已安装 uv；客户端支持 MCP 配置；版本在支持表内。
-
-2. 安装（推荐 `uv tool` 全局隔离安装）：
-
+1. 确认前置条件：Windows 初始化需管理员终端且微信已登录；macOS 4.1+ 需 64 位 hex passphrase；已安装 uv；客户端支持 MCP 配置。
+2. 安装：
 ```bash
 uv tool install 'git+https://github.com/stkoecn/im-mcp.git' --with 'im-mcp[all]'
 ```
-
-国内网络亦可用 Gitee 源。更新用 `uv tool upgrade im-mcp`。只装一侧：
-
-```bash
-pip install 'git+https://github.com/stkoecn/im-mcp.git#egg=im-mcp[wechat]'
-pip install 'git+https://github.com/stkoecn/im-mcp.git#egg=im-mcp[dingtalk]'
-```
-
-3. 一次性初始化（提取密钥 + 解密 + 建 FTS5 索引）：
-
+3. 一次性初始化：
 ```bash
 wechat-init
-wechat-init --passphrase <64位十六进制passphrase>
-wechat-init --output ~/.wechat_mcp/decrypted
-wechat-init --only-extract
-wechat-init --etl-only
 dingtalk-init
-dingtalk-init --output-dir ~/.dingtalk_mcp/decrypted
 ```
-
-默认保存至 `~/.wechat_mcp/`、`~/.dingtalk_mcp/`。
-
-4. 接入 AI 客户端。方案 A（原文推荐，`uvx` 即席运行，零环境污染）：把 `mcpServers` JSON 写进客户端配置，`command` 用 `uvx`，`args` 用 `--from`、`git+https://github.com/stkoecn/im-mcp.git[all]`、`wechat-mcp` 或 `dingtalk-mcp`，`env` 固定 `PYTHONIOENCODING=utf-8`、`PYTHONUTF8=1`。方案 B：步骤 2 已 `uv tool install` 成功且命令在 PATH 中时，`command` 可直接写 `wechat-mcp` / `dingtalk-mcp`；若提示 not on your PATH，可 `uv tool update-shell` 或重启终端，受限环境写绝对路径。
-
+4. 接入 AI 客户端：方案 A 用 `uvx` 即席运行；方案 B 命令在 PATH 中时直接写 `wechat-mcp` / `dingtalk-mcp`。
 5. 给 agent 装配套技能文档：
-
 ```bash
 mkdir -p ~/.agents/skills/im-mcp && cp skills/im-mcp/SKILL.md ~/.agents/skills/im-mcp/
-mkdir -p ~/.claude/skills/im-mcp && cp skills/im-mcp/SKILL.md ~/.claude/skills/im-mcp/
-mkdir -p .agents/skills/im-mcp && cp skills/im-mcp/SKILL.md .agents/skills/im-mcp/
 ```
-
-6. 让 agent 自己完成配置：
-
-```text
-请阅读并遵循开源项目 https://github.com/stkoecn/im-mcp 中的 README.md 与 skills/im-mcp/SKILL.md，帮我配置并启用本机的绿泡泡与DuangDuang MCP 服务。
-```
-
-7. 用完即清（公共机器或试用结束后必须做）。先完全退出 AI 客户端，否则 SQLite 句柄与 `-shm`/`-wal` 锁会阻止删除；或强制结束进程：
-
-```powershell
-Get-Process | Where-Object { $_.ProcessName -match 'wechat-mcp|dingtalk-mcp' } | Stop-Process -Force
-```
-
+6. 用完即清：先完全退出 AI 客户端，再：
 ```bash
 im-clean --dry-run
 im-clean
-im-clean --scope wechat
-im-clean -y --force
 uv tool uninstall im-mcp
 ```
 
-8. 日常使用（工具→场景）：找群里谁发过某话题 → `search_wechat_messages`；总结项目群最近 50 条 → `get_session_history`；汇总某天沟通做日报 → `get_messages_by_date`；拉某时间段群聊 → `get_messages_by_range`；找群文件 → `search_shared_files`；解密聊天图片 → `get_message_image`；查联系人 → `search_contacts`；查数据是否最新 → `get_sync_status`；刚聊了几句要更新后再查 → `sync_wechat_database`。
-
-9. 验证：原文只给了兼容性验证表（Windows/macOS、多个微信/钉钉版本），没有效果指标、任务成功率或对照数据。需要自己选一组真实只读任务，先人工完成并记录耗时和结果，再用 MCP 工具完成同样任务；检查 `get_sync_status` 的索引新鲜度，必要时先 `sync_wechat_database` / `sync_dingtalk_data` 再查询。若版本不兼容、初始化失败、明文落盘不可接受或结果明显不如人工，就停止试用。
-
 ### 做法 L：把例行只读安全检查交给 agent（以 claude-security-scan 为例）
 
-选 L 的条件：已安装 Claude Code、git、bash；Python 3.11+；能访问 GitHub；想用一句自然语言或定时任务做跨 Mac 本体、本地 git 仓库、GitHub、Vercel/公开站点、AWS、GCP、Azure、Cloudflare、Supabase、Gmail 的只读例行检查；能接受这是会读取多账户敏感信息的第三方技能，且目前只有 README 证据。不要从全量扫描开始。
-
-1. 克隆技能并安装工具（前提：Claude Code、git、bash 可用；能访问 GitHub）：
-
+1. 克隆技能并安装工具：
 ```bash
 git clone https://github.com/chaenmasahiro0425/claude-security-scan ~/.claude/skills/security-scan
 bash ~/.claude/skills/security-scan/scripts/install-tools.sh
 ```
-
-预期结果：技能目录出现，gitleaks 与 osv-scanner 安装完成并通过 SHA256 校验。
-
-2. 按需准备各域只读登录（前提：只对你确实要检查、且已安装对应 CLI 的域执行；缺什么会在报告里标为未确认）。把 `...` 换成自己的只读 token：
-
-```bash
-gh auth login
-vercel login
-aws configure
-gcloud auth login
-az login
-export CLOUDFLARE_API_TOKEN=...
-supabase login
-export SUPABASE_ACCESS_TOKEN=...
-gog auth add you@example.com
-```
-
-预期结果：至少一个域完成只读登录；没有登录的域后续会进入“未能确认的项目”并附理由。
-
-3. 先用示例数据确认安装和报告样式（前提：第 1 步已完成；不依赖真实账户数据）：
-
+2. 按需准备各域只读登录；缺什么会在报告里标为未确认。
+3. 先用示例数据确认安装和报告样式：
 ```bash
 python3 ~/.claude/skills/security-scan/scan.py --demo --open
 ```
-
-预期结果：打开示例 HTML 报告，能看到按重要度分级、可按领域/NEW 过滤的样式；不读取真实账户。
-
-4. 只对一个低风险域跑真实扫描，先去掉较重的本地仓库代码检查（前提：第 2 步至少完成一个域的只读登录；先不要全量）：
-
+4. 只对一个低风险域跑真实扫描，先去掉较重的本地仓库代码检查：
 ```bash
 python3 ~/.claude/skills/security-scan/scan.py --skip repos
 ```
-
-预期结果：生成 `reports/<日時>/report.html`；失败或未登录的域进入“未能确认的项目”，而不是被当成“没有问题”；报告中没有明文秘密值。
-
-5. 在 Claude Code 里用自然语言触发和追问（前提：技能已放在 `~/.claude/skills/security-scan`，并在 Claude Code 会话中）：
-
+预期结果：生成 `reports/<日時>/report.html`；失败或未登录的域进入「未能确认的项目」，而不是被当成「没有问题」；报告中没有明文秘密值。
+5. 在 Claude Code 里用自然语言触发和追问：
 ```text
 セキュリティチェックして
 前回から新しく出たリスクだけ教えて
-直せるところある？
-毎週月曜にスキャンするようにして
 ```
+6. 确认只读边界成立后再逐域增加登录，最后才考虑全量扫描和每周定时。
 
-预期结果：Claude Code 能按技能说明触发扫描、只汇报前次之后新增的风险，并把可修复项列出来；定时请求按第 6 步或原文说明处理。
-
-6. 可选：设置 macOS 每周一 8:00 自动执行（前提：macOS；第 1 步已完成）：
-
-```bash
-bash ~/.claude/skills/security-scan/scripts/install-schedule.sh
-```
-
-预期结果：定时任务安装完成；下一轮按计划运行并生成新报告。原文没有给出事件触发或状态机式持续执行机制。
-
-7. 可选：限制扫描对象。无配置也能运行；需要时复制并编辑配置（前提：知道自己的区域和要限制的范围）：
-
-```bash
-cp ~/.claude/skills/security-scan/config.example.toml ~/.config/security-scan/config.toml
-```
-
-AWS 默认只查东京 `ap-northeast-1` 和弗吉尼亚 `us-east-1`，其他区域要在 `[aws] regions` 中追加。预期结果：扫描范围按配置缩小，报告仍会标出未覆盖或未确认的范围。
-
-8. 查看结果并按安全边界核对（前提：扫描已运行）。报告在 `reports/<日時>/report.html`，可按重要度、领域、NEW 过滤；报告含弱点清单，保存在本机、权限 700，注意共享。核对：只读——gog 用 `--readonly`，各云只用 list/get/describe 和 API 的 GET，对网站只用 GET；不保留秘密值——gitleaks 用 `--redact`，Vercel 环境变量只记名称和类型，AWS key ID 只留末尾 4 位，常驻程序不记录启动参数，错误文也先脱敏再保存；抓取失败的账号/组织/仓库范围，不因“这次没看到”而在与上次比较时算作“已解决”或“新增”。预期结果：确认上述边界成立；检测结果只当线索，最终判断和修正由人做。
-
-9. 最小试用：先 `--demo`，再只登录一个域（例如个人 GitHub），用 `--skip repos` 跑一次，确认报告能生成、失败项进入“未能确认”、没有明文秘密、没有对测试仓库/账号产生写入或发送；确认后再逐域增加登录，最后才考虑全量扫描和每周定时。若误报过多、权限范围过宽或报告泄露敏感值，应缩小域、改为仅手动运行或放弃采用。
-
-### 做法 M：把“自主循环 + 工具供给”整套接进来，但只当模板（以 vulnerator-ai 为例）
-
-注意证据等级：这是四容器自驱动循环，默认没有任何护栏，原文也没有准确率、耗时、成本或对比基线的数据。只在隔离靶场、只对已获书面授权的目标跑；它更适合当“让模型自己决定下一步、直接执行、读回结果再进下一轮”的架构模板。
+### 做法 M：把「自主循环 + 工具供给」整套接进来，但只当模板（以 vulnerator-ai 为例）
 
 1. 确认前提：docker、docker compose v2、openssl；一个 OpenRouter API key；能把 kali 容器与宿主机/内网隔开的环境；目标已获书面授权。缺任何一条都不要往下做。
-
-2. 用安装器一键起栈（唯一需要你提供的是 OpenRouter key）：
-
+2. 用安装器一键起栈：
 ```sh
 ./install.sh
 ```
-
-安装器会检查 docker、docker compose v2、openssl，自动生成 `HERMES_API_SERVER_KEY` 与 `VULNERATOR_MCP_INBOUND_TOKEN`，从模板写出 `.env`，并拉起默认四容器栈（不含 Juice Shop 靶场）。参数：`--with-juice-shop`（同时启动 OWASP Juice Shop 练习靶场）、`--no-up`（只写 `.env` 不起容器）、`--force`（覆盖已有 `.env`）。预期结果：`docker compose ps` 看到四容器健康。
-
-3. 先确认控制面，再谈能力：前门 vulnerator-mcp（内部 `:8700`）只应暴露 6 个 run 生命周期工具——`health()`、`start_pentest`、`get_run_status`、`stream_run_events`、`steer_run`、`stop_run`。确认它拿不到原始 `kali_run`，也不能直接打 `/v1/chat/completions`。看不到这条边界，就把它降级为 study。
-
+参数：`--with-juice-shop`（同时启动 OWASP Juice Shop 练习靶场）、`--no-up`（只写 `.env` 不起容器）、`--force`（覆盖已有 `.env`）。
+3. 先确认控制面：前门 vulnerator-mcp（内部 `:8700`）只应暴露 6 个 run 生命周期工具——`health()`、`start_pentest`、`get_run_status`、`stream_run_events`、`steer_run`、`stop_run`。确认它拿不到原始 `kali_run`，也不能直接打 `/v1/chat/completions`。
 4. 先只在 TUI 里跑靶场，不注册到任何助手：
-
 ```sh
 docker compose exec -it ooda-agent hermes chat
 ```
-
-预期结果：agent 自己决定跑 nmap / whatweb / nuclei / ffuf / sqlmap 等确定性工具，把结果带回 OODA 循环，`stream_run_events` 有事件流出。这一轮只用来观察“它会不会乱来”，不是效果验证。
-
-5. 想从自己的编码助手里触发、观察、干预时，注册 stdio 前门（零网络暴露，不需要 inbound token）。先在仓库根目录构建镜像：
-
-```sh
-docker build -f docker/mcp/Dockerfile -t vulnerator-ai-mcp:dev .
-```
-
-再把这段加进助手的 `mcpServers`，`HERMES_API_SERVER_KEY` 从 `.env` 读，不要打印出来：
-
-```json
-{
-  "mcpServers": {
-    "vulnerator-mcp": {
-      "command": "docker",
-      "args": [
-        "run", "-i", "--rm",
-        "--add-host", "host.docker.internal:host-gateway",
-        "-e", "HERMES_API_SERVER_KEY",
-        "-e", "HERMES_API_BASE_URL=http://host.docker.internal:8642",
-        "vulnerator-ai-mcp:dev"
-      ],
-      "env": { "HERMES_API_SERVER_KEY": "<value from .env>" }
-    }
-  }
-}
-```
-
-预期结果：助手侧只多出 6 个 run 生命周期工具；`start_pentest` 发起后能用 `stream_run_events` 读事件、用 `steer_run` 中途转向、用 `stop_run` 停止。
-
-6. 或让编码助手代跑安装，把这段原样粘贴给它（前提：助手在仓库内有 shell 权限）：
-
-```text
-You are setting up the vulnerator-ai repo for me. Do the following, in order:
-
-1. From the repo root, run the installer: ./install.sh
-   It is interactive and will ask for ONE value, OPENROUTER_API_KEY — ask me for it
-   and pass it through (or run it non-interactively as
-   OPENROUTER_API_KEY=<the key> ./install.sh). The installer auto-generates the two
-   secret tokens (HERMES_API_SERVER_KEY, VULNERATOR_MCP_INBOUND_TOKEN), writes the .env,
-   and brings the default 4-container stack up (no Juice Shop lab). Do NOT invent or ask
-   me for the two tokens — the installer makes them.
-
-2. Wait until the stack is healthy, then verify with: docker compose ps
-
-3. Register the local MCP server (stdio mode — zero network surface, no inbound token).
-   First build the image once:
-       docker build -f docker/mcp/Dockerfile -t vulnerator-ai-mcp:dev .
-   Then add this entry to my assistant's MCP config (mcpServers), filling HERMES_API_SERVER_KEY
-   with the value the installer wrote into the repo's .env (read it from there, do not print it):
-       { ... }
-
-4. Confirm the MCP tools are available (health(), start_pentest, get_run_status,
-   stream_run_events, steer_run, stop_run). Then tell me it's ready and remind me this engine
-   has NO scope-guard/consent/audit by default: it must be used only against authorized targets.
-```
-
-预期结果：安装器只问你要 OpenRouter key，两个 token 由它生成；助手最后主动提醒“默认无 scope-guard / consent / audit”。
-
-7. 不用安装器的手工路径：`cp .env.example .env`，填 `OPENROUTER_API_KEY`，用 `openssl rand -hex 32` 生成两个 32 字节 hex token 填进 `HERMES_API_SERVER_KEY` 与 `VULNERATOR_MCP_INBOUND_TOKEN`，再 `docker compose up -d --build`。预期结果同上。
-
-8. 做对照试验：同一靶场、同一目标，先人工按 checklist 跑一遍并记录命令序列、发现数、误报数、耗时；再用 agent 跑一轮同样的目标，比较发现数、误报数、重复命令比例、`steer_run` 干预次数、`stop_run` 是否真的停、耗时。想看“循环本身值不值”，再加一组“只给 kali 工具、不给 OODA 循环”的对照。原文提供 `docs/design.md` 的 findings-store schema 与 `docs/example-report.md` 的脱敏样例，可拿来对照交付物长什么样。
-
-9. 护栏按需开，并理解边界：README 只给两个 opt-in 控制项——针对 `kali_run`/`kali_exec` 的确定性 scope-guard，以及 MCP inbound token；并明确说这两者都不是 consent、也不是防火墙，细节在 `docs/security.md`。开之前先把授权范围写下来，并确认 kali 容器与宿主机/内网已隔开。
-
-10. 扩到真实目标前先答三个问题：这一轮有没有人逐条复核 agent 发出的每条命令？kali 容器和宿主机/内网隔开了吗？有没有超出授权范围的动作？任何一条不确定，就停在靶场，把它降级为 study。
+5. 做对照试验：同一靶场、同一目标，先人工按 checklist 跑一遍并记录命令序列、发现数、误报数、耗时；再用 agent 跑一轮同样的目标，比较发现数、误报数、重复命令比例、`steer_run` 干预次数、`stop_run` 是否真的停、耗时。
+6. 扩到真实目标前先答三个问题：这一轮有没有人逐条复核 agent 发出的每条命令？kali 容器和宿主机/内网隔开了吗？有没有超出授权范围的动作？任何一条不确定，就停在靶场，把它降级为 study。
 
 ### 做法 N：把 Claude Code 接到外部数据平台（以 TradingView-Unified-MCP 为例）
 
-注意证据等级：原文只给到启动命令，正文在此截断；没有策略、代码、回测、收益或日志。只把它当“Claude Code 通过本地 MCP 接触外部数据平台”的接入实验，不接真实资金。
-
-1. 安装并打开 Claude Code。前提：有一台能装桌面应用的电脑。预期结果：Claude Code 能正常对话。
-
-2. 下载并解压 `TradingView-Unified-MCP` 仓库。前提：能访问 GitHub；本机有 Node.js 运行时。原文地址被换行拆断，按原样给出：
-
-```text
-http://github.com/daviddme/TradingView-Unified-MCP
-```
-
-3. 先读仓库 README，补齐原文没写的注册与权限要求：Node 版本、TradingView 账号/订阅、是否需要 API 凭据、MCP 如何注册、`launch` 后进程是否常驻、暴露哪些工具。预期结果：列出必须项；缺一项就停，不要猜。
-
+1. 安装并打开 Claude Code。
+2. 下载并解压 TradingView-Unified-MCP 仓库；本机有 Node.js 运行时。
+3. 先读仓库 README，补齐原文没写的注册与权限要求。
 4. 在解压后的仓库根目录启动 MCP 服务：
-
 ```bash
 node src/cli.mjs launch
 ```
-
-预期结果：进程无报错；记录日志、监听端口、是否常驻。原文未说明这些，需从 README 或实际输出确认。
-
-5. 回到 Claude Code 检查 MCP server 是否被识别、工具数是否可枚举、每个工具的名称与参数。若没识别，按 README 注册，不要凭感觉改配置。预期结果：工具列表可见。
-
-6. 只读冒烟：让 Claude 取某标的行情/图表数据，与 TradingView 网页端人工核对 3–5 次；记录一次完整问答的耗时和偏差。提示词示例：
-
-```text
-用刚接入的 TradingView MCP 只读查询 <标的> 当前价格和最近一段 K 线，并说明你调用了哪个工具、返回了什么。
-```
-
-7. 与手动开网页查做对照：同一标的、同一时间，记录人工耗时、结果和错误；不要评估“机器人赚不赚钱”。若工具能直接下单、需要把账号密码明文写进配置、或需要付费数据源而权限边界没搞清，立即停止，不要接真实账户。
+5. 回到 Claude Code 检查 MCP server 是否被识别、工具数是否可枚举、每个工具的名称与参数。
+6. 只读冒烟：让 Claude 取某标的行情/图表数据，与 TradingView 网页端人工核对 3–5 次；记录一次完整问答的耗时和偏差。不要用盈亏评估这一轮。
 
 ### 做法 O：给编码 agent 接 AWS，先只装 aws-core 并在只读权限下小范围试用（以 agent-toolkit-for-aws 为例）
 
-注意证据等级：这是 AWS 官方 README，仓库状态 GA、Apache-2.0，约 3196 stars；只有官方文档，没有独立测评或客户案例，也没有 skills 端到端评估的具体指标。先只做只读或沙箱任务，不要先放开写操作。
-
-1. 确认前提：目标任务属于 AWS 构建、部署、管理、数据分析或 DevSecOps；使用 README 支持的编码智能体；API 调用和脚本执行需要本地已配置 AWS 账号凭据；仅做文档检索或技能发现不需要认证；Kiro、fx 和其他 agent 的手动安装路径要求本机安装 `uv`。首次接入建议只装 `aws-core`，它覆盖服务选择、CDK/CloudFormation、无服务器、容器、存储、可观测性、账单、SDK 使用和部署。
-
-2. Claude Code：从官方 marketplace 安装 `aws-core`。前提是使用 Claude Code，且默认已添加 `claude-plugins-official` marketplace。
-
+1. 确认前提：目标任务属于 AWS；使用 README 支持的编码智能体；API 调用和脚本执行需要本地已配置 AWS 账号凭据；仅做文档检索或技能发现不需要认证；Kiro、fx 和其他 agent 的手动安装路径要求本机安装 `uv`。首次接入只装 `aws-core`。
+2. Claude Code：
 ```text
 /plugin install aws-core@claude-plugins-official
 ```
-
-若提示 `Plugin not found`，先更新索引：
-
-```text
-/plugin marketplace update claude-plugins-official
-```
-
-按任务再装其他插件：
-
-```text
-/plugin install aws-agents@claude-plugins-official
-/plugin install aws-data-analytics@claude-plugins-official
-```
-
-DevSecOps 插件可从本仓库或官方 marketplace 安装，并按 README 执行 setup：
-
-```text
-/plugin marketplace add aws/agent-toolkit-for-aws
-/plugin install aws-agents-for-devsecops
-/reload-plugins
-
-# Or from Claude's official marketplace:
-/plugin install aws-agents-for-devsecops@claude-plugins-official
-/reload-plugins
-
-# Setup:
-/aws-agents-for-devsecops:setup
-```
-
-创业公司顾问插件从本仓库 marketplace 安装：
-
-```text
-/plugin marketplace add aws/agent-toolkit-for-aws
-/plugin install aws-startup-advisor@agent-toolkit-for-aws
-/reload-plugins
-```
-
-3. Codex：添加仓库 marketplace 后安装。前提是使用 Codex。
-
+若提示 Plugin not found，先 `/plugin marketplace update claude-plugins-official`。
+3. Codex：
 ```text
 codex plugin marketplace add aws/agent-toolkit-for-aws
 ```
-
 启动 Codex 后运行 `/plugins`，浏览并安装 `aws-core`。
-
-4. Cursor：通过 Team Marketplace 导入。前提是使用 Cursor。进入 **Settings → Plugins → Team Marketplaces → Add Marketplace → Import from Repo**，指向 `aws/agent-toolkit-for-aws`；Cursor 会索引 `.cursor-plugin/marketplace.json` 中的插件。然后在 **Plugins** 面板安装 `aws-core`，需要时再装 `aws-agents`、`aws-data-analytics`。每个插件都包含 AWS MCP Server 配置和 agent skills。
-
-5. Devin：用 CLI 或 Web UI 安装。前提是已登录 Devin。
-
-```text
-devin auth login
-devin plugins install aws/agent-toolkit-for-aws#plugins/aws-core
-```
-
-加 `--local` 只装到本机；不加则加入个人插件，在 Devin cloud sessions 和 Devin Desktop 也加载。要装其他插件，把 `aws-core` 替换为 `aws-agents` 或 `aws-data-analytics`。Web UI 路径是 **Customize → Plugins → Add plugin → From repository**，仓库填 `aws/agent-toolkit-for-aws`，子目录填 `plugins/aws-core`。
-
-6. Kiro：MCP Server 与本地 skills 分开装。前提是安装 `uv`，API 调用和脚本执行需要本地 AWS 凭据。先把 AWS MCP Server 写入 `.kiro/settings/mcp.json`：
-
-```json
-{
-  "mcpServers": {
-    "aws": {
-      "command": "uvx",
-      "args": [
-        "mcp-proxy-for-aws-cli@latest",
-        "https://aws-mcp.us-east-1.api.aws/mcp",
-        "--metadata",
-        "AWS_REGION=us-west-2"
-      ]
-    }
-  }
-}
-```
-
-再安装 skills：
-
+4. Cursor：Settings → Plugins → Team Marketplaces → Add Marketplace → Import from Repo，指向 `aws/agent-toolkit-for-aws`；再在 Plugins 面板安装 `aws-core`。
+5. Kiro/fx/其他 agent：手动配置 AWS MCP Server 并另装 skills：
 ```text
 npx skills add aws/agent-toolkit-for-aws/skills
 ```
+6. 先设权限和审计，再放开写操作。README 说明该工具链提供 IAM 条件键区分 agent 动作与人类动作、CloudWatch 指标和 CloudTrail 审计日志；可据此先配置只读或最小权限策略，再逐步放开。
+7. 最小试用：选一个 AWS 仓库和一个边界清晰的任务，只安装 `aws-core`，在沙箱账号或只读权限下运行；先跑未装基线，再跑装后同任务，记录完成、耗时、CloudWatch/CloudTrail 是否能看到动作、权限边界是否成立。
 
-skills 会装到 `~/.kiro/skills/` 或 `.kiro/skills/`；每个 skill 是含 `SKILL.md` 的目录，可选 `references/`。Kiro 会自动发现并在任务匹配时按需加载。
+### 做法 P：给编码 agent 接打包插件，先只启用「宣布完成前先验证」一个技能（以 flashmind 为例）
 
-7. fx：同样分 MCP Server 和 skills 两部分。前提是安装 `uv`，并配置 AWS 凭据。可用命令添加 MCP Server：
-
-```text
-fx mcp add aws uvx mcp-proxy-for-aws-cli@latest https://aws-mcp.us-east-1.api.aws/mcp --metadata AWS_REGION=us-west-2
-```
-
-或手工写入 `~/.fx/mcp.json`：
-
-```json
-{
-  "mcp": {
-    "aws": {
-      "type": "local",
-      "command": [
-        "uvx",
-        "mcp-proxy-for-aws-cli@latest",
-        "https://aws-mcp.us-east-1.api.aws/mcp",
-        "--metadata",
-        "AWS_REGION=us-west-2"
-      ]
-    }
-  }
-}
-```
-
-若会话已打开，运行 `/mcp reload`。安装 skills：
-
-```text
-npx skills add aws/agent-toolkit-for-aws/skills -a fx
-```
-
-默认装到项目级 `.fx/skills/`，加 `-g` 装到 `~/.fx/skills/`。fx 也会发现 `.agents/skills/`、`.claude/skills/`、`.codex/skills/` 中已安装的 skills。
-
-8. 其他 agent：手动配置 MCP Server，再装 skills。按 AWS MCP Server getting started guide 配置好后运行：
-
-```text
-npx skills add aws/agent-toolkit-for-aws/skills
-```
-
-9. 加入项目级 rules。README 建议使用 `rules/` 中的项目级配置文件，告诉 agent 如何更有效地使用 AWS，例如优先使用 AWS MCP Server、发现可用 skills、先搜文档再行动。README 没有展开具体 rules 内容，实施时应打开 `rules/` 目录，按项目复制或改写。
-
-10. 先设权限和审计，再放开写操作。README 说明该工具链提供 IAM 条件键区分 agent 动作与人类动作、CloudWatch 指标和 CloudTrail 审计日志；可据此先配置只读或最小权限策略，再逐步放开。具体 IAM/CloudWatch/CloudTrail 配置未在 README 给出，需按组织策略和用户指南落地。
-
-11. 最小试用：选一个 AWS 仓库和一个边界清晰的任务，例如“只读查询并解释某项 AWS 资源”“生成 CDK/CloudFormation 草案但不部署”“检索 AWS 文档并给出服务选型建议”。只安装 `aws-core`，在沙箱账号或只读权限下运行。建立基线：同一任务先用未装工具包的 agent 做一次，记录完成情况、耗时；再装 aws-core 做同一任务，记录完成情况、耗时、调用了哪些 AWS API、CloudTrail 是否能看到动作、权限边界是否成立。不能直接引用 README 的效果数字。
-
-### 做法 P：给编码 agent 接打包插件，先只启用“宣布完成前先验证”一个技能（以 flashmind 为例）
-
-注意证据等级：原文提供可直接复制的安装命令与 MCP JSON、六种客户端的配置映射表、技能触发条件表、更新与去重规则；但没有防幻觉规则正文、没有 4 个 `SKILL.md` 正文、没有基准/案例/前后对比数据。能照抄的是“接线方式”，抄不到“规则与技能的具体措辞”。先按最小组合试：MCP 记忆 + 规则文件 + `verify-before-done` 一个技能。
-
-1. 确认前提：Node ≥18；目标客户端支持 MCP；本机有 git；自动安装器需要能安装 Engram 二进制；选一个真实仓库和隔离分支/worktree；记录试用前基线（同一类任务的轮次、返工、测试通过率、幻觉类事件）。预期结果：明确只选一个客户端、一个仓库、一个技能。
-
-2. 最轻路径：只接 MCP 服务。在客户端的 MCP 配置（`mcp.json` / `mcp_config.json`）中加入：
-
-```json
-{
-  "mcpServers": {
-    "flashmind": {
-      "command": "npx",
-      "args": ["-y", "flashmind"]
-    }
-  }
-}
-```
-
-预期结果：客户端配置里出现 `flashmind` MCP 服务；只完成接线，不代表规则和技能已生效。
-
-3. Gemini CLI 用户可装扩展：
-
-```bash
-gemini extensions install https://github.com/Hvftpie13/Flashmind_Gemini-3.8-Flash_Smart-agent
-gemini -m gemini-3.8-flash
-```
-
-预期结果：扩展安装完成并能启动。原文里的 `gemini-3.8-flash` 模型名无法从材料核实，按本机实际可用模型调整。
-
-4. 要记忆 + 技能 + 规则全套，跑自动安装器。前提：本机有 git，且能安装 Engram 二进制。
-
-macOS / Linux：
-
+1. 确认前提：Node ≥18；目标客户端支持 MCP；本机有 git；选一个真实仓库和隔离分支/worktree；记录试用前基线。
+2. 最轻路径：只接 MCP 服务。在客户端 MCP 配置中加入 `flashmind`，`command` 用 `npx`，`args` 用 `-y`、`flashmind`。
+3. 要记忆 + 技能 + 规则全套，跑自动安装器：
 ```bash
 git clone https://github.com/Hvftpie13/Flashmind_Gemini-3.8-Flash_Smart-agent flashmind
 cd flashmind
 ./install.sh antigravity-cli
 ```
+安装后必须打开实际文件核对；原文没有给出规则与技能正文。
+4. 只启用 `verify-before-done` 一个技能，暂不启用其余三个：`plan-first`、`no-invented-code`、`systematic-debugging`。
+5. 更新时只替换、不追加：一个服务一个条目；规则文件整体覆盖，共享文件用标记包裹后只替换标记之间内容；技能只留一份。
+6. 最小试用两周：选一个真实仓库、只选一个客户端，只装 MCP 记忆 + 规则文件 + `verify-before-done` 一个技能；记录「未跑测试就宣布已修复」「引入不存在的包/函数/CLI 参数」两类事件计数、返工时长、测试通过率，与试用前同仓库同类型任务对照。
 
-Windows（PowerShell）：
+### 做法 Q：先只装 2–3 个「工程习惯」技能，用真实任务对照（以 MiniMax-AI/mcode-stack 为例）
 
-```powershell
-git clone https://github.com/Hvftpie13/Flashmind_Gemini-3.8-Flash_Smart-agent flashmind
-cd flashmind
-.\install.ps1 antigravity-cli
+注意证据等级：本次只有 README，没有各 `SKILL.md`、`checklists/`、`WORKFLOW.md` 正文，也没有使用前后对比、缺陷率、节省时间或采用率数据；能照抄的是安装/调用方式和技能清单，具体检查项要打开目标技能目录里的 `SKILL.md` 再决定是否照做。建议从 `long-command-check`、`independent-review`、`harness-experiment` 三个开始，不要一次装整套 15 个。
+
+1. 确认前提：已安装 MiniMax Code；若走 Claude Code 市场命令，已安装 Claude Code；本地有 git；选一个真实仓库或任务；记录不调用技能时的基线（长命令阻塞/重试、评审漏检、实验重复运行的波动等）。预期结果：明确只选 2–3 个技能，并保留一个不调用技能的对照会话。
+2. 安装单个技能（所有项目可用）：
+```bash
+git clone https://github.com/MiniMax-AI/mcode-stack.git ~/mcode-stack
+mkdir -p ~/.agents/skills
+cp -R ~/mcode-stack/stacks/ronny/skills/long-command-check ~/.agents/skills/
 ```
-
-预期结果：安装器写入配置、规则和技能。安装后必须打开实际文件核对；原文没有给出规则与技能正文。
-
-5. 或按客户端手工放置配置文件（原文 `configs/` 目录给出对应关系）：
-
-| 客户端 | MCP 配置文件 | 规则文件位置 |
-|---|---|---|
-| Antigravity | `configs/antigravity/mcp_config.json` → `~/.gemini/config/mcp_config.json` | `AGENTS.md` → `~/.gemini/GEMINI.md` |
-| Cursor | `configs/cursor/mcp.json` → `~/.cursor/mcp.json` | `configs/cursor/flashmind.mdc` → `~/.cursor/rules/` |
-| VS Code (Copilot) | `configs/vscode/mcp.json` → `.vscode/mcp.json` | `configs/vscode/flashmind.instructions.md` |
-| Windsurf | `configs/windsurf/mcp_config.json` → `~/.codeium/windsurf/mcp_config.json` | `configs/windsurf/global_rules.md` |
-| Claude Code | 执行 `bash configs/claude-code.sh` | `AGENTS.md` → `CLAUDE.md` |
-| 任意 MCP 客户端 | `configs/mcp.json` | `AGENTS.md` |
-
-预期结果：配置落到对应路径；规则文件落到客户端能读取的位置。
-
-6. 只启用 `verify-before-done` 一个技能，暂不启用其余三个，避免多变量混淆。它的触发条件是宣布 “fixed” / “done” 之前，用途是跑 linter / 测试并报告确切的终端结果。其余三个技能先只记录、不启用：`plan-first`（任务 ≥3 步或多文件改动）、`no-invented-code`（写新函数或 import）、`systematic-debugging`（报错、测试失败、崩溃）。预期结果：agent 在宣布完成前能触发验证并给出终端输出。
-
-7. Gemini CLI 用户用斜杠命令做记忆与审计：`/memory:recall <query>` 检索并总结记忆；`/memory:save <fact>` 保存已验证的决策或发现；`/memory:forget <item>` 删除过时记忆；`/memory:summary` 生成并记录会话摘要；`/verify` 对最后一条回答逐条核对来源证据。预期结果：能检索、保存、删除记忆，并能对回答逐条核对来源。
-
-8. 更新时只替换、不追加。前提：先确认只保留一份配置与一份技能副本。一个服务一个条目：MCP 配置里只保留一个 `"flashmind"` 和一个 `"engram"` 键，改现有条目而不是粘贴第二份。规则文件整体覆盖；对 `~/.gemini/GEMINI.md`、`CLAUDE.md` 这类共享文件，用标记包裹后每次只替换标记之间内容：
-
+把 `long-command-check` 换成 `independent-review`、`harness-experiment` 等技能名可装其他技能。也可把技能放到项目级 `.minimax/skills/`、`.claude/skills/` 或 `.agents/skills/`；全局还会读取 `~/.claude/skills/`、`~/.codex/skills/`。预期结果：目标目录下出现包含 `SKILL.md` 的技能子目录。
+3. 在新会话中查看并调用：
 ```text
-<!-- flashmind:start -->
-...contents of AGENTS.md...
-<!-- flashmind:end -->
+/skills
+/long-command-check
 ```
-
-技能只留一份：若曾把 `skills/` 复制到 `~/.gemini/skills` 和 `~/.agents/skills` 两处，删掉一处。更新后开新会话，让 agent 重新加载规则与技能。各安装方式对应的更新命令：扩展 `gemini extensions update flashmind`；NPX 重启编辑器（必要时 `npm cache clean --force`）；git clone 方式 `git pull` 后重跑安装脚本；Engram 用 `brew upgrade engram` 或 `go install github.com/Gentleman-Programming/engram/v3/cmd/engram@latest`。预期结果：没有重复的 MCP 条目、规则块和技能副本；新会话加载的是更新后内容。
-
-9. 最小试用两周：选一个真实仓库、只选一个客户端（Gemini CLI 或 Claude Code），只装 MCP 记忆 + 规则文件 + `verify-before-done` 一个技能，暂不启用其余三个；用 git 分支或独立 worktree 隔离，记录试用前基线。采集指标：`/verify` 抽查 + 人工看 diff 与终端记录，统计“未跑测试/linter 就宣布已修复”的次数；靠依赖清单 diff 与 import 静态检查，统计“引入不存在的包/函数/CLI 参数”的次数；同一架构问题被重复提问的次数；任务平均来回轮次与人工返工时长；`/memory:recall` 命中里过期或错误条目的比例，以及 `mem_review` 纠错次数；测试通过率与回归数量。判断：与试用前同仓库、同类型任务对照；若前两类幻觉类事件明显下降、返工时长下降且测试通过率不降，则保留并再扩到第二个技能/第二个客户端；若记忆库积累脏条目反而误导（表现为引用过时决策、`mem_review` 频繁报错），则收缩为只保存经 `/verify` 确认的决策，或退回只装规则 + `verify-before-done`。
+也可以不手动调用，让代理根据技能描述自行加载。把 `long-command-check` 换成其他技能名即可调用对应技能。预期结果：`/skills` 能列出已装技能；调用后代理按该技能执行。
+4. 安装整栈为本地插件（可选，先不要一次启用全部）：先看本地插件目录：
+```bash
+mcode plugin marketplace list
+```
+把 `stacks/ronny` 整个目录复制到该命令显示的本地插件目录，然后在 MiniMax Code 打开 `/plugins`，按 `Ctrl+R` 刷新；在面板中按空格启用或禁用。注意 README 说明：`mcode plugin add` 只从官方目录安装，不接受 GitHub URL 或本地路径。预期结果：插件面板出现该 stack，可按需启用/禁用，而不是全部默认启用。
+5. 从市场安装（MiniMax Code 桌面端，可选）：打开 Plugins，选择 Add marketplace，输入 `MiniMax-AI/mcode-stack`；每个 stack 会显示为一个可安装/更新/卸载的插件。README 说明该功能在逐步开放，部分版本可能还没有。预期结果：市场里能看到 stack；若版本没有该功能，回到第 2 步或第 4 步。
+6. 在 Claude Code 中安装同一目录（可选）：
+```bash
+/plugin marketplace add MiniMax-AI/mcode-stack
+/plugin install ronny@mcode-stack
+```
+预期结果：Claude Code 里出现该市场与插件；再用 `/skills` 或技能名调用。
+7. 打开你选中的技能正文再照做：本次材料只有 README，没有 `SKILL.md` 正文；先打开 `~/mcode-stack/stacks/ronny/skills/<skill>/SKILL.md`，核对具体检查项、输入条件和停止条件。检查清单也可直接读 `checklists/` 下的纯文本；工作流读对应 stack 的 `WORKFLOW.md`。预期结果：你能复述该技能要求先做什么、检查什么、什么时候停；不能复述就先不要把它写进团队流程。
+8. 最小试用：选 2–3 个与当前痛点最直接的技能，优先组合 `long-command-check` + `independent-review` + `harness-experiment`；在真实任务中调用，同时保留一个不调用技能的对照会话。记录：技能是否被正确发现、`/skills` 是否列出、调用后是否按预期执行；长命令阻塞/人工中断/重试/后台任务失败或丢失/等待时间（前后各 5–10 次长命令任务）；同一 diff 的干净上下文评审发现的问题数、其中普通评审漏掉的问题数、无效评论数、评审耗时；同一评估任务重复运行的通过率波动、翻转任务数量、一次只改一项时能否定位变化来源；团队是否愿意持续调用、是否减少返工或评审往返。预期结果：与不调用技能的对照相比，至少一个目标指标改善且没有明显负作用；若只有安装成功、没有可观察任务结果改善，就停在 try，不要升级为 adopt。
 
 ## 怎么判断变好了
 
 可观察指标：
+- 通路：`uvx jevcrawl doctor` 是否报通路正常；`rea` 是否出现在 Hermes 服务器列表；CLI-Hub 的 `cli-hub info/install/launch` 是否成功；`arcmira_describe` 是否返回方法表与版本行；`reason network who` 是否稳定列出对方 session 及当前任务；`idx mcp setup <client>` 是否打印绝对路径、客户端里 `idx` 是否出现且工具数可枚举；Blender 扩展是否能打开 MCP Pro 面板、选中支持 tool calling 的模型、跑通「检查场景 → 建对象 → 复制排列」；jevreel 是否 `index` 打印 video id、`ask` 返回时间/概率/帧、`zoom` 取到全分辨率帧；WhatsApp MCP 的 `/debug` 是否为 `phase: idle` 且 `paired: true`；im-mcp 的 `wechat-init` / `dingtalk-init` 是否成功；claude-security-scan 的 `--demo --open` 能否打开示例报告、`--skip repos` 能否生成 `reports/<日時>/report.html`；vulnerator-ai 的 `docker compose ps` 是否四容器健康、前门是否只暴露 6 个 run 生命周期工具；TradingView MCP 是否 `node src/cli.mjs launch` 无报错、Claude Code 是否识别 server 与工具列表；agent-toolkit-for-aws 是否装出 aws-core 插件、skills 是否可见、MCP Server 是否被客户端识别；flashmind 客户端里是否出现 `flashmind` MCP 服务、规则文件是否落到对应路径、技能是否只有一份副本；mcode-stack 的 `/skills` 是否列出已装技能、`/<skill-name>` 调用后是否按技能执行。
+- 工具清单：注册后必须去客户端确认工具真的出现、数量可枚举；不能把「注册成功」当「验证完成」。
+- 任务效果：同一组真实任务，挂载 vs 未挂载/人工，比较任务完成率、答案正确性、漏掉已知消息数、人工步骤数、耗时、工具报错次数。vulnerator-ai 另有：发现数与人工 checklist 的比值、误报数、重复命令比例、`steer_run` 干预次数、`stop_run` 后是否真的停止。TradingView 路径只比只读问答。agent-toolkit-for-aws 比较同一 AWS 任务未装 vs 只装 aws-core：完成情况、耗时、调用到的 AWS API、CloudTrail 审计是否可见、IAM 条件键是否区分 agent 与人类动作。flashmind 比较同一仓库、同一类任务试用前后两类幻觉事件计数、返工时长、测试通过率。mcode-stack 比较调用技能 vs 不调用技能：长命令阻塞/人工中断/重试/后台任务失败或丢失/等待时间；同一 diff 的干净上下文评审发现的问题数、普通评审漏掉的问题数、无效评论数、评审耗时；同一评估任务重复运行的通过率波动、翻转任务数量、一次只改一项时能否定位变化来源；团队是否愿意持续调用、返工或评审往返是否减少。
+- 成本与停止原因：jevcrawl 看 `jev_cost_usd`、`stopped_because`、`degraded`、`needs_js_urls`；arcmira 看 `quote` 预估与实际消耗、错误码是否可按 `code` 分支；jevreel 看 `jevreel measure` 与实际计费、重复 `ask` 是否 0 请求 0 成本、`query` 是否不产生请求。
+- 安全负向指标：是否出现越权访问、读取工作目录之外文件、执行非预期命令；Blender 侧看 `execute_code` 是否超出预期；jevreel 侧确认视频帧与问题允许外发到 TypeSafe；WhatsApp MCP 侧确认没有发送消息、没有多人共享；im-mcp 侧确认只读、明文数据库已按需清理；claude-security-scan 侧确认没有明文秘密、没有对测试仓库/账号产生写入或发送、报告权限 700；vulnerator-ai 侧确认没有越出靶场或授权范围的动作、前门没有暴露原始 `kali_run`；TradingView 侧确认没有接真实账户、没有下单；agent-toolkit-for-aws 侧确认先只读/最小权限、CloudTrail 能看到 agent 动作；flashmind 侧确认规则文件与技能只有一份、记忆库没有存进未经核实的结论；mcode-stack 侧确认技能只从可信仓库安装、没有把密钥写进技能目录或日志。
 
-- 通路：`uvx jevcrawl doctor` 是否报通路正常；`rea` 是否出现在 Hermes 服务器列表；CLI-Hub 的 `cli-hub info/install/launch` 是否成功；`arcmira_describe` 是否返回方法表与版本行；`reason network who` 是否稳定列出对方 session 及当前任务；`idx mcp setup <client>` 是否打印绝对路径、客户端里 `idx` 是否出现且工具数可枚举；Blender 扩展是否能打开 MCP Pro 面板、选中支持 tool calling 的模型、跑通“检查场景 → 建对象 → 复制排列”；jevreel 是否 `index` 打印 video id、`ask` 返回时间/概率/帧、`zoom` 取到全分辨率帧、接入 agent 后能自己调用；WhatsApp MCP 的 `/debug` 是否为 `phase: idle` 且 `paired: true`、`link_status` 的 `last_pull` 是否正常更新；im-mcp 的 `wechat-init` / `dingtalk-init` 是否成功、客户端能调用 `search_wechat_messages` / `get_session_history` 等工具；claude-security-scan 的 `scan.py --demo --open` 能否打开示例报告、`--skip repos` 能否生成 `reports/<日時>/report.html`、Claude Code 里“セキュリティチェックして”能否触发；vulnerator-ai 的 `docker compose ps` 是否四容器健康、前门是否只暴露 `health()`/`start_pentest`/`get_run_status`/`stream_run_events`/`steer_run`/`stop_run`、`start_pentest` 后 `stream_run_events` 是否有事件流出、`stop_run` 是否真的停；TradingView MCP 是否 `node src/cli.mjs launch` 无报错、Claude Code 是否识别 server 与工具列表；agent-toolkit-for-aws 是否装出 aws-core 插件、skills 是否可见、MCP Server 是否被客户端识别、工具是否可枚举；flashmind 客户端里是否出现 `flashmind` MCP 服务、规则文件是否落到对应路径、技能是否只有一份副本、`/verify` 能否逐条核对来源、`verify-before-done` 是否在宣布完成前触发并给出终端结果。
-- 工具清单：注册后必须去客户端确认工具真的出现、数量可枚举；不能把“注册成功”当“验证完成”。
-- 任务效果：同一组真实任务，挂载 vs 未挂载/人工，比较任务完成率、答案正确性、漏掉已知消息数、人工步骤数、耗时、工具报错次数。vulnerator-ai 另有几项：发现数与人工 checklist 的比值、误报数、重复命令比例、`steer_run` 干预次数、`stop_run` 后是否真的停止。TradingView 路径只比只读问答：价格/K 线与网页端抽样是否一致、一次问答耗时、连续启动/调用 10 次的失败次数。agent-toolkit-for-aws 比较同一 AWS 任务未装 vs 只装 aws-core：完成情况、耗时、调用到的 AWS API、CloudTrail 审计是否可见、IAM 条件键是否区分 agent 与人类动作。flashmind 比较同一仓库、同一类任务试用前后：两周内“未跑测试就宣布已修复”和“引入不存在的包/函数/CLI 参数”两类事件计数、同一架构问题重复提问次数、任务平均来回轮次与人工返工时长、记忆库过期/错误条目比例与 `mem_review` 纠错次数、测试通过率与回归数量。
-- 成本与停止原因：jevcrawl 看 `jev_cost_usd`、`stopped_because`、`degraded`、`needs_js_urls`；arcmira 看 `quote` 预估与实际消耗、错误码是否可按 `code` 分支；jevreel 看 `jevreel measure` 与实际计费、重复 `ask` 是否 0 请求 0 成本、`query` 是否不产生请求。vulnerator-ai 原文没有成本或耗时数据，只能自己记录每轮 run 的模型调用与容器资源消耗。agent-toolkit-for-aws 没有给出评估指标与成本数据，只能自己记录调用审计、任务完成和权限边界。flashmind 没有给出成本或效果数据，只能自己记录记忆库健康度、验证触发次数和返工时长。
-- 安全负向指标：是否出现越权访问、读取工作目录之外文件、执行非预期命令；Blender 侧看 `execute_code` 是否超出预期；jevreel 侧确认视频帧与问题允许外发到 TypeSafe；WhatsApp MCP 侧确认没有发送消息、没有多人共享、没有绕过条款；im-mcp 侧确认只读、明文数据库已按需清理、没有在公共机器残留；claude-security-scan 侧确认没有明文秘密、没有对测试仓库/账号产生写入或发送、报告权限 700、共享前已确认脱敏；vulnerator-ai 侧确认没有越出靶场或授权范围的动作、前门没有暴露原始 `kali_run`、`stream_run_events` 里没有超出范围的命令——出现任何一条即停并回滚到 study；TradingView 侧确认没有接真实账户、没有下单、没有明文账号密码、没有把不可外发的数据发送出去；agent-toolkit-for-aws 侧确认先只读/最小权限、没有在未配审计前放开写操作、CloudTrail 能看到 agent 动作、没有把凭据打印出来；flashmind 侧确认规则文件与技能只有一份、记忆库没有存进未经核实的结论、没有把密钥写进配置或日志。
-- claude-security-scan 的报告质量：人工复核首次报告中的 high/medium 项，记录真实问题数与误报数，计算可确认的准确率；连续两周运行，记录 NEW 项数量及其中经复核为真的比例；统计“未能确认”项及原因，确认没有把失败静默当成无问题；记录单次运行时间和每周定时是否完成；在测试账号/仓库比对扫描前后配置与文件，确认只读边界成立。
-
-对照试验设计：所有系统从同一入口、同样预算、同一个问题出发，抓到的内容交给同一个回答 LLM，由同一个 judge 打分，只让被试工具这个变量变。没有对比性指标的工具，先用流程内建测试和真实重复任务做前后对照。vulnerator-ai 的对照要额外固定靶场和目标，否则两轮打的不是同一个东西。TradingView 接入的对照只比接入与只读查询，不把“机器人收益”当指标。agent-toolkit-for-aws 的对照要固定 AWS 账号/沙箱、区域和任务，只比较未装与只装 aws-core 的完成、耗时、审计与权限边界，不引用官方 README 当独立效果数据。flashmind 的对照要固定仓库、客户端和任务类型，只比较试用前后两类幻觉事件计数、返工时长和测试通过率，不把作者“消除幻觉”的主张当效果数据。
+对照试验设计：所有系统从同一入口、同样预算、同一个问题出发，抓到的内容交给同一个回答 LLM，由同一个 judge 打分，只让被试工具这个变量变。没有对比性指标的工具，先用流程内建测试和真实重复任务做前后对照。vulnerator-ai 的对照要额外固定靶场和目标。TradingView 接入的对照只比接入与只读查询。agent-toolkit-for-aws 的对照要固定 AWS 账号/沙箱、区域和任务。flashmind 的对照要固定仓库、客户端和任务类型。mcode-stack 的对照要固定仓库、任务类型和技能组合，只比较调用技能与不调用技能；不要同时装整套 15 个技能。
 
 可参考的作者自测数据（非独立验证）：
-
-- jevcrawl：50 个 WebWalkerQA 任务（2026-10-12，回答模型 `claude-opus-5-5`，judge `claude-sonnet-5-5`）答对 40%、找到答案页 54%、$0.025/任务；Claude 逐个挑链接 30% / 33% / $0.194；广度优先 8% / 11% / $0.228。每正确答答案成本 $0.06 / $0.65 / $2.85。与 Crawl4AI 0.9.4 的 20 任务对照（2026-10-13，只比是否抓到 gold page）：答案页 10 vs 5、全部答案页 5 vs 2、中位爬取时间 29s vs 43s、站点加载失败 0 vs 3。docs.python.org 示例 80,034 tokens 压到 1,873 tokens，$0.0069，8.3 秒。
-- CLI-Anything README 自报：2,461 个测试通过、pytest 100%、多语言/多 harness 覆盖率；无第三方复现。
+- jevcrawl：50 个 WebWalkerQA 任务答对 40%、找到答案页 54%、$0.025/任务；与 Crawl4AI 0.9.4 的 20 任务对照答案页 10 vs 5；docs.python.org 示例 80,034 tokens 压到 1,873 tokens。
+- CLI-Anything README 自报：2,461 个测试通过、pytest 100%；无第三方复现。
 - reason network：README 没有效果数据、指标或案例；仓库 33 stars。
-- idx：调研正文只给安装命令、MCP 注册方式、输出契约与数据流水线描述，未见效果数据、性能数字或对比指标；正文在第 9 步后被截断。
-- Blender 扩展：仓库 705 stars；Release 1.0.0、Blender 4.2+、Windows x64、MIT 许可；没有用户案例、成功率、耗时对比或基准数据。
-- jevreel：10 分钟 1080p 视频单张 sheet 约 $0.00025、索引 $0.0033、一次 ask $0.004–0.005、重复 ask $0、locate $0.0002、whole $0.0003、一小时视频一个问题约 $0.02–0.03；10 分钟 1080p 无语音游戏录像上，三个不到一秒的暂停菜单仅 screening 得分 0.36 / 0.50 / 0.95，验证前漏掉两个、验证后全部捞回。底层 Jev 图像能力仍是实验性，验证只基于单个测试视频。
-- WhatsApp MCP：README 给出完整部署命令、配置项、工具表、架构和调试步骤；HN 35 points、23 comments 只能说明关注度；作者只在一个真实账号上跑过；没有业务效果指标；首次历史导入每个链接只发生一次，失败后要重新链接才能补；免费计划未验证；媒体只显示 `[image]`、`[voice note 12s]` 等标签，不下载不转写；一个部署对应一个 WhatsApp 账号和一个 owner；非官方实现，作者承认违反 WhatsApp 条款；已知缺口包括未命名聊天不会自动刷新、每日 pull 发现登出不会通知、编辑/删除路径未用真实事件测试。
-- im-mcp：README 给出完整安装、初始化、客户端配置、清理命令和工具表；只有一张兼容性验证表，没有效果指标、任务成功率或对照数据；“毫秒级响应”为作者声称，未给测量方法；工具只读，但本地数据库解密后明文落盘；没有 cron、webhook、守护进程等定时/事件触发说明，调度层需自行搭建。
-- claude-security-scan：README 给出检测项清单、安装命令、各域准备方式、报告路径、安全设计和限制；仓库 32 stars。没有检出率、误报率、真实用户案例或独立评测，也没有代码审计结果；作者关于“最近信息泄露多由疏忽造成”“这些检查去看几秒就能知道”等是主张，不是数据结论。原文自述限制：Google Workspace 整体管理设置因需 Admin API 委派不在范围；AWS 默认只查东京和弗吉尼亚；不做暴力/模糊测试等攻击性检查；检测结果需人工最终判断。另需注意：这是会读取多账户敏感信息的第三方技能，README 中的只读与脱敏设计尚未在本报告依据的材料中经过代码级验证；Gmail 依赖第三方 `gog`；token 的 export 命令中 `...` 是占位符。
-- vulnerator-ai：可核查的是四容器架构与端口（kali-mcp `:8900`、playwright-mcp `:8931`、Hermes `:8642`、vulnerator-mcp 内部 `:8700`）、Kali 工具清单（nmap、whatweb、nuclei、ffuf、sqlmap、Prowler 等）、`install.sh` 的行为（检查 docker/compose v2/openssl、自动生成两个 token、写 `.env`、起四容器）、三个可选 flag、TUI 命令、stdio 模式的 `mcpServers` 配置、六个 MCP 工具名、两个 opt-in 控制项及其“不是 consent / 不是防火墙”的边界说明、MIT 许可、OWASP Juice Shop 练习靶场、`docs/design.md` 的 findings-store schema、`docs/example-report.md` 的脱敏样例。原文没有任何准确率、耗时、成本或对比基线数据，没有独立评测和用户案例；设计上刻意没有 core、没有 REST API、没有 UI、没有 gates（无审批环节）；默认无 scope-guard、无 consent、无 audit、无授权闸门。适用条件：只能对明确授权的目标；先隔离靶场（`--with-juice-shop`）跑一轮并对照人工基线；默认无任何护栏，不宜直接用于生产。
-- TradingView-Unified-MCP：可核查的只有两步接入动作——安装 Claude Code、下载解压仓库并在根目录执行 `node src/cli.mjs launch`；原文在第二步命令后被截断。零效果证据：没有策略、代码、回测、收益、胜率、截图或日志；互动量约 50 赞、6 转发、3 回复，只说明关注度。作者主张“通过与 Claude 对话构建了一个交易机器人”未经验证；推文指向作者自己的 GitHub 仓库，有自我推广动机。MCP 注册、账号/订阅、API 凭据、工具列表、进程是否常驻均需从仓库 README 补，原文未给。结论强度：try 而非 adopt，因为接入动作可复制但链条不完整；try 而非 study，因为三行命令有独立复现价值。
-- agent-toolkit-for-aws：可核查的是 AWS 官方 README 给出的多 agent 安装命令、Kiro/fx 的 MCP JSON 配置、skills 安装命令、插件覆盖范围（Claude Code、Codex、Cursor、Devin，Kiro/fx/其他需手动配置 MCP 并另装 skills）、项目级 rules 目录、IAM 条件键、CloudWatch 指标和 CloudTrail 审计的陈述、GA 状态、Apache-2.0 许可、约 3196 stars。局限：只有官方文档，没有独立测评或客户案例；没有 skills 端到端评估的具体指标；没有 IAM/CloudWatch/CloudTrail 配置样例；没有 rules 文件内容；没有提示词模板；示例区域为 `us-west-2`，实际使用需按自己的区域和权限调整。结论强度：团队在 AWS 上开发且已使用支持 agent 时，先装 aws-core 并在只读权限下小范围试用；不要引用 README 当独立效果证据。
-- flashmind：可核查的是 npm 包名 `flashmind`、MIT、31 stars、Node ≥18、可直接复制的 MCP JSON、六种客户端配置映射表、技能触发条件表、更新与去重规则、Gemini CLI 斜杠命令、隐私承诺（100% 本地、零遥测、自动拒绝密码/bearer token/API key、0 运行时 npm 依赖）、徽章显示存在 CI test workflow。属于作者主张、原文未提供支撑的：「消除幻觉」「让快模型记得住、会规划、会验证」；没有任何基准、案例、前后对比数据或用户反馈。关键缺失：防幻觉规则的实际正文（`AGENTS.md` / `GEMINI.md` 内容）和 4 个 `SKILL.md` 的正文都没有出现在抓取到的文本里，只有名称、触发条件和一句话用途——因此能照抄的是「接线方式」，抄不到「规则与技能的具体措辞」。Engram 是另一个仓库的第三方组件；`gemini -m gemini-3.8-flash` 里的模型名与标题中的版本号无法从材料中核实。结论强度：try，先两周小范围试用，用两类幻觉事件计数判断去留。
-- 与已有清单的关系：Claude Code 为 adopt；agent-toolkit-for-aws 可直接作为 Claude Code 的 AWS 能力扩展方式；Cursor 为 watch，可按 Team Marketplace 路径小范围试点；Agent skills 为 adopt，aws 工具包的 skills 采用 `SKILL.md` 加可选 `references/` 的目录结构，与已有概念一致；清单中没有单独的 MCP 服务器条目，本线索可作为“MCP + skills + 插件 + rules + 权限审计”的组合供给案例。flashmind 也是 Agent skills 的具体落地包，把技能写成 4 个带触发条件的分步 playbook，并配套 `install.sh` / `install.ps1` 自动分发；它把 MCP 记忆、规则和技能打包在一起，适合作为“打包插件”的试用样本。
-- 尚未覆盖的部分：这些路径都没有讨论哪类任务适合哪个模型，也没有系统比较 Claude Code / Codex / Hermes 三者在同一工具集下的差异；反馈信号、上下文信息、权限回收机制只有零散机制；除单次调用边界与停止原因外，多数没有由时间、事件或状态触发的主动推进能力；私人消息路径都没有给出业务效果指标，只给出部署/兼容性验证；claude-security-scan 只有 README 证据，没有独立评测或代码审计；vulnerator-ai 只有架构、安装与控制面证据，没有效果、成本或安全审计数据；TradingView 线索在启动命令后截断，没有策略、回测、风控或收益数据；agent-toolkit-for-aws 只有官方 README，没有独立效果数据、rules 内容或 IAM/CloudWatch/CloudTrail 配置样例；flashmind 只有接线方式，没有规则与技能正文和效果数据，需要自己补规则措辞并做对照。
+- idx：未见效果数据、性能数字或对比指标；正文在第 9 步后被截断。
+- Blender 扩展：705 stars；没有用户案例、成功率、耗时对比或基准数据。
+- jevreel：作者自测成本与暂停菜单对照；底层 Jev 图像能力仍是实验性，验证只基于单个测试视频。
+- WhatsApp MCP：HN 35 points 只说明关注度；作者只在一个真实账号上跑过；没有业务效果指标。
+- im-mcp：只有兼容性验证表，没有效果指标或对照数据；「毫秒级响应」为作者声称。
+- claude-security-scan：32 stars；没有检出率、误报率、真实用户案例或独立评测；只读与脱敏设计尚未经过代码级验证。
+- vulnerator-ai：没有准确率、耗时、成本或对比基线；默认无 scope-guard、无 consent、无 audit、无授权闸门。
+- TradingView-Unified-MCP：零效果证据；互动量只说明关注度；原文在启动命令后截断。
+- agent-toolkit-for-aws：官方 README；约 3196 stars 只是关注度；没有独立测评、客户案例或 skills 端到端指标。
+- flashmind：31 stars；没有防幻觉规则正文、没有 4 个 `SKILL.md` 正文、没有基准或前后对比；能照抄的是接线方式。
+- mcode-stack：README 列出 15 个技能，有 MIT、GitHub Actions `validate` 徽章和配套文章；作者称团队每天实际使用，但本次没有使用前后对比、缺陷率、节省时间、采用率等量化数据，也没有真实案例细节；只有 README，没有各 `SKILL.md`、`checklists/`、`WORKFLOW.md` 正文。
 
 最小试用方式与试多久：
-
-- jevcrawl：半天内完成。准备一个答案埋在首页几跳之下、站点不依赖 JS 的真实问题；先用现有方式跑同一个问题并保存原始上下文和答案；按做法 A 接好，`uvx jevcrawl doctor` 确认通路，跑 `jevcrawl crawl <start_url> --goal '<你的问题>' --json`；再换一个答案就在已知单页上的问题跑 `scrape`；把两份产出交给同一个评审做对照打分。
-- REA：以完成一轮“注册 → 枚举 → 冒烟 → 对照”为准，原文没有时间或次数建议。
+- jevcrawl：半天内完成。准备一个答案埋在首页几跳之下、站点不依赖 JS 的真实问题；先跑现有方式，再接 jevcrawl 跑同一个问题，交给同一个评审对照打分。
+- REA：以完成一轮「注册 → 枚举 → 冒烟 → 对照」为准，原文没有时间或次数建议。
 - CLI-Anything：以跑通一条真实重复任务并留下一组对照为准。
-- arcmira：以“示例提示词跑通 + `resolve` 路径走通 + `quote` 预估与实际对得上”为一轮；调研只建议小范围试用。
+- arcmira：以「示例提示词跑通 + `resolve` 路径走通 + `quote` 预估与实际对得上」为一轮。
 - reason network：以 2 人配合跑通一轮 who → 问答 → send → 离线补发为准。
-- idx：以“零安装跑通 → JSON 契约核对 → MCP 注册 → agent 一次调用 → 离线一次”为一轮。
-- Blender 扩展：以“单助手四条提示词跑通 + 团队链把同一任务重做一次”为一轮。
-- jevreel：以“index → ask → zoom 跑通 + 一次插件/MCP 接入 + 一次 lens 过滤”为一轮。
-- WhatsApp MCP：以“部署 → 链接个人账号 → 只读搜索/摘要/补名 → 与人工完成同一组任务对照”为一轮；出现导入失败、隐私/合规不可接受或结果明显不如人工就停止。
-- im-mcp：以“初始化 → 客户端接入 → 3–5 个真实只读任务 → 与人工对照 → 清理”为一轮；版本不兼容、初始化失败、明文落盘不可接受或结果明显不如人工就停止。
-- claude-security-scan：先 `--demo` 看示例报告；再只登录一个低风险域（如个人 GitHub），用 `--skip repos` 跑一次；确认报告生成、失败项进入“未能确认”、没有明文秘密、没有写入/发送后，再逐域增加登录；连续两周记录 NEW 项和人工复核结果，再决定是否全量或定时。
-- vulnerator-ai：以“`--with-juice-shop` 起栈 → `docker compose ps` 四容器健康 → TUI 里跑一轮靶场 → 前门 6 个工具各走一次 → 与人工 checklist 对照”为一轮。原文没有时间或次数建议；在靶场里至少跑两轮（含一组“只给 kali 工具、不给 OODA 循环”的对照）再决定要不要扩大。
-- TradingView-Unified-MCP：半天内完成只读接入实验。装好 Claude Code；下载解压仓库并先读 README；在仓库根目录跑 `node src/cli.mjs launch`；检查 Claude Code 是否识别 MCP server 与工具列表；让 Claude 只读取一个标的的行情/图表，与 TradingView 网页端抽样核对 3–5 次；连续启动/调用 10 次记录失败次数。不要用盈亏评估这一轮。
-- agent-toolkit-for-aws：原文没有时间或次数建议。先选一个 AWS 仓库和一个边界清晰任务，只装 aws-core，在沙箱账号或只读权限下做一轮；先跑未装基线，再跑装后同任务，记录完成、耗时、CloudTrail 审计、权限边界；确认只读与审计成立后，再按任务增加插件或扩大范围。
-- flashmind：两周。选一个真实仓库、只选一个客户端（Gemini CLI 或 Claude Code），只装 MCP 记忆 + 规则文件 + `verify-before-done` 一个技能，暂不启用其余三个；用 git 分支或独立 worktree 隔离，记录试用前基线；采集“未跑测试就宣布已修复”“引入不存在的包/函数/CLI 参数”、重复提问、返工时长、记忆库过期比例、测试通过率等指标，与试用前同仓库、同类型任务对照。
+- idx：以「零安装跑通 → JSON 契约核对 → MCP 注册 → agent 一次调用 → 离线一次」为一轮。
+- Blender 扩展：以「单助手四条提示词跑通 + 团队链把同一任务重做一次」为一轮。
+- jevreel：以「index → ask → zoom 跑通 + 一次插件/MCP 接入 + 一次 lens 过滤」为一轮。
+- WhatsApp MCP：以「部署 → 链接个人账号 → 只读搜索/摘要/补名 → 与人工完成同一组任务对照」为一轮。
+- im-mcp：以「初始化 → 客户端接入 → 3–5 个真实只读任务 → 与人工对照 → 清理」为一轮。
+- claude-security-scan：先 `--demo`；再只登录一个低风险域，用 `--skip repos` 跑一次；确认报告生成、失败项进入「未能确认」、没有明文秘密、没有写入/发送后，再逐域增加登录；连续两周记录 NEW 项和人工复核结果。
+- vulnerator-ai：以「`--with-juice-shop` 起栈 → 四容器健康 → TUI 里跑一轮靶场 → 前门 6 个工具各走一次 → 与人工 checklist 对照」为一轮；至少跑两轮再决定是否扩大。
+- TradingView-Unified-MCP：半天内完成只读接入实验；连续启动/调用 10 次记录失败次数；不要用盈亏评估这一轮。
+- agent-toolkit-for-aws：先选一个 AWS 仓库和一个边界清晰任务，只装 aws-core，在沙箱账号或只读权限下做一轮；先跑未装基线，再跑装后同任务，记录完成、耗时、CloudTrail 审计、权限边界。
+- flashmind：两周。选一个真实仓库、只选一个客户端，只装 MCP 记忆 + 规则文件 + `verify-before-done` 一个技能；记录两类幻觉事件计数、返工时长、记忆库过期比例、测试通过率，与试用前对照。
+- mcode-stack：建议 2–3 个技能，不要一次装整套；优先 `long-command-check` + `independent-review` + `harness-experiment`；装到 `~/.agents/skills/`，新开会话用 `/skills` 确认可见，再在真实任务中调用；同时保留一个不调用技能的对照会话；先打开对应 `SKILL.md` 核对具体检查项。原文没给试多久，按前后各 5–10 次长命令任务、同一 diff 对照评审、同一评估任务重复运行来收数；没有可观察改善就停在 try。
 
 在得到明确正负结果前，不要扩展到长期使用或生产环境。
 
 ## 常见坑
 
-- 把“注册成功”当成“验证完成”。REA 原文没有 list/枚举命令，要查 Hermes 文档补上；jevcrawl 至少还有 `uvx jevcrawl doctor`；arcmira 至少还有 `arcmira_describe` 和一条示例提示词；reason network 至少还有 `reason network who` 和一次真实问答；idx 至少还要去客户端确认 `idx` 出现、工具数可枚举，并用 `idx_brief` 真跑一次；Blender 扩展至少还要跑一遍“检查场景 → 建对象 → 复制排列”；jevreel 至少还要 `ask` 真问一次、`zoom` 真看一次；WhatsApp MCP 至少还要看 `/debug` 的 `paired` 与 `last_pull`、真搜一次；im-mcp 至少还要初始化成功、客户端真调一次检索工具；claude-security-scan 至少还要 `--demo` 打开报告、再只对一个低风险域 `--skip repos` 跑一次并人工复核；vulnerator-ai 至少还要 `docker compose ps` 四容器健康、前门 6 个工具各走一次、`stop_run` 真能停；TradingView MCP 至少还要看到 server 被识别、工具列表可枚举、只读查询与网页端对上 3–5 次；agent-toolkit-for-aws 至少还要看到 aws-core 插件、skills 和 MCP Server 在客户端出现，并用一个只读 AWS 任务真跑一次；flashmind 至少还要看到 `flashmind` MCP 服务、规则文件落到正确路径、技能只有一份副本，并用 `verify-before-done` 真跑一次。
-- 把名字当 id 传。arcmira 的过滤器只接受原样 id，传名字会在发网络请求前抛 `id_required`；必须先 `resolve`，`suggested` 时说明假设与理由，`ask` 时把候选交回用户。
+- 把「注册成功」当成「验证完成」。REA 原文没有 list/枚举命令，要查 Hermes 文档补上；jevcrawl 至少还有 `uvx jevcrawl doctor`；arcmira 至少还有 `arcmira_describe`；reason network 至少还有 `reason network who`；idx 至少还要去客户端确认 `idx` 出现、工具数可枚举；Blender 扩展至少还要跑一遍「检查场景 → 建对象 → 复制排列」；jevreel 至少还要 `ask` 真问一次、`zoom` 真看一次；WhatsApp MCP 至少还要看 `/debug` 的 `paired` 与 `last_pull`；im-mcp 至少还要初始化成功、客户端真调一次检索工具；claude-security-scan 至少还要 `--demo` 打开报告、再只对一个低风险域 `--skip repos` 跑一次并人工复核；vulnerator-ai 至少还要四容器健康、前门 6 个工具各走一次、`stop_run` 真能停；TradingView MCP 至少还要看到 server 被识别、工具列表可枚举；agent-toolkit-for-aws 至少还要看到 aws-core 插件、skills 和 MCP Server 在客户端出现；flashmind 至少还要看到 `flashmind` MCP 服务、规则文件落到正确路径、技能只有一份副本；mcode-stack 至少还要 `/skills` 列出技能、在真实任务中调用一次并保留对照。
+- 把名字当 id 传。arcmira 的过滤器只接受原样 id，传名字会在发网络请求前抛 `id_required`；必须先 `resolve`。
 - 连上就开始猜方法签名。先调 `arcmira_describe`，把 id 规则、参数与返回字段、计量规则、错误码一次读全。
-- 不看清计量规则就批量跑。arcmira 搜索按超出前 5 条的每条 passage 收 4 credits；字幕每开始 15 分钟收 4 credits；Premium 转录每开始 15 分钟收 300 credits；`momentum` 每次 10 credits；`start`/`end` 不降低 Premium 计费。贵操作前先 `arcmira.quote`。
-- 以为 arcmira 工具有预算参数。预算在 dashboard 设；被拦住时按返回的 `code` 分支处理，别把拦截当成“没有数据”。
-- 把“还在转”当失败。Premium 未就绪时返回 `202` + `Retry-After`，按它重读不重复计费；`failed` / `refunded` 除非传 `retry: true` 不会重开。
-- 建了 arcmira monitor 就以为能删。它不提供删除，只能 `paused`；`attachTrackers` 迁移 tracker 需用户先同意；`addEntities` 一次最多 90 个 id。
-- 把厂商自述当独立证据。arcmira 的数据覆盖与说话人/赞助识别准确性全是厂商自述；README 未给免费额度上限，只说 “Plan limits apply”。
-- 把“安装成功”当“任务有效”。CLI-Hub 装完 harness 后，要接进 agent 跑一条真实重复任务，确认真有用再考虑用 `/cli-anything` 生成新 CLI。
-- 把作者自测当独立证据。jevcrawl 的 50 和 20 个任务样本都很小；CLI-Anything 所有效果数据均为项目自述；reason network 连效果数据都没有；idx 调研未包含效果数据；Blender 扩展只有 README 级证据；jevreel 的成本与暂停菜单对照验证同样是作者自测；WhatsApp MCP 只有 README 和单账号验证；im-mcp 只有兼容性表；claude-security-scan 只有 README、32 stars，没有检出率、误报率或代码审计；vulnerator-ai 连一个准确率、耗时或成本数字都没有；TradingView 线索零效果数据且正文截断；agent-toolkit-for-aws 只有官方 README，没有独立效果数据；flashmind 只有接线方式，没有规则与技能正文和效果数据。
-- 在主力环境里直接跑第三方包。REA 依赖 `npx`、jevcrawl 依赖 `uvx`、CLI-Hub 依赖 `pip`，都会拉取并执行第三方包；arcmira 不往本地落包，但程序会在厂商的 Cloudflare Dynamic Worker 沙箱里执行，出站只允许 `GET https://api.arcmira.com/v1/*`（写工具额外允许 `/v1/monitors` 与 `/v1/trackers` 的 POST/PATCH，永不 DELETE）；idx 是不自带沙箱的静态二进制直连公开数据源；Blender 扩展的 Python 工具验证不是安全沙箱；jevreel 的视频帧与问题会发到 TypeSafe；WhatsApp MCP 使用非官方协议并违反 WhatsApp 条款；im-mcp 会把本地数据库解密后明文落盘；claude-security-scan 会读取 Mac 本体、本地全部 git 仓库、GitHub、Vercel、多个云和 Gmail，README 的只读与脱敏设计尚未经过代码级验证；vulnerator-ai 直接让模型执行 nmap/sqlmap 这类命令，默认没有 scope-guard、没有 consent、没有 audit、没有授权闸门；TradingView MCP 是本地 Node 进程，权限与数据外发范围要从 README 和实际工具列表确认；agent-toolkit-for-aws 会通过 AWS MCP Server 访问 AWS API 和执行沙箱脚本，必须先配只读或最小权限，再逐步放开写操作；flashmind 通过 `npx` 拉取 npm 包，记忆库落在本地（`~/.engram/` 或 `~/.flashmind/`），但 Engram 是第三方组件，隐私承诺是作者主张，仍需检查实际落点。
-- 忽略版本写死。`rea-agents@6.3.0` 是原文写死的版本；jevcrawl 的 `jev-1.13.0` 是固定版本，阈值按版本校准；arcmira 是远程 MCP、本身不需要更新，但 `arcmira_describe` 带版本行；jevreel 的 `JEVREEL_MODEL` 默认 `jev-1.14.0` 是故意锁定；im-mcp 强依赖微信 4.x / 钉钉 7.x 的具体版本。
-- 以为 jevcrawl 能爬任何站点。它不执行 JavaScript（需 JS 的 URL 列在 `stats.needs_js_urls`），不读 `robots.txt`，除一次抓 4 页外不做限速，站点条款与合规由使用者自负；不登录、不绕付费墙和 CAPTCHA。
+- 不看清计量规则就批量跑。arcmira 搜索按超出前 5 条的每条 passage 收 4 credits；Premium 转录每开始 15 分钟收 300 credits；贵操作前先 `arcmira.quote`。
+- 以为 arcmira 工具有预算参数。预算在 dashboard 设；被拦住时按返回的 `code` 分支处理。
+- 把「还在转」当失败。Premium 未就绪时返回 `202` + `Retry-After`，按它重读不重复计费。
+- 建了 arcmira monitor 就以为能删。它不提供删除，只能 `paused`。
+- 把厂商自述当独立证据。arcmira 的数据覆盖与说话人/赞助识别准确性全是厂商自述。
+- 把「安装成功」当「任务有效」。CLI-Hub 装完 harness 后，要接进 agent 跑一条真实重复任务。
+- 把作者自测当独立证据。jevcrawl、CLI-Anything、reason network、idx、Blender 扩展、jevreel、WhatsApp MCP、im-mcp、claude-security-scan、vulnerator-ai、TradingView、agent-toolkit-for-aws、flashmind、mcode-stack 都只有 README、作者自测或关注度，不等于独立效果证据。
+- 在主力环境里直接跑第三方包。REA 依赖 `npx`、jevcrawl 依赖 `uvx`、CLI-Hub 依赖 `pip`，都会拉取并执行第三方包；arcmira 在厂商沙箱里执行；idx 是静态二进制直连公开数据源；Blender 扩展的 Python 工具验证不是安全沙箱；jevreel 的视频帧与问题会发到 TypeSafe；WhatsApp MCP 使用非官方协议；im-mcp 会把本地数据库解密后明文落盘；claude-security-scan 会读取多账户敏感信息；vulnerator-ai 默认没有 scope-guard、consent、audit；TradingView MCP 是本地 Node 进程；agent-toolkit-for-aws 会访问 AWS API；flashmind 通过 `npx` 拉取 npm 包；mcode-stack 是技能文件，安装前要确认来源和目录权限，不要把密钥写进技能目录或日志。
+- 忽略版本写死。`rea-agents@6.3.0`、`jev-1.13.0`、`jev-1.14.0`、微信/钉钉版本都是写死或强依赖的；换版本要重新核对。
+- 以为 jevcrawl 能爬任何站点。它不执行 JavaScript、不读 `robots.txt`、不登录、不绕付费墙和 CAPTCHA。
 - 忽略内容外发。jevcrawl 会把页面文本发送到 TypeSafe；API key 只从环境变量读，不落盘、不写日志。
 - 把 401 当故障。arcmira 对无凭证请求返回 401 + OAuth 挑战，这是登录/开户路径。
 - 忽略上游软件依赖。大量 CLI harness 包装真实桌面软件；不先装上游软件，`cli-hub launch` 不会产生有效结果。
-- Windows 上直接跑 Claude Code 生成路径。需先装 Git for Windows（含 `bash`/`cygpath`）或使用 WSL，否则会报 `cygpath: command not found`。
-- OpenCode 命令引用的 `HARNESS.md` 没和命令放同一目录。命令会引用它，必须在同一目录；旧版目录名为 `command/`。
-- 旧版 Claude Code 不识别 `/cli-anything`。改用 `/cli-anything:cli-anything`；辅助命令保持 `:subcommand` 形式。
+- Windows 上直接跑 Claude Code 生成路径。需先装 Git for Windows 或使用 WSL，否则会报 `cygpath: command not found`。
 - 给 GUI 客户端手写相对路径或 `idx`。GUI 应用通常不继承 shell 的 `PATH`；用 `idx mcp setup <client>` 生成绝对路径。
-- 从 stdout 以外的地方捞数据。idx 约定 stdout 只放一个 JSON 文档、其余全部走 stderr；把 stderr 混进管道会得到看似随机的结果。
-- 把 `null` 当 0、或当成“该自己补一个”。idx 对来源未返回的字段写 `null`，不做估算；看到 `null` 要按“没有这个数据”处理，并去看 `warnings`。
+- 从 stdout 以外的地方捞数据。idx 约定 stdout 只放一个 JSON 文档、其余全部走 stderr。
+- 把 `null` 当 0、或当成「该自己补一个」。idx 对来源未返回的字段写 `null`，不做估算。
 - 不看退出码。idx 用 `0/2/3/4/5/6` 分语义；靠解析错误文本做分支，换个版本就碎。
-- npm 12 不加 `--allow-git=all`。用 npm 从仓库安装时会卡住或失败。
-- 以为 npm 安装直接给你一个二进制。npm 装的是小启动器，第一次运行 `idx` 才下载预编译二进制并用 `SHA256SUMS` 校验。
-- 在云 runner 上抓取会拦截云网络的数据源。idx 的 ownership 流水线跑在自托管 runner 上；换成云 runner 会失败。
-- 以为 idx 发布端 Worker 能写。那个 Worker 没有写端点；校验靠 SHA-256，且只有新月份全部行数到齐且数量匹配才算“出现”。
-- 把 idx 当通用工具。它是印尼股市专用工具，领域窄；先试流程，不要直接写进生产手册。
 - 把 Blender 扩展的 Python 工具验证当安全沙箱。它用于拦截不允许操作，不是隔离机制；高影响操作是 `execute_code`、`export_scene`、`import_asset`。
-- 在 Windows x64 + Blender 4.2+ 之外直接照抄 Blender 扩展 release bundle。其他平台/版本未见支持。
-- 选了不支持 tool calling 的模型。Blender 扩展里工具根本调不起来；要看视口截图还需要模型有图像能力。
-- 默认团队链一定更好。README 没有量化指标，审核开销可能大于收益；先用单助手跑通同一任务，再换团队链对比。
-- 以为 Blender 扩展聊天历史会留存。聊天历史仅当前会话有效；连接凭证存在用户设置里。
-- 接上外部 MCP 客户端后还以为审批有兜底。外部 MCP 客户端的审批策略由该客户端自己管理。
-- 把“任务顺序自动推进”当持续运行。Blender 扩展只提到任务按顺序执行、被阻塞任务有一次纠正机会，没有时间/事件/状态触发的持续运行机制。
-- 把 jevreel 的底层图像能力当成熟能力。README 明确它是实验性，验证只基于单个测试视频；只建议小范围试。
-- 以为 jevreel 能自己持续推进。`index_video` 作为 MCP 后台任务运行、重复调用返回已有索引并只补跑新增 lens，但原文没有给出定时器或事件触发机制。
-- 把 `jevreel query` 当收费操作、或把 lens 事后跑当免费。`query` 过滤不产生任何请求；lens 随索引请求一起走几乎免费，事后再单独跑是每分钟视频一次请求。
-- 重复问同一个 jevreel 问题还担心重复付费。答案有缓存；同样的图片和问题问同一个模型不会重复付费。
-- 把 `JEVREEL_CONCURRENCY` 开大不当。默认 16，速率限制按 TypeSafe 账号计；调大并发不等于更快。
-- 没字幕也没 key 就直接放弃 jevreel。无 `TYPESAFE_API_KEY` 时，不带时间线的索引、zoom、字幕和 query 仍可用；本地转写要手动用 `jevreel[all]` 添加。
-- 把 jevreel 插件方式当成装什么都有。插件方式需要 uv 与 FFmpeg 在 PATH；本地语音转写默认不含。
-- 需要完整 jevreel 插件接入细节时只看截断的原文。本次 jevreel 调研原文在 Claude Code 插件部分被截断。
-- 误把传播数据当效果证据。Matthew 的 REA 帖子 230 万次浏览是曝光量，不是效果证据；WhatsApp MCP 的 HN 35 points、23 comments 也只是关注度；claude-security-scan 的 32 stars 同样只说明关注度；TradingView 推文约 50 赞、6 转发、3 回复也只是互动量；agent-toolkit-for-aws 的 3196 stars 也是关注度，不是效果数据；flashmind 的 31 stars 同样只说明关注度。
-- 用被截断的能力清单规划任务。REA 原文只列到“反编译一个应用”就被截断；arcmira 调研在“Claude Code 第三方 marketpla…”处被截断；idx 调研正文在第 9 步后被截断；TradingView 原文在 `node src/cli.mjs launch` 后被截断。
-- 把“139 个工具”当事实。数量只是作者主张。
-- 没有隔离就上线。只要出现越权访问、读取工作目录之外文件或执行非预期命令，就应回滚并降级为 study。
-- 团队不在 Reason workspace 却想试 reason network。它强依赖 Reason CLI 和 Reason workspace，不是通用方案；单人无法自测出“团队通信”的价值。
-- 不看 session title/todo 就想让 `reason network who` 有用。状态来自 session 自己的 title 和 todo，agent 不主动汇报。
-- 把 reason network 的 README 自述当成独立验证。投递时机、离线排队、唤醒空闲 session 等行为均来自 README 自述。
+- 默认团队链一定更好。Blender 扩展 README 没有量化指标，审核开销可能大于收益；先用单助手跑通同一任务，再换团队链对比。
+- 把 jevreel 的底层图像能力当成熟能力。README 明确它是实验性，验证只基于单个测试视频。
+- 把 `jevreel query` 当收费操作、或把 lens 事后跑当免费。`query` 过滤不产生请求；lens 随索引请求一起走几乎免费，事后再单独跑是每分钟视频一次请求。
 - 用 WhatsApp MCP 的免费 Cloudflare 计划，或以为首次导入失败会自动补。README 要求 Workers Paid，免费计划未验证；首次历史导入每个链接只发生一次，失败后要重新链接才能补。
-- 以为 WhatsApp MCP 能发消息、能多人共享、能转写媒体。它不能发送；只用于读取自己的个人账号；媒体只显示 `[image]`、`[voice note 12s]` 等标签，不下载不转写；一个部署对应一个账号和一个 owner。
-- 忽略 WhatsApp MCP 的非官方协议与条款风险。作者明确说使用非官方协议、违反 WhatsApp 条款；只读链接的实际风险低但不是零。
-- 以为 WhatsApp MCP 的姓名会自动刷新、登出会通知。未命名聊天不会自动刷新；每日 pull 发现登出不会通知；编辑/删除路径未用真实事件测试。
-- 在公共机器上跑完 im-mcp 不清理。先完全退出 AI 客户端，否则 SQLite 句柄与 `-shm`/`-wal` 锁会阻止删除；用 `im-clean --dry-run` 预览，再 `im-clean`；残留句柄用 `im-clean -y --force`；最后 `uv tool uninstall im-mcp`。
-- 把 im-mcp 当通用方案。原文未提 Linux；强依赖微信 4.x / 钉钉 7.x 的具体版本；Windows 需管理员终端且微信已登录；macOS 4.1+ 需 64 位 hex passphrase。
-- 以为 im-mcp 有定时/事件触发。它只提供 `get_sync_status`、`sync_wechat_database`、`sync_dingtalk_data` 等原子能力，README 没有 cron、webhook、守护进程说明，调度层要自己搭。
-- 把 im-mcp 的只读声明当安全沙箱。工具声明只读，但本地数据库被解密为 SQLite、明文落盘；用完要清理，不要在不可信机器上长期保留。
-- 把 im-mcp 的“毫秒级响应”当实测结论。原文未给测量方法，只有作者声称。
-- 把第三方安全技能当“只读就安全”。claude-security-scan 会读取 Mac 本体、本地全部 git 仓库、GitHub、Vercel、多个云和 Gmail；README 的只读与脱敏设计尚未在本次材料中经过代码级验证。先在隔离或低风险环境只登录一个域试。
-- 一上来就全量扫描 claude-security-scan。先 `--demo`，再 `--skip repos` 只对一个低风险域跑；确认失败项进入“未能确认”而不是“无问题”，没有明文秘密、没有写入/发送，再逐域扩大。
-- 把“未能确认”当“没有问题”。claude-security-scan 里缺工具、缺权限、抓取失败都会进入“未能确认的项目”并附理由；跨次比较时，抓取失败的范围不算“已解决”或“新增”。
-- 把 claude-security-scan 的检测结果当最终结论。原文明确不做攻击性测试，检测只是线索，最终判断和修正由人做；没有检出率、误报率或对照实验。
-- 忽略 claude-security-scan 的默认覆盖范围。AWS 默认只查东京 `ap-northeast-1` 和弗吉尼亚 `us-east-1`，其他区域要在 `[aws] regions` 追加；Google Workspace 整体管理设置因需 Admin API 委派不在范围内。
-- 把 claude-security-scan 命令里的 `...` 原样写进命令。各域准备命令里的 `...` 是占位符，要换成自己的只读 token；`gog` 是第三方依赖。
-- 把 claude-security-scan 的报告随便共享。报告含弱点清单，保存在本机、权限 700；共享前先确认脱敏。
-- 把 claude-security-scan 的定时任务当持续运行。原文只给 macOS 每周一 8:00 的定时；没有事件触发或状态机式持续执行机制。
-- 把 vulnerator-ai 的“默认无护栏”当成“有默认护栏”。README 明确说默认无 scope-guard、无 consent、无 audit、无授权闸门；安装完就是裸的。
-- 把 vulnerator-ai 的两个 opt-in 当 consent 或防火墙。scope-guard 只针对 `kali_run`/`kali_exec`，inbound token 只管 MCP 入口；两者都不等于用户同意，也不隔离网络。
+- 以为 WhatsApp MCP 能发消息、能多人共享、能转写媒体。它不能发送；媒体只显示标签，不下载不转写；一个部署对应一个账号和一个 owner。
+- 在公共机器上跑完 im-mcp 不清理。先完全退出 AI 客户端；用 `im-clean --dry-run` 预览，再 `im-clean`；最后 `uv tool uninstall im-mcp`。
+- 把第三方安全技能当「只读就安全」。claude-security-scan 会读取 Mac 本体、本地全部 git 仓库、GitHub、Vercel、多个云和 Gmail；先在隔离或低风险环境只登录一个域试。
+- 一上来就全量扫描 claude-security-scan。先 `--demo`，再 `--skip repos` 只对一个低风险域跑。
+- 把「未能确认」当「没有问题」。缺工具、缺权限、抓取失败都会进入「未能确认的项目」并附理由。
+- 把 vulnerator-ai 的「默认无护栏」当成「有默认护栏」。安装完就是裸的；两个 opt-in 控制项也不是 consent、不是防火墙。
 - 对未授权目标跑 vulnerator-ai。它只能对已获书面授权的目标使用；没有书面授权、没有隔离靶场，就先不要起栈。
-- 把 vulnerator-ai 的前门当执行体。前门只暴露 run 生命周期，不暴露原始 `kali_run`，也不能直接打 `/v1/chat/completions`；要观察用 `stream_run_events`，要干预用 `steer_run`/`stop_run`。
-- 以为 vulnerator-ai 有调度器或定时器。README 没有基于时间、事件或外部状态的触发器；循环持续只来自模型自身的 OODA 迭代。
-- 把 vulnerator-ai 的 `docs/design.md` findings-store schema 当“已验证的效果”。它只是产出物结构，不是准确率或漏报率。
-- 把安装器自动生成的两个 token 打印出来，或让编码助手“编一个”。`HERMES_API_SERVER_KEY` 与 `VULNERATOR_MCP_INBOUND_TOKEN` 由 `./install.sh` 生成并写进 `.env`；从文件读，不要打印，也不要自己编。
-- 把 `--with-juice-shop` 起的靶场当“可以打真实目标”。靶场是用来观察循环行为的，不是授权。
-- 把 vulnerator-ai 的 MIT 许可当安全背书。许可只说明代码可用，不代表默认配置安全。
+- 把 vulnerator-ai 的前门当执行体。前门只暴露 run 生命周期，不暴露原始 `kali_run`。
 - 把 TradingView 推文标题当教程。原文在 `node src/cli.mjs launch` 后截断，没有策略、代码、回测、结果；只能当接入线索。
-- 跳过 TradingView 仓库 README 直接 `launch`。原文没给 MCP 注册、账号/订阅、API 凭据、工具列表、进程是否常驻；这些必须从 README 补。
-- 把 Claude Code 能调 TradingView 当“交易机器人已构建”。零收益、回测、胜率数据；互动量只是关注度。
-- 在没搞清权限前接真实账户。若工具能直接下单或需明文账号密码，先停；只读、paper trading。
-- 以为 TradingView 的 `launch` 后一定常驻。原文未说明进程是否常驻、是否需保活、监听什么；要自己记录日志和端口。
-- 忽略 TradingView 路径的 Node 运行时与工作目录。命令是 `node` 执行，且必须在仓库根目录。
-- 把 TradingView 仓库地址当已核实。原文地址被换行拆断，按原样给出；下载前确认可达与仓库内容。
-- 把 agent-toolkit-for-aws 的官方 README 当独立效果证据。它给出安装命令和覆盖范围，但没有独立测评、客户案例或 skills 端到端评估指标；stars 只是关注度。
-- 只装插件不配 AWS 凭据或只读权限。API 调用和脚本执行需要本地 AWS 凭据；仅文档检索或技能发现不需要认证。先在沙箱账号或只读权限下跑。
-- 在未配 IAM/CloudWatch/CloudTrail 前放开写操作。README 说可用 IAM 条件键区分 agent 与人、CloudWatch 指标和 CloudTrail 审计，但没有给具体配置样例；先按组织策略配只读/最小权限，再逐步放开。
-- 把 skills 当 MCP Server。Kiro、fx 和其他 agent 的手动路径要分别配置 MCP Server 和安装 skills；只装 skills 不会自动给你 AWS API 访问。
-- Kiro/fx/其他 agent 手动路径漏装 `uv`。这些路径要求本机安装 `uv`；没有它 MCP Server 起不来。
-- Devin 不加 `--local` 就以为只装本机。不加会把插件加入个人插件，并在 Devin cloud sessions 和 Devin Desktop 也加载。
-- Cursor 不走 Team Marketplace 导入。需要进入 Settings → Plugins → Team Marketplaces → Add Marketplace → Import from Repo，指向 `aws/agent-toolkit-for-aws`，再在 Plugins 面板安装。
-- 以为 README 给了 rules 内容、IAM/CloudWatch/CloudTrail 配置样例或提示词模板。它只建议使用 `rules/` 目录，具体内容要自己打开并按项目复制或改写；IAM/CloudWatch/CloudTrail 要按组织策略和用户指南落地。
-- 以为插件覆盖所有 agent。插件目前只覆盖 Claude Code、Codex、Cursor、Devin；Kiro、fx、其他 agent 需要手动配置 MCP 并另装 skills。
-- 照抄 `us-west-2` 示例区域。示例区域是 `us-west-2`，实际使用要按自己的区域和权限调整。
-- 把 agent-toolkit-for-aws 当能定时自动推进。README 只说明 skills 按需加载、任务匹配时激活和 agent 可调用 AWS API/沙箱脚本；没有时间、事件或状态触发的持续工作流。
-- 把 flashmind 的接线当效果。原文没有防幻觉规则正文、没有 4 个 `SKILL.md` 正文、没有基准/案例/前后对比；能照抄的是安装命令和配置映射，抄不到规则与技能的具体措辞。
-- 一次启用四个技能。多变量混淆，无法判断是哪个技能起作用；先只启用 `verify-before-done`，两周后再扩。
-- MCP 配置重复粘贴。只保留一个 `"flashmind"` 和一个 `"engram"` 键；改现有条目而不是追加第二份。
-- 规则文件重复追加。对共享规则文件用 `<!-- flashmind:start -->` / `<!-- flashmind:end -->` 包裹后整体替换，否则规则越叠越长。
-- 技能留多份副本。若 `skills/` 同时复制到 `~/.gemini/skills` 和 `~/.agents/skills`，删掉一处；否则触发条件可能重复或冲突。
-- 更新后不重启、不开新会话。规则与技能不会重新加载；扩展用 `gemini extensions update flashmind`，NPX 重启编辑器，git clone 方式 `git pull` 后重跑安装脚本。
-- 把记忆库当真相。Engram 是另一个仓库的第三方组件；记忆可能存进未经核实的结论，信任前用 `mem_review` 对照当前代码复核，只保存经 `/verify` 确认的决策。
-- 把“消除幻觉”当已验证。原文只有作者主张，没有数据；用“未跑测试就宣布已修复”和“引入不存在的包/函数/CLI 参数”两类事件计数自己判断。
-- 忽略 Node ≥18 和客户端 MCP 支持。自动安装器还需要 git 和能安装 Engram 二进制；不满足时只接 MCP 或手工放配置。
-- 把 `gemini -m gemini-3.8-flash` 的模型名当已核实。原文如此，材料无法核实；按本机实际可用模型调整。
+- 把 agent-toolkit-for-aws 的官方 README 当独立效果证据。它给出安装命令和覆盖范围，但没有独立测评、客户案例或 skills 端到端评估指标。
+- 只装插件不配 AWS 凭据或只读权限。API 调用和脚本执行需要本地 AWS 凭据；先在沙箱账号或只读权限下跑。
+- 把 skills 当 MCP Server。Kiro、fx 和其他 agent 的手动路径要分别配置 MCP Server 和安装 skills。
+- 把 flashmind 的接线当效果。原文没有防幻觉规则正文、没有 4 个 `SKILL.md` 正文、没有基准/案例/前后对比。
+- 一次启用四个 flashmind 技能。多变量混淆；先只启用 `verify-before-done`，两周后再扩。
+- MCP 配置重复粘贴。只保留一个 `flashmind` 和一个 `engram` 键；改现有条目而不是追加第二份。
+- 把记忆库当真相。Engram 是第三方组件；信任前用 `mem_review` 对照当前代码复核，只保存经 `/verify` 确认的决策。
+- 把 mcode-stack 的 README 当技能正文。本次只有 README，没有各 `SKILL.md`、`checklists/`、`WORKFLOW.md` 正文；先打开目标技能目录里的 `SKILL.md` 再照做。
+- 一次装整套 mcode-stack 15 个技能。多变量混淆；先只装 2–3 个，优先 `long-command-check` + `independent-review` + `harness-experiment`。
+- 把「安装成功/`/skills` 能列出」当效果。要在真实任务中调用并保留不调用技能的对照会话；没有可观察改善就停在 try。
+- 以为 `mcode plugin add` 能从 GitHub URL 或本地路径安装。它只从官方目录安装；本地 stack 要复制到 `mcode plugin marketplace list` 显示的本地插件目录，再到 `/plugins` 刷新启用。
+- 以为 MiniMax Code 桌面端市场安装一定可用。README 说该功能在逐步开放，部分版本可能没有；没有就回到单技能安装或本地插件目录。
+- 把 mcode-stack 当自动触发工作流。README 没有说明定时、事件或状态触发机制；它给的是技能、检查清单和工作流文档。
+- 忽略 mcode-stack 的技能发现路径。技能可放 `~/.agents/skills/`、项目级 `.minimax/skills/`、`.claude/skills/`、`.agents/skills/`，全局还会读 `~/.claude/skills/`、`~/.codex/skills/`；放错位置 `/skills` 看不到。
+- 把 `harness-experiment` 当一次跑完就算。README 要求小评估、一次只改一项、重复运行、看翻转任务；不重复运行无法判断波动。
+- 把 `independent-review` 的干净上下文当普通评审。它要求只提供 diff、需求和测试结果；把完整会话和历史都塞进去就失去「独立」条件。
 
 ## 证据与来源
 
 本节说明每个做法依据哪类材料、有哪些数据、哪些只是作者主张。
-
-- 做法 A jevcrawl：可核查的是 README 的安装命令、参数默认值、输出字段与环境变量表。数据均为作者自测：50 个 WebWalkerQA 任务（2026-10-12，回答模型 `claude-opus-5-5`，judge `claude-sonnet-5-5`）jevcrawl 40% / 54% / $0.025，Claude 逐个挑链接 30% / 33% / $0.194，广度优先 8% / 11% / $0.228；每正确答答案成本 $0.06 / $0.65 / $2.85；与 Crawl4AI 0.9.4 的 20 任务对照（2026-10-13）答案页 10 vs 5、全部答案页 5 vs 2、中位爬取时间 29s vs 43s、站点加载失败 0 vs 3；docs.python.org 示例 80,034 tokens → 1,873 tokens，$0.0069，8.3 秒。作者主张无独立验证：找到答案页概率约 2 倍于 Crawl4AI、比 LLM 驱动爬取快 2 倍、天然抗 prompt injection、引文逐字可溯源。原文自陈局限：样本小；Crawl4AI 驱动真实浏览器而 jevcrawl 不执行 JavaScript；不读 `robots.txt`、除一次抓 4 页外不限速、站点条款与合规自负、不登录不绕付费墙和 CAPTCHA；页面文本会发送到 TypeSafe。
-- 做法 B REA/Hermes：可核查的是一条完整接入命令 `hermes mcp add rea --command npx --args -y rea-agents@6.3.0 mcp`，以及“REA 设置菜单已支持 Claude Code 和 Codex”的事实陈述。只是作者主张、未经原文验证：接入后代理会多出 139 个工具；“反编译一个应用”等能力清单，且原文在列举处被截断。传播数据：Matthew 的 REA 帖子 230 万次浏览，是曝光量，不是效果证据。
+- 做法 A jevcrawl：可核查的是 README 的安装命令、参数默认值、输出字段与环境变量表。数据均为作者自测：50 个 WebWalkerQA 任务答对 40%、找到答案页 54%、$0.025/任务；与 Crawl4AI 0.9.4 的 20 任务对照答案页 10 vs 5、中位爬取时间 29s vs 43s；docs.python.org 示例 80,034 tokens → 1,873 tokens。作者主张无独立验证：比 LLM 驱动爬取快、天然抗 prompt injection、引文逐字可溯源。原文自陈局限：样本小；不执行 JavaScript；不读 `robots.txt`；页面文本会发送到 TypeSafe。
+- 做法 B REA/Hermes：可核查的是一条完整接入命令，以及「REA 设置菜单已支持 Claude Code 和 Codex」的事实陈述。只是作者主张、未经原文验证：接入后代理会多出 139 个工具；能力清单在列举处被截断。Matthew 的 REA 帖子 230 万次浏览是曝光量，不是效果证据。
 - 做法 C：不接入的降级做法，依据是各路径原文在工具清单、验证方式或效果数据上的缺口。
-- 做法 D CLI-Anything：可核查的是 README 的安装与使用命令、各宿主安装脚本。作者主张无第三方复现：CLI 是人和 agent 的通用接口；7 阶段流水线能生成带 REPL/JSON 输出/undo-redo 的 Click CLI、测试、文档并发布；README 自报 2,461 个测试通过、pytest 100%、多语言/多 harness 覆盖率；demos 声称能产出 CAD 模型、3D 场景、图表、游戏内容、字幕等。原文明确：大量 harness 依赖上游桌面软件；Windows 需 Git for Windows 或 WSL；没有对比性指标。
-- 做法 E arcmira：可核查的是 README/调研给出的接入命令、两个 `/v1/signups` 调用、`arcmira_describe` 约 23,000 字符且不计量、4 个工具、客户端方法表、`id_required` 与 `resolve` 的 `best`/`suggested`/`ask` 语义、Premium 转录的 `202` + `Retry-After` 与 `failed`/`refunded`/`retry: true` 行为、credits 计量规则、错误码清单、monitor 方法集、沙箱出站白名单与永不 DELETE。厂商自述、无第三方复现：数据覆盖与说话人/赞助识别准确性。调研结论是先在 Claude Code 用一条命令接入或改用 Bearer key，再照“先 resolve 后查询”的示例做小范围试用；准确性主张全是厂商自述，且有付费计划与预算门槛。
-- 做法 F reason network：可核查的是安装方式、四条 CLI 命令、MCP server 名 `reason-network` 与三个工具名、按 agent 区分的投递时机、网络与安全模型、状态目录、源码构建与测试命令。只是作者主张、没有数据支撑：整套“团队协作因此变好”的说法；README 没有任何使用数据、性能数字、前后对比或用户案例；仓库 33 stars。适用条件与局限：强依赖 Reason CLI 和 Reason workspace；要求团队整体部署；README 没有手动配置 MCP 的方法和提示词层面指引；投递时机、离线排队、唤醒空闲 session 等行为均来自 README 自述。
-- 做法 G idx：可核查的是 README/调研给出的安装方式、npm 启动器校验、`idx -o json` 的 envelope 字段、缺失字段为 `null` 不估算、退出码语义、`idx schema`、`idx mcp` 的 stdio 与 HTTP 形态、`idx mcp setup` 打印绝对路径、各客户端注册命令与配置片段、离线命令、23 个工具名与筛选语法、工具设计约束、仓库数据保鲜流水线。调研未给出效果数据、性能数字、前后对比；正文在第 9 步后被截断。调研判断是值得小范围试，用来验证“把现成 CLI 包成 MCP 工具供 agent 调用”是否省事；它本身是印尼股市工具、领域窄，先试流程。
-- 做法 H Blender 扩展：可核查的是 README 的安装与使用信息、Windows x64 + Blender 4.2+、21 个工具清单、单助手与 Manager/Worker/Reviewer 团队链、四条提示词、OpenCode Portable 与其他兼容客户端、资产服务、控制与安全说明。仅为作者主张、无数据支撑：更快迭代、自动化重复工作、把创意简报变成场景操作等价值描述；没有用户案例、成功率、耗时对比或基准数据。仓库指标 705 stars；Release 1.0.0、MIT 许可。
-- 做法 I jevreel：可核查的是 README/调研给出的命令与机制、lens TOML、插件安装命令、手动 MCP 命令、环境变量表、四步工作流、MCP 工具与 CLI 对照。数据均为作者自测：10 分钟 1080p 视频单张 sheet 约 $0.00025、索引 $0.0033、一次 ask $0.004–0.005、重复 ask $0、locate $0.0002、whole $0.0003、一小时视频一个问题约 $0.02–0.03；10 分钟 1080p 无语音游戏录像上逐条对照帧检查命中，三个不到一秒的暂停菜单仅 screening 得分 0.36 / 0.50 / 0.95，验证前漏掉两个、验证后全部捞回。作者自陈/未验证：底层 Jev 图像能力仍是实验性，验证只基于单个测试视频；没有定时器或事件触发的具体机制；调研原文在 Claude Code 插件部分被截断。调研判断是照 Quickstart 在一段本地短视频上跑通 index→ask→zoom，并以 MCP/插件形式接到 Claude Code 或 Codex 试做视频检索，值得小范围试，不建议直接全量采用。
-- 做法 J WhatsApp MCP：可核查的是仓库 README 给出的完整部署命令、配置项、工具表、架构和调试步骤。HN 的 35 points、23 comments 只能说明关注度，不能证明效果。作者明确说只在一个真实账号上跑过；首次历史导入每个链接只发生一次，失败后要重新链接才能补；免费计划未验证，付费计划才能提高 CPU limit；媒体不下载、不转写；只支持一个部署对应一个 WhatsApp 账号和一个 owner；非官方实现，使用 WhatsApp Web 协议和 Baileys，作者承认违反 WhatsApp 条款，认为只读链接的实际风险低但不是零；已知缺口包括未命名聊天不会自动刷新、每日 pull 发现登出不会通知、编辑/删除路径未用真实事件测试。没有业务效果指标。
-- 做法 K im-mcp：可核查的是 README 给出的安装命令、初始化命令、客户端配置、清理命令、工具表、兼容性验证表。原文只给了兼容性验证（覆盖 Windows/macOS、多个微信/钉钉版本的实测表），没有任何效果指标、任务成功率或对照数据；“毫秒级响应”是作者声称，未给测量方法。工具声明只读，但本地数据库会解密为 SQLite、明文落盘；没有 cron、webhook、守护进程等定时/事件触发说明，调度层需自行搭建。适用条件与局限：Windows x64 或 macOS，原文未提 Linux；强依赖微信 4.x / 钉钉 7.x 的客户端版本；Windows 需管理员终端且微信已登录；macOS 4.1+ 需 64 位 hex passphrase。
-- 做法 L claude-security-scan：可核查的是 README 的检测项清单、安装命令、各域准备方式、报告路径、安全设计和限制；仓库 32 stars。没有检出率、误报率、真实用户案例或独立评测，也没有代码审计结果；作者关于“最近信息泄露多由疏忽造成”“这些检查去看几秒就能知道”等是主张，不是数据结论。原文自述限制：Google Workspace 整体管理设置因需 Admin API 委派不在范围；AWS 默认只查东京和弗吉尼亚；不做暴力/模糊测试等攻击性检查；检测结果需人工最终判断。另需注意：这是会读取多账户敏感信息的第三方技能，README 中的只读与脱敏设计尚未在本报告依据的材料中经过代码级验证；Gmail 依赖第三方 `gog`；token 的 export 命令中 `...` 是占位符。
-- 做法 M vulnerator-ai：可核查的是四容器架构与端口（kali-mcp `:8900`、playwright-mcp `:8931`、Hermes `:8642`、vulnerator-mcp 内部 `:8700`）、Kali 工具清单（nmap、whatweb、nuclei、ffuf、sqlmap、Prowler 等）、`install.sh` 的行为（检查 docker/compose v2/openssl、自动生成两个 token、写 `.env`、起四容器）、三个可选 flag、TUI 命令、stdio 模式的 `mcpServers` 配置、六个 MCP 工具名、两个 opt-in 控制项及其“不是 consent / 不是防火墙”的边界说明、MIT 许可、OWASP Juice Shop 练习靶场、`docs/design.md` 的 findings-store schema、`docs/example-report.md` 的脱敏样例。原文没有任何准确率、耗时、成本或对比基线数据，没有独立评测和用户案例；设计上刻意没有 core、没有 REST API、没有 UI、没有 gates（无审批环节）；默认无 scope-guard、无 consent、无 audit、无授权闸门。与已有清单的关系：Claude Code（adopt）被列为 vulnerator-mcp 的 MCP 客户端之一，这是“只当控制面、不当执行体”的用法范式；Hermes（watch）在本项目里是 OODA 大脑，是 Hermes 从“对话型 agent”变成“循环驱动器 + MCP 工具编排器”的具体落地样本；Cursor（watch）只是可粘贴安装提示词的 shell 助手，没有特殊配置；清单中没有同类“OODA 自主循环 + MCP 工具供给”的条目。适用条件：只能对明确授权的目标；先隔离靶场（`--with-juice-shop`）跑一轮并对照人工基线；默认无任何护栏，不宜直接用于生产。
-- 做法 N TradingView-Unified-MCP：可核查的只有两步接入动作——安装 Claude Code、下载解压仓库并在根目录执行 `node src/cli.mjs launch`；原文在第二步命令后被截断。零效果证据：没有策略、代码、回测、收益、胜率、截图或日志；互动量约 50 赞、6 转发、3 回复，只说明关注度。作者主张“通过与 Claude 对话构建了一个交易机器人”未经验证；推文指向作者自己的 GitHub 仓库，有自我推广动机。MCP 注册、账号/订阅、API 凭据、工具列表、进程是否常驻均需从仓库 README 补，原文未给。结论强度：try 而非 adopt，因为接入动作可复制但链条不完整；try 而非 study，因为三行命令有独立复现价值。
-- 做法 O agent-toolkit-for-aws：证据来自 AWS 官方 README，仓库状态为 GA，许可证 Apache-2.0，约 3196 stars、当日新增 13（输入数据）。可核查：多 agent 安装命令、Kiro/fx 的 MCP JSON 配置、skills 安装命令、插件覆盖范围（Claude Code、Codex、Cursor、Devin；Kiro/fx/其他 agent 需手动配置 MCP 并另装 skills）、项目级 rules 目录、IAM 条件键/CloudWatch 指标/CloudTrail 审计的陈述。局限：只有官方文档，没有独立测评或客户案例；没有 skills 端到端评估的具体指标；没有 IAM/CloudWatch/CloudTrail 配置样例；没有 rules 文件内容；没有提示词模板；示例区域为 `us-west-2`，实际使用需按自己的区域和权限调整。结论强度：团队在 AWS 上开发且已使用支持 agent 时，先装 aws-core 并在只读权限下小范围试用；不要引用 README 当独立效果证据。
-- 做法 P flashmind：可核查的是 npm 包名 `flashmind`、MIT、31 stars、Node ≥18、可直接复制的 MCP JSON、六种客户端配置映射表、技能触发条件表、更新与去重规则、Gemini CLI 斜杠命令、隐私承诺（100% 本地、零遥测、自动拒绝密码/bearer token/API key、0 运行时 npm 依赖）、徽章显示存在 CI test workflow。属于作者主张、原文未提供支撑的：「消除幻觉」「让快模型记得住、会规划、会验证」；没有任何基准、案例、前后对比数据或用户反馈。关键缺失：防幻觉规则的实际正文（`AGENTS.md` / `GEMINI.md` 内容）和 4 个 `SKILL.md` 的正文都没有出现在抓取到的文本里，只有名称、触发条件和一句话用途——因此能照抄的是「接线方式」，抄不到「规则与技能的具体措辞」。Engram 是另一个仓库的第三方组件；`gemini -m gemini-3.8-flash` 里的模型名与标题中的版本号无法从材料中核实。结论强度：try，先两周小范围试用，用两类幻觉事件计数判断去留。
-- 与已有清单的关系：Claude Code 为 adopt；agent-toolkit-for-aws 可直接作为 Claude Code 的 AWS 能力扩展方式；Cursor 为 watch，可按 Team Marketplace 路径小范围试点；Agent skills 为 adopt，aws 工具包的 skills 采用 `SKILL.md` 加可选 `references/` 的目录结构，与已有概念一致；清单中没有单独的 MCP 服务器条目，本线索可作为“MCP + skills + 插件 + rules + 权限审计”的组合供给案例。flashmind 也是 Agent skills 的具体落地包，把技能写成 4 个带触发条件的分步 playbook，并配套 `install.sh` / `install.ps1` 自动分发；它把 MCP 记忆、规则和技能打包在一起，适合作为“打包插件”的试用样本。
-- 尚未覆盖的部分：这些路径都没有讨论哪类任务适合哪个模型，也没有系统比较 Claude Code / Codex / Hermes 三者在同一工具集下的差异；反馈信号、上下文信息、权限回收机制只有零散机制；除单次调用边界与停止原因外，多数没有由时间、事件或状态触发的主动推进能力；私人消息路径都没有给出业务效果指标，只给出部署/兼容性验证；claude-security-scan 只有 README 证据，没有独立评测或代码审计；vulnerator-ai 只有架构、安装与控制面证据，没有效果、成本或安全审计数据；TradingView 线索在启动命令后截断，没有策略、回测、风控或收益数据；agent-toolkit-for-aws 只有官方 README，没有独立效果数据、rules 内容或 IAM/CloudWatch/CloudTrail 配置样例；flashmind 只有接线方式，没有规则与技能正文和效果数据，需要自己补规则措辞并做对照。
+- 做法 D CLI-Anything：可核查的是 README 的安装与使用命令、各宿主安装脚本。作者主张无第三方复现：CLI 是人和 agent 的通用接口；7 阶段流水线能生成 CLI、测试、文档并发布；README 自报 2,461 个测试通过、pytest 100%。原文明确：大量 harness 依赖上游桌面软件；Windows 需 Git for Windows 或 WSL；没有对比性指标。
+- 做法 E arcmira：可核查的是接入命令、`arcmira_describe`、`id_required` 与 `resolve` 语义、Premium 转录的 `202` + `Retry-After`、credits 计量规则、错误码清单、monitor 方法集、沙箱出站白名单与永不 DELETE。厂商自述、无第三方复现：数据覆盖与说话人/赞助识别准确性。调研结论是先在 Claude Code 用一条命令接入或改用 Bearer key，再照「先 resolve 后查询」的示例做小范围试用。
+- 做法 F reason network：可核查的是安装方式、四条 CLI 命令、MCP server 名与三个工具名、按 agent 区分的投递时机、网络与安全模型、状态目录。只是作者主张、没有数据支撑：整套「团队协作因此变好」的说法；README 没有任何使用数据、性能数字、前后对比或用户案例；仓库 33 stars。
+- 做法 G idx：可核查的是安装方式、npm 启动器校验、`idx -o json` 的 envelope 字段、缺失字段为 `null` 不估算、退出码语义、`idx mcp` 的 stdio 与 HTTP 形态、`idx mcp setup` 打印绝对路径、各客户端注册命令、23 个工具名与筛选语法、仓库数据保鲜流水线。调研未给出效果数据、性能数字、前后对比；正文在第 9 步后被截断。
+- 做法 H Blender 扩展：可核查的是 README 的安装与使用信息、Windows x64 + Blender 4.2+、21 个工具清单、单助手与 Manager/Worker/Reviewer 团队链、四条提示词、OpenCode Portable 与其他兼容客户端、控制与安全说明。仅为作者主张、无数据支撑：更快迭代、自动化重复工作等价值描述；没有用户案例、成功率、耗时对比或基准数据。仓库 705 stars；Release 1.0.0、MIT。
+- 做法 I jevreel：可核查的是 README/调研给出的命令与机制、lens TOML、插件安装命令、手动 MCP 命令、环境变量表、四步工作流、MCP 工具与 CLI 对照。数据均为作者自测：10 分钟 1080p 视频单张 sheet 约 $0.00025、索引 $0.0033、一次 ask $0.004–0.005、重复 ask $0；暂停菜单仅 screening 得分 0.36 / 0.50 / 0.95，验证前漏掉两个、验证后全部捞回。底层 Jev 图像能力仍是实验性，验证只基于单个测试视频；原文在 Claude Code 插件部分被截断。
+- 做法 J WhatsApp MCP：可核查的是 README 的完整部署命令、配置项、工具表、架构和调试步骤。HN 的 35 points、23 comments 只能说明关注度。作者明确说只在一个真实账号上跑过；首次历史导入每个链接只发生一次，失败后要重新链接；免费计划未验证；媒体不下载、不转写；一个部署对应一个 WhatsApp 账号和一个 owner；非官方实现，作者承认违反 WhatsApp 条款。
+- 做法 K im-mcp：可核查的是 README 的安装命令、初始化命令、客户端配置、清理命令、工具表、兼容性验证表。原文只给了兼容性验证，没有任何效果指标、任务成功率或对照数据；「毫秒级响应」是作者声称。工具声明只读，但本地数据库会解密为 SQLite、明文落盘；没有 cron、webhook、守护进程说明。
+- 做法 L claude-security-scan：可核查的是 README 的检测项清单、安装命令、各域准备方式、报告路径、安全设计和限制；仓库 32 stars。没有检出率、误报率、真实用户案例或独立评测，也没有代码审计结果。原文自述限制：Google Workspace 整体管理设置不在范围；AWS 默认只查东京和弗吉尼亚；不做攻击性检查；检测结果需人工最终判断。这是会读取多账户敏感信息的第三方技能，只读与脱敏设计尚未在本次材料中经过代码级验证。
+- 做法 M vulnerator-ai：可核查的是四容器架构与端口、Kali 工具清单、`install.sh` 的行为、三个可选 flag、TUI 命令、stdio 模式的 MCP 配置、六个 MCP 工具名、两个 opt-in 控制项及其边界说明、MIT 许可、OWASP Juice Shop 练习靶场、`docs/design.md` 的 findings-store schema、`docs/example-report.md` 的脱敏样例。原文没有任何准确率、耗时、成本或对比基线数据，没有独立评测和用户案例；设计上刻意没有 core、没有 REST API、没有 UI、没有 gates；默认无 scope-guard、无 consent、无 audit、无授权闸门。
+- 做法 N TradingView-Unified-MCP：可核查的只有两步接入动作——安装 Claude Code、下载解压仓库并在根目录执行 `node src/cli.mjs launch`；原文在第二步命令后被截断。零效果证据：没有策略、代码、回测、收益、胜率、截图或日志；互动量约 50 赞、6 转发、3 回复，只说明关注度。作者主张「通过与 Claude 对话构建了一个交易机器人」未经验证；MCP 注册、账号/订阅、API 凭据、工具列表、进程是否常驻均需从仓库 README 补。
+- 做法 O agent-toolkit-for-aws：证据来自 AWS 官方 README，仓库状态为 GA，许可证 Apache-2.0，约 3196 stars。可核查：多 agent 安装命令、Kiro/fx 的 MCP JSON 配置、skills 安装命令、插件覆盖范围、项目级 rules 目录、IAM 条件键/CloudWatch 指标/CloudTrail 审计的陈述。局限：只有官方文档，没有独立测评或客户案例；没有 skills 端到端评估指标；没有 IAM/CloudWatch/CloudTrail 配置样例；没有 rules 文件内容；没有提示词模板。
+- 做法 P flashmind：可核查的是 npm 包名 `flashmind`、MIT、31 stars、Node ≥18、可直接复制的 MCP JSON、六种客户端配置映射表、技能触发条件表、更新与去重规则、Gemini CLI 斜杠命令、隐私承诺。属于作者主张、原文未提供支撑的：「消除幻觉」「让快模型记得住、会规划、会验证」；没有任何基准、案例、前后对比数据或用户反馈。关键缺失：防幻觉规则的实际正文和 4 个 `SKILL.md` 的正文都没有出现在抓取到的文本里。
+- 做法 Q mcode-stack：证据来自仓库 README，MIT（部分 stack 的 `NOTICE.md` 可能另有说明），有 15 个技能徽章、GitHub Actions `validate` 徽章、01–04 和即将发布的 06 篇配套文章；安装命令、目录发现规则、插件市场命令和技能清单是具体可执行的。六个 `engineering-*` 技能注明改编自 Google Engineering Practices，改编材料保持 CC-BY 3.0。只是作者主张：README 称这些是团队「每天实际使用」的工作流，并称真正拉开差距的是代理周围的工程习惯；本次材料没有使用前后对比、缺陷率、节省时间、采用率等量化数据，也没有真实案例细节。关键局限：只拿到 README，没有各 `SKILL.md`、`checklists/`、`WORKFLOW.md` 正文，无法验证每个技能的具体检查项是否足够可照做；部分安装方式依赖 MiniMax Code 版本（插件市场在逐步开放），`mcode plugin add` 也不支持 GitHub URL 或本地路径。结论强度：try，先选 2–3 个技能小范围试用，打开 `SKILL.md` 后再决定是否采用其具体流程。
 
 ## 依据的调研
 
@@ -1209,3 +571,4 @@ cd flashmind
 - [@DaviddDotTech: 我通过与 Claude 对话来构建了一个交易机器人。](../research/radar/2026-10-24/6555-claude.md)：值得一试，可以小范围试的只是“用 MCP 把 Claude Code 接到 TradingView”这一步：按原文装 Claude Code、解压作者的 MCP 仓库、在该目录跑 `node src/cli.mjs launch`；但它后面怎么让 Claude 产出交易逻辑、怎么验证效果，原文全部截断且零证据，只能当接入实验，不能直接上真实资金。
 - [aws/agent-toolkit-for-aws](../research/radar/2026-10-25/6886-aws-agent-toolkit-for-aws.md)：值得一试，如果团队在 AWS 上开发且已使用 Claude Code、Codex、Cursor、Devin、Kiro 或 fx，建议先安装 aws-core 并在只读权限下小范围试用；它把 MCP 服务、Agent Skills、插件和审计控制打包，能直接补齐智能体访问 AWS 的能力与权限供给，但证据主要来自官方 README，缺少独立效果数据。
 - [Hvftpie13/Flashmind_Gemini-3.8-Flash_Smart-agent](../research/radar/2026-10-27/7314-hvftpie13-flashmind-gemini-3-8-flash-smart-agent.md)：值得一试，先在一个仓库、一个 MCP 客户端上照着 README 接线（npx 启动的 MCP 配置、规则文件、verify-before-done 单个技能），小范围试用两周，再用「未跑测试就说已修复」和「虚构包名或函数」两类事件计数判断去留；理由是原文提供了可直接照抄的安装命令、MCP JSON 和客户端配置映射，但没有给出任何效果数据，且防幻觉规则正文与四个技能正文均未提供，只能复用其接线方式。
+- [MiniMax-AI/mcode-stack](../research/radar/2026-10-29/7996-minimax-ai-mcode-stack.md)：值得一试，建议小范围试用：先在 MiniMax Code 或 Claude Code 中安装 long-command-check、independent-review、harness-experiment 等技能，按 README 的目录和插件方式接入，并用 /skills 调用，验证能否改善长命令、评审和实验流程。理由是它给出了可执行的安装与调用步骤，且来自团队日常使用；但当前材料只有 README，具体检查项需打开各 SKILL.md 才能照做。
