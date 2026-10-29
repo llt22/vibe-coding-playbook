@@ -1,10 +1,10 @@
-# 让编码会话在配额耗尽前自动换道，并留下验收证据
+# 让编码 agent 按工作类型选模型，并拿出可验收的证据
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：把跨供应商配额、限流、死 key、模型选择和完成验收从人手切换变成可回退的本地路由与证据检查。
-> 先试这一步：先挑一个非关键任务，只把一个工具或一个 haiku 别名接到本地路由，保留直连做 A/B，并用 /provider doctor --ping 或 curl 确认链路通。
-> 最近修订：2026-10-23
+> 解决的问题：多个供应商、模型和编码 agent 混用时，如何按工作类型路由、在限流或配额故障时回退，并用确定性证据而不是进程退出判断任务完成。
+> 先试这一步：先只给一个最常用的工具接上一条路由或一个备用 provider，保留原直连路径作对照，并用同一批真实任务记录中断次数、人工切换次数、返工率和 token 成本。
+> 最近修订：2026-10-30
 
 ## 解决什么问题
 
@@ -12,11 +12,9 @@
 
 Claude Code 里还有两个更具体的中断：模型设置会全局绑定所有终端窗口，切 provider 会影响全部会话；Anthropic 返回 429 用量上限时，整条会话卡住，只能手动换 key 或等冷却。model-relay 用一个本机 127.0.0.1:8950 的路由守护进程把“按窗口切模型、按别名路由、429 自动故障转移、provider 重试”接过来；它要求 provider 能接 Anthropic 的 /v1/messages 格式，定位是单人本地守护进程，不是团队多租户代理。
 
-本手册给出一套本地可试的做法：用 OmniRoute 这类 OpenAI 兼容网关统一接多个供应商，并按配额、失败或成本自动回退；在 Codex 内用 Adaptive Router 按本地难度启发式选择轻/重模型；用“有证据的验收”判断是否真的完成；用 Gluon 为每次会话选择 harness × model × effort 并观察成本与上下文；用 LiteLLM 的 SDK 或网关把多家供应商统一成 OpenAI 格式，并做按项目/用户的成本追踪；Claude Code 内还有一条线：把次要模型挂成顾问，避免贵模型全程主持。最后再加一条 Claude Code 内的本地路由线：用 model-relay 按窗口/别名切 provider，并在 429 时自动转到备用端点。
+本手册给出一套本地可试的做法：用 OmniRoute 这类 OpenAI 兼容网关统一接多个供应商，并按配额、失败或成本自动回退；在 Codex 内用 Adaptive Router 按本地难度启发式选择轻/重模型；用“有证据的验收”判断是否真的完成；用 Gluon 为每次会话选择 harness × model × effort 并观察成本与上下文；用 LiteLLM 的 SDK 或网关把多家供应商统一成 OpenAI 格式，并做按项目/用户的成本追踪；Claude Code 内还有一条线：把次要模型挂成顾问，避免贵模型全程主持。再加一条 Claude Code 内的本地路由线：用 model-relay 按窗口/别名切 provider，并在 429 时自动转到备用端点。最后新增 cedr：它按工作类型路由 agent/模型/effort，回填 accepted/reworked/redone/rejected 结果，并可为 skill 与 MCP server 生成 cedr.lock 做漂移校验；它还能做多厂商评审门禁，但 Council 的细节在材料中指向 docs，未完整展开。
 
-OmniRoute 的新调研把四类痛点明确列为可接管项：订阅配额到期未用完、编码中途被限流、工具输出烧 token、死 key 导致阻塞。它的核心概念是 combo：一条模型链，配额耗尽、provider 故障或成本飙升时自动切到下一个健康目标；不建 combo 也可以直接用 auto 系列虚拟 combo。本次材料能确认的别名包括 auto、auto/coding、auto/fast、auto/cheap、auto/subscription、auto/thrifty、auto/offline、auto/smart、auto/lkgp、auto/chaos。注意：安装/首次运行章节、combo 完整策略语义和压缩配置在本次材料中被截断，落地前必须回仓库 README 补齐。
-
-agent-smith 的核心主张是：常规工作交给更轻的模型，困难任务才动用重型模型，路由依据是一个本地、未校准的 1.0–10.0 难度启发式；它还用 accepted / rejected / unknown 和确定性 grader 做验收，而不是把“进程干净退出”当成成功。FlagshipRouter 是同一层的另一种接法：本地 OpenAI 兼容网关，把 Claude Code、Cline 等工具接到多家免费供应商的模型表上，用面板统一改配置。Gluon 在会话层：把 Claude Code、Codex、Antigravity、Grok Build、OpenCode、Kimi Code 并排跑在同一个终端框架里，把 agent 定义为 harness × model × effort，先和你确定 spec 再按可配置规则路由，并提供成本与上下文可观测性。LiteLLM 提供 SDK 和 AI Gateway 两种用法。Claude Code 的 /advisor 是另一条线；F2b 只给出一条启动命令和三条分工，原文在“→ 只读 haiku 5.5”处截断。七个项目与 F3 这条推文的材料都未说明可以互相集成，先分别试。
+所有效果数字都要自测。七个项目、F3 这条推文、model-relay 和 cedr 的材料都未说明可以互相集成；先分别试。
 
 ## 适用与不适用
 
@@ -38,13 +36,14 @@ agent-smith 的核心主张是：常规工作交给更轻的模型，困难任�
 - 你长期在 Claude Code 里工作，模型设置全局绑定所有终端窗口，想按窗口/会话切 provider。
 - 你有至少一个备用的 Anthropic 兼容端点（内置 preset：zai、deepseek、kimi、minimax、openrouter，或用 --url 指定自己的网关），想把 haiku/sonnet/opus 别名或某个子代理导到别的 provider。
 - 你遇到 Anthropic 429 用量上限，想自动转到备用 provider 并钉住会话 7 天；愿意接受 Node.js 20+、Claude Code 2.1.287+、单人本机守护进程。
+- 你使用 Claude Code、Codex、Cursor 或 Gemini，愿意试 cedr 的按工作类型路由、verdict 回填和 cedr.lock 固定 skill/MCP；你能接受 preview 阶段命令与文件格式在 1.0 前可能变。
 - 你只想先在非敏感、非生产任务上小范围试。
 
 不适用或需要谨慎：
 
 - 有合规或数据敏感要求：接入前先看清请求是否会经过第三方免费层。OmniRoute README 自己披露有供应商因条款风险被标记为 avoid，本次材料点名 Kiro；早期材料称有 13 家，以你当前 README 标记为准。
-- 想直接采信 README 的效果数字：OmniRoute 的 375 个 provider、1475 个 chat 模型 ID、20 种路由策略、37 个集成、~1.62B 免费 token/月、压缩省 15–95%（平均约 89%）都没有给出可复现的测量方法、测试集或对照实验，且免费额度每两周会双向波动。agent-smith 只有 6 个合成任务、单次尝试；FlagshipRouter 只有仓库元信息；Gluon 没有效果数据；LiteLLM 是特性索引 + 宣传。
-- 想用 OmniRoute 的“生产级”能力（MCP 110 工具、A2A、memory、guardrails、evals、TLS stealth、key pools 等）：给定材料里只有名词或概述，没有配置步骤。
+- 想直接采信 README 的效果数字：OmniRoute 的 375 个 provider、1475 个 chat 模型 ID、20 种路由策略、37 个集成、约 1.62B 免费 token/月、压缩省 15–95%（平均约 89%）都没有给出可复现的测量方法、测试集或对照实验，且免费额度每两周会双向波动。agent-smith 只有 6 个合成任务、单次尝试；FlagshipRouter 只有仓库元信息；Gluon 没有效果数据；LiteLLM 是特性索引 + 宣传；cedr 没有效果数据且只有 42 stars、preview 阶段。
+- 想用 OmniRoute 的生产级能力（MCP 110 工具、A2A、memory、guardrails、evals、TLS stealth、key pools 等）：给定材料里只有名词或概述，没有配置步骤。
 - 想把 OmniRoute 的 combo 策略表直接照抄：本次原文在策略表第 3 条处被截断，round-robin 及后续策略的语义不完整；安装/首次运行章节也没有完整抓到。
 - 以为新装 OmniRoute 一定有 keyless 免费目标：新调研明确提醒，全新安装可能没有任何可用的 keyless 目标，某些 keyless provider 也会拒绝第三方客户端。
 - 想把 OmniRoute 当无单点风险的生产网关：网关是单点，它挂了所有客户端一起挂；需要评估是否值得为省成本引入这个依赖。
@@ -56,7 +55,7 @@ agent-smith 的核心主张是：常规工作交给更轻的模型，困难任�
 - 想让 LiteLLM 的 MCP OAuth 一路走通：可能需要预注册 OAuth app 并配置 credentials。
 - 生产环境想用明文 ALB 长跑：allow_plaintext_alb = true 按 README 只限 dev/trial。
 - 想直接照抄 Claude Code 的 /advisor（F1）：原文唯一依据是文档地址，且被截断；模型名无法核实。
-- 想直接照抄 Sonnet 主跑 + Opus 顾问（F2a）：原文只有一行箭头写法 claude -> model sonnet -> advisor opus，没有给出文档链接、版本号或确切命令语法。
+- 想直接照抄 Sonnet 主跑 + Opus 顾问（F2a）：原文只有一行箭头写法，没有给出文档链接、版本号或确切命令语法。
 - 想直接照抄 F2b 的 claude --model sonnet --advisor opus：原文没有说明 --advisor 从哪个版本起可用；执行前必须用 claude --help 或 /help 确认参数存在。参数不存在就停止照抄命令。
 - 想把 Haiku 只读那一环当现成配置：F2b 原文在“→ 只读 haiku 5.5”处截断，怎么在 Claude Code 里指定 Haiku 只读、给什么权限，原文没有给出。
 - 想把 CLAUDE_CODE_SUBAGENT_MODEL=haiku claude 当成完整三模型协作方案（F3）：原文只给这一条环境变量，没有说明主模型如何设为 Sonnet 或 Opus、三类任务如何划分、子代理如何触发。
@@ -69,8 +68,9 @@ agent-smith 的核心主张是：常规工作交给更轻的模型，困难任�
 - 想装完就自动把请求导出去：不加 alias，haiku 及所有请求默认留在 Claude，不会外流。
 - 想把 proxy mode 当无感隧道：HTTPS_PROXY 写进 settings.json 的 env，Claude Code 跑的命令也会走 relay 当盲隧道，router 挂了 git/curl/gh 会失败；proxy 模式下 router 停了 Claude Code 连不上。
 - 想从 0.6 及更早版本升级只更新插件：0.7+ 只读 "format": 2，要迁移。
-- 想拿 model-relay 的效果当结论：给定调研没有效果数据，且正文在“对应研究问题”处被截断。
-- 想让 model-relay 与 A–F 自动叠加：材料未说明可集成；若用 --url 接本地网关，该端点必须能接 Anthropic /v1/messages。
+- 想让 cedr 直接当团队标准：它处于 preview，1.0 前命令与文件格式仍可能变；用量接入在原文中只具体说明 claude-statusline 与 codex 两种 kind；Council 的 reviewer 报告格式、quorum 默认值、merge 输入形态需读 docs/council.md；cedr route sync 会把历史与路由上传到 cedr.dev，默认应不开；跨机器/团队共享路由属于付费计划功能。
+- 想让 cedr 的 cedr lock 无副作用：只有传 --introspect 时才会真正运行 MCP server，运行前会先警告；若不允许执行第三方 server，就不要加这个参数。
+- 想拿 cedr 的效果当结论：没有效果数据、案例研究、对比实验或用户反馈；示例输出里的百分比是演示样例，不是实测结论。
 
 ## 前置条件
 
@@ -84,6 +84,7 @@ agent-smith 的核心主张是：常规工作交给更轻的模型，困难任�
 - Claude Code 启动参数分层（F2b）：本机已安装并可运行 Claude Code CLI；先在终端运行 claude --help，或在会话内用 /help，确认存在 --model 与 --advisor；账号/方案允许在 sonnet、opus、haiku 等模型之间切换；额度允许调用 opus；原文没有给出支持该参数的版本号。
 - Claude Code 子代理固定为 Haiku（F3）：本机已安装并可运行 Claude Code；当前版本支持 CLAUDE_CODE_SUBAGENT_MODEL 环境变量（原文未给版本要求，需自行确认）；任务可以拆出子代理；你愿意让较弱模型处理子任务，并接受用同一批任务做质量对照。原文只给出一条启动命令，没有给主模型和顾问的配置方式。
 - model-relay：Node.js 20+；Claude Code 2.1.287 或更新（作者在 Node.js 22.23.2 与 Claude Code 2.1.306 上测过）；至少一个备用的 Anthropic 兼容端点（内置 preset：zai、deepseek、kimi、minimax、openrouter，或用 --url 指定自己的网关）；接受这是单用户本机工具，不是团队共享代理；先设好 BACKUP_API_KEY 等环境变量，再启动 Claude Code；手动路径下 node tools/setup.mjs 要在插件安装目录里跑：~/.claude/plugins/cache/model-relay/model-relay/<version>/（设了 CLAUDE_CONFIG_DIR 时是 $CLAUDE_CONFIG_DIR/plugins/cache/model-relay/model-relay/<version>/）；默认端口 8950，Claude Code settings.json 的 ANTHROPIC_BASE_URL 会指向 http://127.0.0.1:8950。
+- cedr：Linux 需要 glibc 2.34 或更新（Ubuntu 22.04、Debian 12、RHEL 9 及以上），或使用对应平台发布包；不想用二进制时本机要有较新的稳定版 Rust 工具链；写入 ~/.config/cedr/routes.toml；使用 Claude Code 时要挂 statusLine；要固定 skill/MCP 时仓库里要有 agent 配置；要接 agent 时 agent 需支持 MCP。README 声明 cedr 不读 agent 凭据、不代你调用厂商 API；用量来自 agent 自己的状态行与 CLI，或你指定的 feed；pick、verdict、stats 留在本机，只有加了 [sync] 段和 cedr.dev API key 后 cedr route sync 才上传。
 
 ## 操作步骤
 
@@ -738,7 +739,110 @@ node tools/setup.mjs rc
 
 要么手动（node tools/setup.mjs migrate → migrate --go → /provider restart）。不迁移的话，后台跑着的 0.6 router 会一直跑旧代码。
 
-**做法 A / B / C / D / E / F / G 怎么选**
+**做法 H：按工作类型路由并固定 skill/MCP 版本，先用 verdict 记录结果（cedr）**
+
+前提：cedr 处于 preview，1.0 前命令与文件格式仍可能变；先只准备 2 个 harness（如 Claude + Codex），只定义 2 条 route，不铺开。
+
+1. 安装 CLI。Linux x86_64 示例：
+
+```sh
+curl -fsSL https://github.com/Sheernox/cedr/releases/latest/download/cedr-x86_64-unknown-linux-gnu.tar.gz | tar -xz
+install -m 755 cedr-x86_64-unknown-linux-gnu/cedr ~/.local/bin/cedr
+cedr --version
+```
+
+其他平台对应 cedr-aarch64-unknown-linux-gnu.tar.gz、cedr-aarch64-apple-darwin.tar.gz、cedr-x86_64-apple-darwin.tar.gz、cedr-x86_64-pc-windows-msvc.zip。需要溯源校验时，每个 release 带 SHA256SUMS 和签名的构建来源，可用 gh attestation verify <archive> --repo Sheernox/cedr 检查。不想用二进制、本机有较新的稳定版 Rust 工具链时：
+
+```sh
+cargo install --locked --git https://github.com/Sheernox/cedr cedr
+```
+
+2. 描述“计划”和“路由”。先明确你手上有哪几个 harness（如 claude、codex）、各自用量读数从哪来。写入 ~/.config/cedr/routes.toml（README 提到 cedr.dev 的 Route 页面可生成此文件）：
+
+```toml
+version = 1
+
+[orchestrator]                  # the agent you work in; it keeps work no one else should take
+harness = "claude"
+model = "opus"
+
+[harnesses.claude]
+expect = ["five_hour", "seven_day"]
+effort_option = "effort"
+
+[harnesses.codex]
+expect = ["primary"]
+effort_option = "reasoningEffort"
+
+[[readings]]                    # where plan usage comes from
+kind = "claude-statusline"
+harness = "claude"
+
+[[readings]]
+kind = "codex"
+harness = "codex"
+
+[routes."review.code"]
+work = "Independent review"
+role = "review"
+candidates = [
+  { target = "codex/sol", effort = "high", tier = 1 },
+  { target = "claude/sonnet", effort = "high", tier = 1 },
+  { target = "self" },
+]
+```
+
+要点：work 描述这类工作是什么，role 是角色，candidates 按 tier 列出候选 target 与 effort，self 表示留给你正在用的 orchestrator。
+
+3. 让 cedr 读到 Claude Code 的计划用量。使用 Claude Code 时，把 cedr 设为状态行，写入 ~/.claude/settings.json：
+
+```json
+{ "statusLine": { "type": "command", "command": "cedr route statusline" } }
+```
+
+已有自定义状态行要保留，就在命令后追加 -- <your command>。
+
+4. 选取，并回填结果：
+
+```console
+$ cedr route pick review.code
+[route review.code -> codex/gpt-6.1-sol high | balanced:31%<claude=64% | codex s22% w31%; claude s64% w48% | rules 770517e | pick p-979e77351990]
+  codex/gpt-6.1-sol role=review
+
+$ cedr route verdict p-979e77351990 accepted
+```
+
+cedr route stats 会显示每类工作上哪个模型表现最好。verdict 取值为 accepted、reworked、redone、rejected（来自命令表说明）。辅助命令：cedr route pools 看各计划剩余空间与 cedr 会用哪些，cedr route list 列出路由与每个路由会尝试的模型。
+
+5. 多厂商评审门禁。前提：每个厂商的 reviewer 需要能产出报告；README 未给出报告格式细节，只指向 docs/council.md。
+
+```sh
+cedr council plan <route>     # 指定每个厂商起一个 reviewer，以及 quorum
+cedr council merge <reports>...  # 合并报告并决定是否放行
+```
+
+6. 固定技能与 MCP server：
+
+```sh
+cedr lint      # 找仓库 agent 配置里的问题
+cedr lock      # 把每个 skill 和 MCP server 钉进 cedr.lock
+cedr verify    # 配置不再匹配 cedr.lock 时失败（离线）
+```
+
+前提：cedr lock 只有在传 --introspect 时才会真正运行 MCP server，运行前会先警告——若不允许执行第三方 server，就不要加这个参数。
+
+7. 从 agent 里直接调用。前提：agent 支持 MCP。cedr mcp 通过 stdio 暴露 Route 与 Council 工具。
+
+```sh
+claude mcp add cedr -- cedr mcp
+codex mcp add cedr -- cedr mcp
+```
+
+8. 凭据与数据边界：README 声明 cedr 不读 agent 凭据、不代你调用厂商 API；用量来自 agent 自己的状态行与 CLI，或你指定的 feed；pick、verdict、stats 留在本机，只有加了 [sync] 段和 cedr.dev API key 后 cedr route sync 才上传。默认不要开 sync。
+
+9. 最小试用：建议 1 人 × 2 周，不铺开。只装 CLI，只配 2 个 harness（Claude + Codex），只定义 2 条 route：一条 review.code，一条你日常最重复的实现类工作。用 1 天完成 statusline 接入，确认 cedr route pools 能显示出真实的计划剩余量；如果读不到数，直接停，不要继续。第一周只用 pick + verdict，不启用 Council、不加 sync。每类工作至少积累 15–20 次 pick 与 verdict 再看得出的分布。原文在“第二周在 2–3”处截断，第二周具体动作不可依据；先按第一周做，Council 和 Guard 只做独立小试。
+
+**做法 A / B / C / D / E / F / G / H 怎么选**
 
 - 主要痛点是跨供应商配额、限流、死 key、工具输出烧 token：先做 A。预算红线先用 auto/subscription；想先榨干套餐额度再降到最便宜付费选项用 auto/thrifty；auto/chaos 会成倍消耗上游调用，除非你就是要多模型交叉验证，否则别日常开。
 - 已经在用 Codex，痛点是“常规任务也调用最重模型”且想用确定性 grader 验收：先做 B。
@@ -749,14 +853,16 @@ node tools/setup.mjs rc
 - 日常用 Claude Code、对成本敏感、主要任务是代码编辑，想让贵模型只出现在判断点上：先试 F2b（启动参数），用 claude --help 确认 --advisor；不存在则试 F2a（会话内命令）。两者都必须先核对官方文档或 help。
 - 日常用 Claude Code、只想让子任务用更轻的模型，且能接受输出质量对照：先试 F3。用 CLAUDE_CODE_SUBAGENT_MODEL=haiku claude 启动，先用 5–10 个任务对比 token 与质量；不要把 F3 当成完整三模型方案，也不要默认它能与 F2b 叠加。
 - 日常用 Claude Code、痛点是“模型设置全局绑定所有窗口”或 429 限流，且你有备用 Anthropic 兼容端点：先试 G。先只给 haiku 别名接一个备用 provider，用 /provider doctor --ping 确认链路，再按窗口逐步放开；不要一上来把所有别名和故障转移链都打开。
+- 你已经在 Claude Code、Codex、Cursor 或 Gemini 之间分配工作，想把“哪类工作交给哪个 agent/模型/effort”写成规则，并用 accepted/reworked/redone/rejected 回填结果：先试 H 的 route pick + verdict。你想固定 skill 和 MCP server 版本、在 CI 里发现漂移：再试 H 的 lint/lock/verify。你想做多厂商评审门禁：先读 docs/council.md，再小范围试 council plan/merge。
 - A 和 C 是同一层的本地 OpenAI 兼容网关，功能重叠，且默认端口都是 20128：先选一个跑通，不要同时按默认端口启动。E 也是请求层网关，但默认 4000 端口，与 A/C 不撞；端口不撞不代表能自动叠加，材料没有说明它们可以集成。
 - A/C/E 与 D 不是同一层：A/C/E 在请求层按供应商/模型别名路由；D 在会话层把已有 harness 并排跑起来，按 harness × model × effort 路由。E 的 harness 抽象能在自己的网关上跑 Claude Code / Codex / OpenCode / Deep Agents，与 D 的“并排多个 harness”语义不同。两者材料都未说明可互相集成。
 - B 与 D 都涉及 Codex：B 是在 Codex 内装插件按难度选模型，D 是把 Codex 当作可并排的一个 harness；材料未说明两者关系。
 - F（F1/F2a/F2b/F3）与 A–E 不是同一层：F 是 Claude Code 内部命令、启动参数或环境变量，材料未说明能与网关/路由自动集成；先单独试。
 - G 是 Claude Code 插件 + 本机 127.0.0.1:8950 的 Anthropic 兼容路由守护进程，和 A/C 的 OpenAI 兼容网关（20128）、E 的 AI Gateway（默认 4000）不是同一层。G 可以用 --url 指向本地/远端端点，但该端点必须能接 Anthropic /v1/messages；只会 OpenAI Chat Completions 的端点需要翻译层。材料未说明 G 能与 A–F 自动集成，先分开试。
-- 七个项目、F3 这条推文和 model-relay 的材料都未说明可以集成。如果确实要同时装，先把各自跑通，再自行验证请求实际走哪条路径；不要默认叠加。D 会把多个 harness 接到同一框架里，建议先在一个非关键、已纳入版本控制的仓库里试；G 也建议先在非关键仓库、只接一个备用 provider。
+- H 是叠在 Claude Code、Codex、Cursor、Gemini 等 harness 之上的编排与门禁层：它依赖 Claude Code 状态行/CLI 或 Codex 提供用量读数；它不是 A–G 的替代，也不是请求转发网关。材料未说明 H 能与 A–G 自动集成；先把各自跑通，再自行验证请求实际走哪条路径。
+- 所有项目都未说明可以互相集成。如果确实要同时装，先把各自跑通，再自行验证请求实际走哪条路径；不要默认叠加。D 会把多个 harness 接到同一框架里，建议先在一个非关键、已纳入版本控制的仓库里试；G 和 H 也建议先在非关键仓库、只接一个备用 provider 或一个 route。
 
-**暂时不要碰的部分**：OmniRoute README 提到的 MCP（110 个工具）、A2A、memory、guardrails、evals、TLS stealth、key pools 公平配额，在给定材料里只有名词，没有配置步骤；安装/首次运行章节、combo 完整策略语义、压缩的具体配置项也不在本次材料里。agent-smith 的“多 agent 协作、重试、失败升级带来的收益”需要单独实验，材料未给步骤。FlagshipRouter 的 Media Models 页面和 Agent Skills 页面同样只有存在性描述，没有用法。Gluon 的 routing.yaml、权限与工具供给、安全隐私、成本分析示例、故障排查都不在给定材料里。LiteLLM 的 MCP 登记细节、Docker 快速上手、E2E 教程都在 README 指向的 docs 里，本页未展开；A2A 与 MCP Bridge 的原文被截断。Claude Code /advisor 的顾问介入方式、效果说明、与网关集成都未在原文中展开；F2b 那一支的原文连 Haiku 只读怎么配都没写全；F3 只给了一条环境变量，主模型和任务划分未展开。model-relay 的调研正文在“对应研究问题”处被截断，效果数据、与 A–F 的集成方式、团队多租户用法都不在给定材料里。
+**暂时不要碰的部分**：OmniRoute README 提到的 MCP（110 个工具）、A2A、memory、guardrails、evals、TLS stealth、key pools 公平配额，在给定材料里只有名词，没有配置步骤；安装/首次运行章节、combo 完整策略语义、压缩的具体配置项也不在本次材料里。agent-smith 的“多 agent 协作、重试、失败升级带来的收益”需要单独实验，材料未给步骤。FlagshipRouter 的 Media Models 页面和 Agent Skills 页面同样只有存在性描述，没有用法。Gluon 的 routing.yaml、权限与工具供给、安全隐私、成本分析示例、故障排查都不在给定材料里。LiteLLM 的 MCP 登记细节、Docker 快速上手、E2E 教程都在 README 指向的 docs 里，本页未展开；A2A 与 MCP Bridge 的原文被截断。Claude Code /advisor 的顾问介入方式、效果说明、与网关集成都未在原文中展开；F2b 那一支的原文连 Haiku 只读怎么配都没写全；F3 只给了一条环境变量，主模型和任务划分未展开。model-relay 的调研正文在“对应研究问题”处被截断，效果数据、与 A–F 的集成方式、团队多租户用法都不在给定材料里。cedr 的 Council 报告格式、quorum 默认值、merge 输入形态未展开；最小试用第二周具体动作在原文“第二周在 2–3”处截断。
 
 ## 怎么判断变好了
 
@@ -771,6 +877,7 @@ node tools/setup.mjs rc
 - Claude Code “Sonnet 主跑 + Opus 顾问”（F2a/F2b，单个真实的中等复杂度代码改动）：先在官方文档或 claude --help 核对命令语法，再挑一个真实的中等复杂度改动任务跑两次——A 组按本配置（Sonnet 主跑 + Opus 顾问），B 组全程用 Opus（或你原本的默认方式）；任务、提示词、仓库状态保持一致。F2b 的具体操作：先用 claude --help 确认 --advisor，再挑一个 1–2 小时能做完的真实小任务，用默认模型跑一遍，再用 claude --model sonnet --advisor opus 跑一遍同类任务。
 - Claude Code 子代理固定为 Haiku（F3，5–10 个有代表性的任务）：同一提示词分别跑默认配置与 CLAUDE_CODE_SUBAGENT_MODEL=haiku claude；记录总 token 或费用、任务完成率、输出被人工修改的比例、返工次数、延迟和主观质量评分。原文没有给试用时长建议；先按这一批任务判断。只有在 token 明显下降且质量不下降或可接受时，才纳入日常；若质量下降，只对低风险子任务使用。若环境变量不存在或命令报错，停止并把结论降为 study。
 - model-relay（先一个别名、一个备用 provider）：先设好永久环境变量并开新终端；装插件；用 /provider setup 或 /provider init + add 只加一个备用 provider；用 /provider doctor --ping 看到 Config OK 与 Upstream ping ✓；先只做 alias haiku backup，不动 sonnet/opus；用 /provider 面板确认只有当前窗口切了 provider，其他窗口仍走 Claude；再挑一次真实 429 或配额耗尽，确认会话被钉到 failover.chain 第一个 provider，冷却后新会话回 Claude。原文未给试用时长；先以一次真实 429/配额耗尽事件和一周内人工切换次数为观察窗口，不要一上来开 proxy 模式。
+- cedr（1 人 × 2 周，只配 2 个 harness 和 2 条 route）：第一天接 statusline 并确认 cedr route pools 能读到真实剩余量，读不到就停。第一周只用 cedr route pick 和 cedr route verdict，不启用 Council、不加 sync；每类工作积累 15–20 次 pick 与 verdict 后用 cedr route stats 看分布。第二周原文被截断，先不要按未给出的第二周动作执行；Guard 可单独在仓库里跑 cedr lint、cedr lock、cedr verify，观察 verify 是否在配置漂移时失败；Council 先读 docs/council.md 再小范围试。
 
 要记录的指标：
 
@@ -785,56 +892,34 @@ node tools/setup.mjs rc
 9. OmniRoute 的 p95 延迟：看板里的 p95 与实际体感；auto/fast 是否真的更快；
 10. OmniRoute 的压缩收益：挑 3 个“工具输出很长”的典型任务，记录开启压缩前后的输入 token 数，验证 15–95% 的宣传在你这里落在哪个区间；
 11. 质量对照：同批任务两组的返工率/一次通过率，防止“省了钱但答案变差”；
-12. 稳定性：网关自身宕机时长、回退触发次数与回退后的成功率。
-
-指标（都自己测，不采信 README 的百分比）：
-
-- 中断次数：同一批任务下，因限流/配额耗尽导致的请求失败或人工切换次数，对照直连单供应商。
-- 人工干预次数：一周内你手动换模型/换 key 的次数是否下降。
-- 任务接受率：用 accepted / rejected / unknown 记录；最好自己写一个确定性检查（测试通过、编译成功、断言满足），而不是看进程是否退出成功。核心门槛是接受率不下降。
-- 实际 token 用量：分组对比，注意两组之间的缓存输入 token 差异（原文里 Sol 组有 24,832 缓存 token，其他组为 0，会污染对比）。
-- 参考成本：用同一套冻结价格快照计算，且明确它不是你的真实账单。OmniRoute 的成本与 token 要同一提示词做 A/B，而不是引用 15–95%。
-- unknown 比例：缺失用量或价格会被记为 unknown；unknown 占比过高说明计量覆盖不足，此时成本对比不可信。
-- 延迟：自己记录 p95，别只信 dashboard 的 savings 卡片。
-- 配额真实性：把 /dashboard/free-tiers 显示的 used/remaining 与供应商后台账单对照，这直接决定“配额感知回退”是否可信。
-- 首次跑通耗时（FlagshipRouter）：从 clone 到第一条成功请求的分钟数。
-- 切换成本（FlagshipRouter）：按任务换模型是否真的生效（看工具里是否显示 flagshiprouter/<model>），以及换一次要几步。
-- 稳定性（FlagshipRouter）：Console Log 里的失败请求数、触发限流/额度耗尽的次数；面板另有 Usage 与 Quota 页 /dashboard/usage、/dashboard/quota。
-- 副作用与可回滚（FlagshipRouter）：原工具有没有出现行为变化或配置被覆盖，能否一条命令回滚掉 CLI Tools 写入的配置。
-- 单位任务成本与上下文占用（Gluon）：按会话比较不同 harness/model/effort 的 token 或费用、上下文占用，看推荐的组合是否真的更省。
-- 选择成本与补问次数（Gluon）：从任务描述到开始执行的耗时、会话间切换耗时、需要人工补问的次数。
-- 任务完成质量（Gluon）：人工评分、测试通过率或 review 意见数——四个项目都没给质量指标，要自己定。
-- 供应商切换成本（LiteLLM）：在 SDK 或网关侧换一个 provider 要改几处（理想是只改 model 字符串或一处配置），以及换完要不要重启服务。
-- 每项目/用户成本（LiteLLM）：README 列出的能力是“按项目/用户的多租户成本追踪与花费管理”，但没有给面板位置与操作步骤，需自己确认在哪里看、数字能不能对上你的账单。
-- 失败率与重试/回退次数（LiteLLM）：SDK 侧 Router 支持跨多个部署（如 Azure/OpenAI）重试与回退，但需自测触发条件和成功率。
-- 质量不下降：用你既有的评测方式（或同一组任务的人工打分）确认换模型后结果没有变差；auto/chaos 并行面板会成倍消耗上游调用，试用时单独计费观察。
-- 顾问是否真实介入（Claude Code /advisor，F1）：命令是否真实存在、是否报错；顾问模型是否在会话中实际介入并给出可读建议，而不是只挂名；开顾问 vs. 不开顾问的返工次数、被采纳的评审意见数、最终产出差异；多出的计费额度与响应延迟是否值得换来上述差异。
-- 贵模型实际被调用几次（Claude Code，F2a/F2b）：复杂决策点上 Opus 被实际调用的次数与效果；这个数字过高会把成本优势吃掉，过低则复杂改动的质量可能下降。
-- 子代理 token 占比（F3）：设置变量前后，子代理相关调用的 token 是否下降；原文没有给测量方法，需自己从会话用量里拆分。
-- 子任务质量（F3）：输出被人工修改的比例、返工次数、主观质量评分；若子任务降级导致返工增加，省下的 token 可能被抵消。
-- 429 中断与自动故障转移（model-relay）：一周内因 429 导致的任务失败/等待次数是否下降；failover.chain 实际触发几次，触发后任务是否继续。
-- 按窗口切换是否真的隔离（model-relay）：在 /provider 面板切当前窗口后，其他窗口是否仍走原 provider；pinned sessions 数量是否符合预期。
-- 钉住与冷却（model-relay）：429 后会话是否被钉住 7 天；10 分钟冷却后新会话是否回 Claude，已钉住会话是否保持不动。
-- 别名路由是否精确（model-relay）：haiku 请求是否走 backup，sonnet/opus 是否留在 Claude；子代理 model-relay:<name> 是否被选中，description 是否匹配任务类型。
-- 重试与最终成功率（model-relay）：retry.attempts / retry.delayMs / retry.backoff / retry.maxDelayMs 的实际效果；打开 retry.failover 后是否只转下一个且不回头。
-- proxy 模式副作用（model-relay）：如果启用，router 宕机时 git/curl/gh 是否失败，Claude Code 是否能重连；proxy disable 后会话是否恢复。
-- 成本与质量对照（model-relay）：同批任务开/不开 alias 或 failover 的 token/费用、返工率、任务完成率；材料没有效果数据，必须自己测。
+12. 稳定性：网关自身宕机时长、回退触发次数与回退后的成功率；
+13. 人工干预次数：一周内你手动换模型/换 key 的次数是否下降；
+14. 任务接受率：用 accepted / rejected / unknown 记录；最好自己写一个确定性检查（测试通过、编译成功、断言满足），而不是看进程是否退出成功；核心门槛是接受率不下降；
+15. unknown 比例：缺失用量或价格会被记为 unknown；unknown 占比过高说明计量覆盖不足，此时成本对比不可信；
+16. 配额真实性：把 /dashboard/free-tiers 显示的 used/remaining 与供应商后台账单对照，这直接决定“配额感知回退”是否可信；
+17. 首次跑通耗时、切换成本、副作用与可回滚（FlagshipRouter）：从 clone 到第一条成功请求的分钟数；按任务换模型是否真的生效（看工具里是否显示 flagshiprouter/<model>）；Console Log 里的失败请求数、触发限流/额度耗尽的次数；原工具有没有出现行为变化或配置被覆盖，能否一条命令回滚掉 CLI Tools 写入的配置；
+18. 单位任务成本与上下文占用、选择成本与补问次数、任务完成质量（Gluon）：按会话比较不同 harness/model/effort 的 token 或费用、上下文占用；从任务描述到开始执行的耗时、会话间切换耗时、需要人工补问的次数；人工评分、测试通过率或 review 意见数——四个项目都没给质量指标，要自己定；
+19. 供应商切换成本、每项目/用户成本、失败率与重试/回退次数（LiteLLM）：在 SDK 或网关侧换一个 provider 要改几处（理想是只改 model 字符串或一处配置），以及换完要不要重启服务；README 列出的多租户成本追踪没有给面板位置与操作步骤，需自己确认在哪里看、数字能不能对上账单；SDK 侧 Router 支持跨多个部署重试与回退，但需自测触发条件和成功率；
+20. 顾问是否真实介入（F1）、贵模型实际被调用几次（F2a/F2b）、子代理 token 占比与子任务质量（F3）；
+21. 429 中断与自动故障转移、按窗口切换是否真的隔离、钉住与冷却、别名路由是否精确、重试与最终成功率、proxy 模式副作用、成本与质量对照（model-relay）；
+22. cedr 的 route × model 统计：用 cedr route verdict 回填 accepted/reworked/redone/rejected 后，看 cedr route stats 中每类工作上哪个模型表现最好；观察 cedr route pools 显示的剩余量与真实计划用量是否一致；观察 cedr verify 的退出码是否在配置漂移时失败；Council 的门禁规则是 P0/P1 阻断、报告过少不静默放行，但报告格式与 quorum 需先读 docs。
 
 试多久、什么情况下停：
 
 - OmniRoute：先用 1–2 天跑通并确认 auto/subscription 真的失败即停，再连续 1–2 周做对照；早期材料建议观察三周。若“中断次数 / 人工切换次数”没有下降，或配额显示与实际账单明显不符，或压缩导致答案质量下降，或免费 provider 出现条款风险，或网关本身成为新的不稳定源，就停用并把结论降为 study。
 - agent-smith：成功标准建议：在接受率不下降的前提下，参考成本或实际 token 明显下降；若接受率下降或 unknown 比例高，先回到离线 benchmark 检查判分与计量的可靠性，再决定是否继续用。
 - FlagshipRouter：先按半天的最小试用跑通，再决定要不要多用几天。只要出现“模型连通但结果明显变差”或“配置互相覆盖且难回滚”，就停止推广，把结论降为 study。
-- Gluon：材料没有给出试用时长建议，只建议小范围试。在非关键仓库试到你能判断“推荐是否真的更省钱或更省上下文”为止；若质量明显下降，或成本/上下文没有可见改善，就停用并把结论降为 study。
+- Gluon：材料没有给出试用时长建议，只建议小范围试。在非关键仓库试到你能判断“推荐是否真的更省钱或省上下文”为止；若质量明显下降，或成本/上下文没有可见改善，就停用并把结论降为 study。
 - LiteLLM：SDK 最小验证半天内做完，网关最小验证再半天。若两天内你还说不清“换 provider 省了几步、成本数字是否可信”，就停在 SDK 层，不要上网关和 Terraform。
 - Claude Code /advisor（F1）：原文没有试用时长建议。先按单个项目、单个会话判断；若 /advisor 不存在、顾问全程不介入，或多次任务中开/不开顾问没有可观察差异，就停用并把结论降为 study。
 - Claude Code “Sonnet 主跑 + Opus 顾问”（F2a/F2b）：原文没有试用时长建议，先按单个任务、单个会话、单个中等复杂度改动判断；若命令或参数不存在、语法对不上、质量下降、或顾问调用次数高到费用接近全程 Opus，就退回原方式并把结论降为 study。
 - Claude Code 子代理固定为 Haiku（F3）：原文没有试用时长建议，先按 5–10 个任务的一批判断；若 token 没有明显下降或质量下降，就停用或只限低风险子任务，并把结论降为 study。
 - model-relay：原文没有试用时长建议。先只接一个备用 provider、只开 haiku alias，至少覆盖一次真实 429 或配额耗尽事件；若 429 中断/人工切换次数没有下降，或按窗口切换没有隔离，或 alias 没有按预期路由，或 proxy 模式让 git/curl/gh 变得不稳定，就停用并把结论降为 study。
+- cedr：原文建议 1 人 × 2 周不铺开，但第二周动作在材料中截断。若 cedr route pools 读不到真实剩余量、pick/verdict 15–20 次后仍看不出分布、cedr verify 误报或漏报、锁文件导致无法维护、Council 的 quorum/报告格式无法落地，就停用或只保留 lint/lock/verify 中确实有用的部分，并把结论降为 study；不要把 preview 阶段写进团队标准。
 
 ## 常见坑
 
-- 把 README 的自述数字当结论。OmniRoute：375 个 provider、1475 个 chat 模型 ID、20 种路由策略、37 个集成、MCP 110 工具、56,000+ 静态测试声明、~1.62B 免费 token/月（首月含注册赠送最高 ~2.22B）、压缩省 15–95%（平均约 89%）、$0 起步，都没有给出可复现的测量方法或对照实验；免费额度数字依赖第三方条款，原文承认每两周重新审计、会双向波动；provider 数量与“可用”是两回事，新装可能没有可用 keyless 目标。agent-smith：86.89%/0.75% 来自 6 个合成任务 × 三种策略 × 单次尝试，没有第三方复现记录。FlagshipRouter：只有 37 stars 这类仓库元信息，没有任何性能、成本、质量或用户案例数据。Gluon：同样没有任何效果数据、对比实验或用户案例，“选择最具性价比的 agent”“成本与上下文可观测性”只是项目主张。LiteLLM：README 是特性索引 + 宣传，A2A agent 网关、MCP 工具网关、harness 跑任意模型、多租户成本追踪都只有概述，没有数据或对照实验。model-relay：给定调研没有效果数据，正文还在“对应研究问题”处被截断。
+- 把 README 的自述数字当结论。OmniRoute：375 个 provider、1475 个 chat 模型 ID、20 种路由策略、37 个集成、MCP 110 工具、56,000+ 静态测试声明、~1.62B 免费 token/月（首月含注册赠送最高 ~2.22B）、压缩省 15–95%（平均约 89%）、$0 起步，都没有给出可复现的测量方法或对照实验；免费额度数字依赖第三方条款，原文承认每两周重新审计、会双向波动；provider 数量与“可用”是两回事，新装可能没有可用 keyless 目标。agent-smith：86.89%/0.75% 来自 6 个合成任务 × 三种策略 × 单次尝试，没有第三方复现记录。FlagshipRouter：只有 37 stars 这类仓库元信息，没有任何性能、成本、质量或用户案例数据。Gluon：同样没有任何效果数据、对比实验或用户案例。LiteLLM：README 是特性索引 + 宣传。model-relay：给定调研没有效果数据，正文还在“对应研究问题”处被截断。cedr：没有效果数据、案例研究、对比实验或用户反馈；仓库仅 42 stars，单一组织维护，preview 阶段；示例输出里的百分比是演示样例。
 - 以为零凭证一定能 curl 通 OmniRoute。新调研的 README 要 Authorization 头，且全新安装可能没有可用 keyless 目标；早期材料里的无 key curl 只在存在 keyless 免费后端时可能可用。先用 Dashboard → Endpoints 的 key 走通，再决定要不要试 keyless。
 - 照抄 OmniRoute 的安装命令。本次材料在安装/首次运行章节被截断，npm i -g omniroute 和 Docker 镜像名只是线索；执行前回 README Quick Start 补齐。
 - 照抄 OmniRoute 的 combo 策略表。本次原文在策略表第 3 条处被截断，round-robin 及后续策略语义不完整；不要凭名字猜。
@@ -845,7 +930,7 @@ node tools/setup.mjs rc
 - 把多把第三方 key 交给一个本地服务。OmniRoute README 称 key 本地加密（AES-256-GCM）、本地优先，但没有给出可照做的验证方法；网关 key 也不要泄露。
 - 只信 dashboard。savings 卡片不等于你自己的 p95 和账单；把 /dashboard/free-tiers 的 used/remaining 与供应商后台对照。
 - 一次把所有工具都切到网关。先只接一个，保留直连对照，否则无法判断是网关起了作用还是任务本身变简单了。
-- 端口撞车。OmniRoute 与 FlagshipRouter 默认都监听 localhost:20128，同时按默认端口启动会冲突；FlagshipRouter 可用 -p 换端口，OmniRoute 的材料没有给出改端口方式。LiteLLM 默认 4000，与上面两个不撞；model-relay 默认 8950，也不撞，但材料没有说明任何两家能叠加使用。
+- 端口撞车。OmniRoute 与 FlagshipRouter 默认都监听 localhost:20128，同时按默认端口启动会冲突；FlagshipRouter 可用 -p 换端口，OmniRoute 的材料没有给出改端口方式。LiteLLM 默认 4000，与上面两个不撞；model-relay 默认 8950，也不撞，但材料没有说明任何两家能叠加使用。cedr 不是请求网关，不占这些端口；但它依赖的 statusline/CLI 读数要单独接。
 - FlagshipRouter 默认面板密码是 123456。README 明确说暴露到 localhost 之外以前必须改；建议先用 --host 127.0.0.1 只本地监听。
 - 把 FlagshipRouter 的测试不全绿当成自己装坏了。README 自陈套件带已知失败：live-provider 测试、缺失的 cloud/ worker、对时序敏感的 DB 测试；引擎测试还在 tests/setup/providerPolicy.js 里把 free-only 策略关掉。
 - 拿 README 的示例模型名当真实模型。FlagshipRouter 的 gpt-6-astra 只是 README 示例，必须换成你自己 Ready 的模型。
@@ -867,7 +952,7 @@ node tools/setup.mjs rc
 - 把 claude --model sonnet --advisor opus 当跨版本通用命令。新材料没有说明 --advisor 从哪个版本起可用；执行前必须用 claude --help 或 /help 确认参数存在。参数不存在就停止照抄命令，退回“贵模型只用在决策点”或 F2a。
 - 照抄 F2a/F2b/F3 里的模型名。Sonnet、Opus、Fable 5.1、Haiku 5.5，以及新材料里的 “sonnet 5.5 / haiku 5.5”，都无法从给定材料核实；「Haiku 5.5」指的是模型版本还是别的，也确认不了。
 - 自己脑补 Haiku 那一环的配置。F2a/F2b 原文都在「Haiku 5.5」或“→ 只读 haiku 5.5”处被截断，它负责哪类任务、怎么配、给什么只读权限都没写；先去文档确认，不要自行加配置。
-- 把 CLAUDE_CODE_SUBAGENT_MODEL=haiku claude 当成完整三模型协作方案。F3 原文只给这一条环境变量，没有给主模型（Sonnet 5.5 / Opus 5.5）设置、任务划分和子代理触发方式；不能把“设置子代理模型”等同于“同时运行三个模型”。
+- 把 CLAUDE_CODE_SUBAGENT_MODEL=haiku claude 当成完整三模型协作方案。F3 原文只给这一条环境变量，没有给主模型设置、任务划分和子代理触发方式；不能把“设置子代理模型”等同于“同时运行三个模型”。
 - 以为设置子代理模型就等于“只读 Haiku”。它只指定子代理用哪个模型，不规定只读权限；F2b 原文的“只读 haiku 5.5”环节仍被截断，两者不是一回事。
 - 把 F3 与 F2b 叠加。F3 是环境变量，F2b 是启动参数；材料未说明可叠加，先分开试。
 - 原文没有给 CLAUDE_CODE_SUBAGENT_MODEL 的版本要求；执行前先确认环境变量在你的版本里存在（claude --help 或官方文档），不存在就停。
@@ -889,280 +974,48 @@ node tools/setup.mjs rc
 - 把 doctor 当成会自动修。doctor 默认只报告、不改动；加 --fix 才让它自己修能修的问题；--json 给修复参数和是否需要确认。
 - 把 /provider 面板当成全局切换。它切的是“当前这个窗口”，其他窗口不受影响；这正是它和全局模型设置的区别。
 - 把 model-relay 当团队多租户代理。作者自己说那种场景应该用 LiteLLM；它是单人本地守护进程。
-- 材料本身是截断的。OmniRoute 本次原文在策略表第 3 条处被截断，安装/首次运行章节不完整；早期材料曾称在 19 种策略表第 12 行处截断，说明版本不同。Gluon 的给定文本也只是 README landing page。Claude Code 的三支原文都在关键处中断：F1 停在“Opus 5.5 继续工作 / Fable 5.1”；F2a 停在「Haiku 5.5」；F2b 停在“→ 只读 haiku 5.5”，没有文档链接、版本号和确切命令语法。F3 只给了一条环境变量，主模型与任务划分未展开。model-relay 的调研正文在“对应研究问题”处被截断，效果数据与集成方式未展开。
+- 把 cedr 当稳定标准。它处于 preview，1.0 前命令与文件格式仍可能变；写进团队流程会有迁移成本。
+- 以为 cedr 能自己拿到所有 harness 的用量。原文只具体说明了 claude-statusline 与 codex 两种 kind；其他 harness 如何提供读数未说明。读不到 cedr route pools 就不要继续。
+- 把 cedr Council 当开箱即用。reviewer 报告格式、quorum 默认值、merge 的输入形态原文未给，需读 docs/council.md；报告数量不足时不会静默放行，P0/P1 会阻断，但先要能产出合格报告。
+- 忘记 cedr route sync 会外发数据。只有加了 [sync] 段和 cedr.dev API key 后 cedr route sync 才上传；默认不要开。
+- 让 cedr lock 执行了第三方 MCP server。cedr lock 只有在传 --introspect 时才真正运行 MCP server，运行前会先警告；若不允许执行第三方 server，就不要加这个参数。
+- 把 cedr.lock 当成不会误报。它固定 skill 与 MCP server 后，server 的工具、描述或网络主机变化会让 verify 失败；先确认这是你要的漂移告警，再挂 CI。
+- 把 cedr 的示例输出百分比当实测。balanced:31%<claude=64%、codex s22% w31% 等是演示用输出样例，不是实测结论。
+- 材料本身是截断的。OmniRoute 本次原文在策略表第 3 条处被截断，安装/首次运行章节不完整；早期材料曾称在 19 种策略表第 12 行处截断，说明版本不同。Gluon 的给定文本也只是 README landing page。Claude Code 的三支原文都在关键处中断：F1 停在“Opus 5.5 继续工作 / Fable 5.1”；F2a 停在「Haiku 5.5」；F2b 停在“→ 只读 haiku 5.5”，没有文档链接、版本号和确切命令语法。F3 只给了一条环境变量，主模型与任务划分未展开。model-relay 的调研正文在“对应研究问题”处被截断。cedr 的最小试用原文在“第二周在 2–3”处截断，Council 细节只在 docs 指向中。
 - 名称相近但关系不明。OmniRoute 材料里作为 keyless 免费后端的 “OpenCode Free”（oc/…）与别处提到的 OpenCode 名称相近，但原文没有说明两者是否同一项目，不能确认；FlagshipRouter 也把 OpenCode Free 列为免注册可用模型来源，同样没有说明它与 OmniRoute 那边的 OpenCode Free 是不是同一回事。
 - agent-smith 的 USD 数值是“实测用量 × 冻结的 API Standard 参考价”，不是 Codex 订阅账单。
 - agent-smith 的难度打分是本地、未校准的启发式；缓存效应与用量覆盖不全（partial usage coverage）会如何影响成本对比，作者自己列为待解决问题。
 - agent-smith 除 Astra、6.1 Sol 外，原文没有给出被路由模型清单、支持的任务类型或失败案例。
 - agent-smith 分发为源码优先，无预打包 DMG，构建为 ad-hoc 签名；Float 仅 macOS 14+。
-- 七个项目、F3 这条推文和 model-relay 的材料都未说明可集成；同时安装或叠加配置时不要假设请求一定经过你以为的那一层。
+- 七个项目、F3 这条推文、model-relay 和 cedr 的材料都未说明可集成；同时安装或叠加配置时不要假设请求一定经过你以为的那一层。
 
 ## 证据与来源
 
 本节区分可照做的操作、项目自述数据和材料边界。
 
-**OmniRoute（调研《cheaper-inference/OmniRoute》）**
+**OmniRoute**：可照做的操作性内容包括 npm 包 omniroute、Docker 镜像 diegosouzapw/omniroute、默认端点 http://localhost:20128/v1、Dashboard → Endpoints 取 key、带 Authorization 的 curl、auto 别名表、combo 四层、/dashboard/free-tiers 与 live analytics、tos: avoid 的 provider 默认排除。项目自述但未验证的有 375 个 provider、1475 个 chat 模型 ID、37 个集成、MCP 110 工具、56,000+ 静态测试、~1.62B 免费 token/月、压缩省 15–95% 等；材料在策略表第 3 条处截断，安装/首次运行、combo 完整策略和压缩配置不完整。
 
-可当证据、可照做的操作性内容：
+**agent-smith**：可照做的有 codex plugin marketplace add .、codex plugin add adaptive-router@agent-smith、router.py --help、model_registry.py show、Use $adaptive-route for this task: …、离线 benchmark demo/report、unittest 命令、Float 构建。原文给出 6 个公开合成任务 × 三种策略 × 单次尝试、18/18 通过确定性 grader 的表：Fixed Astra 102,162 token / $1.237460；Fixed 6.1 Sol 105,285 / $0.1921092；Local router 101,392 / $0.1621807。作者称相对 Fixed Astra 参考成本少 86.89%、实际 token 少 0.75%，但这是单次选择器实验，USD 是冻结参考价，不是 Codex 订阅账单；缓存输入 token 差异会污染对比。
 
-- npm 包 omniroute、Docker 镜像 diegosouzapw/omniroute；默认端点 http://localhost:20128/v1，默认监听 20128；v3.8.53+ 支持无界面模式 serve --headless（材料未给完整启动命令）。
-- Dashboard → Endpoints 复制 OmniRoute key；curl 带 Authorization: Bearer YOUR_OMNIROUTE_KEY 验证；早期材料还给过不带 Authorization 的 curl，但只在存在 keyless 免费后端时可能可用。
-- auto 别名：auto、auto/coding、auto/fast、auto/cheap、auto/subscription、auto/thrifty、auto/offline、auto/smart、auto/lkgp、auto/chaos；auto/subscription 失败即停、不产生账单；auto/thrifty 先用套餐再降最便宜付费；auto/chaos 是 5 路并行面板，不是故障注入。
-- combo：一条模型链，配额耗尽、provider 故障或成本飙升时自动切到下一个健康目标；自建 combo + 自动回退分四层：Subscription → API Key → Cheap → Free。
-- 20 种路由策略；本次材料能确认 priority、fill-first、round-robin 等名称，round-robin 及后续在原文中被截断。原文点名的可接工具包括 Claude Code、Codex、Cursor、Cline、Copilot、Antigravity；Copilot 在清单里是 drop。
-- 看板：/dashboard/free-tiers 看免费额度池已用/剩余；live analytics 看 usage、quota、savings、p95 latency；circuit breaker、key cooldown、model lockout 三层机制处理死 key（材料未给配置步骤）。
-- 被标记 tos: avoid 的 provider（本次点名 Kiro）默认被排除在自动路由之外，即使连上账号也不会覆盖该设置。
+**FlagshipRouter**：可照做的有 git clone、npm run launch、--host 127.0.0.1、-p、--no-browser、Endpoint & Key、Models、CLI Tools、brand.json 与 npm run brand:sync、providers 策略 JSON、测试命令。只有 37 stars 等仓库元信息，没有性能、成本、质量或用户案例数据；测试套件带已知失败，示例模型名 gpt-6-astra 不是真实可用模型。
 
-只是项目自述、未经验证的主张：
+**Gluon**：可照做的有 install.sh/install.ps1、bun add -g、cd your-repo && gluon、intake agent 生成 agent/model/effort 与 spec、按 Enter 在 frame 内启动、多会话人工切换。给定文本是 README landing page，routing.yaml、权限、工具供给、安全隐私、成本分析示例、故障排查都在 docs；没有效果数据。
 
-- 375 个 provider、1475 个 chat 模型 ID、37 个 CLI/agent 集成、20 种路由策略、MCP 110 工具、A2A、56,000+ 静态测试声明（覆盖 7,800+ 测试文件）。
-- 免费额度：467 条免费条目、34 个复用池 key，口径是“17 个有公开正月度预算的池 + 5 个 Groq 单模型上限”，按共享池去重后约 1.62B tokens/月，首月含注册赠送最高约 2.22B；需要区域身份验证的（如 ModelScope）单列、约 +6M，且不计入头条；原文强调这是第三方免费层级的估算汇总，不是 OmniRoute 发放的 token。
-- 压缩：RTK + Caveman 叠加，省 15–95%（平均约 89%）。
-- 价格起点 $0；版本表显示 v3.8.50→v3.8.51→v3.8.53+ 的 provider/模型数增长。
-- “永不撞限额”“$0 起步”缺可复现测量方法；免费额度数字依赖第三方条款，原文承认每两周重新审计、会双向波动；provider 数量与“可用”是两回事，新装可能没有可用 keyless 目标。
+**LiteLLM**：可照做的有 uv add litellm、OPENAI_API_KEY/ANTHROPIC_API_KEY、completion(model=…)、uv tool install 'litellm[proxy]'、litellm --model gpt-4o、OpenAI SDK 指向 4000、Terraform 模块、MCP 的 tools type mcp 请求体与 Cursor mcpServers JSON、litellm.agent 的 Harness 用法、A2AClient 片段。100+ 提供商、虚拟密钥、多租户成本追踪、A2A Agent 网关、MCP 工具网关等是项目自述；Terraform 输出段、A2A 与 MCP Bridge 在材料中截断，Docker/E2E/MCP 登记细节在 docs。
 
-原文自己给出的限制说明与材料局限：
+**Claude Code /advisor 第一种挂法（F1）**：可照做的有 /model fable（某些计划下接受计费确认）与 /advisor fable；原文称 Opus 5.5 继续工作、Fable 5.1 作为顾问，但正文在关键处中断，顾问何时介入未给出。模型名与文档地址无法核实；“别浪费另一个模型配额”是作者主张，可核实互动量只有 70 赞、8 次转发、14 条回复。
 
-- 本次抓到的原文在策略表第 3 条处被截断，安装/首次运行章节、combo 完整策略语义、压缩的具体配置项都不在全文中；早期材料曾称在 19 种策略表第 12 行处截断，说明材料版本不同。
-- 必须自带 provider 账号/密钥，各 provider 的 ToS 自行承担；被标 tos: avoid 的（如 Kiro）默认排除；用免费额度做生产有封号/断供风险。
-- 网关是单点：它挂了，所有客户端一起挂；需要评估是否值得为省成本引入这个依赖。
-- README 含大量营销话术、联盟链接与赞助位，~1.62B 与 ~89% 这类数字不应直接写进对外材料。
+**Claude Code 顾问模式第二种挂法（F2a）**：可照做的原文配置行是 claude -> model sonnet -> advisor opus；按箭头还原的尝试形态是 claude、/model sonnet、/advisor opus，但确切语法待核对。原文称 Sonnet 跑会话并编辑代码、Opus 作为顾问；没有文档链接、版本号或确切语法，Haiku 那一环在「Haiku 5.5」处截断。可核实互动量 120 赞、13 次转发、17 条回复；“不为不需要 Opus 的工作付 Opus 的价格”是作者主张。
 
-**agent-smith（调研《Chengjun023/agent-smith》）**
+**Claude Code 多模型分层第三种挂法（F2b）**：可照做的原文命令是 claude --model sonnet --advisor opus；分工为 sonnet 5.5 运行主会话并编辑代码、只读 haiku 5.5（截断）、只有真正需要决策时才引入 opus。执行前必须用 claude --help 或 /help 确认 --advisor 存在；原文没有版本号。可核实互动量 37 赞、5 转发、10 回复；标题和“简直是黄金”是作者主张。
 
-可当证据、可照做的操作性内容：
+**Claude Code 子代理固定为 Haiku（F3）**：可照做的原文命令是 CLAUDE_CODE_SUBAGENT_MODEL=haiku claude；原文声称同时运行 Sonnet 5.5、Haiku 5.5、Opus 5.5，但只给子代理模型这一个配置，没有主模型设置、任务划分和子代理触发方式。没有版本要求与对比数据；“更好的输出，消耗的 token 少得多”是作者主张。
 
-- 安装：codex plugin marketplace add .、codex plugin add adaptive-router@agent-smith。
-- 检查：python3 router/scripts/router.py --help、python3 router/scripts/model_registry.py show。
-- 启用提示词：Use $adaptive-route for this task: …。
-- 离线基准：python3 router/benchmarks/benchmark.py demo --run-dir /tmp/agent-smith-demo、python3 router/benchmarks/benchmark.py report --run-dir /tmp/agent-smith-demo --output /tmp/agent-smith-demo-report。
-- 回归测试：python3 -m unittest discover -s router/tests -q、python3 -m unittest discover -s float/tests -q。
-- 验收语义：accepted / rejected / unknown 有各自的证据语义；用确定性 grader 判分，而不是把“进程干净退出”当成成功；基准反馈保留在生产学习之外。
-- Float 构建：sh scripts/build.sh；demo 构建：sh scripts/build.sh --demo。
+**model-relay**：可照做的有安装插件、/provider setup、/provider init、node tools/setup.mjs add、/provider doctor --ping、alias 命令、providers.<name>.agent 的 description/effort/maxTurns、429 failover.chain 与默认值、statusline 文件格式、proxy enable/disable、0.6 升级迁移。定位是单人本地守护进程；provider 必须能接 Anthropic /v1/messages；给定调研正文在“对应研究问题”处截断，没有成本、质量、稳定性或用户案例数据。
 
-原文给出的数据（六个公开合成任务 × 三种策略 × 单次尝试，18/18 全部通过确定性 grader）：
+**cedr**：可核对的操作性内容有安装命令与平台矩阵、glibc 版本要求、routes.toml 完整样例、Claude Code statusLine 的 JSON、cedr route pick/verdict 的真实命令与示例输出、cedr route stats/pools/list、cedr council plan/merge、cedr lint/lock/verify 与 --introspect 警告、claude mcp add cedr -- cedr mcp、SHA256SUMS/gh attestation verify、以及指向 docs/route.md、docs/council.md、docs/design.md 的规格说明。只是作者主张、没有证据的是：路由“挑得对”、Council 能提高评审质量、锁文件能防住真实风险；原文没有效果数据、案例研究、对比实验或用户反馈，仓库仅 42 stars、单一组织维护、preview 阶段，示例输出里的百分比是演示样例。材料边界：1.0 前命令与文件格式可能变；用量接入只具体说明 claude-statusline 与 codex 两种 kind；Council 报告格式、quorum、merge 输入形态未给；cedr route sync 会外发数据；跨机器/团队共享路由是付费计划功能；最小试用第二周在“第二周在 2–3”处截断。
 
-| 策略 | Accepted | 实际 token | API Standard 参考成本 USD |
-| --- | ---: | ---: | ---: |
-| Fixed Astra | 6/6 | 102,162 | $1.237460 |
-| Fixed 6.1 Sol | 6/6 | 105,285 | $0.1921092 |
-| Local router | 6/6 | 101,392 | $0.1621807 |
-
-作者结论：相对 Fixed Astra，路由器在该试点中参考成本少 86.89%、实际 token 少 0.75%。同时作者自己指出：Fixed 6.1 Sol 有 24,832 个缓存输入 token，其他两组为 0，读成本对比时必须注意缓存暴露。
-
-局限（多为作者自述或原文信息边界）：
-
-- 这是一次性的选择器实验（one-shot selector experiment），只测了那六个合成任务；更广的质量等价性，以及多 agent 协作、重试、失败升级带来的收益，需要单独实验。
-- USD 数值是“实测用量 × 冻结的 API Standard 参考价”，不是 Codex 订阅账单。
-- 难度打分是本地、未校准的启发式。
-- 缓存效应与用量覆盖不全（partial usage coverage）会如何影响成本对比，作者自己列为待解决问题。
-- “130 个 router 测试 + 50 个 Float 测试”是导入基线；分发为源码优先，无预打包 DMG，构建为 ad-hoc 签名。
-- 除 Astra、6.1 Sol 外，原文没有给出被路由模型清单、支持的任务类型或失败案例。
-- 全文是项目自述，86.89%/0.75% 等数字没有第三方复现记录；作者也承认规则式难度分应让位于“实测工作量证据”的边界尚不清晰。
-
-**FlagshipRouter（调研《theRizwan/FlagshipRouter》）**
-
-可当证据、可照做的操作性内容：
-
-- 安装与启动：git clone https://github.com/theRizwan/FlagshipRouter.git、npm run launch；首次构建要几分钟，服务跑在端口 20128，浏览器自动打开面板，终端保留小菜单；后续启动只需几秒，源码或 brand.json 变化时自动重建。
-- CLI 参数写法：npm run launch -- --host 127.0.0.1、npm run launch -- -p 20130、npm run launch -- --no-browser。
-- 可选：cd cli && npm link；开发模式 npx next dev --port 20128。
-- 接入流程：Endpoint & Key 建 key → Models 选 Ready 模型（OpenCode Free 免注册）→ 工具指向 http://localhost:20128/v1，模型显示为 flagshiprouter/<model>；CLI Tools 页面可代写配置。
-- 连通性 curl（示例模型名 gpt-6-astra 来自 README，需换成实际 Ready 的模型）。
-- brand.json 字段含义与 npm run brand:sync。
-- providers 免费供应商策略 JSON 与判定规则（category / hasFree / includeHasFree / include / exclude / customEndpoints）。
-- 测试命令及其已知失败说明。
-- 数据目录 ~/.<slug>；默认密码 123456，必须在暴露到 localhost 之外前改掉。
-
-只是项目自述、未经验证的主张：
-
-- “Free AI models for every coding tool”、Models 页面的一键测试、统一模型命名带来的便利，均无对照实验或量化结果支持。
-- 仓库元信息只有 37 stars；没有性能、成本、质量或用户案例数据。
-- Media Models（embedding、image、video、speech、transcription、web fetch & search）与 Agent Skills 等页面的能力描述，README 没有给用法。
-
-原文自己给出的限制说明与材料局限：
-
-- 本次输入只有仓库 README，没有实际跑过，所有步骤均为未经验证的转述。
-- 测试套件带已知失败：live-provider 测试、缺失的 cloud/ worker、对时序敏感的 DB 测试；README 建议与上一个 commit 的运行结果对比，而不是期待全绿；引擎测试在 tests/setup/providerPolicy.js 里把 free-only 策略关掉。
-- 依赖免费的第三方供应商及其额度政策，可用性和限流会随上游变化；README 中的示例模型名（如 gpt-6-astra）不能当作真实可用模型。
-- 需要 Node.js 20.9+，README 建议 22。
-
-**Gluon（调研《fidipro/gluon》）**
-
-可当证据、可照做的操作性内容：
-
-- 安装命令：Linux/macOS/WSL curl -fsSL https://github.com/fidipro/gluon/releases/latest/download/install.sh | sh；Windows PowerShell irm https://github.com/fidipro/gluon/releases/latest/download/install.ps1 | iex；Bun 方式 bun add -g "$PWD/gluon-<version>.tgz"（从 release 下载 npm 风格 tarball，Linux、macOS）；从 checkout 构建见 CONTRIBUTING.md；校验与所有安装选项见 install guide。
-- 启动：cd your-repo && gluon。
-- 首次运行连接 agent；描述本次会话目的；intake agent 读取仓库、问几个问题并给出 agent/model/effort 与 spec；按 Enter 在该 agent 自己的 UI 中启动，会话运行在 Gluon frame 内；按一个键回到主界面继续开新会话。
-- 支持的 harness：Claude Code、Codex、Antigravity、Grok Build、OpenCode、Kimi Code；平台 Linux、macOS、Windows（README 另提 WSL）。
-- 仓库为 Apache-2.0，有 CI 和 release；原文显示 35 stars。
-
-只是项目自述、未经验证的主张：
-
-- “在单个 harness 内或跨多个 harness 为每次会话挑选最具性价比的 agent”“成本与上下文可观测性和分析”，均无对照实验或量化结果支持。
-
-原文自己给出的限制说明与材料局限：
-
-- 给定文本是 README landing page，原文注明细节在 docs/；routing.yaml、CLI/config/environment/models 的参考内容、权限、工具供给、安全隐私、成本分析示例、故障排查均未展开。
-- 没有给出质量评估指标、对照实验或用户案例。
-- 会话不是由时间、事件或状态自动触发，而是由“描述本次会话目的”启动；多会话并排与会话管理只支持人工持续切换与推进。
-- 适用前提：已有受支持的编程智能体账号或 API key，能在本地仓库跑终端命令；需自行查文档确认各 harness 连接方式与路由配置，并注意把代码库交给多个第三方 agent 时的权限与数据边界。调研给出的建议是先在非关键仓库小范围试，记录成本与上下文。
-
-**LiteLLM（调研《BerriAI/litellm》）**
-
-可当证据、可照做的操作性内容：
-
-- SDK 安装：uv add litellm；同一环境只能装 litellm 或 litellm-core 之一。
-- 环境变量：OPENAI_API_KEY、ANTHROPIC_API_KEY。
-- SDK 调用：completion(model="openai/gpt-4o", …)、completion(model="anthropic/claude-sonnet-4-20250514", …)。
-- 网关安装与启动：uv tool install 'litellm[proxy]'、litellm --model gpt-4o。
-- 用标准 OpenAI SDK 指向 http://0.0.0.0:4000，api_key 填任意值。
-- Terraform 模块（AWS/GCP）的 clone 路径、terraform init && terraform apply 以及 HCL 调用示例；source 为 BerriAI/litellm/aws，version ~> 1.89。
-- MCP：/chat/completions 的 tools type mcp 请求体；Cursor 的 mcpServers JSON。
-- Harness：litellm.agent(Harness.CLAUDE_CODE / CODEX / OPENCODE / DEEPAGENTS, …, sandbox=sandbox.local("./repo"), model="litellm_proxy/…")，以及 LITELLM_PROXY_API_BASE / LITELLM_PROXY_API_KEY。
-- A2A：A2AClient 片段，protocolVersion 1.0 或 0.3，a2a-sdk>=1.1.0。
-- 从源码构建 core 包：python scripts/build_core_distribution.py --out-dir dist/core + pip install。
-
-只是项目自述、未经验证的主张：
-
-- 100+ LLM 提供商、虚拟密钥与鉴权授权、按项目/用户的多租户成本追踪与花费管理、日志/guardrails/缓存定制、管理后台 UI、A2A Agent 网关、MCP 工具网关、把 Claude Code / Codex / OpenCode / Deep Agents 跑在任意模型上。
-- SDK 侧 Router 的跨部署重试与回退、应用级负载均衡、OpenAI 兼容错误处理、可观测性回调（Lunary、MLflow、Langfuse 等）。
-- “-stable 标签的 docker 镜像发布前经过 12 小时负载测试”。
-
-原文自己给出的限制说明与材料局限：
-
-- 抓取到的原文在 Terraform 输出段被截断（停在 output "litellm_url" { va），云部署部分只有前半段可依据。
-- README 大量内容是指向 docs 的链接，本身不是完整教程；Docker 快速上手、E2E 教程、Adding your MCP 的配置细节都不在本页。
-- 生产要用 ACM 证书，没有则 allow_plaintext_alb = true 仅限 dev/trial。
-- MCP OAuth 上游可能实际用 401/403 拒绝动态客户端注册；需预注册 OAuth app 并配置 credentials，且 provider 必须批准该 app。
-- A2A 与 MCP Bridge 部分在材料中被截断。
-
-调研结论：值得小范围试——照 README 给的命令先在本地起一个 LiteLLM 网关，把 1–2 个模型统一成 OpenAI 格式并开启花费追踪，用自己的成本和失败率数据决定是否推广；它给出了可复制的安装与调用步骤，但整体是特性索引 + 宣传，实际收益需自测。
-
-**Claude Code /advisor 的第一种挂法（调研《@polydao: Claude Code 提示：一旦 Opus 5.5 成为你的主要模型，就别让你的 Fable 5.1 配额白白浪费了》，对应做法 F1）**
-
-可当证据、可照做的操作性内容：
-
-- 在某些计划下先执行 /model fable 接受按使用信用（usage credit）计费的确认。
-- 把次要模型置于顾问状态：/advisor fable。
-- 原文称主模型 Opus 5.5 继续工作，Fable 5.1 作为顾问；但正文在“Opus 5.5 继续工作 / Fable 5.1”处中断，顾问如何介入未给出。
-- 文档入口为 code.claude.com/docs/en/advisor；原文中该链接被截断。
-
-只是作者主张、未经验证：
-
-- “一旦主模型就位，就别浪费另一个模型的配额”是作者的成本利用主张，没有给出成本、效果或对比数据。
-- 可核实的互动量只有 70 赞、8 次转发、14 条回复。
-
-原文自己给出的限制说明与材料局限：
-
-- 原文正文在关键处被截断，看不到顾问模型实际做什么、何时被调用、有无效果说明；链接也只剩半截。
-- 文中出现的模型名（Opus 5.5、Fable 5.1）与文档地址均无法从给定材料中验证，本手册不对其真实性做判断。
-- 适用条件：仅在你所使用的 Claude Code 版本支持 /advisor、且你的订阅计划允许挂载第二个模型时成立；不同计划的计费确认方式可能不同。
-- 调研结论：可以小范围试——先用 /model fable（如提示计费则确认）与 /advisor fable 确认命令真实存在，再观察顾问是否实际介入；若不存在、不介入或多次任务无可观察差异，则不写进长期流程。
-
-**Claude Code 顾问模式的第二种挂法（调研《@rvaniaaaa: 这太他妈的棒了。Anthropic 的文档描述了运行 Opus 最聪明的方法之一》，对应做法 F2a）**
-
-可当证据、可照做的操作性内容：
-
-- 原文给出的配置行：claude -> model sonnet -> advisor opus。
-- 按原文箭头还原的最简尝试形态（命令确切语法待核对）：claude、/model sonnet、/advisor opus。
-- 一条分工描述：Sonnet 运行会话并编辑代码，Opus 作为顾问介入。
-- 试用与验证方式：挑一个真实的中等复杂度改动任务跑两次——A 组按本条配置（Sonnet 主跑 + Opus 顾问），B 组全程用 Opus（或原本默认方式），任务、提示词、仓库状态保持一致；记录任务是否完成/是否需人工返工、返工轮数、该次会话 token 与费用、复杂决策点上 Opus 被实际调用的次数与效果。
-
-只是作者主张、未经验证：
-
-- 三个模型各做“成本最低的部分”、让贵模型只出现在真正需要它的判断点上，没有配数据、基准、案例或成本对比。
-- “你不再为不需要 Opus 的工作支付 Opus 的价格”是断言，没有量化。
-
-原文自己给出的限制说明与材料局限：
-
-- 推文正文在「Haiku 5.5」处被截断，Haiku 承担哪类工作、怎么配置都没写；「Haiku 5.5」指模型版本还是别的也无法确认。
-- 没有给出 Anthropic 文档链接、版本号或确切命令语法，本手册无法保证照抄能跑通。
-- 文中出现的模型名（Sonnet、Opus、Haiku 5.5）与文档地址均无法从给定材料中验证，本手册不对其真实性做判断。
-- 适用条件：已在用 Claude Code，账号允许在 Sonnet/Opus 等模型间切换，对成本敏感、以代码编辑为主要任务；若顾问触发过于频繁，成本优势可能被吃掉；触发过少，复杂改动的质量可能下降。
-- 可核实的互动量：120 赞、13 次转发、17 条回复。
-- 调研结论：建议在 Claude Code 里小范围试一遍“Sonnet 主跑 + Opus 顾问”的分工，用成本和质量双指标对比后再常规化；理由是原文给出了可直接照做的模型分工配置思路，但推文被截断、命令确切语法和 Haiku 那一环都没写全，不足以直接采纳。在确认真实语法前，不要把这条写进团队默认流程。
-
-**Claude Code 多模型分层的第三种挂法（调研《@sector_sol: 停止支付 opus 来做 haiku 的家庭作业。这个 claude 代码设置简直是黄金。》，对应做法 F2b）**
-
-可当证据、可照做的操作性内容：
-
-- 原文只给出一条启动命令和三条分工，没有更多配置步骤。原文命令：claude --model sonnet --advisor opus。
-- 原文给出的分工：sonnet 5.5 运行主会话并编辑代码；只读 haiku 5.5（此处原文被截断，后续内容缺失）；只有在真正需要决策时才引入 opus。
-- 要照做，先核对 --advisor 是否存在：终端运行 claude --help（或在会话内用 /help）查找该参数；原文没有说明它从哪个版本起可用。
-- 若参数存在，在项目目录用原文命令启动；再按“文件阅读、检索、批量机械修改这类只读/低判断量的活交给 haiku”的方向找等价做法——具体怎么在 Claude Code 里指定 haiku 只读，原文未给出，需自行在版本里找子代理配置或权限只读设置等。
-- 决策点才切 opus；原文只说“只有在真正需要决策时才引入 opus”，没有给出切换判据，需自行定义，例如架构选型、跨模块改动方案、反复失败后的重新规划。
-- 最小试用：挑一个 1–2 小时能做完的真实小任务，用默认模型跑一遍，再用 claude --model sonnet --advisor opus 跑一遍同类任务；每次记录账单/token 消耗、完成所需的重试次数、你手动接手修改的次数、以及“后悔没用 opus”的次数（决策被顾问模型纠正或放行的次数）。
-
-只是作者主张、未经验证：
-
-- 标题“停止支付 opus 来做 haiku 的家庭作业”和“这个 claude 代码设置简直是黄金”都是作者主张，没有数据、案例、账单对比或前后测。
-- 社区验证弱：该条互动为 37 赞、5 转发、10 回复，不足以视为被验证的做法。
-
-原文自己给出的限制说明与材料局限：
-
-- 内容不完整：正文被截断，“围绕这个分工构建其余设置”的后续内容（尤其是 haiku 只读怎么配）缺失，无法据此完整复现。
-- 可核实性存疑：--advisor 参数以及 “sonnet 5.5 / haiku 5.5” 的命名，在给出的材料内都无法核实；若参数不存在，命令不可执行。
-- 隐含前提：成本敏感、按量计费、且 opus 单价明显高于 sonnet/haiku 的 Claude Code 使用场景。这个价格关系在常识层面成立，但原文未给出任何数字。
-- 调研结论：先在本地确认 Claude Code 是否支持 --advisor，再用 claude --model sonnet --advisor opus 做一次分层对照（sonnet 主会话、opus 只在决策点介入、haiku 承担只读杂活），验证成本与返工率是否改善；思路明确可试，但原文只有一条命令加几句分工、正文还被截断，没有任何成本或质量数据，参数与模型名也无法从材料内核实。
-
-**Claude Code 子代理模型固定为 Haiku（调研《@skunzu: 这是一个真正他妈的金矿》，对应做法 F3）**
-
-可当证据、可照做的操作性内容：
-
-- 启动命令：CLAUDE_CODE_SUBAGENT_MODEL=haiku claude。
-- 原文声称同时运行 Sonnet 5.5、Haiku 5.5、Opus 5.5，让每个模型只做最擅长的任务；但只给出子代理模型这一个配置。
-- 最小试用与验证方式：选 5–10 个有代表性的 Claude Code 任务，同一提示词分别跑默认配置与设置该变量的配置；记录总 token 或费用、任务完成率、输出被人工修改的比例、返工次数、延迟和主观质量评分。
-
-只是作者主张、未经验证：
-
-- “更好的输出，消耗的 token 少得多”没有对比数据、任务案例或评测方法。
-- 原文称“Anthropic 刚刚分享”，但没有给官方文档链接或完整示例。
-
-原文自己给出的限制说明与材料局限：
-
-- 原文只给了一条环境变量，没有说明主模型如何设为 Sonnet 或 Opus、三类任务如何划分、子代理如何触发；不能把这一条命令等同于完整三模型协作方案。
-- 原文出现 Sonnet 5.5、Haiku 5.5、Opus 5.5 的名称，但材料中没有版本说明或官方来源，需先确认环境是否支持。
-- CLAUDE_CODE_SUBAGENT_MODEL 没有给版本要求，需自行确认。
-- 适用条件：使用 Claude Code、任务可拆出子代理、愿意用较弱模型处理子任务；对质量要求高且不能接受子代理降级的任务需谨慎。
-- 调研结论：可小范围试——先用 CLAUDE_CODE_SUBAGENT_MODEL=haiku claude 做一次 token 与质量的对照，若 token 明显下降且质量不下降或可接受，再考虑日常使用；否则只对低风险子任务使用。
-
-**model-relay（调研《cablate/model-relay》）**
-
-可当证据、可照做的操作性内容：
-
-- 定位：Claude Code 插件，本机 127.0.0.1:8950 上的轻量路由守护进程；按窗口/会话切模型，按 matchModels + ANTHROPIC_DEFAULT_*_MODEL 路由 haiku/sonnet/opus 别名请求，动态注册 model-relay:<name> 子代理类型，429 自动故障转移，provider 重试。
-- 安装：claude plugin marketplace add cablate/model-relay、claude plugin install model-relay@model-relay。
-- 配置：/provider setup、/provider setup use deepseek for haiku、/provider init；手动路径用 node tools/setup.mjs add <name> --preset <preset> --model <model id> --token env:<VAR>，且要在插件安装目录里跑。
-- 自检：/provider doctor --ping；doctor 默认只报告，--fix 才修，--json 给 fix 与 needsConsent。
-- alias：node tools/setup.mjs alias、alias haiku backup、alias haiku claude、alias subagent sonnet；settings.json 写 env.ANTHROPIC_DEFAULT_HAIKU_MODEL = "your-model-id[1m]"，model-relay.json 给 providers.backup.matchModels 加 "haiku"。
-- 子代理：providers.<name>.agent 的 description / effort / maxTurns；实测限制 permissionMode、initialPrompt、memory。
-- 429 故障转移：failover.enabled 默认 true；failover.chain 默认空；failover.cooldownMs 默认 600000（10 分钟，允许 60000–7200000）；retry.attempts 默认 3（0 = 无限重试）；retry.delayMs 默认 2000；retry.backoff 默认 2；retry.maxDelayMs 默认 10000；retry.failover 默认 false；429 后钉住会话 7 天，冷却后新会话回 Claude。
-- statusline：~/.claude/model-relay-status/<session id>，一行 kind<TAB>label；kind 为 claude / pinned / failover / limit / offline / direct；一周没更新会被删。
-- proxy：node tools/setup.mjs proxy enable --go、rc、proxy disable --go；HTTPS_PROXY 写进 settings.json 的 env，Claude Code 跑的命令也会走 relay 当盲隧道；proxy disable --go 可逆，旧 settings 保留为 settings.json.model-relay-backup，但已在 proxy 模式的会话要重启才能恢复。
-- 升级：0.6 及更早版本要 /provider setup upgrade my model-relay config 或 node tools/setup.mjs migrate → migrate --go → /provider restart；0.7+ 只读 "format": 2。
-- 前提：Node.js 20+，Claude Code 2.1.287+（作者在 Node.js 22.23.2 与 Claude Code 2.1.306 上测过）；provider 必须能接 Anthropic /v1/messages；只会 OpenAI Chat Completions 的服务需要本地翻译层。
-
-只是项目自述、未经验证的主张：
-
-- 按窗口/别名路由、429 故障转移、子代理类型、statusline 这些能力有命令和配置可照做，但给定调研没有给出成本、质量、稳定性或用户案例数据。
-- “单人本地守护进程，不是给整个组织用的多租户云代理”是作者自己的定位；多租户场景作者说应该用 LiteLLM。
-
-原文自己给出的限制说明与材料局限：
-
-- 本次调研正文在“对应研究问题”处被截断（停在“Agent 类型 model-rela”），没有完整问答与效果数据。
-- 所有 provider 必须能接 Anthropic /v1/messages；只会 OpenAI Chat Completions 的服务需要本地翻译层。
-- 环境变量必须在启动 Claude Code 前设好；在已跑着 Claude Code 的 shell 里 export 看不到。
-- 手动路径的 node tools/setup.mjs 要在插件安装目录里跑；在别处要用完整路径。
-- proxy 模式下 router 停了 Claude Code 连不上，Claude Code 跑的命令也会走 relay 当盲隧道；proxy disable 后已在 proxy 模式的会话要重启才能恢复。
-- 升级 0.6 及更早版本要迁移，否则后台旧 router 会一直跑旧代码。
-- 调研结论：如果你长期在 Claude Code 里工作，可以小范围试用：先只把 haiku 这类子任务和 429 故障转移接到一个备用 provider，用 /provider doctor --ping 确认链路通，再按窗口逐步放开。理由是 README 给出了可直接复制的安装、配置和自检命令，并有默认保守的开关；但它仍是单人用的本地守护进程，缺少效果数据，先小范围试、别急着全量替换。
-
-**材料边界**
-
-- 七个项目、F3 这条推文和 model-relay 的材料都未说明可以互相集成；同时安装或叠加配置时不要假设请求一定经过你以为的那一层。
-- 所有效果数字都需要自测；本手册只把可复制的命令、配置和提示词当作操作依据，把项目自述数字和作者主张当作待验证信息。
-- model-relay 的调研正文不完整，本手册只采用其中可复制的安装、配置、自检和默认值；没有把它写成已验证的成本/质量方案。
+**材料边界**：所有效果数字都需要自测；本手册只把可复制的命令、配置和提示词当作操作依据，把项目自述数字和作者主张当作待验证信息。七个项目、F3 这条推文、model-relay 和 cedr 的材料都未说明可以互相集成；同时安装或叠加配置时不要假设请求一定经过你以为的那一层。
 
 ## 依据的调研
 
@@ -1177,3 +1030,4 @@ node tools/setup.mjs rc
 - [@skunzu: 这是一个真正他妈的金矿](../research/radar/2026-10-22/5773-item.md)：值得一试，可小范围试：用 CLAUDE_CODE_SUBAGENT_MODEL=haiku 启动 Claude Code，把子代理固定为 Haiku，并对比 token 消耗与输出质量；但原文只给了一条环境变量，没有给出 Sonnet、Opus、Haiku 的完整分工和触发方式，不能当作完整多模型方案照搬。
 - [cheaper-inference/OmniRoute](../research/radar/2026-10-22/5842-cheaper-inference-omniroute.md)：值得一试，建议小范围试：在本地启动 OmniRoute，把 Claude Code 或 Cursor 的 base URL 指向 http://localhost:20128/v1，模型用 auto/subscription 或 auto/coding 跑一到两周，对比中断次数、单位任务 token 成本和 p95 延迟，再决定是否常态化。理由是它给出了可照做的接入方式与回退/路由配置，但省 token、免费额度等关键数字均为项目自述，且依赖第三方 provider 条款，必须先自测。
 - [cablate/model-relay](../research/radar/2026-10-23/6217-cablate-model-relay.md)：值得一试，如果你长期在 Claude Code 里工作，可以小范围试用：先只把 haiku 这类子任务和 429 故障转移接到一个备用 provider，用 /provider doctor --ping 确认链路通，再按窗口逐步放开。理由是 README 给出了可直接复制的安装、配置和自检命令，并有默认保守的开关；但它仍是单人用的本地守护进程，缺少效果数据，先小范围试、别急着全量替换。
+- [Sheernox/cedr](../research/radar/2026-10-30/8398-sheernox-cedr.md)：值得一试，可以用小范围试点的方式接入 cedr：先只做“按工作类型路由、记录结果”和“把 skill/MCP 版本固定进锁文件”两件事，再考虑多厂商评审门禁；理由是 README 给出了可直接照做的安装命令、routes.toml 样例、statusline 配置和完整命令表，但项目处于 preview 阶段、缺少任何效果数据，暂不宜直接定为团队标准。
