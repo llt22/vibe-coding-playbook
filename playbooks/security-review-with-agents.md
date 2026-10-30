@@ -1,10 +1,10 @@
-# 先让 agent 建模威胁，再收窄攻击面，改完还要给补丁猎回归
+# 让 AI 安全评审留下可复核的证据链
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：让 agent 参与安全工作时，产出必须是带可核验证据的候选清单而不是结论：先划清范围与威胁，再收窄真实可达的攻击面，最后证明补丁既修好了 bug 又没引入回归。
-> 先试这一步：挑一个非核心、可只读暴露的仓库，按做法 A 装好 threat-model skill，跑一次 `/threat-model quick <你的架构>`，然后从报告里随机抽 20 条结论，逐条核对它引用的文件和行号是否真实存在、是否支持该结论。
-> 最近修订：2026-10-29
+> 解决的问题：大型代码库的安全评审常常没有范围、可达性证据和修复复测，本手册给出一套从威胁建模、攻击面收窄到补丁回归与本地证据账本的组合流程。
+> 先试这一步：先拿一个非核心、可只读暴露的仓库跑一次只读威胁建模或 PandaWard 被动扫描，并抽查 20 条结论的文件/行号或证据是否真实成立。
+> 最近修订：2026-10-30
 
 ## 解决什么问题
 
@@ -14,9 +14,11 @@
 2. **攻击面本身。** 某些代码在发布默认配置下就能被未认证的人走到，却没有任何默认功能真正使用它；某些敏感逻辑运行在认证、点击或协议状态转换之前；还有些配置单独看都合理，组合起来却静默关闭了安全控制。
 3. **修复副作用。** AI 或工程师修一个已报告 bug 时，可能引入回归、不完整修复，或只修了症状。
 
-这篇手册把三套流程接起来：先用威胁建模划清范围、列出威胁与已有控制，得到一份待人工核验的候选清单；再用攻击面三遍法找并收窄可达路径；最后用“三步证明 + 回归猎取”验证补丁没有引入新缺陷。贯穿始终的纪律只有一条：**每一步的结论都要落到可核验的证据上**——威胁要带文件和行号，默认行为变没变要看测试差异是否为 0，回归要带 live PoC，产不出 live PoC 的步骤一律记为 inconclusive。
+此外，扫描结果和修复状态如果只留在会话里，无法复测、无法审计，也会让前三层的工作失去闭环。
 
-三份材料的可复制程度不一样：威胁建模有公开的安装命令、调用语法、产物约定和审阅清单（但作者自述提示词仍是草稿，且没有任何效果数据）；攻击面与回归猎取两份调研都明确没有公开完整 skill、提示词、安装命令和 schema。所以整体上这是一套需要人工复核的流程，不是一键工具。
+这篇手册把四套流程接起来：先用威胁建模划清范围、列出威胁与已有控制，得到一份待人工核验的候选清单；再用攻击面三遍法找并收窄可达路径；用“三步证明 + 回归猎取”验证补丁没有引入新缺陷；并用 PandaWard 这类本地证据账本把被动扫描、人工 triage、修复复测和 CI 门禁串起来。贯穿始终的纪律只有一条：**每一步的结论都要落到可核验的证据上**——威胁要带文件和行号，默认行为变没变要看测试差异是否为 0，回归要带 live PoC，产不出 live PoC 的步骤一律记为 `inconclusive`，finding 要有账本和复测记录。
+
+四份材料的可复制程度不一样：威胁建模有公开的安装命令、调用语法、产物约定和审阅清单（但作者自述提示词仍是草稿，且没有任何效果数据）；攻击面与回归猎取两份调研都明确没有公开完整 skill、提示词、安装命令和 schema；PandaWard 有公开插件和 CLI 命令，但项目仍是 alpha，适配器未验证，内置规则对 Java 注入基准为 0.00，且没有独立评测。所以整体上这是一套需要人工复核的流程，不是一键工具，也不能把任何一份报告当成安全结论。
 
 ## 适用与不适用
 
@@ -28,15 +30,17 @@
 - 有可复现的 bug 报告或待审查的 PR diff；有安全工程师能复核威胁模型、动态 trace、live PoC、补丁和影响范围。
 - 有（或愿意补）项目专属的威胁模型与打补丁指南；攻击面材料的语言范围覆盖 C、C++、Java、PHP、Python，可作参考。
 - 手上有一个非核心、可只读暴露的仓库，用来试跑和对比基线。
+- 做法 D 额外适用：已安装 Claude Code；想先建立本地 finding 账本、人工 triage、修复复测和 CI new-only 门禁；有可选 scanner（gitleaks、semgrep、osv-scanner、trivy、apktool、MobSF、ZAP 等）；如要做网络测试，有书面许可和能在交互终端批准 scope 的人；移动端检查有 emulator 或已启动 simulator。
 
 **不适用：**
 
 - 代码库无法构建、无法动态 trace，或无法提供 live 接口（威胁建模本身可以在只读仓库上跑，但它只能给候选清单，无法替代后两步的验证）。
 - 没有稳定测试基线，改完无法判断默认行为是否变化。
 - 没有人能做安全复核和最终裁决，只能让 agent 自动改代码、自动报回归、自动批准修复。
-- 期望直接复制现成 skill、安装命令、提示词或 schema。**注意差别**：做法 A 的安装命令与调用语法在 README 里是公开的，可以照抄；做法 B、C 没有公开命令和 schema，只能手工照流程做，不要臆造。
-- 深度依赖 Codex 生态；其他 agent 环境需要自行复刻流程。
+- 期望直接复制现成 skill、安装命令、提示词或 schema。**注意差别**：做法 A 的安装命令与调用语法在 README 里是公开的，可以照抄；做法 B、C 没有公开命令和 schema，只能手工照流程做，不要臆造；做法 D 有公开插件和 CLI 命令，但仍是 alpha，适配器未验证，不能把自动结果当安全结论。
+- 深度依赖 Codex 生态；做法 D 依赖 Claude Code，其他 agent 环境需要自行复刻流程。
 - 想把威胁模型的结论当合规依据或“系统已安全”的证明——原文明确写了威胁模型不构成系统安全的证明。
+- 做法 D 不适用：想把内置规则结果当完整安全评估；内置规则对 Java 注入基准为 0.00，注入类问题应交给 Semgrep 等数据流工具；没有书面许可就想发网络流量；想在真实设备上做移动端运行时检查；Windows 与 macOS/Linux 插件装错。
 
 ## 前置条件
 
@@ -47,7 +51,8 @@
 - 一名能判断威胁前提是否成立、已有哪些控制、如何按风险排序的安全工程师，同时能复核 live PoC 和裁决回归。
 - 做威胁建模额外需要：macOS 或 Linux 本地 shell（用于 clone 与建软链）、agent 支持 skills 目录或项目级指令文件、明确的决策目标与范围外声明、已有设计文档与历史威胁模型（做增量评审时）。
 - 做回归猎取额外需要：`THREAT_MODEL.md`、`PATCHING_GUIDELINES.md`（或 `AGENTS.md`）、固定 I/O schema、明确的“回归”定义与裁决门槛，以及可编排的 agent 环境（Codex 或等价环境）。
-- 如果暂不装任何插件，把做法 B、C 的步骤当作 agent 提示词/流程手工执行。
+- 做 PandaWard 额外需要：Claude Code；项目读权限和 `.pandaward/` 配置写入；本地 SQLite ledger；可选 scanner（gitleaks、semgrep、osv-scanner、trivy、apktool、MobSF、ZAP 等）；Go 安装方式需要 Go 1.26+，release 二进制无运行时依赖；网络测试需要填好的 `scope.yaml` 和交互终端批准，`staging-active` 还需要 ZAP 和 Java 17+；授权检查需要测试身份的环境变量；CI 需要 pinned action 和 `contents: read`、`security-events: write`；移动端需要 emulator/simulator 与 adb/simctl。
+- 如果暂不装任何插件，把做法 B、C 的步骤当作 agent 提示词/流程手工执行；做法 D 也可以只用 CLI 的 `assess`、`findings`、`fix-plan` 起步，但网络测试仍必须走 scope 人工批准。
 
 ## 操作步骤
 
@@ -56,11 +61,13 @@
 - **做法 A：威胁建模。** 适合还没有共同语言的时候——需要先说清范围、信任边界、关键资产和“什么不算漏洞”。产物是结构化候选清单，不做动态验证。
 - **做法 B：攻击面三遍法。** 适合时间、人力充足，目标是系统性缩减攻击面。按默认配置可达性、早期可达性、配置交互依次跑三遍。
 - **做法 C：修复 bug 并猎取回归。** 适合已有可复现 bug 报告或待审查 PR diff，目标是让补丁有证据，并检查这次改动还弄坏了什么。
+- **做法 D：PandaWard 本地证据化安全评估。** 适合先建立 finding 账本、人工 triage、修复复测和 CI 门禁，再决定是否启用人工批准的运行时测试。它默认只读仓库，不运行安装脚本、Makefile 或构建，不跟随符号链接，也不向目标发流量；需要联网的测试必须有人工填写并在交互终端批准的 scope manifest，AI agent 不能批准。项目仍是 alpha，适配器未验证，内置规则对 Java 注入基准为 0.00，不能把结果当安全结论。
 
 **组合用法与边界：**
 
 - 做法 A 的产物（`SYSTEM_UNDER_REVIEW.md` 里的范围、信任边界、关键资产）可以作为做法 B 清点入口与安全相关配置时的上下文；做变更评审时，A 的 `change` 模式可以先用一轮，再用 C 的回归猎取对具体补丁要 live PoC。*（这条衔接是本手册的整合建议，三份原文都没有验证过它带来的增益，试点时请自行对照。）*
-- 做法 A 与 B、C 不能互相替代：A 说“这里可能有问题”，仍要 B 的动态 trace 或 C 的 live PoC 才算确认。
+- 做法 D 的 finding 账本和复测记录可以作为 A/B/C 的候选清单与修复状态底账；A 的范围声明可以帮 D 判断哪些目录和服务优先；C 修完补丁后，D 的 `retest` 可以确认“不再看到该问题”，但它不等于 C 的回归猎取，也不替代 live PoC。*（D 与 A/B/C 的拼接同样是本手册的整合建议，PandaWard 原文没有验证这种组合的增益。）*
+- 做法 A 与 B、C 不能互相替代：A 说“这里可能有问题”，仍要 B 的动态 trace 或 C 的 live PoC 才算确认。D 也不能替代 B 的动态 trace 或 C 的 live PoC；它擅长的是账本、复核编排、复测和门禁。
 - 当 B 产出 gate 补丁，用 C 的回归猎取复核；当 C 修完一个 bug，用 B 的配置组合/早期可达性做横向搜索。两者冲突时：B 要求默认配置测试差异为 0；C 要求每条回归有 live PoC。测试全绿不等于无回归，仍需枚举调用者并在 live deployment 上复现候选回归。
 - 无论选哪种，三遍法每遍让 agent 从空上下文开始，只带上一遍的短上下文，避免上下文污染；回归猎取的重放步骤也要用全新上下文的 agent。
 
@@ -304,6 +311,199 @@ open questions（未决问题）
 review the PR for regressions
 ```
 
+### 做法 D：PandaWard 本地证据化安全评估
+
+#### D1. 安装 Claude Code 插件
+
+前提：已安装 Claude Code；macOS/Linux 与 Windows 只能选一个插件。
+
+```text
+/plugin marketplace add ratomirjovanovic/pandaward
+/plugin install pandaward@pandaward            # macOS and Linux
+# 或
+/plugin install pandaward-windows@pandaward    # Windows
+```
+
+也可以从终端执行：
+
+```sh
+claude plugin marketplace add ratomirjovanovic/pandaward
+claude plugin install pandaward-windows@pandaward   # Windows；macOS/Linux 用 pandaward@pandaward
+```
+
+安装后重启 Claude Code，`/mcp` 应列出 `plugin:pandaward:pandaward` 为 connected。更新时执行：
+
+```sh
+claude plugin marketplace update pandaward
+claude plugin update pandaward-windows@pandaward   # 或 pandaward@pandaward
+```
+
+预期结果：插件连接成功；后续命令通过 MCP 调用本地 PandaWard。
+
+#### D2. 在项目里一键启动完整评估
+
+前提：Claude Code 已连上 PandaWard MCP。
+
+```text
+/pandaward:start
+```
+
+README 说明该命令会扫描项目、让 specialist reviewers 复核自动化无法判定的部分、做 triage、生成修复计划并写报告，带实时 checklist；结束时问一个问题：修复计划、记录 triage 结果、安装缺失 scanner，然后按选择执行，并在每次修复后复测。后续代码变化时会在会话中自行重测。改变 finding 状态的命令仍会显示确认提示；网络测试始终需要本人在终端批准 scope。
+
+也可单独调用技能：
+
+```text
+/pandaward:init
+/pandaward:scan
+/pandaward:review
+/pandaward:fix-plan
+/pandaward:retest
+/pandaward:report
+/pandaward:status
+```
+
+预期结果：`.pandaward/` 配置与本地 SQLite ledger；finding 跨运行指纹化，只有复测不再看到问题时才从 `OPEN` 变为 `REMEDIATED`；文件移动或改名保留 finding ID 和人工 triage 状态；报告支持 HTML、Markdown、JSON、SARIF、CSV。
+
+#### D3. 或者用 CLI 跑同一流程
+
+前提：Go 安装方式需要 Go 1.26+；release 二进制无运行时依赖。
+
+macOS/Linux 可用 brew：
+
+```sh
+brew tap ratomirjovanovic/pandaward https://github.com/ratomirjovanovic/pandaward && brew install ratomirjovanovic/pandaward/pandaward
+```
+
+Windows 可用 scoop：
+
+```powershell
+scoop bucket add pandaward https://github.com/ratomirjovanovic/pandaward; scoop install pandaward/pandaward
+```
+
+或用 Go：
+
+```sh
+go install github.com/ratomirjovanovic/pandaward/cmd/pandaward@latest
+```
+
+在项目目录运行：
+
+```sh
+pandaward assess          # init、带进度扫描、报告和摘要
+pandaward findings        # 查看 finding
+pandaward fix-plan        # 生成有序修复步骤
+```
+
+预期结果：`assess` 完成 init、带进度扫描、报告和摘要；`findings` 可查看 finding；`fix-plan` 生成有序修复步骤。
+
+#### D4. 人工记录判定，不要让模型直接改状态
+
+前提：已有 finding ID。
+
+```sh
+pandaward findings false-positive PW-0007 --by "Jane" --note "constant input, not user controlled"
+pandaward findings accept-risk   PW-0003 --by "Jane" --note "internal tool" --expires 2027-03-01
+pandaward findings apply --file decisions.json --by "Jane"   # 批量，全有或全无
+```
+
+`decisions.json` 是数组，元素含 `finding_id`、`action`、`note`、`expires`；`action` 为 `confirm`、`false-positive`、`accept-risk` 或 `reopen`，`accept-risk` 必须带 `expires`。每个条目写入前都会检查，一条坏条目会拒绝整批。
+
+预期结果：每条假阳性/接受风险都有记录人、备注和必要到期日；批量应用全有或全无。
+
+#### D5. 如要做网络测试，先填 scope 并人工批准
+
+前提：只对有权测试的目标；`staging-active` 需要 ZAP 和 Java 17+；批准必须来自交互终端。
+
+```sh
+pandaward scope init                       # 写入 .pandaward/scope.yaml，初始不可用
+# 填写 owner、书面许可引用、purpose、targets、limits、acknowledged: true
+pandaward scope approve --by "Jane"        # 仅交互终端，绑定文件 SHA-256
+pandaward test --profile production-observe
+pandaward test --profile staging-active    # staging 或本地目标，需要 ZAP
+```
+
+编辑 `scope.yaml` 会使批准失效；批准还绑定项目外的每用户 key，随仓库带来的 scope 或 ledger 不算已批准。引擎最多按配置速率向列出的 origin 发 `max_requests_total` 个 GET，不跟随重定向，连接时检查每个解析地址；loopback、私有、link-local 地址除非 manifest 明确允许本地 fixture，否则拒绝；云 metadata 地址始终拒绝。
+
+授权检查的配置示例：
+
+```yaml
+identities:
+  - {name: alice, tenant: acme, header: Authorization, value_env: PANDAWARD_ID_ALICE}
+  - {name: bob,   tenant: beta, header: Authorization, value_env: PANDAWARD_ID_BOB}
+  - {name: carol, tenant: acme, header: Authorization, value_env: PANDAWARD_ID_CAROL}
+  - {name: alice-logged-out, tenant: acme, header: Authorization, value_env: PANDAWARD_ID_OLD, revoked: true}
+authorization_checks:
+  - {name: acme invoice, kind: object,   method: GET, path: /api/invoices/inv_acme_1, allowed: [alice]}
+  - {name: user admin,   kind: function, method: GET, path: /admin/users,            allowed: [carol]}
+```
+
+凭据只通过环境变量提供，不写进文件；缺少凭据变量会在第一个请求前停止。授权检查只允许 GET 和 HEAD，不改数据、不需要清理；证据只保留状态、大小、content type 和 body hash，不保留 header、body 或凭据。
+
+预期结果：网络测试有书面许可引用、purpose、targets、limits 和 `acknowledged: true`；批准绑定文件 SHA-256；没有交互批准就不发流量。
+
+#### D6. 移动端运行时检查
+
+前提：Android 是可调试测试构建并运行在 emulator 上；iOS 是运行在已启动 simulator 的测试构建，且为 macOS；真实设备会被拒绝。
+
+```yaml
+# .pandaward/config.yaml
+runtime:
+  android_package: com.acme.shop
+  ios_bundle_id: com.acme.shop
+```
+
+```sh
+pandaward test --profile local-runtime
+```
+
+Android 使用 `adb` 的 `emulator-*` serial，并要求 `ro.kernel.qemu=1`；通过 `run-as` 读取 `shared_prefs`，仅对 debuggable 构建有效。iOS 使用 `xcrun simctl get_app_container booted`，只接受 CoreSimulator 内容器，再读 preferences plist。凭据类 key 下非空值记为 K-003 或 L-002，只记录 key 名，不记录值。
+
+预期结果：移动端存储检查只读运行在 emulator/simulator 的测试构建；证据中不出现凭据值。
+
+#### D7. 在 CI 和提交前加门禁
+
+前提：GitHub Actions 需要 `contents: read` 和 `security-events: write`；action 版本 v0.1.3 或更高，SHA 要 pinned。
+
+```yaml
+permissions:
+  contents: read
+  security-events: write
+steps:
+  - uses: actions/checkout@<pinned-sha>
+  - id: pandaward
+    uses: ratomirjovanovic/pandaward@<pinned-sha>
+    with:
+      fail-on: high
+      new-only: "true"
+  - if: always()
+    uses: github/codeql-action/upload-sarif@<pinned-sha>
+    with:
+      sarif_file: ${{ steps.pandaward.outputs.sarif-file }}
+```
+
+`new-only` 会在单独 worktree 扫描 base commit，只对指纹为新的 finding 计数。提交前可用 pre-commit：
+
+```yaml
+repos:
+  - repo: https://github.com/ratomirjovanovic/pandaward
+    rev: v0.2.7
+    hooks:
+      - id: pandaward-system
+```
+
+先在项目里跑一次 `pandaward init`。hook 执行 `pandaward scan --quiet --fail-on high`，存在 open 的 high 或 critical finding 时阻止提交；它扫描工作树，不只扫描 staged 文件。
+
+预期结果：CI 上传 SARIF；`new-only` 只拦新增指纹；pre-commit 在本地阻止 open high/critical。
+
+#### D8. 如不需要自动重测，可在 `.pandaward/config.yaml` 关闭
+
+```yaml
+hooks:
+  auto_retest: false
+```
+
+预期结果：hooks 不再在回合结束时自动跑 changed-only passive retest；需要时手动调用 `/pandaward:retest`。
+
 ## 怎么判断变好了
 
 ### 最小试用方式
@@ -314,11 +514,14 @@ review the PR for regressions
 
 **回归猎取（1–2 天，不必装插件）：** 选一个可构建运行的中等规模仓库，取 5–10 个已合入的历史 bug 修复 PR，其中至少 2–3 个是已知引入过回归的；只为其中 1 个仓库写最小版 `THREAT_MODEL.md` + `PATCHING_GUIDELINES.md`（各 1 页以内）；对每个 PR 按 C6 四段流程跑，全部记录原始证据；再用基线提示词 `review the PR for regressions` 跑同一批 PR；人工对每条“确认回归”和“borderline”判定真伪，与已知历史结论对照；另取 1 个真实 bug 报告跑 patching-bugs 流程，重点验证第三步（回退后必须再次失败）能否被稳定执行。
 
+**PandaWard（一个仓库、一次被动扫描加一轮复测）：** 选一个非核心、可只读暴露的仓库；安装 Claude Code 插件，确认 `/mcp` 列出 `plugin:pandaward:pandaward` 为 connected；先只跑 `/pandaward:start` 或 `pandaward assess` 的被动部分，不做网络测试；人工复核至少 20 条 finding，按 `false-positive`/`accept-risk` 记录判定；挑一条低风险 finding 执行 `fix-plan` 并 `/pandaward:retest`；再在 CI 用 `new-only` 对 base commit 做一次对照。原文未给耗时数据，不要承诺固定天数。
+
 ### 试用周期
 
 - 威胁建模：一次 `quick` + 一次单方法对照 + 一次 `change` 增量，约半天。
 - 攻击面：以“完成一个 pass 并至少确认一个发现”为一个周期；原文没有给出耗时数据，不要按固定天数承诺。
 - 回归猎取：最小试用 1–2 天。
+- PandaWard：以一个仓库、一次被动扫描加一轮复测为一个周期；原文没有给出耗时数据，不要按固定天数承诺。
 
 ### 可观察指标
 
@@ -339,11 +542,22 @@ review the PR for regressions
 
 - 假阳性率（每条被报出的回归里人工判为真的比例，与基线提示词对比）；borderline 比例（被判“有嫌疑但证据不足”的数量，这是主要代价，不能算作成功）；已知回归的召回（那 2–3 个已知回归是否至少被判为 borderline，不接受静默漏过）；证据完备率（报出的每条回归中带 live PoC 且三步证明齐全的比例，原文要求 100%）；人工筛检成本（每个 PR 平均需要人工处理多少条候选）；可重复性（同一 PR 重跑两次，结论是否一致）。
 
+**PandaWard：**
+
+- 证据账本完整率：每个可检查控制项是否有检查方式、脱敏证据和无法判定记录。
+- 人工 triage 记录率：每条 false-positive/accept-risk 是否有记录人、备注，accept-risk 是否有到期日。
+- 复测闭环：修复后有多少 finding 从 `OPEN` 变为 `REMEDIATED`；文件移动/改名后 finding ID 和 triage 状态是否保留。
+- CI 门禁：`new-only` 是否只对新增指纹计数；pre-commit 是否只拦 open high/critical；SARIF 是否成功上传。
+- 误报与接受风险数：人工确认的误报、接受风险、到期需重开的数量。
+- 网络测试合规：scope 是否有书面许可引用、purpose、targets、limits 和终端批准记录；有没有 AI 自行批准。
+- 移动端检查：是否只读 emulator/simulator 测试构建；凭据类 key 是否只记录 key 名、不记录值。
+
 ### 判断改善的最低标准
 
 - **威胁建模**：若“真实且此前未知”的数量不高于人工基线，或证据可核验率偏低（引用不存在、不支持结论），则把 verdict 降为 study，只借鉴它的流程骨架（六阶段 + 证据引用 + 五步审阅 + 只读权限约束），不直接使用这套提示词。
 - **攻击面**：至少一个发现被动态 trace 确认；修复后默认行为测试差异为 0；认证前或默认配置可达的敏感代码明显减少。
 - **回归猎取**：若在 5–10 个 PR 上假阳性率明显低于基线、已知回归无一静默漏过、且人工筛检量可接受，则纳入标准步骤；若 borderline 比例过高或 live deployment 成本压不住，则退回 study，只保留“三步证明”“强制 live PoC”“威胁模型全局注入”这三条可迁移原则。
+- **PandaWard**：若只能得到内置规则结果、没有人工 triage 和复测，或内置规则在 Java 注入基准为 0.00 却仍被当作覆盖证明，则只把 D 当账本/门禁试用，不纳入安全结论。至少一条 finding 经人工确认并完成修复后复测状态变化；CI `new-only` 能只对新增指纹计数；网络测试有书面许可和终端批准记录。
 - **整体**：若无法动态 trace 或测试基线不稳定，则整体降级为人工辅助审查，不采用自动 gate，也不把威胁模型报告当评审结论。
 
 ## 常见坑
@@ -358,7 +572,7 @@ review the PR for regressions
 - **没有 trace 和测试基线就上自动 gate。** 这会导致无法验证可达性，也可能改坏默认行为。原文的效果验证完全依赖动态 trace 与测试套件。
 - **自动采用会改变非默认配置的 gate。** 原文明确要求这类变更交给人类决定。
 - **把配置组合直接当成可利用漏洞。** 部分问题本身不立即可利用，配置组合可能非标准或低频，需要人工判断。
-- **以为三套做法都有现成 skill、命令或 schema 可复制。** 只有威胁建模这一套有公开的安装命令和调用语法；攻击面与回归猎取的完整内容未公开，必须自行编写并人工复核，不要臆造命令行。
+- **以为三套做法都有现成 skill、命令或 schema 可复制。** 只有威胁建模这一套有公开的安装命令和调用语法；攻击面与回归猎取的完整内容未公开，必须自行编写并人工复核，不要臆造命令行；PandaWard 虽有公开命令，但仍是 alpha，适配器未验证。
 - **只跑一遍就想覆盖三类攻击面问题。** 默认配置可达性、早期可达性、配置交互是三类不同问题，应分开跑，每遍用空上下文。
 - **外推自动触发机制。** 原文只说明 skill 会自动跑三遍；威胁建模这边也只是 `change` 以 diff 为触发、六阶段靠文件交接串联，没有任何按时间或状态自动运行的机制，不要自行假设。
 - **只修一个点，不做横向搜索。** 一个 hostname/wildcard 规则在反向 DNS 关闭时与 IP 比较导致 deny 规则 fail open 的模式，在 4 个无关项目中出现；修完一个点后应在同类项目中横向搜。
@@ -371,6 +585,16 @@ review the PR for regressions
 - **用摘要替代原始证据。** 固定 schema 要求 raw evidence，目的是让下一步验证上一步的原始证据，而不是相信总结。
 - **省略 fresh-context 重放。** 原 agent 的上下文偏见可能让同一 PoC 被误判；重放要用全新上下文的 agent。
 - **误以为 patching-bugs 已经过评测。** 原文明确说还在 building an evaluation，只有 regression-hunt 有对比数据；不要把未评测插件当成熟工具直接全量采用。
+- **把 PandaWard 的自动结果当安全结论。** 项目仍是 alpha，适配器未验证，内置规则对 Java 注入基准为 0.00，且没有独立评测；它适合做账本、编排、复测和门禁，不适合当完整安全评估。
+- **让模型直接改 finding 状态。** 假阳性、接受风险、重开和确认都要走人工命令，并把记录人、备注、到期日写进 ledger。
+- **没批准 scope 就发网络流量。** AI agent 不能批准；批准必须来自交互终端，并绑定 `scope.yaml` 的 SHA-256；编辑文件会使批准失效，仓库里带来的 scope 或 ledger 不算已批准。
+- **`accept-risk` 不设到期日。** 命令会校验，`accept-risk` 必须带 `expires`；批量应用是全有或全无，一条坏条目会拒绝整批。
+- **把 D 的 `retest` 当成 C 的回归猎取。** `retest` 只说明复测不再看到该问题；C 仍要求枚举调用者、live PoC、fresh-context 重放和裁决。
+- **只跑内置规则，不接数据流工具。** 注入类问题应交给 Semgrep 等工具；内置规则对 Java 注入基准为 0.00，不能拿它证明注入覆盖。
+- **CI 门禁不 pin SHA 或只扫工作树。** GitHub Action 要 pinned SHA，`new-only` 会在单独 worktree 扫描 base commit；pre-commit 扫描工作树，不只扫描 staged 文件，先跑一次 `pandaward init`。
+- **移动端在真实设备或不可调试构建上跑。** 真实设备会被拒绝；Android 要 emulator 且 `ro.kernel.qemu=1`、debuggable，iOS 要已启动 simulator 和 CoreSimulator 容器。
+- **把凭据写进配置文件。** 授权检查的凭据只通过环境变量提供，缺少变量会在第一个请求前停止；证据只保留状态、大小、content type 和 body hash。
+- **Windows 与 macOS/Linux 插件装错。** macOS/Linux 用 `pandaward@pandaward`，Windows 用 `pandaward-windows@pandaward`，只能选一个。
 
 ## 证据与来源
 
@@ -380,14 +604,17 @@ review the PR for regressions
 
 **回归猎取**来自本次调研《AI agent fixed the bug, but what else did it change?》：复核 130+ 个 PR 中确认 21 个回归（16 个功能性、1 个性能、4 个构建/测试），没有一个是破坏安全防护的；单次运行 58 个候选里确认 21 个，约 36% 精确率，作者自评“review was noisy”；regression-hunt 相比基线提示词 `review the PR for regressions` 假阳性少 25%，95% 置信区间 14%–38%；案例点名 Scapy、GPAC、liboqs、validator.js。patching-bugs 尚未做评测，原文明确说“we're building an evaluation”，只有 regression-hunt 有对比数据。
 
-**只是作者主张、无数据支撑的部分**：减少攻击面能一次性降低所有未知漏洞的风险；OpenSSH 这种高强度审计代码仍有问题说明方法有普遍价值；四原则（极简指导、模块化步骤、严格 schema、每条断言都要 live PoC）的有效性；“不变量引导修复能泛化到同类变体”；“文件越具体输出越好”；grim-prompter 那套六阶段骨架和五步审阅清单的实际收益。
+**PandaWard** 来自本次调研《ratomirjovanovic/pandaward》。原文给出的具体事实：本地 Go CLI 加 Claude Code 插件；默认只读仓库，不运行安装脚本、Makefile 或构建，不跟随符号链接，也不向目标发流量；需要联网的测试必须有人工填写并在交互终端批准的 scope manifest，AI agent 不能批准；本地 SQLite ledger 记录每个可检查控制项、检查方式、脱敏证据和无法判定的控制项；finding 跨运行指纹化，只有复测不再看到问题时才从 `OPEN` 变为 `REMEDIATED`，文件移动或改名保留 finding ID 和人工 triage 状态；输出支持 HTML、Markdown、JSON、SARIF、CSV；有插件安装、`/pandaward:start`、分步 skill、CLI、人工 triage、scope 批准、移动端检查、GitHub Actions 和 pre-commit 的完整命令。调研结论是建议小范围试用：项目仍是 alpha、适配器未验证、内置规则对 Java 注入基准为 0.00，不能把结果当成安全结论；材料来自仓库 README，未提供实际运行记录或独立评测。
 
-**本手册的整合主张（三份原文都未验证）**：把威胁模型的 `SYSTEM_UNDER_REVIEW.md` 当作攻击面清点的上下文；用 `change` 模式先扫 diff、再用 regression-hunt 做 live 验证。这两处属于流程拼接假设，试点时请留出对照。
+**只是作者主张、无数据支撑的部分**：减少攻击面能一次性降低所有未知漏洞的风险；OpenSSH 这种高强度审计代码仍有问题说明方法有普遍价值；四原则（极简指导、模块化步骤、严格 schema、每条断言都要 live PoC）的有效性；“不变量引导修复能泛化到同类变体”；“文件越具体输出越好”；grim-prompter 那套六阶段骨架和五步审阅清单的实际收益；PandaWard 作为证据账本/流程编排的可用性、适配器效果和门禁收益。
 
-**局限**：三份材料都是初始研究总结或 README，不是完整论文；攻击面与回归猎取的 skill/插件安装命令/schema 定义未公开；威胁建模的提示词自述为草稿且无任何效果数据；结果依赖动态 trace、live deployment 和测试套件；原文未给误报率、成本、耗时（回归猎取给了假阳性对比但样本有限）；部分问题本身不立即可利用，配置组合可能非标准或低频；非默认配置变更需要人类判断；回归猎取的严格证据要求会带来召回下降（borderline 比例上升）；深度绑定 Codex 生态，其他 agent 需自行复刻流程。
+**本手册的整合主张（原文未验证）**：把威胁模型的 `SYSTEM_UNDER_REVIEW.md` 当作攻击面清点的上下文；用 `change` 模式先扫 diff、再用 regression-hunt 做 live 验证；把 PandaWard 的 finding 账本作为 A/B/C 的候选清单与修复状态底账；用 PandaWard 的 `new-only` CI 门禁作为 B 的补充；用 PandaWard 的 `retest` 作为 C 的预检。这些都属于流程拼接假设，试点时请留出对照。
+
+**局限**：四份材料都是初始研究总结或 README，不是完整论文；攻击面与回归猎取的 skill/插件安装命令/schema 定义未公开；威胁建模的提示词自述为草稿且无任何效果数据；PandaWard 仍是 alpha，适配器未验证，内置规则对 Java 注入基准为 0.00，且没有独立评测；结果依赖动态 trace、live deployment 和测试套件；原文未给误报率、成本、耗时（回归猎取给了假阳性对比但样本有限）；部分问题本身不立即可利用，配置组合可能非标准或低频；非默认配置变更需要人类判断；回归猎取的严格证据要求会带来召回下降（borderline 比例上升）；深度绑定 Codex 生态，PandaWard 绑定 Claude Code，其他 agent 需自行复刻流程。
 
 ## 依据的调研
 
 - [Using Claude to reduce the attack surface of code](../research/radar/2026-10-21/5617-using-claude-to-reduce-the-attack-surface-of-code.md)：值得一试，建议按原文的三遍法，在一个可构建、可动态运行且有测试基线的代码库上小范围试用：先清点入口与配置，再查默认配置可达性、认证前/协议状态前可达性、配置组合，所有发现用动态 trace 确认，默认配置 gate 必须通过项目测试与黑盒回归且结果不变。理由是流程具体且有 OpenSSH 案例和批量数据支撑，但完整 skill、提示词与配置尚未公开，需要人工复核。
 - [AI agent fixed the bug, but what else did it change?](../research/radar/2026-10-22/5718-ai-agent-fixed-the-bug-but-what-else-did-it-change.md)：值得一试，先在一个可构建运行、有真实 bug 报告的仓库里补齐 THREAT_MODEL.md 与 PATCHING_GUIDELINES.md，再照原文流程对历史 PR 跑一遍：regression-hunt 的“枚举→在真实部署上复现→用全新上下文的 agent 重放→裁决”和 patching-bugs 的“三步证明+不变量引导修复”。原文给出了可照做的步骤、门槛和小样本数据（假阳性比基线低 25%），但安装命令、schema 定义和评测集未公开，且确认率与召回存在取舍，适合小范围试而非直接采用。
 - [jmanico/grim-prompter](../research/radar/2026-10-29/8075-jmanico-grim-prompter.md)：值得一试，按 README 把 threat-model skill 链接进 Claude Code 或 Codex，先在一个非核心仓库上用 quick 或单一方法跑一次威胁建模，产出只当作待人工核验的候选清单使用；因为原文给出了可照做的安装命令、调用语法、产物约定和审阅清单，但作者自述提示词仍是草稿，而且没有给出任何效果数据。
+- [ratomirjovanovic/pandaward](../research/radar/2026-10-30/8580-ratomirjovanovic-pandaward.md)：值得一试，建议在代码安全评估这一垂直场景小范围试用：用 Claude Code 安装 PandaWard 插件，先跑被动扫描、证据账本和修复复测，再决定是否启用人工批准的运行时测试。理由是有完整的安装、运行、复核、回归和证据校验步骤，但项目仍是 alpha、适配器未验证、内置规则对 Java 注入基准为 0.00，不能把结果当成安全结论。
