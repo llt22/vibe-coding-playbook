@@ -1,15 +1,15 @@
-# 让多个 AI agent 并行干活，但只接受可验证的结果
+# 把多个编码 agent 编成有频道和审批闸门的团队
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：把“不满意就重问一次”升级成一套可执行流程：任务写清、并行分工、独立验证、合入门禁、成本检查、注意力路由、共享账本核销、跨会话交接，并在探索卡住时按预算止损。
-> 先试这一步：先挑一个真实任务，写成独立文件，并用一条可执行验证命令或独立 verifier 决定是否接受结果；再按处境从做法 A–AD 选一条最小试用。
-> 最近修订：2026-10-30
+> 解决的问题：让多个 AI agent 并行干活时，分工写进频道、交接留痕、写操作先过人这一关，接受与否由测试、独立 verifier 或人决定，而不是听 agent 说自己做完了。
+> 先试这一步：先在一个低风险仓库里建一个频道，放 2–3 个代理（一个修、一个评审），只接一个只读连接器，把 merge / post / email / delete 全部设为人工审批，跑一次真实小任务，并与单人 Claude Code 做同题对照。
+> 最近修订：2026-10-31
 
 ## 解决什么问题
-单个 AI 回答或单条串行 agent 会话，交付的往往是你没有验证过的结果。手册把“不满意就重问一次”升级成一套可执行流程：任务写清、并行分工、独立验证、合入门禁、成本检查、注意力路由、共享账本核销，并在探索卡住时按预算止损。做法 A–AD 覆盖从单次答案竞赛到多项目控制台、文件状态 + 心跳编排、多 agent 共享账本、长时运行骨架，以及跨会话/跨人的消息交接。共同底线是：并行只负责产出，接受与否必须由测试、独立 verifier、校验器、接收人本人确认或人工复核决定；消息层只负责把问题送到，不负责证明结果正确。
+单个 AI 回答或单条串行 agent 会话，交付的往往是你没有验证过的结果。手册把“不满意就重问一次”升级成一套可执行流程：任务写清、并行分工、独立验证、合入门禁、成本检查、注意力路由、共享账本核销，并在探索卡住时按预算止损。做法 A–AE 覆盖从单次答案竞赛到多项目控制台、文件状态 + 心跳编排、多 agent 共享账本、长时运行骨架、跨会话/跨人的消息交接，以及把多个编码 agent 编成有频道、有审批闸门的团队。共同底线是：并行只负责产出，接受与否必须由测试、独立 verifier、校验器、接收人本人确认或人工复核决定；消息层和编排层只负责把问题送到、把人叫来，不负责证明结果正确。
 
-做法 A–AD 概览：
+做法 A–AE 概览：
 - A：把不满意的回答送进锦标赛（arena-skill）。
 - B：并行子代理 + 测试合入闸门（clodfarm）。
 - C：多 harness、多座位的统一编排与恢复（openrig）。
@@ -40,6 +40,7 @@
 - AB：用共享账本 + “预约—直取—本人确认”核销协议，压掉多 agent 重复认领与错发（来自 Minecraft 蜂群实验）。
 - AC：给长时运行的 agent 骨架配齐六类能力与三件套（agent 目录、共享沙盒、DM），把失败写进日志，并显式指定角色。
 - AD：用 Imbo 在多个编码 agent 会话、机器或人之间发消息、交接和群组同步，把消息送进正在工作的会话并唤醒空闲会话（先在非生产、只读任务上试）。
+- AE：把多个编码代理编成有频道、有角色、按代理授权工具的团队，写操作先过人工审批（Tucano；先一个频道、2–3 个代理、一个只读连接器）。
 
 ## 适用与不适用
 **适用（按处境选路径）**
@@ -75,6 +76,7 @@
 | 多个 agent（或人 + agent）会重复认领同一件事、同一份稀缺资源被多次领走 | AB（先在一件会被重复认领的事上跑两周） |
 | 想搭或体检一个长时运行、要读写共享产物、要能互相发消息的 agent 骨架 | AC（先 5 个 agent、30 分钟） |
 | 两个编码 agent 会话、两台机器或两个人之间需要提问、交接或群组同步，且消息要落进正在运行的会话、还能唤醒空闲会话 | AD（先在非生产、只读任务上试 1–2 周） |
+| 手上有 2–3 个编码代理（Claude Code / Codex / OpenCode / Pi），想让它们在频道里互相 @ 交接与评审，且合并、外发、删除这类写操作必须先经人审批 | AE（先一个频道、2–3 个代理、一个只读连接器） |
 
 **不适用（关键边界）**
 - A：任务描述本身就含糊，100 个 agent 会一起含糊；不愿承担 token 成本不要用。
@@ -107,6 +109,7 @@
 - AB：协作对象只有一个 agent、或没人会因为重复认领而损失，不要用；共享存储对某个 agent 只读时协议会退化成空写；真实工作里失败有成本，不能照搬游戏里“死亡只掉装备”的宽松设定。
 - AC：目标环境没有可脚本化 API、也没有共享文件系统时不要硬套；50 个 agent 的规模与约 5,900 条消息意味着很高成本，原文没给成本数据，不要直接照规模复刻；游戏里学到的是策略倾向，不是可直接迁移的行为规范。
 - AD：Windows 不支持；项目很新（31 stars，0.x）；默认要登录 imbo.dev 托管服务，会话元数据经第三方；安装器会给 Imbo 工具免逐次审批，且 agent 可能不先问你即回复；不能接受供应链风险、不能做边界测试，或需要稳定生产规范，不要用；它只是胶水层，不能替代测试、独立 verifier 或合入门禁。
+- AE：不在受支持的桌面系统上（macOS Apple silicon、Linux x64/ARM64、Windows 10/11 x64），或一个 harness 都没装好并登录，不要用；Windows 安装包未代码签名，公司电脑可能被 IT 阻止；只有项目自述、没有独立效果数据，不要把它当高安全场景的唯一控制，也不要指望它替代测试与合入门禁——它只是编排层，底层 harness 仍是 Claude Code / Codex / OpenCode / Pi。
 
 ## 前置条件
 - 共同前提：把任务写成独立、自包含的文件。子代理看不到你的聊天记录，任务文件是它唯一的信息源。
@@ -140,9 +143,10 @@
 - AB：有多个 agent（或人 + agent）会读写同一份共享状态；有一处所有参与者都能读写的共享存储（共享目录、共享文件、共享工单表）；你愿意把“谁领了什么、领到没有”写成文件而不是口头传达。原文来自 Minecraft 蜂群实验，工具无关，不需要安装任何东西。
 - AC：目标环境有可脚本化 API（原文用 Minecraft 的 Mineflayer）；有一份开源 harness 可参照（github.com/yc-software/minecraft-agent-harness），但原文没给安装命令与完整代码，安装配置需按仓库 README 自行补足。
 - AD：macOS 或 Linux，arm64 或 x86_64；需要一个邮箱接收登录码；要有一台常开的机器跑 daemon；安装时勾选并连接目标工具（Claude Code 用 plugin，Codex / opencode 用 MCP server，Cursor CLI / ZCode 用 MCP + hooks，MiniMax Code 用带 hooks 的 plugin）；联系人需对方 account ID 并 accept；群只能邀请联系人、入群要选接收会话；附件落到接收方 ~/.imbo/files/。自托管需域名、证书、SMTP，可选外部 PostgreSQL。
+- AE：macOS Apple silicon（M1 或更新）、Linux x64/ARM64、或 Windows 10/11 x64；至少安装并登录一个 harness（Claude Code / Codex / OpenCode / Pi）；Docker 和 Chrome 是可选项；Windows 还需 Git for Windows，因为代理命令由 Git Bash 执行。Linux 上保存密码依赖系统 keyring。
 
 ## 操作步骤
-先按上表选路径。以下保留 A–Z 的核心操作，并新增 AA、AB、AC、AD。每条都先做最小试用，不先上全量；验证与接受仍走测试、独立 verifier、校验器、接收人本人确认或人工复核。
+先按上表选路径。以下保留 A–Z 的核心操作，并新增 AA、AB、AC、AD、AE。每条都先做最小试用，不先上全量；验证与接受仍走测试、独立 verifier、校验器、接收人本人确认或人工复核。
 
 ### 做法 A：把不满意的回答送进锦标赛（arena-skill）
 1. 前提：Claude Code 可 spawn 子 agent，Python 3.8+；任务已写成独立文件。安装三选一：粘贴仓库地址说 Install this skill, then confirm /arena works；或 clone 后复制 `skills/arena` 到 `~/.claude/skills/`；或 `/plugin marketplace add` 后安装。
@@ -418,6 +422,49 @@ cargo test --workspace
 ```
 9. 最小试用顺序：选两台机器（或同一台的两个会话），只接 Claude Code + Codex 两个工具，先不接清单标 avoid 的 ZCode；互加联系人后先跑一次跨会话提问——在 A 会话让 agent 发问，B 会话保持空闲，观察是否被唤醒并回复；再建 2–3 个会话的群，让各自核对自己那一侧后回帖；单独做一次边界测试：故意让 agent 被要求发送一个本地文件或删除文件，确认它是否按原文所述先来问你；再发一个带指令的附件，确认接收侧把它当数据而非执行。预期：人工转述次数下降，跨会话确认端到端耗时下降，空闲会话被唤醒并产出有效改动；但这些都是自建指标，原文只有 demo 描述。
 
+### 做法 AE：把多个编码 agent 编成有频道、有角色、有审批闸门的团队（Tucano）
+1. 前提核对：macOS Apple silicon（M1 或更新）、Linux x64/ARM64、或 Windows 10/11 x64；至少安装并登录一个 harness；Docker 和 Chrome 可选；Windows 还需 Git for Windows，因为代理命令由 Git Bash 执行。Tucano 是编排层，不替代底层 harness：它把 Claude Code、Codex、OpenCode、Pi 组织成有名字、角色、工具和记忆的团队。
+2. 装 harness 并登录。Claude Code：
+```bash
+curl -fsSL https://claude.ai/install.sh | bash
+claude auth login
+```
+Windows PowerShell：
+```powershell
+irm https://claude.ai/install.ps1 | iex
+claude auth login
+```
+Codex：
+```bash
+npm install -g @openai/codex
+```
+README 说明 Codex 要在 Tucano 内登录一次。
+3. 装 Tucano。Mac 下载 .dmg 后拖入 Applications；Ubuntu/Debian：
+```bash
+sudo apt install ./tucano-linux-amd64.deb
+```
+AppImage 先加执行权限：
+```bash
+chmod +x tucano-linux-x86_64.AppImage
+```
+Windows PowerShell：
+```powershell
+irm https://github.com/eduwxyz/tucano/releases/latest/download/install.ps1 | iex
+```
+Mac 或 Linux 终端也可：
+```bash
+curl -fsSL https://github.com/eduwxyz/tucano/releases/latest/download/install.sh | sh
+```
+4. 首次运行按向导配置：选语言和姓名；勾选代理可用的 harness，每一项有 Test now 可以发一个真实问题；选路由频道和保存记忆用的模型；填写每个代理都应知道的背景；工具和技能可跳过；创建第一个代理，可选模板或从零开始。完成后进入 #general。
+5. 建频道和团队：新建频道，加入代理。提问时可用 @ 指定代理，不指定则由路由器选谁回答。代理之间用 @ 交接，形成调查 → 修复 → 评审的链路。预期：一条请求自己从调查走到修复和评审，每一步在频道里留痕。
+6. 接工具：Connectors → Add，粘贴 MCP server 地址；OAuth 服务会打开浏览器，其他服务填 token。随后在每个代理页面按连接器设置 no access、read 或 read and write。先只接一个只读或低风险的连接器（例如 GitHub 或 GitLab 读 issue），不要一上来给写权限。
+7. 设审批与限额：有影响的写操作等待确认；可选 approve once、always allow safe one、或 refuse with reason，拒绝理由会被代理读到。Settings → Phone and GitHub 可接 Telegram 机器人，在手机上审批。给每个代理设月度 token 限额和单次回复上限；需要时用 Pause everything 一次停掉所有代理。预期：未授权的写操作次数为 0，审批卡上能看到 exact call 与参数。
+8. 管记忆和技能：在 Memory 页查看、批准、编辑、遗忘每条记忆；代理反复走同一路径时会提议 skill，即整个团队可照做的书面配方；Claude Code 和 Codex 已有 skills 可一键导入。预期：同类任务在记忆/技能复用后时间下降。
+9. 设例程：Routines 可按日期时间触发，也可按连接器事件触发，例如新 issue、监控失败、邮件。周日历显示每次运行结果；quiet hours 可以保持夜间安静。关闭窗口后 Tucano 留在托盘，例程和触发继续运行。最小试用先开一个每周例程扫新 issue。
+10. 给代理电脑/浏览器（可选）：可给 Docker 隔离的 Linux 环境，或选择本机；借出文件夹或仓库；给独立 Chrome，可实时观看，并在需要登录时接管。
+11. 看回执和报告：每条回复显示 searched、read、ran、edited，以及 token 和时间回执；Usage and limits 看每个代理月度用量和订阅窗口；weekly Report 看每个 issue 花了多少 token、多少回复、时间去了哪里。
+12. 最小试用组合：选一个真实但低风险的小任务（例如修一个非关键 bug）。建一个频道，放 2–3 个代理：一个用 Claude Code 修复，一个用 Codex 评审，可选一个做调查或路由；只接一个只读或低风险 MCP 连接器；只借出一个仓库文件夹；把 merge、post、email、delete、purchase 设为审批；开一个每周例程扫新 issue。预期：拿得到可评审的 PR，危险写操作全部被审批拦下；效果仍需与单人 Claude Code 基线对照。
+
 ## 怎么判断变好了
 **可观察的指标**
 - A：盲评比分；冠军扛过的攻击里有多少条指向你原本没写进要求、但确实在意的缺口；是否实际采用；token 开销 vs plan --quick 的预估。
@@ -456,6 +503,7 @@ cargo test --workspace
   - 失败事件日志密度：death_log.md 一类日志的条数与类型分布。
 - AC：是否自发出现分工与交接（在共享文件里看得见）；六项能力缺哪项最常卡住；三件套去掉一项后协调是否明显退化；重复劳动率与文件互相覆盖次数；单位协作产出的消息量与耗时（原文 50 agent 3 小时约 5,900 条消息，可作规模参照，不是目标值）。
 - AD：跨会话/跨人一次确认的端到端耗时（人工转述 vs Imbo 直达）；人工转述次数是否降到 0；交接遗漏率——需要对方核对的事项中实际得到回复的比例；空闲会话利用率——原本等人来叫的会话被消息唤醒并产出有效改动的次数；打扰成本——每个会话因消息被中断的次数，以及“无内容可补故不回复”的比例（过高说明群组广播过宽）；安全指标（应为 0）——未经你确认的外发文件/数据次数、越权触碰生产或删除的次数、把附件内容当指令执行的次数。
+- AE：任务完成率——派进去的小任务有多少拿到可评审 PR；从开始到可评审 PR 的时间；评审轮次与返工次数；人工介入次数与审批等待时间；每个完成任务的 token 成本（看 Usage and limits 与 weekly Report）；未授权的写操作次数（应为 0）；被审批拦下的危险调用条数；记忆或技能复用后同类任务时间是否下降；反向信号——你不断给代理补规则、或某个代理的产出你从不采用。
 
 **最小试用**
 - A：挑 1–2 个真实、不满意的任务，跑 `/arena --quick --seed 7` 并用 baseline 传入旧答案。
@@ -488,6 +536,7 @@ cargo test --workspace
 - AB：选一件会被多人/多 agent 重复认领的事（领取稀缺资源、认领工单、占用同一台测试机），落地“预约—直取—本人确认”五步协议和带时间戳、带 supersede 的共享账本，跑两周。不需要任何工具安装，先用手工方式验证协议本身。
 - AC：按仓库 README 装好 harness，先用 5 个 agent、30 分钟跑一个必须协作才能完成的目标，配齐 agent 目录 + 共享沙盒 + DM；目录顺序至少随机一次或显式指定角色，再比较分工是否不同。
 - AD：选两台机器（或同一台的两个会话），只接 Claude Code + Codex；互加联系人后跑一次跨会话提问，让对方空闲会话被唤醒并回复；再建 2–3 个会话的群，做一次只读的 spec 对照 diff；单独做一次边界测试：要求发送本地文件、删除文件、发带指令的附件，确认 agent 是否先来问你、接收侧是否把附件当数据；附件只放非敏感内容；试用期内不改生产凭据、不开生产权限。
+- AE：先在一个低风险真实小任务上跑一遍（例如修一个非关键 bug）：一个频道、2–3 个代理（Claude Code 修复 + Codex 评审，可选一个调查/路由）、一个只读 MCP（GitHub/GitLab 读 issue）、只借出一个仓库文件夹、merge/post/email/delete/purchase 全部设为审批、开一个每周例程扫新 issue。对照基线：同一类任务先用单人 Claude Code 或人工流程做 1–2 次，记录同样的指标（完成率、到可评审 PR 的时间、评审轮次、人工介入次数、token 成本）。
 
 **试多久、什么时候升级**
 - A：若 --quick 在 3 个以上任务上稳定优于 baseline，且攻击确实命中你没考虑到的地方，再升到 --agents 32。
@@ -517,6 +566,7 @@ cargo test --workspace
 - AB：先在共享仓库、共享库存这类场景跑两周，只观察错配率、核销确认率、未服务高危对象滞留时长三项。若错配率明显下降且账本状态可信，再把它写进所有派工流程；若账本开始被随手覆盖、或确认率低于一半，先修协议（三态、时间戳、本人确认）而不是加 agent 数量。
 - AC：先 5 个 agent、30 分钟跑一次；能观察到自发分工与可追溯的交接，才把它扩到更长时间和更多 agent。扩之前至少对比一次“随机化目录顺序 vs 固定顺序”，确认你看到的管理行为不是顺序伪影。
 - AD：先试 1–2 周，只在非生产、只读任务上使用。若跨会话确认的端到端耗时和人工转述次数明显下降、交接遗漏率下降，且安全指标为 0，再考虑扩大到更多会话或自托管；若消息投递出现不可解释的丢失/延迟、安全指标不为 0，或团队仍靠人工转述兜底，就退回人工转述 + 清单内已有的单会话做法。
+- AE：先按最小组合跑 1–2 周、2–3 个代理、一次一个真实小任务。若任务完成率不降、到可评审 PR 的时间缩短或返工减少，且未授权的写操作始终为 0、审批等待没有把节奏拖死，再考虑加代理、开第二个连接器写权限或接例程自动化；若只是频道热闹、PR 你从不采用，或审批变成无脑点“允许”，就退回单人 Claude Code + 明确的测试/评审门禁，只保留其按代理授权与审批的思路。
 
 ## 常见坑
 - A：任务含糊，100 个 agent 会一起含糊；任务文件是唯一信息源；judge 也是 Claude，评分有偏差。
@@ -549,6 +599,7 @@ cargo test --workspace
 - AB：工具层的“拿取记录”不等于送达——原文明确 Tool pickup attribution alone is insufficient，必须由接收人本人回报才能标 served；不要把稀缺物资“丢进人群”让别人自取；账本里“报告值”不是实时值，未确认发放不算已发，没有 supersede 规则多人写同一份状态会互相覆盖；原文的反例 Esme/Noor 一次误领直到 time13207 才被本人纠正，说明没有确认环节时错误会长时间存活；另外原文的死亡几乎无代价（只掉装备加一行日志），真实工作里失败有成本，行为策略不可直接照搬。
 - AC：目录顺序会造出伪层级——原文里排第一的 Ada 成了事实上的领导者，这是评测设计带来的伪影，迁移时应主动随机化顺序或显式指定角色；首夜 22 死（占全程 34 死的大多数）之后 agent 普遍变得过度保守、放弃原定任务，说明反馈信号强度直接改变策略，配反馈时要想清楚你希望它冒险还是保守；50 个 agent、约 5,900 条消息意味着巨大 token 与时间成本，原文没给成本数据，不要一次复刻；原文是项目介绍页不是教程，harness 的安装、配置、提示词要看仓库；Mindustry 部分在抓取时已截断，不能据此下结论。
 - AD：项目很新（31 stars）、仍在 0.x，原文只有作者自述文档，没有安全审计、第三方评测或真实团队使用案例；默认走 imbo.dev 托管服务并用邮箱注册，会话元数据经第三方；`curl | sh` 安装方式引入供应链风险；安装器会给 Imbo 工具免逐次审批，等于扩大 agent 的自主动作面；agent 可能不先问你即回复，多 agent 环路上存在信息外泄与被诱导风险——原文只做了“发送文件/数据、删除、对外发送、花钱、碰生产前先问”的约束声明，必须自己做边界测试；消息“在两次工具调用之间落地”“回复唤醒空闲会话”“没内容可补的会话不回复”来自 README 的 GIF 说明文字，没有延迟数据、成功率、并发上限、失败重试语义、消息持久化/离线补投行为的说明；平台不含 Windows；自托管需要域名、证书、SMTP，运维成本不低；它只是胶水层，不能替代测试、独立 verifier 或合入门禁。
+- AE：材料只有 README，没有独立复现；仓库 36 stars，采用规模有限，多代理协作效果、审批体验、长期记忆质量、例程可靠性都未量化，没有 benchmark、任务成功率、成本对比或安全审计。README 里的 Iris 在 Datadog 找到错误、Leo 修复并开 merge request、Nico 评审并请求合并审批只是产品说明中的示例，不是独立测评。“数据留在本机、无 Tucano 服务器、密码不进数据库、每轮隔离、工具按代理授权”都是作者主张，需要自行验证。Claude Code 只读 ~/.claude/settings.json 的 env 和 apiKeyHelper，hooks、插件和权限不进入 Tucano；Codex 用独立 home，避免个人 skills、AGENTS.md 和插件泄漏——这两条意味着你在原 CLI 里配好的 hooks/权限不会自动生效，别以为换个壳就继承了旧防护。Windows 安装包未代码签名，公司电脑可能被 IT 阻止，Windows 还需 Git for Windows。审批一旦变成无脑点“允许”，等于没有闸门；它只是编排层，不能替代测试、独立 verifier 或合入门禁。
 
 ## 证据与来源
 - A 依据调研《Jakeschincariol/arena-skill》。可核对：成本表、bracket.py plan 输出、赛程表、rubric 权重、默认并发 10、单元测试、117 stars。质量提升属作者主张。
@@ -581,6 +632,7 @@ cargo test --workspace
 - AB 依据调研《We ran AI agent swarms in Minecraft and Mindustry》（YC Labs 与 Olam Labs 的蜂群实验）。可核对：Civ50 用 50 个 agent 在生存模式 Minecraft 跑 3 小时、目标“Build a thriving civilization”、约 5,900 条消息；首 90 秒内把出生点附近的树几乎砍完；层级按 directory 顺序形成、排第一的 Ada 成为事实上的领导者；首夜 22 死、全程 34 死；plans/settlement.md 与 notes/food-queue.md 的原文片段；一次误领（Esme 吃了给 Noor 的鸡肉）与一次“已 pickup 但接收人无库存”的纠正；death_log.md 每死一次写一行；Ada 第三夜后写下的停工备忘录原文。协议本身（预约—直取—本人确认、三态账本、时间戳与 supersede）来自原文明确陈述与反例，属可核对部分；“多智能体动态是 AI alignment 最紧迫问题之一”“千 agent 蜂群解决数百开放数学问题”等是动机论述，不是本文实验数据；Minecraft 之外只提到也在 Mindustry 做了实验，抓取正文在该部分之前已截断。
 - AC 依据同一篇调研的架构描述与实验记录。可核对：六类能力（observe / reason / remember / act / message / write-execute scripts）、三件套（agent directory、shared sandbox、DM）、基于 Mineflayer 的脚本工具、核心 agentic loop 用 Pi 运行、harness 已开源（github.com/yc-software/minecraft-agent-harness）、正在跑的 25 个 agent 新殖民地（Twitch 直播，正文未给结果）。原文自比 Hermes、OpenClaw、QM，属作者定位；harness 的安装、配置、提示词需看仓库，本文不臆造；“50 个 agent 规模”与“约 5,900 条消息”是这一场的观测，不是推荐规模；另有一个 25 agent 的实验无结果数据。
 - AD 依据调研《Bearisbug/imbo》。可核对：安装命令与安装器行为（写入 `~/.local/bin`、邮箱码登录、launchd/systemd user service、勾选工具、列出改动、`imbo uninstall` 回滚）；六种工具的接入方式对照表；CLI 命令样例（`whoami`、`contact add/requests/accept/list`、`group create/invite/join`、`send`、`inbox`、`status`、`update`）；附件路径 `~/.imbo/files/`；agent 侧五个工具名；授权边界清单（外发文件、删除、花钱、碰生产前先问）；自托管 docker 命令与六个环境变量语义；`cargo build --release` / `cargo test --workspace`；License Apache-2.0；平台 macOS/Linux、arm64/x86_64；31 stars，0.2.11 之前无 `imbo update`。只是作者主张、无独立证据的部分：消息“在两次工具调用之间落地”“回复唤醒空闲会话”“没内容可补的会话不回复”，均来自 README 的 GIF 说明文字，没有延迟数据、成功率、并发上限、失败重试语义、消息持久化/离线补投行为的说明；没有安全审计、没有第三方评测、没有真实团队使用案例与前后对比指标。风险：默认托管服务、`curl | sh`、安装器免审批、agent 可能不先问即回复；不能替代测试与合入门禁。
+- AE 依据调研《eduwxyz/tucano》。可核对：README 给出的平台要求（macOS Apple silicon、Linux x64/ARM64、Windows 10/11 x64）、各平台安装命令、首次运行向导步骤、Connectors 与按代理的 no access / read / read and write 授权、审批模型（approve once / always allow safe one / refuse with reason）、Telegram 手机审批、月度 token 限额、Pause everything、Memory 页与 skill 提议、Routines 的定时与连接器事件触发、quiet hours、托盘常驻、Docker/浏览器借出、searched/read/ran/edited 回执与 weekly Report、Claude Code 只读 settings.json 的 env 与 apiKeyHelper、Codex 独立 home、仓库 36 stars。属产品说明示例、非独立测评：Iris/Leo/Nico 那条 Datadog → 修复 → merge request → 评审 → 审批的链路。“数据留在本机、无 Tucano 服务器、密码不进数据库、每轮隔离、工具按代理授权”是作者主张；没有 benchmark、用户数、任务成功率、成本对比或安全审计，多代理协作效果、审批体验、长期记忆质量、例程可靠性均未量化。本手册中的最小试用组合与判断指标是据此补充的试用设计，不是原文数据。
 
 ## 依据的调研
 
@@ -613,3 +665,4 @@ cargo test --workspace
 - [@runes_leo: Yifan 的经验：agent 往一个方向钻 1–2 小时还没结果，基本就是进死胡同了。这时候停掉它，拆出 3 个子 agent 各想一个新方向，多数时候立刻见效。他引的 Claude Code 团队](../research/radar/2026-10-21/5652-yifan-agent-1-2-3-agent-claude-code.md)：值得一试，建议小范围试：给 agent 的单个探索方向设定 1–2 小时时间预算，到点仍无进展就终止，拆成 3 个各走不同新方向的子 agent，并给评审类循环预设停止条件；理由是这条经验把“什么时候该放弃”变成了可执行规则，但原文只是一条从业者经验、无数据和实现细节，需自己量化验证。
 - [We ran AI agent swarms in Minecraft and Mindustry](../research/radar/2026-10-30/8443-we-ran-ai-agent-swarms-in-minecraft-and-mindustry.md)：值得一试，把两个可直接借鉴的做法小范围试用：一是“共享文件 + 预约—直取—本人确认”的多智能体协作与核销协议；二是这套已开源的 Minecraft agent harness，用于搭建长时运行、能记忆和写脚本的 agent。理由是原文给出了可直接参照的协调产物模板和分配规则，但安装与配置细节在仓库而不在正文，因此先试不直接采用。
 - [Bearisbug/imbo](../research/radar/2026-10-30/8508-bearisbug-imbo.md)：值得一试，建议小范围试用：用 Imbo 在两个编码 agent 会话（或两台机器、两个人）之间做提问、交接和群组同步，因为它提供了可照做的安装、联系人、群组、附件与自托管步骤，并把消息送进正在工作的会话、还能唤醒空闲会话；但项目很新（31 stars）、只有作者自述文档、需要登录其托管服务，且 agent 可能不先问你即回复，因此应先在非生产、只读任务上验证。
+- [eduwxyz/tucano](../research/radar/2026-10-31/8661-eduwxyz-tucano.md)：值得一试，建议小范围试用：先用 2–3 个编码代理在一个频道里跑真实小任务，并把合并、发布、删除等写操作设为人工审批；理由是 README 给出了可照做的安装、连接器、权限和定时触发步骤，但只有项目自述、缺少独立效果数据，暂不宜直接 adopt。
