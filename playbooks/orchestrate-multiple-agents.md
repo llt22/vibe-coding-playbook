@@ -1,15 +1,15 @@
-# 让并行 agent 的产出真正被验收：分工、核销、验证与止损
+# 让多个 AI agent 并行干活，但只接受可验证的结果
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：多个 AI agent 并行干活时，产出没人验证、同一件事被重复认领、卡住了也没人叫停——手册给出从任务书写、并行分工、独立验证、合入门禁、共享账本核销到成本止损的一整套可执行做法。
-> 先试这一步：给你的下一个任务写一份自包含的任务文件（子代理看不到你的聊天记录），同时为会被重复认领的那件事建一份带时间戳和“本人确认”栏的共享账本。
+> 解决的问题：把“不满意就重问一次”升级成一套可执行流程：任务写清、并行分工、独立验证、合入门禁、成本检查、注意力路由、共享账本核销、跨会话交接，并在探索卡住时按预算止损。
+> 先试这一步：先挑一个真实任务，写成独立文件，并用一条可执行验证命令或独立 verifier 决定是否接受结果；再按处境从做法 A–AD 选一条最小试用。
 > 最近修订：2026-10-30
 
 ## 解决什么问题
-单个 AI 回答或单条串行 agent 会话，交付的往往是你没有验证过的结果。手册把“不满意就重问一次”升级成一套可执行流程：任务写清、并行分工、独立验证、合入门禁、成本检查、注意力路由、共享账本核销，并在探索卡住时按预算止损。做法 A–AC 覆盖从单次答案竞赛到多项目控制台、文件状态 + 心跳编排、再到多 agent 共享账本与长时运行骨架。共同底线是：并行只负责产出，接受与否必须由测试、独立 verifier、校验器、接收人本人确认或人工复核决定。
+单个 AI 回答或单条串行 agent 会话，交付的往往是你没有验证过的结果。手册把“不满意就重问一次”升级成一套可执行流程：任务写清、并行分工、独立验证、合入门禁、成本检查、注意力路由、共享账本核销，并在探索卡住时按预算止损。做法 A–AD 覆盖从单次答案竞赛到多项目控制台、文件状态 + 心跳编排、多 agent 共享账本、长时运行骨架，以及跨会话/跨人的消息交接。共同底线是：并行只负责产出，接受与否必须由测试、独立 verifier、校验器、接收人本人确认或人工复核决定；消息层只负责把问题送到，不负责证明结果正确。
 
-做法 A–AC 概览：
+做法 A–AD 概览：
 - A：把不满意的回答送进锦标赛（arena-skill）。
 - B：并行子代理 + 测试合入闸门（clodfarm）。
 - C：多 harness、多座位的统一编排与恢复（openrig）。
@@ -39,6 +39,7 @@
 - AA：给单个探索方向设 1–2 小时止损预算，到点无进展就终止并拆 3 个各走不同新方向的子 agent；评审类循环另设停止条件。
 - AB：用共享账本 + “预约—直取—本人确认”核销协议，压掉多 agent 重复认领与错发（来自 Minecraft 蜂群实验）。
 - AC：给长时运行的 agent 骨架配齐六类能力与三件套（agent 目录、共享沙盒、DM），把失败写进日志，并显式指定角色。
+- AD：用 Imbo 在多个编码 agent 会话、机器或人之间发消息、交接和群组同步，把消息送进正在工作的会话并唤醒空闲会话（先在非生产、只读任务上试）。
 
 ## 适用与不适用
 **适用（按处境选路径）**
@@ -73,6 +74,7 @@
 | 有一个会长时间跑但迟迟不出结果的探索/评审任务，想给止损和停止条件 | AA（先做 A/B 对照） |
 | 多个 agent（或人 + agent）会重复认领同一件事、同一份稀缺资源被多次领走 | AB（先在一件会被重复认领的事上跑两周） |
 | 想搭或体检一个长时运行、要读写共享产物、要能互相发消息的 agent 骨架 | AC（先 5 个 agent、30 分钟） |
+| 两个编码 agent 会话、两台机器或两个人之间需要提问、交接或群组同步，且消息要落进正在运行的会话、还能唤醒空闲会话 | AD（先在非生产、只读任务上试 1–2 周） |
 
 **不适用（关键边界）**
 - A：任务描述本身就含糊，100 个 agent 会一起含糊；不愿承担 token 成本不要用。
@@ -104,6 +106,7 @@
 - AA：必须一次连续完成、无法中途换分支的任务不要用；无法观测中间产出，或重启成本高于继续死钻，不要用；原文只是单条推文经验、无命令与数据，不能当硬规范或团队制度。
 - AB：协作对象只有一个 agent、或没人会因为重复认领而损失，不要用；共享存储对某个 agent 只读时协议会退化成空写；真实工作里失败有成本，不能照搬游戏里“死亡只掉装备”的宽松设定。
 - AC：目标环境没有可脚本化 API、也没有共享文件系统时不要硬套；50 个 agent 的规模与约 5,900 条消息意味着很高成本，原文没给成本数据，不要直接照规模复刻；游戏里学到的是策略倾向，不是可直接迁移的行为规范。
+- AD：Windows 不支持；项目很新（31 stars，0.x）；默认要登录 imbo.dev 托管服务，会话元数据经第三方；安装器会给 Imbo 工具免逐次审批，且 agent 可能不先问你即回复；不能接受供应链风险、不能做边界测试，或需要稳定生产规范，不要用；它只是胶水层，不能替代测试、独立 verifier 或合入门禁。
 
 ## 前置条件
 - 共同前提：把任务写成独立、自包含的文件。子代理看不到你的聊天记录，任务文件是它唯一的信息源。
@@ -136,9 +139,10 @@
 - AA：能观测 agent 的中间产出；任务可中断、可重启；能同时运行多个子 agent；愿意记录对照数据。原文未给具体工具要求。
 - AB：有多个 agent（或人 + agent）会读写同一份共享状态；有一处所有参与者都能读写的共享存储（共享目录、共享文件、共享工单表）；你愿意把“谁领了什么、领到没有”写成文件而不是口头传达。原文来自 Minecraft 蜂群实验，工具无关，不需要安装任何东西。
 - AC：目标环境有可脚本化 API（原文用 Minecraft 的 Mineflayer）；有一份开源 harness 可参照（github.com/yc-software/minecraft-agent-harness），但原文没给安装命令与完整代码，安装配置需按仓库 README 自行补足。
+- AD：macOS 或 Linux，arm64 或 x86_64；需要一个邮箱接收登录码；要有一台常开的机器跑 daemon；安装时勾选并连接目标工具（Claude Code 用 plugin，Codex / opencode 用 MCP server，Cursor CLI / ZCode 用 MCP + hooks，MiniMax Code 用带 hooks 的 plugin）；联系人需对方 account ID 并 accept；群只能邀请联系人、入群要选接收会话；附件落到接收方 ~/.imbo/files/。自托管需域名、证书、SMTP，可选外部 PostgreSQL。
 
 ## 操作步骤
-先按上表选路径。以下保留 A–Z 的核心操作，并新增 AA、AB、AC。每条都先做最小试用，不先上全量；验证与接受仍走测试、独立 verifier、校验器、接收人本人确认或人工复核。
+先按上表选路径。以下保留 A–Z 的核心操作，并新增 AA、AB、AC、AD。每条都先做最小试用，不先上全量；验证与接受仍走测试、独立 verifier、校验器、接收人本人确认或人工复核。
 
 ### 做法 A：把不满意的回答送进锦标赛（arena-skill）
 1. 前提：Claude Code 可 spawn 子 agent，Python 3.8+；任务已写成独立文件。安装三选一：粘贴仓库地址说 Install this skill, then confirm /arena works；或 clone 后复制 `skills/arena` 到 `~/.claude/skills/`；或 `/plugin marketplace add` 后安装。
@@ -359,6 +363,61 @@ Stop optional bulk excavation/building and distant scouting. Idle in lit closed 
 5. 检查反馈信号的强度，因为它会直接改变 agent 的行为策略：原文首夜 22 死（占全程 34 死的大多数）之后，agent 普遍变得过度保守、放弃原定任务，Ada 因此下令停止可选的大规模挖掘与远距离侦察。真实工作里失败有成本，不能照搬游戏里“死亡只掉装备加一行日志”的设定；配反馈时要考虑你希望 agent 冒险还是保守。
 6. 最小试用：按仓库 README 装好后，先用远小于 50 的规模（例如 5 个 agent）、短时长（例如 30 分钟），跑一个必须协作才能完成的目标，复现“共享文件 + DM + 目录”三件套，观察是否自发出现分工。预期：分工与交接在共享文件里看得见；重复劳动和相互覆盖可由账本追溯。原文的 50 agent / 3 小时 / 约 5,900 条消息只作上限参照，不要一次复刻。
 
+### 做法 AD：用 Imbo 在多个编码 agent 会话、机器或人之间做提问、交接和群组同步
+1. 前提：macOS 或 Linux，arm64 或 x86_64；一个邮箱接收登录码；一台常开机器跑 daemon；安装时勾选并连接目标工具。安装并登录（安装器会把 `imbo` 放到 `~/.local/bin`，用邮箱验证码登录，启动后台 daemon，并让你勾选要连接的工具）：
+```sh
+curl -fsSL https://imbo.dev/install | sh
+```
+安装器会列出它改了哪些设置，并允许 Imbo 自己的工具运行时不每次都弹审批；`imbo uninstall` 可撤销。
+2. 确认本机状态与会话：
+```sh
+imbo status        # daemon、连接状态、本机上的会话
+imbo whoami        # 你的 account ID，用来给别人
+```
+3. 加联系人。对方要先拿到你的 account ID；对方侧需要接受：
+```sh
+imbo contact add 30713956 --note 'bob, api team'
+imbo contact requests               # 对方侧：查看请求和群邀请
+imbo contact accept 1
+imbo contact list                   # 联系人和他们在线会话
+imbo send bob/api 'hi'              # 发给 bob 的某个会话（短 ID 或标题）
+```
+4. 建群并让消息广播到多个会话。建群时要选自己哪些会话接收消息；只能邀请联系人：
+```sh
+imbo group create launch            # 选哪几个自己的会话接收该群消息
+imbo group invite launch 24441842   # 仅限联系人
+imbo group join 3                   # 被邀请方用 requests 里的 ID 加入
+imbo send launch 'v2.3 is tagged. Check your side and reply here.'
+```
+群消息会到达每个成员的所有接收会话，群里的回复也回到所有这些会话；没内容可补的会话不会回复。
+5. 发文件。附件保存在接收方 `~/.imbo/files/`；接收方 agent 把附件当数据处理，未经其用户同意不会执行里面的指令或程序：
+```sh
+imbo send bob/api 'Spec v2 attached. Diff it against /users.' --file api-spec.md
+imbo inbox                          # 在终端里看自己发出消息的回复
+```
+6. 在会话内让 agent 自己用工具：agent 侧暴露 `send`、`inbox`、`contacts`、`groups`、`accept` 五个工具，直接用自然语言指派，例如“问 bob/api 的 GET /users 是否分页”“在 launch 群里让大家核对 v2.3”。
+7. 更新与自托管（可选）：
+```sh
+imbo update    # 下载、校验并安装最新版，保留登录与已连接工具并重启 daemon
+```
+0.2.11 之前的版本没有该子命令，需重跑安装命令。自托管服务端：
+```sh
+docker run -d -p 443:443 -v imbo:/data \
+  -e IMBO_DOMAIN=imbo.example.com -e IMBO_ACME_EMAIL=you@example.com \
+  -e IMBO_SMTP_URL='smtps://user:pass@smtp.example.com' \
+  ghcr.io/bearisbug/imbo-server:latest
+```
+关键变量：`IMBO_DOMAIN`（公网域名，启用 Let's Encrypt HTTPS，TLS-ALPN，443 端口）、`IMBO_SMTP_URL`（登录码邮件）、`IMBO_MAIL_FROM`（发件人，默认 `Imbo <login@your-domain>`）、`DATABASE_URL`（外部 PostgreSQL；不设则在 `IMBO_DATA_DIR` 用内置库）、`IMBO_SIGNUP_EMAIL_DOMAINS`（允许注册的邮箱域，不设则任何人可注册）、`IMBO_LISTEN`（默认有域名时 `0.0.0.0:443`，否则 `0.0.0.0:8080`）。客户端指向自建服务：
+```sh
+imbo setup --server https://imbo.example.com
+```
+8. 从源码构建（需要 Rust 工具链）：
+```sh
+cargo build --release   # target/release/imbo 和 target/release/imbo-server
+cargo test --workspace
+```
+9. 最小试用顺序：选两台机器（或同一台的两个会话），只接 Claude Code + Codex 两个工具，先不接清单标 avoid 的 ZCode；互加联系人后先跑一次跨会话提问——在 A 会话让 agent 发问，B 会话保持空闲，观察是否被唤醒并回复；再建 2–3 个会话的群，让各自核对自己那一侧后回帖；单独做一次边界测试：故意让 agent 被要求发送一个本地文件或删除文件，确认它是否按原文所述先来问你；再发一个带指令的附件，确认接收侧把它当数据而非执行。预期：人工转述次数下降，跨会话确认端到端耗时下降，空闲会话被唤醒并产出有效改动；但这些都是自建指标，原文只有 demo 描述。
+
 ## 怎么判断变好了
 **可观察的指标**
 - A：盲评比分；冠军扛过的攻击里有多少条指向你原本没写进要求、但确实在意的缺口；是否实际采用；token 开销 vs plan --quick 的预估。
@@ -396,6 +455,7 @@ Stop optional bulk excavation/building and distant scouting. Idle in lit closed 
   - 过度保守倾向：大规模失败后任务放弃率是否异常升高。如果协议带来的确定性让 agent 更敢做正事，说明反馈质量改善；如果只是变保守，说明风险只是被转移了。
   - 失败事件日志密度：death_log.md 一类日志的条数与类型分布。
 - AC：是否自发出现分工与交接（在共享文件里看得见）；六项能力缺哪项最常卡住；三件套去掉一项后协调是否明显退化；重复劳动率与文件互相覆盖次数；单位协作产出的消息量与耗时（原文 50 agent 3 小时约 5,900 条消息，可作规模参照，不是目标值）。
+- AD：跨会话/跨人一次确认的端到端耗时（人工转述 vs Imbo 直达）；人工转述次数是否降到 0；交接遗漏率——需要对方核对的事项中实际得到回复的比例；空闲会话利用率——原本等人来叫的会话被消息唤醒并产出有效改动的次数；打扰成本——每个会话因消息被中断的次数，以及“无内容可补故不回复”的比例（过高说明群组广播过宽）；安全指标（应为 0）——未经你确认的外发文件/数据次数、越权触碰生产或删除的次数、把附件内容当指令执行的次数。
 
 **最小试用**
 - A：挑 1–2 个真实、不满意的任务，跑 `/arena --quick --seed 7` 并用 baseline 传入旧答案。
@@ -427,6 +487,7 @@ Stop optional bulk excavation/building and distant scouting. Idle in lit closed 
 - AA：挑一类已知会卡住的任务（跨多文件 bug 定位，或 agent 互评式代码评审），A 组不设止损，B 组设 1–2 小时方向预算、到点无进展终止并拆 3 个不同方向子 agent；评审类额外设“最大轮次 + 连续无新增问题即停”；各跑 5–10 次同类任务。
 - AB：选一件会被多人/多 agent 重复认领的事（领取稀缺资源、认领工单、占用同一台测试机），落地“预约—直取—本人确认”五步协议和带时间戳、带 supersede 的共享账本，跑两周。不需要任何工具安装，先用手工方式验证协议本身。
 - AC：按仓库 README 装好 harness，先用 5 个 agent、30 分钟跑一个必须协作才能完成的目标，配齐 agent 目录 + 共享沙盒 + DM；目录顺序至少随机一次或显式指定角色，再比较分工是否不同。
+- AD：选两台机器（或同一台的两个会话），只接 Claude Code + Codex；互加联系人后跑一次跨会话提问，让对方空闲会话被唤醒并回复；再建 2–3 个会话的群，做一次只读的 spec 对照 diff；单独做一次边界测试：要求发送本地文件、删除文件、发带指令的附件，确认 agent 是否先来问你、接收侧是否把附件当数据；附件只放非敏感内容；试用期内不改生产凭据、不开生产权限。
 
 **试多久、什么时候升级**
 - A：若 --quick 在 3 个以上任务上稳定优于 baseline，且攻击确实命中你没考虑到的地方，再升到 --agents 32。
@@ -455,6 +516,7 @@ Stop optional bulk excavation/building and distant scouting. Idle in lit closed 
 - AA：先跑 5–10 次同类任务；若 B 组在首次可验收产出时间、卡死率、评审收敛轮次上稳定优于 A 且成本可接受，再把阈值和时间盒写进流程；否则先调整方向切分方式，再判断这条经验是否成立。
 - AB：先在共享仓库、共享库存这类场景跑两周，只观察错配率、核销确认率、未服务高危对象滞留时长三项。若错配率明显下降且账本状态可信，再把它写进所有派工流程；若账本开始被随手覆盖、或确认率低于一半，先修协议（三态、时间戳、本人确认）而不是加 agent 数量。
 - AC：先 5 个 agent、30 分钟跑一次；能观察到自发分工与可追溯的交接，才把它扩到更长时间和更多 agent。扩之前至少对比一次“随机化目录顺序 vs 固定顺序”，确认你看到的管理行为不是顺序伪影。
+- AD：先试 1–2 周，只在非生产、只读任务上使用。若跨会话确认的端到端耗时和人工转述次数明显下降、交接遗漏率下降，且安全指标为 0，再考虑扩大到更多会话或自托管；若消息投递出现不可解释的丢失/延迟、安全指标不为 0，或团队仍靠人工转述兜底，就退回人工转述 + 清单内已有的单会话做法。
 
 ## 常见坑
 - A：任务含糊，100 个 agent 会一起含糊；任务文件是唯一信息源；judge 也是 Claude，评分有偏差。
@@ -486,6 +548,7 @@ Stop optional bulk excavation/building and distant scouting. Idle in lit closed 
 - AA：原文是单条推文、转述他人经验，点赞 48、转发 8、回复 6；1–2 小时和 3 个子 agent 都是经验值；“多数时候立刻见效”是主观判断；“两个 agent 能互相忙一整晚”是引述的二手结论；原文在“我给自己的 AI”处截断，没有命令、配置、提示词或实现细节；并行会抬高 token 成本，需看是否被时长下降抵消；3 路长期只有 0–1 路有效，说明方向切分方式有问题，而不是阈值本身；不适用于必须一次连续完成、无法观测中间产出、重启成本高于继续死钻的任务。
 - AB：工具层的“拿取记录”不等于送达——原文明确 Tool pickup attribution alone is insufficient，必须由接收人本人回报才能标 served；不要把稀缺物资“丢进人群”让别人自取；账本里“报告值”不是实时值，未确认发放不算已发，没有 supersede 规则多人写同一份状态会互相覆盖；原文的反例 Esme/Noor 一次误领直到 time13207 才被本人纠正，说明没有确认环节时错误会长时间存活；另外原文的死亡几乎无代价（只掉装备加一行日志），真实工作里失败有成本，行为策略不可直接照搬。
 - AC：目录顺序会造出伪层级——原文里排第一的 Ada 成了事实上的领导者，这是评测设计带来的伪影，迁移时应主动随机化顺序或显式指定角色；首夜 22 死（占全程 34 死的大多数）之后 agent 普遍变得过度保守、放弃原定任务，说明反馈信号强度直接改变策略，配反馈时要想清楚你希望它冒险还是保守；50 个 agent、约 5,900 条消息意味着巨大 token 与时间成本，原文没给成本数据，不要一次复刻；原文是项目介绍页不是教程，harness 的安装、配置、提示词要看仓库；Mindustry 部分在抓取时已截断，不能据此下结论。
+- AD：项目很新（31 stars）、仍在 0.x，原文只有作者自述文档，没有安全审计、第三方评测或真实团队使用案例；默认走 imbo.dev 托管服务并用邮箱注册，会话元数据经第三方；`curl | sh` 安装方式引入供应链风险；安装器会给 Imbo 工具免逐次审批，等于扩大 agent 的自主动作面；agent 可能不先问你即回复，多 agent 环路上存在信息外泄与被诱导风险——原文只做了“发送文件/数据、删除、对外发送、花钱、碰生产前先问”的约束声明，必须自己做边界测试；消息“在两次工具调用之间落地”“回复唤醒空闲会话”“没内容可补的会话不回复”来自 README 的 GIF 说明文字，没有延迟数据、成功率、并发上限、失败重试语义、消息持久化/离线补投行为的说明；平台不含 Windows；自托管需要域名、证书、SMTP，运维成本不低；它只是胶水层，不能替代测试、独立 verifier 或合入门禁。
 
 ## 证据与来源
 - A 依据调研《Jakeschincariol/arena-skill》。可核对：成本表、bracket.py plan 输出、赛程表、rubric 权重、默认并发 10、单元测试、117 stars。质量提升属作者主张。
@@ -517,6 +580,7 @@ Stop optional bulk excavation/building and distant scouting. Idle in lit closed 
 - AA 依据调研《@runes_leo: Yifan 的经验：agent 往一个方向钻 1–2 小时还没结果，基本就是进死胡同了》。可核对：单条推文、48 赞、8 转发、6 回复；1–2 小时方向预算、拆 3 个子 agent 各想一个新方向、评审要有停止条件；原文在“我给自己的 AI”处截断。原文没有命令、配置、提示词、样本量、失败案例或成本对比；“多数时候立刻见效”是作者主观判断；“两个 agent 会互相来回忙一整晚”是引述的二手结论；止损预算、3 路不同方向、评审停止条件的具体落地是按原文主张做的合理落地，不是原文原文。
 - AB 依据调研《We ran AI agent swarms in Minecraft and Mindustry》（YC Labs 与 Olam Labs 的蜂群实验）。可核对：Civ50 用 50 个 agent 在生存模式 Minecraft 跑 3 小时、目标“Build a thriving civilization”、约 5,900 条消息；首 90 秒内把出生点附近的树几乎砍完；层级按 directory 顺序形成、排第一的 Ada 成为事实上的领导者；首夜 22 死、全程 34 死；plans/settlement.md 与 notes/food-queue.md 的原文片段；一次误领（Esme 吃了给 Noor 的鸡肉）与一次“已 pickup 但接收人无库存”的纠正；death_log.md 每死一次写一行；Ada 第三夜后写下的停工备忘录原文。协议本身（预约—直取—本人确认、三态账本、时间戳与 supersede）来自原文明确陈述与反例，属可核对部分；“多智能体动态是 AI alignment 最紧迫问题之一”“千 agent 蜂群解决数百开放数学问题”等是动机论述，不是本文实验数据；Minecraft 之外只提到也在 Mindustry 做了实验，抓取正文在该部分之前已截断。
 - AC 依据同一篇调研的架构描述与实验记录。可核对：六类能力（observe / reason / remember / act / message / write-execute scripts）、三件套（agent directory、shared sandbox、DM）、基于 Mineflayer 的脚本工具、核心 agentic loop 用 Pi 运行、harness 已开源（github.com/yc-software/minecraft-agent-harness）、正在跑的 25 个 agent 新殖民地（Twitch 直播，正文未给结果）。原文自比 Hermes、OpenClaw、QM，属作者定位；harness 的安装、配置、提示词需看仓库，本文不臆造；“50 个 agent 规模”与“约 5,900 条消息”是这一场的观测，不是推荐规模；另有一个 25 agent 的实验无结果数据。
+- AD 依据调研《Bearisbug/imbo》。可核对：安装命令与安装器行为（写入 `~/.local/bin`、邮箱码登录、launchd/systemd user service、勾选工具、列出改动、`imbo uninstall` 回滚）；六种工具的接入方式对照表；CLI 命令样例（`whoami`、`contact add/requests/accept/list`、`group create/invite/join`、`send`、`inbox`、`status`、`update`）；附件路径 `~/.imbo/files/`；agent 侧五个工具名；授权边界清单（外发文件、删除、花钱、碰生产前先问）；自托管 docker 命令与六个环境变量语义；`cargo build --release` / `cargo test --workspace`；License Apache-2.0；平台 macOS/Linux、arm64/x86_64；31 stars，0.2.11 之前无 `imbo update`。只是作者主张、无独立证据的部分：消息“在两次工具调用之间落地”“回复唤醒空闲会话”“没内容可补的会话不回复”，均来自 README 的 GIF 说明文字，没有延迟数据、成功率、并发上限、失败重试语义、消息持久化/离线补投行为的说明；没有安全审计、没有第三方评测、没有真实团队使用案例与前后对比指标。风险：默认托管服务、`curl | sh`、安装器免审批、agent 可能不先问即回复；不能替代测试与合入门禁。
 
 ## 依据的调研
 
@@ -548,3 +612,4 @@ Stop optional bulk excavation/building and distant scouting. Idle in lit closed 
 - [tomtomsatnav/agent-orchestration-standard](../research/radar/2026-10-20/5098-tomtomsatnav-agent-orchestration-standard.md)：值得一试，建议小范围试用：先用 AOS-1 的文件状态、heartbeat 和校验器搭一个低风险项目的多代理看板与调度，再逐步接入 Claude Code 执行；理由是原文给出了可复制的命令、配置和验证流程，但项目仍是 macOS-first 的个人早期项目，且没有效果数据，高风险派发必须加人工审批门禁。
 - [@runes_leo: Yifan 的经验：agent 往一个方向钻 1–2 小时还没结果，基本就是进死胡同了。这时候停掉它，拆出 3 个子 agent 各想一个新方向，多数时候立刻见效。他引的 Claude Code 团队](../research/radar/2026-10-21/5652-yifan-agent-1-2-3-agent-claude-code.md)：值得一试，建议小范围试：给 agent 的单个探索方向设定 1–2 小时时间预算，到点仍无进展就终止，拆成 3 个各走不同新方向的子 agent，并给评审类循环预设停止条件；理由是这条经验把“什么时候该放弃”变成了可执行规则，但原文只是一条从业者经验、无数据和实现细节，需自己量化验证。
 - [We ran AI agent swarms in Minecraft and Mindustry](../research/radar/2026-10-30/8443-we-ran-ai-agent-swarms-in-minecraft-and-mindustry.md)：值得一试，把两个可直接借鉴的做法小范围试用：一是“共享文件 + 预约—直取—本人确认”的多智能体协作与核销协议；二是这套已开源的 Minecraft agent harness，用于搭建长时运行、能记忆和写脚本的 agent。理由是原文给出了可直接参照的协调产物模板和分配规则，但安装与配置细节在仓库而不在正文，因此先试不直接采用。
+- [Bearisbug/imbo](../research/radar/2026-10-30/8508-bearisbug-imbo.md)：值得一试，建议小范围试用：用 Imbo 在两个编码 agent 会话（或两台机器、两个人）之间做提问、交接和群组同步，因为它提供了可照做的安装、联系人、群组、附件与自托管步骤，并把消息送进正在工作的会话、还能唤醒空闲会话；但项目很新（31 stars）、只有作者自述文档、需要登录其托管服务，且 agent 可能不先问你即回复，因此应先在非生产、只读任务上验证。

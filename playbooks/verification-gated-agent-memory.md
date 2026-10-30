@@ -1,10 +1,10 @@
-# 让 AI 的产出先过验证器：独立复核、盲测重现与负控拒绝
+# 当 agent 互相调用时，只让可离线核验的证据驱动下一步
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：模型会把“我觉得对”当成“已经对”；这篇手册给出一套可操作的提交规则：模型只提议，独立验证器决定能否提交，并且验证器本身要先通过盲测、负控和非引导对抗审查。
-> 先试这一步：如果你还没有回路，先跑做法 A 的离线 demo；如果已经有回路，先做做法 G 的盲测加负控：拿一小组已有正确答案的样本让管道在看不到答案的条件下重跑，再准备几个已知冒充者和故障样本看它会不会拒绝。
-> 最近修订：2026-10-26
+> 解决的问题：解决多 agent/工具链中下游把上游 agent 的自报当成事实、凭一句“测试通过了/某人批准了”就行动的问题；做法是让主张携带第三方写入的可离线核验证据，自报一律算 unproven，并自己补证据新鲜度检查。
+> 先试这一步：先跑 `pip install tracekit-ai==1.5.0` 和 `tracekit pcm demo`，看清 accepted / unproven / rejected 三类消息，再选一条真实链路只接入一种 claim。
+> 最近修订：2026-10-30
 
 ## 解决什么问题
 
@@ -12,26 +12,32 @@
 
 模型自报的置信度只是逐 token 生成的文本延续，不是对内部状态的测量，也没有针对“它是否答对”校准；换措辞、重复问都可能变。可信的置信度需要反映预测所依据的信息量，并在同类问题上与实际结果核对过。替代方案是像天气预报员一样，用可观测信息建立“信息到置信度”的规则，持续记录结果并按实际正确率校准。LLM 仍可写回答、做摘要，但置信度来自规则，不来自 LLM 自我报告。
 
+当 agent 开始互相调用，问题会更具体：A 对 B 说“alice 批准了这笔 120 美元的退款”“测试通过了”“我从 api.example.com 取到了这笔订单”，B 今天只有 A 的一面之词。PCM 0.1 给的做法是让每条关于“发生了什么”的主张携带证据，接收方离线核验：证据来自发送方 agent 无法写入的 append-only Merkle 日志，附 RFC 9162 包含证明和 checkpoint 签名，消息由证明型签名器签名，agent 自己从不持有密钥。判定是三值的：每条 claim 得 `proven` / `unproven` / `failed`，整条消息得 `accept` / `accept-unproven` / `reject`；不能严格解析的文本得 `bad-input`，在任何检查之前就被拒。最核心的一条规则是：**只靠 agent 自己说法的主张永远是 `unproven`，绝不会是 `proven`**。记录只有在“agent 以外的第三方写入”时才构成证明——签名器或实际执行了该调用的 attesting gateway/executor（T2）；agent 自己进程上报的结果（T1）只给 `unproven`。
+
 几份材料给的是同一条回路在不同场景里的实现：
 
 - 有客观对错的任务（对账、排班、行程规划、约束优化、工程校核等）：ResiMind README 的流程是 `Propose → check → diagnose what remains → change strategy → check again → 完成证明 → 准入规则 → 复用并复检`。
 - 由固定规则和一串数字决定结果的决策（例如永续合约交易）：trading-research-agents 的一句话是 **“The agents propose; the system decides.”** 模型只负责读数据、给判断；取数、算数字、给往返成本定价、套用限额、定仓位由系统做。
 - 多步文书任务（例如按岗位改写简历、写求职信、准备面试）：ai-job-search 把流程拆成 drafter 起草、fresh context 的 reviewer 独立批评、`verify_pdf.py` / `verify_layout.py` / ATS 检查等机器可检验收，外部写操作前留人工批准位。
 - 科研/可复现分析写作：DeepScient 把“选题 → 检索 → 实验 → 分析 → 作图 → 写作 → 投稿 → 审稿回应”拆成 12 个阶段、55 个可判定门，配 36 个科研工具、98 条技能和证据链；要求结论追到数据、数据追到可重跑的实验。
+- agent 之间的消息：PCM 0.1 把“测试通过”“某人批准”“文件已写”“取到了主机”四类主张变成可离线核验的 claim，自报一律 `unproven`，只有第三方写入的日志记录才 `proven`。
 
-新合并的一条调研把这套回路又往前推了一步：验证器本身也要被验证。它的四条原则是——让管道在看不到答案的盲目条件下重现已知结果；让它也能拒绝已知冒充者和仪器故障；不要相信结果，另起独立代理用非引导性提示做对抗性审查并反复进行；要求审查者从原始数据重新验证，而不是只读管道输出。原文没有给命令、提示词、样本量或阈值，下面把它落成做法 G，作为 A–F 的叠加层。
+做法 G 把回路又往前推了一步：验证器本身也要被验证。它的四条原则是——让管道在看不到答案的盲目条件下重现已知结果；让它也能拒绝已知冒充者和仪器故障；不要相信结果，另起独立代理用非引导性提示做对抗性审查并反复进行；要求审查者从原始数据重新验证，而不是只读管道输出。原文没有给命令、提示词、样本量或阈值，下面把它落成做法 G，作为 A–F 的叠加层。
+
+做法 H 补的是“证据本身怎么携带、怎么离线核验”：不是让接收方相信发送方的进程，而是让发送方交出一段接收方可以自己验的日志记录和证明。它和 G 的差别是：G 验收验证器，H 让消息里的 claim 自带可验收的证据。
 
 共用的提交规则：
 
 - 模型只负责提议下一步候选与证据引用。
-- 可信的领域代码独立重算结果，检查引用、前提、作用域、精确有理数运算和单位；模型不能靠置信度或一个 `verified` 字段给自己发验证。文书任务里对应的是页数、文本可抽取、版式、关键词覆盖、发布信息完整性等可脚本检查项；科研任务里对应的是阶段门对库内真实状态判定。
+- 可信的领域代码独立重算结果，检查引用、前提、作用域、精确有理数运算和单位；模型不能靠置信度或一个 `verified` 字段给自己发验证。文书任务里对应的是页数、文本可抽取、版式、关键词覆盖、发布信息完整性等可脚本检查项；科研任务里对应的是阶段门对库内真实状态判定；消息任务里对应的是签名、Merkle 包含证明、记录是否是发送方 run 与 tenant 的合法事件、grant 链 caveat、schema 和 replay。
 - 验证器先被验证：盲测重现、负控拒绝、非引导对抗审查、从原始数据复核；否则“独立检查”也可能只是走形式。
 - 置信度不是模型自报，而是由可观测信号和已校准规则产生；低置信度走人工复核。规则置信度用于分级/分流，不替代独立重算与校验。
-- 未通过不改变状态，只把原因回给提议方；未完成目标、未知量和硬约束构成残差，从已提交事实重建后驱动下一次提议。文书任务里残差可以是缺页、缺关键词、版式碰撞、未回答的面试缺口。
+- 未通过不改变状态，只把原因回给提议方；未完成目标、未知量和硬约束构成残差，从已提交事实重建后驱动下一次提议。文书任务里残差可以是缺页、缺关键词、版式碰撞、未回答的面试缺口；消息任务里 `reject` 不驱动行动，`unproven` 只当一面之词。
 - 每个决定和每次拒绝都连同理由落盘，事后可查“发生了什么、为什么”，而且不重写。
 - 任务完成后才从已完成的推导中抽取候选规则，经独立准入、重载复检、每次新应用再检查，存进持久规则库。模型权重不变，知识长在模型之外。
 - 阶段门必须对着库里的真实状态判定，不能凭模型“觉得可以了”就通过；系统算不出来的判断（构念效度、创新性、伦理取舍）只给检查清单，人保留判断权。
 - 可复现性要落盘：实验记录、环境、版本、随机种子都保存到磁盘，换机器能重跑出同样的表。
+- 证据有年龄：`proven` 的 claim 只说“这次调用发生过”，不说“之后没变过”。过期证据必须自己查，协议 0.1 不替你做。
 
 ## 适用与不适用
 
@@ -45,6 +51,7 @@
 - 多步、有材料可核、有可写死验收标准的文书工作：岗位匹配打分与排序、按岗位改写 CV 与求职信、公司调研与草稿批评、面试 prep pack、技能 gap heatmap、跟进信起草、从邮件识别申请状态、生成 HTML 仪表盘、注册并试编译模板、为本地招聘站点生成搜索 CLI。这里迁移的是“起草—独立审阅—机器验收—人工批准外发”的结构，不是整套求职工具。
 - 科研或可复现分析写作：需要多阶段推进、每阶段有可判定门、结论能追到数据、数据能追到可重跑实验、实验记录/环境/版本/随机种子要落盘。可借鉴 DeepScient 的“12 阶段 + 55 门 + 证据链”结构，不必照搬整套工具。
 - 已经有可重复运行的 AI 或数据处理管道，并且有一组“已知正确答案”的基准、已知冒充者样本、已知仪器故障样本、审查者可访问的原始数据、能隔离出的独立审查上下文——这时可以叠加做法 G，先验收验证器本身，再谈产出可不可信。
+- 多 agent / 工具链中，下游需要凭上游的“测试通过了”“某人批准了这笔”“文件已写了”“从某主机取到了数据”行动，而上游 agent 不可信、或双方不想共享信任根：可用做法 H，把这几类主张变成带日志记录和包含证明的消息，接收方离线核验。前提是这些主张确实由 agent 之外的第三方写入（签名器或 attesting executor/gateway），而不是 agent 自己回报。
 
 **不适用或要谨慎**
 
@@ -52,7 +59,7 @@
 - 把 `solved` 当成“存在可行解或满足工程限值”。`solved` 只表示“声明的义务已完成”，每个适配器有自己的有界范围。
 - 想靠它直接提升模型准确率或节省总体算力。ResiMind 原文明确：十题离线对照只测“已发布开发任务上的复用”，不测模型准确率提升，也不测总体算力节省。
 - trading-research-agents 处于 alpha，真实资金路径作者自己没跑过，且强绑定永续合约交易场景——只适合小范围试，不要用真钱起步。
-- 想找时间或外部事件触发的后台持续运行机制时，要分开看：ResiMind 材料里只有状态触发（残差驱动下一次提议），没有时间触发和后台持续运行的说明；trading-research-agents 提供 `tra run --every 15m` 这种按 15 分钟 bar 的时钟循环；ai-job-search 的 `/outcome followup` 默认找 10 天无回音的申请，但原文没有给出 cron/CI 定时调度配置，节奏靠人手动触发。三者不要混为一谈。
+- 想找时间或外部事件触发的后台持续运行机制时，要分开看：ResiMind 材料里只有状态触发（残差驱动下一次提议），没有时间触发和后台持续运行的说明；trading-research-agents 提供 `tra run --every 15m` 这种按 15 分钟 bar 的时钟循环；ai-job-search 的 `/outcome followup` 默认找 10 天无回音的申请，但原文没有给出 cron/CI 定时调度配置，节奏靠人手动触发。三者不要混为一谈。PCM 也只有消息级门控（replay、grant 过期、证据年龄检查点），不是任务调度。
 - 没有人工复核或结果标签时，置信度校准无法落地。
 - 不能把一个任务上校准出的置信度规则直接假定适用于另一类任务。
 - 校准本身不等于有用：一个永远输出历史基率的规则也可能校准，但没有利用新信息；要看高置信度组与低置信度组的实际正确率是否有明显差异。
@@ -65,6 +72,10 @@
 - 系统算不出来的判断（构念效度、创新性、伦理取舍）不要交给模型自动下结论；它只给检查清单，人保留判断权。
 - 做法 G 的四条原则缺少任何一条前提都会退化：没有已知正确答案的基准，就做不了盲测；没有负控样本（冒充者、故障样本），验证器可能只是“什么都通过”；审查者拿不到原始数据，只能复述管道输出；隔离不出独立审查上下文，所谓对抗审查就会变成自我确认。
 - 原文只是作者经验总结，没有数据、案例、样本量、工具名称或失败复盘；39 个赞、2 次转发、5 条回复是传播数据，不是方法有效的证据。
+- 做法 H 当前只是 0.1 草案，评测是单机的，参考实现内置 in-process executor；它不覆盖所有 agent 输出，只覆盖封闭词表里的四类 claim（`tests_passed`、`reached_host`、`file_written`、`approved_by`），新增类型要新 checker 和每种结果的测试向量。它也不负责传输，消息要装在 A2A / MCP 里走。
+- PCM 0.1 不内建新鲜度：测试曾通过、代码改了、测试又失败，发送方引用那次通过；或文件写了两次，引用第一次写。两种都判 `proven`，因为 claim 只说“调用发生过”。必须自己加证据年龄、文件 digest、suite 与 commit 绑定或最大证据年龄。
+- 不能把 PCM 当成“更强的事实来源”：它只证明“这条确切的命令行经由 attesting executor 退出码为 0”“这次调用发生过”“这个人批准了这次调用”。测试 runner 可以带根本不跑测试的 flag，`proven` 的 `tests_passed` 还要拿 `suite` 与自己接受的 suite 集合比对；`reached_host` 在 4xx/5xx 上会被判 `failed`，诚实调用也可能因此被拒。
+- `grants.root` 的验证器只报告 root 那个人是谁，不判断该不该信他；信任谁要你自己定。
 
 ## 前置条件
 
@@ -75,7 +86,8 @@
 - 做法 E（ai-job-search 结构）的前提：Claude Code（无免费层，需 Pro/Max/Team 订阅或 API credits）、Python 3.10+、Bun、带 `lualatex` 与 `xelatex` 的 LaTeX 发行版；可选 `pypdf`（ATS 检查用），Poppler `pdftotext` 为 fallback。自用要建私有仓库，不要用公开 fork，因为 `/setup` 会把姓名、联系方式、履历、薪资期望写进 tracked 文件。模板必须能从命令行编译出 PDF；新增门户前提是目标站点无登录墙。
 - 做法 F（DeepScient）的前提：桌面版 Windows 10/11 不需要 clone 仓库，也不需要单独安装 DeepSeek Harness；macOS Apple Silicon 桌面版不需要 Node.js、pnpm，也不需要单独安装 DeepSeek Harness；Web 工作台形态需要 Windows 10/11、Node ≥ 22.5、已装 DeepSeek Harness 桌面版；源码构建需要对应平台的 DeepSeek Harness 桌面壳或运行时。数据写在 `%USERPROFILE%\.deepscient` 或 `~/.deepscient`，不写 `~/.dsh`。第三方技能安装与 MCP 工具层是可选层；MCP 需要 `npx`，并显式设置 `$env:DSH_ENABLE_MCP = '1'`。
 - 做法 G 的前提：已有可重复运行的管道；一组已有明确正确答案的已知结果；运行时管道不会提前看到答案（答案不能出现在输入、上下文、检索库、文件名或元数据里）；知道要防范的冒充类型和故障类型，并能造出对应样本；审查者能访问原始数据；能隔离出相对独立的审查代理或上下文。原文没有给出命令、配置、提示词模板、样本量或阈值。
-- 版本认知：ResiMind v0.12.1 / Experimental，MIT，30 stars，领域示例多为合成/脚本化 fixture，效果数据由作者自报且未隔离因果；trading-research-agents 为 MIT、PyPI 包、README 标注 Status: alpha；ai-job-search 为单一样本、自我报告、无对照，仓库 stars 63187；DeepScient 0.12.0、dsh-science 0.5.0，成熟度证据来自作者自述，强依赖 DeepSeek Harness，且只在 Windows 上验证过。都先小范围试，不要直接采用。
+- 做法 H 的前提：Python 环境，能 `pip install tracekit-ai==1.5.0`，demo 不需要额外 key；签名器持密钥，agent 不持密钥；append-only Merkle 日志及其 checkpoint 签名 key；接收方 pin 住的 key 和 `trust.json`（威胁模型里接收方只有 message 与 `trust.json`）；双方按哈希 pin 的 schema 文档；接收方每个身份一份 replay state；能产出 T2 记录的 executor/gateway；root grant 必须由签名器配置里具名的人批准，且不能是 agent 批准、不能自批、不能是 grant 的主体。复现评测要把 Tracekit checkout 到 v1.5.0；`run` 另需 standalone verifier 的 `rfc8785` 与 `cryptography`；造新数据集还要 pytest、IPv6 loopback `::1`、能解析 IPv4 写法的 resolver（像 macOS 那样）。
+- 版本认知：ResiMind v0.12.1 / Experimental，MIT，30 stars，领域示例多为合成/脚本化 fixture，效果数据由作者自报且未隔离因果；trading-research-agents 为 MIT、PyPI 包、README 标注 Status: alpha；ai-job-search 为单一样本、自我报告、无对照，仓库 stars 63187；DeepScient 0.12.0、dsh-science 0.5.0，成熟度证据来自作者自述，强依赖 DeepSeek Harness，且只在 Windows 上验证过；PCM 0.1 是草案，单机评测，参考实现内置 in-process executor。都先小范围试，不要直接采用。
 
 ## 操作步骤
 
@@ -599,7 +611,93 @@ node deepscient/scripts/probe-mcp.mjs pubmed
 
 预期结果：你得到的是验证器的成绩单，而不只是被验证对象的成绩单。没有这份成绩单，就不能说“我的验证器是独立的”。
 
-### 怎么选用 A / B / C / D / E / F，以及 G 加在哪
+### 做法 H：当下游要凭上游 agent 的说法行动时，用可离线核验的证据消息（PCM 0.1）
+
+这条与 A–G 的差别：A–F 是在具体领域里搭回路，G 验收验证器；H 处理的是 agent 与 agent 之间的消息——让“测试通过了”“某人批准了这笔”“文件已写了”“从某主机取到了数据”这类 claim 自带日志记录和包含证明，接收方离线核验，而不是相信发送方进程的自报。H 不负责传输，消息要装在 A2A / MCP 里走；它也不替你判断该不该信任 root 那个人。
+
+**步骤 41：装参考实现并跑通 demo**
+
+前提：有 Python 环境、能 pip 安装。
+
+```sh
+pip install tracekit-ai==1.5.0
+tracekit pcm demo        # two agents, a refund request and a real signer: accepted, unproven and rejected messages
+```
+
+预期结果：demo 会给出三类消息各一条：accepted、unproven、rejected。先把这三条输出和 `skipped` 字段看懂，再接自己的系统。
+
+**步骤 42：让 agent 的工具调用走证明型签名器**
+
+前提：agent 不再持有密钥；签名器能写 append-only Merkle 日志；接收方有自己 pin 住的 key。协议要求的三步：
+
+1. agent 的工具调用经过 attesting signer，签名器把每次调用记进 append-only Merkle 日志，agent 写不了这个日志；
+2. agent 发消息时由签名器签名，消息携带支撑每条 claim 的日志记录与包含证明；
+3. 接收方离线校验签名、证明、记录（对照自己 pin 住的 key），每条 claim 得 `proven` / `unproven` / `failed`。
+
+关键前提：要拿到 `proven`，执行方必须是 attesting gateway 或 executor（T2），不能是 agent 自己回报。agent 自己进程上报的结果（T1）只给 `unproven`；T2 标记只读签名器设置的字段，不读 agent 发来的数据。
+
+预期结果：你的消息里不再出现“agent 自己说测试过了所以算 proven”的情况；自报永远是 `unproven`。
+
+**步骤 43：构造消息（JSON envelope）**
+
+前提：双方按哈希 pin 住 schema 文档；签名器配置里已有具名的人。
+
+- 签名器负责设置消息的 `id`、`ts`、`nonce`、`sig`；
+- **intent** 是 typed 的，按双方用哈希 pin 住的 schema 文档校验；
+- **claims** 目前是封闭词表四种类型：`tests_passed`、`reached_host`、`file_written`、`approved_by`；新增类型需要新 checker 和每种结果的测试向量；
+- **grants**：root grant 只有在“签名器配置里具名的人”批准了一个条款完全一致的 `pcm.grant` 调用后才存在——不能是 agent 批准、不能自批、不能是 grant 的主体；子 grant 只能收窄父 grant（按类型化 caveat 的固定蕴含表），每层都由签名器校验后签名，验证方再校验整条链，并绑定到发送方 tenant 与该消息的签名日志；
+- 传输层不替代：PCM 消息设计为装在 A2A / MCP 里，作为 `application/vnd.pcm+json` 类型的 part 或 embedded resource。
+
+预期结果：消息能表达“这次调用发生了什么”，而不是“agent 认为发生了什么”；每条 claim 都有对应的日志记录或明确的 `unproven`。
+
+**步骤 44：接收方按顺序核验**
+
+前提：接收方有 `trust.json`、pin 住的 key、schema 文档和每个身份一份 replay state。
+
+对一条消息依次做：验签（对照自己 pin 的 log key）→ 每条记录的 `hash` 是否等于其 `event` 的哈希、`proof` 是否通向 checkpoint root → 记录是否是发送方 run 与 tenant 的合法事件 → 按 id 把 approval 连到其 request、request 连到 decision → 若 claim 带 `covers: true` 且 decision 是 `pcm.grant`，走 grant 路径，校验 root grant 的 `issuer.approval_id`、`run`、`tenant` 与该 approval 一致 → 校验 grant 链的 caveat（例：`amount <= 20000`、`order == 81`）→ 校验 schema → 校验 replay。
+
+预期结果：不能严格解析的文本得 `bad-input`，在任何检查之前就被拒；能验的 claim 得 `proven`，自报得 `unproven`，验不过得 `failed`。
+
+**步骤 45：接收方纪律（可直接做成检查清单）**
+
+前提：接收方以一个身份 `me` 运行，整个生命周期只维护一份 replay state。
+
+- 同一身份的多个副本要么按发送方路由到同一副本，要么共享状态——一个接收身份对每条消息最多接受一次。`skipped` 非空的结果**只能用于审计**。
+- **绝不根据 `reject` 行动**；把 `unproven` 当作发送方的一面之词。
+- 需要“人的授权”时，在 schema 里列出 `approved_by`，这样只有带 `covers: true` 的 claim 才满足它。注意：approval 是对**一次调用**的批准，不是对一条消息的批准；在 tool-and-args 路径上，它覆盖发往任何接收方、任意次数、同样的 tool + args 的每条消息。要一次性授权，就在 schema 里列一个该请求唯一的字段（如 `request_id`）并每个值只执行一次，或者要求 grant（其 caveats 与过期时间限定范围）。
+- `approved_by` 没有 `covers` 时，要读结果里的 `approved`（它的 `tool` 与 `args`），不能只看 `result`——claim 里的 call id 是 agent 自己起的名字，`approved` 才是那个人实际看到的。
+- `proven` 的 `tests_passed` 只证明“这条确切的命令行经由 attesting executor 退出码为 0”。测试 runner 可以带根本不跑测试的 flag，所以要拿 `suite` 与自己接受的 suite 集合比对。
+- `proven` 的 claim 只说“这次调用发生过”，不说“之后没变过”：检查证据年龄（两个 CLI 在 `proven` 的 `tests_passed` 或 `file_written` 之后都会打印），文件还要拿 digest 与手上的字节比对。
+- `grants.root` 要对照你自己接受的人：验证器只报告 root 那个人是谁，不判断该不该信他。
+
+预期结果：`unproven` 不会变成行动依据；`reject` 不会触发任何操作；`skipped` 进了审计而不是决策。
+
+**步骤 46：复现评测（可选，用于自评或改造）**
+
+前提：仓库根目录；Tracekit checkout 到 v1.5.0；`run` 另需 standalone verifier 的 `rfc8785` 与 `cryptography`。
+
+```sh
+PYTHONPATH=<tracekit> python -m bench.lies run --verifier all   # results/{tracekit,standalone,baselines}.jsonl
+python -m bench.lies report                                     # results/results.json, findings/, the tables
+```
+
+要造新数据集先跑 `gen`（会覆盖已提交的 `data/dataset.jsonl` 与 `data/meta.json`，另需 pytest、IPv6 loopback `::1`、以及像 macOS 那样解析 IPv4 写法的 resolver；seed 20261028 固定密钥与所有选择）：
+
+```sh
+PYTHONPATH=<tracekit> python -m bench.lies gen                  # data/dataset.jsonl, data/meta.json (~1 min)
+```
+
+预期结果：得到本地的假接受率、诚实主张 `proven` 率、两个独立验证器判决一致性、单条核验耗时、消息体积倍数。原文没有给目标值，先记基线。
+
+**步骤 47：必须自己补新鲜度**
+
+前提：你已经跑通至少一条 claim 的端到端核验。
+
+做法：0.1 的已知漏洞是“过期证据”：测试曾通过、代码改了、测试又失败，发送方引用那次通过；或文件写了两次，引用第一次写。两种都判 `proven`，因为 0.1 的 claim 只说“调用发生过”。原文给的缓解是检查证据年龄 + 文件 digest 比对，而“调用之后的运行状态”证据只是 Appendix B 第 5 问里 0.2 的设计方向。所以接入时要自己加：对关键决策重跑测试或把 suite 与 commit 绑定；对文件一律核 digest；对带时间窗的结论设最大证据年龄。
+
+预期结果：过期证据不会因为 `proven` 就被当成当前事实；你能说清每条关键 claim 的证据年龄和绑定对象。原文的数据点是：0.1 版 712 条谎话里唯一漏放的 10 条全是过期证据。
+
+### 怎么选用 A / B / C / D / E / F / G / H
 
 - 第一次接触、只想看清回路：走 A。
 - 已经有明确“什么算通过”的检查、要把回路搬到自己的任务：走 B。
@@ -607,24 +705,26 @@ node deepscient/scripts/probe-mcp.mjs pubmed
 - 需要给模型输出分级/分流、已有真人复核和结果标签、又不想让模型自评置信度：走 D；D 可以独立于 A/B/C 使用，但最好和独立验证器一起用。
 - 多步文书任务、验收能写成页数/文本层/版式/关键词/发布信息等检查：走 E；先只取“起草—独立审阅—脚本验收—人工批准”四件事，不要整体照搬求职工具。
 - 科研/可复现分析写作、需要阶段门和证据链：走 F；先小范围试装，重点借鉴结构，不要因为工具多就整体照搬。
+- 多 agent / 工具链、下游要凭上游的“测试通过了/某人批准了/文件写了/取到了数据”行动：走 H；先跑 demo，只接一种 claim，先拿 `unproven` 和 `reject` 做负控，再谈自动化。
 - 不管走哪条路，先加 G：验证器先被验证，再谈产出。如果你还没有回路，先 A，再用 G 验收你照着搭出来的验证器；如果你已经有回路，先 G，找出验证器“什么都通过”的问题。
-- 只想评估值不值得继续投入：先 A，再小范围 B 或 C 或 D 或 E 或 F。
+- H 和 G 的关系：G 检查你的验证器会不会“什么都通过”；H 让消息里的 claim 自带可离线核验的证据。两者可以叠加：先用 G 验收接收方的核验器，再用 H 约束消息。
+- 只想评估值不值得继续投入：先 A，再小范围 B 或 C 或 D 或 E 或 F 或 H。
 
 ### 不管走哪条路，都要守住的约束
 
-1. **证据先于主张**：证据必须由注册的 `EvidenceTool` 先收集成类型化输入，再谈主张。文书任务里对应的是先拿到 JD、profile、已提交材料，再写；科研任务里对应的是先有实验记录和数据，再写结论。
-2. **验证器必须独立**：检查引用、前提、作用域、精确有理数算术、单位；提交时原子地检查引用与冲突。模型不能靠置信度或一个 `verified` 字段给自己发验证。做法 C 的等价物是：模型引用的每一个数字都要对着发给它的 brief 校验，连值一起校验。做法 E 的等价物是：草稿之外另起 fresh context 的 reviewer，并用脚本检查页数、版式、文本层。做法 F 的等价物是：阶段门对库内真实状态判定，结论追到数据、数据追到可重跑实验。
+1. **证据先于主张**：证据必须由注册的 `EvidenceTool` 先收集成类型化输入，再谈主张。文书任务里对应的是先拿到 JD、profile、已提交材料，再写；科研任务里对应的是先有实验记录和数据，再写结论；消息任务里对应的是先有签名器写入的日志记录和包含证明，再谈 claim。
+2. **验证器必须独立**：检查引用、前提、作用域、精确有理数算术、单位；提交时原子地检查引用与冲突。模型不能靠置信度或一个 `verified` 字段给自己发验证。做法 C 的等价物是：模型引用的每一个数字都要对着发给它的 brief 校验，连值一起校验。做法 E 的等价物是：草稿之外另起 fresh context 的 reviewer，并用脚本检查页数、版式、文本层。做法 F 的等价物是：阶段门对库内真实状态判定，结论追到数据、数据追到可重跑实验。做法 H 的等价物是：验签、验包含证明、验记录归属、验 grant 链、验 schema、验 replay——不是看 agent 自报。
 3. **成本先算**：fee、spread、impact、funding、slippage 组成往返成本，在订单存在之前就定价，声称的 edge 覆盖不了就直接拒。
 4. **每个角色只看它工作需要的数字**：brief 由系统按角色写；宏观分析师永远不能提方向，情绪分析师不能编造没有数字支持的 mood。文书任务里 reviewer 只拿内联草稿批评，不重读全部文件。
-5. **闭 schema 先行**：模型回答先过闭 schema 再给人读，所以只支持 JSON mode 的 provider 也被约束成同样的形状。
+5. **闭 schema 先行**：模型回答先过闭 schema 再给人读，所以只支持 JSON mode 的 provider 也被约束成同样的形状。PCM 里对应的是 intent 按双方 pin 住的 schema 校验、claims 是封闭词表。
 6. **引用不到数字的 claim 直接丢弃**：验证者只能 support/oppose/abstain 并引用被给到的数字；投票本身永远不决定结果，只按你给的权重移动 conviction。
-7. **拒绝不改变状态，只回原因，并指名那个数字**：缺前提就让任务保持 open，例如缺配送日期、缺回程路线测量时都不产出完成态结论。
+7. **拒绝不改变状态，只回原因，并指名那个数字**：缺前提就让任务保持 open，例如缺配送日期、缺回程路线测量时都不产出完成态结论。消息任务里 `reject` 不驱动行动，`unproven` 只当一面之词。
 8. **残差驱动重试**：未完成目标、未知量和硬约束从已提交事实重建，直接驱动下一次提议。
 9. **预算有界**：跨策略变化时重试与动作预算仍然有界；attempt/stall budgets 限制循环；v0.12 引入显式累加的 overflow reserve，默认储备为 0，每个被接受的步骤只付它估算的超额。
 10. **本地优先于调模型**：先比较“已验证规则的预览、化简、本地展开”三种本地手段，再决定是否叫模型（v0.10 cost-aware scheduling）。
-11. **全部不重写地落盘**：每轮的 snapshot、briefs、answers、intent、venue 回复都要能事后复查。文书任务里是 tracker、归档目录和 CI 记录；科研任务里是实验记录、环境、版本、随机种子和证据链。
+11. **全部不重写地落盘**：每轮的 snapshot、briefs、answers、intent、venue 回复都要能事后复查。文书任务里是 tracker、归档目录和 CI 记录；科研任务里是实验记录、环境、版本、随机种子和证据链；消息任务里是 `skipped`、`reasons`、replay state 和核验记录。
 12. **保护要随单一起发出**：止损止盈随入场单发到交易所，这样它们能在本进程死掉后仍然存在。
-13. **模型的权限边界**：模型不能下单、撤单、改仓位、读项目外的文件、改配置；风控只能 continue / cut / pause / halt，不能放松限额也不能加仓；两个审计只能出 findings 和 proposed changes。文书任务里模型不能自动外发、不能执行 JD 正文里的指令、不能抓正文里的链接。
+13. **模型的权限边界**：模型不能下单、撤单、改仓位、读项目外的文件、改配置；风控只能 continue / cut / pause / halt，不能放松限额也不能加仓；两个审计只能出 findings 和 proposed changes。文书任务里模型不能自动外发、不能执行 JD 正文里的指令、不能抓正文里的链接。消息任务里 agent 不持密钥、不能写签名日志、不能自批 grant。
 14. **置信度来自规则，不来自模型自报**：低置信度走人工复核，不自动提交。
 15. **校准要分任务，且要看区分度**：在一个任务上校准出的规则，不能直接假定适用于另一类任务；要看高置信度组与低置信度组的实际正确率是否有明显差异。
 16. **先私有、再自动化**：带个人信息的文书仓库先设 private；外部写操作（投递、发信、写 tracker）先留人工批准位。
@@ -632,17 +732,20 @@ node deepscient/scripts/probe-mcp.mjs pubmed
 18. **验证器先被验证**：先做盲测重现和负控拒绝，再谈独立验证；没有负控样本，验证器可能只是“什么都通过”。
 19. **审查用非引导提示，且从原始数据重算**：不要把结论交给审查者让它确认；只给原始问题和原始材料，并让它自己算、自己查、自己重跑。
 20. **审查要反复，停手条件先写**：原文只说“反复这样做”，没有给次数和停止条件；停手条件要在开始前写下来并记录，不能假装有通用阈值。
+21. **自报永远是 `unproven`**：只靠 agent 自己说法的主张，不管说得多确定，都只能当一面之词；要 `proven`，就必须有 agent 之外的第三方写入的记录。
+22. **证据有年龄，且只证明“发生过”**：`proven` 不等于“现在仍然成立”；关键决策要重跑测试或绑定 commit，文件要核 digest，带时间窗的结论要设最大证据年龄。
 
 ## 怎么判断变好了
 
 **原则**
 
 - **Measure the Agent, not the model**：固定模型、任务和资源上限，只测完成率、无效交付、调用次数、跨任务复用。
-- 验收门槛是独立验证器，不是模型自我评价；置信度规则只用于分级/分流，不能替代独立验证器。文书任务里验收门槛是脚本检查 + 独立审阅 + 人工批准，不是“读起来不错”；科研任务里验收门槛是阶段门 + 数据/实验证据链 + 可重跑记录，不是模型说“可以了”。
-- 每次尝试都记录决策、原因、状态、残差，用 `--json` 审计轨迹查；做法 C 里对应的原始材料是落盘的 snapshot / briefs / answers / intent / venue 回复，以及每次拒绝指名的那一个数字；做法 E 里是 tracker、归档目录、CI 和核对清单；做法 F 里是阶段门记录、实验记录、环境、版本、随机种子和证据链。
-- 数据要新鲜才算数：`tra sources show` 里超过 `max_age` 的值显示为 stale 且永不计入，先看有没有 stale 再谈结论。
+- 验收门槛是独立验证器，不是模型自我评价；置信度规则只用于分级/分流，不能替代独立验证器。文书任务里验收门槛是脚本检查 + 独立审阅 + 人工批准，不是“读起来不错”；科研任务里验收门槛是阶段门 + 数据/实验证据链 + 可重跑记录，不是模型说“可以了”；消息任务里验收门槛是离线核验通过的 `proven`，不是发送方说“我验证过了”。
+- 每次尝试都记录决策、原因、状态、残差，用 `--json` 审计轨迹查；做法 C 里对应的原始材料是落盘的 snapshot / briefs / answers / intent / venue 回复，以及每次拒绝指名的那一个数字；做法 E 里是 tracker、归档目录、CI 和核对清单；做法 F 里是阶段门记录、实验记录、环境、版本、随机种子和证据链；做法 H 里是 `skipped`、`reasons`、replay state 和核验记录。
+- 数据要新鲜才算数：`tra sources show` 里超过 `max_age` 的值显示为 stale 且永不计入，先看有没有 stale 再谈结论；PCM 里要看证据年龄和文件 digest。
 - 置信度要看校准，不看单个数字：每个置信度档位的“声称正确率”和“实际正确率”差多少；高置信度组的实际正确率是否明显高于低置信度组。
 - 验证器本身也要有成绩单：盲测重现率、负控拒绝率、审查发现的实质错误数、复核后结论被修正或推翻的比例、重复审查的一致性、审查耗时和成本。原文没有给指标，这些是建议观察项。
+- 消息级证据要有自己的成绩单：假接受率、诚实主张 `proven` 率、两个独立验证器判决一致性、单条核验耗时、消息体积倍数；再加一项“过期证据导致的漏放数”。
 
 **最小试用方式**
 
@@ -656,10 +759,11 @@ node deepscient/scripts/probe-mcp.mjs pubmed
 - 做法 E 的可观察指标：脚本一次通过率；被脚本拒绝的具体原因分布（页数、版式、文本层、关键词、隐藏字符等）；人工返工次数；审阅者指出的问题中，修改后确实消失的比例；外发后是否出现事实错误或格式事故；从草稿到可交付的端到端时长。原文没有给出这些指标的目标值，先记录基线再比较。
 - 做法 F：最小试用是在 Windows 桌面版跑通启动与登录，跑一次 `node tools/verify-packaging.mjs`；再选一个小课题按 12 阶段推进，记录每道门拒绝的原因、补了什么证据、换机器能否重跑出同样的表。`verify-deepscient.mjs` 要等实例在跑并带 token；`e2e-science-run.mjs` 要真 key、真模型。可观察指标：阶段门一次通过率、被拒绝的具体门与原因分布、结论到数据到实验的可追踪比例、换机器重跑一致率、验证脚本通过项数。原文没有给这些指标的目标值，先记录基线再比较。
 - 做法 G：选一个已有明确已知结果的 AI 或数据处理管道，准备少量已知正确样本和少量已知冒充/故障样本；先在盲目条件下重跑，再用独立代理做非引导性对抗审查，最后要求审查者回到原始数据复核。记录步骤 40 的四类结果加上审查耗时和成本；原文没有给目标值，先记基线再比较。
+- 做法 H：选一条真实 agent 链路，只接一种 claim（优先 `tests_passed` 或 `approved_by`）；先跑 `tracekit pcm demo` 看懂三类消息；把 agent 的工具调用改走 attesting signer；接收方按步骤 44 的顺序核验，按步骤 45 的纪律行动；准备少量已知谎话样本（例如 agent 自报测试通过但其实没跑、过期测试结果、文件已被改但引用旧记录），看它们是否被判 `unproven` / `failed` 或被证据年龄拦住；记录步骤 46 的五类指标和过期证据漏放数。原文的评测是单机的，0.1 版 712 条谎话里漏放的 10 条全是过期证据，不要以为协议自带新鲜度。
 
 **试多久**
 
-材料没有给出统一时间长度。它给出的可比单位是“十题离线对照”“每题 8 次调用上限”，做法 C 的 bar 粒度（15 分钟 bar 决策、`--every 15m`），做法 D 的按周或固定周期汇总，做法 E 的“5–10 个真实任务”是这里建议的最小观察窗口而非原文数字；做法 F 原文没有给试用时长，可用“一个小课题端到端跑完”作为观察窗口，这是建议而非原文数字。做法 G 原文只说“反复这样做”，没有给次数、停止条件或一致性标准；停手条件要在开始前自己写下来并记录，不能假装有通用阈值。按这些粒度做最小对照，不要用“感觉聪明了”当结论。
+材料没有给出统一时间长度。它给出的可比单位是“十题离线对照”“每题 8 次调用上限”，做法 C 的 bar 粒度（15 分钟 bar 决策、`--every 15m`），做法 D 的按周或固定周期汇总，做法 E 的“5–10 个真实任务”是这里建议的最小观察窗口而非原文数字；做法 F 原文没有给试用时长，可用“一个小课题端到端跑完”作为观察窗口，这是建议而非原文数字；做法 G 原文只说“反复这样做”，没有给次数、停止条件或一致性标准，停手条件要在开始前自己写下来并记录；做法 H 原文没有给试用时长，可用“一条链路的一种 claim 端到端跑通 + 一批已知谎话样本”作为观察窗口，这是建议而非原文数字。按这些粒度做最小对照，不要用“感觉聪明了”当结论。
 
 ## 常见坑
 
@@ -670,7 +774,7 @@ node deepscient/scripts/probe-mcp.mjs pubmed
 - **缺前提也强行给完成态**：缺配送日期、缺回程路线测量时都应保持 open。
 - **拒绝时改动状态**：正确做法是保留状态、只回传原因；而且要指名背后的那个数字。
 - **实时失败没有回退却当成离线用**：ResiMind 材料明确实时请求失败后没有离线回退；实时调用还会产生费用，也可能一直保持未解决状态。
-- **把领域示例当生产证据**：ResiMind v0.12.1 为 Experimental，领域示例多为合成/脚本化 fixture，效果数据由作者自报且未隔离因果；trading-research-agents 为 alpha，真实资金路径作者自己没跑过；ai-job-search 只有作者一人的求职漏斗，无对照；DeepScient 成熟度证据主要来自作者自述，只在 Windows 上验证过。
+- **把领域示例当生产证据**：ResiMind v0.12.1 为 Experimental，领域示例多为合成/脚本化 fixture，效果数据由作者自报且未隔离因果；trading-research-agents 为 alpha，真实资金路径作者自己没跑过；ai-job-search 只有作者一人的求职漏斗，无对照；DeepScient 成熟度证据主要来自作者自述，只在 Windows 上验证过；PCM 0.1 是草案、单机评测、参考实现内置 in-process executor。
 - **用 GitHub 的 `develop` 分支而不是 PyPI release**：README 明确那里的 commit 不是 release。
 - **`.env` 放错位置**：命令只在 `strategy.toml` 旁边的 `.env` 里找 key。
 - **把练习账户和 mainnet 混着来**：想发真单先在交易所的练习账户试，不要上 mainnet 起步。
@@ -678,7 +782,7 @@ node deepscient/scripts/probe-mcp.mjs pubmed
 - **把验证者的投票当裁决**：投票永远不决定结果，只按权重移动 conviction。
 - **指望审计或风控替你放宽限制**：审计只能出 findings 和 proposed changes；风控只能更保守，不能放松限额也不能加仓。
 - **拿 stale 数据当依据**：超过 `max_age` 的值显示为 stale 且永不计入。
-- **把触发机制搞混**：ResiMind 只有状态触发；`tra run --every 15m` 是另一套材料的时钟循环；ai-job-search 的 followup 是手动触发的规则，不是定时调度；DeepScient 的 campaign 工具原文没有说明自动触发机制。
+- **把触发机制搞混**：ResiMind 只有状态触发；`tra run --every 15m` 是另一套材料的时钟循环；ai-job-search 的 followup 是手动触发的规则，不是定时调度；DeepScient 的 campaign 工具原文没有说明自动触发机制；PCM 只有消息级门控，不是任务调度。
 - **误把它当成“更强模型”**：这些结构的定位都是把模型放进先验证后提交的回路；模型权重不变，知识长在模型之外。
 - **只校准不区分**：一个永远输出历史基率的规则也可能校准，但没有利用新信息。
 - **跨任务套用校准规则**：在一个任务上校准出的规则，不能直接假定适用于另一类任务。
@@ -706,6 +810,18 @@ node deepscient/scripts/probe-mcp.mjs pubmed
 - **让审查者读管道输出而不是原始数据**：它复述的是你的结论；要从原始数据重新算、重新查、重新跑。
 - **把一次审查当结论**：原文只说“反复这样做”，没有给次数、停止条件或一致性标准；停手条件要自己写并记录。
 - **把推文的互动数据当方法有效证据**：39 个赞、2 次转发、5 条回复只是传播数据，不是实验或案例。
+- **把 agent 自报当 `proven`**：只靠 agent 自己说法的主张永远是 `unproven`；要 `proven`，必须有 agent 之外的第三方写入的日志记录。
+- **拿 `unproven` 当行动依据**：`unproven` 只是发送方的一面之词；需要人的授权时，在 schema 里列 `approved_by`，并只认带 `covers: true` 的 claim。
+- **根据 `reject` 行动**：接收方纪律明确“绝不根据 `reject` 行动”；`skipped` 非空的结果只能用于审计。
+- **让 agent 持密钥或写签名日志**：agent 自己从不持有密钥；签名器把每次调用记进 append-only Merkle 日志，agent 写不了这个日志。
+- **让 agent 自批 grant 或让 grant 主体批准**：root grant 必须由签名器配置里具名的人批准，不能是 agent 批准、不能自批、不能是 grant 的主体；子 grant 只能收窄父 grant。
+- **只看 `approved_by` 的 `result`**：没有 `covers` 时要读 `approved`（它的 `tool` 与 `args`）；claim 里的 call id 是 agent 自己起的名字。
+- **把 `proven` 的 `tests_passed` 当成“测试套件真的跑过”**：它只证明“这条确切的命令行经由 attesting executor 退出码为 0”；测试 runner 可以带根本不跑测试的 flag，要拿 `suite` 与自己接受的 suite 集合比对。
+- **把 `proven` 当成“现在仍然成立”**：`proven` 只说“这次调用发生过”；要查证据年龄、文件 digest，关键决策要重跑测试或绑定 commit。0.1 版 712 条谎话里漏放的 10 条全是过期证据。
+- **每个副本各维护一份 replay state**：一个接收身份对每条消息最多接受一次；多个副本要么按发送方路由到同一副本，要么共享状态。
+- **把 PCM 当通用事实来源**：它只覆盖封闭词表四类 claim；新增类型要新 checker 和每种结果的测试向量；它不负责传输，要装在 A2A / MCP 里走。
+- **把 `grants.root` 的验证器当信任判断**：验证器只报告 root 那个人是谁，不判断该不该信他；信任谁要你自己定。
+- **以为 `reached_host` 一定被判 `proven`**：`reached_host` 在 4xx/5xx 上会被判 `failed`，诚实调用也可能因此被拒。
 
 ## 证据与来源
 
@@ -715,7 +831,8 @@ node deepscient/scripts/probe-mcp.mjs pubmed
 - 做法 E（ai-job-search）：把个人知识拆成 `01-candidate-profile.md` … `07-interview-prep.md`、`.claude/commands/*.md`、`verify_pdf.py`、`verify_layout.py`、`posting_guard.py`、`lint_skills.py`、drafter 写 + fresh context 的 reviewer 批评、LaTeX 页数与版式规则、ATS 文本层与关键词覆盖、CI 的 LaTeX 冒烟编译与 skill lint、`framework_version` bump 检查、私有仓库警告、`/setup` / `/scrape` / `/rank` / `/apply` / `/interview` / `/outcome` / `/gmail-sync` / `/expand` / `/upskill` / `/html-report` / `/notion-sync` / `/add-template` / `/add-portal` 的用法与前提：来自本次 ai-job-search 调研报告正文，依据其 README 与 `SETUP.md`。其中 `verify_pdf.py`、`verify_layout.py`、ATS 检查、CI、`posting_guard.py` 属于仓库中可直接核对的机器检查；reviewer 能抓出漏关键词/弱框架/套话、框架“编码了职业指导最佳实践”、模式可迁移到其他多步文书任务，属于作者主张，原文没有非求职用例，也没有对照实验。作者自述数据为 69 份定制申请、20 次一面、1 份签约、2026 年 6 月入职；仓库 stars 63187；这是单一样本、自我报告、无对照，且时间是未来式的，不能独立复核。门户绑定丹麦市场、Claude Code 无免费层、需要 LaTeX/Bun/Python、`/apply` 编译-检视循环多花 token、LinkedIn 自动化违反 ToS、安全边界是指令级不是沙箱、原文没有 cron/CI 定时调度配置：均来自该报告。
 - 做法 F（DeepScient）：12 阶段、55 个可判定门、36 个科研工具、98 条技能（随包 17 条 + 第三方 81 条）、证据链、可复现、人保留判断权、桌面版 Windows/macOS 安装包与大小、首次装配约 30–40/30–60 秒、数据写在 `%USERPROFILE%\.deepscient`、源码构建命令、Web 工作台命令与端口 3081–3099、M7 调度层 5 个工具与 4 级 13 岗、第三方技能安装 `--plan`/`--apply`、MCP 开关与 `probe-mcp.mjs`、`verify-packaging.mjs`（20 项）、`verify-deepscient.mjs`（294 项，不带 token 285 项）、`e2e-science-run.mjs`（端到端六段）、`install-skills.mjs --self-test`（10 项）、`verify-portability.mjs`（78 个文件）：来自本次 DeepScient 调研报告正文，依据其 README 与仓库脚本。成熟度证据主要来自作者自述，强依赖 DeepSeek Harness，只在 Windows 上验证过；原文没有给出单道门具体判定条件、36 工具完整名称与用法、提示词模板，也没有说明 campaign 工具的触发器类型、重试策略或中断恢复机制：这些同样来自该报告结论与正文。采用前先按“怎么判断变好了”自行验证。
 - 做法 G（盲测重现、负控拒绝、非引导对抗审查、从原始数据复核）：四条原则来自本次 @fofrAI 推文调研报告；原文是作者经验总结，没有给出数据、案例、样本量、工具名称、命令、配置、提示词模板或阈值；推文互动数据 39 个赞、2 次转发、5 条回复只是传播数据，不是方法有效的证据。适用条件是已有可重复运行的管道、有已知正确答案的基准、有已知冒充或故障样本、能访问原始数据、能隔离出独立审查代理；缺少这些条件时只能把四条原则当验证思路。报告建议的最小试用是选一个已有明确已知结果的管道，准备少量已知正确样本和少量已知冒充/故障样本，先盲测重跑，再独立非引导对抗审查，最后回原始数据复核；指标由试用者自行定义，原文没有给目标值。
-- 需要区分的两类信息：命令、接口契约、审计方式、默认值表、脚本名与 CI 检查属于仓库/README 材料可直接核对；完成率、提议次数、复用次数、69→20→1 等效果数字属于作者自报，ResiMind 原文说明未隔离因果，ai-job-search 无对照；trading-research-agents 材料未给出任何收益类效果数字；置信度调研的 75%/95%/40%/90%/70% 均为解释性示例；DeepScient 的成熟度与效果主要来自作者自述，且只在 Windows 上验证过；做法 G 的四条原则属于作者经验总结，没有数据、案例或效果数字。采用前先按“怎么判断变好了”自行验证。
+- 做法 H（PCM 0.1）：消息里每条 claim 携带证据、接收方离线核验、证据来自发送方无法写入的 append-only Merkle 日志并附 RFC 9162 包含证明和 checkpoint 签名、证明型签名器、agent 不持密钥、三值判定 `proven` / `unproven` / `failed` 与 `accept` / `accept-unproven` / `reject`、`bad-input` 优先拒绝、只靠 agent 自报永远是 `unproven`、T1 与 T2 的区别、四类 claim（`tests_passed`、`reached_host`、`file_written`、`approved_by`）、root grant 与子 grant 的批准/收窄规则、接收方核验顺序与纪律、`approved_by` 的 `covers` 与 `approved`、`tests_passed` 的 `suite` 比对、证据年龄与文件 digest、`grants.root` 只报告不判断、`pip install tracekit-ai==1.5.0` 与 `tracekit pcm demo`、`bench.lies run` / `report` / `gen` 命令、seed 20261028、0.1 版 712 条谎话中漏放的 10 条全是过期证据、单机评测与 in-process executor、0.1 草案与“调用之后的运行状态”只是 0.2 设计方向：来自本次 Cygnux-Labs/PCM-protocol 调研报告正文与结论。该报告建议小范围试：按 README 跑通 tracekit pcm demo，并只在一条需要凭上游结论行动的 agent 链路上接入 PCM 的三值校验，同时自行补上证据新鲜度检查；协议本身仍是 0.1 草案、单机评测、参考实现内置 in-process executor。
+- 需要区分的两类信息：命令、接口契约、审计方式、默认值表、脚本名与 CI 检查属于仓库/README 材料可直接核对；完成率、提议次数、复用次数、69→20→1 等效果数字属于作者自报，ResiMind 原文说明未隔离因果，ai-job-search 无对照；trading-research-agents 材料未给出任何收益类效果数字；置信度调研的 75%/95%/40%/90%/70% 均为解释性示例；DeepScient 的成熟度与效果主要来自作者自述，且只在 Windows 上验证过；做法 G 的四条原则属于作者经验总结，没有数据、案例或效果数字；做法 H 的 712 条/10 条是 PCM 报告里的评测数据，但仍是单机评测，不是你的场景的效果证明。采用前先按“怎么判断变好了”自行验证。
 
 ## 依据的调研
 
@@ -725,3 +842,4 @@ node deepscient/scripts/probe-mcp.mjs pubmed
 - [ai-job-search-dev/ai-job-search](../research/radar/2026-10-22/5843-ai-job-search-dev-ai-job-search.md)：值得一试，把它的“起草—独立审阅—机器可检验收”流水线（drafter/reviewer 双 agent、把验收标准写成脚本、把个人知识拆成编号 profile 文件）抽出来小范围试，而不是整体照搬求职工具；理由是把多步文书任务拆成可复用命令、并用脚本而非“看着还行”来验收，正是最值得迁移到其他工作的部分，但原文的实证只有作者一人的求职漏斗，门户工具绑定丹麦市场，且需要付费 Claude 加 LaTeX/Bun 环境。
 - [yzlin286-wq/Deepscient](../research/radar/2026-10-25/6803-yzlin286-wq-deepscient.md)：值得一试，若你正在做科研或需要可复现的分析写作流程，可以按 README 的桌面安装步骤小范围试装，重点借鉴它“12 阶段 + 55 个可判定门 + 证据链”的结构；不必照搬整套工具。理由是：原文给出了可直接执行的安装、配置和验收命令，但成熟度证据全部来自作者自述，且强依赖 DeepSeek Harness，只在 Windows 上验证过。
 - [@fofrAI: 一些关于我如何进行这类探索工作的提示：](../research/radar/2026-10-26/7038-item.md)：值得一试，建议先把这四条原则做成最小验证清单，并选一个已有已知结果的管道小范围试用；原文虽短，但给出了可执行的验证动作，足以检验其价值。
+- [Cygnux-Labs/PCM-protocol](../research/radar/2026-10-30/8509-cygnux-labs-pcm-protocol.md)：值得一试，建议小范围试：按 README 跑通 tracekit pcm demo，并只在一条需要凭上游结论行动的 agent 链路上接入 PCM 的三值校验（proven/unproven/failed），同时自行补上证据新鲜度检查——因为 0.1 版 712 条谎话里唯一漏放的 10 条全是过期证据，协议本身仍是 0.1 草案、单机评测、参考实现内置 in-process executor。

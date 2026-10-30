@@ -1,16 +1,16 @@
-# 让编码 agent 在宣布完成前拿出可核对证据
+# 让 agent 的“完成”与“已验证”都拿得出证据
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：把“确保正确”“测试通过”“已完成”从 agent 自述换成具名检查、可复核回执和真实运行证据，并说明六组做法各自适用的宿主与边界。
-> 先试这一步：先在一个小仓库装 first-pass（Claude Code 走插件），让下一个改动按 premortem→实现→breaker 评审→ship-check 走完，拿不到证据就只报 built。
-> 最近修订：2026-10-20
+> 解决的问题：这篇手册解决 agent 把“检查过了、测试通过、结论仍然成立”当成事实汇报，而代码变动、界面事实和结论时效都没有被核对的问题。
+> 先试这一步：先挑一个改动，要求 agent 在说完成前交出三件证据——改动前会失败的测试、非作者评审、干净 checkout 的 CI；缺一件就只报 built。
+> 最近修订：2026-10-30
 
 ## 解决什么问题
 
 每个功能请求都以“确保代码正确、无 bug、覆盖所有缺口、100% 确定”结尾，但 agent 检查的往往只有它刚写的那几行。作者的完整审计在代码库里发现 318 个问题，其中 25 个高严重度；按原因分类，只有 45 个落在正在写的那些行里，其余都在改动周围的代码里。其中一些还是更早审计已发现并修过的——每次只补一个点，教训没有带到下一个会话。
 
-这篇手册把“确保正确”换成一串具名、可执行的检查，并规定 agent 在宣布“完成”之前必须交出证据。第二件事：“跑过测试”不等于“用户看到的界面是对的”——移动端横向滚动、console 报错、接口 4xx/5xx、坏图坏链、按钮“没反应”、上线前的样式回归，这些代码和测试都拦不住。第三件事：“测试通过”这四个字本身也可能是假的。第四件事：“完成”是主张，不是事实。第五件事：agent 定位 bug 时多数只能读代码猜，看不见一次点击实际走了哪条路径。第六件事：工作项是否真的从 Asked 走到 Proven，需要按证据而不是自述推进。下面六组做法可以各自单独用。
+这篇手册把“确保正确”换成一串具名、可执行的检查，并规定 agent 在宣布“完成”之前必须交出证据。第二件事：“跑过测试”不等于“用户看到的界面是对的”——移动端横向滚动、console 报错、接口 4xx/5xx、坏图坏链、按钮“没反应”、上线前的样式回归，这些代码和测试都拦不住。第三件事：“测试通过”这四个字本身也可能是假的。第四件事：“完成”是主张，不是事实。第五件事：agent 定位 bug 时多数只能读代码猜，看不见一次点击实际走了哪条路径。第六件事：工作项是否真的从 Asked 走到 Proven，需要按证据而不是自述推进。第七件事：研究/数据类工作里的“已验证”结论，会在 grader、数据管道或辅助函数被改后悄悄失去依据；只靠 agent 嘴上说结论没变，挡不住。下面七组做法可以各自单独用。
 
 ## 适用与不适用
 
@@ -22,6 +22,7 @@
 - done-is-a-claim：宿主是 Claude Code 或 Codex，或任意会读 AGENTS.md 的 agent；你只想拿走规则、模板和回执工具，不想装一套会拦你的插件；需要在 agent 之间交接工作。
 - Shrike：用 AI 搭 Web 应用、需要在本地调试“点按钮没反应 / 报错”这类 bug 的人；后端是 Node（Express、Next.js、NestJS、Hono、Remix）或 Python 3.12+（FastAPI、Flask、Django），前端是 Vite/Next 时，能拿到逐函数的参数、返回值和源码行号。
 - Vantage：以 Claude Code + git 为主的小仓库；愿意安装 hooks；想观察工作项是否按证据从 Asked 到 Built 到 Proven，而不是听 agent 说做了什么；接受先 dry-run 再安装、数据默认留在本机。
+- Agent-Cockpit：以“跑代码/跑实验 → 写结论”为主线的研究流程；目标目录是 git 仓库；agent 支持 MCP（Claude Code、Codex、Cursor、Gemini CLI 等）；愿意接受三条纪律——所有实验用 cockpit run 执行、变更用 cockpit_report 上报、claim 证据必须是某次记录 run 实际写出的文件字段。
 
 **不适用 / 需要知道**
 
@@ -31,6 +32,7 @@
 - done-is-a-claim 作者明说：不拦截 agent 的工具调用、不阻断合并、不强制部署策略，所以它自己挡不住任何东西，别把它当闸门用。它的演示和本地工具需要 Python 3.10+；只复制规则文件则不需要。效果数据为作者自报，原始日志未公开。
 - Shrike 只覆盖本地开发调试，不做生产监控——README 明确写 For errors in production, keep Sentry。平台强绑定 macOS Apple Silicon；Linux 只有 x64/arm64 的自构建且没有语音；Windows 从未在 Windows 机器上跑过。对其它会说 OpenTelemetry 的后端只有请求、查询和外部调用级的基础 tracing。仓库 31 stars、只有 GitHub README，没有实测、没有第三方评测。
 - Vantage 仍是 Phase 1、未发布 release；当前只对 Claude Code 和 git 建好可用切片，只有 Asked/Built/Proven 阶段机，Reviewed、Shipped、Verified 还需要后续阶段的数据源。Stop gate 默认只是 warn 模式，只提示、不阻塞；不能当完整交付验收系统或强制闸门。README 自称尚未按日使用满一周，没有独立基准、对照实验或长期使用数据。README 没有提到 Cursor 集成，不能把 Vantage 用于 Cursor 的依据写入手册。
+- Agent-Cockpit 很年轻（36 stars），材料只有 README 与作者自述的一次会话录像；误报率和流程摩擦需要自行验证。Python 依赖做到函数级，其他语言的处理方式原文未说明，不要外推。它只给事件/状态触发，没有定时调度或长期后台轮询。不装 graphify 或 open-code-review 时用内置规则，不代表有同等强度的外部审查。
 
 ## 前置条件
 
@@ -78,9 +80,18 @@
 - 需要本地 daemon、仓库注册、对 Claude Code settings.json 的写入权限和 hooks。
 - 数据默认本地存放在 ~/.vantage；Track 页面只监听 127.0.0.1，带 token 和 Host/Origin 检查。
 
+**Agent-Cockpit**
+
+- Node.js ≥ 22.13（用到内置 node:sqlite）、git；demo 项目还需要 python3。
+- 目标目录必须是 git 仓库；cockpit init 只在该仓库内写文件。
+- 支持 MCP 的 agent；init 会为 Claude Code、Cursor、VS Code、Gemini CLI 写好配置，并为 Codex 打印命令。agent 身份来自 MCP 握手，不需要手填。
+- 可选装 graphify 或 open-code-review；不装就用内置的 graphify 兼容代码图与规则式 review。
+- 三条纪律：实验必须经 cockpit run 执行；变更必须 cockpit_report 上报；claim 证据必须是记录 run 写出的文件字段。
+- 需要回放和复盘时，把 .cockpit/events.jsonl 提交进仓库。
+
 ## 操作步骤
 
-下面 1–20 是“规定什么才算完成”和“让它自己看到界面事实”；21–28 是去核对 agent 说的“测试通过”是不是真的；29–38 是同一件事的“不装闸门”做法——把证据要求写成规则、模板和本地回执，不依赖某个宿主的 hooks；39–43 是去补上“agent 看不见实际执行”这块；44–51 是用 Vantage 观察工作项是否按证据从 Asked 推进到 Proven。六组可以各自单独用。
+下面 1–20 是“规定什么才算完成”和“让它自己看到界面事实”；21–28 是去核对 agent 说的“测试通过”是不是真的；29–38 是同一件事的“不装闸门”做法——把证据要求写成规则、模板和本地回执，不依赖某个宿主的 hooks；39–43 是去补上“agent 看不见实际执行”这块；44–51 是用 Vantage 观察工作项是否按证据从 Asked 推进到 Proven；52–60 是新增的第七组：把研究/数据工作的“已验证”结论锁在运行记录和代码哈希上。七组可以各自单独用。
 
 ### 1. 安装 first-pass：选做法 A 还是 B
 
@@ -617,6 +628,100 @@ vantage uninstall
 
 remove 停止跟踪当前仓库，uninstall 移除 Vantage 写入 settings.json 的 hooks 和状态行；两者都不删除 ~/.vantage，需要手动删除该目录才会清除数据。预期结果：不想继续试时，你知道哪些动作可逆、哪些数据还在。
 
+### 52. Agent-Cockpit：先跑 demo，确认失效检测真的成立
+
+前提：Node.js ≥ 22.13（用到内置 node:sqlite）、git、python3（仅 demo 项目需要）。
+
+```bash
+git clone https://github.com/chutingyean/Agent-Cockpit.git
+cd Agent-Cockpit
+npm install
+```
+
+构建 demo 研究仓库并开白板：
+
+```bash
+npm run demo
+node bin/cockpit.mjs serve --repo demo/research
+```
+
+预期结果：demo 有 6 次真实运行、6 条 claim；白板在 http://127.0.0.1:4180 打开。若没有这些，后面的试用不必做。
+
+### 53. 制造一次未上报改动，看 claim 怎么变红、怎么恢复
+
+在第二个终端里执行：
+
+```bash
+node bin/cockpit.mjs demo --break
+node bin/cockpit.mjs demo --restore
+```
+
+预期结果：--break 悄悄放宽 grader 的答案匹配且不上报，依赖该 grader 的 claim 在白板上变红，系统自己抛出一个待人类决策项并生成一页证据简报（brief）；--restore 后哈希重新一致，claim 恢复。若你看到的现象不是这样，不要接入自己的仓库。
+
+### 54. Agent-Cockpit：接入自己的研究仓库
+
+前提：目标目录必须是一个 git 仓库；init 只在该仓库内写文件。
+
+```bash
+cd /path/to/your-research
+node /path/to/Agent-Cockpit/bin/cockpit.mjs init
+node /path/to/Agent-Cockpit/bin/cockpit.mjs serve
+```
+
+预期结果：init 写入 MCP 配置、AGENTS.md、Stop hook、pre-commit；为 Claude Code、Cursor、VS Code、Gemini CLI 写好配置，并为 Codex 打印命令；serve 打开白板。可选执行 npm link 获得全局 cockpit 命令，之后可简写为 cockpit serve / cockpit run -- ...。
+
+### 55. Agent-Cockpit：所有实验都用 cockpit run 执行
+
+```bash
+node /path/to/Agent-Cockpit/bin/cockpit.mjs run -- python3 train.py --lr 1e-3
+```
+
+前提：在该仓库里打开你的 agent，让它读 AGENTS.md 与 MCP 配置；agent 身份来自 MCP 握手。预期结果：这次运行被记录，包括脚本哈希、脚本依赖的每个文件哈希、触达的每个函数哈希；只有被记录下来的 run 才能作为 claim 的证据来源。直接 python xxx.py 不记录，整套证据链会空转。
+
+### 56. Agent-Cockpit：用 cockpit_claim 登记结论，证据必须落到文件字段
+
+每跑完一次实验，让 agent 通过 MCP 的 cockpit_claim 登记结论。硬约束：证据必须是某次被记录 run 实际写出的文件 + 字段（例如 metrics.json 里的某个 key），不能是“我觉得”“日志看起来”。具体调用参数原文未列出，以仓库 docs/tutorial.md 为准。预期结果：claim 与 run 绑定；代码或依赖一变，claim 能被判 stale。
+
+### 57. Agent-Cockpit：按 MCP 工具表给 agent 立规矩
+
+| 环节 | 工具 | 用途 |
+|---|---|---|
+| 开场 | cockpit_overview | 先调用：待决策、需要复核的 claim 及原因、未上报变更 |
+| 计划 | cockpit_plan / cockpit_stage | 研究路径；stage 在必需工具被调用前不能关闭 |
+| 执行 | cockpit_task | agent 自己的任务卡，每轮更新（做什么、为什么、下一步） |
+| 执行 | cockpit_run | 跑实验并记录 |
+| 结论 | cockpit_claim | 登记 claim，证据须来自被记录 run |
+| 假设 | cockpit_hypothesis / cockpit_premise | 假设与尚未验证的前提 |
+| 人工 | cockpit_decide / cockpit_decisions | 向人提问并等回答；读回答案 |
+| 上报 | cockpit_report | 上报改了哪些文件 |
+| 复核 | cockpit_review | 代码审查：装了 ocr 用 ocr，否则内置规则；也可上报自己的发现 |
+
+预期结果：agent 开场先 cockpit_overview；计划、执行、结论、假设、人工裁决、变更上报、复核都有固定入口，不靠聊天里临时约定。
+
+### 58. Agent-Cockpit：提交前自查，并把事件日志纳入版本管理
+
+```bash
+cockpit status
+cockpit check
+```
+
+预期结果：status 打印 cockpit 摘要；check 列出未上报变更。把 .cockpit/events.jsonl 提交进仓库——原文说它是单一事实来源，同时兼作 agent 的工作日志。可选增强：装 graphify 或 open-code-review 后 cockpit 会自动改用它们；不装就用内置的 graphify 兼容代码图与规则式 review。手动重建与审查：
+
+```bash
+cockpit graph
+cockpit review [--all]
+```
+
+预期结果：代码图和审查可用；cockpit_review 检测到 ocr 时优先用 ocr，否则内置规则；默认只看变更行，--all 看全部。
+
+### 59. Agent-Cockpit：关键裁决让它阻塞等待，不要自己猜
+
+用 cockpit_decide 向人提问并等回答，用 cockpit_decisions 读回答案。当改动破坏 claim 时，cockpit 自己发起一个决策项并写一页证据简报，人只需选“恢复 / 接受”，再由 agent 执行。预期结果：agent 不在关键裁决上自说自话；问题修好后 brief 仍然保留，便于复盘。
+
+### 60. Agent-Cockpit：回放与边界
+
+白板可拖到任意时刻重放；事件日志 .cockpit/events.jsonl 是唯一事实来源，白板只是 reduce → derive 的投影。所有写入（MCP、CLI、白板）过同一道 gate（src/gate.mjs），不合规写入被拒并给出可执行理由，拒绝也记日志。未上报的文件变更会被检出：阻断 git commit，且 Claude Code 在上报前无法结束回合。白板绑定 127.0.0.1，所有检查是普通规则，无 LLM 调用、零 token。预期结果：你能沿事件日志回看任意时刻的状态；但别把它当定时调度或长期后台轮询——原文只给了事件/状态触发。
+
 ## 怎么判断变好了
 
 **可观察的指标（first-pass）**
@@ -663,14 +768,23 @@ remove 停止跟踪当前仓库，uninstall 移除 Vantage 写入 settings.json 
 - 人工抽查 10 条 Track 记录，对照 git diff、测试日志和 PR，确认阶段推进确实有证据，而不是智能体自述。
 - README 中 stats 的 ✅/⚠️/❌ 目标只能当起点，README 明确说这些目标只是 starting points，不是产品规则。
 
+**可观察的指标（Agent-Cockpit）**
+
+- demo 的 --break 之后，依赖 grader 的 claim 在白板上变红，并生成待人类决策项与一页证据简报；--restore 之后哈希重新一致，claim 恢复。
+- 改动 run 未触达的函数不会使 run 失效；改动可达函数、import 或模块级代码一定失效；记录你看到的误报和漏报。
+- cockpit check 能列出未上报变更；pre-commit 能阻断提交；Claude Code 在上报前无法结束回合。
+- .cockpit/events.jsonl 能回放到任意时刻；brief 在问题修好后仍然保留。
+- 白板只在 127.0.0.1，无 LLM 调用、零 token 是机制描述，不是收益数据；收益仍要看误报和流程摩擦。
+
 **最小试用方式**
 
 - first-pass：在一个仓库上小范围试装，第一个改动完整走一遍 premortem → 修改（只当场修真实伤害）→ breaker 评审 → ship-check。
 - 浏览器 skill：先在一个前端项目里只做多尺寸截图 + 移动端溢出定位这一件事，把结果和手动 F12 的结论对照，确认它对得上再扩展。
-- dotpals：在一个有测试套件的小项目上按 README 一条命令装起来，小范围试。先让 agent 报一次测试通过，再用 test_status / MCP 核对它说的和实际是否一致；有条件的话加一次改测试让它变绿的对照，看它是否识别并回推。
+- dotpals：在一个有测试套件的小项目上按 README 一条命令装起来，小范围试。先让 agent 报一次测试通过，再用 test_status / MCP 核对它说得和实际是否一致；有条件的话加一次改测试让它变绿的对照，看它是否识别并回推。
 - done-is-a-claim：在一个小项目上按第 29 步装一次，用 receipt.py 给一条命令采一份回执（第 33 步）、跑一次 check_receipt.py（第 34 步），再用第 31 步的请求让 agent 交一次报告，看它有没有把没验证的部分写出来。
 - Shrike：在一台 macOS Apple Silicon 上装二进制版，先用自带 sample project 走通一次完整闭环（点到崩溃 → 看 Thread 红行与内联真实值 → 看 diff → Apply → 看 replay），再换成你自己一个真实项目挑一个真实的点按钮没反应或报错的 bug 复现一遍；然后装上 Claude Code 插件，用终端里的 agent 定位同一个 bug，跟直接把报错粘进聊天对照。
 - Vantage：选一个真实小仓库、一个开发者，先跑 vantage add --dry-run 检查会改哪些文件，再安装并运行 1 到 2 周。只启用默认功能，先不要开 classify；明确记录安装前的基线工作方式，作为对照。
+- Agent-Cockpit：先按第 52–53 步跑 demo，确认你看到 claim 变红和恢复；再在一个已有 git 的小型计算型研究仓库上 cockpit init、用 cockpit run 记录实验、用 cockpit_claim 登记结论，并做一次“改未触达函数”与“改可达函数/import”的对照。报告没有给试用时长；项目仅 36 stars、只有 README 与自述一次会话录像，先记录误报和流程摩擦再决定是否扩大。
 
 **试多久**
 
@@ -680,6 +794,7 @@ remove 停止跟踪当前仓库，uninstall 移除 Vantage 写入 settings.json 
 - done-is-a-claim：报告同样没有给出试用时长，只说先在一个小项目上试跑一轮，再决定是否固化进团队流程。同样记录 2–3 次真实任务里回执记录的事实和实际是否一致、它漏掉了什么。
 - Shrike：报告没有给出试用时长，也没有任何准确率、耗时或成功率数字，验证方式可操作但未被独立度量。先用一两个真实 bug 做前后对照，记录定位到行要几个来回、replay 是否通过、还需要人工粘几次日志，再决定是否扩大使用范围。
 - Vantage：调研建议先跑 1 到 2 周；README 自称 Phase 1、尚未按日使用满一周，且没有独立基准。若 Stop gate 误报过多，先用 VANTAGE_GATE_MODE=off 关闭并记录误报场景；若两周后仍无法稳定产生编辑后有新测试的证据，说明该流程不适合当前团队，不应升级为 adopt。
+- Agent-Cockpit：报告没有给出试用时长；项目仅 36 stars，材料只有 README 和作者自述的一次会话录像。先用 demo 确认机制，再在一个小仓库上走几轮真实实验和 claim，记录 claim 变红是否准确、误报几次、流程摩擦多大，再决定是否扩大。
 
 ## 常见坑
 
@@ -710,6 +825,11 @@ remove 停止跟踪当前仓库，uninstall 移除 Vantage 写入 settings.json 
 - Vantage 的 stats 输出只含数字和固定标签，不含标题、命令、路径或仓库名；这是便于贴到 issue 的设计，不是完整审计日志。人工抽查 Track 记录时仍要对照 git diff、测试日志和 PR。
 - Vantage 的 Haiku 分类默认关闭；开启后会发送仓库名、分支、第一条请求的第一句（最多 300 字符，移除 URL 和疑似秘密文本）、最多 10 个文件名（不含路径）、计数和当前标题，不发送命令、transcript 或路径。它只改善标题、主题和分组，不决定状态、阶段或 proof。
 - vantage remove 和 vantage uninstall 都不删除 ~/.vantage；需要手动删除该目录才会清除数据。别把 remove 当成清空所有本地记录。
+- Agent-Cockpit 的证据链吃纪律：实验不经 cockpit run 就没有记录；变更不 cockpit_report 上报就可能被 gate 拦住；claim 证据不落到 run 实际写出的文件字段，整条链就是空的。
+- 它不是 git 仓库就用不了，init 只往仓库内写。未上报变更会阻断 git commit，也会让 Claude Code 在上报前无法结束回合；别以为是工具坏了，先 cockpit check / cockpit_report。
+- 函数级精度只对 Python 有原文依据，其他语言不要外推。未上报变更的检测、阻断提交和结束回合是它的硬机制；但 claim 是否真的失效，仍要看哈希和依赖可达性，不是模型判断。
+- Agent-Cockpit 很年轻：36 stars，材料只有 README 与作者自述的一次会话录像；误报率和流程摩擦没有独立评测。先跑 demo，再在自己的小仓库里试，不要把“回滚即恢复”当成所有语言、所有项目都已验证。
+- 白板绑定 127.0.0.1、所有检查是普通规则、无 LLM 调用、零 token，这些是机制描述；不等于你的研究结论自动可信。cockpit_review 默认只看变更行，--all 才看全部；装了 ocr 才优先用 ocr。
 
 ## 证据与来源
 
@@ -727,7 +847,9 @@ remove 停止跟踪当前仓库，uninstall 移除 Vantage 写入 settings.json 
 
 **Vantage 部分**来自本次调研的 ymatrix1/vantage 报告：本地工作项状态跟踪、A2V 轨道 Asked → Built → Proven → Reviewed → Shipped → Verified、只有证据能让卡片前进、Phase 1 只对 Claude Code 和 git 建好可用切片、hook 采集到本地 spool、SQLite 存储、git 扫描、linker、Asked/Built/Proven 阶段机、warn 模式的 Stop gate、终端状态行、本地 Track 页面、单进程 daemon 和安装器；安装与从 checkout 构建命令、vantage add --dry-run / --yes / start / doctor / open、可选 Claude Code 插件命令、Stop gate 的 off|warn 配置、stats 输出字段、可选 Haiku 分类的配置与数据策略、remove / uninstall 行为。报告里的数据与局限（均为 README 自述）：Node.js 22.5+、git、Claude Code，checkout 构建需要 pnpm；当前没有 published release，安装 release 的路径暂时不可用，只能走 checkout；README 自称 Phase 1，尚未按日使用满一周；Reviewed、Shipped、Verified 还没有数据源；只有 Claude Code 和 git 的完整切片；没有独立基准、对照实验或长期使用数据，因此证据驱动能改善结果目前主要是作者的方法主张和产品设计，不是外部验证结论；Track 页面只监听 127.0.0.1，带 token 和 Host/Origin 检查；stats 输出只含数字和固定标签，不含标题、命令、路径或仓库名；Haiku 分类默认关闭，只发送仓库名、分支、第一条请求的第一句（最多 300 字符，移除 URL 和疑似秘密文本）、最多 10 个文件名（不含路径）、计数和当前标题，不发送命令、transcript 或路径；remove / uninstall 都不删除 ~/.vantage。适用条件是单机、本地、以 Claude Code 为主、用 git 管理、愿意安装 hooks 的团队或个人。
 
-**没有证据支撑的部分**：把 dotpals 的测试状态核对接在 first-pass 的完成的定义之后、在已有测试套件的小项目上小范围试并加一次改绿测试看它是否识别这套试用方式，把 done-is-a-claim 的回执 + 新鲜度复核作为 first-pass 完成定义的无 hook 替代，把 Shrike 的真实执行轨迹 + Apply 审批 + replay 验收接在 first-pass 与浏览器 skill 之后，以及把 Vantage 的 stats 与 Stop gate 作为观察工作项是否按证据推进的第六组做法，都是本次合并时按上述材料做的编排，报告本身没有给出验证结论，也没有给试用时长；六组做法之间可以互相替代的部分，材料里也没有做过交叉验证。
+**Agent-Cockpit 部分**来自本次调研的 chutingyean/Agent-Cockpit 报告（仓库 36 stars，材料只有 README 与作者自述的一次会话录像）：本地白板 + MCP server、claim 必须引用某次被记录 run 实际写出的文件字段、run 记录脚本哈希与依赖文件/函数哈希、内容哈希判定时效、回滚即恢复、Python 依赖做到函数级、所有写入过同一道 gate（src/gate.mjs）、未上报变更阻断 git commit 且 Claude Code 在上报前无法结束回合、事件溯源 .cockpit/events.jsonl、白板绑定 127.0.0.1、无 LLM 调用零 token；命令与步骤包括 npm install、npm run demo、cockpit serve --repo demo/research、demo --break / --restore、cockpit init、cockpit run -- python3 train.py --lr 1e-3、npm link、cockpit status、cockpit check、cockpit graph、cockpit review [--all]、cockpit decide / cockpit_decisions；MCP 工具表包括 cockpit_overview、cockpit_plan、cockpit_stage、cockpit_task、cockpit_run、cockpit_claim、cockpit_hypothesis、cockpit_premise、cockpit_decide、cockpit_decisions、cockpit_report、cockpit_review。可核验的是命令、工具名、Node.js ≥ 22.13、demo 6 runs / 6 claims、Python 函数级、事件日志与 gate 的代码位置；属于作者主张或尚未独立验证的是误报率低、流程摩擦可接受、函数级精度足以支撑真实研究、回滚即恢复在所有项目上都可靠。报告明确建议先在一个已有 git 的小型计算型研究仓库上小范围试用，但没有给出试用时长，也没有独立基准、对照实验或第三方评测。把 Agent-Cockpit 作为第七组做法，并把“回执新鲜度”和“claim 随代码/运行失效”并列，是本次合并时按材料做的编排；两者没有做过交叉验证。
+
+**没有证据支撑的部分**：把 dotpals 的测试状态核对接在 first-pass 的完成的定义之后、在已有测试套件的小项目上小范围试并加一次改绿测试看它是否识别这套试用方式，把 done-is-a-claim 的回执 + 新鲜度复核作为 first-pass 完成定义的无 hook 替代，把 Shrike 的真实执行轨迹 + Apply 审批 + replay 验收接在 first-pass 与浏览器 skill 之后，把 Vantage 的 stats 与 Stop gate 作为观察工作项是否按证据推进的第六组做法，以及把 Agent-Cockpit 的 claim/run/代码哈希作为研究结论时效的第七组做法，都是本次合并时按上述材料做的编排，报告本身没有给出验证结论，也没有给试用时长；各组做法之间可以互相替代的部分，材料里也没有做过交叉验证。
 
 ## 依据的调研
 
@@ -737,3 +859,4 @@ remove 停止跟踪当前仓库，uninstall 移除 Vantage 写入 settings.json 
 - [Grit-77/done-is-a-claim](../research/radar/2026-10-11/2455-grit-77-done-is-a-claim.md)：值得一试，把「完成是一句主张，要附证据」落成可操作的规则文件+技能包+本地采证工具，先在一个小项目上按 README 的安装路径和 receipt 工具试跑一轮，再决定是否固化进团队流程；理由是它给出了可照抄的安装命令、18 条规则、回执工具用法和验证模板，但作者自己声明不强制、不拦截，效果数据为自报且原始日志未公开。
 - [SumantxD/shrike](../research/radar/2026-10-12/2683-sumantxd-shrike.md)：值得一试，在一台 macOS Apple Silicon 上用一个小型 Node/Next（或 FastAPI/Flask/Django）项目接入 Shrike，完整走一遍“点击出错按钮→Agent 沿真实执行轨迹定位到行→批准 diff→重放同一次点击验证”的闭环，理由是把真实运行轨迹（含行内真实值）通过 MCP 喂给 Claude Code、并强制人工批准后才能改码，正好补上编程智能体“看不见实际执行、只能读代码猜”的短板；但只有 macOS 构建、项目仅 31 stars 且无独立评测，先小范围试。
 - [ymatrix1/vantage](../research/radar/2026-10-20/5186-ymatrix1-vantage.md)：值得一试，建议在一个以 Claude Code + git 为主的小仓库试用 Vantage，先 dry-run 安装，再用 Stop gate 和 stats 检验“只有证据才推进”的验收流程；它给出了可照做的安装与配置，但仍是 Phase 1、未发布、只覆盖 Asked/Built/Proven，不能当作完整交付验收系统。
+- [chutingyean/Agent-Cockpit](../research/radar/2026-10-30/8506-chutingyean-agent-cockpit.md)：值得一试，建议在一个已有 git 的小型计算型研究仓库上小范围试用 Agent-Cockpit：先跑 demo 观察“改一行 grader→相关结论变红→回滚后恢复”，再用 `cockpit init` 接入自有仓库、用 `cockpit run` 记录实验并通过 MCP 的 `cockpit_claim` 登记结论；理由是它把“结论—运行—代码”的失效检测做成确定性哈希规则（零 token、无 LLM 调用），并挂进 Claude Code/Cursor 等 MCP agent 的 Stop hook 与 pre-commit，直接作用于效果验证，但项目很年轻（36 stars、仅有 README 与自述的一次会话录像佐证），误报率与流程摩擦需自行验证。
