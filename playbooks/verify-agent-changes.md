@@ -1,16 +1,16 @@
-# 让 agent 的“完成”与“已验证”都拿得出证据
+# 让编码 agent 在说“完成”之前拿出证据
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：这篇手册解决 agent 把“检查过了、测试通过、结论仍然成立”当成事实汇报，而代码变动、界面事实和结论时效都没有被核对的问题。
-> 先试这一步：先挑一个改动，要求 agent 在说完成前交出三件证据——改动前会失败的测试、非作者评审、干净 checkout 的 CI；缺一件就只报 built。
-> 最近修订：2026-10-30
+> 解决的问题：把“确保正确”拆成可执行的检查，并要求 agent 用可复核的证据证明完成，而不是自述。
+> 先试这一步：先在一个小仓库上，把一条改动走完“改动前失败的测试 → 独立评审 → 干净 checkout 的 CI”，拿不到证据就只报 built。
+> 最近修订：2026-11-01
 
 ## 解决什么问题
 
 每个功能请求都以“确保代码正确、无 bug、覆盖所有缺口、100% 确定”结尾，但 agent 检查的往往只有它刚写的那几行。作者的完整审计在代码库里发现 318 个问题，其中 25 个高严重度；按原因分类，只有 45 个落在正在写的那些行里，其余都在改动周围的代码里。其中一些还是更早审计已发现并修过的——每次只补一个点，教训没有带到下一个会话。
 
-这篇手册把“确保正确”换成一串具名、可执行的检查，并规定 agent 在宣布“完成”之前必须交出证据。第二件事：“跑过测试”不等于“用户看到的界面是对的”——移动端横向滚动、console 报错、接口 4xx/5xx、坏图坏链、按钮“没反应”、上线前的样式回归，这些代码和测试都拦不住。第三件事：“测试通过”这四个字本身也可能是假的。第四件事：“完成”是主张，不是事实。第五件事：agent 定位 bug 时多数只能读代码猜，看不见一次点击实际走了哪条路径。第六件事：工作项是否真的从 Asked 走到 Proven，需要按证据而不是自述推进。第七件事：研究/数据类工作里的“已验证”结论，会在 grader、数据管道或辅助函数被改后悄悄失去依据；只靠 agent 嘴上说结论没变，挡不住。下面七组做法可以各自单独用。
+这篇手册把“确保正确”换成一串具名、可执行的检查，并规定 agent 在宣布“完成”之前必须交出证据。第二件事：“跑过测试”不等于“用户看到的界面是对的”——移动端横向滚动、console 报错、接口 4xx/5xx、坏图坏链、按钮“没反应”、上线前的样式回归，这些代码和测试都拦不住。第三件事：“测试通过”这四个字本身也可能是假的。第四件事：“完成”是主张，不是事实。第五件事：agent 定位 bug 时多数只能读代码猜，看不见一次点击实际走了哪条路径。第六件事：工作项是否真的从 Asked 走到 Proven，需要按证据而不是自述推进。第七件事：研究/数据类工作里的“已验证”结论，会在 grader、数据管道或辅助函数被改后悄悄失去依据；只靠 agent 嘴上说结论没变，挡不住。第八件事：便宜模型更容易跳过计划、没运行就声称修好、反复重试同一个坏思路、长任务漂移；可以把短循环、硬停止条件和真实证据做成技能包。下面八组做法可以各自单独用。
 
 ## 适用与不适用
 
@@ -23,6 +23,7 @@
 - Shrike：用 AI 搭 Web 应用、需要在本地调试“点按钮没反应 / 报错”这类 bug 的人；后端是 Node（Express、Next.js、NestJS、Hono、Remix）或 Python 3.12+（FastAPI、Flask、Django），前端是 Vite/Next 时，能拿到逐函数的参数、返回值和源码行号。
 - Vantage：以 Claude Code + git 为主的小仓库；愿意安装 hooks；想观察工作项是否按证据从 Asked 到 Built 到 Proven，而不是听 agent 说做了什么；接受先 dry-run 再安装、数据默认留在本机。
 - Agent-Cockpit：以“跑代码/跑实验 → 写结论”为主线的研究流程；目标目录是 git 仓库；agent 支持 MCP（Claude Code、Codex、Cursor、Gemini CLI 等）；愿意接受三条纪律——所有实验用 cockpit run 执行、变更用 cockpit_report 上报、claim 证据必须是某次记录 run 实际写出的文件字段。
+- deepseek-stack：在支持 SKILL.md 的编码 agent 里，用 DeepSeek V4.1 Flash、V4 Pro 这类便宜模型做代码/PR 任务；你愿意让 agent 跑真实检查和 CI；想先用一套短循环补“跳过计划、没运行就声称修好、重复坏思路、长任务漂移”这四个缺口。
 
 **不适用 / 需要知道**
 
@@ -33,6 +34,7 @@
 - Shrike 只覆盖本地开发调试，不做生产监控——README 明确写 For errors in production, keep Sentry。平台强绑定 macOS Apple Silicon；Linux 只有 x64/arm64 的自构建且没有语音；Windows 从未在 Windows 机器上跑过。对其它会说 OpenTelemetry 的后端只有请求、查询和外部调用级的基础 tracing。仓库 31 stars、只有 GitHub README，没有实测、没有第三方评测。
 - Vantage 仍是 Phase 1、未发布 release；当前只对 Claude Code 和 git 建好可用切片，只有 Asked/Built/Proven 阶段机，Reviewed、Shipped、Verified 还需要后续阶段的数据源。Stop gate 默认只是 warn 模式，只提示、不阻塞；不能当完整交付验收系统或强制闸门。README 自称尚未按日使用满一周，没有独立基准、对照实验或长期使用数据。README 没有提到 Cursor 集成，不能把 Vantage 用于 Cursor 的依据写入手册。
 - Agent-Cockpit 很年轻（36 stars），材料只有 README 与作者自述的一次会话录像；误报率和流程摩擦需要自行验证。Python 依赖做到函数级，其他语言的处理方式原文未说明，不要外推。它只给事件/状态触发，没有定时调度或长期后台轮询。不装 graphify 或 open-code-review 时用内置规则，不代表有同等强度的外部审查。
+- deepseek-stack 只有 README 级描述（58 stars、MIT）：约 30 个技能只给名称和一句话功能，没有展开每个 SKILL.md 的提示词全文，也没有 benchmark、成功率、成本对比或用户案例。README 称它能让 DeepSeek 像更贵的模型、称 thinking mode 比任何技能都重要，都是作者主张。ds-ship 是无人值守从变更走到合并，ds-watch-pr 会自动盯 CI 和 review bot，ds-adopt / ds-revive 会接手旧 PR；README 没有给权限边界、失败回滚或人工审批点的细节，自动合并、自动修 CI、自动接手他人 PR 都可能造成误改。ds-jury、ds-best-of-n、ds-swarm 需要子代理或第二模型，没有时会退化为在新上下文里串行尝试。Cline、OpenCode 只被列为支持 harness，没有专门配置或案例；Graft 原文未提及。
 
 ## 前置条件
 
@@ -89,9 +91,17 @@
 - 三条纪律：实验必须经 cockpit run 执行；变更必须 cockpit_report 上报；claim 证据必须是记录 run 写出的文件字段。
 - 需要回放和复盘时，把 .cockpit/events.jsonl 提交进仓库。
 
+**deepseek-stack**
+
+- 支持 SKILL.md 的编码 agent harness；README 列出 Claude Code、Codex、Cline、OpenCode、PandaCode 等。
+- 机器上有可用的 npx；手动安装则要能把 skills/* 复制到所用 harness 的 skills 文件夹。
+- 用 Ship 组技能需要安装并登录 gh；ds-watch-pr 需要 python3。
+- ds-jury、ds-best-of-n、ds-swarm 需要子代理或第二模型；没有时技能会在新上下文中串行跑多次尝试。
+- 安装后先打开对应 SKILL.md 审阅，再决定是否用于无人值守或自动合并场景。
+
 ## 操作步骤
 
-下面 1–20 是“规定什么才算完成”和“让它自己看到界面事实”；21–28 是去核对 agent 说的“测试通过”是不是真的；29–38 是同一件事的“不装闸门”做法——把证据要求写成规则、模板和本地回执，不依赖某个宿主的 hooks；39–43 是去补上“agent 看不见实际执行”这块；44–51 是用 Vantage 观察工作项是否按证据从 Asked 推进到 Proven；52–60 是新增的第七组：把研究/数据工作的“已验证”结论锁在运行记录和代码哈希上。七组可以各自单独用。
+下面 1–20 是“规定什么才算完成”和“让它自己看到界面事实”；21–28 是去核对 agent 说的“测试通过”是不是真的；29–38 是同一件事的“不装闸门”做法——把证据要求写成规则、模板和本地回执，不依赖某个宿主的 hooks；39–43 是去补上“agent 看不见实际执行”这块；44–51 是用 Vantage 观察工作项是否按证据从 Asked 推进到 Proven；52–60 是把研究/数据工作的“已验证”结论锁在运行记录和代码哈希上；61–66 是新增第八组：用 deepseek-stack 把便宜模型的短验证循环固化成技能。八组可以各自单独用。
 
 ### 1. 安装 first-pass：选做法 A 还是 B
 
@@ -722,6 +732,58 @@ cockpit review [--all]
 
 白板可拖到任意时刻重放；事件日志 .cockpit/events.jsonl 是唯一事实来源，白板只是 reduce → derive 的投影。所有写入（MCP、CLI、白板）过同一道 gate（src/gate.mjs），不合规写入被拒并给出可执行理由，拒绝也记日志。未上报的文件变更会被检出：阻断 git commit，且 Claude Code 在上报前无法结束回合。白板绑定 127.0.0.1，所有检查是普通规则，无 LLM 调用、零 token。预期结果：你能沿事件日志回看任意时刻的状态；但别把它当定时调度或长期后台轮询——原文只给了事件/状态触发。
 
+### 61. deepseek-stack：先只装最小三件套，不要一上来装全包
+
+前提：harness 支持 SKILL.md，机器上有 npx。先只装一个技能试：
+
+```bash
+npx skills add aicodeking/deepseek-stack --skill ds-verify-loop
+```
+
+确认可用后再装整包：
+
+```bash
+npx skills add aicodeking/deepseek-stack
+npx skills add aicodeking/deepseek-stack -g
+```
+
+手动安装则把 skills/* 复制到 ~/.claude/skills/、~/.codex/skills/ 或所用 harness 的 skills 文件夹。不知道从哪开始时运行：
+
+```text
+/ds-help
+```
+
+预期结果：技能目录出现；先打开对应 SKILL.md 审阅，再用于真实任务。最小试用只装 ds-mode、ds-plan-loop、ds-verify-loop 三件套，遇到同一失败两次再加 ds-unstick；不要先上 ds-ship。
+
+### 62. deepseek-stack：按任务选技能
+
+日常默认用 ds-mode（复述、先读、小步验证、有证据才说完成）加 ds-principles（21 条带触发条件的工程规则）。新任务用 ds-sharpen 复述并重写提示词，再用 ds-plan-loop 做“每步带检查”的计划、在新一轮里自我批评一次、然后一步一实现。实现阶段用 ds-verify-loop 反复“改—跑真实检查—读真实错误—修根因”，最多 5 轮。同一失败出现两次用 ds-unstick 命名共同假设、验证它、换路线。长任务用 ds-context-reset 维护 PROGRESS.md 并在新上下文继续，或用 ds-ledger 一行一个决策、每步前重读。评审用 ds-review-loop（作者加新上下文评审，最多 4 轮）或 ds-jury（两三个不同模型直到一致）。要质量时用 ds-best-of-n（N 个并行尝试选最佳并嫁接其余优点）或 ds-swarm（并行 worker 合并成一份报告）。构建与交付：先 ds-blueprint 定类型、签名、模块布局再实现；需要测试驱动时用 ds-tdd；改完用 ds-blast-radius 找 diff 之外的破坏面并证明安全；前端用 ds-design / ds-design-audit；交付用 ds-pr 写以问题开头的短 PR，ds-watch-pr 盯 CI 和 review bot 并修真实问题，ds-ship 无人值守从变更走到合并，ds-ready 同样流程但停在合并前；接手别人的 PR 用 ds-adopt，旧 PR 用 ds-revive。预期结果：每个技能对应一个短循环和硬停止条件，不靠聊天里临时约定。
+
+### 63. deepseek-stack：DeepSeek 配置建议
+
+README 原文建议：
+
+```text
+Use thinking mode at max effort for planning and review. It matters more than any skill.
+Run big jobs at off-peak hours, when the API price is lower.
+DeepSeek is cheap, so spend tokens on quality: ds-best-of-n, ds-review-loop and ds-jury cost little and catch a lot.
+Pair a stronger planner with DeepSeek as the implementer if your harness supports separate plan and act models.
+```
+
+这几条是作者主张，不是实测结论。用法：规划和评审开最大 thinking；大批量任务错峰跑；把省下的钱花在 ds-best-of-n、ds-review-loop、ds-jury 上；harness 支持分离 plan/act 模型时，用更强规划模型配 DeepSeek 实现。
+
+### 64. deepseek-stack：用 10 个同类型小任务做 A/B 最小试用
+
+选 10 个同类型的小任务（修小 bug 或加小功能），同一 harness、同一仓库快照、同一提示词模板，分两组：A 组便宜模型裸跑；B 组只安装 ds-mode、ds-plan-loop、ds-verify-loop，遇到重复失败再加 ds-unstick。先不要上 ds-ship 自动合并。记录：是否先给出计划、计划每一步是否带检查；是否实际执行验证命令；是否读取并引用真实错误；首次通过率、平均修复轮数、同一失败重复次数；人工干预次数和人工返工时间；token 消耗/费用和总耗时。预期结果：B 组验证命令执行率应接近 100%，重复失败次数和人工干预次数应下降，首次通过率或总耗时不差于 A 组；如果成本增加但返工明显减少，可继续加 ds-review-loop 或 ds-best-of-n 做第二轮对比。
+
+### 65. deepseek-stack：长任务和交付边界
+
+长任务另测 ds-context-reset + ds-ledger，看跨上下文是否丢状态：PROGRESS.md 记进度，ledger 一行一个决策、每步前重读。Ship 类先在非关键仓库用 ds-ready（不自动合并）观察 CI 修复和评审处理质量；ds-watch-pr 需要 gh 登录和 python3；ds-ship 是无人值守从变更走到合并，风险最高，不要在关键仓库直接开。预期结果：长任务不在新上下文里丢状态；交付技能停在合并前时，你能看到 CI 修复和 review 处理质量，再决定是否放开。
+
+### 66. deepseek-stack：把失败变成下一次的规则，而不是重试
+
+ds-verify-loop 最多 5 轮；同一失败出现两次就转 ds-unstick，不要继续原样重试。ds-review-loop 最多 4 轮；ds-jury 用两三个不同模型直到一致。每次失败后把可复用的检查写回技能或项目规则：例如把重复错误转成类型、lint、测试，或写进 ds-principles 的触发条件。预期结果：同一坏思路不会无限重试；失败留下可复用的检查，而不是只留下聊天记录。
+
 ## 怎么判断变好了
 
 **可观察的指标（first-pass）**
@@ -776,6 +838,14 @@ cockpit review [--all]
 - .cockpit/events.jsonl 能回放到任意时刻；brief 在问题修好后仍然保留。
 - 白板只在 127.0.0.1，无 LLM 调用、零 token 是机制描述，不是收益数据；收益仍要看误报和流程摩擦。
 
+**可观察的指标（deepseek-stack）**
+
+- B 组是否先给出计划，计划每一步是否带检查；是否实际执行验证命令，而不是只声称通过。
+- 是否读取并引用真实错误；首次通过率、平均修复轮数、同一失败重复次数是否下降。
+- 人工干预次数和人工返工时间是否下降；token 消耗/费用和总耗时是否可接受。
+- 长任务用 ds-context-reset + ds-ledger 后，跨上下文是否丢状态；ds-ready 停在合并前时，CI 修复和 review 处理质量是否可接受。
+- 注意：仓库只有 README 级描述，没有 benchmark、成功率或成本对比；以上是试用时要自己记录的指标，不是已验证收益。
+
 **最小试用方式**
 
 - first-pass：在一个仓库上小范围试装，第一个改动完整走一遍 premortem → 修改（只当场修真实伤害）→ breaker 评审 → ship-check。
@@ -785,6 +855,7 @@ cockpit review [--all]
 - Shrike：在一台 macOS Apple Silicon 上装二进制版，先用自带 sample project 走通一次完整闭环（点到崩溃 → 看 Thread 红行与内联真实值 → 看 diff → Apply → 看 replay），再换成你自己一个真实项目挑一个真实的点按钮没反应或报错的 bug 复现一遍；然后装上 Claude Code 插件，用终端里的 agent 定位同一个 bug，跟直接把报错粘进聊天对照。
 - Vantage：选一个真实小仓库、一个开发者，先跑 vantage add --dry-run 检查会改哪些文件，再安装并运行 1 到 2 周。只启用默认功能，先不要开 classify；明确记录安装前的基线工作方式，作为对照。
 - Agent-Cockpit：先按第 52–53 步跑 demo，确认你看到 claim 变红和恢复；再在一个已有 git 的小型计算型研究仓库上 cockpit init、用 cockpit run 记录实验、用 cockpit_claim 登记结论，并做一次“改未触达函数”与“改可达函数/import”的对照。报告没有给试用时长；项目仅 36 stars、只有 README 与自述一次会话录像，先记录误报和流程摩擦再决定是否扩大。
+- deepseek-stack：按第 64 步做 10 个同类型小任务的 A/B；B 组只装 ds-mode、ds-plan-loop、ds-verify-loop，重复失败再加 ds-unstick，先不要上 ds-ship。长任务另测 ds-context-reset + ds-ledger；Ship 类先在非关键仓库用 ds-ready 观察。
 
 **试多久**
 
@@ -795,6 +866,7 @@ cockpit review [--all]
 - Shrike：报告没有给出试用时长，也没有任何准确率、耗时或成功率数字，验证方式可操作但未被独立度量。先用一两个真实 bug 做前后对照，记录定位到行要几个来回、replay 是否通过、还需要人工粘几次日志，再决定是否扩大使用范围。
 - Vantage：调研建议先跑 1 到 2 周；README 自称 Phase 1、尚未按日使用满一周，且没有独立基准。若 Stop gate 误报过多，先用 VANTAGE_GATE_MODE=off 关闭并记录误报场景；若两周后仍无法稳定产生编辑后有新测试的证据，说明该流程不适合当前团队，不应升级为 adopt。
 - Agent-Cockpit：报告没有给出试用时长；项目仅 36 stars，材料只有 README 和作者自述的一次会话录像。先用 demo 确认机制，再在一个小仓库上走几轮真实实验和 claim，记录 claim 变红是否准确、误报几次、流程摩擦多大，再决定是否扩大。
+- deepseek-stack：报告没有给试用时长；先按 10 个同类型小任务跑一轮 A/B，记录验证执行率、返工、人工干预和成本，再决定是否加 ds-review-loop、ds-best-of-n 或进入 Ship 类技能。
 
 ## 常见坑
 
@@ -830,6 +902,10 @@ cockpit review [--all]
 - 函数级精度只对 Python 有原文依据，其他语言不要外推。未上报变更的检测、阻断提交和结束回合是它的硬机制；但 claim 是否真的失效，仍要看哈希和依赖可达性，不是模型判断。
 - Agent-Cockpit 很年轻：36 stars，材料只有 README 与作者自述的一次会话录像；误报率和流程摩擦没有独立评测。先跑 demo，再在自己的小仓库里试，不要把“回滚即恢复”当成所有语言、所有项目都已验证。
 - 白板绑定 127.0.0.1、所有检查是普通规则、无 LLM 调用、零 token，这些是机制描述；不等于你的研究结论自动可信。cockpit_review 默认只看变更行，--all 才看全部；装了 ocr 才优先用 ocr。
+- deepseek-stack 别当成熟方案。58 stars、MIT，只有 README 级描述；约 30 个技能只给名称和一句话功能，没有技能内部提示词、benchmark、成功率或成本对比。先打开 SKILL.md 审阅，再用于真实任务。
+- ds-ship 风险最高：无人值守从变更走到合并；ds-watch-pr 会自动盯 CI 和 review bot；ds-adopt / ds-revive 会接手旧 PR。README 没有给权限边界、失败回滚或人工审批点的细节，自动合并、自动修 CI、自动接手他人 PR 都可能造成误改。先在非关键仓库用 ds-ready 停在合并前。
+- ds-jury、ds-best-of-n、ds-swarm 需要子代理或第二模型；没有时会退化为在新上下文里串行尝试，不要以为一定有并行加速。ds-watch-pr 需要 gh 登录和 python3；Ship 组需要 gh。
+- 别把“安装全部技能”当默认。先只装 ds-mode、ds-plan-loop、ds-verify-loop；同一失败出现两次再转 ds-unstick，不要原样重试到第 5 轮以后。ds-verify-loop 最多 5 轮，ds-review-loop 最多 4 轮，这是硬停止条件，不是建议。
 
 ## 证据与来源
 
@@ -849,7 +925,9 @@ cockpit review [--all]
 
 **Agent-Cockpit 部分**来自本次调研的 chutingyean/Agent-Cockpit 报告（仓库 36 stars，材料只有 README 与作者自述的一次会话录像）：本地白板 + MCP server、claim 必须引用某次被记录 run 实际写出的文件字段、run 记录脚本哈希与依赖文件/函数哈希、内容哈希判定时效、回滚即恢复、Python 依赖做到函数级、所有写入过同一道 gate（src/gate.mjs）、未上报变更阻断 git commit 且 Claude Code 在上报前无法结束回合、事件溯源 .cockpit/events.jsonl、白板绑定 127.0.0.1、无 LLM 调用零 token；命令与步骤包括 npm install、npm run demo、cockpit serve --repo demo/research、demo --break / --restore、cockpit init、cockpit run -- python3 train.py --lr 1e-3、npm link、cockpit status、cockpit check、cockpit graph、cockpit review [--all]、cockpit decide / cockpit_decisions；MCP 工具表包括 cockpit_overview、cockpit_plan、cockpit_stage、cockpit_task、cockpit_run、cockpit_claim、cockpit_hypothesis、cockpit_premise、cockpit_decide、cockpit_decisions、cockpit_report、cockpit_review。可核验的是命令、工具名、Node.js ≥ 22.13、demo 6 runs / 6 claims、Python 函数级、事件日志与 gate 的代码位置；属于作者主张或尚未独立验证的是误报率低、流程摩擦可接受、函数级精度足以支撑真实研究、回滚即恢复在所有项目上都可靠。报告明确建议先在一个已有 git 的小型计算型研究仓库上小范围试用，但没有给出试用时长，也没有独立基准、对照实验或第三方评测。把 Agent-Cockpit 作为第七组做法，并把“回执新鲜度”和“claim 随代码/运行失效”并列，是本次合并时按材料做的编排；两者没有做过交叉验证。
 
-**没有证据支撑的部分**：把 dotpals 的测试状态核对接在 first-pass 的完成的定义之后、在已有测试套件的小项目上小范围试并加一次改绿测试看它是否识别这套试用方式，把 done-is-a-claim 的回执 + 新鲜度复核作为 first-pass 完成定义的无 hook 替代，把 Shrike 的真实执行轨迹 + Apply 审批 + replay 验收接在 first-pass 与浏览器 skill 之后，把 Vantage 的 stats 与 Stop gate 作为观察工作项是否按证据推进的第六组做法，以及把 Agent-Cockpit 的 claim/run/代码哈希作为研究结论时效的第七组做法，都是本次合并时按上述材料做的编排，报告本身没有给出验证结论，也没有给试用时长；各组做法之间可以互相替代的部分，材料里也没有做过交叉验证。
+**deepseek-stack 部分**来自本次调研的 aicodeking/deepseek-stack 报告（仓库 58 stars、MIT）：README 把便宜模型的常见失败归为四类——跳过计划、没运行就声称修好、反复重试同一个坏思路、长任务漂移；技能分 Core、Loops、Build、Ship、Understand 五组，约 30 个，可在任何读取 SKILL.md 的 harness 中使用，README 列出 Claude Code、Codex、Cline、OpenCode、PandaCode 等。可核验的具体内容：安装命令 npx skills add aicodeking/deepseek-stack、全局 -g、单技能 --skill ds-verify-loop、手动复制 skills/*、/ds-help；依赖 npx、gh、python3、子代理或第二模型；技能名与一句话分工；DeepSeek 配置建议原文。属于作者主张、尚无数据：这些技能能让 DeepSeek 像更贵的模型、便宜模型总在同样几处失败、thinking mode 比任何技能都重要、错峰更便宜、多花 token 很划算；README 没有 benchmark、成功率、成本对比、用户案例或技能内部提示词，无法验证。成熟度：58 stars，低关注度，技能质量、维护频率、与各 harness 的兼容性未证明。风险：自动合并、自动修 CI、自动接手他人 PR 可能误改；README 没有给权限边界、失败回滚或人工审批点。最小试用是 10 个同类型小任务的 A/B，B 组只装 ds-mode、ds-plan-loop、ds-verify-loop，记录验证执行率、返工、人工干预、成本和耗时；报告没有给试用时长。
+
+**没有证据支撑的部分**：把 dotpals 的测试状态核对接在 first-pass 的完成的定义之后、在已有测试套件的小项目上小范围试并加一次改绿测试看它是否识别这套试用方式，把 done-is-a-claim 的回执 + 新鲜度复核作为 first-pass 完成定义的无 hook 替代，把 Shrike 的真实执行轨迹 + Apply 审批 + replay 验收接在 first-pass 与浏览器 skill 之后，把 Vantage 的 stats 与 Stop gate 作为观察工作项是否按证据推进的第六组做法，把 Agent-Cockpit 的 claim/run/代码哈希作为研究结论时效的第七组做法，以及把 deepseek-stack 作为第八组、用 10 个同类型小任务做 A/B 并把 ds-mode/ds-plan-loop/ds-verify-loop 作为最小三件套，都是本次合并时按上述材料做的编排；报告本身没有给出这些编排的验证结论，也没有给试用时长。各组做法之间可以互相替代的部分，材料里也没有做过交叉验证。
 
 ## 依据的调研
 
@@ -860,3 +938,4 @@ cockpit review [--all]
 - [SumantxD/shrike](../research/radar/2026-10-12/2683-sumantxd-shrike.md)：值得一试，在一台 macOS Apple Silicon 上用一个小型 Node/Next（或 FastAPI/Flask/Django）项目接入 Shrike，完整走一遍“点击出错按钮→Agent 沿真实执行轨迹定位到行→批准 diff→重放同一次点击验证”的闭环，理由是把真实运行轨迹（含行内真实值）通过 MCP 喂给 Claude Code、并强制人工批准后才能改码，正好补上编程智能体“看不见实际执行、只能读代码猜”的短板；但只有 macOS 构建、项目仅 31 stars 且无独立评测，先小范围试。
 - [ymatrix1/vantage](../research/radar/2026-10-20/5186-ymatrix1-vantage.md)：值得一试，建议在一个以 Claude Code + git 为主的小仓库试用 Vantage，先 dry-run 安装，再用 Stop gate 和 stats 检验“只有证据才推进”的验收流程；它给出了可照做的安装与配置，但仍是 Phase 1、未发布、只覆盖 Asked/Built/Proven，不能当作完整交付验收系统。
 - [chutingyean/Agent-Cockpit](../research/radar/2026-10-30/8506-chutingyean-agent-cockpit.md)：值得一试，建议在一个已有 git 的小型计算型研究仓库上小范围试用 Agent-Cockpit：先跑 demo 观察“改一行 grader→相关结论变红→回滚后恢复”，再用 `cockpit init` 接入自有仓库、用 `cockpit run` 记录实验并通过 MCP 的 `cockpit_claim` 登记结论；理由是它把“结论—运行—代码”的失效检测做成确定性哈希规则（零 token、无 LLM 调用），并挂进 Claude Code/Cursor 等 MCP agent 的 Stop hook 与 pre-commit，直接作用于效果验证，但项目很年轻（36 stars、仅有 README 与自述的一次会话录像佐证），误报率与流程摩擦需自行验证。
+- [aicodeking/deepseek-stack](../research/radar/2026-11-01/9047-aicodeking-deepseek-stack.md)：值得一试，建议小范围试：在支持 SKILL.md 的编码 agent 里安装 ds-mode、ds-plan-loop、ds-verify-loop 三件套，用一批小任务对比裸跑 DeepSeek 时的验证执行率、返工次数和人工干预。仓库给出了可直接复制的安装命令和清楚的技能分工，但只有 README 级描述、没有效果数据和技能内部提示词，暂不宜直接 adopt。
