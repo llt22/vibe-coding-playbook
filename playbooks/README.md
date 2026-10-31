@@ -4,13 +4,13 @@
 
 | 手册 | 解决的问题 | 先试这一步 | 最近修订 |
 |---|---|---|---|
+| [给编码 agent 补上网页、PDF 与浏览器操作能力：先选路，再小范围验证](web-access-for-agents.md) | 怎么以最小风险给能执行 shell 的 agent 补上网页、PDF、JS 页面和登录态渠道的读取/操作能力，并在读网页/PDF 时控制进入上下文的 token 与成本，渠道失效时能定位换路而不是重写代码。 | 先跑 `agent-reach install --env=auto --dry-run` 预览安装范围，再执行默认安装并用 `agent-reach doctor` 体检。 | 2026-11-01 |
 | [让编码 agent 在说“完成”之前拿出证据](verify-agent-changes.md) | 把“确保正确”拆成可执行的检查，并要求 agent 用可复核的证据证明完成，而不是自述。 | 先在一个小仓库上，把一条改动走完“改动前失败的测试 → 独立评审 → 干净 checkout 的 CI”，拿不到证据就只报 built。 | 2026-11-01 |
 | [让代码评审在合并前留下可审计的证据链](code-review-with-agents.md) | 解决 AI 生成代码在评审、理解确认、记录与审批风险判断上缺少可核对证据和分层门禁的问题。 | 先在一个非关键仓库安装 kyy-logs/code-review-skill，用一条未提交改动和一段历史 commit 区间各跑一次，核对 high 发现是否都带位置、摘要、证据和严重级别，并确认合并门禁能从 probe JSON 重新推导。 | 2026-10-31 |
 | [让 AI 在大型代码库里做可复核的安全评审与日志补齐](security-review-with-agents.md) | 大型代码库的安全评审和日志补齐常常缺少范围、证据与闭环：威胁建模可能变成伪缺陷清单，攻击面看不清，补丁回归没人验，日志埋点既漏覆盖又可能泄露敏感数据；这篇手册用五套可人工复核的流程把结论落到证据上。 | 先在一个非核心、可只读暴露的仓库上跑一次威胁建模 quick 评审，人工核对报告里的文件与行号引用是否真实支持结论，再决定是否进入攻击面、回归猎取、证据账本和日志改造。 | 2026-10-31 |
 | [离开工位后继续推进本地编码会话：手机接管、审批与核查](remote-control-coding-sessions.md) | 解决离开工位或切换设备时，如何让手机接管本地正在运行的编码 agent 会话，并仍能审批命令、核对改动，而不是在云端重开一个没有上下文的白板会话。 | 先做一次最小验证：在本地会话里植入只有该会话知道的信息，用 `/rc` 扫码接管后追问它，确认上下文是否真的连续；若 `/rc` 不可用，再考虑用自托管 CodeRail 做受控试点。 | 2026-10-31 |
 | [让 AI 在真实项目里持续干活：从最小循环到可恢复、可评测的工作环境](build-agent-from-scratch.md) | 这篇手册解决如何把只会聊天或只能跑 demo 的 AI，变成能看到项目状态、受权限约束、出问题可排查、结果可评测、崩溃后可恢复的 agent 工作环境。 | 先跑一个不需要 key 的 demo（如 NamiAgent 的 python web/app.py --demo 或 hello-agent-system 的离线 demo），观察每一步工具调用和完整上下文，再按 harness 五件套补最缺的一项。 | 2026-10-31 |
 | [让编码 agent 分工：贵模型只规划，廉价模型写码，测试当裁判](model-routing-for-coding-agents.md) | 让编码 agent 不靠更贵的模型硬扛，而是把规划、实现和验收分开，用测试结果决定改动是否落地。 | 选一个中等规模、已有可运行测试的真实任务，先用纯 Claude Code 记录 Opus token、轮数和测试通过数，再用 cheap-agent 同一提示词跑一遍对照。 | 2026-10-31 |
-| [让 agent 读网页、PDF 和 JS 页面时先估成本、按需读取、坏了能换路](web-access-for-agents.md) | 怎么以最小风险给能执行 shell 的 agent 补上网页、PDF、JS 页面和登录态渠道的读取/操作能力，并把进入上下文的 token 与抓取成本控制住，渠道失效时能定位换路而不是重写代码。 | 先跑 `agent-reach install --env=auto --dry-run` 预览，再默认安装并执行 `agent-reach doctor`；上下文敏感时再装 fatsearch，用 `dry:true` 和 `fats stats` 量一个真实页面。 | 2026-10-31 |
 | [让编码 agent 在长任务里少烧上下文、少返工](manage-agent-context.md) | 编码 agent 在长任务里被工具输出、重复规则、过时指令和后台开销塞满上下文，导致配额耗尽、状态丢失和返工；本手册给出一组可小范围验证的治理步骤。 | 先做一次上下文预算审计：在真实任务中运行 /context 看 token 去向，只改一项（先禁用当前会话用不到的 MCP 服务器），再用同类任务对比。 | 2026-10-31 |
 | [让 agent 在宣布完成前，自己先看一眼渲染结果](build-ui-components-with-agents.md) | 图表、组件、架构图、界面、特效这类视觉交付物常常代码通过、自检通过，但真实渲染出来的像素、布局、状态和文案没人看过，agent 就宣布完成了。 | 挑一个能跑起来的前端项目，把 `npx -y github:ngocanhnckh/renderlint init` 跑一遍，再跑 `npx renderlint`，把报出的 error 逐条修到 0。 | 2026-10-31 |
 | [把多个编码 agent 编成有频道和审批闸门的团队](orchestrate-multiple-agents.md) | 让多个 AI agent 并行干活时，分工写进频道、交接留痕、写操作先过人这一关，接受与否由测试、独立 verifier 或人决定，而不是听 agent 说自己做完了。 | 先在一个低风险仓库里建一个频道，放 2–3 个代理（一个修、一个评审），只接一个只读连接器，把 merge / post / email / delete 全部设为人工审批，跑一次真实小任务，并与单人 Claude Code 做同题对照。 | 2026-10-31 |

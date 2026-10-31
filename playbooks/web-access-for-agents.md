@@ -1,10 +1,10 @@
-# 让 agent 读网页、PDF 和 JS 页面时先估成本、按需读取、坏了能换路
+# 给编码 agent 补上网页、PDF 与浏览器操作能力：先选路，再小范围验证
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：怎么以最小风险给能执行 shell 的 agent 补上网页、PDF、JS 页面和登录态渠道的读取/操作能力，并把进入上下文的 token 与抓取成本控制住，渠道失效时能定位换路而不是重写代码。
-> 先试这一步：先跑 `agent-reach install --env=auto --dry-run` 预览，再默认安装并执行 `agent-reach doctor`；上下文敏感时再装 fatsearch，用 `dry:true` 和 `fats stats` 量一个真实页面。
-> 最近修订：2026-10-31
+> 解决的问题：怎么以最小风险给能执行 shell 的 agent 补上网页、PDF、JS 页面和登录态渠道的读取/操作能力，并在读网页/PDF 时控制进入上下文的 token 与成本，渠道失效时能定位换路而不是重写代码。
+> 先试这一步：先跑 `agent-reach install --env=auto --dry-run` 预览安装范围，再执行默认安装并用 `agent-reach doctor` 体检。
+> 最近修订：2026-11-01
 
 ## 解决什么问题
 
@@ -13,6 +13,8 @@
 Agent-Reach 覆盖渠道：网页（Jina Reader）、YouTube 字幕+搜索（yt-dlp）、RSS/Atom（feedparser）、全网语义搜索（Exa，经 mcporter 以 MCP 接入）、GitHub（gh CLI）、Twitter/X、B站（bili-cli）、Reddit、Facebook、Instagram、小红书、LinkedIn、Boss直聘、V2EX、雪球、小宇宙播客转写（Whisper）。
 
 关键设计：每个平台是一个有序后端列表（首选+备选），某个接入方式失效时只调整列表顺序，不重写代码；`agent-reach doctor` 告诉你每个平台当前实际在用哪个后端。默认只激活 6 个零配置渠道（网页、YouTube、RSS、GitHub、B站、V2EX），需要登录态的会先问你。
+
+另有一条试验性做法：用 Microsoft Playwright CLI 及其 skills 把浏览器自动化作为“技能”供给 Claude Code，让 agent 用自然语言驱动浏览器抓公开页面，再与手写脚本做对照。来源只有一条推文、原文在第二步被截断，没有成功率与失败案例，所以本手册只把它列为“做法 E（试验性）”，不进入默认链路。
 
 ## 适用与不适用
 
@@ -29,6 +31,7 @@ Agent-Reach 覆盖渠道：网页（Jina Reader）、YouTube 字幕+搜索（yt-
 - 你想把单个页面直接转成 Markdown/HTML/PNG/PDF/结构化数据，喂给模型或存档。
 - 你已有 Puppeteer/Playwright 脚本，想通过 CDP 换一个浏览器引擎；或想让 MCP 客户端直接拿到一个浏览器工具。
 - 你想先用自然语言把网页任务跑通，再固化成不消耗 token 的 PandaScript 回放。
+- 你想验证“把浏览器自动化作为技能交给编码 agent”是否能省掉写爬虫：在 Node.js 20+ 环境装 Playwright CLI 并执行 `playwright-cli install --skills`，用自然语言驱动 Claude Code 抓公开页面，再与手写脚本做对照。这是试验性做法，不是已验证流程。
 
 不适用：
 
@@ -42,6 +45,7 @@ Agent-Reach 覆盖渠道：网页（Jina Reader）、YouTube 字幕+搜索（yt-
 - 你要求稳定发行版而非 nightly：Lightpanda 目前只有 nightly 构建，不适合作为唯一生产依赖。
 - 你在 Windows 上想要原生二进制，或在 Alpine/musl、Android/Termux 上直接跑：Windows 走 WSL2；Linux 二进制链接 glibc，Alpine 等 musl 系统会报 `cannot execute: required file not found`，需换 Debian/Ubuntu 基础镜像或源码编译；Android/Termux 不可用。
 - 你要求它在所有站点上都与 Chrome 行为一致：结论提示 Lightpanda 无渲染引擎，兼容性必须在自家目标站点上验证；不要因为内存/速度数字好看就直接替换现有 Chrome + Playwright。
+- 你要求一条已验证、可复现的浏览器自动化标准流程：Playwright CLI 这条只有一条推文，原文第二步被截断，没有提示词、使用示例、成功率或失败案例；只能作为试验，不能写进生产链路。
 
 ## 前置条件
 
@@ -86,9 +90,17 @@ openclaw gateway restart
 - 默认会上报使用遥测，需要关闭时设 `LIGHTPANDA_DISABLE_TELEMETRY=true`；不想要 core dump 时设 `LIGHTPANDA_DISABLE_CORE_DUMP`。
 - 抓取第三方站点时注意合规，示例命令带 `--obey-robots`。
 
+**Playwright CLI（做法 E，试验性）**
+
+- Node.js 20 及以上（原文明确要求）；用 `node -v` 确认输出为 v20 或更高。
+- 能运行 Claude Code 的环境；全局安装 `@playwright/cli` 需要 npm 权限。
+- 目标站点允许抓取（遵守 robots.txt 与站点条款）；需要登录态的站点要另行提供凭据与授权。
+- 原文未说明是否还需额外安装浏览器内核，需用 `playwright-cli --help` 确认。
+- 原文在 `playwright-cli install --skills` 处被截断，后续步骤、执行目录要求均未给出，不能当作已验证流程。
+
 ## 操作步骤
 
-先做做法 A；需要精读网页/PDF 且 token 敏感时试做法 B；需要登录态渠道再进做法 C；需要 JS 渲染、浏览器交互或 MCP 浏览器工具时试做法 D。四者可并存，不要求按顺序全做。材料没有给出 Agent-Reach、fatsearch、Lightpanda 三者的集成命令，本手册只把它们并列为可选做法。
+先做做法 A；需要精读网页/PDF 且 token 敏感时试做法 B；需要登录态渠道再进做法 C；需要 JS 渲染、浏览器交互或 MCP 浏览器工具时试做法 D。这四者材料相对完整，可并存、不要求按顺序全做。做法 E 是试验性做法，只在你想验证“自然语言驱动浏览器能否替代手写爬虫”时做，默认不进入生产链路。材料没有给出 Agent-Reach、fatsearch、Lightpanda 三者的集成命令，本手册只把它们并列为可选做法；Playwright CLI 也没有与前三者的集成说明。
 
 ### 做法 A：最小可行试用 Agent-Reach
 
@@ -446,6 +458,39 @@ OPENAI_BASE_URL=https://my-gateway/v1 OPENAI_API_KEY=... ./lightpanda agent
 - 不想要 core dump 时设 `LIGHTPANDA_DISABLE_CORE_DUMP`。
 - 抓第三方站点时注意合规；示例命令带 `--obey-robots`。
 
+### 做法 E（试验性）：用 Playwright CLI + skills 让 Claude Code 自然语言驱动浏览器
+
+说明：来源只有一条推文，正文在第二步中途被截断（“Run playwright-cli install --skills in your” 之后缺失），没有给出提示词、使用示例或结果。以下只把原文给出的两条命令当作可照做部分，其余标注为待验证；不要把它当标准做法。
+
+1. 确认 Node.js 20+。前提：准备在 Claude Code 环境里试。预期结果：输出 v20 或更高。
+
+```bash
+node -v
+```
+
+2. 全局安装 Playwright CLI。前提：npm 可用。预期结果：得到 `playwright-cli` 命令（原文命令原样）。
+
+```bash
+npm install -g @playwright/cli@latest
+```
+
+3. 安装 skills，把工具用法暴露给 Claude Code。前提：上一步成功；原文说在项目目录下执行。预期结果：agent 知道如何调用浏览器。原文未说明是否需要特定目录或是否需先初始化项目；是否还需额外安装浏览器内核，原文未提及，需用 `playwright-cli --help` 确认。
+
+```bash
+playwright-cli install --skills
+```
+
+4. 在 Claude Code 中发起抓取任务。前提：前三步完成，目标站点允许抓取。原文没有给示例提示词；下面这段是调研报告按该思路自拟的待验证写法，不是原文内容：
+
+```text
+用 playwright 打开 https://example.com，抓取列表页每一条的标题、链接、日期，
+翻完所有分页，结果输出为 CSV。遇到需要登录或 robots 禁止的页面就停下并告诉我。
+```
+
+预期结果：agent 用自然语言驱动浏览器执行并返回结果。实际是否零代码、是否覆盖“几乎任何网站”，原文没有给出证据，按下面的最小试用自己量。
+
+5. 记录过程与指标。前提：你要判断这种做法是否值得保留。预期结果：拿到一组可与手写脚本对照的数字（人工投入时间、人工干预次数、是否改代码、字段完整率/准确率、翻页/渲染失败率、是否主动做合规检查）。判定规则见“怎么判断变好了”。
+
 ### 维护：更新与卸载 Agent-Reach
 
 更新：
@@ -476,9 +521,12 @@ pip uninstall agent-reach              # 卸载 Python 包本身
 - 不要用作者 benchmark 直接 adopt：fatsearch 的效果数字全部来自作者自发布 benchmark，项目 48 stars、v0.2.x 早期；报告建议小范围试用。
 - Lightpanda 的最小对比：先用 Docker 或二进制启动 Lightpanda，用 `fetch --dump markdown` 和 MCP / agent 模式各跑一条真实的网页采集与操作任务，并与现有 Chrome + Playwright 方案对比成功率、耗时和内存。这是调研报告给出的试用判断方式。
 - Lightpanda 的基准只能当参考：README 自测在 AWS EC2 m5.large、请求 933 个真实网页，100 页峰值内存 123MB vs Headless Chrome 2GB（约 16 倍更少），执行时间 5s vs 46s（约 9 倍更快）；这是作者自测，不是第三方评测。
-- 试用时长：两份材料都没有给出 Agent-Reach 和 fatsearch 的试用时长；Lightpanda 材料也只给出“先小范围对比”的建议。至少先完成上述最小任务对比，再决定是否扩大。
+- Playwright CLI 的最小对照：选 3 个公开站点做同一件任务——一个静态页面、一个 JS 渲染页面、一个需要翻页的列表页；每类任务做两次对照：A = 手写脚本或手动复制，B = 在 Claude Code 中用自然语言驱动 Playwright，任务目标与字段完全相同；记录 B 组从发指令到拿到可用结果的完整过程（含 agent 反复试错、是否需要人工纠正）。这是调研报告给出的最小试用设计，不是实测结论。
+- Playwright CLI 看这些指标：人工投入时间（分钟）与人工干预次数（每次卡住需人介入算一次）；是否需要写/改代码（原文主张零代码，这是主要待验证点）；字段完整率与准确率（对照人工核对的前 20 条）；翻页/渲染类页面上的失败率与重试次数；合规检查是否被 agent 主动执行（如遇到 robots 禁止是否停下）。
+- Playwright CLI 的判定规则：若在静态页和列表页这两类任务上 B 组显著省时、无需改代码、准确率不低于人工核对基准，可作为 Claude Code 的一条可选工具供给做法保留；若只在静态页成立，降级为“特定场景可用”的注记，不进入标准流程。
+- 试用时长：材料没有给出 Agent-Reach 和 fatsearch 的试用时长；Lightpanda 材料只给出“先小范围对比”的建议；Playwright CLI 这条，调研报告把最小试用设计为“半天内可完成”。至少先完成上述最小任务对比，再决定是否扩大。
 
-最小试用方式：Agent-Reach 先 `agent-reach install --env=auto --dry-run` 预览 → 默认安装 → `agent-reach doctor` → 挑 1～2 个零配置渠道的示例任务跑通；fatsearch 先安装 CLI → 注册 MCP → 用 `dry:true` 和 `fats stats` 量几个真实网页/PDF 的 token 与成本；Lightpanda 先 `./lightpanda version` → `fetch --dump markdown` 抓一个真实页面 → 用 MCP 或 agent 模式跑一条任务 → 与现有 Chrome + Playwright 对比成功率、耗时、内存。
+最小试用方式：Agent-Reach 先 `agent-reach install --env=auto --dry-run` 预览 → 默认安装 → `agent-reach doctor` → 挑 1～2 个零配置渠道的示例任务跑通；fatsearch 先安装 CLI → 注册 MCP → 用 `dry:true` 和 `fats stats` 量几个真实网页/PDF 的 token 与成本；Lightpanda 先 `./lightpanda version` → `fetch --dump markdown` 抓一个真实页面 → 用 MCP 或 agent 模式跑一条任务 → 与现有 Chrome + Playwright 对比成功率、耗时、内存；Playwright CLI（试验性）先 `node -v` 确认 20+ → 装 CLI → `playwright-cli install --skills` → 用 `playwright-cli --help` 确认可用 → 按静态页、JS 渲染页、翻页列表页做 A/B 对照。
 
 ## 常见坑
 
@@ -507,6 +555,11 @@ pip uninstall agent-reach              # 卸载 Python 包本身
 - MCP HTTP 模式下，不带 `Mcp-Session-Id` 的 `initialize` 会新建会话；后续请求要带上它。用相同 `Mcp-Session-Id` 会共享页面、Cookie 和内存，多个 agent 协同时才这么做。
 - `run` 结束时页面会关闭，但 Cookie 和 storage 保留，登录态会带到下一次 `run`；不要以为脚本结束就清掉了登录态。
 - Lightpanda 的基准是作者自测，只有 nightly 构建，结论还提示无渲染引擎；不要因为 16 倍内存、9 倍速度的数字好看就直接替换 Chrome + Playwright，先在自家目标站点对比成功率、耗时和内存。
+- Playwright CLI 原文在第二步被截断：`playwright-cli install --skills` 之后该在哪个目录、还要做什么、提示词怎么写都没有；执行前先用 `playwright-cli --help` 查清，不要照抄半截流程。
+- Playwright CLI 这条只有一个推文来源（46 赞、1 转发、10 回复），“turns into a web crawler for almost any website”“zero lines of code”都是作者主张，没有案例、截图、抓取结果、成功率或失败情形。
+- 原文没有说明是否还需额外安装浏览器内核；`npm install -g @playwright/cli@latest` 成功不等于浏览器能启动。
+- 原文没讨论封禁、速率限制、版权与合规风险；对需要登录、强反爬或高频请求的站点，“almost any website”未经验证，不要直接跑。
+- 不要把做法 E 当成已验证的标准流程或生产链路；它只用于和手写脚本做对照试验。
 
 ## 证据与来源
 
@@ -522,9 +575,11 @@ pip uninstall agent-reach              # 卸载 Python 包本身
 - Lightpanda 自测基准：AWS EC2 m5.large、请求 933 个真实网页，100 页峰值内存 123MB vs Headless Chrome 2GB（约 16 倍更少），执行时间 5s vs 46s（约 9 倍更快）。这是作者自测，不是第三方评测。
 - Lightpanda 的项目判断：只有 nightly 构建；结论提示无渲染引擎；建议先用 Docker 或二进制启动，用 `fetch --dump markdown` 和 MCP / agent 模式各跑一条真实的网页采集与操作任务，并与现有 Chrome + Playwright 方案对比成功率、耗时和内存。这是调研报告的建议，不是实测结论。
 - 三者关系：Agent-Reach 负责多渠道选型、安装、体检、路由；fatsearch 负责单页/PDF 的“先大纲、按节读”与成本可见；Lightpanda 负责 JS 渲染与浏览器交互。给出的材料没有提供三者集成的命令，本手册只把它们并列为可选做法；这是依据材料做的编排，不是原文集成说明。
+- Playwright CLI 做法 E：@plusxbt 推文（46 赞、1 转发、10 回复）。`node -v` 要求 Node.js 20+、`npm install -g @playwright/cli@latest`、`playwright-cli install --skills` 两条命令来自原文；原文在第二步中途被截断，后续步骤、提示词、使用示例、成功率与失败案例均缺失。调研报告的结论是：先做小范围试验，用“耗时/人工干预次数/是否改代码”对比手写脚本，不宜直接写进手册作为标准做法。第 4 步的提示词是调研报告自拟的待验证写法，不是原文内容。Playwright CLI 与前面三者没有集成说明，只是并列的试验性浏览器供给方式。
 
 ## 依据的调研
 
 - [Panniantong/Agent-Reach](../research/radar/2026-10-03/852-panniantong-agent-reach.md)：值得一试，把它作为「给 Agent 补互联网读取能力」的最小可行方案小范围试用：先 --dry-run，再只用默认零配置渠道，并固定用 `agent-reach doctor` 做体检。理由是原文给出了可照抄的安装/体检/更新/卸载流程和「首选+备选多后端路由」的可复用设计，但各渠道依赖平台反爬与登录态、作者自述频繁换代，稳定性必须自己验证，不宜直接全量采纳。
 - [fatsearch/fatsearch](../research/radar/2026-10-22/5707-fatsearch-fatsearch.md)：值得一试，把 fatsearch 装成 Claude Code 的 MCP 工具，在“代理需要读网页或 PDF、但上下文预算敏感”的场景里小范围试用，先用 `fats stats` 和 `dry:true` 自己量 token 与成本，再决定是否推广。因为它给出可直接照抄的安装、MCP 注册和“先看大纲、按节读取”的操作流程，但效果数字全部来自作者自published benchmark，48 stars 的早期项目（v0.2.x），还不足以直接 adopt。
 - [lightpanda-io/browser](../research/radar/2026-10-31/8886-lightpanda-io-browser.md)：值得一试，建议小范围试：先用 Docker 或二进制启动 Lightpanda，用 `fetch --dump markdown` 和 MCP / agent 模式各跑一条真实的网页采集与操作任务，并与现有 Chrome + Playwright 方案对比成功率、耗时和内存；理由在于 README 给出了可直接复制的安装、MCP 配置、PandaScript 录制回放流程，但只有 nightly 构建、基准为自测且无渲染引擎，兼容性必须在自家目标站点上验证。
+- [@plusxbt: It is becoming f*cking dangerous: Claude Code turns into a web crawler for almost any website, and y](../research/radar/2026-11-01/9089-it-is-becoming-f-cking-dangerous-claude-code-turns.md)：值得一试，先做小范围试验：在 Node.js 20+ 环境安装 Microsoft Playwright CLI 并执行 skills 安装，让 Claude Code 用自然语言驱动浏览器抓取公开页面，再用「耗时/人工干预次数/是否改代码」对比手写脚本；原文只给出两步安装线索、第二步还被截断，没有流程细节和验证数据，因此不宜直接写进手册作为标准做法。
