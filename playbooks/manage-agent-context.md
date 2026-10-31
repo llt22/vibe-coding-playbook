@@ -1,25 +1,21 @@
-# 给编码 agent 管上下文和规则：先量再砍，用任务结果验收
+# 让编码 agent 在长任务里少烧上下文、少返工
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：编码 agent 的上下文、规则文件和后台调用会悄悄吃掉配额并让行为跑偏；本手册给出一套先测量、一次只改一项、用任务侧结果验收的做法。
-> 先试这一步：先跑 /context，再跑 wc -l CLAUDE.md 和 wc -c AGENTS.md，记下基线，然后只挑一项改。
+> 解决的问题：编码 agent 在长任务里被工具输出、重复规则、过时指令和后台开销塞满上下文，导致配额耗尽、状态丢失和返工；本手册给出一组可小范围验证的治理步骤。
+> 先试这一步：先做一次上下文预算审计：在真实任务中运行 /context 看 token 去向，只改一项（先禁用当前会话用不到的 MCP 服务器），再用同类任务对比。
 > 最近修订：2026-10-31
 
 ## 解决什么问题
 
-编码 agent 会调用大量工具：读文件、grep、跑 shell、抓网页、扫日志、翻工单。原始数据直接进上下文，很快塞满窗口；会话压缩时状态还可能丢失。另一类浪费是把只需要一个小判断的问题做成全量读取，例如在 187 个文件里找处理 auth 的。还有机器层面的浪费：同一台机器装 Claude Code、Codex，每个工具各维护一份指令文件。还有上下文配置本身的浪费：旧提示习惯可能拖累新模型；CLAUDE.md、完整聊天记录、从不调用的 MCP 工具定义在每条消息里反复重发。长会话交接、AGENTS.md 常驻文件、以及 AGENTS.md 的长度本身，也都会持续吃配额。还有一类更隐蔽的浪费发生在缓存层：子代理的提示缓存闲置约 5 分钟就会过期，之后的下一次调用要从头重写整个上下文。还有一类浪费发生在规则本身：同一段背景或规则在每次新会话里重复粘贴，agent 的工作范围又说不清，它会反复确认边界，或者跑到无关目录去读东西。更常见的是配置一次性堆满：第一天就把所有规则、skills、MCP 都加上，常驻文件变长，真正反复被违反的约定反而混在资料库里。还有一类问题出在 AGENTS.md 里某条规则本身：它看起来合理，却让 agent 走偏或做不必要的工作；要靠回看真实历史会话找出「哪条指令、当时用户说了什么」这一对证据，而不是凭感觉继续加规则。还有一类规则粒度问题：所有规则都堆在根级 CLAUDE.md，无法让日记、项目、研究等不同目录各自只读、编辑边界或引用规范；按目录分层放置局部 CLAUDE.md，可以把规则放到对应文件夹。还有一类更日常的浪费：同一句纠正反复对 agent 说，却从未沉淀成规则；或者反过来，规则包一装就全收，常驻文件膨胀，真正重要的规则被稀释。还有一类产出浪费：编码 agent 默认会写大量复述代码本身的注释，既稀释上下文又增加评审负担；需要一条注释准入判据，把注释从默认产出改成需要过门槛的行为。还有一类结构浪费：把知识和能力都堆进 skills 或 AGENTS.md，agent 每次都要读一大段，或者找不到该看哪份文档；做法 AC 把能力放 skills、知识放 docs/、AGENTS.md 只做「如果 X 就看文档 Y」的条件路由。
-
-还有一类开销不在你的对话里：Claude Code 的 `agent_summary` 会在后台约每 30 秒、对每个后台 agent，把该 agent 的整个 transcript 发给它自己的模型，要求生成 3–5 个词的状态行；结果只更新 agents panel，不进入模型或你的对话。调研中的 OpenTelemetry 测量称它曾占全部 Claude Code 花费 16.4%、API 请求 19.7%，其中 96% 的花费在 Opus 上，输入 token 与输出 token 比约 9000:1。
-
-本手册把对应做法合在一起：把工具输出挡在上下文之外（Context Mode、headroom）、把略读判断外包给小模型（Quicksilver）、用持久记忆保住跨会话状态（claude-mem、mem0、cognee）、把执行计划写到磁盘并靠 hook 重注入（planning-with-files）、把团队 trace 固化成技能（hivemind）、用录屏口述补上下文和反馈（blurt）、把 agent 规则集中成一份共享 AGENTS.MD 软链给同机多个工具共读（做法 L）、定期审查 CLAUDE.md / skills 里的过时指令（做法 M）、先给上下文预算做一次审计再逐项砍浪费（做法 N）、把长会话的自动交接与沉淀交给工具（做法 O、P、Q）、用一条提示词把 AGENTS.md 本身重组干净（做法 R）、先量出 AGENTS.md 的行数与字节数再压进 200 行 / 32 KiB 的长度预算（做法 S）、把 Claude Code 自动压缩阈值从默认 1M 调到 400k（做法 T）、先验证「子代理闲置后 token 是否暴涨」再决定要不要动子代理缓存 TTL（做法 U）、把一类工作收进专用文件夹、用根目录 CLAUDE.md 固化规则、把重复粘贴的上下文省掉（做法 V）、按触发条件增量配置 CLAUDE.md、同一约定累计两次被违反才写入并保持 200 行以内（做法 W）、回看历史会话、定位 AGENTS.md 中真正造成返工的那条指令（做法 X）、按目录分层放置 CLAUDE.md、把局部规则放到对应文件夹（做法 Y）、用 nomore 规则包和本地 CLI 把反复纠正的话固化成 CLAUDE.md 规则（做法 Z）、给代码注释加一条准入判据并在单仓库试一周（做法 AA）、审计并关闭隐藏的后台摘要 side-query（做法 AB）、以及把能力放 skills、知识放 docs/、AGENTS.md 只做条件路由（做法 AC）。核心要求是：不只看节省比例，要用任务侧指标验证结果有没有变好。
+编码 agent 在长任务里会读大量工具输出、反复加载规则、调用后台摘要；上下文窗口被塞满，压缩时状态丢失，配额被看不见的开销吃掉。还有规则本身的浪费：CLAUDE.md / AGENTS.md 过长、过时、堆满资料；同一纠正反复说却不沉淀；规则粒度不分目录；注释复述代码；知识和能力堆在一起。本手册把做法 A–AD 合在一起：把工具输出挡在上下文外、把略读判断外包、用持久记忆保状态、把计划写磁盘、把 trace 固化成技能、用录屏口述、共享 AGENTS.MD、审查旧指令、审计上下文预算、自动交接、重组和限长 AGENTS.md、调压缩阈值、验证子代理缓存、专用文件夹、增量规则、回看历史会话、目录分层、nomore 规则包、注释准入、关闭后台摘要、skills/docs 条件路由，以及用 Claude Code 读笔记库生成 CLAUDE.md 初稿（做法 AD）。核心是任务侧指标验证，不只看节省比例。
 
 ## 适用与不适用
 
 适用：
 
-- 你正在用编码代理（Claude Code、Codex、Cursor 等）做真实编码任务，任务中本来就会产生大量工具输出。
-- 你会经历会话压缩，或者需要跨会话继续同一个任务。
+- 你用编码代理做真实编码任务，任务中本来就会产生大量工具输出。
+- 你会经历会话压缩，或需要跨会话继续同一个任务。
 - 你有一类「读很多、只判断一点」的活：在大量文件、日志、工单里找少数命中项。
 - 你有说不清、截图慢的界面问题，需要一个更自然的输入通道。
 - 你要做长时编码任务，计划需要挺过 /clear、崩溃和 compaction。
@@ -40,6 +36,7 @@
 - 你的编码 agent 会在仓库里写代码注释，且注释会被后续会话或评审继续读；你想用一条低成本规则减少无信息量注释。
 - 你在 Linux 上使用 Claude Code 2.1.257–2.1.312，能设置环境变量、重启 daemon，能看日志或 OpenTelemetry，并愿意在非关键项目上小范围试。
 - 你有团队内部开发 harness，skills、docs/、AGENTS.md 可编辑，想把上下文供给从堆文本改成可检索规则（做法 AC）。
+- 你有一个本地笔记库或结构稳定的项目目录，想用 Claude Code 生成一份描述文件夹、链接风格和命名规则的 CLAUDE.md 初稿，再人工校正（做法 AD）。
 
 不适用：
 
@@ -92,6 +89,7 @@
 - 做法 AA：你的项目是一次性脚本、教学代码或对外 API 文档，注释主要给人类读；判据「下一个 Claude 是否要花多次工具调用才能搞明白」会反向失效。你要求这条规则有现成实验数据；原文只有一条推文和转述，没有数据、案例或前后对比。你不能接受原文在 If the answer isn't 处截断，删除动作是按语义补全而不是原话。
 - 做法 AB：macOS 和 Windows 未测，Windows 上 /$bunfs/ 门控很可能不会安装 hook；你不能接受非官方 Bun preload、修改客户端运行时行为或可能违反服务条款；你不能设置环境变量、不能重启 Claude Code daemon，或不能让 BUN_OPTIONS 继承到 claude -p、cron、CI 和编辑器集成；你没有 OpenTelemetry 且需要强验证；你要在关键项目上直接全量采用；你期望有官方设置或稳定接口直接关闭 agent_summary；你不能接受升级后静默失效并每次重验。
 - 做法 AC：你的文档路径不稳定、触发条件无法枚举，或者任务很少重复、没有稳定流程：条件路由会失效或增加维护成本。你希望原文给出 OKF 格式、目录结构或 AGENTS.md 样例：原文没有给，需自行定义。你不能接受先盘点、再迁移、再验证的维护成本。你要求这条做法有前后对比数据：原文只有作者团队经验总结和一句「不比 skills 差」。
+- 做法 AD：你的笔记库包含敏感内容且不能整库交给 agent 读取；原文没有给出权限控制、隐私处理或回滚方法；你希望原文给出第 4 步或完整验证数据；原文在 add one line: 处截断，没有展示生成后的 CLAUDE.md、准确率、耗时或案例对比。
 
 ## 前置条件
 
@@ -121,8 +119,9 @@
 - 做法 Y：知识库已经按目录组织，目录职责相对稳定；所用 AI 工具确实会读取目录级 CLAUDE.md；能从目标文件夹启动或指定任务；先备份现有根级 CLAUDE.md。原文没有说明是哪个插件、客户端或命令行工具读取，也没有说明读取顺序。
 - 做法 Z：已安装 Claude Code；Node 20+；知道项目或全局 CLAUDE.md 的位置；本机能读到 Claude Code 会话记录，工具会遵循 CLAUDE_CONFIG_DIR；已有一份 CLAUDE.md 作为写入目标；愿意逐条 yes/no/edit；先选一个日常最常用的项目、试一周；规则包需要能访问 raw GitHub；可选复现规则包挖掘时需要克隆仓库并装有 pnpm。规则包下载会覆盖同名文件，要长期保留自定义版本就改文件名后导入。CLI 自认是 preview，作者说约三分之一建议才是真规则，其余多是任务词。
 - 做法 AA：项目里已有会被 agent 自动加载的 CLAUDE.md 或 AGENTS.md；agent 能对仓库做检索（grep / 读文件 / 跳转定义），否则「多次工具调用」这个判据不成立；选一个中等规模仓库，准备保留前 5 个 PR 的同等长度基线；愿意跑一周或 5 个 PR 并做前后对比；注意原文在 If the answer isn't 处截断，删除动作是按语义补全，不是原文原话。
-- 做法 AB：Linux x64；Claude Code 2.1.257–2.1.312（原文实测平台与版本区间）；能设置环境变量并重启 Claude Code daemon；脚本放在绝对路径；接受 MIT 许可的非官方 Bun preload 脚本和可能违反服务条款的风险；最好有 OpenTelemetry 做 `query_source = agent_summary` 检查；先在非关键项目试用；每次升级 Claude Code 后能重跑验证。
+- 做法 AB：Linux x64；Claude Code 2.1.257–2.1.312（原文实测平台与版本区间）；能设置环境变量并重启 Claude Code daemon；脚本放在绝对路径；接受 MIT 许可的非官方 Bun preload 脚本和可能违反服务条款的风险；最好有 OpenTelemetry 做 query_source = agent_summary 检查；先在非关键项目试用；每次升级 Claude Code 后能重跑验证。
 - 做法 AC：已有团队内部开发用的 harness；skills、docs/、AGENTS.md 可编辑；先备份现有 skills 与 AGENTS.md；能确认或定义 OKF 格式；文档路径稳定、触发条件可枚举；选一个仓库或一条内部开发流程，准备同一批任务做前后对比。原文没有给出 OKF 格式、目录结构或 AGENTS.md 样例。
+- 做法 AD：本地有 Obsidian 笔记库或结构稳定的目录；已安装并可运行 Claude Code；允许 Claude Code 读取该目录；先备份或使用版本控制；选一个非敏感的小型笔记库副本；原文第 4 步缺失，不要把缺失步骤当已验证。
 
 ## 操作步骤
 
@@ -157,37 +156,26 @@
 - 主要痛点是 agent 写的注释大量复述代码、评审时反复删注释 → 做法 AA（在 CLAUDE.md / AGENTS.md 加一条注释准入规则，先在一个中等规模仓库试一周或 5 个 PR）。做法 AA 管「注释这条具体规则的内容和验证」，做法 W 管「何时加规则」，做法 S 管长度，做法 M 管内容是否过时；不要同时改这几项。
 - 主要痛点是配额被看不见的后台摘要吃掉，且你在 Linux 上用 Claude Code、能看日志或 OpenTelemetry → 做法 AB（先量 agent_summary，再决定是否用 Bun preload 关闭）。不要和 N、T、U 等上下文/缓存改动同时做。
 - 主要痛点是 skills 和 AGENTS.md 里堆了太多「知识」，agent 每次都要读一大段，或者不知道何时该查哪份文档 → 做法 AC（先盘点 skills 与 docs/，把知识迁到 docs/，AGENTS.md 只写「如果 X 就看文档 Y」）。做法 AC 管上下文供给结构，做法 S 管长度，做法 R 管重组，做法 M 管内容是否过时，做法 W 管何时加规则。
+- 主要痛点是已有笔记库/项目目录，但缺少描述文件夹结构、链接风格和命名规则的 CLAUDE.md → 做法 AD（在库根目录启动 Claude Code，用一条提示词生成初稿，再人工校正）。做法 AD 管「上下文说明文件怎么起草」，做法 Y 管目录分层，做法 S 管长度，做法 M 管内容是否过时。
 
-这些做法可以叠加，但一次只加一个，否则分不清是哪个起了作用。AGENTS.md 相关维护建议顺序：先量长度（S），再回看历史会话找返工证据（X），再集中规则（L），再重组结构（R），再逐条审内容（M），最后用增量规则控制新增（W）。如果知识文档很多，再用 AC 把知识移出 AGENTS.md 到 docs/ 并做条件路由。这是本手册建议的顺序，不是原文实验结论。CLAUDE.md 目录分层（Y）与 AGENTS.md 维护是两条线；Y 不替代 S/M/W。做法 Z 产出的是候选规则，仍要逐条人工确认，不替代 W/S/M/X。做法 AB 只动 Claude Code 的后台摘要 side-query，不替代上下文压缩、规则长度和子代理缓存的做法。做法 AC 只动上下文供给结构，不替代长度、结构和内容治理。
+这些做法可以叠加，但一次只加一个，否则分不清是哪个起了作用。AGENTS.md 相关维护建议顺序：先量长度（S），再回看历史会话找返工证据（X），再集中规则（L），再重组结构（R），再逐条审内容（M），最后用增量规则控制新增（W）。如果知识文档很多，再用 AC 把知识移出 AGENTS.md 到 docs/ 并做条件路由。这是本手册建议的顺序，不是原文实验结论。CLAUDE.md 目录分层（Y）与 AGENTS.md 维护是两条线；Y 不替代 S/M/W。做法 Z 产出的是候选规则，仍要逐条人工确认，不替代 W/S/M/X。做法 AB 只动 Claude Code 的后台摘要 side-query，不替代上下文压缩、规则长度和子代理缓存的做法。做法 AC 只动上下文供给结构，不替代长度、结构和内容治理。做法 AD 产出的是 CLAUDE.md 初稿，仍需人工校正，不替代 S/M/Y。
 
 ### 做法 A：MCP-only 轻量试用（推荐先做）
 
-1. 确认 Claude Code 版本：
-```bash
-claude --version
-```
-预期：版本不低于 v1.0.33。低于这个版本先升级。
-2. 添加 MCP server：
-```bash
-claude mcp add context-mode -- npx -y context-mode
-```
-预期：注册 11 个 ctx_* 工具。这个方式没有 hook、没有自动路由，只有工具。
-3. 重启 Claude Code。预期：在会话里能调用 ctx_* 工具。
-4. 准备一个真实编码任务，任务里本来就会产生大量工具输出。
-5. 任务开始前和结束后输入 ctx stats。预期：能看到按工具的节省明细、消耗 token、节省比例。
+1. 确认 Claude Code 版本：`claude --version`。预期：不低于 v1.0.33。
+2. 添加 MCP server：`claude mcp add context-mode -- npx -y context-mode`。预期：注册 11 个 ctx_* 工具；没有 hook、没有自动路由。
+3. 重启 Claude Code。预期：能调用 ctx_* 工具。
+4. 准备真实编码任务，任务中本来就会产生大量工具输出。
+5. 任务开始前和结束后输入 ctx stats。预期：看到按工具的节省明细、消耗 token、节省比例。
 6. 手动提示模型使用 ctx_* 工具：批量读取、统计、聚合类工作先用 ctx_execute 写脚本完成，只输出结果。
-7. 记录任务结果：正确率、人工纠正次数、交付时间。最好和不用 Context Mode 的基线对比。
-8. 根据结果决定是否上做法 B，或者是否推广到团队。
+7. 记录任务结果：正确率、人工纠正次数、交付时间；最好和不用 Context Mode 的基线对比。
+8. 根据结果决定是否上做法 B，或推广到团队。
 
 ### 做法 B：完整插件（自动路由 + hook）
 
 1. 前置：Claude Code v1.0.33+。
-2. 添加 marketplace：
-```text
-/plugin marketplace add mksglu/context-mode
-/plugin install context-mode@context-mode
-```
-3. 重启 Claude Code，或执行 /reload-plugins，然后用 /context-mode:ctx-doctor 验证。预期：所有检查为 [x]。
+2. 添加 marketplace：`/plugin marketplace add mksglu/context-mode`、`/plugin install context-mode@context-mode`。
+3. 重启 Claude Code 或执行 /reload-plugins，然后用 /context-mode:ctx-doctor 验证。预期：所有检查为 [x]。
 4. 可选：在 ~/.claude/settings.json 里加 statusLine，命令为 context-mode statusline。重启后状态栏显示 $ saved this session · $ saved across sessions · % efficient。
 5. 用斜杠命令查看状态：ctx-stats、ctx-doctor、ctx-index、ctx-search、ctx-upgrade、ctx-purge、ctx-insight。
 6. 跑真实任务，对比结果。完整插件会通过 hook 自动拦截会产生大输出的工具，并自动路由到沙箱。
@@ -200,103 +188,46 @@ claude mcp add context-mode -- npx -y context-mode
 
 ### 做法 D：把「略读型批量判断」外包给 Jev（Quicksilver）
 
-适用形态：一个窄的、带类型的判断，作用在大量条目上。Jev 返回带类型的判定，Claude 只拿回一个 shortlist。
-
 1. 前提：Claude Code 已安装；Node 18+；到 console.typesafe.ai 申请 Jev key。内容会被发送到 TypeSafe 的 API。
-2. 交互式安装：
-```bash
-npx github:UditAkhourii/quicksilver
-```
-装完重启 Claude Code。之后 Claude 在任务看起来像「读很多来判断一点」时会自行调用这个 skill。
-3. 非交互安装：
-```bash
-npx github:UditAkhourii/quicksilver install --key YOUR_JEV_KEY
-```
-4. 作为 Claude Code 插件安装：
-```text
-/plugin marketplace add UditAkhourii/quicksilver
-/plugin install quicksilver@quicksilver
-```
-5. 常用命令：
-```bash
-qs filter 'Does this file handle user sessions?' src
-qs filter 'Does this line report a failure?' app.log --lines
-qs classify --labels 'bug,feature,question' --items issues.jsonl
-qs rank 'where do we issue refunds?' src --top 5
-qs find 'the retry backoff logic' huge_module.py
-qs ask 'Does this contract allow termination without notice?' --state @contract.txt
-qs status
-```
+2. 交互式安装：`npx github:UditAkhourii/quicksilver`。装完重启 Claude Code。之后 Claude 在任务看起来像「读很多来判断一点」时会自行调用这个 skill。
+3. 非交互安装：`npx github:UditAkhourii/quicksilver install --key YOUR_JEV_KEY`。
+4. 作为 Claude Code 插件安装：`/plugin marketplace add UditAkhourii/quicksilver`、`/plugin install quicksilver@quicksilver`。
+5. 常用命令：`qs filter 'Does this file handle user sessions?' src`、`qs filter 'Does this line report a failure?' app.log --lines`、`qs classify --labels 'bug,feature,question' --items issues.jsonl`、`qs rank 'where do we issue refunds?' src --top 5`、`qs find 'the retry backoff logic' huge_module.py`、`qs ask 'Does this contract allow termination without notice?' --state @contract.txt`、`qs status`。
 6. 大扫描时加 --fast。README 原文：Add --fast to pack items and go about 10× faster on obvious needles。
 7. 按 skill 要求改写提问：一次只问一个窄的、带类型的判断；写清边界情况；给兜底标签；不做算术、不涉及日期。
 8. 读回执判断值不值：扫描数、命中数、borderline 数、耗时、Jev token 与成本、约多少 Claude token 没被读。
-9. 安全边界：不会发送 .env*、私钥、证书、凭据文件；遵守 .gitignore；跳过二进制文件和大于 2 MB 的文件。key 保存在 ~/.quicksilver/config.json。删除 key：
-```bash
-npx github:UditAkhourii/quicksilver setup --remove
-```
+9. 安全边界：不会发送 .env*、私钥、证书、凭据文件；遵守 .gitignore；跳过二进制文件和大于 2 MB 的文件。key 保存在 ~/.quicksilver/config.json。删除 key：`npx github:UditAkhourii/quicksilver setup --remove`。
 10. 不要用它做写作、编辑、多步推理，以及任何 grep 能精确回答的问题。
 
 ### 做法 E：跨会话持久记忆（claude-mem）
 
 1. 前提：Node.js 20.0.0+；Claude Code 最新版且支持插件。
-2. 标准安装：
-```bash
-npx claude-mem install
-```
-安装器先完成部署，再要求浏览器登录 claude-mem。
+2. 标准安装：`npx claude-mem install`。安装器先完成部署，再要求浏览器登录 claude-mem。
 3. 想跳过登录：显式传 --provider，或设 CLAUDE_MEM_ONLINE_OPTIN=false，或在 CI / 非交互 shell 中运行。
-4. 插件市场安装：
-```text
-/plugin marketplace add thedotmack/claude-mem
-/plugin install claude-mem
-```
-5. 其他 harness：npx claude-mem install --ide opencode；npx claude-mem install --ide antigravity；npx claude-mem install --ide omp；npx claude-mem install --ide grok-bot。
-6. OpenClaw 网关安装：
-```bash
-curl -fsSL https://install.cmem.ai/openclaw.sh | bash
-```
-7. 重启 Claude Code。此后新会话会自动出现此前会话的上下文。
-8. 配置写在 ~/.claude-mem/settings.json。可配 AI 模型、worker 端口、数据目录、日志级别、上下文注入设置。
-9. 让 SessionStart 上下文包含所有 harness 的观察：设 CLAUDE_MEM_SESSION_START_INCLUDE_ALL_SOURCES=true。
-10. 隐私控制：用 <private> 标签把敏感内容排除在存储之外。
-11. 检索三层工作流：search 约 50–100 tokens/结果；timeline 看时间线；get_observations 按 ID 批量取完整详情，约 500–1,000 tokens/结果。
-12. 注意：npm install -g claude-mem 只安装 SDK，不注册插件 hook。装插件走 npx claude-mem install 或 /plugin。
-13. 出问题时：把问题描述给 Claude，troubleshoot skill 会自动诊断；也可 cd ~/.claude/plugins/marketplaces/thedotmack && npm run bug-report。
+4. 插件市场安装：`/plugin marketplace add thedotmack/claude-mem`、`/plugin install claude-mem`。
+5. 其他 harness：`npx claude-mem install --ide opencode`、`--ide antigravity`、`--ide omp`、`--ide grok-bot`。OpenClaw 网关安装：`curl -fsSL https://install.cmem.ai/openclaw.sh | bash`。
+6. 重启 Claude Code。此后新会话会自动出现此前会话的上下文。
+7. 配置写在 ~/.claude-mem/settings.json。可配 AI 模型、worker 端口、数据目录、日志级别、上下文注入设置。
+8. 让 SessionStart 上下文包含所有 harness 的观察：设 CLAUDE_MEM_SESSION_START_INCLUDE_ALL_SOURCES=true。
+9. 隐私控制：用 <private> 标签把敏感内容排除在存储之外。
+10. 检索三层工作流：search 约 50–100 tokens/结果；timeline 看时间线；get_observations 按 ID 批量取完整详情，约 500–1,000 tokens/结果。
+11. 注意：npm install -g claude-mem 只安装 SDK，不注册插件 hook。装插件走 npx claude-mem install 或 /plugin。
+12. 出问题时：把问题描述给 Claude，troubleshoot skill 会自动诊断；也可 cd ~/.claude/plugins/marketplaces/thedotmack && npm run bug-report。
 
 ### 做法 F：本地代理压缩所有 LLM 流量（headroom）
 
-1. 安装（三种方式任选）。前提：Python 3.10+。
-```bash
-uv tool install --python 3.13 'headroom-ai[all]'
-pip install 'headroom-ai[all]'
-npm install headroom-ai
-```
-注意：headroom CLI 只在 PyPI 包里；npm 包是库。
+1. 安装（三种方式任选）。前提：Python 3.10+。`uv tool install --python 3.13 'headroom-ai[all]'`、`pip install 'headroom-ai[all]'`、`npm install headroom-ai`。注意：headroom CLI 只在 PyPI 包里；npm 包是库。
 2. 选接入模式：headroom deploy；headroom wrap claude；headroom proxy --port 8787。撤销用 headroom unwrap <tool>。
 3. 自检与看省量：headroom doctor；headroom perf；headroom dashboard。
-4. 打开输出 token 削减（默认关闭）：
-```bash
-export HEADROOM_OUTPUT_SHAPER=1
-headroom proxy --port 8787
-```
+4. 打开输出 token 削减（默认关闭）：`export HEADROOM_OUTPUT_SHAPER=1`、`headroom proxy --port 8787`。
 5. 让工具自己学简洁度：headroom learn --verbosity；headroom learn --verbosity --apply。
-6. 量测输出节省：headroom output-savings。想看实测，留出 10% 会话作未处理对照组：
-```bash
-export HEADROOM_OUTPUT_HOLDOUT=0.1
-```
-7. 关闭遥测：
-```bash
-export HEADROOM_BEACON=off
-```
+6. 量测输出节省：headroom output-savings。想看实测，留出 10% 会话作未处理对照组：`export HEADROOM_OUTPUT_HOLDOUT=0.1`。
+7. 关闭遥测：`export HEADROOM_BEACON=off`。
 8. 失败挖掘与回滚：headroom learn；headroom learn --target CLAUDE.md；headroom unwrap <tool>。
 
 ### 做法 G：录屏 + 口述（blurt）
 
-1. 安装 skill：
-```bash
-npx skills add AGIHunt/blurt
-```
-Claude Code 也可以用：/plugin marketplace add AGIHunt/blurt。
+1. 安装 skill：`npx skills add AGIHunt/blurt`。Claude Code 也可以用：/plugin marketplace add AGIHunt/blurt。
 2. 触发语：「start blurt」/「开始口喷」。首次运行会自动挑语音模型，并安装 Blurt 菜单栏应用。
 3. 划定录制区域：拖选区域、点选窗口，或全屏。
 4. 倒计时后开始口述。快捷键：⌥⇧P 暂停、⌥⇧S 完成。
@@ -309,19 +240,8 @@ Claude Code 也可以用：/plugin marketplace add AGIHunt/blurt。
 
 ### 做法 H：mem0 可编程持久记忆
 
-1. CLI 最小验证：
-```bash
-npm install -g @mem0/cli
-mem0 init --agent --agent-caller claude-code
-mem0 add 'I am using mem0'
-mem0 search 'am I using mem0'
-```
-2. 带用户隔离：
-```bash
-mem0 init
-mem0 add 'Prefers dark mode and vim keybindings' --user-id alice
-mem0 search 'What does Alice prefer?' --user-id alice
-```
+1. CLI 最小验证：`npm install -g @mem0/cli`、`mem0 init --agent --agent-caller claude-code`、`mem0 add 'I am using mem0'`、`mem0 search 'am I using mem0'`。
+2. 带用户隔离：`mem0 init`、`mem0 add 'Prefers dark mode and vim keybindings' --user-id alice`、`mem0 search 'What does Alice prefer?' --user-id alice`。
 3. 库方式：pip install mem0ai；增强混合检索：pip install 'mem0ai[nlp]'；python -m spacy download en_core_web_sm。核心模式：取记忆 → 拼进 system prompt → 生成回答 → 把整轮对话写回记忆。
 4. 自托管服务器：cd server && make bootstrap；cd server && docker compose up -d，默认 http://localhost:3000。自托管默认开启鉴权。旧版升级需设 ADMIN_API_KEY，或仅在本地开发用 AUTH_DISABLED=true。
 5. Agent Skills：npx skills add https://github.com/mem0ai/mem0 --skill mem0；mem0-cli；mem0-vercel-ai-sdk；mem0-integrate；mem0-test-integration；mem0-oss-to-platform。
@@ -330,10 +250,7 @@ mem0 search 'What does Alice prefer?' --user-id alice
 
 ### 做法 I：cognee 本地知识图谱记忆
 
-1. 安装：
-```bash
-uv pip install 'cognee[gliner]'
-```
+1. 安装：`uv pip install 'cognee[gliner]'`。
 2. 无 LLM 本地跑通「写入 + 检索」：
 ```python
 import asyncio
@@ -367,11 +284,7 @@ CLI 等价写法：cognee-cli remember 'Marie Curie was born in Warsaw.' -d loca
 ### 做法 J：planning-with-files 磁盘计划
 
 1. 前提：宿主支持 hook/插件或 Agent Skills；本机有 Node/npx。
-2. 安装：
-```bash
-npx skills add OthmanAdi/planning-with-files --skill planning-with-files -g
-```
-中文版：npx skills add OthmanAdi/planning-with-files --skill planning-with-files-zh -g。状态标记必须保持英文字面量，例如 **Status:** complete。
+2. 安装：`npx skills add OthmanAdi/planning-with-files --skill planning-with-files -g`。中文版：npx skills add OthmanAdi/planning-with-files --skill planning-with-files-zh -g。状态标记必须保持英文字面量，例如 **Status:** complete。
 3. 建立三文件结构：task_plan.md、findings.md、progress.md。并行任务用 .planning/YYYY-MM-DD-slug/，通过 .active_plan 指针选择。默认被 gitignore。
 4. 与 Claude Code plan mode 衔接：plan mode 里设计并批准方案；接受后让智能体把方案写成 task_plan.md 的 phases，然后在普通模式执行。
 5. 依赖 hook 持续注入：UserPromptSubmit hook 每回合重新注入 active-plan；/clear 或新会话后从磁盘重读。
@@ -382,11 +295,7 @@ npx skills add OthmanAdi/planning-with-files --skill planning-with-files -g
 
 ### 做法 K：hivemind 团队 trace 技能化
 
-1. 安装（macOS / Linux）：
-```bash
-curl -fsSL https://deeplake.ai/hivemind.sh | sh
-```
-Windows：irm https://deeplake.ai/hivemind.ps1 | iex。npm：npm i -g @deeplake/hivemind && hivemind install。
+1. 安装（macOS / Linux）：`curl -fsSL https://deeplake.ai/hivemind.sh | sh`。Windows：irm https://deeplake.ai/hivemind.ps1 | iex。npm：npm i -g @deeplake/hivemind && hivemind install。
 2. 授权登录：HIVEMIND_TOKEN=<your-token> hivemind install；或 hivemind install --token <your-token>。
 3. 只给指定 assistant 安装：hivemind install --only claude；hivemind claude install；hivemind codex install；hivemind claw install；hivemind cursor install；hivemind hermes install；hivemind pi install；hivemind claude_cowork install。
 4. 检查接线：hivemind status。
@@ -439,12 +348,7 @@ Windows：irm https://deeplake.ai/hivemind.ps1 | iex。npm：npm i -g @deeplake/
 ### 做法 O：长会话自动交接与沉淀（ctx-handoff，experimental）
 
 1. 前提：需要带 function hooks（mods）的 Claude Code build。版本不符时不要继续。
-2. 克隆并首次加载：
-```bash
-git clone https://github.com/cablate/ctx-handoff-mod ~/.claude/mods/ctx-handoff
-claude --plugin-dir ~/.claude/mods/ctx-handoff
-```
-预期：会话里能调用 /handoff。
+2. 克隆并首次加载：`git clone https://github.com/cablate/ctx-handoff-mod ~/.claude/mods/ctx-handoff`、`claude --plugin-dir ~/.claude/mods/ctx-handoff`。预期：会话里能调用 /handoff。
 3. 跑 /handoff 自检。预期输出能看到上下文用量、门槛、刷新计数。
 4. 想让每个会话都加载，在 ~/.claude/settings.json 的 env 里加 CLAUDE_CODE_PLUGIN_DIRS，指向该目录的绝对路径。
 5. 按需调参：数值是 hooks/register.ts 顶部常量。默认 THRESHOLD 600_000、WINDOW_RATIO 0.8、IDLE_MS 55 min、MAX_REFRESH 3、MIN_TOKENS 30_000。
@@ -459,11 +363,7 @@ claude --plugin-dir ~/.claude/mods/ctx-handoff
 ### 做法 P：用结构化交接简报替换内置 auto-compact（claude-auto-handoff，先小范围试）
 
 1. 前提：需要带 mods 的 Claude Code 构建。
-2. 克隆并加载：
-```bash
-git clone https://github.com/alexknowshtml/claude-auto-handoff.git ~/claude-auto-handoff
-claude --plugin-dir ~/claude-auto-handoff
-```
+2. 克隆并加载：`git clone https://github.com/alexknowshtml/claude-auto-handoff.git ~/claude-auto-handoff`、`claude --plugin-dir ~/claude-auto-handoff`。
 3. 可选：写进 ~/.claude/settings.json 的 env，加 CLAUDE_CODE_PLUGIN_DIRS 指向该目录。
 4. 配置：threshold 默认 160000；maxConsecutiveHandoffs 默认 2；briefTemplate 默认 ~/.claude/auto-handoff/brief.md；instructionsTemplate 默认 ~/.claude/auto-handoff/instructions.md；ignoreFiles 默认空；viewer 默认 tailscale:3846。环境变量：AUTO_HANDOFF_TOKENS=60000 可覆盖阈值；AUTO_HANDOFF_DISABLE=1 关闭；DISABLE_AUTO_COMPACT 也会关闭它。
 5. 改简报结构与规则：改 ~/.claude/auto-handoff/ 下的副本，不要改仓库里的。不要写 files 和 commits 段；不要删掉 ## Last Request from the User 及其 Status 行。
@@ -477,11 +377,7 @@ claude --plugin-dir ~/claude-auto-handoff
 ### 做法 Q：空闲自动落盘交接（obie/auto-handoff，先小范围试）
 
 1. 前提：已安装并运行 Claude Code。基于 early access 的 function hooks 插件 API。
-2. 安装：
-```text
-/plugin marketplace add obie/auto-handoff
-/plugin install auto-handoff@auto-handoff
-```
+2. 安装：`/plugin marketplace add obie/auto-handoff`、`/plugin install auto-handoff@auto-handoff`。
 3. 可选调整触发条件。默认 minutes 为 50，默认 command 为 auto-handoff:handoff。用 /plugin configure auto-handoff 调整。
 4. 若换成自己的交接命令，必须给它 allowed-tools 预批准工具，或把会话放在允许写入的权限模式下。
 5. 默认交接行为：写 docs/handoffs/<timestamp>-<slug>.md，覆盖 goal、status、decisions、dead ends、files、verification commands、next steps、open questions；运行 date 和 git status，不做任何提交。
@@ -515,12 +411,7 @@ AGENTS.md
 ### 做法 S：给 AGENTS.md 设一个长度预算（200 行 / 32 KiB）
 
 1. 前提：使用 Codex 或 Claude Code；项目里已有或准备新建 AGENTS.md；能在项目根目录跑 wc；准备一个近期 1–2 周会持续使用的项目。
-2. 量现状：
-```bash
-wc -l AGENTS.md
-wc -c AGENTS.md
-```
-预期：拿到行数与字节数。前者对应「200 行以内」，后者对应「Codex 默认最多读取 32 KiB」。中文内容按字节算更容易先撞 32 KiB 线，两条命令都要跑。
+2. 量现状：`wc -l AGENTS.md`、`wc -c AGENTS.md`。预期：拿到行数与字节数。前者对应「200 行以内」，后者对应「Codex 默认最多读取 32 KiB」。中文内容按字节算更容易先撞 32 KiB 线，两条命令都要跑。
 3. 判断撞的是哪条线。原文给的两个阈值来源不同：Claude Code 是文档建议 200 行以内；Codex 是默认最多读取 32 KiB、超出被跳过。200 行通常更紧。这一步是推算，原文没有直接比较两条限制。
 4. 精简内容。原文只说「强烈推荐精简」，没有给出具体删减或拆分方法。可以借用做法 R 的重组提示词，或用法 X 先找出真正造成返工的规则再删改。
 5. 建立复查动作。每次修改 AGENTS.md 后重跑两条命令，把长度当配额管。
@@ -533,10 +424,7 @@ wc -c AGENTS.md
 
 1. 前提：Claude Code 可用；额度按周统计；原提到的参数名是 autoCompactWindow；你能够自己核对它属于配置文件字段、环境变量还是启动参数。原文没有给出写入方式，核对不到就不要照做。
 2. 确认参数存在。在 Claude Code 的设置/环境变量/官方文档中查找与自动压缩阈值相关的项。原文提到的名字是 autoCompactWindow，原文未说明它属于配置文件字段、环境变量还是启动参数。
-3. 把阈值从默认的 1M 改成 400k。原文只给了参数名与目标值，写法需按你的版本核对，下面只是示意，不是原文给出的命令：
-```text
-autoCompactWindow: 400k
-```
+3. 把阈值从默认的 1M 改成 400k。原文只给了参数名与目标值，写法需按你的版本核对，下面只是示意，不是原文给出的命令：`autoCompactWindow: 400k`。
 4. 确认生效方式。原文没有说明改完是否需要重启会话或新开会话才生效，需自行确认。
 5. 保持其他变量不变：同一模型、同一类任务、同一使用强度，否则省额度的对比没有意义。
 6. 记录基线。先用默认值（1M）按原强度用满一周，记下额度消耗节奏；或者用同一组固定任务反复跑，而不是靠自然使用量对比。
@@ -582,11 +470,7 @@ autoCompactWindow: 400k
 3. 记录基线：把「约定内容、违反次数、在哪个任务里违反」记下来。不要凭印象直接把所有规则写进 CLAUDE.md。
 4. 只有当同一约定累计第二次被违反时，才把该约定写入 CLAUDE.md。原文规则可照抄为检查条件：Claude 两次违反约定？就放到这里。预期：CLAUDE.md 里只沉淀真正反复出问题的规则，而不是一次性细则或资料库。
 5. 写入 CLAUDE.md 的内容定位为「始终开启的规则」，不要把它当成按需加载的资料库。
-6. 按原文要求把 CLAUDE.md 保持在 200 行以下。可定期检查：
-```bash
-wc -l CLAUDE.md
-```
-预期：行数低于 200。原文依据是「每次会话都会加载，所以保持在 200 行以下」；原文未规定检查频率。
+6. 按原文要求把 CLAUDE.md 保持在 200 行以下。可定期检查：`wc -l CLAUDE.md`。预期：行数低于 200。原文依据是「每次会话都会加载，所以保持在 200 行以下」；原文未规定检查频率。
 7. 不要同时添加其他未给出触发条件的配置。原文只展开到 01 CLAUDE.md，02 Skills 被截断；没有足够信息时不要根据这条材料补写 Skills 步骤。
 8. 观察同类约定第三次违反是否减少、因规则缺失导致的重复纠正次数是否下降、CLAUDE.md 是否始终低于 200 行、是否出现「为了少写而漏写关键规则」的情况。
 9. 与做法 S、M、N 的分工：做法 W 管「什么时候加规则」，做法 S 管常驻文件的长度预算，做法 M 审 CLAUDE.md / skills 的内容还适不适用，做法 N 用 /context 看它吃掉多少 token。它们可以叠加，但一次只加一项。
@@ -635,40 +519,13 @@ research/CLAUDE.md
 
 1. 前提：已装 Claude Code；Node 20+；知道项目或全局 CLAUDE.md 在哪；本机能读到 Claude Code 会话记录，工具会遵循 CLAUDE_CONFIG_DIR；先备份 CLAUDE.md；选一个日常最常用的项目，试一周。
 2. 先记录基线：连续 3–5 个会话，每次手动记下「我又纠正了 Claude 什么」，只记条数和原话。预期：得到一份重复纠正清单，后面用来对照。
-3. 装规则包：
-```bash
-curl -fsSL https://raw.githubusercontent.com/globalmpc/nomore/main/rules/CLAUDE.md -o nomore-rules.md
-```
-预期：得到一份 20 条规则的 Markdown 快照。README 列出的前 5 条包括：不写没有信息量的代码注释；不用 load-bearing 这类反复出现的行话；未经许可不跑破坏性 git 命令（reset --hard、checkout -- .、clean -f、push --force）；保留弯引号、破折号等排版字符；不用 belt-and-suspenders 这类习语。每条规则都附来源 issue 链接，逐条点开核对是否适用于你的项目。
-4. 在已有的 CLAUDE.md 里加一行导入：
-```text
-@nomore-rules.md
-```
-若想对所有项目生效，把两个文件都放进 ~/.claude/。预期：规则包被导入。注意重新下载会覆盖 nomore-rules.md；要长期保留自定义版本，改文件名后导入。
+3. 装规则包：`curl -fsSL https://raw.githubusercontent.com/globalmpc/nomore/main/rules/CLAUDE.md -o nomore-rules.md`。预期：得到一份 20 条规则的 Markdown 快照。README 列出的前 5 条包括：不写没有信息量的代码注释；不用 load-bearing 这类反复出现的行话；未经许可不跑破坏性 git 命令（reset --hard、checkout -- .、clean -f、push --force）；保留弯引号、破折号等排版字符；不用 belt-and-suspenders 这类习语。每条规则都附来源 issue 链接，逐条点开核对是否适用于你的项目。
+4. 在已有的 CLAUDE.md 里加一行导入：`@nomore-rules.md`。若想对所有项目生效，把两个文件都放进 ~/.claude/。预期：规则包被导入。注意重新下载会覆盖 nomore-rules.md；要长期保留自定义版本，改文件名后导入。
 5. 逐条裁规则包：删掉你不认同的、与项目技术栈或团队约定冲突的，保留 10 条以内。预期：只留下你真正会反复违反、且一条规则能改变行为的条目。规则包是静态快照，不是越多越好。
-6. 先只读跑 CLI：
-```bash
-npx nomore
-```
-预期：扫描 30 天内活跃会话，列出你反复对 Claude 说的指令。前提：本机能读到会话记录；工具遵循 CLAUDE_CONFIG_DIR。注意：CLI 是 preview，作者说约三分之一建议才是真规则，其余多是 commit、continue 这类任务词。
-7. 只针对单个项目，逐条确认后才写入：
-```bash
-npx nomore --project .
-```
-预期：建议写进该项目的 CLAUDE.md；逐条 yes/no/edit。只接受「这确实是长期偏好而不是任务词」的条目。写入前先检查 CLAUDE.md 行数预算。
-8. 要直接进入逐条确认写入时：
-```bash
-npx nomore --apply
-```
-预期：逐条确认后才写入 CLAUDE.md。只看汇总数字时：
-```bash
-npx nomore --card
-```
-9. 可选：复现规则包的挖掘过程。前提：仓库已克隆，装有 pnpm。
-```bash
-bash scripts/fetch-issues.sh && pnpm mine
-```
-预期：按 README 从 issues 聚类、排序、人工挑选。原文没有给可复现的完整筛选标准，只作了解，不要把它当成自动生成规则的流水线。
+6. 先只读跑 CLI：`npx nomore`。预期：扫描 30 天内活跃会话，列出你反复对 Claude 说的指令。前提：本机能读到会话记录；工具遵循 CLAUDE_CONFIG_DIR。注意：CLI 是 preview，作者说约三分之一建议才是真规则，其余多是 commit、continue 这类任务词。
+7. 只针对单个项目，逐条确认后才写入：`npx nomore --project .`。预期：建议写进该项目的 CLAUDE.md；逐条 yes/no/edit。只接受「这确实是长期偏好而不是任务词」的条目。写入前先检查 CLAUDE.md 行数预算。
+8. 要直接进入逐条确认写入时：`npx nomore --apply`。预期：逐条确认后才写入 CLAUDE.md。只看汇总数字时：`npx nomore --card`。
+9. 可选：复现规则包的挖掘过程。前提：仓库已克隆，装有 pnpm。`bash scripts/fetch-issues.sh && pnpm mine`。预期：按 README 从 issues 聚类、排序、人工挑选。原文没有给可复现的完整筛选标准，只作了解，不要把它当成自动生成规则的流水线。
 10. 之后一周正常干活，继续按同样方式记录纠正条数；周末用 npx nomore --card 记录总量趋势。预期：同类纠正的重复次数下降；若没有，停止扩大。
 11. 与 W/S/M/X 的关系：Z 提供候选规则；W 决定同一约定累计两次被违反才写入；S 管 200 行 / 32 KiB 的长度预算；M 审内容是否过时；X 用 Codex 历史会话定位 AGENTS.md 里的误导指令。一次只加一个变量；不要同时装规则包、跑 --apply、改 W 的触发条件。
 
@@ -682,7 +539,7 @@ bash scripts/fetch-issues.sh && pnpm mine
 ## Comments
 
 After every code comment you write, ask yourself:
-"Is this information the next Claude would spend multiple tool calls trying to understand?"
+'Is this information the next Claude would spend multiple tool calls trying to understand?'
 If the answer isn't clearly yes, delete the comment.
 
 Keep comments that explain *why* (non-obvious constraints, workarounds,
@@ -697,53 +554,27 @@ Good (keep): `// Stripe rejects idempotency keys older than 24h, so we rotate da
 4. 明确例外白名单并写进同一条规则：公共 API 的 docstring、生成代码的头部声明、许可证头、必须解释「为什么」的决策注释，不走这条删除判据。不要只单向删注释，导致关键「为什么」注释也被删掉。
 5. 让规则在评审环节闭环：code review 时把「无信息量注释」和「缺关键注释」都当作可提意见项，形成双向反馈。预期：评审会同时压掉复述型注释、补回缺失的关键注释。
 6. 只在一个中等规模仓库试一周或 5 个 PR，不叠加其他提示词改动。保留试用前的同等长度基线（前 5 个 PR）。预期：能对比注释密度和评审追问数。
-7. 判断改善的指标（前后对比）：
-   - 注释密度：每个 PR 新增注释行数 / 新增代码行数。目标是下降。
-   - 无效注释评论数：review 中「这条注释没用 / 纯复述」类评论的条数。目标是下降。
-   - 反向指标（防止删过头）：review 中「这里为什么这么写？」类追问数、以及因看不懂而导致的返工次数。目标是不上升。
-   - 关键注释留存：抽 10 个 PR 人工判断，涉及外部约束、workaround、非显然取舍的注释是否仍被保留。目标是不漏。
-8. 判定规则：指标 1、2 下降，且指标 3 持平或下降，则保留规则并写入团队规范；若指标 3 明显上升，则不是废弃规则，而是补第 4 步的例外白名单与示例后重测一轮。
-9. 与做法 W、S、M、Z、X 的关系：做法 AA 管「注释这条具体规则的内容和验证」；做法 W 管「什么时候加规则」——建议在 W 的触发条件成立后再写入，或作为 W 的第一条候选规则；做法 S 管常驻文件长度；做法 M 审内容是否过时；做法 Z 提供候选规则；做法 X 用历史会话定位 AGENTS.md 里的误导指令。一次只加一个变量，不要同时改注释规则、长度预算和增量触发条件。
-10. 停止条件：如果一周或 5 个 PR 后，注释密度和无效注释评论数没有下降，或反向追问数明显上升且补例外白名单后仍不改善，就回退这条规则；不要因为「少写注释」听起来对就继续加码。
+7. 判断改善的指标（前后对比）：注释密度（每个 PR 新增注释行数 / 新增代码行数）下降；无效注释评论数下降；反向指标「这里为什么这么写？」类追问数、因看不懂导致的返工次数不上升；抽 10 个 PR 人工判断关键注释（外部约束、workaround、非显然取舍）是否仍被保留。判定规则：前两项下降且反向指标持平或下降，才保留；反向指标明显上升，先补例外白名单与正反例再重测一轮。
+8. 与做法 W、S、M、Z、X 的关系：做法 AA 管「注释这条具体规则的内容和验证」；做法 W 管「什么时候加规则」——建议在 W 的触发条件成立后再写入，或作为 W 的第一条候选规则；做法 S 管常驻文件长度；做法 M 审内容是否过时；做法 Z 提供候选规则；做法 X 用历史会话定位 AGENTS.md 里的误导指令。一次只加一个变量。
+9. 停止条件：如果一周或 5 个 PR 后，注释密度和无效注释评论数没有下降，或反向追问数明显上升且补例外白名单后仍不改善，就回退这条规则；不要因为「少写注释」听起来对就继续加码。
 
 ### 做法 AB：审计并关闭 Claude Code 的隐藏后台摘要 side-query（agent_summary，Linux 小范围试）
 
-适用形态：你在 Linux 上用 Claude Code，怀疑配额被不在对话里的后台摘要吃掉。原文称 `agent_summary` 约每 30 秒、对每个后台 agent，把该 agent 的整个 transcript 发给它自己的模型，要求生成 3–5 个词的状态行；结果只更新 agents panel，不进入模型或你的对话。原文称 2.1.232（2026-08）起默认开启，且没有设置可以关闭。下面是一个 MIT 许可的非官方 Bun preload 脚本，不修改二进制，通过 `BUN_OPTIONS=--preload` 注入；它包裹 `setTimeout` / `setInterval`，当回调源码文本包含摘要器锚点（如 `[AgentSummary] Timer fired`）时，返回一个惰性 handle 而不是真正装载定时器；其他定时器原样通过。效果是关闭 `agent_summary`，可见变化是每个 agent 的面板状态停止更新，SDK 的 `task_progress` 没有 summary；子代理、后台代理、forked skills 和后台会话仍正常运行，只跳过 summary fork。
+适用形态：你在 Linux 上用 Claude Code，怀疑配额被不在对话里的后台摘要吃掉。原文称 agent_summary 约每 30 秒、对每个后台 agent，把该 agent 的整个 transcript 发给它自己的模型，要求生成 3–5 个词的状态行；结果只更新 agents panel，不进入模型或你的对话。原文称 2.1.232（2026-08）起默认开启，且没有设置可以关闭。下面是一个 MIT 许可的非官方 Bun preload 脚本，不修改二进制，通过 BUN_OPTIONS=--preload 注入；它包裹 setTimeout / setInterval，当回调源码文本包含摘要器锚点（如 [AgentSummary] Timer fired）时，返回一个惰性 handle 而不是真正装载定时器；其他定时器原样通过。效果是关闭 agent_summary，可见变化是每个 agent 的面板状态停止更新，SDK 的 task_progress 没有 summary；子代理、后台代理、forked skills 和后台会话仍正常运行，只跳过 summary fork。
 
-1. 前提：原文实测平台为 Linux x64，Claude Code 版本 2.1.257–2.1.312；macOS 和 Windows 未测，Windows 上 `/$bunfs/` 门控很可能不会安装 hook。需要能设置环境变量、重启 Claude Code daemon，并自行检查修改客户端运行时行为是否违反服务条款。
-2. 先用 OpenTelemetry 量基线：在 Claude Code 的 OpenTelemetry 导出中按 `query_source` 分组 `claude_code.api_request` 事件，看 `agent_summary` 的请求数和花费份额。原文称这是唯一能捕获所有失败模式的检查。没有 OTel 时只能用日志和面板状态做弱验证，结论应相应降级。
-3. 确认版本：
-```bash
-claude --version
-```
-预期：落在原文实测的 2.1.257–2.1.312 区间内；不在区间内仍可小范围试，但失败模式未测。
-4. 把脚本下载到稳定路径，并记住绝对路径。前提：`~/.local/share` 存在或先创建。
-```bash
-curl -fsSL https://gist.githubusercontent.com/flamerix-ai/c3905705cc4205e5de3011fa2e74efce/raw/no-agent-summary.js -o ~/.local/share/no-agent-summary.js
-```
-5. 最小试用时，只在当前 shell 注入 preload，不要先写全局配置。前提：当前 shell 能启动 Claude Code。
-```bash
-export BUN_OPTIONS="${BUN_OPTIONS:+$BUN_OPTIONS} --preload $HOME/.local/share/no-agent-summary.js"
-```
-6. 重启 daemon 和所有已运行会话，然后从带有 `BUN_OPTIONS` 的环境启动 Claude Code。前提：daemon、pty host 和 pre-warmed bg-spare 会继承启动 daemon 的客户端环境；早于环境变量启动的 daemon 会继续产生未挂钩会话。
-```bash
-claude daemon stop --any
-```
-7. 验证 preload 是否加载。前提：路径必须是绝对路径。
-```bash
-BUN_OPTIONS="--preload $HOME/.local/share/no-agent-summary.js" CC_AGENT_SUMMARY_LOG=/tmp/nas.log claude --version && cat /tmp/nas.log
-```
-期望日志出现 `preload active mode=off …`。没有这一行，说明 `BUN_OPTIONS` 没到达进程，或路径不是绝对路径。
-8. 验证摘要定时器是否被抑制：用同样的 `BUN_OPTIONS` 和 `CC_AGENT_SUMMARY_LOG=/tmp/nas.log`，运行一个后台子代理一到两分钟。日志应出现 `summary timer #1 suppressed (setTimeout, delay=30000)`，并且该 agent 的面板状态停止更新。如果导出 OpenTelemetry，查询 `query_source = agent_summary` 应保持为 0。
-9. 做一次 A/B 对照：设置 `CC_AGENT_SUMMARY_MODE=pass` 会加载 hook 但不过滤，所有定时器原样装载，摘要会回来；默认是 `off`，其他值会在 stderr 警告并按 `off` 处理。只在验证时用 pass。预期：pass 模式下摘要恢复，说明 off 的结果来自 hook。
-10. 要永久化，可把同样的 export 写进 `~/.profile`、`~/.bashrc` 或 `~/.zshrc`；原文还给出 fish、systemd user env 和 PATH wrapper 写法，选一种即可。前提：每个启动 Claude Code 的进程都必须继承 `BUN_OPTIONS`，包括 `claude -p`、cron、CI 和编辑器集成。
-```bash
-# ~/.profile, ~/.bashrc, ~/.zshrc
-export BUN_OPTIONS="${BUN_OPTIONS:+$BUN_OPTIONS} --preload /abs/path/no-agent-summary.js"
-```
-11. 每次升级 Claude Code 后重跑第 7、8 步。原文的失败模式是 fail-open：更新可能重命名日志行或 query-source id、用 `fn.bind(...)` 包装回调、把字符串移到回调外的共享常量，或把定时器移到 `timers/promises`、scheduler loop 等未包裹 API；此时 hook 匹配不到，摘要会静默恢复。
-12. 可选观测：`CC_AGENT_SUMMARY_LOG` 记录 preload 加载、前 20 个匹配定时器和退出计数；`CC_AGENT_SUMMARY_MARKER` 在加载时写入 active 行。脚本用 `2^31−1` ms 作为惰性定时器，因为 Node/Bun 会把更大的 delay 当作 1 ms，不能用无限 delay。
-13. 回滚：移除 `BUN_OPTIONS` 并重启 daemon。副作用与边界：面板状态停止更新、SDK task_progress 没有 summary 属预期；子代理、后台代理、forked skills 和后台会话仍应正常运行，只跳过 summary fork。非官方脚本，不修改二进制；仅在 Linux 实测；使用前自行检查服务条款。
+1. 前提：原文实测平台为 Linux x64，Claude Code 版本 2.1.257–2.1.312；macOS 和 Windows 未测，Windows 上 /$bunfs/ 门控很可能不会安装 hook。需要能设置环境变量、重启 Claude Code daemon，并自行检查修改客户端运行时行为是否违反服务条款。
+2. 先用 OpenTelemetry 量基线：在 Claude Code 的 OpenTelemetry 导出中按 query_source 分组 claude_code.api_request 事件，看 agent_summary 的请求数和花费份额。原文称这是唯一能捕获所有失败模式的检查。没有 OTel 时只能用日志和面板状态做弱验证，结论应相应降级。
+3. 确认版本：`claude --version`。预期：落在原文实测的 2.1.257–2.1.312 区间内；不在区间内仍可小范围试，但失败模式未测。
+4. 把脚本下载到稳定路径，并记住绝对路径。前提：~/.local/share 存在或先创建。`curl -fsSL https://gist.githubusercontent.com/flamerix-ai/c3905705cc4205e5de3011fa2e74efce/raw/no-agent-summary.js -o ~/.local/share/no-agent-summary.js`。
+5. 最小试用时，只在当前 shell 注入 preload，不要先写全局配置。前提：当前 shell 能启动 Claude Code。`export BUN_OPTIONS='${BUN_OPTIONS:+$BUN_OPTIONS} --preload $HOME/.local/share/no-agent-summary.js'`。注意：这里用单引号示意，实际要让变量展开需按 shell 规则处理。
+6. 重启 daemon 和所有已运行会话，然后从带有 BUN_OPTIONS 的环境启动 Claude Code。前提：daemon、pty host 和 pre-warmed bg-spare 会继承启动 daemon 的客户端环境；早于环境变量启动的 daemon 会继续产生未挂钩会话。`claude daemon stop --any`。
+7. 验证 preload 是否加载。前提：路径必须是绝对路径。`BUN_OPTIONS='--preload $HOME/.local/share/no-agent-summary.js' CC_AGENT_SUMMARY_LOG=/tmp/nas.log claude --version && cat /tmp/nas.log`。期望日志出现 `preload active mode=off …`。没有这一行，说明 BUN_OPTIONS 没到达进程，或路径不是绝对路径。
+8. 验证摘要定时器是否被抑制：用同样的 BUN_OPTIONS 和 CC_AGENT_SUMMARY_LOG=/tmp/nas.log，运行一个后台子代理一到两分钟。日志应出现 `summary timer #1 suppressed (setTimeout, delay=30000)`，并且该 agent 的面板状态停止更新。如果导出 OpenTelemetry，查询 query_source = agent_summary 应保持为 0。
+9. 做一次 A/B 对照：设置 CC_AGENT_SUMMARY_MODE=pass 会加载 hook 但不过滤，所有定时器原样装载，摘要会回来；默认是 off，其他值会在 stderr 警告并按 off 处理。只在验证时用 pass。预期：pass 模式下摘要恢复，说明 off 的结果来自 hook。
+10. 要永久化，可把同样的 export 写进 ~/.profile、~/.bashrc 或 ~/.zshrc；原文还给出 fish、systemd user env 和 PATH wrapper 写法，选一种即可。前提：每个启动 Claude Code 的进程都必须继承 BUN_OPTIONS，包括 claude -p、cron、CI 和编辑器集成。示例：`export BUN_OPTIONS='${BUN_OPTIONS:+$BUN_OPTIONS} --preload /abs/path/no-agent-summary.js'`。
+11. 每次升级 Claude Code 后重跑第 7、8 步。原文的失败模式是 fail-open：更新可能重命名日志行或 query-source id、用 fn.bind(...) 包装回调、把字符串移到回调外的共享常量，或把定时器移到 timers/promises、scheduler loop 等未包裹 API；此时 hook 匹配不到，摘要会静默恢复。
+12. 可选观测：CC_AGENT_SUMMARY_LOG 记录 preload 加载、前 20 个匹配定时器和退出计数；CC_AGENT_SUMMARY_MARKER 在加载时写入 active 行。脚本用 2^31−1 ms 作为惰性定时器，因为 Node/Bun 会把更大的 delay 当作 1 ms，不能用无限 delay。
+13. 回滚：移除 BUN_OPTIONS 并重启 daemon。副作用与边界：面板状态停止更新、SDK task_progress 没有 summary 属预期；子代理、后台代理、forked skills 和后台会话仍应正常运行，只跳过 summary fork。非官方脚本，不修改二进制；仅在 Linux 实测；使用前自行检查服务条款。
 14. 与做法 N、T、U 等的关系：这些都是上下文或缓存改动，做法 AB 动的是后台摘要 side-query。材料没有说明它们能否同时改；一次只加一个变量，不要同时改上下文压缩、规则长度和子代理缓存 TTL。
 
 ### 做法 AC：把能力放 skills、知识放 docs/、AGENTS.md 只做条件路由（小范围试）
@@ -758,6 +589,23 @@ export BUN_OPTIONS="${BUN_OPTIONS:+$BUN_OPTIONS} --preload /abs/path/no-agent-su
 6. 用同一批任务对比改造前后。记录任务一次通过率、人工纠正次数、AI 找错/漏查文档次数、完成同样任务所需上下文长度或查阅轮次、维护者更新文档的时间。原文没有给指标，这些是本手册补的试用方式。
 7. 只有当「不劣于原 harness」且维护成本可接受时，才扩大到一个以上仓库/流程；否则回退，不要把条件路由写成新的堆文本。
 8. 与做法 L、M、R、S、W、X 的关系：AC 决定「知识放哪、AGENTS.md 怎么指向文档」；S 管长度，R 管结构重组，M 审内容是否过时，W 管何时加规则，X 用历史会话找返工证据。可以叠加，但一次只加一项。
+
+### 做法 AD：让 Claude Code 读笔记库，生成 CLAUDE.md 初稿（小范围试）
+
+适用形态：已有笔记库或结构稳定的目录，缺少一份描述文件夹结构、链接风格和命名规则的 CLAUDE.md。原文给出前三步和一条可复制提示词，第四步在 add one line: 处截断。按小范围试对待：生成的是初稿，规则是否正确要人工判断。
+
+1. 前提：本地有 Obsidian 笔记库或结构稳定的目录；已安装并可运行 Claude Code；允许 Claude Code 读取该目录；先备份或使用版本控制；选一个非敏感的小型笔记库副本，不要直接在主库上跑。
+2. 在笔记库根目录打开终端，并在该目录内启动 Claude Code。预期：会话工作目录就是 vault 根目录；如果当前路径不对，工具读到的目录结构会不对。
+3. 输入原文提示词：
+```text
+read my vault and write a CLAUDE.md describing my folders, linking style and naming rules
+```
+预期：生成一份 CLAUDE.md 初稿，覆盖文件夹、链接风格、命名规则三类信息。原文没有展示生成后的 CLAUDE.md 样例。
+4. 人工检查生成的 CLAUDE.md，修改它写错的地方。原文只要求 edit what it gets wrong，没有给出检查清单。可按三类逐项核对：漏了哪些目录、链接风格判断是否正确、命名规则是否正确；记录错误类型和修改条数。
+5. 原文在 add one line: 处截断，无法确定要添加哪一行。试用时不要把这一步当作已验证步骤；需等原文补全，或自行定义一条最小规则并单独验证。在原文补全前，第 4 步之后不要写「已完成」。
+6. 把生成并校正后的 CLAUDE.md 当作候选上下文文件：按做法 S 用 wc -l / wc -c 量长度，按做法 N 用 /context 看它占多少 token，按做法 M 审内容是否过时，按做法 Y 判断是否需要按目录分层。不要因为一次生成就把它当成长期规则。
+7. 验证：用同一批涉及库结构的问题或任务，对比生成前后 Claude Code 回答的错误率；抽样新笔记的命名与链接是否符合规则；记录人工修改条数、修改耗时、目录覆盖率、规则条目准确率。原文没有给基线或指标，这些是本手册补的试用方式。
+8. 与做法 M、S、Y、V、L 的关系：AD 管「从现有目录起草 CLAUDE.md」，M 审内容，S 管长度，Y 管目录分层，V 管把一类工作收进一个文件夹，L 管多工具共读。可以叠加，但一次只加一项。
 
 ## 怎么判断变好了
 
@@ -790,8 +638,9 @@ export BUN_OPTIONS="${BUN_OPTIONS:+$BUN_OPTIONS} --preload /abs/path/no-agent-su
 - 做法 Y：没有工具侧读数。能直接观察的是目标目录里的局部规则是否被读取、是否被遵守；原文没有给读取日志或命中计数。
 - 做法 Z：工具侧读数包括 npx nomore --card 的汇总数、--project . 建议的采纳数与删除数、规则包保留条数、CLAUDE.md 行数。原文没有给出纠正次数下降的测量，--card 只输出汇总数；规则包是否真的减少了纠正，只能靠你自己的任务侧记录。
 - 做法 AA：没有工具侧读数。可记录的是注释密度、无效注释评论数、反向追问数、关键注释留存；不要用「注释变少了」本身当成功。
-- 做法 AB：有 OpenTelemetry 时，看 `query_source = agent_summary` 的请求数和花费份额是否降到 0；没有其他 side-query 增长来替代；日志是否出现 `preload active mode=off …` 和 `summary timer … suppressed`；面板状态停止更新属预期副作用；`claude --version` 的启动延迟开销可接受（原文一次测量约 10→17 ms）；每次升级后复验仍为 0。没有 OTel 时只能用日志和面板状态做弱验证。
+- 做法 AB：有 OpenTelemetry 时，看 query_source = agent_summary 的请求数和花费份额是否降到 0；没有其他 side-query 增长来替代；日志是否出现 `preload active mode=off …` 和 `summary timer … suppressed`；面板状态停止更新属预期副作用；claude --version 的启动延迟开销可接受（原文一次测量约 10→17 ms）；每次升级后复验仍为 0。没有 OTel 时只能用日志和面板状态做弱验证。
 - 做法 AC：没有工具侧读数。可记录 AGENTS.md 行数/字节数（是否变短）、docs/ 被引用的次数、skills 条目数、AI 查阅文档的轮次；原文没有给这些读数，这是试用设计。
+- 做法 AD：没有工具侧读数。可记录生成初稿的目录覆盖率、规则条目准确率、人工修改条数、人工修改耗时；原文没有给这些指标。
 
 任务侧指标：
 
@@ -821,6 +670,7 @@ export BUN_OPTIONS="${BUN_OPTIONS:+$BUN_OPTIONS} --preload /abs/path/no-agent-su
 - 做法 AA：注释密度（每个 PR 新增注释行数 / 新增代码行数）下降；无效注释评论数下降；反向指标「这里为什么这么写？」类追问数、因看不懂导致的返工次数不上升；抽 10 个 PR 人工判断关键注释（外部约束、workaround、非显然取舍）是否仍被保留。判定规则：前两项下降且反向指标持平或下降，才保留；反向指标明显上升，先补例外白名单与正反例再重测一轮。
 - 做法 AB：主子代理、后台代理、forked skills 和后台会话仍正常；任务完成率、人工纠正次数与不用该脚本时持平；SDK task_progress 没有 summary 属预期副作用，不应当作任务失败。若面板状态之外出现 agent 行为异常，回滚并重测。
 - 做法 AC：任务一次通过率、人工纠正次数、AI 找错/漏查文档次数、完成同样任务所需上下文长度或查阅轮次、维护者更新文档的时间。判定标准：至少不劣于原 harness，并记录失败案例；样本小则只作为局部经验，不外推。
+- 做法 AD：后续新笔记命名与链接的抽样符合率；Claude Code 回答涉及库结构问题时的错误率；人工修改条数是否随第二次生成下降（若重复生成）。原文没有给基线，建议用同一批抽样任务做生成前后对比。
 
 最小试用方式：
 
@@ -849,8 +699,9 @@ export BUN_OPTIONS="${BUN_OPTIONS:+$BUN_OPTIONS} --preload /abs/path/no-agent-su
 23. 做法 Y：选一个边界清楚的目录（日记或研究资料），只加一条最容易验证的局部规则，例如「只读，不总结」或「每个声明都链接到其源笔记」；在同一目录下让 AI 完成 3–5 个真实小任务；记录它是否遵守局部规则、需要人工纠正多少次。若工具无法稳定读取局部 CLAUDE.md，或规则违反次数没有下降，不扩大使用。
 24. 做法 Z：选一个日常最常用的项目，先连续 3–5 个会话记录「我又纠正了 Claude 什么」作为基线；装规则包并裁到 10 条以内；在同一项目跑 npx nomore --project . 只读观察建议质量，再跑 --apply 逐条 yes/no/edit，只接受「这确实是偏好而不是任务」的条目；之后一周正常干活，继续记录纠正条数；周末用 npx nomore --card 记录总量趋势。
 25. 做法 AA：选 1 个中等规模仓库，在 CLAUDE.md 里只加这一条注释准入规则，跑 1 周或 5 个 PR，不叠加其他提示词改动；保留试用前的同等长度基线（前 5 个 PR）；前后对比注释密度、无效注释评论数、反向追问数与关键注释留存；若反向追问数明显上升，补例外白名单与正反例后重测一轮。
-26. 做法 AB：在 Linux 单机、非关键项目上，先用当前 shell 的临时 BUN_OPTIONS，不写全局配置；先检查服务条款；按第 2–5 步下载、注入、重启 daemon；用 CC_AGENT_SUMMARY_LOG=/tmp/nas.log 确认 `preload active mode=off`；跑一个后台子代理一到两分钟，确认出现 `summary timer … suppressed` 且面板状态停止更新。若可用 OpenTelemetry，查询 `query_source = agent_summary` 应为 0。再做一次 `CC_AGENT_SUMMARY_MODE=pass` 对照，确认摘要会恢复，以证明 off 的结果来自 hook。
+26. 做法 AB：在 Linux 单机、非关键项目上，先用当前 shell 的临时 BUN_OPTIONS，不写全局配置；先检查服务条款；按第 2–5 步下载、注入、重启 daemon；用 CC_AGENT_SUMMARY_LOG=/tmp/nas.log 确认 preload active mode=off；跑一个后台子代理一到两分钟，确认出现 summary timer … suppressed 且面板状态停止更新。若可用 OpenTelemetry，查询 query_source = agent_summary 应为 0。再做一次 CC_AGENT_SUMMARY_MODE=pass 对照，确认摘要会恢复，以证明 off 的结果来自 hook。
 27. 做法 AC：选一个仓库或一条内部开发流程，先盘点 skills 和知识文档；把「我知道」类内容迁到 docs/，保留可执行能力为 skills；把 AGENTS.md 限制为少量「如果 X 就看 docs/Y」的规则；用同一批任务对比改造前后。原文没有给 OKF 格式、目录结构或样例，先确认或定义最小格式再迁移。
+28. 做法 AD：选一个非敏感的小型笔记库副本，先备份或纳入版本控制；在库根目录启动 Claude Code；粘贴提示词生成 CLAUDE.md；按漏目录、链接风格、命名规则三类人工标注并修正；先不执行原文缺失的第 4 步；用同一批库结构问题对比生成前后错误率。
 
 试多久：
 
@@ -879,6 +730,7 @@ export BUN_OPTIONS="${BUN_OPTIONS:+$BUN_OPTIONS} --preload /abs/path/no-agent-su
 - 做法 AA 原文没有给验证周期。建议先在一个中等规模仓库跑 1 周或 5 个 PR，保留前 5 个 PR 基线；若反向追问数明显上升，补例外白名单与正反例后重测一轮。没有数据证明这个周期足够，应按小范围试用对待。
 - 做法 AB 的验证只需几分钟到一次后台子代理运行；长期是否保留至少跨一次 Claude Code 升级并复验。原文没有给长期时长建议或对照实验。
 - 做法 AC 原文没有给验证周期。建议先在一个仓库或一条内部开发流程跑 1–2 周，或同一批固定任务；样本小只作局部经验，不外推。
+- 做法 AD 原文没有给验证周期。建议先在一个小型笔记库副本上跑一次生成 + 人工校正，再用同一批抽样任务验证；样本小只作局部经验，不外推。
 
 ## 常见坑
 
@@ -1131,13 +983,13 @@ hivemind：
 做法 AB：
 
 - 方案非官方，可能与服务条款冲突；原文要求自行检查修改客户端运行时行为是否违反服务条款。
-- 只在 Linux 实测，macOS/Windows 未测，Windows 上 `/$bunfs/` 门控很可能不会安装 hook。
-- 依赖特定版本的内部字符串，升级后 fail-open：更新可能重命名日志行或 query-source id、用 `fn.bind(...)` 包装回调、把字符串移到回调外的共享常量，或把定时器移到 `timers/promises`、scheduler loop 等未包裹 API；此时 hook 匹配不到，摘要会静默恢复。
-- 可见代价是面板状态不再更新、SDK `task_progress` 没有 summary；子代理、后台代理、forked skills 和后台会话仍应正常运行，只跳过 summary fork。
-- `BUN_OPTIONS` 必须到达每个启动 Claude Code 的进程，包括 `claude -p`、cron、CI 和编辑器集成；早于环境变量启动的 daemon 会继续产生未挂钩会话。
-- 路径必须是绝对路径；没有出现 `preload active` 就说明没生效。
+- 只在 Linux 实测，macOS/Windows 未测，Windows 上 /$bunfs/ 门控很可能不会安装 hook。
+- 依赖特定版本的内部字符串，升级后 fail-open：更新可能重命名日志行或 query-source id、用 fn.bind(...) 包装回调、把字符串移到回调外的共享常量，或把定时器移到 timers/promises、scheduler loop 等未包裹 API；此时 hook 匹配不到，摘要会静默恢复。
+- 可见代价是面板状态不再更新、SDK task_progress 没有 summary；子代理、后台代理、forked skills 和后台会话仍应正常运行，只跳过 summary fork。
+- BUN_OPTIONS 必须到达每个启动 Claude Code 的进程，包括 claude -p、cron、CI 和编辑器集成；早于环境变量启动的 daemon 会继续产生未挂钩会话。
+- 路径必须是绝对路径；没有出现 preload active 就说明没生效。
 - 没有 OpenTelemetry 时只能用日志和面板状态做弱验证，无法捕获所有失败模式。
-- 原文中的成本是 Claude Code 自身按请求估算的 `cost_usd`，不是发票；订阅用户损失的是速率限制余量。
+- 原文中的成本是 Claude Code 自身按请求估算的 cost_usd，不是发票；订阅用户损失的是速率限制余量。
 - 作者关于「没有设置可关」「间隔来自服务端 flag 且 30–240 秒、默认已是最小且不能禁用」「98% 调用重读缓存、2% 冷缓存承载超过三分之一成本」等，属于作者对二进制的分析或主张，原文没有给出可独立复现的全部证据。
 - 不要把做法 AB 和做法 N/T/U 等上下文改动同时做；一次只加一个变量才能归因。
 
@@ -1151,6 +1003,17 @@ hivemind：
 - 不要同时改 skills 结构、docs/ 迁移和 AGENTS.md 路由三件事；一次只加一项，否则无法归因。
 - 如果任务很少重复、没有稳定流程，条件路由可能增加维护成本。
 - 与做法 R 的区别：R 用提示词重组 AGENTS.md，AC 是把知识移出 AGENTS.md 到 docs/ 并做条件路由；不要同时做。
+
+做法 AD：
+
+- 素材是单条推文（92 likes、13 reposts、10 replies），正文在 add one line: 处截断，第 4 步缺失。
+- 原文没有展示生成后的 CLAUDE.md，没有准确率、耗时或案例对比；作者称其为 pure f*cking gold，是评价不是证据。
+- 未说明 Claude Code 版本、库的规模和文件类型、隐私与权限处理、生成错误如何回滚、人工修正的标准。
+- 让 agent 读取整个库之前先备份或纳入版本控制；敏感库不要直接跑。
+- 生成的是初稿，规则是否正确要人工判断；不要直接当成长期规则。
+- 根目录的 CLAUDE.md 会进入每个会话，按做法 S 量长度、按做法 N 看 token 占比。
+- 不要和做法 M/S/Y 同时改；一次只加一个变量。
+- 原文缺失的第 4 步不要凭猜测补写。
 
 ## 证据与来源
 
@@ -1180,7 +1043,8 @@ hivemind：
 - nomore（做法 Z）：有依据的是规则包下载与 @ 导入机制、CLI 命令与参数、README 列出的前 5 条规则，以及作者给出的挖掘过程数字：作者称读了近 10,000 条 issue，过滤后剩 7,994 条（去掉 PR、重复、撤回的报告），其中标题含词的 7,897 条用于聚类；抓取日期 2026-10-24；排序公式 Σ(1 + reactions)，相似度阈值 0.5，最终人工挑出 20 条；前 5 条规则的背书度为 252、185、121、61、43 reactions；仓库 48 stars。CLI 自认是 preview，作者说团队会话里约三分之一建议才是真规则，其余多是任务词；规则包每条规则目前只建立在一个 issue 及其点赞数之上；规则挑选是手工的，选择过程不可复现；本地运行、不外发数据由作者声称，只能靠阅读源码或自行抓包验证；过滤器只针对英语、韩语、印尼语调优，中文场景效果未知；没有任何前后对比数据表明装了规则包后纠正次数下降。本手册补的一周单项目试用、基线记录、同类纠正重复次数、采纳/删除比、规则膨胀反指标和停止条件，是基于原文推导的试用方式，不是原文给出的内容。
 - 代码注释准入判据（做法 AA，来自 @davekiss 推文）：有依据的是一条推文正文和一句转述——把「这条信息是不是下一个 Claude 需要花多次工具调用才能搞明白的？」作为写每条代码注释后的自问；若答案不是明确的「是」，就删掉这条注释；保留解释 why 的注释（非显然约束、workaround、外部系统怪癖、令人意外的取舍），删除复述 what 的注释。推文作者归因为 Bun 的 CLAUDE.md、@jarredsumner 的测试。原文正文在 If the answer isn't 处被截断，后续处置动作未见；本手册中的「delete the comment」是按语义补全，不是原文原话。互动量为 206 赞、7 转发、6 回复，只是传播信号，不是效果证据；原文没有任何数据、案例、前后对比、仓库名或提交记录。本手册补的正反例、例外白名单、评审闭环、四项指标、1 周或 5 个 PR 的试用方式与判定规则，是基于原文推导的验证方式，不是原文给出的内容。
 - 隐藏后台摘要 agent_summary（做法 AB，来自 flamerix-ai 的 gist）：有依据的是原文给出的 OTel 测量与版本表——DRIM 在 Claude Code OpenTelemetry 导出中发现，agent_summary 曾占全部 Claude Code 花费 16.4%（主对话为 15.7%）、占全部 API 请求 19.7%，其中 96% 的花费在 Opus 上，输入 token 与输出 token 比约 9000:1；原文还引用 #86879 收集的四个独立测量为 18–26%；版本表给出 2.1.257、2.1.280、2.1.301、2.1.308、2.1.310、2.1.312 的静态检查和动态 fork 计数，例如 2.1.312 为 5/5/0（无 hook / hook pass / hook off）；周花费份额从 7 月的 3.5–7% 升到 7.3%、11.8%，10 月中约 16%；作者称在 2.1.301 上自 2026-10-26 日常使用以来 agent_summary 请求为 0，且没有其他 side-query 增长到替代它；启动延迟一次测量为 claude --version 从约 10 ms 到约 17 ms。需要区分：上述遥测数字是原文/作者及其引用来源的测量；成本是 Claude Code 自身按请求估算的 cost_usd，不是发票，订阅用户损失的是速率限制余量。作者关于「没有设置可关」「SDK option 是 OR 的一项且代码路径都设为 true」「间隔来自服务端 flag 且 30–240 秒、默认已是最小且不能禁用」「98% 调用重读缓存、2% 冷缓存承载超过三分之一成本」「成本工具读 transcript 看不到、只有 OTel 能看到」「2.1.310 的 short mode 默认关闭」等，属于作者对二进制的分析或主张，原文没有给出可独立复现的全部证据。方案非官方，可能与服务条款冲突；只在 Linux 实测，macOS/Windows 未测，Windows 很可能不装 hook；依赖特定版本的内部字符串，升级后 fail-open；可见代价是面板状态不再更新、SDK task_progress 没有 summary；timers/promises、bind、共享常量、scheduler loop 等写法会绕过匹配；延迟开销只有一次测量。适用条件是 Linux 上的 Claude Code 2.1.257–2.1.312、能控制环境变量和 daemon 重启、接受非官方风险，并能用日志或 OTel 做验证。
-- harness 组织法（做法 AC，来自 @NahuiGPT 推文）：有依据的只有两条原则和一句效果判断——用「我能做/我知道」区分 skills 与文档；把 AGENTS.md 从一大段文本改成「如果 X 就看文档 Y」的规则规格集；原文称后一做法效果很好，不比 skills 差。原文没有给出 OKF 格式、目录结构、AGENTS.md 样例、命令、配置、前后对比数据或失败案例，且在第三条要点处被截断。互动量 126 赞、4 转发、12 回复只是传播信号，不是效果证据。本手册补的盘点步骤、最小试用、指标与扩大条件，是基于原文推导出的试用方式，不是原文给出的内容。
+- harness 组织法（做法 AC，来自 @NahuiGPT 推文）：有依据的只有两条原则和一句效果判断——用「我能做/我知道」区分 skills 与文档；把 AGENTS.md 从一大段文本改成「如果 X 就看文档 Y」的规则规格集；原文称后一做法效果很好，不比 skills 差。原文没有给出 OKF 格式、目录结构、AGENTS.md 样例、命令、配置、前后对比数据或失败案例，且在第三条要点处截断。互动量 126 赞、4 转发、12 回复只是传播信号，不是效果证据。本手册补的盘点步骤、最小试用、指标与扩大条件，是基于原文推导出的试用方式，不是原文给出的内容。
+- 用 Claude Code 读笔记库生成 CLAUDE.md（做法 AD，来自 @cyrilXBT 推文）：有依据的是前三步和一条可复制提示词——在 vault 根目录启动 Claude Code；输入 read my vault and write a CLAUDE.md describing my folders, linking style and naming rules；人工检查并修改它写错的地方。原文在 add one line: 处截断，第 4 步及之后缺失；没有展示生成后的 CLAUDE.md，没有准确率、耗时或案例对比；互动量 92 赞、13 转发、10 回复只是传播信号，不是效果证据。未说明 Claude Code 版本、库的规模和文件类型、隐私与权限处理、生成错误如何回滚、人工修正的标准。本手册补的备份要求、三类错误标注、长度与 token 检查、同一批抽样任务对比，是基于原文推导出的试用方式，不是原文给出的内容。
 
 ## 依据的调研
 
@@ -1211,3 +1075,4 @@ hivemind：
 - [@davekiss: Most of the code comments your agent writes should be deleted](../research/radar/2026-10-28/7841-most-of-the-code-comments-your-agent-writes-should.md)：值得一试，把“这条信息是否值得下一个 Claude 花多次工具调用才能搞明白”这句自问写进 CLAUDE.md/AGENTS.md，先在一个仓库试一周，用注释密度和 review 中因看不懂而产生的追问数双向验证；判据本身一句话可落地、成本极低，但原文在此处被截断且无任何数据支撑，只能小范围试而不能直接定为规范。
 - [Claude Code burns ~15–20% of your tokens on a 3-word status line](../research/radar/2026-10-29/8115-claude-code-burns-15-20-of-your-tokens-on-a-3-word.md)：值得一试，建议在 Linux 单机、非关键项目的 Claude Code 上小范围试用：用 Bun preload 关闭 agent_summary，并以日志和 OpenTelemetry 验证 agent_summary 归零且没有替代 side-query。先不要全量默认采用，因为该方案非官方、依赖版本内部字符串、仅 Linux 实测，升级后可能静默失效，并需自行检查服务条款。
 - [@NahuiGPT: 本周推进了团队内部开发用的harness改革。](../research/radar/2026-10-31/8731-harness.md)：值得一试，可小范围试用“能力入 skills、知识入 docs/、AGENTS.md 做条件路由”的 harness 组织法，因为它把上下文供给从堆文本改成可检索规则；但原文未给 OKF 格式和 AGENTS.md 样例，需自行补齐并验证。
+- [@cyrilXBT: this is pure f*cking gold](../research/radar/2026-10-31/8783-this-is-pure-f-cking-gold.md)：值得一试，建议小范围试：在笔记库副本根目录启动 Claude Code，用原文提示词生成 CLAUDE.md 后人工校正；理由是步骤具体、提示词可复制，但原文第四步被截断且无验证数据，不适合直接 adopt。
