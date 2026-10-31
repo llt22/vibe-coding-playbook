@@ -1,14 +1,14 @@
-# 给能执行 shell 的 agent 补上可控的读取能力
+# 让 agent 读网页、PDF 和 JS 页面时先估成本、按需读取、坏了能换路
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：在不一次性全量接入、不重写代码的前提下，给能执行 shell 的 agent 补上外部平台读取能力，并在读网页/PDF 时控制进入上下文的 token 与成本。
-> 先试这一步：先跑 `agent-reach install --env=auto --dry-run` 看它会改什么，再默认安装并跑 `agent-reach doctor`；若你更关心单页/PDF 的 token 成本，另用 `fats <url> dry:true` 做一次预估。
-> 最近修订：2026-10-22
+> 解决的问题：怎么以最小风险给能执行 shell 的 agent 补上网页、PDF、JS 页面和登录态渠道的读取/操作能力，并把进入上下文的 token 与抓取成本控制住，渠道失效时能定位换路而不是重写代码。
+> 先试这一步：先跑 `agent-reach install --env=auto --dry-run` 预览，再默认安装并执行 `agent-reach doctor`；上下文敏感时再装 fatsearch，用 `dry:true` 和 `fats stats` 量一个真实页面。
+> 最近修订：2026-10-31
 
 ## 解决什么问题
 
-已有 agent（Claude Code、Cursor、Windsurf、OpenClaw 等）能执行 shell，但默认不知道该怎么读外部平台的内容，也容易把整页 HTML 或整份 PDF 直接塞进上下文。Agent-Reach 是一个 CLI 形式的「能力层」：它自己不实现抓取，负责选型、安装、体检、路由；真正的读取由 Agent 直接调用上游工具完成，没有包装层。fatsearch（命令 `fats`）则把单个 URL 或 PDF 抓取、清洗、生成大纲并缓存成 id，让 Agent 先拿大纲，需要细节时再按节读取或页内过滤，并记录每次抓取的 provider、耗时、成本和 token。这篇手册要解决的是：怎么以最小风险给 agent 补上这些读取能力，并在读网页/PDF 时控制进入上下文的 token 与成本；某个渠道失效时能定位、换路，而不是重写代码。
+已有 agent（Claude Code、Cursor、Windsurf、OpenClaw 等）能执行 shell，但默认不知道该怎么读外部平台的内容，也容易把整页 HTML 或整份 PDF 直接塞进上下文；遇到 JS 渲染页、需要点击/填表/复用 Cookie 的页面时，又缺少一个可脚本化、可给 MCP 调用的浏览器。Agent-Reach 是一个 CLI 形式的“能力层”：它自己不实现抓取，负责选型、安装、体检、路由；真正的读取由 Agent 直接调用上游工具完成，没有包装层。fatsearch（命令 `fats`）把单个 URL 或 PDF 抓取、清洗、生成大纲并缓存成 id，让 Agent 先拿大纲，需要细节时再按节读取或页内过滤，并记录每次抓取的 provider、耗时、成本和 token。Lightpanda 是一个从零写的无头浏览器（Zig 实现，非 Chromium/WebKit 分支），定位为“给 AI agent 和自动化用的浏览器”；它提供 `fetch --dump`、CDP/MCP 服务和 `agent` 原生模式，用自然语言跑通后可导出 PandaScript 回放。这篇手册要解决的是：怎么以最小风险给 agent 补上网页、PDF、JS 页面和登录态渠道的读取/操作能力，并在读网页/PDF 时控制进入上下文的 token 与成本；某个渠道失效时能定位、换路，而不是重写代码。
 
 Agent-Reach 覆盖渠道：网页（Jina Reader）、YouTube 字幕+搜索（yt-dlp）、RSS/Atom（feedparser）、全网语义搜索（Exa，经 mcporter 以 MCP 接入）、GitHub（gh CLI）、Twitter/X、B站（bili-cli）、Reddit、Facebook、Instagram、小红书、LinkedIn、Boss直聘、V2EX、雪球、小宇宙播客转写（Whisper）。
 
@@ -22,19 +22,26 @@ Agent-Reach 覆盖渠道：网页（Jina Reader）、YouTube 字幕+搜索（yt-
 - 你想先用最小范围验证 Agent-Reach：`--dry-run` 预览、只用默认零配置渠道、固定用 `agent-reach doctor` 体检。
 - 你有多个可替代渠道的需求，想在某个后端失效时只调整路由顺序而不重写代码。
 - 你要读网页、YouTube 字幕、RSS、GitHub、B站、V2EX 等零配置渠道的内容。
-- 你需要读网页或 PDF、且上下文预算敏感，愿意按 fatsearch 的「先大纲、按节读」流程小范围试用。
+- 你需要读网页或 PDF、且上下文预算敏感，愿意按 fatsearch 的“先大纲、按节读”流程小范围试用。
 - 你需要绕过 JS 渲染页、captcha 或拦截页，并愿意自备 Oxylabs / Bright Data / Decodo 之一作为 provider。
 - 你需要把 PDF 按页切节、引用某一页，或需要单次抓取的成本/token 可见。
+- 你需要 JS 渲染、点击、表单输入、Cookie、自定义 Header、代理、网络拦截或 adblocker，并想用比 headless Chrome 更轻的浏览器跑自动化。
+- 你想把单个页面直接转成 Markdown/HTML/PNG/PDF/结构化数据，喂给模型或存档。
+- 你已有 Puppeteer/Playwright 脚本，想通过 CDP 换一个浏览器引擎；或想让 MCP 客户端直接拿到一个浏览器工具。
+- 你想先用自然语言把网页任务跑通，再固化成不消耗 token 的 PandaScript 回放。
 
 不适用：
 
 - agent 不能执行 shell。Agent-Reach 的 shell 是前提，OpenClaw 还要额外开 exec；fatsearch 也要先安装 CLI 并注册 MCP，至少要有能落地的安装环境。
 - 你想一次性全量接入所有登录态渠道。原文的口径是默认只装零配置渠道，登录态渠道列菜单点名才装；且这些渠道存在平台反爬与封号风险，稳定性必须自己验证。
-- 你想用它评测产出质量。Agent-Reach 的效果验证只到「渠道是否可用」这一层；fatsearch 给的是 token/成本可见性，效果数字全部来自作者自发布 benchmark，不能当第三方评测。
-- 你想靠它做主动推进或定时触发。Agent-Reach 只在需求列表里提到「帮我订阅这几个 RSS 源，有更新告诉我」，实现侧只给了 feedparser 解析，没有给出定时轮询、事件触发或状态触发的配置；fatsearch 明确写「no daemon」，没有 watch、cron、回调、重试队列。
+- 你想用它评测产出质量。Agent-Reach 的效果验证只到“渠道是否可用”这一层；fatsearch 给的是 token/成本可见性，效果数字全部来自作者自发布 benchmark，不能当第三方评测；Lightpanda 的基准也是作者自测。
+- 你想靠它做主动推进或定时触发。Agent-Reach 只在需求列表里提到“帮我订阅这几个 RSS 源，有更新告诉我”，实现侧只给了 feedparser 解析，没有给出定时轮询、事件触发或状态触发的配置；fatsearch 明确写“no daemon”，没有 watch、cron、回调、重试队列。
 - 你打算从 PyPI 安装同名包。原文明确说那不是本项目。
 - 你要读扫描版 PDF（OCR，fatsearch 返回 `! no_text`）、DOCX/XLSX（fatsearch 返回 `! not_in_v1 zip`）、登录墙后的页面，或需要语义近似/主题匹配（`match:near`/`match:topic` 需本地模型）。
 - 你要求必须通读全文才能下结论：fatsearch 默认只给大纲、按节读；作者没有讨论这种任务是否会被大纲机制削掉信息，这是试用时要专门验的点。
+- 你要求稳定发行版而非 nightly：Lightpanda 目前只有 nightly 构建，不适合作为唯一生产依赖。
+- 你在 Windows 上想要原生二进制，或在 Alpine/musl、Android/Termux 上直接跑：Windows 走 WSL2；Linux 二进制链接 glibc，Alpine 等 musl 系统会报 `cannot execute: required file not found`，需换 Debian/Ubuntu 基础镜像或源码编译；Android/Termux 不可用。
+- 你要求它在所有站点上都与 Chrome 行为一致：结论提示 Lightpanda 无渲染引擎，兼容性必须在自家目标站点上验证；不要因为内存/速度数字好看就直接替换现有 Chrome + Playwright。
 
 ## 前置条件
 
@@ -68,12 +75,20 @@ openclaw gateway restart
 
 - macOS/Linux 或 Windows；有 Homebrew / npm / cargo 之一，或能跑安装脚本；不需要账号。
 - provider key 可选；只装免费通道时，遇到 JS 页面、captcha 或拦截页就抓不到内容，网页搜索也用不了。
-- 代理侧需要能注册 MCP；可选装 Agent Skill 让代理知道「先大纲、按节读」。
+- 代理侧需要能注册 MCP；可选装 Agent Skill 让代理知道“先大纲、按节读”。
 - 没有账号体系，没有 daemon、没有浏览器内核；二进制 17–21 MB。
+
+**Lightpanda**
+
+- Linux x86_64 / macOS（或 WSL2）。Windows 无原生二进制，走 WSL2；Android/Termux 不可用；Linux 二进制链接 glibc，在 Alpine 等 musl 系统上会报 `cannot execute: required file not found`，需换 `FROM debian:bookworm-slim` / `FROM ubuntu:24.04` 这类基础镜像，或从源码编译。
+- 安装方式：Homebrew（nightly）、Arch AUR、Linux x86_64 二进制、Nix；也可用 Docker 起 CDP 服务。
+- `agent` 模式需要任一模型供应商 API key 或本地模型；`--no-llm` 可进基础 REPL。CDP/MCP 路线不要求先跑自然语言 agent。
+- 默认会上报使用遥测，需要关闭时设 `LIGHTPANDA_DISABLE_TELEMETRY=true`；不想要 core dump 时设 `LIGHTPANDA_DISABLE_CORE_DUMP`。
+- 抓取第三方站点时注意合规，示例命令带 `--obey-robots`。
 
 ## 操作步骤
 
-先做做法 A；需要精读网页/PDF 且 token 敏感时试做法 B；需要登录态渠道再进做法 C。三者可并存，不要求按顺序全做。
+先做做法 A；需要精读网页/PDF 且 token 敏感时试做法 B；需要登录态渠道再进做法 C；需要 JS 渲染、浏览器交互或 MCP 浏览器工具时试做法 D。四者可并存，不要求按顺序全做。材料没有给出 Agent-Reach、fatsearch、Lightpanda 三者的集成命令，本手册只把它们并列为可选做法。
 
 ### 做法 A：最小可行试用 Agent-Reach
 
@@ -83,7 +98,7 @@ openclaw gateway restart
 agent-reach install --env=auto --dry-run
 ```
 
-2. 执行默认安全检查安装。前提：看过预览，接受只读检查范围。预期结果：只激活默认 6 个零配置渠道（网页、YouTube、RSS、GitHub、B站、V2EX）；需要登录态的渠道会先问你。原文同时给出兼容安全参数 `--safe`，与默认行为相同。
+2. 执行默认安全检查安装。前提：看过预览，接受只读检查范围。预期结果：只激活默认 6 个零配置渠道；需要登录态的渠道会先问你。原文同时给出兼容安全参数 `--safe`，与默认行为相同。
 
 ```bash
 agent-reach install --env=auto
@@ -101,7 +116,7 @@ agent-reach install --env=auto
 agent-reach install --env=auto --system
 ```
 
-原文说明了 Agent 安装时会依次做 6 件事：从仓库安装 `agent-reach` CLI（自带 yt-dlp、feedparser，注意不要从 PyPI 安装同名包）；检查系统基建 Node.js、gh CLI、mcporter 并给出缺失项的安装方式；按授权安装与配置，仅在显式传入 `--system` 时才安装依赖并通过 MCP 接入 Exa；检测环境，判断本地电脑还是服务器，给对应配置建议；按授权注册 SKILL.md，仅在显式 `--system` 时写入 Agent 的 skills 目录，默认只检查不改文件；问你要不要更多，默认只激活 6 个零配置渠道，登录态渠道列菜单点名才装。
+原文说明 Agent 安装时会依次做 6 件事：从仓库安装 `agent-reach` CLI（自带 yt-dlp、feedparser，注意不要从 PyPI 安装同名包）；检查系统基建 Node.js、gh CLI、mcporter 并给出缺失项的安装方式；按授权安装与配置，仅在显式传入 `--system` 时才安装依赖并通过 MCP 接入 Exa；检测环境，判断本地电脑还是服务器，给对应配置建议；按授权注册 SKILL.md，仅在显式 `--system` 时写入 Agent 的 skills 目录，默认只检查不改文件；问你要不要更多，默认只激活 6 个零配置渠道，登录态渠道列菜单点名才装。
 
 3. 体检。前提：安装已完成。预期结果：一条命令给出每个渠道的状态、当前走哪条路、坏掉的给出修复处方。
 
@@ -111,12 +126,12 @@ agent-reach doctor
 
 4. 装好即用，不用记命令。前提：SKILL.md 已按原文注册或安装就绪。预期结果：Agent 读了 SKILL.md 后自己知道调什么命令。原文给的使用示例：
 
-- 「帮我看看这个链接」→ `curl https://r.jina.ai/URL` 读任意网页
-- 「这个 GitHub 仓库是做什么的」→ `gh repo view owner/repo`
-- 「这个 YouTube 视频讲了什么」→ `yt-dlp` 提取字幕
-- 「B站搜一下 AI 教程」→ `bili search`（无需登录）
-- 「全网搜一下 LLM 框架对比」→ Exa 语义搜索
-- 「订阅这个 RSS」→ `feedparser` 解析
+- “帮我看看这个链接” → `curl https://r.jina.ai/URL` 读任意网页
+- “这个 GitHub 仓库是做什么的” → `gh repo view owner/repo`
+- “这个 YouTube 视频讲了什么” → `yt-dlp` 提取字幕
+- “B站搜一下 AI 教程” → `bili search`（无需登录）
+- “全网搜一下 LLM 框架对比” → Exa 语义搜索
+- “订阅这个 RSS” → `feedparser` 解析
 
 ### 做法 B：上下文预算敏感时，用 fatsearch 按大纲/分节读网页或 PDF
 
@@ -154,18 +169,7 @@ fats setup
 fats setup oxy       # 也可 bd / decodo / gh
 ```
 
-通过代理配置（key 不进入对话）：让代理执行 `fats setup oxy`（或 `bd` / `decodo` / `gh`）。它会打印 provider 控制台链接和一个位于 `127.0.0.1` 的一次性表单 URL，有效期 10 分钟；你在浏览器里粘贴 key，而不是粘进聊天。README 给出的代理侧话术原文：
-
-```console
-$ fats setup decodo
-= setup decodo · waiting for the key at http://127.0.0.1:59802/k/e0c8baba7a5b058947f4fdab97dabb05/decodo · 10 min · $0
-tell the user (never ask for the key in chat):
-1. open https://dashboard.decodo.com/web-data/playground  (no account yet: https://dashboard.decodo.com/register)
-2. Copy the API key shown on the Web Data playground. Do NOT paste it in this chat.
-3. open http://127.0.0.1:59802/k/e0c8baba7a5b058947f4fdab97dabb05/decodo , paste the key, press Save
-then: fats setup   (when the user says done; end your turn, do not poll · checks it, $0)
-browser not on this machine (SSH)? the user runs fats setup decodo in a terminal there and pastes the key
-```
+通过代理配置（key 不进入对话）：让代理执行 `fats setup oxy`（或 `bd` / `decodo` / `gh`）。它会打印 provider 控制台链接和一个位于 `127.0.0.1` 的一次性表单 URL，有效期 10 分钟；你在浏览器里粘贴 key，而不是粘进聊天。
 
 没有浏览器的机器（CI / SSH）：把 key 通过管道输入。
 
@@ -173,7 +177,7 @@ browser not on this machine (SSH)? the user runs fats setup decodo in a terminal
 printf %s "$KEY" | fats setup oxy
 ```
 
-环境里已导出 key：导入一次；它只补「尚未保存」的位置，不覆盖已保存的 key。
+环境里已导出 key：导入一次；它只补“尚未保存”的位置，不覆盖已保存的 key。
 
 ```sh
 fats setup import-env
@@ -200,7 +204,7 @@ codex mcp add fats -- fats mcp                                    # Codex
 {"mcpServers": {"fats": {"command": "fats", "args": ["mcp"]}}}   # Cursor, Desktop, …
 ```
 
-4. 给代理装入技能说明（推荐，让代理知道「怎么读而不淹上下文」）。预期结果：代理知道先拿大纲、按节读。没有上述 CLI 的代理，读取固定到某个 release 的原文（可审阅、不来自网站运行）：
+4. 给代理装入技能说明（推荐，让代理知道“怎么读而不淹上下文”）。预期结果：代理知道先拿大纲、按节读。没有上述 CLI 的代理，读取固定到某个 release 的原文（可审阅、不来自网站运行）：
 
 ```sh
 npx skills add fatsearch/fatsearch        # Agent Skills standard: Claude Code, Codex, Cursor, Copilot, Gemini CLI, …
@@ -264,21 +268,183 @@ DO_NOT_TRACK=1
 
 ### 做法 C：按需解锁需要登录态的渠道
 
-不用查文档，直接对 Agent 说「帮我配 XXX」。原文给出的口径：
+不用查文档，直接对 Agent 说“帮我配 XXX”。原文给出的口径：
 
-- **GitHub**：告诉 Agent「帮我登录 GitHub」→ 解锁私有仓库、提 Issue/PR、Fork。
+- **GitHub**：告诉 Agent“帮我登录 GitHub” → 解锁私有仓库、提 Issue/PR、Fork。
 - **Twitter/X**：Cookie 必须由用户通过 Cookie-Editor 手工导出；保存后仅供 `agent-reach doctor` 检查配置是否齐全，直接运行上游 `twitter` 命令前，仍需在当前进程环境中显式设置 `TWITTER_AUTH_TOKEN` 和 `TWITTER_CT0`。
 - **B站**：搜索+视频详情用 bili-cli（无需登录）；字幕需 OpenCLI。
 - **Reddit**：没有零配置路径（匿名接口已被封），桌面装 OpenCLI 用浏览器登录态，或 rdt-cli + Cookie。
 - **Facebook / Instagram**：桌面装 OpenCLI，复用 Chrome 登录态。
 - **小红书**：OpenCLI 只用用户已有 Chrome 会话；MCP/存量工具用 Cookie-Editor 导出后配置 xiaohongshu-mcp / 存量工具。`agent-reach configure xhs-cookies` 不会把 Cookie 注入 OpenCLI / Chrome。
-- **LinkedIn / Boss直聘 / 雪球 / 小宇宙播客**：告诉 Agent「帮我配 XXX」；Boss直聘由 Agent 打开专用 Chrome，你手动登录。
+- **LinkedIn / Boss直聘 / 雪球 / 小宇宙播客**：告诉 Agent“帮我配 XXX”；Boss直聘由 Agent 打开专用 Chrome，你手动登录。
 
 安全约束（照抄执行）：
 
 - 凭据只存本机 `~/.agent-reach/config.yaml`，文件权限 600，不上传不外传。
 - 用 Cookie 登录的平台（Twitter、小红书等）务必用专用小号，作者明确提示存在被平台检测并封号的风险，主账号不要用。
 - 本地电脑不需要代理；代理只有部署在服务器上才需要（~$1/月）。
+
+### 做法 D：需要 JS 渲染或浏览器交互时，用 Lightpanda
+
+Lightpanda 的 README 给出三种给 AI 用的接入面：`fetch --dump`（把页面转成 HTML/Markdown/PNG/PDF/结构化数据）、CDP/MCP 服务（给 Puppeteer/Playwright 或 MCP 客户端调用）、`agent` 原生 agent 模式（自然语言驱动，产出可回放的 PandaScript）。选哪条：
+
+- 只要“把网页变成模型能读的文本” → D1。
+- 已有 Puppeteer/Playwright 脚本，想换引擎 → D2。
+- MCP 客户端要直接拿浏览器工具 → D3。
+- 想先用自然语言跑通，再固化成免模型脚本 → D4。
+
+#### D1：只要把网页变成模型能读的文本
+
+1. 安装。前提：Linux x86_64 / macOS（或 WSL2）。任选一种。预期结果：得到 `lightpanda` 命令或二进制。
+
+```console
+brew install lightpanda-io/browser/lightpanda
+```
+
+```console
+yay -S lightpanda-nightly-bin
+```
+
+```console
+curl -L -o lightpanda https://github.com/lightpanda-io/browser/releases/download/nightly/lightpanda-x86_64-linux && \
+chmod a+x ./lightpanda
+```
+
+```console
+nix run github:lightpanda-io/browser -- --help
+```
+
+2. 运行前先校验二进制。预期结果：打印版本，确认能执行。
+
+```console
+./lightpanda version
+```
+
+3. 抓单个 URL 并直接输出 Markdown（喂给 LLM 最省 token 的形态）。预期结果：页面正文以 Markdown 输出。
+
+```console
+./lightpanda fetch --obey-robots --dump markdown --log-format pretty --log-level info https://demo-browser.lightpanda.io/campfire-commerce/
+```
+
+可替换的输出格式：`--dump html`、`--dump png > page.png`、`--dump pdf > page.pdf`（纯文本渲染）、`--dump structured_data`（输出页面的 JSON-LD、OpenGraph、Twitter card、meta 和 link 标签为 JSON）。
+
+4. 页面是异步渲染时，用等待参数控制抓取时机：`--wait-until`、`--wait-ms`、`--wait-selector`、`--wait-script`。
+
+#### D2：给现成 Puppeteer/Playwright 脚本换引擎（CDP）
+
+前提：已有 Puppeteer 脚本；客户端可跑在 WSL 内或 Windows 宿主（WSL 会自动转发 `localhost:9222`）。
+
+1. 用 Docker 起服务端（最简单）。预期结果：本机 9222 端口上有一个 CDP 服务。
+
+```console
+docker run -d --name lightpanda -p 127.0.0.1:9222:9222 lightpanda/browser:latest
+```
+
+或直接起 CDP server：
+
+```console
+./lightpanda serve --obey-robots --log-format pretty --log-level info --host 127.0.0.1 --port 9222
+```
+
+需要只允许本机用户访问时，改用 Unix domain socket（owner-only，0600）：
+
+```console
+./lightpanda serve --unix-socket /run/user/1000/lightpanda.sock
+```
+
+2. 把脚本里的 `connect` 改成指向 `browserWSEndpoint`，其余逻辑不变。预期结果：原脚本通过 Lightpanda 执行。
+
+```js
+import puppeteer from 'puppeteer-core';
+
+// use browserWSEndpoint to pass the Lightpanda's CDP server address.
+const browser = await puppeteer.connect({
+  browserWSEndpoint: "ws://127.0.0.1:9222",
+});
+
+// The rest of your script remains the same.
+const context = await browser.createBrowserContext();
+const frame = await context.newPage();
+
+// Dump all the links from the frame.
+await frame.goto('https://demo-browser.lightpanda.io/amiibo/', {waitUntil: "networkidle0"});
+
+const links = await frame.evaluate(() => {
+  return Array.from(document.querySelectorAll('a')).map(row => {
+    return row.getAttribute('href');
+  });
+});
+
+console.log(links);
+
+await frame.close();
+await context.close();
+await browser.disconnect();
+```
+
+3. 需要 WebDriver Bidi 时，在 serve 上加 `--protocol webdriver`；两个协议可同时开：`--protocol webdriver --protocol cdp`。
+
+#### D3：接入 MCP 客户端
+
+前提：MCP 客户端支持 stdio 或 HTTP 传输。
+
+1. stdio 方式，在 MCP 配置里加。预期结果：客户端出现 `lightpanda` MCP server。
+
+```json
+{
+  "mcpServers": {
+    "lightpanda": {
+      "command": "/path/to/lightpanda",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+2. 多个 agent 共用一个进程时，改用 HTTP 传输。预期结果：客户端向 `http://host:9223/mcp` POST JSON-RPC。
+
+```bash
+lightpanda mcp --port 9223
+```
+
+要点：
+
+- 不带 `Mcp-Session-Id` 头 `initialize` 会被分配新会话（id 在响应的 `Mcp-Session-Id` 头里返回），后续请求带上它以保持隔离——每个会话有自己的页面、Cookie 和内存，agent 之间不再互相踩页面。
+- 两个 agent 用**相同**的 `Mcp-Session-Id` 则共享同一个浏览上下文（例如多个 agent 协作同一页面）。
+- 用 `session_new` / `session_list` / `session_close` 显式管理会话；`DELETE /mcp` 带 session id 关闭会话。
+
+3. 用 `run` 工具执行 PandaScript，可一次 POST 完成（脚本默认超时 60000ms）。预期结果：脚本在浏览器里执行并返回结果。脚本结束时打开的页面会关闭，但 Cookie 和 storage 保留，登录态可以带到下一次 `run`。也有现成 skill：`lightpanda-io/agent-skill`。
+
+#### D4：用自然语言跑一遍，再固化成免模型的脚本
+
+前提：有任一模型供应商的 API key，或本地模型。
+
+1. 让 agent 干活（自动从环境变量检测 key）。预期结果：用自然语言完成网页任务。
+
+```console
+./lightpanda agent                                    # auto-detects API key from env
+./lightpanda agent --task "top story on news.ycombinator.com?"
+./lightpanda agent --no-llm                           # basic REPL, no LLM
+./lightpanda run session.js                           # run a recorded script
+cat session.js | ./lightpanda run -                   # ...or pipe one in via stdin
+./lightpanda agent --provider gemini --task "..."
+./lightpanda agent --list-models                      # models available for the detected provider
+```
+
+支持 Anthropic、OpenAI、Gemini、Vertex AI、Mistral、Hugging Face、Vercel AI Gateway、OpenRouter、任意 OpenAI 兼容端点，以及 Ollama / llama.cpp / LLMD 本地模型。示例：
+
+```console
+OPENROUTER_API_KEY=... ./lightpanda agent --provider openrouter --model anthropic/claude-sonnet-5
+OPENAI_BASE_URL=https://my-gateway/v1 OPENAI_API_KEY=... ./lightpanda agent
+```
+
+2. 跑通后用 `/save` 把当前会话导出成 PandaScript（原生 JS + 少量浏览器原语），再用 `lightpanda run <script>.js` 回放。按 README 说法，脚本是确定性的、不消耗 token，所以可以“用 LLM 做原型、把产物上线到生产而不在运行时带模型”。
+
+#### D5：运维/合规
+
+- 默认会上报使用遥测，需要关闭时设 `LIGHTPANDA_DISABLE_TELEMETRY=true`。
+- 不想要 core dump 时设 `LIGHTPANDA_DISABLE_CORE_DUMP`。
+- 抓第三方站点时注意合规；示例命令带 `--obey-robots`。
 
 ### 维护：更新与卸载 Agent-Reach
 
@@ -303,13 +469,16 @@ pip uninstall agent-reach              # 卸载 Python 包本身
 
 - 渠道可用性：`agent-reach doctor` 一条命令给出每个渠道的状态、当前实际用哪个后端、坏掉的修复处方。这是 Agent-Reach 原文唯一给出的效果验证层，能看到哪个通、哪个不通、怎么修。
 - 改动可控性：`--dry-run` 能先看到会做什么再决定是否执行；`--system` 是否使用由你显式决定，默认只检查不改文件、不写 skills 目录。
-- 默认范围：安装后默认只激活 6 个零配置渠道（网页、YouTube、RSS、GitHub、B站、V2EX），没有在你点名之前装登录态渠道。
+- 默认范围：安装后默认只激活 6 个零配置渠道，没有在你点名之前装登录态渠道。
 - 跑通示例任务：用原文给的 6 个示例（读链接、读 GitHub 仓库、读 YouTube 字幕、B站搜索、Exa 全网搜索、RSS 解析）各试一次，看 Agent 是否知道自己该调什么命令。
 - fatsearch 的 token/成本可见性：`fats stats` 逐次列出 provider、毫秒、成本、token；`dry:true` 在执行前预估花费。用你自己的真实页面/PDF 做小范围试用，先看 `fats stats` 和 `dry:true` 的数字，再决定是否推广。
-- fatsearch 的缺失能力是否显式：缺失能力以 `!` 行说明「缺什么、该怎么办」，且「Never silence」（从不静默）。
+- fatsearch 的缺失能力是否显式：缺失能力以 `!` 行说明“缺什么、该怎么办”，且“Never silence”（从不静默）。
 - 不要用作者 benchmark 直接 adopt：fatsearch 的效果数字全部来自作者自发布 benchmark，项目 48 stars、v0.2.x 早期；报告建议小范围试用。
+- Lightpanda 的最小对比：先用 Docker 或二进制启动 Lightpanda，用 `fetch --dump markdown` 和 MCP / agent 模式各跑一条真实的网页采集与操作任务，并与现有 Chrome + Playwright 方案对比成功率、耗时和内存。这是调研报告给出的试用判断方式。
+- Lightpanda 的基准只能当参考：README 自测在 AWS EC2 m5.large、请求 933 个真实网页，100 页峰值内存 123MB vs Headless Chrome 2GB（约 16 倍更少），执行时间 5s vs 46s（约 9 倍更快）；这是作者自测，不是第三方评测。
+- 试用时长：两份材料都没有给出 Agent-Reach 和 fatsearch 的试用时长；Lightpanda 材料也只给出“先小范围对比”的建议。至少先完成上述最小任务对比，再决定是否扩大。
 
-最小试用方式：Agent-Reach 先 `agent-reach install --env=auto --dry-run` 预览 → 默认安装 → `agent-reach doctor` → 挑 1～2 个零配置渠道的示例任务跑通；fatsearch 先安装 CLI → 注册 MCP → 用 `dry:true` 和 `fats stats` 量几个真实网页/PDF 的 token 与成本。试多久：两份材料都没有给出时长；Agent-Reach 的稳定性需要你自己验证，作者自述渠道频繁换代；fatsearch 也不足以直接 adopt，先用 `fats stats` 和 `dry:true` 自己量。
+最小试用方式：Agent-Reach 先 `agent-reach install --env=auto --dry-run` 预览 → 默认安装 → `agent-reach doctor` → 挑 1～2 个零配置渠道的示例任务跑通；fatsearch 先安装 CLI → 注册 MCP → 用 `dry:true` 和 `fats stats` 量几个真实网页/PDF 的 token 与成本；Lightpanda 先 `./lightpanda version` → `fetch --dump markdown` 抓一个真实页面 → 用 MCP 或 agent 模式跑一条任务 → 与现有 Chrome + Playwright 对比成功率、耗时、内存。
 
 ## 常见坑
 
@@ -323,15 +492,21 @@ pip uninstall agent-reach              # 卸载 Python 包本身
 - `--system` 才会安装系统依赖、通过 MCP 接入 Exa、把 SKILL.md 写入 Agent 的 skills 目录；默认只检查不改文件。
 - yt-dlp 仍适合 YouTube，但作者自述 2026-06 已被 B站风控 412 封死，所以 B站改用 bili-cli；这类渠道换代需要自己盯。
 - Agent-Reach 的验证只到渠道是否可用，没有产出质量指标；`agent-reach doctor` 不评价内容摘要或搜索结果是否切题。
-- RSS 只给了 feedparser 解析，没有定时轮询、事件触发或状态触发配置，不能当「有更新就通知我」的完整方案。
+- RSS 只给了 feedparser 解析，没有定时轮询、事件触发或状态触发配置，不能当“有更新就通知我”的完整方案。
 - fatsearch 的包名是 `fatsearch`，命令是 `fats`；Homebrew、npm 和安装脚本会加 `fatsearch` 别名，`cargo install` 只加 `fats`。
 - fatsearch 不配 provider key 也能用免费通道，但遇到 JS 页面、captcha 或拦截页会抓不到内容，网页搜索也用不了；不要把它当万能抓取器。
 - provider key 不要粘进聊天：走 `fats setup` 的一次性表单、管道或 `fats setup import-env`；`auth.json` 是唯一 key 来源，`fats` 不会使用环境变量里的 key。
 - `fats setup free off` 会关掉免费通道，所有页面都走 provider，每页都花钱；只想临时停用某个 provider 用 `fats setup oxy off` / `on`。
 - fatsearch 没有 daemon，没有 watch、cron、回调、重试队列；不要用它做定时订阅或主动推进。
 - fatsearch 读扫描版 PDF 会返回 `! no_text`（OCR），DOCX/XLSX 在 v1 返回 `! not_in_v1 zip`，登录墙后的页面也读不到；需要语义近似/主题匹配时 `match:near`/`match:topic` 需本地模型。
-- fatsearch 默认只给大纲、按节读；作者没有讨论「必须通读全文才能下结论」的任务是否会被大纲机制削掉信息，试用时要专门验。
+- fatsearch 默认只给大纲、按节读；作者没有讨论“必须通读全文才能下结论”的任务是否会被大纲机制削掉信息，试用时要专门验。
 - fatsearch 效果数字全部来自作者自发布 benchmark，项目 48 stars、v0.2.x 早期；不要因为示例里的 token/成本数字好看就直接全量推广。
+- Lightpanda 目前只有 nightly 构建，不要把它当成稳定发行版直接替换唯一生产链路。
+- Linux 二进制链接 glibc，在 Alpine 等 musl 系统上会报 `cannot execute: required file not found`；Android/Termux 不可用；Windows 没有原生二进制，走 WSL2。
+- 抓第三方站点时注意合规；示例命令带 `--obey-robots`。
+- MCP HTTP 模式下，不带 `Mcp-Session-Id` 的 `initialize` 会新建会话；后续请求要带上它。用相同 `Mcp-Session-Id` 会共享页面、Cookie 和内存，多个 agent 协同时才这么做。
+- `run` 结束时页面会关闭，但 Cookie 和 storage 保留，登录态会带到下一次 `run`；不要以为脚本结束就清掉了登录态。
+- Lightpanda 的基准是作者自测，只有 nightly 构建，结论还提示无渲染引擎；不要因为 16 倍内存、9 倍速度的数字好看就直接替换 Chrome + Playwright，先在自家目标站点对比成功率、耗时和内存。
 
 ## 证据与来源
 
@@ -341,11 +516,15 @@ pip uninstall agent-reach              # 卸载 Python 包本身
 - Agent-Reach 效果验证：仅到渠道是否可用这一层；原文没有产出质量指标或评测方法。主动推进证据较弱：原文只在需求列表里提到 RSS 更新通知，实现侧只给了 feedparser 解析，没有可照做的触发机制。
 - Agent-Reach 与已有做法的关系：Jina Reader 是 Agent-Reach 中读网页渠道的首选后端；Agent-Reach 通过注册 SKILL.md 落地 Agent skills 机制；报告建议把 Agent-Reach 的状态从 study 上调为 try。
 - fatsearch 做法 B：fatsearch/fatsearch 调研报告。安装命令、MCP 注册、`fats setup` 的安全设计、`dry:true` / `fats stats`、遥测开关、能力边界，均来自该报告与 README 原文；属作者自述，没有第三方核验。
-- fatsearch 项目状态：48 stars、v0.2.x 早期项目；效果数字全部来自作者自发布 benchmark，不足以直接 adopt。报告建议把它装成 Claude Code 的 MCP 工具，在「代理需要读网页或 PDF、但上下文预算敏感」的场景里小范围试用，先用 `fats stats` 和 `dry:true` 自己量 token 与成本，再决定是否推广。
+- fatsearch 项目状态：48 stars、v0.2.x 早期项目；效果数字全部来自作者自发布 benchmark，不足以直接 adopt。报告建议把它装成 Claude Code 的 MCP 工具，在“代理需要读网页或 PDF、但上下文预算敏感”的场景里小范围试用，先用 `fats stats` 和 `dry:true` 自己量 token 与成本，再决定是否推广。
 - fatsearch 的其他数据：MCP 只暴露一个工具 `fats(cmd)`，工具卡约 60 token，一个字符串参数；没有账号体系，无 daemon、无浏览器内核；二进制 17–21 MB；免费抓取每个站点每秒最多发起一次请求；示例 `dry:true` 预估 up to $0.0040；`fats stats` 示例列出 1.2ktok、40.9ktok 等 token 数。这些均来自报告/README，属作者自述。
-- 两者关系：Agent-Reach 负责多渠道选型、安装、体检、路由；fatsearch 负责单页/PDF 的「先大纲、按节读」与成本可见。给出的材料没有提供二者集成的命令，本手册只把它们并列为可选做法；这是依据材料做的编排，不是原文集成说明。
+- Lightpanda 做法 D：lightpanda-io/browser 调研报告。安装命令、`fetch --dump`、CDP/MCP 配置、PandaScript 流程、平台限制、遥测与 core dump 环境变量，均来自该报告与 README 原文；属作者自述，没有第三方核验。
+- Lightpanda 自测基准：AWS EC2 m5.large、请求 933 个真实网页，100 页峰值内存 123MB vs Headless Chrome 2GB（约 16 倍更少），执行时间 5s vs 46s（约 9 倍更快）。这是作者自测，不是第三方评测。
+- Lightpanda 的项目判断：只有 nightly 构建；结论提示无渲染引擎；建议先用 Docker 或二进制启动，用 `fetch --dump markdown` 和 MCP / agent 模式各跑一条真实的网页采集与操作任务，并与现有 Chrome + Playwright 方案对比成功率、耗时和内存。这是调研报告的建议，不是实测结论。
+- 三者关系：Agent-Reach 负责多渠道选型、安装、体检、路由；fatsearch 负责单页/PDF 的“先大纲、按节读”与成本可见；Lightpanda 负责 JS 渲染与浏览器交互。给出的材料没有提供三者集成的命令，本手册只把它们并列为可选做法；这是依据材料做的编排，不是原文集成说明。
 
 ## 依据的调研
 
 - [Panniantong/Agent-Reach](../research/radar/2026-10-03/852-panniantong-agent-reach.md)：值得一试，把它作为「给 Agent 补互联网读取能力」的最小可行方案小范围试用：先 --dry-run，再只用默认零配置渠道，并固定用 `agent-reach doctor` 做体检。理由是原文给出了可照抄的安装/体检/更新/卸载流程和「首选+备选多后端路由」的可复用设计，但各渠道依赖平台反爬与登录态、作者自述频繁换代，稳定性必须自己验证，不宜直接全量采纳。
 - [fatsearch/fatsearch](../research/radar/2026-10-22/5707-fatsearch-fatsearch.md)：值得一试，把 fatsearch 装成 Claude Code 的 MCP 工具，在“代理需要读网页或 PDF、但上下文预算敏感”的场景里小范围试用，先用 `fats stats` 和 `dry:true` 自己量 token 与成本，再决定是否推广。因为它给出可直接照抄的安装、MCP 注册和“先看大纲、按节读取”的操作流程，但效果数字全部来自作者自published benchmark，48 stars 的早期项目（v0.2.x），还不足以直接 adopt。
+- [lightpanda-io/browser](../research/radar/2026-10-31/8886-lightpanda-io-browser.md)：值得一试，建议小范围试：先用 Docker 或二进制启动 Lightpanda，用 `fetch --dump markdown` 和 MCP / agent 模式各跑一条真实的网页采集与操作任务，并与现有 Chrome + Playwright 方案对比成功率、耗时和内存；理由在于 README 给出了可直接复制的安装、MCP 配置、PandaScript 录制回放流程，但只有 nightly 构建、基准为自测且无渲染引擎，兼容性必须在自家目标站点上验证。

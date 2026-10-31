@@ -1,80 +1,77 @@
-# 让编码 agent 按工作类型选模型，并拿出可验收的证据
+# 让编码 agent 分工：贵模型只规划，廉价模型写码，测试当裁判
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：多个供应商、模型和编码 agent 混用时，如何按工作类型路由、在限流或配额故障时回退，并用确定性证据而不是进程退出判断任务完成。
-> 先试这一步：先只给一个最常用的工具接上一条路由或一个备用 provider，保留原直连路径作对照，并用同一批真实任务记录中断次数、人工切换次数、返工率和 token 成本。
-> 最近修订：2026-10-30
+> 解决的问题：让编码 agent 不靠更贵的模型硬扛，而是把规划、实现和验收分开，用测试结果决定改动是否落地。
+> 先试这一步：选一个中等规模、已有可运行测试的真实任务，先用纯 Claude Code 记录 Opus token、轮数和测试通过数，再用 cheap-agent 同一提示词跑一遍对照。
+> 最近修订：2026-10-31
 
 ## 解决什么问题
 
 编码过程中经常遇到几种中断：某个供应商的订阅配额到期没用完、编码到一半被限流、某个 key 死掉导致整条流程卡住、工具输出烧 token。这些事本身没有谁专门负责，于是变成你手动换模型、换 key。另一类问题是模型选择：要么一直用最重最贵的模型，要么靠手动切换；agent 宣布完成时，也可能只看进程退出，不看任务是否真的通过确定性检查。还有一种浪费是：主力模型已经成为日常，另一个模型的配额一直闲置，却没有把它挂进当前会话。
 
+更具体的一类浪费是：贵模型（如 Opus）把大量 token 花在写样板代码、写测试、跨文件改代码上，而这些活本可以交给廉价模型，只要贵模型先把任务写清楚，并用测试当裁判。Cheap Agent 把这条分工自动化：Opus 只写简短任务并做决策，DeepSeek / OpenRouter / OpenCode Go 上的模型在 git worktree 独立副本里写代码，必须先写一个失败的测试、再改到测试通过；Cheap Agent 自己运行测试，只有通过的结果才以未提交形式落回项目；廉价模型做不完时默认由 Sonnet 兜底，而不是让 Opus 重做。
+
 Claude Code 里还有两个更具体的中断：模型设置会全局绑定所有终端窗口，切 provider 会影响全部会话；Anthropic 返回 429 用量上限时，整条会话卡住，只能手动换 key 或等冷却。model-relay 用一个本机 127.0.0.1:8950 的路由守护进程把“按窗口切模型、按别名路由、429 自动故障转移、provider 重试”接过来；它要求 provider 能接 Anthropic 的 /v1/messages 格式，定位是单人本地守护进程，不是团队多租户代理。
 
-本手册给出一套本地可试的做法：用 OmniRoute 这类 OpenAI 兼容网关统一接多个供应商，并按配额、失败或成本自动回退；在 Codex 内用 Adaptive Router 按本地难度启发式选择轻/重模型；用“有证据的验收”判断是否真的完成；用 Gluon 为每次会话选择 harness × model × effort 并观察成本与上下文；用 LiteLLM 的 SDK 或网关把多家供应商统一成 OpenAI 格式，并做按项目/用户的成本追踪；Claude Code 内还有一条线：把次要模型挂成顾问，避免贵模型全程主持。再加一条 Claude Code 内的本地路由线：用 model-relay 按窗口/别名切 provider，并在 429 时自动转到备用端点。最后新增 cedr：它按工作类型路由 agent/模型/effort，回填 accepted/reworked/redone/rejected 结果，并可为 skill 与 MCP server 生成 cedr.lock 做漂移校验；它还能做多厂商评审门禁，但 Council 的细节在材料中指向 docs，未完整展开。
+本手册给出一套本地可试的做法：用 OmniRoute 这类 OpenAI 兼容网关统一接多个供应商，并按配额、失败或成本自动回退；在 Codex 内用 Adaptive Router 按本地难度启发式选择轻/重模型；用“有证据的验收”判断是否真的完成；用 Gluon 为每次会话选择 harness × model × effort 并观察成本与上下文；用 LiteLLM 的 SDK 或网关把多家供应商统一成 OpenAI 格式，并做按项目/用户的成本追踪；Claude Code 内还有一条线：把次要模型挂成顾问，避免贵模型全程主持。再加一条 Claude Code 内的本地路由线：用 model-relay 按窗口/别名切 provider，并在 429 时自动转到备用端点。新增 cedr：它按工作类型路由 agent/模型/effort，回填 accepted/reworked/redone/rejected 结果，并可为 skill 与 MCP server 生成 cedr.lock 做漂移校验；它还能做多厂商评审门禁，但 Council 的细节在材料中指向 docs，未完整展开。最后新增 Cheap Agent：在 Claude Code 内把“贵模型规划、廉价模型写码、测试裁判”做成插件，用测试结果而不是模型自述决定改动是否落地。
 
-所有效果数字都要自测。七个项目、F3 这条推文、model-relay 和 cedr 的材料都未说明可以互相集成；先分别试。
+所有效果数字都要自测。这些项目、F3 这条推文以及各 Claude Code 扩展的材料都未说明可以互相集成；先分别试。
 
 ## 适用与不适用
 
 适用：
 
+- 你用 Claude Code，任务属于中等规模（新功能或真实 bug，跨几个文件），项目已有能跑、能覆盖改动的测试。
+- 你愿意把代码发给第三方廉价模型 provider，并能按项目执行 /cheapag:allow 授权、审 diff 后自己提交。
+- 你想让 Opus 只做规划和决策，廉价模型写码，Sonnet 作为失败兜底。
 - 你手上有多个供应商或多把订阅/API key，经常因为某一个配额耗尽、限流或失败而中断工作。
 - 你愿意在本机长期运行一个本地服务，并且手上的工具支持自定义 OpenAI 兼容 base URL。
 - 你想把“模型选择、配额管理、故障回退、成本控制”这类元工作从人身上拿掉，交给网关自动做。
-- 你使用 Codex，并愿意在 Codex 内装本地插件，用 $adaptive-route 跑日常任务。
-- 你想先用离线 benchmark demo 验证路由/评测链路，再上真实任务。
+- 你使用 Codex，并愿意在 Codex 内装本地插件，用 $adaptive-route 跑日常任务；想先用离线 benchmark demo 验证路由/评测链路。
 - 你想用一个面板把“哪个工具接哪个模型”集中管起来，并希望工具里的模型以统一前缀显示（FlagshipRouter 的 flagshiprouter/<model>）。
-- 你已经装了多个编码 agent（Claude Code、Codex、Antigravity、Grok Build、OpenCode、Kimi Code 中至少一个），想在同一终端框架里并排开会话，并为每次会话选 harness/model/effort。
-- 你想按会话看到成本与上下文占用，用来比较不同选择；并且能在 Linux/macOS/WSL/Windows 的本地 git 仓库里跑终端命令。
-- 你想先在 Python 代码里用同一个函数调不同供应商（换模型只改 model 字符串），再决定要不要上网关。
-- 你需要在本地网关侧做按项目/用户的成本追踪与虚拟密钥，或想把 Claude Code / Codex / OpenCode / Deep Agents 作为 harness 跑在自己的网关上。
-- 你使用 Claude Code，且版本支持 /advisor 或 --advisor；主模型已设为日常主力，同时还有另一个模型的可用配额（F1）。
-- 你使用 Claude Code，账号/计划允许在 Sonnet、Opus、Haiku 等模型之间切换，主要任务是代码编辑、对成本敏感，并愿意先在一个 1–2 小时的中等复杂度改动上做 A/B（F2a/F2b）。
-- 你使用 Claude Code，任务可以拆出子代理，愿意让较弱模型处理子任务，并愿意用同一批任务做 token 与质量的对照（F3）。
-- 你长期在 Claude Code 里工作，模型设置全局绑定所有终端窗口，想按窗口/会话切 provider。
-- 你有至少一个备用的 Anthropic 兼容端点（内置 preset：zai、deepseek、kimi、minimax、openrouter，或用 --url 指定自己的网关），想把 haiku/sonnet/opus 别名或某个子代理导到别的 provider。
+- 你已经装了多个编码 agent（Claude Code、Codex、Antigravity、Grok Build、OpenCode、Kimi Code 中至少一个），想在同一终端框架里并排开会话，并为每次会话选 harness/model/effort，按会话看成本与上下文。
+- 你想先在 Python 代码里用同一个函数调不同供应商（换模型只改 model 字符串），再决定要不要上网关；或需要本地网关侧按项目/用户做成本追踪与虚拟密钥。
+- 你使用 Claude Code，且版本支持 /advisor 或 --advisor；主模型已设为日常主力，同时还有另一个模型的可用配额（F1）；或账号/计划允许在 Sonnet、Opus、Haiku 等模型之间切换，想对成本敏感的代码编辑任务做 A/B（F2a/F2b）；或任务可以拆出子代理，愿意让较弱模型处理子任务并做 token 与质量对照（F3）。
+- 你长期在 Claude Code 里工作，模型设置全局绑定所有终端窗口，想按窗口/会话切 provider；你有至少一个备用的 Anthropic 兼容端点（内置 preset：zai、deepseek、kimi、minimax、openrouter，或用 --url 指定自己的网关），想把 haiku/sonnet/opus 别名或某个子代理导到别的 provider。
 - 你遇到 Anthropic 429 用量上限，想自动转到备用 provider 并钉住会话 7 天；愿意接受 Node.js 20+、Claude Code 2.1.287+、单人本机守护进程。
-- 你使用 Claude Code、Codex、Cursor 或 Gemini，愿意试 cedr 的按工作类型路由、verdict 回填和 cedr.lock 固定 skill/MCP；你能接受 preview 阶段命令与文件格式在 1.0 前可能变。
+- 你使用 Claude Code、Codex、Cursor 或 Gemini，愿意试 cedr 的按工作类型路由、verdict 回填和 cedr.lock 固定 skill/MCP；能接受 preview 阶段命令与文件格式在 1.0 前可能变。
 - 你只想先在非敏感、非生产任务上小范围试。
 
 不适用或需要谨慎：
 
-- 有合规或数据敏感要求：接入前先看清请求是否会经过第三方免费层。OmniRoute README 自己披露有供应商因条款风险被标记为 avoid，本次材料点名 Kiro；早期材料称有 13 家，以你当前 README 标记为准。
-- 想直接采信 README 的效果数字：OmniRoute 的 375 个 provider、1475 个 chat 模型 ID、20 种路由策略、37 个集成、约 1.62B 免费 token/月、压缩省 15–95%（平均约 89%）都没有给出可复现的测量方法、测试集或对照实验，且免费额度每两周会双向波动。agent-smith 只有 6 个合成任务、单次尝试；FlagshipRouter 只有仓库元信息；Gluon 没有效果数据；LiteLLM 是特性索引 + 宣传；cedr 没有效果数据且只有 42 stars、preview 阶段。
+- 项目没有可运行测试或测试覆盖不足：Cheap Agent 的机制依赖测试裁判，不要用。
+- 极小任务（几行代码、从零写一个小应用）：作者自己说没有收益；最难一档 bug 作者自报 6/9 对 7/9，可能略差。
+- 合规或数据敏感：Cheap Agent 会把代码发给第三方 provider；OmniRoute 接入前也要看清请求是否会经过第三方免费层，README 自己披露有供应商因条款风险被标记为 avoid，本次材料点名 Kiro。
+- Windows 上用 Cheap Agent：beta，CI 测过但无真实用户验证，需要 Git for Windows。
+- 期望 Cheap Agent 自动 commit/push：它从不 commit 或 push，改动以未提交形式落地，必须人工审 diff。
+- 想把 Cheap Agent 与 model-relay、cedr 等 Claude Code 扩展叠加：材料未说明可集成，先分开试。
+- 想直接采信 README 的效果数字：OmniRoute、agent-smith、FlagshipRouter、Gluon、LiteLLM、model-relay、cedr、Cheap Agent 的数字大多没有可复现测量方法或第三方复核。
 - 想用 OmniRoute 的生产级能力（MCP 110 工具、A2A、memory、guardrails、evals、TLS stealth、key pools 等）：给定材料里只有名词或概述，没有配置步骤。
 - 想把 OmniRoute 的 combo 策略表直接照抄：本次原文在策略表第 3 条处被截断，round-robin 及后续策略的语义不完整；安装/首次运行章节也没有完整抓到。
 - 以为新装 OmniRoute 一定有 keyless 免费目标：新调研明确提醒，全新安装可能没有任何可用的 keyless 目标，某些 keyless provider 也会拒绝第三方客户端。
 - 想把 OmniRoute 当无单点风险的生产网关：网关是单点，它挂了所有客户端一起挂；需要评估是否值得为省成本引入这个依赖。
-- 想用 FlagshipRouter 的 Media Models 和 Agent Skills 页面：README 只提到存在，没有给用法。
-- 想直接照抄 Gluon 的 routing.yaml：具体写法、权限与工具供给、安全隐私、成本分析示例、故障排查都在文档站点，给定材料没展开。
 - Codex Float 仅 macOS 14+；agent-smith 的 router 执行需要已有 Codex 登录。
 - FlagshipRouter 默认面板密码是 123456，默认监听 20128；暴露到 localhost 之外前必须改密码。
 - 想在同一个 Python 环境里同时装 litellm 和 litellm-core：只能装一个。
 - 想让 LiteLLM 的 MCP OAuth 一路走通：可能需要预注册 OAuth app 并配置 credentials。
 - 生产环境想用明文 ALB 长跑：allow_plaintext_alb = true 按 README 只限 dev/trial。
-- 想直接照抄 Claude Code 的 /advisor（F1）：原文唯一依据是文档地址，且被截断；模型名无法核实。
-- 想直接照抄 Sonnet 主跑 + Opus 顾问（F2a）：原文只有一行箭头写法，没有给出文档链接、版本号或确切命令语法。
-- 想直接照抄 F2b 的 claude --model sonnet --advisor opus：原文没有说明 --advisor 从哪个版本起可用；执行前必须用 claude --help 或 /help 确认参数存在。参数不存在就停止照抄命令。
-- 想把 Haiku 只读那一环当现成配置：F2b 原文在“→ 只读 haiku 5.5”处截断，怎么在 Claude Code 里指定 Haiku 只读、给什么权限，原文没有给出。
-- 想把 CLAUDE_CODE_SUBAGENT_MODEL=haiku claude 当成完整三模型协作方案（F3）：原文只给这一条环境变量，没有说明主模型如何设为 Sonnet 或 Opus、三类任务如何划分、子代理如何触发。
-- 想把 F3 与 F2b 叠加：F3 是环境变量，F2b 是启动参数；材料未说明可叠加，先分开试。
-- 想把“停止支付 opus 来做 haiku 的家庭作业”“简直是黄金”“不为不需要 Opus 的工作付 Opus 的价格”当结论：都是作者主张，原文没有数据、基准、案例或成本对比。
-- 想把 F1、F2a、F2b、F3 混着抄，或把 /advisor、--advisor、CLAUDE_CODE_SUBAGENT_MODEL 与 A–E 的网关/路由自动叠加：材料都未说明可集成，先分开试。
+- 想直接照抄 Claude Code 的 /advisor（F1）、Sonnet 主跑 + Opus 顾问（F2a）、claude --model sonnet --advisor opus（F2b）、CLAUDE_CODE_SUBAGENT_MODEL=haiku claude（F3）：原文都在关键处截断或没有版本号，执行前必须确认命令/参数/环境变量存在；模型名无法核实。
+- 想把 F1、F2a、F2b、F3 混着抄，或与 A–I 的网关/路由自动叠加：材料都未说明可集成，先分开试。
 - 想给整个组织做多租户云代理：model-relay 作者自己说那种场景应该用 LiteLLM；它是单人本地守护进程。
 - 只有 OpenAI Chat Completions 格式的 provider：model-relay 要求 provider 能接 Anthropic /v1/messages；只会说 OpenAI Chat Completions 的服务需要本地翻译层。
 - 想在已经跑着 Claude Code 的 shell 里 export key 就生效：key 由 router 进程从它继承的环境里读，要写成永久变量并开新终端。
-- 想装完就自动把请求导出去：不加 alias，haiku 及所有请求默认留在 Claude，不会外流。
-- 想把 proxy mode 当无感隧道：HTTPS_PROXY 写进 settings.json 的 env，Claude Code 跑的命令也会走 relay 当盲隧道，router 挂了 git/curl/gh 会失败；proxy 模式下 router 停了 Claude Code 连不上。
-- 想从 0.6 及更早版本升级只更新插件：0.7+ 只读 "format": 2，要迁移。
-- 想让 cedr 直接当团队标准：它处于 preview，1.0 前命令与文件格式仍可能变；用量接入在原文中只具体说明 claude-statusline 与 codex 两种 kind；Council 的 reviewer 报告格式、quorum 默认值、merge 输入形态需读 docs/council.md；cedr route sync 会把历史与路由上传到 cedr.dev，默认应不开；跨机器/团队共享路由属于付费计划功能。
+- 想装完 model-relay 就自动把请求导出去：不加 alias，haiku 及所有请求默认留在 Claude，不会外流。
+- 想把 model-relay 的 proxy mode 当无感隧道：HTTPS_PROXY 写进 settings.json 的 env，Claude Code 跑的命令也会走 relay 当盲隧道，router 挂了 git/curl/gh 会失败；proxy 模式下 router 停了 Claude Code 连不上。
+- 想从 0.6 及更早版本升级 model-relay 只更新插件：0.7+ 只读 "format": 2，要迁移。
+- 想让 cedr 直接当团队标准：它处于 preview，1.0 前命令与文件格式仍可能变；用量接入只具体说明 claude-statusline 与 codex 两种 kind；Council 的 reviewer 报告格式、quorum 默认值、merge 输入形态需读 docs/council.md；cedr route sync 会把历史与路由上传到 cedr.dev，默认应不开。
 - 想让 cedr 的 cedr lock 无副作用：只有传 --introspect 时才会真正运行 MCP server，运行前会先警告；若不允许执行第三方 server，就不要加这个参数。
 - 想拿 cedr 的效果当结论：没有效果数据、案例研究、对比实验或用户反馈；示例输出里的百分比是演示样例，不是实测结论。
 
 ## 前置条件
 
-- OmniRoute：本机可安装 npm 全局包，或可用 Docker 镜像 diegosouzapw/omniroute；能长期运行一个本地服务；默认监听 20128；至少有一个你自己有权使用的 provider 账号或 API key；客户端支持自定义 OpenAI 兼容 base URL；从 Dashboard → Endpoints 取 OmniRoute key；v3.8.53+ 的材料提到可用无界面模式 serve --headless 放服务器常驻，但没有给完整启动命令。本次材料的安装/首次运行章节被截断，npm i -g omniroute 只作为线索，执行前回 README Quick Start 补齐。README 点名的可接工具包括 Claude Code、Codex、Cursor、Cline、Copilot、Antigravity；原文把 Copilot 列为 drop，不必为它单独接。
+- Cheap Agent：已安装 Claude Code；Node.js 20+；一个充值了几美元的 API key，来自 OpenRouter / DeepSeek / OpenCode Go；支持 macOS 和 Linux，Windows 为 beta（CI 测过但无真实用户验证，且需要 Git for Windows）；项目里有能跑、能覆盖改动的测试套件；每个项目执行一次 /cheapag:allow 授权；API key 存在本地凭据库，不进聊天。
+- OmniRoute：本机可安装 npm 全局包，或可用 Docker 镜像 diegosouzapw/omniroute；能长期运行一个本地服务；默认监听 20128；至少有一个你自己有权使用的 provider 账号或 API key；客户端支持自定义 OpenAI 兼容 base URL；从 Dashboard → Endpoints 取 OmniRoute key；v3.8.53+ 的材料提到可用无界面模式 serve --headless 放服务器常驻，但没有给完整启动命令。本次材料的安装/首次运行章节被截断，npm i -g omniroute 只作为线索，执行前回 README Quick Start 补齐。
 - agent-smith：Python 部分只用标准库；路由执行需要已有的 Codex 登录；Float 需要 macOS 14+、/usr/bin/python3 和 Xcode Command Line Tools。以下命令均在克隆后的仓库根目录执行（Float 相关除外）。
 - FlagshipRouter：Node.js 20.9 或更高（README 建议 22）；git 与 npm 可用；本地端口 20128 空闲——与 OmniRoute 默认端口相同，不能按默认端口同时启动；要接自有供应商时需要相应凭证，不想注册时可先只用 OpenCode Free 的免注册模型。
 - Gluon：至少一个受支持编程智能体的 API key 或订阅；Linux、macOS、WSL 或 Windows；在本地 git 仓库目录中操作。安装需要能访问 GitHub release，或用 Bun 从 release tarball 安装。
@@ -293,7 +290,7 @@ curl -fsSL https://github.com/fidipro/gluon/releases/latest/download/install.sh 
 Windows PowerShell：
 
 ```powershell
-irm https://github.com/fidipro/gluon/releases/latest/download/install.ps1 | iex
+irm https://github.com/microsoft/gluon/releases/latest/download/install.ps1 | iex
 ```
 
 原文还给出 Bun/源码方式的线索：从 release 下载 npm 风格 tarball gluon-<version>.tgz，然后 bun add -g "$PWD/gluon-<version>.tgz"（Linux、macOS）；从 checkout 构建见 CONTRIBUTING.md。校验与所有安装选项见其 install guide。预期结果：gluon 命令可用。
@@ -607,7 +604,7 @@ CLAUDE_CODE_SUBAGENT_MODEL=haiku claude
 - 目标不同：F1 是“别让另一份闲置配额白白浪费”，主模型仍是重模型；F2a/F2b 是“不为不需要 Opus 的工作付 Opus 的价格”，主模型换成轻模型；F3 是“只把子代理固定为更轻的 Haiku”，不改变主模型和顾问。不要混着抄。
 - 入口不同：F2a 是会话内命令，F2b 是启动参数，F3 是启动时的环境变量。先运行 claude --help：如果 --advisor 存在，优先按 F2b 的最小对照试；如果只有 /advisor 存在，退回 F2a；如果只想让子任务少花 token，先试 F3；如果都不存在，只保留“贵模型只用在决策点”这一条分配原则。
 - 三者模型名（Opus 5.5、Fable 5.1、Sonnet、Haiku 5.5）与命令语法在给定材料里都无法核实；F2a/F2b 的原文都在关键处被截断，F3 原文只给一条环境变量。先确认命令或环境变量存在，再小范围试。
-- 材料未说明它们能与 A–E 的网关/路由自动集成，也未说明 F1/F2a/F2b/F3 之间可以叠加；先分开试。
+- 材料未说明它们能与 A–I 的网关/路由自动集成，也未说明 F1/F2a/F2b/F3 之间可以叠加；先分开试。
 
 **做法 G：在 Claude Code 内按窗口/别名路由，并把 429 故障转移钉住（model-relay）**
 
@@ -654,7 +651,7 @@ claude plugin install model-relay@model-relay
 这会创建 ~/.claude/model-relay.json（先不含任何 provider，所以所有请求仍走 Claude），并把 ~/.claude/settings.json 里的 ANTHROPIC_BASE_URL 指向 relay。然后加 provider：
 
 ```bash
-node tools/setup.mjs add <name> --preset <preset> --model <model id> --token env:<VAR>
+node tools/setup/mjs add <name> --preset <preset> --model <model id> --token env:<VAR>
 ```
 
 前提：node tools/setup.mjs 要在插件安装目录里跑，即 ~/.claude/plugins/cache/model-relay/model-relay/<version>/（设了 CLAUDE_CONFIG_DIR 时是 $CLAUDE_CONFIG_DIR/plugins/cache/model-relay/model-relay/<version>/，ls 一下看版本号）；在别处要用该目录下 tools/setup.mjs 的完整路径。presets 子命令列内置 preset。改完重启 Claude Code。
@@ -842,7 +839,80 @@ codex mcp add cedr -- cedr mcp
 
 9. 最小试用：建议 1 人 × 2 周，不铺开。只装 CLI，只配 2 个 harness（Claude + Codex），只定义 2 条 route：一条 review.code，一条你日常最重复的实现类工作。用 1 天完成 statusline 接入，确认 cedr route pools 能显示出真实的计划剩余量；如果读不到数，直接停，不要继续。第一周只用 pick + verdict，不启用 Council、不加 sync。每类工作至少积累 15–20 次 pick 与 verdict 再看得出的分布。原文在“第二周在 2–3”处截断，第二周具体动作不可依据；先按第一周做，Council 和 Guard 只做独立小试。
 
-**做法 A / B / C / D / E / F / G / H 怎么选**
+**做法 I：贵模型规划、廉价模型写码、测试当裁判（Cheap Agent）**
+
+前提：已安装 Claude Code；Node.js 20+；一个充值了几美元的 API key（OpenRouter/DeepSeek/OpenCode Go）；macOS/Linux（Windows beta，需要 Git for Windows）；项目里有能跑、能覆盖改动的测试套件。未执行 /cheapag:allow 前不会外发代码。
+
+1. 让 Claude Code 代为安装（最省事路径）。把下面这段原样贴进 Claude Code：
+
+```text
+Set up Cheap Agent (npm: cheap-agent) for me.
+1. Ask me: which provider (OpenRouter recommended, DeepSeek or OpenCode Go), and which
+   models (balanced is the default; cheapest, strongest, or my own provider/model).
+2. Check that node is 20+ and the claude CLI is installed.
+3. If I picked my own model, save {"models":{"implement":"<model>"}} in
+   ~/.config/cheapag/config.json, keeping what else is there.
+4. Give me the command to run in my terminal: npx cheap-agent login --preset <my choice,
+   or custom>, and which number to pick for my provider (1 OpenCode Go, 2 OpenRouter,
+   3 DeepSeek). I run it and type my API key there. Never ask for my key.
+5. When I say done, check `claude mcp list` shows cheapag, then tell me to run
+   /cheapag:allow in a new Claude Code session in my project.
+```
+
+预期结果：Claude 问你 provider 和模型，给出 login 命令，并确认 claude mcp list 里出现 cheapag。
+
+2. 或手动安装。在终端执行：
+
+```bash
+npx cheap-agent
+```
+
+按提示选 provider（不确定就选 OpenRouter），模型直接回车用推荐值，粘贴 API key。预期结果：它验证 key 可用，并把自身注册进 Claude Code（对所有项目生效）。
+
+3. 在每个项目里授权一次。在项目中新开一个 Claude Code 会话，执行：
+
+```text
+/cheapag:allow
+```
+
+预期结果：把该项目代码发送给廉价模型的明确授权生效，同时显示哪些模型会看到代码。未执行前不会外发。
+
+4. （可选）项目级配置。在项目根放 cheapag.json：
+
+| 设置 | 默认值 | 作用 |
+| --- | --- | --- |
+| takeover | "sonnet" | 廉价模型做不完的步骤由谁接手：Sonnet 助手，或 "self"（Opus 自己做，上限 15 次工具调用） |
+| limits.max_turns | 25 | 廉价模型每一步最多可用轮数 |
+| models | 安装时的选择 | 使用哪些廉价模型；可用 npx cheap-agent login --preset strongest 切换 |
+
+5. 照平常方式提需求。像以前一样让 Claude 改代码，Claude 会把代码改动交给廉价模型。常用命令：
+
+| 命令 | 作用 |
+| --- | --- |
+| /cheapag:allow | 授权本项目代码发给廉价模型，每个项目一次 |
+| /cheapag:status | 查看近期任务和廉价模型已花费金额 |
+| /cheapag:hook on | 强制 Claude 必须把代码改动交给廉价模型，不许自己动手 |
+| /cheapag:clean | 清理旧的任务目录 |
+
+6. 人工审 diff 并自行提交。预期结果：工具从不 commit 或 push，改动以未提交形式落地；你审阅 diff 后决定是否提交。
+
+7. 更新与卸载：
+
+```bash
+npx cheap-agent@latest
+```
+
+```bash
+claude plugin uninstall cheapag@cheapag
+```
+
+```bash
+claude mcp remove -s user cheapag
+```
+
+机制说明（来自原文）：廉价模型在 git worktree 隔离副本里写码，必须先写一个失败的测试、再改到测试通过；Cheap Agent 自己运行测试，只有通过的结果才以未提交形式落回项目；失败默认由 Sonnet 兜底，而不是让 Opus 重做。原文 FAQ 明确说半美分模型单独用不行，需要书面任务、必须通过的测试和跑测试的裁判。
+
+**做法 A / B / C / D / E / F / G / H / I 怎么选**
 
 - 主要痛点是跨供应商配额、限流、死 key、工具输出烧 token：先做 A。预算红线先用 auto/subscription；想先榨干套餐额度再降到最便宜付费选项用 auto/thrifty；auto/chaos 会成倍消耗上游调用，除非你就是要多模型交叉验证，否则别日常开。
 - 已经在用 Codex，痛点是“常规任务也调用最重模型”且想用确定性 grader 验收：先做 B。
@@ -854,23 +924,26 @@ codex mcp add cedr -- cedr mcp
 - 日常用 Claude Code、只想让子任务用更轻的模型，且能接受输出质量对照：先试 F3。用 CLAUDE_CODE_SUBAGENT_MODEL=haiku claude 启动，先用 5–10 个任务对比 token 与质量；不要把 F3 当成完整三模型方案，也不要默认它能与 F2b 叠加。
 - 日常用 Claude Code、痛点是“模型设置全局绑定所有窗口”或 429 限流，且你有备用 Anthropic 兼容端点：先试 G。先只给 haiku 别名接一个备用 provider，用 /provider doctor --ping 确认链路，再按窗口逐步放开；不要一上来把所有别名和故障转移链都打开。
 - 你已经在 Claude Code、Codex、Cursor 或 Gemini 之间分配工作，想把“哪类工作交给哪个 agent/模型/effort”写成规则，并用 accepted/reworked/redone/rejected 回填结果：先试 H 的 route pick + verdict。你想固定 skill 和 MCP server 版本、在 CI 里发现漂移：再试 H 的 lint/lock/verify。你想做多厂商评审门禁：先读 docs/council.md，再小范围试 council plan/merge。
+- 日常用 Claude Code，任务中等规模、项目有可运行测试，想让 Opus 只做规划和决策、廉价模型写码：先做 I。先在一个项目执行 /cheapag:allow，用同一提示词做 A/B；无测试或极小任务不要用。I 与 G/H 都是 Claude Code 侧扩展，但材料未说明可叠加，先分开试；I 会把代码发给第三方 provider，合规敏感场景先过审。
 - A 和 C 是同一层的本地 OpenAI 兼容网关，功能重叠，且默认端口都是 20128：先选一个跑通，不要同时按默认端口启动。E 也是请求层网关，但默认 4000 端口，与 A/C 不撞；端口不撞不代表能自动叠加，材料没有说明它们可以集成。
 - A/C/E 与 D 不是同一层：A/C/E 在请求层按供应商/模型别名路由；D 在会话层把已有 harness 并排跑起来，按 harness × model × effort 路由。E 的 harness 抽象能在自己的网关上跑 Claude Code / Codex / OpenCode / Deep Agents，与 D 的“并排多个 harness”语义不同。两者材料都未说明可互相集成。
 - B 与 D 都涉及 Codex：B 是在 Codex 内装插件按难度选模型，D 是把 Codex 当作可并排的一个 harness；材料未说明两者关系。
 - F（F1/F2a/F2b/F3）与 A–E 不是同一层：F 是 Claude Code 内部命令、启动参数或环境变量，材料未说明能与网关/路由自动集成；先单独试。
 - G 是 Claude Code 插件 + 本机 127.0.0.1:8950 的 Anthropic 兼容路由守护进程，和 A/C 的 OpenAI 兼容网关（20128）、E 的 AI Gateway（默认 4000）不是同一层。G 可以用 --url 指向本地/远端端点，但该端点必须能接 Anthropic /v1/messages；只会 OpenAI Chat Completions 的端点需要翻译层。材料未说明 G 能与 A–F 自动集成，先分开试。
 - H 是叠在 Claude Code、Codex、Cursor、Gemini 等 harness 之上的编排与门禁层：它依赖 Claude Code 状态行/CLI 或 Codex 提供用量读数；它不是 A–G 的替代，也不是请求转发网关。材料未说明 H 能与 A–G 自动集成；先把各自跑通，再自行验证请求实际走哪条路径。
-- 所有项目都未说明可以互相集成。如果确实要同时装，先把各自跑通，再自行验证请求实际走哪条路径；不要默认叠加。D 会把多个 harness 接到同一框架里，建议先在一个非关键、已纳入版本控制的仓库里试；G 和 H 也建议先在非关键仓库、只接一个备用 provider 或一个 route。
+- I 是 Claude Code 内的插件/MCP 扩展，改变的是 Claude Code 内部“谁写代码”的分工；它使用的执行引擎是 OpenCode（Windows 已知问题里点名 opencode.exe），不是请求转发网关，也不是编排层。材料未说明 I 能与 A–H 自动集成；先分开试。
+- 所有项目都未说明可以互相集成。如果确实要同时装，先把各自跑通，再自行验证请求实际走哪条路径；不要默认叠加。D 会把多个 harness 接到同一框架里，建议先在一个非关键、已纳入版本控制的仓库里试；G、H 和 I 也建议先在非关键仓库、只接一个备用 provider、一个 route 或一个项目里试。
 
-**暂时不要碰的部分**：OmniRoute README 提到的 MCP（110 个工具）、A2A、memory、guardrails、evals、TLS stealth、key pools 公平配额，在给定材料里只有名词，没有配置步骤；安装/首次运行章节、combo 完整策略语义、压缩的具体配置项也不在本次材料里。agent-smith 的“多 agent 协作、重试、失败升级带来的收益”需要单独实验，材料未给步骤。FlagshipRouter 的 Media Models 页面和 Agent Skills 页面同样只有存在性描述，没有用法。Gluon 的 routing.yaml、权限与工具供给、安全隐私、成本分析示例、故障排查都不在给定材料里。LiteLLM 的 MCP 登记细节、Docker 快速上手、E2E 教程都在 README 指向的 docs 里，本页未展开；A2A 与 MCP Bridge 的原文被截断。Claude Code /advisor 的顾问介入方式、效果说明、与网关集成都未在原文中展开；F2b 那一支的原文连 Haiku 只读怎么配都没写全；F3 只给了一条环境变量，主模型和任务划分未展开。model-relay 的调研正文在“对应研究问题”处被截断，效果数据、与 A–F 的集成方式、团队多租户用法都不在给定材料里。cedr 的 Council 报告格式、quorum 默认值、merge 输入形态未展开；最小试用第二周具体动作在原文“第二周在 2–3”处截断。
+**暂时不要碰的部分**：OmniRoute README 提到的 MCP（110 个工具）、A2A、memory、guardrails、evals、TLS stealth、key pools 公平配额，在给定材料里只有名词，没有配置步骤；安装/首次运行章节、combo 完整策略语义、压缩的具体配置项也不在本次材料里。agent-smith 的“多 agent 协作、重试、失败升级带来的收益”需要单独实验，材料未给步骤。FlagshipRouter 的 Media Models 页面和 Agent Skills 页面同样只有存在性描述，没有用法。Gluon 的 routing.yaml、权限与工具供给、安全隐私、成本分析示例、故障排查都不在给定材料里。LiteLLM 的 MCP 登记细节、Docker 快速上手、E2E 教程都在 README 指向的 docs 里，本页未展开；A2A 与 MCP Bridge 的原文被截断。Claude Code /advisor 的顾问介入方式、效果说明、与网关集成都未在原文中展开；F2b 那一支的原文连 Haiku 只读怎么配都没写全；F3 只给了一条环境变量，主模型和任务划分未展开。model-relay 的调研正文在“对应研究问题”处被截断，效果数据、与 A–F 的集成方式、团队多租户用法都不在给定材料里。cedr 的 Council 报告格式、quorum 默认值、merge 输入形态未展开；最小试用第二周具体动作在原文“第二周在 2–3”处截断。Cheap Agent 本次材料只有 README，未查看源码，无法核实 worktree 隔离、hook 阻止逻辑和凭据存储的实现细节；收益高度依赖项目里有能跑、能覆盖改动的测试；原文没有说明测试缺失或不充分时的退化行为。
 
 ## 怎么判断变好了
 
 最小试用：
 
+- Cheap Agent（先一个中等规模任务）：选一个中等规模的真实任务（新功能或真实 bug，跨几个文件，不是几行改动，也不是从零起项目），确认项目现有测试能在本地跑通。先用纯 Claude Code 记录基线：Opus token 用量、轮数、最终测试通过数（Claude Code 自带用量显示，或至少记录轮数与改动文件数）。装好 Cheap Agent，在项目内执行一次 /cheapag:allow，保持默认 takeover="sonnet"、limits.max_turns=25。用同一条提示词重跑同类任务，记录同样指标，并额外记录 /cheapag:status 里的廉价模型花费。开 /cheapag:hook on 再跑一轮，比较“允许 Claude 自己判断”与“强制交给廉价模型”的差别。先只在个人或非敏感仓库试，审 diff 后再提交。
 - OmniRoute（先 1–2 天跑通，再 1–2 周对照；早期材料建议试三周，可作为上限）：本地或一台小服务器起 OmniRoute（先试 Docker，便于回滚）；只接 2–3 个 provider（1 个付费主力 + 1 个免费备用）；只改一个客户端的 base URL（选你日均用得最多的那个，如 Claude Code），模型先用 auto 和 auto/coding 两个别名；有预算红线就用 auto/subscription 跑一天，确认它真的“失败即停”而不产生账单；同一批真实任务一半走网关、一半直连原 provider。不要启用来源不明的免费供应商，先用自有 key 或已知供应商验证回退逻辑是否按预期工作。
 - agent-smith（先零成本离线验证）：克隆仓库 → 按步骤 1–2 安装并检查 → 步骤 6 跑 demo 与 report 两条离线命令，确认基准管道能在自己机器上产出报告（这两条不调用模型，零成本）。确认通过后，准备 5–10 个日常常规 Coding 任务，分成两组：一组用 Use $adaptive-route for this task: …，一组固定用你平时最重的模型。只在这一小批上对比，不要一次性全面切换。
-- FlagshipRouter（半天以内，全部本地）：clone + npm run launch -- --host 127.0.0.1，先去 Settings 把密码从 123456 改掉；在 Models 里挑一个 OpenCode Free 的免注册模型，用第 6 步的 curl 打通一条请求；用 CLI Tools 只给一个当前已在用的工具（例如 Claude Code）写配置，并记录原配置以便回滚；拿一个真实的小任务，分别在原配置和走网关的配置下各跑一遍。
+- FlagshiperRouter（半天以内，全部本地）：clone + npm run launch -- --host 127.0.0.1，先去 Settings 把密码从 123456 改掉；在 Models 里挑一个 OpenCode Free 的免注册模型，用第 6 步的 curl 打通一条请求；用 CLI Tools 只给一个当前已在用的工具（例如 Claude Code）写配置，并记录原配置以便回滚；拿一个真实的小任务，分别在原配置和走网关的配置下各跑一遍。
 - Gluon（非关键、已纳入版本控制的仓库）：按做法 D 的安装命令装好，cd your-repo && gluon 启动；选一个边界清晰的小任务，先用默认/交互方式让 intake agent 推荐 agent/model/effort，记录它给出的 spec；再手动用第二个 harness 或模型做同一任务，比较结果。如果要从路由规则开始，先查文档中的 routing.yaml 写法，不要照搬本文。
 - LiteLLM（分两半，先 SDK 后网关）：先用 uv add litellm，用同一个 completion() 分别调 openai/gpt-4o 和 anthropic/claude-sonnet-4-20250514，确认换模型只改一个字符串；再用 uv tool install 'litellm[proxy]' + litellm --model gpt-4o，用上面的 OpenAI SDK 片段把 base_url 指向 http://0.0.0.0:4000 打通一条请求；只接 1–2 个模型，连续几天看成本追踪与失败率，而不是看 README 的能力清单。如果 SDK 层就够用（不需要虚拟密钥、多租户成本追踪、管理后台），不必起网关。
 - Claude Code /advisor（F1，单个项目、单个会话）：按做法 F1 执行 /model fable（如提示计费则确认）与 /advisor fable，然后照常完成一个日常任务（例如修一个 bug 或做一次代码审查），全程记录顾问模型是否真的产出了可见内容。原文未给试用时长建议；先按单个任务/单会话判断，若 /advisor 不存在、顾问不介入，或多次任务中没有可观察差异，就停用并把结论降为 study。
@@ -903,9 +976,11 @@ codex mcp add cedr -- cedr mcp
 20. 顾问是否真实介入（F1）、贵模型实际被调用几次（F2a/F2b）、子代理 token 占比与子任务质量（F3）；
 21. 429 中断与自动故障转移、按窗口切换是否真的隔离、钉住与冷却、别名路由是否精确、重试与最终成功率、proxy 模式副作用、成本与质量对照（model-relay）；
 22. cedr 的 route × model 统计：用 cedr route verdict 回填 accepted/reworked/redone/rejected 后，看 cedr route stats 中每类工作上哪个模型表现最好；观察 cedr route pools 显示的剩余量与真实计划用量是否一致；观察 cedr verify 的退出码是否在配置漂移时失败；Council 的门禁规则是 P0/P1 阻断、报告过少不静默放行，但报告格式与 quorum 需先读 docs。
+23. Cheap Agent 的 Opus token 与轮数是否下降、廉价模型花费、测试通过数是否不降、Sonnet 接手次数、/cheapag:hook on 后的质量、diff 被人工修改比例、以及代码外发是否按项目授权。
 
 试多久、什么情况下停：
 
+- Cheap Agent：先按一个中等规模任务、同一条提示词、默认配置 vs 开启 Cheap Agent 做一轮；再开 /cheapag:hook on 做一轮。若测试跑不起来或覆盖不足、质量下降、Opus token 不降、廉价模型花费反而更高、或合规不允许代码外发，就停用并把结论降为 study。
 - OmniRoute：先用 1–2 天跑通并确认 auto/subscription 真的失败即停，再连续 1–2 周做对照；早期材料建议观察三周。若“中断次数 / 人工切换次数”没有下降，或配额显示与实际账单明显不符，或压缩导致答案质量下降，或免费 provider 出现条款风险，或网关本身成为新的不稳定源，就停用并把结论降为 study。
 - agent-smith：成功标准建议：在接受率不下降的前提下，参考成本或实际 token 明显下降；若接受率下降或 unknown 比例高，先回到离线 benchmark 检查判分与计量的可靠性，再决定是否继续用。
 - FlagshipRouter：先按半天的最小试用跑通，再决定要不要多用几天。只要出现“模型连通但结果明显变差”或“配置互相覆盖且难回滚”，就停止推广，把结论降为 study。
@@ -919,6 +994,17 @@ codex mcp add cedr -- cedr mcp
 
 ## 常见坑
 
+- 把 Cheap Agent 当“装上就省钱”。它依赖可运行测试和书面短任务；无测试、极小任务、最难 bug 可能无收益或略差。
+- 未执行 /cheapag:allow 就以为代码已外发，或反过来没注意已经授权。授权是每个项目一次，并显示哪些模型会看到代码。
+- 把 API key 粘到聊天里。用 npx cheap-agent login 在终端输入；setup 提示明确 never ask for my key。
+- 忽略代码外发合规。Cheap Agent 会把代码发给第三方 provider；敏感项目先过审。
+- 把 takeover="self" 当默认。默认是 "sonnet"；self 是 Opus 自己接手，上限 15 次工具调用。
+- 把 max_turns=25 当无限循环。它是每步上限；不是自动推进机制。
+- 以为 Cheap Agent 会 commit/push。它从不 commit 或 push，改动未提交，必须人工审 diff。
+- 在 Windows 上按稳定版期待 Cheap Agent。Windows 为 beta，CI 测过但无真实用户验证，需要 Git for Windows；首次任务可能约 2 分钟；引擎崩溃可能留下 opencode.exe；廉价模型在其项目副本里读不到 node_modules 这类依赖目录，测试仍可正常运行。
+- 把 Cheap Agent 的作者自报数字当结论。demo、SWE-bench、Windows 自举都是单方单次对照，没有样本量/重复次数/随机性控制，SWE-bench 未给可复现脚本。
+- 把 Cheap Agent 与 model-relay/cedr 等叠加。材料未说明可集成；都是 Claude Code 侧扩展，先分开试。
+- 把 Cheap Agent 当 Claude Code 替代。它是扩展，以 MCP 注册；改变的是 Claude Code 内部谁写代码。
 - 把 README 的自述数字当结论。OmniRoute：375 个 provider、1475 个 chat 模型 ID、20 种路由策略、37 个集成、MCP 110 工具、56,000+ 静态测试声明、~1.62B 免费 token/月（首月含注册赠送最高 ~2.22B）、压缩省 15–95%（平均约 89%）、$0 起步，都没有给出可复现的测量方法或对照实验；免费额度数字依赖第三方条款，原文承认每两周重新审计、会双向波动；provider 数量与“可用”是两回事，新装可能没有可用 keyless 目标。agent-smith：86.89%/0.75% 来自 6 个合成任务 × 三种策略 × 单次尝试，没有第三方复现记录。FlagshipRouter：只有 37 stars 这类仓库元信息，没有任何性能、成本、质量或用户案例数据。Gluon：同样没有任何效果数据、对比实验或用户案例。LiteLLM：README 是特性索引 + 宣传。model-relay：给定调研没有效果数据，正文还在“对应研究问题”处被截断。cedr：没有效果数据、案例研究、对比实验或用户反馈；仓库仅 42 stars，单一组织维护，preview 阶段；示例输出里的百分比是演示样例。
 - 以为零凭证一定能 curl 通 OmniRoute。新调研的 README 要 Authorization 头，且全新安装可能没有可用 keyless 目标；早期材料里的无 key curl 只在存在 keyless 免费后端时可能可用。先用 Dashboard → Endpoints 的 key 走通，再决定要不要试 keyless。
 - 照抄 OmniRoute 的安装命令。本次材料在安装/首次运行章节被截断，npm i -g omniroute 和 Docker 镜像名只是线索；执行前回 README Quick Start 补齐。
@@ -962,7 +1048,7 @@ codex mcp add cedr -- cedr mcp
 - 把 F2a/F2b 写进团队默认流程。原文被截断、没有文档链接和版本号，先在个人、单项目、单会话里试。
 - 把 F1、F2a、F2b、F3 混着抄。四者目标不同，模型分工和入口也不同；材料未说明可叠加。
 - 把“别让配额白白浪费”当成效果结论。F1 的原文没有给出任何成本、效果或对比数据；可核实的互动量只有 70 赞、8 次转发、14 条回复。
-- 把 /advisor、--advisor 或 CLAUDE_CODE_SUBAGENT_MODEL 与 A–E 的网关/路由混为一谈。前者是 Claude Code 内部命令、启动参数或环境变量，材料未说明能与本地网关、Adaptive Router、Gluon 或 LiteLLM 集成；先分开试。
+- 把 /advisor、--advisor 或 CLAUDE_CODE_SUBAGENT_MODEL 与 A–I 的网关/路由混为一谈。前者是 Claude Code 内部命令、启动参数或环境变量，材料未说明能与本地网关、Adaptive Router、Gluon、LiteLLM、model-relay、cedr 或 Cheap Agent 集成；先分开试。
 - 以为装了 model-relay 就自动把请求导出去。新配置下 haiku 及所有请求默认留在 Claude，不加 alias 不会外流；先 /provider doctor --ping，再显式 alias haiku backup。
 - 在已经跑着 Claude Code 的 shell 里 export key。key 由 router 进程从它继承的环境里读，旧 shell 的 export 补不进去；要写成永久变量并开新终端。
 - 在任意目录直接跑 node tools/setup.mjs。手动路径要在插件安装目录里跑，即 ~/.claude/plugins/cache/model-relay/model-relay/<version>/；否则用该目录下 tools/setup.mjs 的完整路径。
@@ -981,17 +1067,19 @@ codex mcp add cedr -- cedr mcp
 - 让 cedr lock 执行了第三方 MCP server。cedr lock 只有在传 --introspect 时才真正运行 MCP server，运行前会先警告；若不允许执行第三方 server，就不要加这个参数。
 - 把 cedr.lock 当成不会误报。它固定 skill 与 MCP server 后，server 的工具、描述或网络主机变化会让 verify 失败；先确认这是你要的漂移告警，再挂 CI。
 - 把 cedr 的示例输出百分比当实测。balanced:31%<claude=64%、codex s22% w31% 等是演示用输出样例，不是实测结论。
-- 材料本身是截断的。OmniRoute 本次原文在策略表第 3 条处被截断，安装/首次运行章节不完整；早期材料曾称在 19 种策略表第 12 行处截断，说明版本不同。Gluon 的给定文本也只是 README landing page。Claude Code 的三支原文都在关键处中断：F1 停在“Opus 5.5 继续工作 / Fable 5.1”；F2a 停在「Haiku 5.5」；F2b 停在“→ 只读 haiku 5.5”，没有文档链接、版本号和确切命令语法。F3 只给了一条环境变量，主模型与任务划分未展开。model-relay 的调研正文在“对应研究问题”处被截断。cedr 的最小试用原文在“第二周在 2–3”处截断，Council 细节只在 docs 指向中。
-- 名称相近但关系不明。OmniRoute 材料里作为 keyless 免费后端的 “OpenCode Free”（oc/…）与别处提到的 OpenCode 名称相近，但原文没有说明两者是否同一项目，不能确认；FlagshipRouter 也把 OpenCode Free 列为免注册可用模型来源，同样没有说明它与 OmniRoute 那边的 OpenCode Free 是不是同一回事。
+- 材料本身是截断的。OmniRoute 本次原文在策略表第 3 条处被截断，安装/首次运行章节不完整；早期材料曾称在 19 种策略表第 12 行处截断，说明版本不同。Gluon 的给定文本也只是 README landing page。Claude Code 的三支原文都在关键处中断：F1 停在“Opus 5.5 继续工作 / Fable 5.1”；F2a 停在「Haiku 5.5」；F2b 停在“→ 只读 haiku 5.5”，没有文档链接、版本号和确切命令语法。F3 只给了一条环境变量，主模型与任务划分未展开。model-relay 的调研正文在“对应研究问题”处被截断。cedr 的最小试用原文在“第二周在 2–3”处截断，Council 细节只在 docs 指向中。Cheap Agent 本次材料只有 README，未查看源码。
+- 名称相近但关系不明。OmniRoute 材料里作为 keyless 免费后端的 “OpenCode Free”（oc/…）与别处提到的 OpenCode 名称相近，但原文没有说明两者是否同一项目，不能确认；FlagshipRouter 也把 OpenCode Free 列为免注册可用模型来源，同样没有说明它与 OmniRoute 那边的 OpenCode Free 是不是同一回事。Cheap Agent 原文说廉价模型的执行引擎是 OpenCode，但同样没有说明它和上述 OpenCode Free 的关系。
 - agent-smith 的 USD 数值是“实测用量 × 冻结的 API Standard 参考价”，不是 Codex 订阅账单。
 - agent-smith 的难度打分是本地、未校准的启发式；缓存效应与用量覆盖不全（partial usage coverage）会如何影响成本对比，作者自己列为待解决问题。
 - agent-smith 除 Astra、6.1 Sol 外，原文没有给出被路由模型清单、支持的任务类型或失败案例。
 - agent-smith 分发为源码优先，无预打包 DMG，构建为 ad-hoc 签名；Float 仅 macOS 14+。
-- 七个项目、F3 这条推文、model-relay 和 cedr 的材料都未说明可集成；同时安装或叠加配置时不要假设请求一定经过你以为的那一层。
+- 这些项目、F3 这条推文以及各 Claude Code 扩展的材料都未说明可集成；同时安装或叠加配置时不要假设请求一定经过你以为的那一层。
 
 ## 证据与来源
 
 本节区分可照做的操作、项目自述数据和材料边界。
+
+**Cheap Agent**：可照做的操作性内容包括 npm 包 cheap-agent、npx cheap-agent、Claude Code 代为安装的提示词、npx cheap-agent login --preset、/cheapag:allow、/cheapag:status、/cheapag:hook on、/cheapag:clean、cheapag.json 的 takeover/limits.max_turns/models、更新与卸载命令。作者自报但无第三方复核的数据：demo 同一提示下纯 Claude Code 233k Opus token，加 Cheap Agent 132k，廉价模型花费 $0.007；同一功能同一提示纯 Claude Code 154k Opus token / 5 轮，加 Cheap Agent 57k / 2 轮（少 63%），廉价模型花费半美分，两者都通过全部测试；SWE-bench Verified 日常 7 个 bug 1.6M→655k（少 59%），双方 7/7；最难 9 个 3.0M→1.3M（少 55%），6/9 对 7/9，剩余由 Sonnet 助手完成；Windows 原生支持 36 文件、+753/−278 行、30 个 job、$0.29。作者承认的局限：最难一档略逊、极小任务没有收益、只在“真实代码里的真实功能和真实修复”这段中间地带有效、Windows 为 beta、首次任务可能约 2 分钟、引擎崩溃会留下 opencode.exe、廉价模型在其项目副本里读不到 node_modules 这类依赖目录；所有数字都是作者单方、单次运行的对照，没有说明样本量、重复次数与随机性控制，SWE-bench 数字未给可复现脚本；本次材料只有 README，未查看源码，无法核实 worktree 隔离、hook 阻止逻辑和凭据存储的实现细节；代码会发送给第三方 provider，合规敏感场景需先过审。
 
 **OmniRoute**：可照做的操作性内容包括 npm 包 omniroute、Docker 镜像 diegosouzapw/omniroute、默认端点 http://localhost:20128/v1、Dashboard → Endpoints 取 key、带 Authorization 的 curl、auto 别名表、combo 四层、/dashboard/free-tiers 与 live analytics、tos: avoid 的 provider 默认排除。项目自述但未验证的有 375 个 provider、1475 个 chat 模型 ID、37 个集成、MCP 110 工具、56,000+ 静态测试、~1.62B 免费 token/月、压缩省 15–95% 等；材料在策略表第 3 条处截断，安装/首次运行、combo 完整策略和压缩配置不完整。
 
@@ -1015,7 +1103,7 @@ codex mcp add cedr -- cedr mcp
 
 **cedr**：可核对的操作性内容有安装命令与平台矩阵、glibc 版本要求、routes.toml 完整样例、Claude Code statusLine 的 JSON、cedr route pick/verdict 的真实命令与示例输出、cedr route stats/pools/list、cedr council plan/merge、cedr lint/lock/verify 与 --introspect 警告、claude mcp add cedr -- cedr mcp、SHA256SUMS/gh attestation verify、以及指向 docs/route.md、docs/council.md、docs/design.md 的规格说明。只是作者主张、没有证据的是：路由“挑得对”、Council 能提高评审质量、锁文件能防住真实风险；原文没有效果数据、案例研究、对比实验或用户反馈，仓库仅 42 stars、单一组织维护、preview 阶段，示例输出里的百分比是演示样例。材料边界：1.0 前命令与文件格式可能变；用量接入只具体说明 claude-statusline 与 codex 两种 kind；Council 报告格式、quorum、merge 输入形态未给；cedr route sync 会外发数据；跨机器/团队共享路由是付费计划功能；最小试用第二周在“第二周在 2–3”处截断。
 
-**材料边界**：所有效果数字都需要自测；本手册只把可复制的命令、配置和提示词当作操作依据，把项目自述数字和作者主张当作待验证信息。七个项目、F3 这条推文、model-relay 和 cedr 的材料都未说明可以互相集成；同时安装或叠加配置时不要假设请求一定经过你以为的那一层。
+**材料边界**：所有效果数字都需要自测；本手册只把可复制的命令、配置和提示词当作操作依据，把项目自述数字和作者主张当作待验证信息。这些项目、F3 这条推文以及各 Claude Code 扩展的材料都未说明可以互相集成；同时安装或叠加配置时不要假设请求一定经过你以为的那一层。
 
 ## 依据的调研
 
@@ -1031,3 +1119,4 @@ codex mcp add cedr -- cedr mcp
 - [cheaper-inference/OmniRoute](../research/radar/2026-10-22/5842-cheaper-inference-omniroute.md)：值得一试，建议小范围试：在本地启动 OmniRoute，把 Claude Code 或 Cursor 的 base URL 指向 http://localhost:20128/v1，模型用 auto/subscription 或 auto/coding 跑一到两周，对比中断次数、单位任务 token 成本和 p95 延迟，再决定是否常态化。理由是它给出了可照做的接入方式与回退/路由配置，但省 token、免费额度等关键数字均为项目自述，且依赖第三方 provider 条款，必须先自测。
 - [cablate/model-relay](../research/radar/2026-10-23/6217-cablate-model-relay.md)：值得一试，如果你长期在 Claude Code 里工作，可以小范围试用：先只把 haiku 这类子任务和 429 故障转移接到一个备用 provider，用 /provider doctor --ping 确认链路通，再按窗口逐步放开。理由是 README 给出了可直接复制的安装、配置和自检命令，并有默认保守的开关；但它仍是单人用的本地守护进程，缺少效果数据，先小范围试、别急着全量替换。
 - [Sheernox/cedr](../research/radar/2026-10-30/8398-sheernox-cedr.md)：值得一试，可以用小范围试点的方式接入 cedr：先只做“按工作类型路由、记录结果”和“把 skill/MCP 版本固定进锁文件”两件事，再考虑多厂商评审门禁；理由是 README 给出了可直接照做的安装命令、routes.toml 样例、statusline 配置和完整命令表，但项目处于 preview 阶段、缺少任何效果数据，暂不宜直接定为团队标准。
+- [muaaz9329/cheap-ag](../research/radar/2026-10-31/8887-muaaz9329-cheap-ag.md)：值得一试，可以在有一个中等规模任务、并且已有可运行测试套件的项目里小范围试：用 npx cheap-agent 接入 Claude Code，让 Claude 只负责规划、廉价模型负责写码、测试充当裁判；理由是该仓库 README 给出了完整的安装、授权、配置和回退流程，并且用测试结果作为唯一验收标准，但所有效果数据均为作者自报，且在最难任务和极小任务上没有收益甚至略有倒退。
