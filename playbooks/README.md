@@ -4,6 +4,7 @@
 
 | 手册 | 解决的问题 | 先试这一步 | 最近修订 |
 |---|---|---|---|
+| [把多 agent 工作流固定成项目、待办和自动推进（含 Orkas）](orchestrate-multiple-agents.md) | 多个 AI 会话各自为战、上下文反复交代、任务推进靠人盯；手册给出一套可执行流程，把任务写清、并行分工、独立验证、合入门禁、成本检查、注意力路由、共享账本和定时推进落到可核对的步骤上。 | 先选一个边界清楚、交付物明确的小流程（例如每周研究简报+幻灯片），建一个 project，拆 3–5 个 to-do，手动跑第一项并复核，再只对下一项开启 Auto-advance。 | 2026-11-01 |
 | [给编码 agent 补上网页、PDF 与浏览器操作能力：先选路，再小范围验证](web-access-for-agents.md) | 怎么以最小风险给能执行 shell 的 agent 补上网页、PDF、JS 页面和登录态渠道的读取/操作能力，并在读网页/PDF 时控制进入上下文的 token 与成本，渠道失效时能定位换路而不是重写代码。 | 先跑 `agent-reach install --env=auto --dry-run` 预览安装范围，再执行默认安装并用 `agent-reach doctor` 体检。 | 2026-11-01 |
 | [让编码 agent 在说“完成”之前拿出证据](verify-agent-changes.md) | 把“确保正确”拆成可执行的检查，并要求 agent 用可复核的证据证明完成，而不是自述。 | 先在一个小仓库上，把一条改动走完“改动前失败的测试 → 独立评审 → 干净 checkout 的 CI”，拿不到证据就只报 built。 | 2026-11-01 |
 | [让代码评审在合并前留下可审计的证据链](code-review-with-agents.md) | 解决 AI 生成代码在评审、理解确认、记录与审批风险判断上缺少可核对证据和分层门禁的问题。 | 先在一个非关键仓库安装 kyy-logs/code-review-skill，用一条未提交改动和一段历史 commit 区间各跑一次，核对 high 发现是否都带位置、摘要、证据和严重级别，并确认合并门禁能从 probe JSON 重新推导。 | 2026-10-31 |
@@ -13,7 +14,6 @@
 | [让编码 agent 分工：贵模型只规划，廉价模型写码，测试当裁判](model-routing-for-coding-agents.md) | 让编码 agent 不靠更贵的模型硬扛，而是把规划、实现和验收分开，用测试结果决定改动是否落地。 | 选一个中等规模、已有可运行测试的真实任务，先用纯 Claude Code 记录 Opus token、轮数和测试通过数，再用 cheap-agent 同一提示词跑一遍对照。 | 2026-10-31 |
 | [让编码 agent 在长任务里少烧上下文、少返工](manage-agent-context.md) | 编码 agent 在长任务里被工具输出、重复规则、过时指令和后台开销塞满上下文，导致配额耗尽、状态丢失和返工；本手册给出一组可小范围验证的治理步骤。 | 先做一次上下文预算审计：在真实任务中运行 /context 看 token 去向，只改一项（先禁用当前会话用不到的 MCP 服务器），再用同类任务对比。 | 2026-10-31 |
 | [让 agent 在宣布完成前，自己先看一眼渲染结果](build-ui-components-with-agents.md) | 图表、组件、架构图、界面、特效这类视觉交付物常常代码通过、自检通过，但真实渲染出来的像素、布局、状态和文案没人看过，agent 就宣布完成了。 | 挑一个能跑起来的前端项目，把 `npx -y github:ngocanhnckh/renderlint init` 跑一遍，再跑 `npx renderlint`，把报出的 error 逐条修到 0。 | 2026-10-31 |
-| [把多个编码 agent 编成有频道和审批闸门的团队](orchestrate-multiple-agents.md) | 让多个 AI agent 并行干活时，分工写进频道、交接留痕、写操作先过人这一关，接受与否由测试、独立 verifier 或人决定，而不是听 agent 说自己做完了。 | 先在一个低风险仓库里建一个频道，放 2–3 个代理（一个修、一个评审），只接一个只读连接器，把 merge / post / email / delete 全部设为人工审批，跑一次真实小任务，并与单人 Claude Code 做同题对照。 | 2026-10-31 |
 | [让编码 agent 跨会话接手时不把旧笔记当事实](persistent-memory-for-coding-agents.md) | AI 每次新会话都要重讲背景，而落盘的笔记、handoff、记忆和项目地图只是主张；若不按话题落盘、不核对事实、不处理冲突，就会把失败任务、未推送分支和过期结论带进新会话。 | 先建一个隔离工作目录，用 A-1 的 memory/ 或 A-3 的 MEMORY/notes/people/projects 落盘长期信息，并在 CLAUDE.md 写清何时读、何时追加；跨天项目再加 D 的 ground-truth.sh 在会话边界核对 git/GitHub/本机事实。 | 2026-10-30 |
 | [让编码 agent 做数据分析：先固定口径与流程，再小范围验证](data-analysis-with-agents.md) | 直接让 AI 写裸 SQL 或临时长提示词做数据分析，会导致指标口径不一致、结论无法核对、流程无法复用；本篇给四套可照做的做法，并说明每套怎么先小范围验证再固化进工作流。 | 挑 1–2 个数据工程技能（优先 profile 或 incident）装进测试项目的 `.claude/skills`，先不改写跑一遍，再按自己项目的路径与标准改写跑第二遍，同时让同事人工独立做同一件事对照。 | 2026-10-30 |
 | [让编码 agent 在可控环境里动手，并留下能离线复核的证据](host-coding-agents.md) | 让编码 agent 在隔离、可回退、可审批、可审计的环境里按项目规则反复执行任务，并由你自己跑测试验收，而不是在本机随手跑一次就相信它的自述。 | 先在一个可丢弃的仓库里写一份短 CLAUDE.md 加 .claude/settings.json 的 allow/ask/deny，跑 3–5 个边界清晰的小任务，每轮结束后自己跑测试、看 diff。 | 2026-10-30 |
