@@ -1,22 +1,28 @@
-# 把复杂项目拆成多角色协作，并用运行证据关闭任务
+# 让编码 agent 在检查点和证据里交付
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：解决单会话编码代理在复杂项目中角色混乱、流程缺失、完成标准只靠测试绿灯的问题。
-> 先试这一步：先在一个 1–2 天能完成的小项目上，从项目根目录跑 /start，只用 minimal 严谨度跑通一次“开始→拆分→开发→证据关闭”的闭环。
-> 最近修订：2026-10-30
+> 解决的问题：这篇手册解决：怎样把编码 agent 的重复协作固化成技能、钩子和项目契约，并用能失败的提交门禁、真实测试检查、人工检查点和运行证据来验收，而不是靠长对话和测试绿灯。
+> 先试这一步：先选一个 1–2 天的真实小任务，只跑一个最小闭环：只读探索→计划审批→实现→能失败的测试或门禁→截图/运行证据，再决定加哪个扩展点。
+> 最近修订：2026-11-01
 
 ## 解决什么问题
 
-用编码 agent 干活时，一次性对话会反复消耗：同一流程重写提示词、上下文差导致跑偏、项目约定散落漂移、做完了没证据、绿色测试可能是改测试改出来的、这次怎么做对的靠人整理。本手册以 Claude Code 为主线，把重复提示词和流程固化成技能、钩子、子智能体，用固定工作流控制先探索再计划后写代码最后提交；把可判定的硬约束从提示文件搬到提交门禁；用五段式 AGENTS.md + 零依赖 linter + SessionStart 钩子让项目契约可检查。MyAgent、Ryugi、claude-howto、Tenex、Skill Recorder、tstack、dev-quality-gates 是可选路线。本次新增 Claude-Code-Game-Studios 游戏工作室模板：用多角色分层、modes.rigor、事件钩子和运行证据，把复杂项目协作组织成可试跑流程；它补的是多角色分工和证据关闭，不替代提交门禁、测试真实性检查和项目契约 linter。
+用编码 agent 干活时，一次性对话会反复消耗：同一流程重写提示词、上下文差导致跑偏、项目约定散落漂移、做完了没证据、绿色测试可能是改测试改出来的、这次怎么做对的靠人整理。本手册以 Claude Code 为主线，把重复提示词和流程固化成技能、钩子、子智能体，用固定工作流控制先探索再计划后写代码最后提交；把可判定的硬约束从提示文件搬到提交门禁；用五段式 AGENTS.md + 零依赖 linter + SessionStart 钩子让项目契约可检查。MyAgent、Ryugi、claude-howto、Tenex、Skill Recorder、tstack、dev-quality-gates、Claude-Code-Game-Studios 是可选路线。
+
+本次新增 roost 路线：它把产品想法塑形成 epic，按切片逐块构建，再走 review、close-out、release QA 和 rollout；agent 干活，但在命名检查点停下来让人做决定，发布命令由人自己执行。它补的是带人工检查点的端到端规格驱动流程，不替代提交门禁、测试真实性检查、项目契约 linter 和最小多角色模板。
 
 ## 适用与不适用
 
-适用于流程固化：有真实项目、改动可用测试或截图验证、愿意按文件审阅配置。适用于提交门禁：存在能被 diff 文本模式判定的硬约束，有 pre-commit，agent 能读到失败输出；不适用于只能靠人判断好坏的约束。适用于文件大小门禁：有预提交钩子、主要约束代理编写的代码文件、接受 bytes/4 估算；不适用没有钩子或要求精确 token。适用于 MyAgent：想自动沉淀反馈、先只读计划再审批、能读 Python 3.11+、自备模型接口；不适用不能自备 key 或不愿接受 --yolo 风险。适用于测试规则：已有测试框架和 AGENTS.md、代理会读 AGENTS.md；不适用没有自动化测试。适用于项目契约：有隐性规则、希望多工具复用 AGENTS.md、愿意跑 Python 3.9+ linter；不适用指望 linter 检查规则合理性。适用于 claude-howto：已在用 Claude Code 2.1+，想做两周单项目模板试用；不适用想一键安装或要 ROI 数据。适用于 Tenex：多人多项目、需要长期维护和交代决策、愿意签入计划与决策；不适用单人单项目或流程不存在。适用于 Skill Recorder：任务步骤稳定、每周至少 3 次、单次 5–15 分钟、以点击和终端命令为主；不适用一次性任务或含敏感数据未确认落盘。适用于 tstack：工作在 GitHub PR 流程、有 CI 和 review bot、已认证 gh；不适用非 GitHub 或没有 CI。适用于 dev-quality-gates：有真实代码库、愿意先让代理出计划、只选匹配门禁并逐个证明能失败；不适用想全部安装或材料未给完整配置就照猜。本次新增游戏工作室模板适用于：有 1–2 天能完成但需要多角色协作的小项目（游戏原型或小型软件功能），愿意在项目根目录启动 Claude Code、保留默认 hooks 和权限规则、用 minimal 严谨度起步、用运行截图/观察证据关闭玩家可见内容；不适用于想整仓照搬到非游戏业务、不愿装 Python/Bash/jq、在子目录启动、只靠测试绿灯关闭任务，或要求外部复现数据。
+适用于流程固化：有真实项目、改动可用测试或截图验证、愿意按文件审阅配置。适用于提交门禁：存在能被 diff 文本模式判定的硬约束，有 pre-commit，agent 能读到失败输出；不适用于只能靠人判断好坏的约束。适用于文件大小门禁：有预提交钩子、主要约束代理编写的代码文件、接受 bytes/4 估算；不适用没有钩子或要求精确 token。适用于 MyAgent：想自动沉淀反馈、先只读计划再审批、能读 Python 3.11+、自备模型接口；不适用不能自备 key 或不愿接受 --yolo 风险。适用于测试规则：已有测试框架和 AGENTS.md、代理会读 AGENTS.md；不适用没有自动化测试。适用于项目契约：有隐性规则、希望多工具复用 AGENTS.md、愿意跑 Python 3.9+ linter；不适用指望 linter 检查规则合理性。适用于 claude-howto：已在用 Claude Code 2.1+，想做两周单项目模板试用；不适用想一键安装或要 ROI 数据。适用于 Tenex：多人多项目、需要长期维护和交代决策、愿意签入计划与决策；不适用单人单项目或流程不存在。适用于 Skill Recorder：任务步骤稳定、每周至少 3 次、单次 5–15 分钟、以点击和终端命令为主；不适用一次性任务或含敏感数据未确认落盘。适用于 tstack：工作在 GitHub PR 流程、有 CI 和 review bot、已认证 gh；不适用非 GitHub 或没有 CI。适用于 dev-quality-gates：有真实代码库、愿意先让代理出计划、只选匹配门禁并逐个证明能失败；不适用想全部安装或材料未给完整配置就照猜。适用于 Claude-Code-Game-Studios（此前已纳入）：有 1–2 天能完成但需要多角色协作的小项目（游戏原型或小型软件功能），愿意在项目根目录启动 Claude Code、保留默认 hooks 和权限规则、用 minimal 严谨度起步、用运行截图/观察证据关闭玩家可见内容；不适用于想整仓照搬到非游戏业务、不愿装 Python/Bash/jq、在子目录启动、只靠测试绿灯关闭任务，或要求外部复现数据。
+
+本次新增 roost 适用于：单仓库、单个小型 epic，团队使用 Claude Code，且 tracker 是 Jira（Atlassian MCP）或 GitHub Issues（gh），测试管理是 Xray（Cucumber）或 repo 里的 eval cases，代码在 GitHub 且 gh 可用，堆叠 PR 时 gh stack 可用；如果是 app，还要 Playwright MCP 和一条命令能起来的本地栈（Aspire、Docker Compose 或自己的脚本），库或插件项目不需要这两项。它适合愿意在计划审批、切片检查点、close-out 和 runbook 每一步停下来做决定的人。不适用于：没有 tracker 或测试工具、没有 GitHub/gh、不能提供环境变量凭据、期望 agent 自动 merge/deploy、要求完整 Cursor/Codex/Copilot/Gemini CLI 支持、或只凭 30 stars 和作者自述就要全团队 adopt。roost 目前强绑定 Claude Code + Jira/Xray/gh stack，Cursor 只有部分 skill 可用。
 
 ## 前置条件
 
 Claude Code：macOS/Linux/WSL，Windows 用官方 PowerShell/CMD；Anthropic 账号；项目可写 .claude/；提交门禁需 git 和 pre-commit；agent 能读 hook 输出。MyAgent：Python 3.11+、macOS/Linux、Git、模型接口 key/base URL/model；自进化写 skill 需写权限。测试规则：可运行测试命令、根目录 AGENTS.md、代理有读写权限。项目契约：git、Python 3.9+；SessionStart 需 Claude Code；CI 用仓库里的 agents-lint.yml，不能照 README 手写。claude-howto：Claude Code 2.1+、项目目录、MCP 凭据、hooks 可执行权限；已有 settings.json 手动合并。Tenex：多人 git 仓库、2–3 人 1 仓 4 周试点、能写一页纸流程、agent 有写权限、两个模型入口读同一仓库、有故事点或等价单位。Skill Recorder：先到仓库确认安装、停止录制、产物形态、支持代理和触发方式；录制可能含敏感信息，先确认落盘与清除。tstack：gh auth login、python3、仓库 push/PR/merge 权限；council/sol-loop 需要能调用其他厂商模型 subagent 的 harness。dev-quality-gates：从仓库根目录开始，代理能读 GitHub 原始文件、改仓库、跑命令；人工审阅计划后才改；用 mise/hk 时能安装；CI 跑全量检查，因为 hook 可被 --no-verify 绕过；材料只有 README，adopt.md/patterns.md 正文未包含。游戏工作室模板：Git、Claude Code、Python 3、Bash，推荐 jq；项目根目录含 CLAUDE.md 和 project.yaml；Windows 用 Git Bash；缺 Python 会静默回退到默认设置，提交暂存数据 JSON 时会被阻止；必须在根目录启动，否则跳过 hooks、deny 规则和 ask-first 权限模式；保留默认 hooks 和 settings.json 权限规则；游戏测试放 tests/，模板自检用 studio-tests。
+
+roost 前置：Claude Code，每个 repo 一个 session；tracker 为 Jira（走 Atlassian MCP）或 GitHub Issues（走 gh CLI）；测试管理为 Xray（Cucumber 场景）或 repo 里的 eval cases；GitHub + gh CLI，堆叠 PR 还要 gh stack 扩展；app 需 Playwright MCP + 一条命令能起来的本地栈，库/插件项目不需要这两项。凭据只通过环境变量提供：Jira 用 JIRA_EMAIL、JIRA_API_TOKEN；Xray 用 XRAY_CLIENT_ID、XRAY_CLIENT_SECRET。README 明确警告：某个 skill 所需工具缺失时安装会静默失败，所以先按 README 的 What each skill needs 表核对，再开工。README 的 examples/config.example.yml 和 config-schema.md 不在本次材料正文，实施时必须打开读。
 
 ## 操作步骤
 
@@ -36,7 +42,7 @@ npm install -g @anthropic-ai/claude-code
 
 运行 claude 首次浏览器登录。预期：claude 命令可用，会话可用。
 
-### 2. 跑第一条提示并生成 CLAUDE.md
+### 2. 给提示并生成 CLAUDE.md
 
 在项目目录运行 claude，试：
 
@@ -274,7 +280,7 @@ hk check --all
 
 对每个新门禁制造一次已知违规，确认返回非零退出码并阻断 CI；只出报告不算完成。先只覆盖一个主语言加一个跨切面风险类别；至少一个门禁捕获真实问题或成功拦截构造违规，且误报和 CI 延迟可接受，再扩大。材料只有 README，adopt.md/patterns.md 正文未包含，不能照猜完整安装命令或配置。
 
-### 19. Claude-Code-Game-Studios：多角色协作与证据门禁（本次新增，可选）
+### 19. Claude-Code-Game-Studios：多角色协作与证据门禁（可选）
 
 来源背景：Donchitos/Claude-Code-Game-Studios 是 MIT 模板仓库，README 声称 49 个代理、74 个 skills、15 个 hooks、14 条路径规则、62 个文档模板；代理分导演层、部门主管层、专家层；协作协议是先提问、再给 2–4 个带优劣的选项、用户决定、出草稿、用户批准才落盘。它不是自动驾驶员。
 
@@ -341,13 +347,79 @@ claude
 
 怎么选：第一次试这个模板 → 做法 A，只跑 minimal 闭环，保留默认 hooks；minimal 稳定且你需要更严格评审/文档 → 做法 B 升档；你想整仓照搬到非游戏业务 → 不要这样做，README 没有给出迁移步骤；你要硬约束必须发生 → 仍用第 9 步提交门禁；要测试真实 → 第 11 步空实现检查；要项目契约可检查 → 第 12 步 linter；要 PR 尾巴 → 第 17 步 tstack。
 
+### 20. roost：从 epic 到发布 QA 的规格驱动闭环（本次新增，可选）
+
+来源背景：Beakpoint-Insights/roost 是 MIT 的 Claude Code 插件式 skills 集合，不是独立 agent，本身不托管服务；README 约 30 stars，作者自称每天用于自家产品，未见第三方数据。它主张规格驱动不能停在写完代码，要继续走 review、close-out、release QA 和 rollout。人机分工是：agent 干活，但在命名检查点停下来让人做决定；rollout 的每条命令由人自己执行。
+
+做法 A（推荐起点：单仓库、单小型 epic 跑完整闭环）
+
+1. 核对前置：Claude Code，每个 repo 一个 session；tracker 为 Jira（Atlassian MCP）或 GitHub Issues（gh）；测试管理为 Xray（Cucumber）或 repo eval cases；GitHub + gh，堆叠 PR 还要 gh stack；app 需 Playwright MCP + 一条命令能起来的本地栈（Aspire、Docker Compose 或自己的脚本），库/插件项目不需要这两项。凭据用环境变量：JIRA_EMAIL、JIRA_API_TOKEN、XRAY_CLIENT_ID、XRAY_CLIENT_SECRET。先按 README 的 What each skill needs 表核对；README 警告缺工具时安装会静默失败。预期：所有必需工具可用，凭据只从环境变量取。
+
+2. 安装插件：
+
+```text
+/plugin marketplace add Beakpoint-Insights/roost
+/plugin install roost@roost
+```
+
+装后 skill 以 roost:<skill> 形式可用。预期：在 Claude Code 里能看到 roost 的 skill。
+
+3. 写团队配置：
+
+```text
+/roost:setup
+```
+
+它要么链接已有共享配置，要么逐个询问后生成。配置查找顺序：你显式指定的路径 > $ROOST_CONFIG > 当前 repo 的 .roost/config.yml > ~/.claude/roost/config.yml。多团队或单机多配置时，orchestrator 看不到 repo 内配置，要用 ROOST_CONFIG=<that team's config> claude 启动。机器级差异写到 ~/.claude/roost/local/<team.name>.yml，只在本机覆盖团队共享配置。团队共享配置可放私有 repo，再链接到 ~/.claude/roost/config.yml。配置永不存密钥，只写从哪里取。README 可见 key：tracker.kind、tests.kind、vcs.stacking、vcs.host、repos、stack，deploy/design/qa 可选，roadmap.skill。当前支持 Jira/GitHub Issues、Xray/repo eval cases、gh stack/普通 PR、GitHub；Linear、Graphite、GitLab、Gherkin 文件、Cursor 完整支持、Codex、Copilot、Gemini CLI 在 roadmap。examples/config.example.yml 和 config-schema.md 不在本次材料正文，必须打开读。
+
+4. 搭会话拓扑：每个 repo 一个 worker session，例如后端 API session、前端 UI session；orchestrator 在任意位置打开，它从不编辑任何 repo，只把活分发给其他 session 并把结果带回来。预期：orchestrator 不产生代码改动。
+
+5. 塑形 epic：
+
+```text
+/roost:shape-epic New customers should be able to send data within minutes of signing up.
+```
+
+它跑七个阶段：problem、epic、design、slices、tests、build guide、handoff，每个阶段结束都与你确认。产物落到 epic 上：含问题、目标、范围描述的 epic；基于设计系统的原型；按切片拆的有序 stories；每个 story 的测试；build guide 与 tech lead prompt。预期：每个 story 小到能独立交付。
+
+6. 规划构建并审批：在 orchestrator 里说 Build PROJ-1234。build-epic 不提问直接开跑，先做规划：把 epic 的 tech lead prompt 发给 lead repo 的 session，后者在新开的 gh stack 上写实现计划；你审批计划或要求修改；计划末尾固定有 Rollout needed: yes or no，合并+部署不够时填 yes；lead session 为每个 repo 在每个 story 上贴 kickoff comment，在 epic 上贴 Release order comment；需要 rollout 时创建 deploy ticket 并跑 write-runbook，runbook 每个阶段成为该 ticket 的子任务，编号与名称一一对应。预期：没有你的计划批准，不进入构建。
+
+7. 逐切片构建：build-epic 用 run-slice 按顺序构建每个 story。各 repo 的 session 按配置顺序、依据自己的 kickoff comment 构建自己那部分；stack 的 owner 在它们之间启动本地栈，使后建 repo 对着前一个 repo 的真实成果构建。持有 e2e 套件的 session 用 verify-slice-tests 核对该 story 的测试，每个 session 对自己的 stack 跑 /code-review。检查点会收到汇总的测试结果与评审发现，每条带建议（现在修 / 之后开票 / 跳过），由你拍板。session 对现在修的项以测试先行方式修复；e2e session 在真实浏览器里手工验证该切片，发现的 bug 以同样方式回到你面前。slice-handoff 把剩余项归入下一个切片/发布前/以后，归置结果由你确认，跑一遍 epic 到目前为止的全部测试，并按实际建成的东西重写下一个 story 的 kickoff comment。然后下一个 story 自动开始。每个 repo 在每个切片的部分、每个 bug 修复，都是 epic stack 上独立的 PR，Release order comment 列出全部 PR 的合并顺序。预期：每个检查点都有人做决定，而不是全自动推进。
+
+8. 发布前收口：修完发布前项（bug 走 run-bug 与 bug-bash），epic 的全部测试再跑一遍。review-epic：每个 session 对 main 做整 epic 的 /code-review（高 effort），服务端代码额外做 /security-review，重点盯没有任何切片评审看过的代码，每条发现由你决定。close-out-epic：每张未关 ticket 都要有归宿（发布前修 / 移到后续 epic / 独立），由你确认；发布后检查生产确实跑了这个 epic，并主动提议起草 release note。e2e session 跑 release-qa：完整 e2e、探索性测试、给出发布结论。预期：没有未关 ticket 悄悄消失。
+
+9. 发布：roost 不替你 merge、不替你 deploy。对它说：
+
+```text
+let's run the PROJ-1234 runbook together
+```
+
+pair-runbook 带着你一次一步地走 deploy ticket 的 runbook：给你命令和预期结果，你自己执行并粘贴输出，它校验结果、填写本次运行记录、关闭该步子任务；每个阶段的门禁都停下来等你放行。合 stack 也是 runbook 的一步，stacked-prs 协助解冲突。预期：每条发布命令都有人执行并留下输出。
+
+10. 沉淀团队自有 skill：只对你们团队有意义的 skill（公司格式的 roadmap、给董事会的报告）放进自己的私有插件，与配置文件放在一起。roost 的 skill 可以调用它们，例如 shape-epic 会调用 roadmap.skill 指定的 skill 把 epic 放到 roadmap 上。新增 tracker 或测试工具时，加一个 adapter 文件并更新支持表。预期：团队流程不写进 roost 本体。
+
+做法 B（Cursor 里用，能力受限）：先 clone 再链接：
+
+```bash
+git clone https://github.com/Beakpoint-Insights/roost.git ~/src/roost
+~/src/roost/scripts/link-skills.sh
+```
+
+换目录用 scripts/link-skills.sh ~/.agents/skills；撤销用 scripts/link-skills.sh --remove。配置放 ~/.claude/roost/config.yml 或设 ROOST_CONFIG。注意：run-slice、build-epic、run-bug、review-epic 不能用（它们要给别的 Claude Code session 发消息，Cursor 做不到）；retro 不能用（读 Claude Code transcript）；slice-handoff 部分可用（排序、tracker 更新、stack 检查可用，epic 测试那一步要手动在各 repo 跑）；shape-epic 部分可用（问题陈述、切片、测试可用，原型/artifact/tech lead 交接要在 Claude Code 里跑）。预期：只把 Cursor 当部分入口，不指望完整闭环。
+
+怎么选：第一次试 roost → 做法 A，单仓库、单小型 epic 跑完整闭环；只要提交门禁/测试真实性/项目契约 → 用第 9、11、12 步，不装 roost；非 GitHub/Jira/Claude Code 为主 → 不要硬套；要 agent 自动 merge/deploy → 不适合 roost；材料只有 README，成熟度只有作者自述和 30 stars，先试用不要直接全团队 adopt。
+
 ## 怎么判断变好了
 
 流程固化：同一 prompt 重复 ≥3 次就建 skill；Plan 阶段没写代码，Explore 只读；TDD 测试在实现前真的红过一次；视觉迭代 2–3 轮对齐；用 /effort 在自己环境核对。提交门禁：违规提交率下降、首次提交即通过比例上升、每次触发后修复轮数减少、人工 review 同类问题减少、误报可控；对照 A 组只靠 AGENTS.md，B 组 hook 门禁 + 失败提示。文件大小门禁：只在暂存文件触发、忽略锁文件和生成文件、超限被阻止、错误信息能指导拆分、误报可接受。MyAgent：Plan Mode 获批前无写操作/Shell；SKILL.md 出现或更新；审计产物可查来源与版本；人工读生成的 skill。测试规则：改测试凑绿次数少、空实现检查通过比例高、返工少。项目契约：linter 零错误、--strict 无可接受警告、CLAUDE.md 只有 @AGENTS.md 无 W070、CI 三平台绿、会话开头有自检输出、W101 在 32 KiB 告警；linter 速度基线引用来源数据，A/B 5 次/条件不是统计显著。Tenex：人均周故事点/任务数趋势，前 4 周基线 vs 后 4 周；返工率防刷量；为什么这么改的解答耗时；评审实质问题数和采纳比例；token/人力支出。claude-howto：两周单项目，三件套跑 5 次，记录耗时、返工、有效问题/误报、测试通过率；三件套无明显收益先不要加 hooks/MCP。Skill Recorder：3 次复跑至少 2 次无需人工接管且含检查时间总耗时低于手工；记录完成率、接管次数、耗时比、失败集中点。tstack：1 周只启用 file-pr 和 babysit-pr，跑 2–3 个真实 PR；看首段是否先讲问题、CI 修复轮数、误报/噪声比例、评论可直接发、人工总耗时；再加 full-stop 看人工干预次数/PR，3 次以上不升级；full-send 仅在 CI 能拦住、可回滚、非关键仓库试 1–2 次，出现 revert 即回退。dev-quality-gates：选真实仓库，先只覆盖一个主语言加一个跨切面风险类别；记录推荐数、接入数、成功证明能失败数、误报数、CI 时长变化、修复一个违规所需时间；核心是违规能否被稳定阻断。游戏工作室模板：用 1–2 天小任务、独立仓库/分支，先跑 minimal 闭环；记录闭环是否完成、关闭故事是否有 production/qa/evidence/ 截图或观察记录、review_mode 人数是否符合需要、/skill-test audit 是否通过、是否出现子目录启动丢 hooks、git 规则误伤提交信息；minimal 与 standard 的 1 vs 30 份文档、0 vs 58 分钟、盲审排名只是作者自测，不要当统计结论。
 
+roost：建议在单个仓库、单个小型 epic 上安装后跑一遍完整流程（shape-epic → 计划审批 → 逐切片构建 → 发布 QA → pair-runbook），只跑一个 epic 或 1–2 个切片就停。记录人工介入次数、计划返工轮数、漏到 release-qa 的缺陷数、检查点是否真的改变了决定、runbook 是否每一步都有执行输出、orchestrator 是否始终没有编辑 repo。如果 shape-epic 阶段反复卡住，或计划审批后仍频繁返工，先别扩大。30 stars 和作者自述不是成熟度证据，不能当作 adopt 依据。
+
 ## 常见坑
 
 1. 把 think/think hard/think harder 当开关；只识别 ultrathink。2. 以为 effort 越高越聪明；更高不等于更聪明，max 仅单会话且写不进 settings.json。3. cp -r 整个 .claude/；Skills/hooks/agents/workflows 是以你的权限运行的可执行指令，要逐文件读。4. 把版本时点数字当事实；用 /effort 自己核对。5. 命名冲突搞错；企业 > 个人 > 项目 > 插件 > 内置，本地 skill 不替换内置命令别名。6. 过度上扩展点；主会话放得下就别上子智能体。7. 拿半截资料硬做；材料截断处不补步骤。8. 拿不可判定约束上 hook；模式匹配会误报漏报。9. 规则写进 hook 就不管；变更时要同步 hook 与匹配模式。10. 反馈通道没打通；agent 读不到失败输出就只会提交失败。11. 把 ten out of ten 当数据。12. 以为开了自进化就不用管 skill；要人工抽查生成的 SKILL.md。13. Plan Mode 下等它改文件；它阻断写操作和 Shell。14. 用 --yolo 当默认；README 也不建议长期默认。15. 把 pytest 全绿当端到端有效；测试不调用模型。16. 把 README 示例 model 名当事实。17. 目标配错，skill 写错地方；project 写 .bear/skills/，user 写 ~/.bear/skills/。18. 把审计产物当效果证明。19. 拿半截 MyAgent 资料硬做。20. 把测试改绿当完成。21. 空实现检查搞错对象；只对新写测试做，恢复后确认变绿。22. 把 7 条规则当完整清单抄；原文只完整给第 1 条。23. 没有测试的项目硬套。24. 误把补写的 git 命令当原文。25. 以为写进 AGENTS.md 就等于必须发生。26. 把 linter 当语义检查；它只查结构、占位、路径、命令、密钥、大小。27. 覆盖已有 .claude/settings.json。28. 照 README 手写 CI workflow。29. 把 5 次 A/B 当统计显著。30. 同时维护 AGENTS.md 和 CLAUDE.md 两份规则。31. 把 Cursor/Copilot 当已验证。32. 忘 linter 运行前提。33. 把 Lessons 当自动沉淀。34. 把测试规则和契约 linter 混为一谈。35. 文件大小门禁跑全仓库。36. 忘排除锁文件和生成文件。37. 把 bytes/4 当精确 token。38. 超限只报错不给拆分说明。39. 把 5,000 当普适阈值。40. 把 W101 和做法 C 混为一谈。41. 把推文点赞当效果证据。42. 把 Ryugi 当已量化验证。43. 多 harness 只装一个。44. 没装 Node.js 却用 ryugi-artifacts。45. 干净会话没看到 brainstorming 就继续写代码。46. 忽略项目自有技能。47. 把 just code it 当常态。48. 把默认 squash、从不 merge commit 当团队规范。49. UI 验收只看代码不看证据。50. 默认开 worktree。51. 把 Ryugi 与第 5 步手工工作流同时跑。52. 在 Cursor/OpenCode 照猜完整命令。53. 把 claude-howto 当新工具或一次全装。54. 照 README 用 /plugin install 装 claude-howto 插件。55. 注册 hooks 覆盖已有 settings.json。56. 一次配 33 个 hook 事件。57. 把 /self-assessment 和 /lesson-quiz 当效果证明。58. 把仓库自身 pytest/ruff/bandit/mypy/coverage 当使用效果。59. MCP 命令硬编码 PAT 或提交凭据。60. 把 README 的 90% 能力没用上、10x productivity 当数据。61. 把 checkpoints 当版本控制替代。62. 在材料截断处补写指标。63. 自动化一个不存在的流程。64. 把 MetaHarness 当现成模板照搬。65. 让评审模型改代码。66. 把第二个模型当形式。67. 只给 agent 人写摘要，不把原始记录落 repo。68. 把故事点当绝对真理。69. 只看人均故事点上涨不看返工率。70. 单人单项目小团队照搬重结构。71. 企业非工程场景没解决 RBAC 就上生产智能体。72. 照抄播客模型名。73. 把 2 倍产出当统计结论。74. 把文档签入当自动推进。75. 把 MetaHarness 和提交门禁、测试规则、项目契约混为一谈。76. 把 readouts 直接当客户交付物。77. 把 Skill Recorder 推文当完整文档。78. 录制前不确认敏感数据落盘位置。79. 拿一次性任务去录制。80. 录完不读一遍就交给代理。81. 只装 full-send 不装依赖。82. 一上来就用 full-send。83. 改技能本体来放个人配置。84. 以为 council/sol-loop 在任何 harness 都能用。85. 把每天在用当效果证据。86. 在非 GitHub、非 PR 式协作硬套 tstack。87. 把 full-send 用在生产关键路径。88. 只触发 file-pr 就以为 PR 描述合格。89. 把 dev-quality-gates 当通用技术栈全量安装。90. 跳过证明能失败。91. 材料未提供 adopt.md/patterns.md 时照猜配置。92. 让代理一次改太多。93. 把本地 hook 当 CI 替代。94. 把清单策展声明当效果证明。95. 在子目录启动游戏工作室模板；会跳过 hooks、deny 规则和 ask-first 权限模式。96. 缺 Python 3 硬跑；所有设置会静默回退，提交暂存数据 JSON 会被阻止。97. 把代理层级当计费方案；那是角色资历。98. 一上来把 modes.rigor 升到 full；先用 minimal 闭环，项目变大再升。99. 只看测试绿灯关闭玩家可见故事；必须启动、观察、截图存 production/qa/evidence/。100. 把游戏工作室模板整仓照搬到非游戏业务；README 没有迁移步骤。101. 把作者自测的 1 vs 30 份文档、0 vs 58 分钟当外部复现；表格只展示两档。102. 忽略 git 规则误伤提交信息；提交信息出现 push +、clean -f、reset --hard 类似片段可能被拒绝。103. 把 /settings 写错层级；写 project.yaml 是团队级，--local 写个人级。104. 改模板后不跑 /skill-test 和 /skill-improve；框架本身会腐坏。105. 把 49/74/15/14/62 当已核对源码；材料只依据 README，未审阅源码。
+
+106. 缺工具硬装 roost；README 说会静默失败，先按 What each skill needs 表核对。107. 把 roost 当自动驾驶员；它不替你 merge、不替你 deploy，rollout 每条命令由人执行。108. 让 orchestrator 编辑 repo；它只分发和回收结果，不产生代码改动。109. 在 roost 配置里写密钥；配置只写密钥从哪里取。110. 不读 examples/config.example.yml 和 config-schema.md 就猜 key；本次材料未包含这两份正文。111. 多团队不设 ROOST_CONFIG；orchestrator 在 repo 外运行，看不到 repo 内 .roost/config.yml。112. 在 Cursor 里用 run-slice、build-epic、run-bug、review-epic、retro；这些要么不能用，要么只能部分替代。113. 跳过计划审批或切片检查点；roost 的设计就是让人在命名检查点拍板。114. 让 release-qa 结论替代人工 runbook；发布命令仍由人执行并粘贴输出。115. 把 30 stars 和作者自述当 adopt 证据。116. 把 roadmap 里的 Linear、Graphite、GitLab、Codex 等当已支持。117. 把 roost 和提交门禁、测试空实现检查、项目契约混为一谈；它补流程，不补硬约束。
 
 ## 证据与来源
 
@@ -363,7 +435,8 @@ claude
 - 来源十：@RoundtableSpace 推文，称微软开源 Skill Recorder，仓库 microsoft/skill-recorder，Release v0.7.0，4.3K 星。可核对：录制快捷键 macOS ⌘⇧R、Windows Ctrl+Shift+R；捕获点击、应用/窗口切换、页面、终端命令；录制本机进行；可边做边讲解；137 赞/16 转发/15 回复。作者主张：教会你的 AI 代理为你执行它，无复跑成功率/案例/失败场景；本机进行是产品侧隐私表述。材料仅推文，仓库文档、输出格式、支持代理、平台覆盖、停止录制方式、触发方式缺失；v0.7.0 早期迭代。
 - 来源十一：t3dotgg/tstack README，MIT，约 32 stars。可核对：9 个技能名称、口头触发词与作用；安装 git clone 后 cp -R 到 ~/.claude/skills/ 和 ~/.codex/skills/；前置 gh auth login、python3、council/sol-loop 需要能调用其他厂商模型 subagent 的 harness；依赖图；个人配置写 CLAUDE.md/AGENTS.md；先 full-stop 后 full-send 的保守起步建议。作者主张：每天在用是作者自述；无 benchmark、PR 数量、合并成功率或前后对比；约 32 stars 个人工作流仓库；技能本体不在材料中；部分依赖 T3 Code 的 delegate_task。第 17 步 1 周/2 周试用顺序和指标是调研报告建议，不是 tstack 数据。
 - 来源十二：mokevnin/dev-quality-gates README。可核对：按任务推荐一个质量门禁工具（少数两个）、说明为什么选和不适用；原则包括按任务选一个工具、覆盖优先于数量、优先快速原生工具链、必须能阻断构建（非零退出码）而不只是出报告、对 AI 编码代理友好、没有可靠推荐就留空；README 代理提示词；推荐 mise.toml 固定版本、hk.pkl 让本地 hook 和 CI 跑同一套检查；命令 mise use hk、hk check、hk fix、hk check --all；要求证明能失败；明确不是通用技术栈、不要全部安装。作者主张：采用后代码质量改善量化数据没有；adopt.md、patterns.md、tools.json 和 research 正文未包含；Under review 表格处截断；2026-10-23 一次 sweep 不是独立评审；多个推荐工具较新/pre-1.0/单一维护者。第 18 步试用顺序、指标和先覆盖一个主语言加一个跨切面类别是调研报告建议，不是原文效果证明。
-- 来源十三（本次新增）：Donchitos/Claude-Code-Game-Studios README，MIT 模板仓库。可核对：README 声称 49 个代理、74 个 skills、15 个 hooks、14 条路径规则、62 个文档模板；代理分导演层、部门主管层、专家层；协作协议先提问、给 2–4 个带优劣选项、用户决定、出草稿、用户批准才落盘；不是自动驾驶员；安装 git clone 后 cd my-game；必须在项目根目录启动，否则跳过项目 hooks、deny 规则和 ask-first 权限模式；/start、/settings、/settings modes.review_mode、/settings modes.rigor=full、/settings --local modes.review_mode=solo；modes.rigor 有 minimal/standard/full，默认 minimal，覆盖 workflow、docs.density、qa.level、story_granularity、review_mode、team.size；minimal 链路 /start→/setup-engine→/brainstorm→/create-stories→/dev-story↔/story-done；团队编排 skills /team-combat 等；hooks 列表与触发条件；权限规则自动允许测试、阻止 force push/rm -rf/读 .env；git 规则可能误伤提交信息；改变玩家可见内容的故事必须启动、观察、截图存 production/qa/evidence/；/skill-test static/category/spec/audit 和 /skill-improve；studio-tests 测框架，游戏测试放 tests/。作者自测：同一 brief 用 minimal 与 standard 构建，minimal 写第一行游戏代码前 1 份文档、0 分钟；standard 30 份文档、58 分钟；两者都产出可运行且测试过的游戏，但两名盲审和一次真人试玩把 standard 排最后；作者认为多出的 29 份文档买到可追溯性，不是更好的游戏；表格只展示两档，另外两档无法核对。属于作者主张/未验证：模板可定制、可迁移到非游戏项目但没有具体迁移步骤；49/74/15/14/62 计数未与源码核对；强游戏领域绑定；主开发环境 Windows 10 + Git Bash，hooks 也在 macOS/Linux 测试，notify.sh 在非 Windows 是 no-op；缺 Python 会静默回退。本手册只建议单个小型项目小范围试用，不整仓照搬到非游戏工作。
+- 来源十三：Donchitos/Claude-Code-Game-Studios README，MIT 模板仓库。可核对：README 声称 49 个代理、74 个 skills、15 个 hooks、14 条路径规则、62 个文档模板；代理分导演层、部门主管层、专家层；协作协议先提问、给 2–4 个带优劣选项、用户决定、出草稿、用户批准才落盘；不是自动驾驶员；安装 git clone 后 cd my-game；必须在项目根目录启动，否则跳过项目 hooks、deny 规则和 ask-first 权限模式；/start、/settings、/settings modes.review_mode、/settings modes.rigor=full、/settings --local modes.review_mode=solo；modes.rigor 有 minimal/standard/full，默认 minimal，覆盖 workflow、docs.density、qa.level、story_granularity、review_mode、team.size；minimal 链路 /start→/setup-engine→/brainstorm→/create-stories→/dev-story↔/story-done；团队编排 skills /team-combat 等；hooks 列表与触发条件；权限规则自动允许测试、阻止 force push/rm -rf/读 .env；git 规则可能误伤提交信息；改变玩家可见内容的故事必须启动、观察、截图存 production/qa/evidence/；/skill-test static/category/spec/audit 和 /skill-improve；studio-tests 测框架，游戏测试放 tests/。作者自测：同一 brief 用 minimal 与 standard 构建，minimal 写第一行游戏代码前 1 份文档、0 分钟；standard 30 份文档、58 分钟；两者都产出可运行且测试过的游戏，但两名盲审和一次真人试玩把 standard 排最后；作者认为多出的 29 份文档买到可追溯性，不是更好的游戏；表格只展示两档，另外两档无法核对。属于作者主张/未验证：模板可定制、可迁移到非游戏项目但没有具体迁移步骤；49/74/15/14/62 计数未与源码核对；强游戏领域绑定；主开发环境 Windows 10 + Git Bash，hooks 也在 macOS/Linux 测试，notify.sh 在非 Windows 是 no-op；缺 Python 会静默回退。本手册只建议单个小型项目小范围试用，不整仓照搬到非游戏工作。
+- 来源十四（本次新增）：Beakpoint-Insights/roost README，MIT，Claude Code 插件式 skills 集合，不是独立 agent。可核对：/plugin marketplace add Beakpoint-Insights/roost 与 /plugin install roost@roost；/roost:setup；配置查找顺序、ROOST_CONFIG、~/.claude/roost/local/<team.name>.yml、团队共享配置私有 repo、配置不存密钥；可见配置 key；支持 Jira/GitHub Issues、Xray/repo eval cases、gh stack/普通 PR、GitHub；Linear/Graphite/GitLab/Gherkin/Cursor 完整支持/Codex/Copilot/Gemini CLI 在 roadmap；每 repo 一个 session 的会话拓扑与 orchestrator 不编辑 repo；shape-epic 七阶段；build-epic 计划审批、Rollout needed、kickoff comment、Release order、deploy ticket 与 runbook；run-slice、verify-slice-tests、/code-review、切片检查点、测试先行修复、真实浏览器验证、slice-handoff；review-epic、/security-review、close-out-epic、release-qa；pair-runbook 由人执行命令并粘贴输出；Cursor link-skills 与能力差异；团队自有 skill 和 adapter。数据：README 约 30 stars；作者自称每天用于自家产品；无第三方数据、无 merge 成功率、无缺陷泄漏率、无对照实验。限制：examples/config.example.yml 和 config-schema.md 不在本次材料正文；强绑定 Claude Code + Jira/Xray/gh stack；Cursor 只有部分 skill；README 对成熟度和可迁移性的说法属于作者主张。本手册第 20 步的试用顺序和判断指标是建议，不是 roost 原文效果证明。
 
 ## 依据的调研
 
@@ -380,3 +453,4 @@ claude
 - [t3dotgg/tstack](../research/radar/2026-10-25/6799-t3dotgg-tstack.md)：值得一试，先把 tstack 装到单个低风险仓库，只用 file-pr 和 babysit-pr 跑两三个真实 PR，暂不给自动合并权限；因为 README 给出了可直接复制的安装命令、技能依赖图和明确的前置条件，但技能本体内容不在材料里，效果没有数据支撑。
 - [mokevnin/dev-quality-gates](../research/radar/2026-10-25/6885-mokevnin-dev-quality-gates.md)：值得一试，建议在单个代码库小范围试用：在仓库根目录让编码代理按 README 的提示词先出计划，只接入与项目栈匹配的少量质量门禁，并逐个证明能失败。理由是该仓库给出了可复制的代理提示词和按任务选工具的清单，但 adopt.md、patterns.md 未包含在材料中，且清单明确声明不是通用栈，需要先验证再推广。
 - [Donchitos/Claude-Code-Game-Studios](../research/radar/2026-10-30/8503-donchitos-claude-code-game-studios.md)：值得一试，建议把它当作“多角色 + 工作流 + 事件钩子 + 可调严谨度”的复杂项目协作模板，在单个小型项目上试跑，不要直接整仓照搬到非游戏工作；因为 README 给出了可执行的安装、配置和校验流程，但效果证据主要是作者自测，且强依赖游戏开发场景。
+- [Beakpoint-Insights/roost](../research/radar/2026-11-01/9205-beakpoint-insights-roost.md)：值得一试，建议在单个仓库、单个小型 epic 上安装 roost 跑一遍完整流程（shape-epic → 计划审批 → 逐切片构建 → 发布 QA → pair-runbook），以“人工介入次数、计划返工轮数、漏到 release-qa 的缺陷数”作为是否保留的判断依据；它给出了可直接照抄的安装命令、配置查找顺序、会话拓扑与人工检查点，但成熟度证据只有作者自述与 30 stars，且强绑定 Claude Code + Jira/Xray/gh stack，尚不足以直接 adopt。
