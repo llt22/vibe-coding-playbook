@@ -1,10 +1,10 @@
-# 让编码 agent 分工：贵模型只规划，廉价模型写码，测试当裁判
+# 编码 agent 被限流、选错模型或假完成时，按一套本地流程处理
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：让编码 agent 不靠更贵的模型硬扛，而是把规划、实现和验收分开，用测试结果决定改动是否落地。
-> 先试这一步：选一个中等规模、已有可运行测试的真实任务，先用纯 Claude Code 记录 Opus token、轮数和测试通过数，再用 cheap-agent 同一提示词跑一遍对照。
-> 最近修订：2026-10-31
+> 解决的问题：解决编码 agent 因配额耗尽、限流、死 key、模型选错或假完成而中断的问题，并给出一套可本地试、可回退的模型分层与验收流程。
+> 先试这一步：先选一个中等规模、已有可运行测试的真实任务，记录基线（token、轮数、返工），再只接一个本地扩展或一条人工规则做同提示词对照。
+> 最近修订：2026-11-03
 
 ## 解决什么问题
 
@@ -15,6 +15,8 @@
 Claude Code 里还有两个更具体的中断：模型设置会全局绑定所有终端窗口，切 provider 会影响全部会话；Anthropic 返回 429 用量上限时，整条会话卡住，只能手动换 key 或等冷却。model-relay 用一个本机 127.0.0.1:8950 的路由守护进程把“按窗口切模型、按别名路由、429 自动故障转移、provider 重试”接过来；它要求 provider 能接 Anthropic 的 /v1/messages 格式，定位是单人本地守护进程，不是团队多租户代理。
 
 本手册给出一套本地可试的做法：用 OmniRoute 这类 OpenAI 兼容网关统一接多个供应商，并按配额、失败或成本自动回退；在 Codex 内用 Adaptive Router 按本地难度启发式选择轻/重模型；用“有证据的验收”判断是否真的完成；用 Gluon 为每次会话选择 harness × model × effort 并观察成本与上下文；用 LiteLLM 的 SDK 或网关把多家供应商统一成 OpenAI 格式，并做按项目/用户的成本追踪；Claude Code 内还有一条线：把次要模型挂成顾问，避免贵模型全程主持。再加一条 Claude Code 内的本地路由线：用 model-relay 按窗口/别名切 provider，并在 429 时自动转到备用端点。新增 cedr：它按工作类型路由 agent/模型/effort，回填 accepted/reworked/redone/rejected 结果，并可为 skill 与 MCP server 生成 cedr.lock 做漂移校验；它还能做多厂商评审门禁，但 Council 的细节在材料中指向 docs，未完整展开。最后新增 Cheap Agent：在 Claude Code 内把“贵模型规划、廉价模型写码、测试裁判”做成插件，用测试结果而不是模型自述决定改动是否落地。
+
+还有一类中断来自模型选择纪律：同一会话里任务类型变了却不换模型，或者换模型时上下文已经很长，切过去要重新交代背景。新增材料给出一条个人规则：按“这次改动是否涉及架构”选模型，涉及架构用 Fable，不涉及用 Opus；长途换模型前先 /compact，短上下文直接 /model；并行任务用 Herdr 分 session。原文在“- 不用”处截断，模型名与 Herdr 用法需自行核对。
 
 所有效果数字都要自测。这些项目、F3 这条推文以及各 Claude Code 扩展的材料都未说明可以互相集成；先分别试。
 
@@ -36,6 +38,8 @@ Claude Code 里还有两个更具体的中断：模型设置会全局绑定所�
 - 你长期在 Claude Code 里工作，模型设置全局绑定所有终端窗口，想按窗口/会话切 provider；你有至少一个备用的 Anthropic 兼容端点（内置 preset：zai、deepseek、kimi、minimax、openrouter，或用 --url 指定自己的网关），想把 haiku/sonnet/opus 别名或某个子代理导到别的 provider。
 - 你遇到 Anthropic 429 用量上限，想自动转到备用 provider 并钉住会话 7 天；愿意接受 Node.js 20+、Claude Code 2.1.287+、单人本机守护进程。
 - 你使用 Claude Code、Codex、Cursor 或 Gemini，愿意试 cedr 的按工作类型路由、verdict 回填和 cedr.lock 固定 skill/MCP；能接受 preview 阶段命令与文件格式在 1.0 前可能变。
+- 你以 Claude Code 为主要编码入口，手上有 2 个以上可并行推进的任务，愿意按“改动是否涉及架构”给任务打标签，并在长上下文换模型前先 /compact（做法 J）。
+- 你想验证“按架构相关性选模型”这条人工规则，而不是再装一个路由插件。
 - 你只想先在非敏感、非生产任务上小范围试。
 
 不适用或需要谨慎：
@@ -67,6 +71,9 @@ Claude Code 里还有两个更具体的中断：模型设置会全局绑定所�
 - 想让 cedr 直接当团队标准：它处于 preview，1.0 前命令与文件格式仍可能变；用量接入只具体说明 claude-statusline 与 codex 两种 kind；Council 的 reviewer 报告格式、quorum 默认值、merge 输入形态需读 docs/council.md；cedr route sync 会把历史与路由上传到 cedr.dev，默认应不开。
 - 想让 cedr 的 cedr lock 无副作用：只有传 --introspect 时才会真正运行 MCP server，运行前会先警告；若不允许执行第三方 server，就不要加这个参数。
 - 想拿 cedr 的效果当结论：没有效果数据、案例研究、对比实验或用户反馈；示例输出里的百分比是演示样例，不是实测结论。
+- 原文在“- 不用”处被截断，只有个人经验、没有数据；Fable/Opus 模型名、Herdr 的安装与命令都需自行核对，不能照抄。
+- 你的任务高度耦合、无法拆成独立 session，或你不常做架构判断：J 的收益不明。
+- 你不能接受 /compact 丢失上下文细节：长途换模型前先压缩这条要谨慎，压缩前把关键约束写到文件或消息里。
 
 ## 前置条件
 
@@ -82,6 +89,7 @@ Claude Code 里还有两个更具体的中断：模型设置会全局绑定所�
 - Claude Code 子代理固定为 Haiku（F3）：本机已安装并可运行 Claude Code；当前版本支持 CLAUDE_CODE_SUBAGENT_MODEL 环境变量（原文未给版本要求，需自行确认）；任务可以拆出子代理；你愿意让较弱模型处理子任务，并接受用同一批任务做质量对照。原文只给出一条启动命令，没有给主模型和顾问的配置方式。
 - model-relay：Node.js 20+；Claude Code 2.1.287 或更新（作者在 Node.js 22.23.2 与 Claude Code 2.1.306 上测过）；至少一个备用的 Anthropic 兼容端点（内置 preset：zai、deepseek、kimi、minimax、openrouter，或用 --url 指定自己的网关）；接受这是单用户本机工具，不是团队共享代理；先设好 BACKUP_API_KEY 等环境变量，再启动 Claude Code；手动路径下 node tools/setup.mjs 要在插件安装目录里跑：~/.claude/plugins/cache/model-relay/model-relay/<version>/（设了 CLAUDE_CONFIG_DIR 时是 $CLAUDE_CONFIG_DIR/plugins/cache/model-relay/model-relay/<version>/）；默认端口 8950，Claude Code settings.json 的 ANTHROPIC_BASE_URL 会指向 http://127.0.0.1:8950。
 - cedr：Linux 需要 glibc 2.34 或更新（Ubuntu 22.04、Debian 12、RHEL 9 及以上），或使用对应平台发布包；不想用二进制时本机要有较新的稳定版 Rust 工具链；写入 ~/.config/cedr/routes.toml；使用 Claude Code 时要挂 statusLine；要固定 skill/MCP 时仓库里要有 agent 配置；要接 agent 时 agent 需支持 MCP。README 声明 cedr 不读 agent 凭据、不代你调用厂商 API；用量来自 agent 自己的状态行与 CLI，或你指定的 feed；pick、verdict、stats 留在本机，只有加了 [sync] 段和 cedr.dev API key 后 cedr route sync 才上传。
+- 做法 J：已安装并登录 Claude Code CLI；有 2 个以上互不干扰、可并行推进的编码任务；确认你的环境里存在原文所称的 Fable、Opus 或等价模型（原文未给版本与可用性）；确认 /compact 与 /model 命令存在；Herdr 的安装与命令原文未给，需查其文档。
 
 ## 操作步骤
 
@@ -912,7 +920,39 @@ claude mcp remove -s user cheapag
 
 机制说明（来自原文）：廉价模型在 git worktree 隔离副本里写码，必须先写一个失败的测试、再改到测试通过；Cheap Agent 自己运行测试，只有通过的结果才以未提交形式落回项目；失败默认由 Sonnet 兜底，而不是让 Opus 重做。原文 FAQ 明确说半美分模型单独用不行，需要书面任务、必须通过的测试和跑测试的裁判。
 
-**做法 A / B / C / D / E / F / G / H / I 怎么选**
+**做法 J：按“是否动架构”选模型，长途换模型前先 /compact（Claude Code + Herdr）**
+
+前提：已安装并登录 Claude Code CLI；有 2 个以上可并行推进的编码任务；确认你的环境里存在原文所称的 Fable、Opus 或等价模型（原文未给版本与可用性，照抄前先核对）；确认 /compact 与 /model 命令存在；Herdr 的安装与命令原文未给，需查其文档。原文在“- 不用”处截断，第 5 条缺失，不要补写。
+
+1. 收敛工具面：把编码工作集中到 Claude Code 一个入口，不并行维护多套 agent 工具的提示词与配置。前提：现有工作流不依赖其他 agent 的独有能力。预期结果：提示词、配置、模型规则只维护一份。
+
+2. 用 Herdr 管多会话：把并行任务拆成多个 session，交给 Herdr 统一管理，而不是在一个会话里来回切任务。前提：手上同时有 2 个以上互不干扰的任务；Herdr 的具体命令原文未给，需自行查其文档。预期结果：每个任务一个 session，上下文不串；多会话仍由你人工切换推进。
+
+3. 动手前给任务打标签：判断这次改动会不会改变模块边界、接口、数据流。会 → `动架构`；不会（局部实现、样板代码、修 bug）→ `不动架构`。预期结果：你在选模型前先有一个可判断的二元属性，而不是凭感觉切换。
+
+4. 按标签派模型：原文的规则是涉及架构的改动用 Fable，与架构无关的改动用 Opus；模型名先在你的环境里核对，不存在就用等价的重模型/日常模型替代，不要把 Fable/Opus 当确定可用的模型名。预期结果：架构类改动由更侧重架构推理的模型做，局部实现由日常模型做。
+
+5. 中途需要换模型时分两种情况处理上下文：
+   - 上下文已经很长 → 先压缩再换：
+
+```text
+/compact
+```
+
+     然后再：
+
+```text
+/model
+```
+
+     切到另一个模型；
+   - 上下文还短 → 直接 `/model` 切换。
+
+   前提：会话已经积累了大量历史；注意 /compact 会丢细节，压缩前应确认关键约束（接口签名、报错、决策理由）已写在文件或消息里。预期结果：换模型后少重新解释背景；若仍要重新交代，记录次数。
+
+6. 做 1–2 周最小试用：选 5–8 个真实编码任务，动手前各打 `动架构`/`不动架构` 标签；按标签派模型；一旦发现派错，记录当前会话大致长度：长则 /compact 再 /model，短则直接 /model，并记下是否出现“压缩后要重新解释背景”的情况。同时开两个互不干扰的任务，用 Herdr 各开一个 session 跑，对比“在单会话里交替做”的体验。原文第 5 条被截断，不要补。
+
+**做法 A / B / C / D / E / F / G / H / I / J 怎么选**
 
 - 主要痛点是跨供应商配额、限流、死 key、工具输出烧 token：先做 A。预算红线先用 auto/subscription；想先榨干套餐额度再降到最便宜付费选项用 auto/thrifty；auto/chaos 会成倍消耗上游调用，除非你就是要多模型交叉验证，否则别日常开。
 - 已经在用 Codex，痛点是“常规任务也调用最重模型”且想用确定性 grader 验收：先做 B。
@@ -925,6 +965,7 @@ claude mcp remove -s user cheapag
 - 日常用 Claude Code、痛点是“模型设置全局绑定所有窗口”或 429 限流，且你有备用 Anthropic 兼容端点：先试 G。先只给 haiku 别名接一个备用 provider，用 /provider doctor --ping 确认链路，再按窗口逐步放开；不要一上来把所有别名和故障转移链都打开。
 - 你已经在 Claude Code、Codex、Cursor 或 Gemini 之间分配工作，想把“哪类工作交给哪个 agent/模型/effort”写成规则，并用 accepted/reworked/redone/rejected 回填结果：先试 H 的 route pick + verdict。你想固定 skill 和 MCP server 版本、在 CI 里发现漂移：再试 H 的 lint/lock/verify。你想做多厂商评审门禁：先读 docs/council.md，再小范围试 council plan/merge。
 - 日常用 Claude Code，任务中等规模、项目有可运行测试，想让 Opus 只做规划和决策、廉价模型写码：先做 I。先在一个项目执行 /cheapag:allow，用同一提示词做 A/B；无测试或极小任务不要用。I 与 G/H 都是 Claude Code 侧扩展，但材料未说明可叠加，先分开试；I 会把代码发给第三方 provider，合规敏感场景先过审。
+- 日常用 Claude Code、同时推进多个互不干扰的任务，想按“是否动架构”选模型并管理换模型时的上下文：先试 J。只保留两条最可执行的规则——动手前给任务打“动架构/不动架构”标签，长途换模型前先 /compact；Herdr 只作为分会话的候选，原文没给命令，查文档再用。J 与 F 都在 Claude Code 里动模型选择，但 J 是人工规则（打标签 + /compact + /model），F 是会话命令/启动参数/环境变量；材料未说明可叠加，先分开试。J 与 G/H/I 也未说明可集成。
 - A 和 C 是同一层的本地 OpenAI 兼容网关，功能重叠，且默认端口都是 20128：先选一个跑通，不要同时按默认端口启动。E 也是请求层网关，但默认 4000 端口，与 A/C 不撞；端口不撞不代表能自动叠加，材料没有说明它们可以集成。
 - A/C/E 与 D 不是同一层：A/C/E 在请求层按供应商/模型别名路由；D 在会话层把已有 harness 并排跑起来，按 harness × model × effort 路由。E 的 harness 抽象能在自己的网关上跑 Claude Code / Codex / OpenCode / Deep Agents，与 D 的“并排多个 harness”语义不同。两者材料都未说明可互相集成。
 - B 与 D 都涉及 Codex：B 是在 Codex 内装插件按难度选模型，D 是把 Codex 当作可并排的一个 harness；材料未说明两者关系。
@@ -932,9 +973,10 @@ claude mcp remove -s user cheapag
 - G 是 Claude Code 插件 + 本机 127.0.0.1:8950 的 Anthropic 兼容路由守护进程，和 A/C 的 OpenAI 兼容网关（20128）、E 的 AI Gateway（默认 4000）不是同一层。G 可以用 --url 指向本地/远端端点，但该端点必须能接 Anthropic /v1/messages；只会 OpenAI Chat Completions 的端点需要翻译层。材料未说明 G 能与 A–F 自动集成，先分开试。
 - H 是叠在 Claude Code、Codex、Cursor、Gemini 等 harness 之上的编排与门禁层：它依赖 Claude Code 状态行/CLI 或 Codex 提供用量读数；它不是 A–G 的替代，也不是请求转发网关。材料未说明 H 能与 A–G 自动集成；先把各自跑通，再自行验证请求实际走哪条路径。
 - I 是 Claude Code 内的插件/MCP 扩展，改变的是 Claude Code 内部“谁写代码”的分工；它使用的执行引擎是 OpenCode（Windows 已知问题里点名 opencode.exe），不是请求转发网关，也不是编排层。材料未说明 I 能与 A–H 自动集成；先分开试。
-- 所有项目都未说明可以互相集成。如果确实要同时装，先把各自跑通，再自行验证请求实际走哪条路径；不要默认叠加。D 会把多个 harness 接到同一框架里，建议先在一个非关键、已纳入版本控制的仓库里试；G、H 和 I 也建议先在非关键仓库、只接一个备用 provider、一个 route 或一个项目里试。
+- J 是 Claude Code 内的人工使用规则，不是插件、不是网关，也不是编排层；它只改“你什么时候 /model、什么时候先 /compact、多个任务怎么分 session”。材料未说明 J 能与 A–I 自动集成；先分开试。
+- 所有项目都未说明可以互相集成。如果确实要同时装，先把各自跑通，再自行验证请求实际走哪条路径；不要默认叠加。D 会把多个 harness 接到同一框架里，建议先在一个非关键、已纳入版本控制的仓库里试；G、H、I、J 也建议先在非关键仓库、只接一个备用 provider、一个 route、一个项目或一条人工规则里试。
 
-**暂时不要碰的部分**：OmniRoute README 提到的 MCP（110 个工具）、A2A、memory、guardrails、evals、TLS stealth、key pools 公平配额，在给定材料里只有名词，没有配置步骤；安装/首次运行章节、combo 完整策略语义、压缩的具体配置项也不在本次材料里。agent-smith 的“多 agent 协作、重试、失败升级带来的收益”需要单独实验，材料未给步骤。FlagshipRouter 的 Media Models 页面和 Agent Skills 页面同样只有存在性描述，没有用法。Gluon 的 routing.yaml、权限与工具供给、安全隐私、成本分析示例、故障排查都不在给定材料里。LiteLLM 的 MCP 登记细节、Docker 快速上手、E2E 教程都在 README 指向的 docs 里，本页未展开；A2A 与 MCP Bridge 的原文被截断。Claude Code /advisor 的顾问介入方式、效果说明、与网关集成都未在原文中展开；F2b 那一支的原文连 Haiku 只读怎么配都没写全；F3 只给了一条环境变量，主模型和任务划分未展开。model-relay 的调研正文在“对应研究问题”处被截断，效果数据、与 A–F 的集成方式、团队多租户用法都不在给定材料里。cedr 的 Council 报告格式、quorum 默认值、merge 输入形态未展开；最小试用第二周具体动作在原文“第二周在 2–3”处截断。Cheap Agent 本次材料只有 README，未查看源码，无法核实 worktree 隔离、hook 阻止逻辑和凭据存储的实现细节；收益高度依赖项目里有能跑、能覆盖改动的测试；原文没有说明测试缺失或不充分时的退化行为。
+**暂时不要碰的部分**：OmniRoute README 提到的 MCP（110 个工具）、A2A、memory、guardrails、evals、TLS stealth、key pools 公平配额，在给定材料里只有名词，没有配置步骤；安装/首次运行章节、combo 完整策略语义、压缩的具体配置项也不在本次材料里。agent-smith 的“多 agent 协作、重试、失败升级带来的收益”需要单独实验，材料未给步骤。FlagshipRouter 的 Media Models 页面和 Agent Skills 页面同样只有存在性描述，没有用法。Gluon 的 routing.yaml、权限与工具供给、安全隐私、成本分析示例、故障排查都不在给定材料里。LiteLLM 的 MCP 登记细节、Docker 快速上手、E2E 教程都在 README 指向的 docs 里，本页未展开；A2A 与 MCP Bridge 的原文被截断。Claude Code /advisor 的顾问介入方式、效果说明、与网关集成都未在原文中展开；F2b 那一支的原文连 Haiku 只读怎么配都没写全；F3 只给了一条环境变量，主模型和任务划分未展开。model-relay 的调研正文在“对应研究问题”处被截断，效果数据、与 A–F 的集成方式、团队多租户用法都不在给定材料里。cedr 的 Council 报告格式、quorum 默认值、merge 输入形态未展开；最小试用第二周具体动作在原文“第二周在 2–3”处截断。Cheap Agent 本次材料只有 README，未查看源码，无法核实 worktree 隔离、hook 阻止逻辑和凭据存储的实现细节；收益高度依赖项目里有能跑、能覆盖改动的测试；原文没有说明测试缺失或不充分时的退化行为。Herdr 的安装、配置与命令，以及 J 原文第 5 条（“- 不用”之后的内容）都不在材料里。
 
 ## 怎么判断变好了
 
@@ -951,6 +993,7 @@ claude mcp remove -s user cheapag
 - Claude Code 子代理固定为 Haiku（F3，5–10 个有代表性的任务）：同一提示词分别跑默认配置与 CLAUDE_CODE_SUBAGENT_MODEL=haiku claude；记录总 token 或费用、任务完成率、输出被人工修改的比例、返工次数、延迟和主观质量评分。原文没有给试用时长建议；先按这一批任务判断。只有在 token 明显下降且质量不下降或可接受时，才纳入日常；若质量下降，只对低风险子任务使用。若环境变量不存在或命令报错，停止并把结论降为 study。
 - model-relay（先一个别名、一个备用 provider）：先设好永久环境变量并开新终端；装插件；用 /provider setup 或 /provider init + add 只加一个备用 provider；用 /provider doctor --ping 看到 Config OK 与 Upstream ping ✓；先只做 alias haiku backup，不动 sonnet/opus；用 /provider 面板确认只有当前窗口切了 provider，其他窗口仍走 Claude；再挑一次真实 429 或配额耗尽，确认会话被钉到 failover.chain 第一个 provider，冷却后新会话回 Claude。原文未给试用时长；先以一次真实 429/配额耗尽事件和一周内人工切换次数为观察窗口，不要一上来开 proxy 模式。
 - cedr（1 人 × 2 周，只配 2 个 harness 和 2 条 route）：第一天接 statusline 并确认 cedr route pools 能读到真实剩余量，读不到就停。第一周只用 cedr route pick 和 cedr route verdict，不启用 Council、不加 sync；每类工作积累 15–20 次 pick 与 verdict 后用 cedr route stats 看分布。第二周原文被截断，先不要按未给出的第二周动作执行；Guard 可单独在仓库里跑 cedr lint、cedr lock、cedr verify，观察 verify 是否在配置漂移时失败；Council 先读 docs/council.md 再小范围试。
+- 按“是否动架构”选模型 + /compact（J，1–2 周）：选 5–8 个真实编码任务，动手前各打 `动架构`/`不动架构` 标签；动架构走 Fable，不动架构走 Opus（模型名先确认在你环境里存在，否则用等价模型替代）。一旦发现派错，记录当前会话大致长度：长则 `/compact` 再 `/model`，短则直接 `/model`，并记下是否出现“压缩后要重新解释背景”的情况。同时开两个互不干扰的任务，用 Herdr 各开一个 session 跑，对比“在单会话里交替做”的体验。原文没有给试用时长，这里是按它自己说的“最近几个月”习惯缩成 1–2 周的最小试用。
 
 要记录的指标：
 
@@ -977,6 +1020,11 @@ claude mcp remove -s user cheapag
 21. 429 中断与自动故障转移、按窗口切换是否真的隔离、钉住与冷却、别名路由是否精确、重试与最终成功率、proxy 模式副作用、成本与质量对照（model-relay）；
 22. cedr 的 route × model 统计：用 cedr route verdict 回填 accepted/reworked/redone/rejected 后，看 cedr route stats 中每类工作上哪个模型表现最好；观察 cedr route pools 显示的剩余量与真实计划用量是否一致；观察 cedr verify 的退出码是否在配置漂移时失败；Council 的门禁规则是 P0/P1 阻断、报告过少不静默放行，但报告格式与 quorum 需先读 docs。
 23. Cheap Agent 的 Opus token 与轮数是否下降、廉价模型花费、测试通过数是否不降、Sonnet 接手次数、/cheapag:hook on 后的质量、diff 被人工修改比例、以及代码外发是否按项目授权。
+24. 中途换模型次数 / 每任务（J）：若按架构相关性分工有效，这个数应下降。
+25. 换模型后需要重新交代背景的次数（J）：衡量 /compact 是否造成信息损失。
+26. 单任务墙钟时间与返工轮次（J）：同一处代码被改两遍以上算一次返工。
+27. 架构类改动的事后返工率（J）：若明显低于不分工时，说明“架构相关性选模型”这条规则站得住。
+28. 多 session 并行时的任务串味/冲突次数（J）：验证 Herdr 分会话是否真的隔离了上下文。
 
 试多久、什么情况下停：
 
@@ -991,6 +1039,7 @@ claude mcp remove -s user cheapag
 - Claude Code 子代理固定为 Haiku（F3）：原文没有试用时长建议，先按 5–10 个任务的一批判断；若 token 没有明显下降或质量下降，就停用或只限低风险子任务，并把结论降为 study。
 - model-relay：原文没有试用时长建议。先只接一个备用 provider、只开 haiku alias，至少覆盖一次真实 429 或配额耗尽事件；若 429 中断/人工切换次数没有下降，或按窗口切换没有隔离，或 alias 没有按预期路由，或 proxy 模式让 git/curl/gh 变得不稳定，就停用并把结论降为 study。
 - cedr：原文建议 1 人 × 2 周不铺开，但第二周动作在材料中截断。若 cedr route pools 读不到真实剩余量、pick/verdict 15–20 次后仍看不出分布、cedr verify 误报或漏报、锁文件导致无法维护、Council 的 quorum/报告格式无法落地，就停用或只保留 lint/lock/verify 中确实有用的部分，并把结论降为 study；不要把 preview 阶段写进团队标准。
+- J：1–2 周后若中途换模型次数、重新交代背景次数、返工轮次都没有改善，或 /compact 导致的重复解释代价大于换模型收益，就降级为 study，只保留“按架构相关性选模型”这一思路，不照搬流程。若模型名或命令不存在，停止。
 
 ## 常见坑
 
@@ -1073,7 +1122,13 @@ claude mcp remove -s user cheapag
 - agent-smith 的难度打分是本地、未校准的启发式；缓存效应与用量覆盖不全（partial usage coverage）会如何影响成本对比，作者自己列为待解决问题。
 - agent-smith 除 Astra、6.1 Sol 外，原文没有给出被路由模型清单、支持的任务类型或失败案例。
 - agent-smith 分发为源码优先，无预打包 DMG，构建为 ad-hoc 签名；Float 仅 macOS 14+。
-- 这些项目、F3 这条推文以及各 Claude Code 扩展的材料都未说明可集成；同时安装或叠加配置时不要假设请求一定经过你以为的那一层。
+- 把 Fable/Opus 当确定模型名照抄。原文只写这两个名字，没有版本、可用性说明；Fable 不是常见公开模型名，可能是笔误或内部别名，执行前用自己环境的模型列表核对。
+- 把原文当成完整清单。它在“- 不用”处被截断，第 5 条缺失；只能按已保存的前几条试。
+- 换模型前无脑 /compact。/compact 会丢细节；压缩前把接口签名、报错、决策理由写到文件或消息里，否则换过去要重新解释背景。
+- 以为 Herdr 会自动并行推进。原文只提到用它管理多个 session，没有安装、配置或自动触发细节；多会话仍需人工切换推进。
+- 把“按架构选模型”当效果结论。原文只有个人几个月习惯，69 赞、8 回复，没有数据、案例或对比实验。
+- 把 J 与 F/G/H/I 叠加。J 是人工规则，F 是 Claude Code 会话命令/启动参数，G/H/I 是插件或编排层；材料未说明可集成，先分开试。
+- 这些项目、F3 这条推文、J 这条推文以及各 Claude Code 扩展的材料都未说明可集成；同时安装或叠加配置时不要假设请求一定经过你以为的那一层。
 
 ## 证据与来源
 
@@ -1103,7 +1158,9 @@ claude mcp remove -s user cheapag
 
 **cedr**：可核对的操作性内容有安装命令与平台矩阵、glibc 版本要求、routes.toml 完整样例、Claude Code statusLine 的 JSON、cedr route pick/verdict 的真实命令与示例输出、cedr route stats/pools/list、cedr council plan/merge、cedr lint/lock/verify 与 --introspect 警告、claude mcp add cedr -- cedr mcp、SHA256SUMS/gh attestation verify、以及指向 docs/route.md、docs/council.md、docs/design.md 的规格说明。只是作者主张、没有证据的是：路由“挑得对”、Council 能提高评审质量、锁文件能防住真实风险；原文没有效果数据、案例研究、对比实验或用户反馈，仓库仅 42 stars、单一组织维护、preview 阶段，示例输出里的百分比是演示样例。材料边界：1.0 前命令与文件格式可能变；用量接入只具体说明 claude-statusline 与 codex 两种 kind；Council 报告格式、quorum、merge 输入形态未给；cedr route sync 会外发数据；跨机器/团队共享路由是付费计划功能；最小试用第二周在“第二周在 2–3”处截断。
 
-**材料边界**：所有效果数字都需要自测；本手册只把可复制的命令、配置和提示词当作操作依据，把项目自述数字和作者主张当作待验证信息。这些项目、F3 这条推文以及各 Claude Code 扩展的材料都未说明可以互相集成；同时安装或叠加配置时不要假设请求一定经过你以为的那一层。
+**按“是否动架构”选模型 + /compact（J）**：可照做的有把编码收敛到 Claude Code 一个入口、用 Herdr 管多个 session（原文未给 Herdr 命令）、动手前按“动架构/不动架构”打标签、动架构用 Fable、不动架构用 Opus、长途换模型前先 /compact 再 /model、短上下文直接 /model。原文在“- 不用”处截断，第 5 条缺失；Fable/Opus 的名称、版本、可用性无法核实；Herdr 的安装与配置未给。只有作者个人几个月的工作习惯陈述，推文 69 赞、8 回复，没有指标、对比或结果数据；“按架构相关性选模型”和“换模型前先 compact”都是作者主张，/compact 丢细节是未验证的风险点。
+
+**材料边界**：所有效果数字都需要自测；本手册只把可复制的命令、配置和提示词当作操作依据，把项目自述数字和作者主张当作待验证信息。这些项目、F3 这条推文、J 这条推文以及各 Claude Code 扩展的材料都未说明可以互相集成；同时安装或叠加配置时不要假设请求一定经过你以为的那一层。
 
 ## 依据的调研
 
@@ -1120,3 +1177,4 @@ claude mcp remove -s user cheapag
 - [cablate/model-relay](../research/radar/2026-10-23/6217-cablate-model-relay.md)：值得一试，如果你长期在 Claude Code 里工作，可以小范围试用：先只把 haiku 这类子任务和 429 故障转移接到一个备用 provider，用 /provider doctor --ping 确认链路通，再按窗口逐步放开。理由是 README 给出了可直接复制的安装、配置和自检命令，并有默认保守的开关；但它仍是单人用的本地守护进程，缺少效果数据，先小范围试、别急着全量替换。
 - [Sheernox/cedr](../research/radar/2026-10-30/8398-sheernox-cedr.md)：值得一试，可以用小范围试点的方式接入 cedr：先只做“按工作类型路由、记录结果”和“把 skill/MCP 版本固定进锁文件”两件事，再考虑多厂商评审门禁；理由是 README 给出了可直接照做的安装命令、routes.toml 样例、statusline 配置和完整命令表，但项目处于 preview 阶段、缺少任何效果数据，暂不宜直接定为团队标准。
 - [muaaz9329/cheap-ag](../research/radar/2026-10-31/8887-muaaz9329-cheap-ag.md)：值得一试，可以在有一个中等规模任务、并且已有可运行测试套件的项目里小范围试：用 npx cheap-agent 接入 Claude Code，让 Claude 只负责规划、廉价模型负责写码、测试充当裁判；理由是该仓库 README 给出了完整的安装、授权、配置和回退流程，并且用测试结果作为唯一验收标准，但所有效果数据均为作者自报，且在最难任务和极小任务上没有收益甚至略有倒退。
+- [@aliez_ren: 最近几个月我是这样用 AI 写代码的：](../research/radar/2026-11-03/9706-ai.md)：值得一试，可以小范围照做的是“按任务是否涉及架构改动来选模型 + 长途切换模型前先 /compact”这套分工与切换规则，因为它给出了可直接执行的操作顺序；但原文被截断、只有个人经验无数据，Herdr 与具体模型名需自行核对后再落地。
