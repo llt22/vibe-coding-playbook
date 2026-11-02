@@ -1,10 +1,10 @@
-# 把多 agent 工作流固定成项目、待办和自动推进（含 Orkas）
+# 让 AI 常驻值守 issue 与反馈，合并前必须真跑
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：多个 AI 会话各自为战、上下文反复交代、任务推进靠人盯；手册给出一套可执行流程，把任务写清、并行分工、独立验证、合入门禁、成本检查、注意力路由、共享账本和定时推进落到可核对的步骤上。
-> 先试这一步：先选一个边界清楚、交付物明确的小流程（例如每周研究简报+幻灯片），建一个 project，拆 3–5 个 to-do，手动跑第一项并复核，再只对下一项开启 Auto-advance。
-> 最近修订：2026-11-01
+> 解决的问题：如何把 issue/PR 值守、社媒反馈筛选和技术债清理拆成互不干扰的常驻循环，同时把合并与 UI/UX 决策留给人。
+> 先试这一步：先只在一个仓库启动一条盯 issue/PR 的 /loop，并规定每个 PR 必须 fetch 到本地跑构建和测试后再判断是否合并。
+> 最近修订：2026-11-02
 
 ## 解决什么问题
 单个 AI 回答或单条串行 agent 会话，交付的往往是你没有验证过的结果。手册把“不满意就重问一次”升级成一套可执行流程：任务写清、并行分工、独立验证、合入门禁、成本检查、注意力路由、共享账本核销，并在探索卡住时按预算止损。做法 A–AF 覆盖从单次答案竞赛到多项目控制台、文件状态+心跳编排、多 agent 共享账本、长时运行骨架、跨会话/跨人的消息交接，以及把多个编码 agent 编成有频道、有审批闸门的团队。共同底线是：并行只负责产出，接受与否必须由测试、独立 verifier、校验器、接收人本人确认或人工复核决定；消息层和编排层只负责把问题送到、把人叫来，不负责证明结果正确。
@@ -27,7 +27,7 @@
 - O：把“代理在等我”变成菜单栏上可一键回答的提醒（Muster，macOS）。
 - P：在 tmux 里跑一个有门禁、评审与清理的 Claude 会话团队（hivehouse）。
 - Q：在进入下一阶段前先结一次账（/cost 阶段成本检查）。
-- R：用并行 /loop 做持续 issue 复现与修复（magpie 工作流复刻）。
+- R：用并行 /loop 做持续 issue/PR 值守与修复（Magpie 运维的两个复刻版本）。
 - S：用实验性环境变量尝试开启 Claude Code 内置 agent teams，先做基线对照再决定是否采用。
 - T：用 git-ai/Graft 在服务端承载大量编码 agent 的并发落库、冲突解决、落库后验证与 agent 权限（先 quickstart，再 shadow 接入）。
 - U：用 claude --worktree 给每个并行代理一份独立工作树副本（原文只有一句话加一个命令，先自测再决定是否采用）。
@@ -64,7 +64,8 @@
 | macOS 14+ 上并行跑多个 Claude Code / Codex / Cursor，人被卡在审批与多选 | O |
 | 想在 Claude Code 里跑有门禁、评审、清理与无人值守的 tmux 会话团队 | P（先 relay，后 delegate） |
 | 跑多代理 / 分阶段流程，想进下一阶段前先结一次账 | Q（先跑 2–3 个阶段） |
-| 想让 Claude Code 用 /loop 持续处理最近 3 天 issue，并按先复现、先写失败测试、再修的顺序做 | R（先只跑 triage-github） |
+| 想让 Claude Code 用 /loop 持续处理最近 3 天 issue，并按先复现、先写失败测试、再修的顺序做 | R1（先只跑 triage-github） |
+| 有稳定 issue/PR、Discord 或 X 外部输入，想按“代码协作 / 舆情筛选 / 定时清债”三条互不干扰的 loop 常驻值守 | R2（先只跑代码协作一条，稳定后再加） |
 | 使用 Claude Code，想试内置 agent teams 是否真的开启多代理并行，并先确认成本与质量 | S（先做 30 分钟基线对照） |
 | 同时运行大量编码智能体，想验证服务端落库、缓存、多个 agent、一次 land 的完整链路 | T（先跑 quickstart，再 shadow 接入） |
 | 有多个 Claude Code 代理要同时改同一仓库，编辑期互相覆盖、想先隔离 | U（先自测，再决定是否写进流程） |
@@ -98,7 +99,7 @@
 - O：不是 macOS 14+；主力是 Cursor 时只能跳转、不能代答。
 - P：Claude Code 低于 2.1.291，或缺少 tmux / git / jq / perl / shasum，不要用。
 - Q：流程无法分阶段，或读不到任何成本 / token 数据，不要用。
-- R：原文正文被截断，/loop 完整配置、提示词原文、第三个 loop 均未给出；没有可写失败测试的仓库或 issue 无法复现，不要用。
+- R：没有可写失败测试的仓库或 issue 无法复现，不要用；原文没有给出 /loop 的完整配置、提示词原文与第三个 loop 的细节，不要编造；三条常驻 loop + Opus 的 token 成本可能高于单人小项目收益；自动拉黑、自动评论有误判风险，loop 内部的人工审核点需自己加；PR 不拉下来真跑就判断，等于没有验证。
 - S：需要稳定、可写进团队规范或生产流程，不要用；该环境变量含 EXPERIMENTAL。
 - T：只跑一两个 agent 的个人或小团队，引入数据库+对象存储收益未经验证；不能接受 0.1.0 接口变动，不要用。
 - U：单代理串行、或不在 git 仓库里，不要用；想直接照抄成团队规范，不要用。
@@ -133,7 +134,7 @@
 - O：macOS 14 或更高；安装后逐代理在 Settings → Answer prompts from Muster 开启；Codex 需先 /hooks 信任一次。
 - P：tmux ≥ 3.2；git ≥ 2.31；bash；jq；perl；shasum；Claude Code ≥ 2.1.291；远程运行还需 ssh 和 rsync。
 - Q：一个支持分阶段执行、且能显示成本或提供 /cost 的多代理 / 分阶段流程。
-- R：Claude Code + Opus；一个 GitHub 仓库；能访问 issue 和 PR；有测试体系可先写会失败的测试；能持续运行 /loop 的会话或调度机制。
+- R：Claude Code + 官方 Opus；一个自己维护的 GitHub 仓库，有 issue/PR 流；能访问 Discord 或同类讨论区、X 账号接收反馈；一个便宜模型接口用于 X 反馈预筛；能本地 fetch 并运行 PR 分支的构建与测试；有测试体系可先写会失败的测试；能持续运行 /loop 的会话或调度机制。原文未给 /loop 完整配置、循环间隔、筛选标准与 prompt 原文，这些需自补。
 - S：已安装 Claude Code CLI，且能正常在终端里运行 claude 并完成一次普通对话；在同一个 shell 会话中操作；能接受实验特性失效、行为变化、以及可能的额外 token 消耗。
 - T：Linux 或 macOS 机器，能联网拉依赖；Go 1.26；C 工具链；Meson；Ninja；构建过程会编译一份内置的 Git。若接真实仓库：需要 config.toml（[graft] 段+可选 [graft.storage] 段）、数据库与对象存储、给每个 agent 的 token、RPC allowlist、branch policy；存储迁移先 shadow 后 authoritative。版本 0.1.0。
 - U：处在 git 仓库中；已装 Claude Code 并能正常在终端里运行 claude；确实有多个代理要同时改同一份代码。--worktree 版本或环境要求原文未给，需自测。
@@ -263,10 +264,15 @@ nsq
 2. 记录阶段成本、token、代理数与耗时；原文示例：5 个代理、20 秒、4.18 美元；工作 token 从 198,628 增加到 233,055。
 3. 对无法定价的新代理保持警惕：估不出边际成本就先不加。预期：事前看见异常增长，避免不必要扩容。
 
-### 做法 R：用并行 /loop 做持续 issue 复现与修复（magpie 工作流复刻）
-1. 前提：Claude Code + Opus；一个 GitHub 仓库；能访问 issue 和 PR；有测试体系可先写会失败的测试；能持续运行 /loop。
-2. 不要一上来跑 3 个 loop；最小试用只启动 triage-github，处理最近 3 天 issue。把处理顺序写死：先复现；先写一个会失败的测试；再修。可把“处理最近 3 天的 issue，先复现、先写一个会失败的测试，再修”放进 loop 指令。
-3. 跑一天后检查产出的 PR 或提交，按复现数、失败测试数、修复后测试通过数、PR 合并/进入 review 数判断；第一个 loop 稳定后再考虑 watch-social；/loop 启动命令原文未给，不要编造。预期：拿得到可 review 的修复产出。
+### 做法 R：用并行 /loop 做持续 issue/PR 值守与修复（Magpie 运维的两个复刻版本）
+1. 前提：Claude Code + 官方 Opus；一个自己维护的 GitHub 仓库，有 issue/PR 流；能访问 Discord 或同类讨论区、X 账号接收反馈；一个便宜模型接口用于 X 反馈预筛；能本地 fetch 并跑 PR 分支的构建与测试；有测试体系可先写会失败的测试；能持续运行 /loop 的会话或调度机制。原文没有给出 /loop 的完整配置、提示词原文、循环间隔和 X 筛选标准，这些必须自补；不同版本不要混成一条大循环。
+2. 先选版本。R1 是单 loop 先跑 triage-github，重点在任务顺序：先复现、先写会失败的测试、再修，适合第一次照做；R2 是三条互不干扰的常驻 loop 分工：代码协作面、舆情面、内部质量面，适合已有稳定外部输入、技术债在累积的维护场景。两者不冲突：先用 R1 跑通一条 loop，再把 R2 的分工逐条加上。
+3. R1 起步：不要一上来跑 3 个 loop。只启动 triage-github 这一条，处理最近 3 天 issue。把处理顺序写死：先复现；先写一个会失败的测试；再修。可把“处理最近 3 天的 issue，先复现、先写一个会失败的测试，再修”放进 loop 指令。跑一天后检查产出的 PR 或提交，按复现数、失败测试数、修复后测试通过数、PR 合并/进入 review 数判断；第一个 loop 稳定后再考虑扩展。/loop 启动命令原文未给，不要编造。预期：拿得到可 review 的修复产出。
+4. R2 第一条：起代码协作值守 loop。用 Claude Code + Opus 起一个 /loop，职责是盯 GitHub issue/PR 与 Discord。关键约束：PR 不能只看 diff 就判，必须先把该 PR 分支 fetch 到本地，跑构建与测试，再依据实际结果给结论或评论。原文未给间隔与 prompt，先用较长间隔，人工检查几轮输出后再收紧。
+5. R2 第二条：起 X 反馈筛选 loop。职责是盯 X 上的用户反馈。关键约束：前面先用便宜模型拦一道，把大量噪声挡在 Opus 之外，只把有价值的反馈送进主模型，以省 token。筛选标准、如何把便宜模型输出传给 Opus，原文未给，需自行补齐。
+6. R2 第三条：起定时清债 loop。定时做三件事：清理技术债、把教训写下来、拉黑低质提交。周期原文未给，需自定。教训建议落成仓库内可被后续 loop 读到的文本，否则沉淀无法回流。自动拉黑与自动评论先加人工复核，观察误伤。
+7. 三条 loop 并行常驻，各自独立运转，不合并成一条大循环。人工保留 UI/UX 环节：审美与交互决策不外派，其余交给循环。这一步是整套方法能成立的前提。
+8. 预期：issue/PR 首次响应时间下降；你本人每天花在非 UI/UX 事务上的时长下降；loop 给出的 PR 判断被事后推翻的比例下降；token 与 API 成本可见。注意这些是检验点，不是原文已给出的效果数据。
 
 ### 做法 S：用实验性开关尝试开启 Claude Code 内置 agent teams
 1. 前提：已安装 Claude Code CLI，能在终端正常运行 claude；在同一个 shell 会话中操作。export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1；紧接着 claude。
@@ -376,41 +382,38 @@ curl -fsSL https://imbo.dev/install | sh
 安装器会列出它改了哪些设置，并允许 Imbo 自己的工具运行时不每次都弹审批；imbo uninstall 可撤销。
 2. 确认本机状态与会话：
 ```sh
-imbo status        # daemon、连接状态、本机上的会话
-imbo whoami        # 你的 account ID，用来给别人
+imbo status
+imbo whoami
 ```
 3. 加联系人。对方要先拿到你的 account ID；对方侧需要接受：
 ```sh
 imbo contact add 30713956 --note 'bob, api team'
-imbo contact requests               # 对方侧：查看请求和群邀请
+imbo contact requests
 imbo contact accept 1
-imbo contact list                   # 联系人和他们在线会话
-imbo send bob/api 'hi'              # 发给 bob 的某个会话（短 ID 或标题）
+imbo contact list
+imbo send bob/api 'hi'
 ```
 4. 建群并让消息广播到多个会话。建群时要选自己哪些会话接收消息；只能邀请联系人：
 ```sh
-imbo group create launch            # 选哪几个自己的会话接收该群消息
-imbo group invite launch 24441842   # 仅限联系人
-imbo group join 3                   # 被邀请方用 requests 里的 ID 加入
+imbo group create launch
+imbo group invite launch 24441842
+imbo group join 3
 imbo send launch 'v2.3 is tagged. Check your side and reply here.'
 ```
 群消息会到达每个成员的所有接收会话，群里的回复也回到所有这些会话；没内容可补的会话不会回复。
 5. 发文件。附件保存在接收方 ~/.imbo/files/；接收方 agent 把附件当数据处理，未经其用户同意不会执行里面的指令或程序：
 ```sh
 imbo send bob/api 'Spec v2 attached. Diff it against /users.' --file api-spec.md
-imbo inbox                          # 在终端里看自己发出消息的回复
+imbo inbox
 ```
 6. 在会话内让 agent 自己用工具：agent 侧暴露 send、inbox、contacts、groups、accept 五个工具，直接用自然语言指派，例如“问 bob/api 的 GET /users 是否分页”“在 launch 群里让大家核对 v2.3”。
 7. 更新与自托管（可选）：
 ```sh
-imbo update    # 下载、校验并安装最新版，保留登录与已连接工具并重启 daemon
+imbo update
 ```
 0.2.11 之前的版本没有该子命令，需重跑安装命令。自托管服务端：
 ```sh
-docker run -d -p 443:443 -v imbo:/data \
-  -e IMBO_DOMAIN=imbo.example.com -e IMBO_ACME_EMAIL=you@example.com \
-  -e IMBO_SMTP_URL='smtps://user:pass@smtp.example.com' \
-  ghcr.io/bearisbug/imbo-server:latest
+docker run -d -p 443:443 -v imbo:/data -e IMBO_DOMAIN=imbo.example.com -e IMBO_ACME_EMAIL=you@example.com -e IMBO_SMTP_URL='smtps://user:pass@smtp.example.com' ghcr.io/bearisbug/imbo-server:latest
 ```
 关键变量：IMBO_DOMAIN（公网域名，启用 Let's Encrypt HTTPS，TLS-ALPN，443 端口）、IMBO_SMTP_URL（登录码邮件）、IMBO_MAIL_FROM（发件人，默认 Imbo <login@your-domain>）、DATABASE_URL（外部 PostgreSQL；不设则在 IMBO_DATA_DIR 用内置库）、IMBO_SIGNUP_EMAIL_DOMAINS（允许注册的邮箱域，不设则任何人可注册）、IMBO_LISTEN（默认有域名时 0.0.0.0:443，否则 0.0.0.0:8080）。客户端指向自建服务：
 ```sh
@@ -418,7 +421,7 @@ imbo setup --server https://imbo.example.com
 ```
 8. 从源码构建（需要 Rust 工具链）：
 ```sh
-cargo build --release   # target/release/imbo 和 target/release/imbo-server
+cargo build --release
 cargo test --workspace
 ```
 9. 最小试用顺序：选两台机器（或同一台的两个会话），只接 Claude Code + Codex 两个工具，先不接清单标 avoid 的 ZCode；互加联系人后先跑一次跨会话提问——在 A 会话让 agent 发问，B 会话保持空闲，观察是否被唤醒并回复；再建 2–3 个会话的群，让各自核对自己那一侧后回帖；单独做一次边界测试：故意让 agent 被要求发送一个本地文件或删除文件，确认它是否按原文所述先来问你；再发一个带指令的附件，确认接收侧把它当数据而非执行。预期：人工转述次数下降，跨会话确认端到端耗时下降，空闲会话被唤醒并产出有效改动；但这些都是自建指标，原文只有 demo 描述。
@@ -521,7 +524,7 @@ npm run native:check
 - O：从代理开始等待到人察觉的时间；从察觉到回答完成的时间；是否出现重复回答或冲突；关掉后设置文件是否精确还原。
 - P：安装检查通过；团队是否按计划产出 diff/提交；gate 是否把每一步运行到日志并验证通过；cleanup 是否只移除 manifest 记录的内容。
 - Q：进入下一阶段前是否真的能看到该阶段成本；实际总成本 vs 你设的预算；token 增长是否与任务复杂度匹配；新增代理前是否能估出边际成本。
-- R：最近 3 天 issue 中有多少被真正复现；有多少修复在改代码前存在会失败的测试；这些测试在修复后是否通过；产出的 PR 有多少被合并或至少进入人工 review；人工返工比例；是否产生误报、重复处理或无关改动；与人工处理同一批 issue 的时间、返工率对比。
+- R：R1 看最近 3 天 issue 中有多少被真正复现；有多少修复在改代码前存在会失败的测试；这些测试在修复后是否通过；产出的 PR 有多少被合并或至少进入人工 review；人工返工比例；是否产生误报、重复处理或无关改动。R2 看 issue/PR 首次响应时间（人工介入前）；你本人每天花在非 UI/UX 事务上的时长；每天/每周 token 与 API 成本，与人工时薪对照；loop 给出的 PR 判断中事后被推翻的比例，用来衡量“拉下来真跑”降低了多少误判；定时清债清掉了多少、教训文档是否被后续 loop 实际读取；被拉黑提交的误伤比例。
 - S：开关是否真的生效，能否观察到多个 agent 被创建/并行工作；单位任务总开销是否下降；Opus 侧上下文占用是否明显减少；测试通过率、diff 规模、返工次数是否不劣于基线；是否报错、中途丢失上下文、重复劳动或互相覆盖改动。
 - T：单次 land 的端到端耗时；同一分支上并发 land 的成功率与需要人工介入的冲突比例；自动冲突解决被接受且后续没被 revert 的比例；graft-verify 捕获的回归数量、bisect 定位是否准确、自动 revert 是否误伤；权限控制是否真的挡住越权操作；增加服务节点后横向扩展是否如预期。README 未给数值目标，需自建基线。
 - U：并行期间是否出现互相覆盖、需要人工解冲突的次数；把各自结果合并回主线所花的时间（对照组：不用 --worktree，两个代理直接在同一工作树里改同样的东西）；主工作树是否被代理污染、副本能否一键丢弃回退；副本目录是否按预期自动创建和清理。
@@ -555,7 +558,7 @@ npm run native:check
 - O：macOS 14+ 装 Muster，只对 Claude Code 开代答；开两个并行会话，制造权限请求和多选题，练 ⌥↓、⌥↩、⌥1–9。
 - P：非关键项目、本地环境安装；先保持 relay，只对一个项目运行 /hivehouse:start <task>。
 - Q：下一次多代理任务拆成 2–3 个阶段，每阶段开始前跑一次 /cost，记录成本、token、转移次数和耗时。
-- R：只选一个自己熟悉的 GitHub 仓库，不要一上来跑 3 个 loop；只启动 triage-github 这一个 loop，处理最近 3 天 issue；强制先复现、写一个会失败的测试、再修；跑一天后检查产出的 PR 或提交。
+- R：只选一个自己熟悉的 GitHub 仓库，不要一上来跑 3 个 loop；先只启动 triage-github 这一个 loop，处理最近 3 天 issue，强制先复现、写一个会失败的测试、再修；跑一天后检查产出的 PR 或提交。若这条稳定，再按 R2 加代码协作值守 loop，规定 PR 必须 fetch 到本地跑构建与测试；然后加定时清债 loop，教训落成仓库内文本；最后才加 X 反馈 loop，并在前面用便宜模型粗筛。
 - S：选一个非关键小仓库，构造一个包含“多环节”的固定任务；先不设变量跑基线；再开新终端执行 export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 后 claude，跑同一任务；30 分钟内完成对照。
 - T：不改动现有仓库，先构建，然后跑 examples/graft/quickstart.sh；用 ./_build/bin/graft 熟悉 land、changeset、verify 子命令；拿一个非关键真实仓库按 [graft.storage] 的 shadow 模式做只读导入，核对一致；确认无误后再切 authoritative；只让少量 agent 走这套流程，暂时不开自动冲突解决。
 - U：挑一个不关键的 git 仓库，开两个代理，都用 claude --worktree 启动，各派一个改动任务——先试改不同文件，再试改同一文件的不同区域，全程人工记录；对照组是不用 --worktree，两个代理直接在同一工作树里改同样的东西。
@@ -586,7 +589,7 @@ npm run native:check
 - O：先在 1–2 个并行会话、半天到一天内试用。
 - P：先在非关键项目、本地环境用 relay 模式跑一个任务；确认无误后再考虑 overnight 或 delegate。
 - Q：先在一两次任务上试 2–3 个阶段；只有当事前看见成本真的让你避免了一次异常增长或一次不必要的代理扩容时，才固定成流程里的固定步骤。
-- R：跑一天后检查产出的 PR 或提交；如果拿不到可合并或可 review 的产出，或大量 PR 无法通过测试，说明该流程在当前仓库还不适合直接采用。第一个 loop 稳定后再加第二个；第三个 loop 原文缺失，不升级。
+- R：先只跑代码协作值守这一条 loop，一到两周；若 issue/PR 首次响应时间下降、你本人花在非 UI/UX 事务上的时长下降、PR 判断被事后推翻的比例可接受，再加定时清债 loop；定时清债稳定后再加 X 反馈 loop。若两周内人工审核 loop 输出所花的时间接近自己直接做的时间，说明输入量不足或判断标准没调好，退回单条 loop 或放弃。三条同时上是原文形态，但首轮验证没必要承担三倍成本。
 - S：只做一次 30 分钟对照不构成采用依据。若开关无效或行为与基线无差别，降级为 watch；若有并行但质量或成本变差，不写入手册或只作谨慎注记；只有并行确实存在、成本下降且质量不掉，才考虑作为可选实验配置，并注明实验性与验证日期。
 - T：先以“临时目录 quickstart 跑通+非关键仓库 shadow 只读导入+少量 agent 且 resolver none”为最小范围；确认单次 land 耗时、并发 land 成功率、人工介入冲突比例、graft-verify 误伤率可接受，再扩大到更多 agent；没有量化对比前不扩大到关键仓库。
 - U：先在一个不关键仓库、两个代理、一两个任务上试半天到一天。如果编辑期冲突减少，但合并耗时和人工成本持平甚至更高，那只是把问题挪了个位置；只有在整体耗时或返工明显下降时，才值得写进手册。
@@ -620,7 +623,7 @@ npm run native:check
 - O：仅 macOS 14+；只覆盖 Claude Code / Codex / Cursor；Cursor 只能跳转、不能代答。
 - P：工作文件夹绝不能是项目本身；默认 relay 模式每次 start / wake / answer 都等你；delegate 模式涉及 bypassPermissions 和复制 secret 文件到远程的风险。
 - Q：推文级材料；只有一组单次观测数据，没有基线、阈值或对照；阶段检查依赖你能读到阶段成本。
-- R：正文被截断，/loop 的完整配置、提示词原文、第三个 loop 均未给出；watch-social 只写到“盯 X /”，不要照不完整片段猜。只有作者主张“跑了一天，效果很好”和一个 PR 链接；PR 6796 只能说明有产出。先只跑一个 triage-github loop，不要一上来并行 3 个。
+- R：两次调研都是推文级或二手总结，没有给出 /loop 完整配置、提示词原文、循环间隔、X 筛选标准和任何量化数据；R1 的 watch-social 片段被截断，第三个 loop 细节缺失，不要照不完整片段猜。R2 的“PR 拉下来真跑”是明确可照做的约束，“人晚上只铲 UI/UX”是作者对效果的主张，不是已验证结论。常驻循环 + Opus 的 token 消耗要单独记账；自动拉黑与自动评论有误判风险，原文未提 loop 内部如何设人工审核，必须自己加；三条同时上是原文形态，首轮验证先只跑一条。
 - S：原文只有一行环境变量加启动命令，没有任何效果数据、案例、截图、文档链接或 Anthropic 官方出处；互动量很低（61 赞、3 转发、6 回复）；模型名 Opus 5.5 / Haiku 5.5 与常见版本号命名习惯不符；环境变量名含 EXPERIMENTAL，可能随时改名或移除。不要把它当团队规范或生产流程的稳定依赖。
 - T：0.1.0，接口在 1.0 前可能变动；构建要编译内置 Git，依赖较重；已知缺口写在 LIMITATIONS.md；README 未给出与传统 Git 或其他方案的对比数字；banner 图注里的“50 agents on one branch retry and fail with push, rebase, retry”“100 against 200 changes landed”是配图说明，不是可核验的基准结果；只跑一两个 agent 的个人或小团队收益未经验证；存储迁移必须影子模式先导入、确认无误再切 authoritative。
 - U：原文只有一句话加一个命令，没有截图、命令输出、版本号；作者称方法来自 Anthropic 的分享但没有给出处；“让三个代理可以同时编辑同一个代码库而不会冲突”是作者主张；原文未涉及合并成本，存在把冲突从“编辑时”推迟到“合并时”的可能；不要拿它当安全边界，也不要补写原文没给的版本要求、副本位置、合并与清理方式。
@@ -634,7 +637,7 @@ npm run native:check
 - AC：目录顺序会造出伪层级——原文里排第一的 Ada 成了事实上的领导者，这是评测设计带来的伪影，迁移时应主动随机化顺序或显式指定角色；首夜 22 死（占全程 34 死的大多数）之后 agent 普遍变得过度保守、放弃原定任务，说明反馈信号强度直接改变策略，配反馈时要想清楚你希望它冒险还是保守；50 个 agent、约 5,900 条消息意味着巨大 token 与时间成本，原文没给成本数据，不要一次复刻；原文是项目介绍页不是教程，harness 的安装、配置、提示词要看仓库；Mindustry 部分在抓取时已截断，不能据此下结论。
 - AD：项目很新（31 stars）、仍在 0.x，原文只有作者自述文档，没有安全审计、第三方评测或真实团队使用案例；默认走 imbo.dev 托管服务并用邮箱注册，会话元数据经第三方；curl | sh 安装方式引入供应链风险；安装器会给 Imbo 工具免逐次审批，等于扩大 agent 的自主动作面；agent 可能不先问你即回复，多 agent 环路上存在信息外泄与被诱导风险——原文只做了“发送文件/数据、删除、对外发送、花钱、碰生产前先问”的约束声明，必须自己做边界测试；消息“在两次工具调用之间落地”“回复唤醒空闲会话”“没内容可补的会话不回复”来自 README 的 GIF 说明文字，没有延迟数据、成功率、并发上限、失败重试语义、消息持久化/离线补投行为的说明；平台不含 Windows；自托管需要域名、证书、SMTP，运维成本不低；它只是胶水层，不能替代测试、独立 verifier 或合入门禁。
 - AE：材料只有 README，没有独立复现；仓库 36 stars，采用规模有限，多代理协作效果、审批体验、长期记忆质量、例程可靠性都未量化，没有 benchmark、任务成功率、成本对比或安全审计。README 里的 Iris 在 Datadog 找到错误、Leo 修复并开 merge request、Nico 评审并请求合并审批只是产品说明中的示例，不是独立测评。“数据留在本机、无 Tucano 服务器、密码不进数据库、每轮隔离、工具按代理授权”都是作者主张，需要自行验证。Claude Code 只读 ~/.claude/settings.json 的 env 和 apiKeyHelper，hooks、插件和权限不进入 Tucano；Codex 用独立 home，避免个人 skills、AGENTS.md 和插件泄漏——这两条意味着你在原 CLI 里配好的 hooks/权限不会自动生效，别以为换个壳就继承了旧防护。Windows 安装包未代码签名，公司电脑可能被 IT 阻止，Windows 还需 Git for Windows。审批一旦变成无脑点“允许”，等于没有闸门；它只是编排层，不能替代测试、独立 verifier 或合入门禁。
-- AF：README 主要是产品说明，没有独立基准、客户案例数据或前后对比；16 个 agent 的能力、DeepResearcher 的“verified sources”、ProductDeveloper 的“verifiable results”都是作者主张。项目/待办/自动化的按钮级操作步骤没有给出，任务路由的具体判定标准也没有展开。打包应用需要登录，内置模型走 Orkas 管理服务；源码版不支持共享项目、云同步和 web app 发布。自动化依赖电脑唤醒和 Orkas 运行，不能关机后继续。视频复刻不支持社交平台分享链接下载，也不保证精确运镜、真人表演和逐帧匹配。后台学习 review 也可能判断没有值得保存的内容。不要一上来建 13 个 Bot 或全量开 Auto-advance；先把 project、to-dos、权限确认和人工复核跑顺。
+- AF：README 主要是产品说明，没有独立基准、客户案例数据或前后对比；16 个 agent 的能力、DeepResearcher 的“verified sources”、ProductDeveloper 的“verifiable results”都是作者主张。项目/待办/自动化的按钮级操作步骤没有给出，任务路由的具体判定标准也没有展开。打包应用需要登录，内置模型走 Orkas 管理服务；源码版不支持共享项目、云同步和 web-app 发布。自动化依赖电脑唤醒和 Orkas 运行，不能关机后继续。视频复刻不支持社交平台分享链接下载，也不保证精确运镜、真人表演和逐帧匹配。后台学习 review 也可能判断没有值得保存的内容。不要一上来建 13 个 Bot 或全量开 Auto-advance；先把 project、to-dos、权限确认和人工复核跑顺。
 
 ## 证据与来源
 - A 依据调研《Jakeschincariol/arena-skill》。可核对：成本表、bracket.py plan 输出、赛程表、rubric 权重、默认并发 10、单元测试、117 stars。质量提升属作者主张。
@@ -654,13 +657,13 @@ npm run native:check
 - O 依据调研《josefchen/muster》。可核对：macOS 14+、brew 安装、逐代理开启、Claude Code 支持类型、Codex /hooks、Cursor 只跳转、快捷键、URL scheme、pricing.json、构建/测试脚本、备份路径、只读会话、资源占用、MIT、73 stars。改善等待时间属作者主张。
 - P 依据调研《Cleveland-RD/hivehouse》。可核对：安装命令、依赖版本、claude plugin list、userConfig、hh-hub init/start、技能表、docs-health-check、hh-slot status、delegate 规则、清理范围、测试脚本、30 stars。bin/ 机械动作经过测试与 docs-health-check 是 Unverified here；无任务完成率/成本/质量数据。
 - Q 依据调研《@Klonzu》。可核对：别再添加无法定价的代理、下一阶段前检查成本、/cost、演示面板数据（5 个代理、20 秒、4.18 美元；19 次转移；token 198,628→233,055）。数据来自一次演示面板，无基线/阈值/对照。
-- R 依据调研《@hwangxin》。可核对：复刻 magpie 并用在 Readest 跑一天；Claude Code + Opus 并行跑 3 个 /loop；triage-github 处理最近 3 天 issue、先复现、先写失败测试再修；watch-social 截断；PR 6796；60 likes、8 reposts、6 replies。效果很好属作者主张，PR 只能说明有产出；/loop 完整配置与第三个 loop 未给。
+- R 合并两条调研：R1 来自《@hwangxin》，可核对：复刻 magpie 并用在 Readest 跑一天；Claude Code + Opus 并行跑 3 个 /loop；triage-github 处理最近 3 天 issue、先复现、先写失败测试再修；watch-social 截断；PR 6796；60 likes、8 reposts、6 replies；效果很好属作者主张，PR 只能说明有产出，/loop 完整配置与第三个 loop 未给。R2 来自《@MindfulReturn》，是对 yetone 维护 Magpie 所用方法的二手总结，可核对：三条互不干扰的常驻循环分工（GitHub issue/PR 与 Discord；X 反馈；定时技术债、教训沉淀、低质提交拉黑）；Claude Code + 官方 Opus 为主力；X 反馈前用便宜模型粗筛；PR 不能只看 diff，必须拉下来真跑；人晚上只铲 UI/UX。局限：只有推文长度总结，无 prompt 原文、无 loop 间隔、无判断标准、无任何量化数据；“人晚上只铲 UI/UX”是作者对效果的主张；常驻循环 + Opus 的 token 消耗、自动拉黑与自动评论的误判风险都需自行控制；原文未提 loop 内部人工审核点。本手册把 R 写成两阶段：先跑 R1 单 loop，再按 R2 加代码协作、定时清债、X 反馈三条，最小试用与指标是据此补充的试用设计，不是原文数据。
 - S 依据调研《@mirku21》。可核对：唯一命令 export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 和 claude；61 赞、3 转发、6 回复；无效果数据、案例、截图、文档链接或 Anthropic 官方出处。Opus 级架构与节省上下文属作者主张；模型名无法确认；变量含 EXPERIMENTAL。
 - T 依据调研《feder-cr/git-ai》。可核对：MIT；fork 自 Gitaly；版本 0.1.0；Go 1.26、C 工具链、Meson、Ninja；examples/graft/quickstart.sh 与 config.toml；文档列表。传统 Git 对 agent 是瓶颈无测量；测试覆盖未给数量；banner 图注不是基准；接口可能变、LIMITATIONS.md 有已知缺口、构建重、无对比数字。
 - U 依据调研《@thedelost》。可核对：唯一操作是 claude --worktree，以及 101 赞/15 转发/8 回复。让三个代理同时编辑不冲突属作者主张，三个代理是举例不是实测；作者称来自 Anthropic 分享但未给出处；命令当前版本是否存在未核实。只列为待自测候选。
 - V 依据调研《olivieropinotti/orchestrator-skill》。可核对：安装命令、/orchestrator、status/stop/redirect、关闭方式、账本路径、模型选择规则、MIT、约 38 stars。never blocks、3-5 agents、survives compaction 等属作者主张，无 benchmark/对比/案例/失败模式/成本数据。
 - W 依据调研《timscheuerai/grokbot-gtm-team》。可核对：13 Bot + 1 群聊 + 1 例程角色表、四步导入、5 个问题、agents/ 下 instructions block、guides 文件、交接四要素、每任务 1 worktree、内容本机/代码 dev server、MIT、30 stars。让 Bot 带队更有效、文案图形视频质量不够、晨报是 slop、routine 从 10 减到 1 更好属作者主张；只抓到 README，提示词正文需自取；依赖 OXYGEN 且有推广链接。
-- X 依据调研《BlackAngel242/MyTeam》。可核对：安装命令与参数、演示模式、默认端口 4317、环境变量、快捷键、HTTP 423 冻结、POST /api/crise/arret、.bureau/ 持久化文件、24 款工具与三款增强遥测、npm test/check、MIT、32 stars。100% 本地、零 npm 依赖、无出网、不存 key、事实真实等属作者主张；材料在作者主张段被截断，模型名无法核对；环境变量名不一致；界面行为只有描述。
+- X 依据调研《BlackAngel242/ MyTeam》。可核对：安装命令与参数、演示模式、默认端口 4317、环境变量、快捷键、HTTP 423 冻结、POST /api/crise/arret、.bureau/ 持久化文件、24 款工具与三款增强遥测、npm test/check、MIT、32 stars。100% 本地、零 npm 依赖、无出网、不存 key、事实真实等属作者主张；材料在作者主张段被截断，模型名无法核对；环境变量名不一致；界面行为只有描述。
 - Y 依据调研《@RoundtableSpace》。可核对：5 个子代理、每个全新上下文、按问题类别分工；安全与性能两类检查项；183 赞、10 转发、34 回复。新上下文更干净、5 个并行更好属作者主张，无案例/前后对比；原文在第 3 类处截断；汇总、去重、误报、成本、耗时未给；第 3–5 类、输出格式、汇总去重与人工复核是补充做法。
 - Z 依据调研《tomtomsatnav/agent-orchestration-standard》。可核对：SPEC、JSON Schema、零依赖一致性校验器、参考 server、heartbeat runner、Web/Terminal UI、MCP、notifier、make 目标、配置样例、launchd 样例、安全模型；命令与配置可照做。数据/案例：截图展示“三个项目、19 个 agent”的合成演示数据，明确没有真实项目或路径；33 stars 是输入指标；没有成功率、成本节省、可靠性、规模上限或对照实验。作者主张：隐私优先、布局无重叠、粒子流自适应、主题对比度等，部分由自动化测试覆盖但未独立验证。项目状态为个人项目、macOS-first；Linux 仅说可用 systemd 等价，未给 unit。validator 只能结构性检查 append-only，不能检查历史写入，追加写入靠 writer 自律；heartbeat runner 具体入口需查仓库。高风险命令人工审批是规范要求，不是自动保证。
 - AA 依据调研《@runes_leo: Yifan 的经验：agent 往一个方向钻 1–2 小时还没结果，基本就是进死胡同了》。可核对：单条推文、48 赞、8 转发、6 回复；1–2 小时方向预算、拆 3 个子 agent 各想一个新方向、评审要有停止条件；原文在“我给自己的 AI”处截断。原文没有命令、配置、提示词、样本量、失败案例或成本对比；“多数时候立刻见效”是作者主观判断；“两个 agent 会互相来回忙一整晚”是引述的二手结论；止损预算、3 路不同方向、评审停止条件的具体落地是按原文主张做的合理落地，不是原文原文。
@@ -703,3 +706,4 @@ npm run native:check
 - [Bearisbug/imbo](../research/radar/2026-10-30/8508-bearisbug-imbo.md)：值得一试，建议小范围试用：用 Imbo 在两个编码 agent 会话（或两台机器、两个人）之间做提问、交接和群组同步，因为它提供了可照做的安装、联系人、群组、附件与自托管步骤，并把消息送进正在工作的会话、还能唤醒空闲会话；但项目很新（31 stars）、只有作者自述文档、需要登录其托管服务，且 agent 可能不先问你即回复，因此应先在非生产、只读任务上验证。
 - [eduwxyz/tucano](../research/radar/2026-10-31/8661-eduwxyz-tucano.md)：值得一试，建议小范围试用：先用 2–3 个编码代理在一个频道里跑真实小任务，并把合并、发布、删除等写操作设为人工审批；理由是 README 给出了可照做的安装、连接器、权限和定时触发步骤，但只有项目自述、缺少独立效果数据，暂不宜直接 adopt。
 - [Orkas-AI/Orkas](../research/radar/2026-11-01/9199-orkas-ai-orkas.md)：值得一试，建议小范围试用 Orkas 的“项目 + 待办 + 自动推进 + 定时自动化”工作流，把它当作多智能体协作的编排层；理由是 README 给出了可运行的安装/配置步骤、外部 CLI 接入方式和明确的复核/权限机制，但缺少效果数据和按钮级操作步骤，不宜直接全面采用。
+- [@MindfulReturn: yetone 这套 Magpie 运维看着朴素，总结下来的方法如下：Claude Code + 官方 Opus，并行三条 /loop——一条盯 GitHub issue/PR 和 Discord（PR](../research/radar/2026-11-02/9530-yetone-magpie-claude-code-opus-loop-github-issue-p.md)：值得一试，先在一个仓库上照搬“三条并行 loop + PR 必须拉下来真跑 + 便宜模型先拦截 X 杂音”这套骨架，跑一两周再决定是否扩展；它的价值不在工具新奇，而在于把 issue/PR 值守、舆情筛选、技术债清理拆成三个互不干扰的常驻循环，人工只留下 UI/UX 决策，分工清晰、可小成本验证。
