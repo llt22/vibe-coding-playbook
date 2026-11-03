@@ -1,15 +1,15 @@
-# 让 AI 交付先过证据门：多 agent、独立 QA、人工审批与可叫停
+# 让多个编码 agent 的产出过验收门：派工、验证、叫停与治理
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：把 AI 的一次性回答或多 agent 并行产出，变成有验证、有审批、有止损、能叫停的交付流程。
-> 先试这一步：先在一个低风险任务上只跑一条最小链路：任务写成文件 → 独立验证或 QA → 人工审批 → 再合并，记录返工和耗时。
-> 最近修订：2026-11-03
+> 解决的问题：把“不满意就重问”升级成一套可执行流程，让并行 agent 的产出必须由测试、独立验证、校验器或人确认后才能被接受。
+> 先试这一步：先写一张任务单（目标、权限、产出、验收标准、可写资源），配一条可执行的验证命令，在一个真实小任务上走一遍；不要先铺角色和自动化。
+> 最近修订：2026-11-04
 
 ## 解决什么问题
-单个 AI 回答或单条串行 agent 会话，交付的往往是你没有验证过的结果。手册把“不满意就重问一次”升级成一套可执行流程：任务写清、并行分工、独立验证、合入门禁、成本检查、注意力路由、共享账本核销、叫停与围栏，以及用角色化 fleet 把 spec、实现、独立 QA 分开。做法 A–AH 覆盖从单次答案竞赛到多项目控制台、文件状态+心跳编排、多 agent 共享账本、长时运行骨架、跨会话/跨人的消息交接、把多个编码 agent 编成有频道、有审批闸门的团队、用显式任务图 + epoch 围栏做本地执行控制面，以及用 coordinator + coder + qa 三角色起步的角色化交付。共同底线是：并行只负责产出，接受与否必须由测试、独立 verifier、校验器、接收人本人确认或人工复核决定；消息层和编排层只负责把问题送到、把人叫来，不负责证明结果正确。做法 AH 补的是角色分工这一层：coordinator 只规划和创建任务卡，product 写 spec 后由人批准，designer 写视觉方案后由人批准，coder 写代码和测试，QA 独立运行构建、审查代码与安全、复现 bug，但不改代码，只写 QA-REPORT.md 和 punch-list；只有测试全绿才允许合并，红测中止合并；发布动作和凭据始终等人处理。它同样不证明结果正确。
+单个 AI 回答或单条串行 agent 会话，交付的往往是你没有验证过的结果。手册把“不满意就重问一次”升级成一套可执行流程：任务写清、并行分工、独立验证、合入门禁、成本检查、注意力路由、共享账本核销、叫停与围栏，以及用角色化 fleet 把 spec、实现、独立 QA 分开。做法 A–AJ 覆盖从单次答案竞赛到多项目控制台、文件状态+心跳编排、多 agent 共享账本、长时运行骨架、跨会话/跨人的消息交接、把多个编码 agent 编成有频道、有审批闸门的团队、用显式任务图 + epoch 围栏做本地执行控制面、用 coordinator + coder + qa 三角色起步的角色化交付，以及两层“治理”：AI 用 CTO/PM/工程师三层把任务单和验收证据固化成交接契约；AJ 用 G0–G7 状态机 + 零依赖 CLI 把基线冻结、审批签名、黑盒 QA 和 fail-closed 校验做成可执行的门。共同底线是：并行只负责产出，接受与否必须由测试、独立 verifier、校验器、接收人本人确认或人工复核决定；消息层和编排层只负责把问题送到、把人叫来，不负责证明结果正确。做法 AH 补的是角色分工这一层：coordinator 只规划和创建任务卡，product 写 spec 后由人批准，designer 写视觉方案后由人批准，coder 写代码和测试，QA 独立运行构建、审查代码与安全、复现 bug，但不改代码，只写 QA-REPORT.md 和 punch-list；只有测试全绿才允许合并，红测中止合并；发布动作和凭据始终等人处理。做法 AI 补的是交接契约这一层：每张任务单必须写清目标、权限、产出、验收标准和可写资源，委派不等于授权，结果回流走共享事件而不是消息中转，监控交给便宜档模型，容量失败按固定退避重试。做法 AJ 补的是可执行治理这一层：freeze 阻止空规格或缺 AC-xxx 行的规格，approve 绑定规格与 manifest 哈希，close-bug 必须先有缺陷记录，check --gate=G5 用 HMAC 信任根、manifest、仓库内证据和最新 QA 运行做 fail-closed 校验。它们同样都不证明结果正确。
 
-做法 A–AH 概览：
+做法 A–AJ 概览：
 - A：把不满意的回答送进锦标赛（arena-skill）。
 - B：并行子代理+测试合入闸门（clodfarm）。
 - C：多 harness、多座位的统一编排与恢复（openrig）。
@@ -44,6 +44,8 @@
 - AF：用 project + to-dos + Auto-advance + scheduled automations 把多 agent 工作流固定下来，并接入本机 Claude Code、Codex 等 CLI agent（Orkas；先手动跑一项待办，再只对下一项开 Auto-advance）。
 - AG：用显式任务图 + epoch 围栏做本地执行控制面，叫停后旧 epoch 排队任务失效、迟到完成被拒绝、进程树被终结（skein；先跑示例和停止演练）。
 - AH：用 Hermes fleet 的 coordinator + coder + qa 三角色起步，设 spec/design 两道人审门和红测合并门，QA 只报告不改代码（先只启用三角色，在 Windows/Python 本地小工具上试）。
+- AI：用 CTO/PM/工程师三层把任务单、验收证据和模型路由固化成交接契约（codex-cto-agent-team；先只出 plan-only，不建 chat）。
+- AJ：用 G0–G7 状态机 + gate_runner.py 做基线冻结、审批签名、黑盒 QA 与 fail-closed 校验（先复制规则文件，再跑 init/freeze）。
 
 ## 适用与不适用
 **适用（按处境选路径）**
@@ -84,6 +86,8 @@
 | 想把多 agent 工作流固定成“项目+待办+自动推进+定时自动化”，并让本机 Claude Code、Codex、OpenCode 等 CLI agent 参与，但不想一上来全自动 | AF（先手动跑一项待办，再只对下一项开 Auto-advance） |
 | 有一组本地、有依赖、需要可中断的多步子任务，想验证“叫停就真停、旧任务不会偷偷完成” | AG（先跑示例 + 停止演练，再迁真实任务图） |
 | 用 Windows + Python 做本地桌面应用/CLI/小 Web UI，想把 spec、实现、独立 QA 分开，先小范围试角色化 fleet | AH（先只启用 coordinator、coder、qa，保留 spec 门） |
+| 用 Codex 类宿主、想让“谁在做什么、做完凭什么算完成”写成任务单和验收契约，但还不想真的建一堆 chat | AI（先 plan-only：只出计划、不建 chat） |
+| 用多智能体编码、担心代理改验收标准、删测试、写桩代码、未授权关缺陷，想要一条可执行、fail-closed 的治理线 | AJ（先复制 CLAUDE.md/.cursorrules，再跑 init/freeze） |
 
 **不适用（关键边界）**
 - A：任务描述本身就含糊，100 个 agent 会一起含糊；不愿承担 token 成本不要用。
@@ -120,6 +124,8 @@
 - AF：只想要一次性问答、不能保持电脑唤醒且 Orkas 运行、不能接受打包应用登录或源码版无共享项目/云同步/web-app publishing，不要用；没有明确交付物和人工验收人，不要开 Auto-advance；把 16 个内置 agent 的能力、DeepResearcher 的 verified sources、ProductDeveloper 的 verifiable results 当独立验证结果，不要用。
 - AG：需要跨机/分布式调度、沙箱隔离、鉴权、外部副作用恰好一次或崩溃后自动恢复，不要用；manifest 的完整 schema 不在 README，要先读 docs/INTEGRATION.md；0.2.0 单作者项目，基准只在作者单机、单一 OS 测得，社区验证有限；它只管调度与停止，不证明结果正确。
 - AH：README 只给高层流程和规则，没有 SOUL.md 正文、adopt.md 细节和命令，不能据此完整复现；tested on 只有 Windows + Python 本地桌面应用/CLI/小 Web UI，macOS/Linux、带服务器/账户/支付的在线服务、移动应用、非 Python 栈未测试；没有量化数据、案例结果或对比实验，多数规则是作者设计主张；第三方技能不在仓库内，需要从来源安装；两处人审门之外，发布动作和凭据必须人处理，QA 只写报告不改代码，红测必须阻断合并；不要把“三角色跑通”当成结果正确性的证明。
+- AI：只在 Codex 类宿主上做过；Claude Code / Cursor / 通用云环境只有文字适配说明，原文自述“documented guidance, not live client validation”，不要当成已在你的宿主上验证；56 个角色全部铺开、建 chat、发任务消息都需要显式授权与账号容量；仓库不含后台调度器，本轮结束不会自动安排自己回来；模型档位表里的模型名不是所有宿主的默认值，也不是可用性承诺；没有任务成功率、成本或质量数据，不要当团队规范。
+- AJ：项目较新（v1.6.4，34 stars），生态与长期稳定性未知；同 UID 威胁模型下，G2 语义同行评审、容器级 E2 沙箱、针对同 UID 代理的秘密保管、生产发布执行仍由 SOP 协议、IDE 规则和 CI 保管负责，不是本 CLI 完全覆盖；需要团队愿意管理签名密钥、外部信任锚和证据目录，对个人小项目偏重；没有实际项目的前后对比数据或用户案例，反桩代码、防改验收标准等效果是作者主张。
 
 ## 前置条件
 - 共同前提：把任务写成独立、自包含的文件。子代理看不到你的聊天记录，任务文件是它唯一的信息源。
@@ -157,9 +163,11 @@
 - AF：macOS 12+（Apple Silicon/Intel）或 Windows 10+ 可直接用打包安装包；Linux 源码运行需 glibc 2.34+ 的 x64/arm64，且不支持 Alpine/musl。源码方式需要 Node 22.12+；保留 Python 3 和 C/C++ 构建工具链，用于少数原生模块回退编译。打包应用首次启动需登录，自带 500 credits；也可以用自己的 provider key。源码工作区在 macOS/Linux 的 ~/.orkas/，Windows 下在最小非系统盘符的 .orkas 目录。
 - AG：Linux / macOS / Windows，amd64 或 arm64；或本机有 Go 1.26+ 用于源码构建；一个持久状态目录（示例用 .skein）；要迁真实任务时，先读 docs/INTEGRATION.md 的 manifest 契约。
 - AH：已安装 Hermes Agent；有一个代码仓库作为项目状态载体；README 的 tested on 是 Windows + Python + 本地小工具，未测试 macOS/Linux、带服务器/账户/支付的在线服务、移动应用、非 Python 栈；每个角色需要独立 Hermes profile，从 roles/<role>/ 复制 SOUL.md 和 skills/ 到对应 profile；具体命令、SOUL.md 正文和 adopt 细节按 docs/adopt.md，本次材料没有给出可复制命令与正文。
+- AI：Codex 类宿主，能加载 skill；本机 Python ≥ 3.11（脚本只用标准库）；一个仓库外的私有状态目录（不存凭据，只存凭据的引用）；若要真建 chat 与发任务消息，需要足够的账号容量并显式授权。
+- AJ：已安装 Python 3（只用标准库，无第三方依赖）；项目根目录可写；准备至少 16 字符的签名密钥，通过环境变量 O9_APPROVAL_SECRET 或 --key 传入（未配置时 fail-closed）；外部信任锚 ~/.o9-trust/ 可写；规格文件中必须有结构化的 AC-xxx 表格行；若用 AI IDE，需把 .cursorrules 或 CLAUDE.md 复制到项目根目录。
 
 ## 操作步骤
-先按上表选路径。以下保留 A–AH 的核心操作。每条都先做最小试用，不先上全量；验证与接受仍走测试、独立 verifier、校验器、接收人本人确认或人工复核。
+先按上表选路径。以下保留 A–AJ 的核心操作。每条都先做最小试用，不先上全量；验证与接受仍走测试、独立 verifier、校验器、接收人本人确认或人工复核。
 
 ### 做法 A：把不满意的回答送进锦标赛（arena-skill）
 1. 前提：Claude Code 可 spawn 子 agent，Python 3.8+；任务已写成独立文件。安装三选一：粘贴仓库地址说 Install this skill, then confirm /arena works；或 clone 后复制 skills/arena 到 ~/.claude/skills/；或 /plugin marketplace add 后安装。
@@ -579,6 +587,97 @@ idea
 5. 项目状态只放仓库，不放 agent 记忆。每个任务结束清理临时文件、测试输出和残留服务，并说明清理了什么。当任务上下文被压缩两次后，写 handoff 并停止，让新会话从文件而不是模糊对话继续。
 6. 最小试用：选一个 1–2 天可完成的 Python CLI 或本地小工具；只启用 coordinator、coder、qa，可选 product 先写 SPEC.md。要求产出 SPEC.md、代码与测试、QA-REPORT.md。设置 spec 审批门；公开发布和凭据仍由人处理。跑 2 个任务，记录：人工介入次数是否集中在审批门和公开/凭据；红测是否阻止合并；QA 在发布前发现的可复现问题数；返工轮次；从想法到可运行安装包的时间；是否出现密钥进聊天、残留进程、状态只存在对话里等事故。预期：人工介入集中在审批门与发布/凭据；QA 在发布前抓到可复现问题；没有安全/清理事故。是否扩到 design、media、docs 和七角色，由对照指标决定。
 
+### 做法 AI：用 CTO/PM/工程师三层把任务单和验收证据固化成交接契约（codex-cto-agent-team）
+1. 前提：Codex 类宿主能加载 skill；本机 Python ≥ 3.11（只用标准库）；准备一个仓库外的私有状态目录，里面不存凭据，只存凭据的引用。克隆并复制整个 skills/cto-agent-team 目录（必须保留 scripts、references、assets、agents 子目录）。PowerShell 个人级安装：
+```powershell
+git clone https://github.com/StochasticResult/codex-cto-agent-team.git
+Set-Location codex-cto-agent-team
+$skillSource = Join-Path (Get-Location) 'skills/cto-agent-team'
+$skillTarget = Join-Path $env:USERPROFILE '.agents/skills/cto-agent-team'
+if (Test-Path -LiteralPath $skillTarget) { throw 'The target exists. Review it before updating.' }
+New-Item -ItemType Directory -Path (Split-Path -Parent $skillTarget) -Force | Out-Null
+Copy-Item -LiteralPath $skillSource -Destination $skillTarget -Recurse
+```
+项目级安装则改为复制到该项目的 .agents/skills/cto-agent-team。在 Codex 里选择 cto-agent-team；列表里没有就重启 Codex。注意边界：Claude Code / Cursor / 通用云环境只在 references/host-adapters.md 里有文字指引，原文自述“documented guidance, not live client validation”；建 chat、发消息、监控都依赖宿主工具和账号容量，这个 skill 本身不提供这些能力。
+2. 先只做计划，不建组织。在目标项目里开一个 CTO chat，选中 skill 或直接用 $cto-agent-team：
+```text
+Use $cto-agent-team to plan the work for `<GOAL>`. Give the task owners and acceptance criteria. Do not make chats.
+```
+预期：拿到任务归属与验收标准的一份计划；这一步不创建任何 chat，也不发任务消息。
+3. 要真建独立 chat 的全组织模式时，必须显式授权建 chat 和发任务消息——原文明确“Skill selection alone does not authorize chat creation or task messages”：
+```text
+Use $cto-agent-team for `<PROJECT>`. Use the current chat as CTO. Make five PM chats and ten engineer chats per PM.
+Use suitable existing chats. I permit creation of missing chats. I permit CTO-to-PM and PM-to-engineer task messages for this project.
+Keep private state in `<PRIVATE_STATE_DIR>`. Use the available tools and account capacity. Give actual creation and READY results.
+```
+4. 写任务单/交接单，这是最值得直接抄走的部分。每张任务单必须写清五项：目标、权限、产出、验收标准、可写资源。原文：“Each task must identify its target, permissions, outputs, acceptance criteria, and writable resources.” 委派不等于授权：组织上的层层下派，不自动授予设备操作、发布、对外发消息、采购等权限。派活前读目标项目的 AGENTS.md，确认设备身份、连接方式、任务权限三项都对。共享文件 / 设备 / 桌面 / 线上操作，同一时刻只有一个写者。交接里带上显式风格、约束和可观察的验收标准，并记录“改变了输出的那几个决定”。
+5. 结果回流不要用消息中转。PM 在共享私有事件里读工程师结果，由指定的一名文书（clerk）写共享摘要，CTO 读摘要 + 必要的原始引用。原文：“Do not send routine progress or result relay messages.”
+6. 按工作性质选模型档。原文 compatibility-6.1 档位表如下，原文同时声明该表“不是所有宿主的默认值，也不是可用性承诺”，不同厂商的 effort/speed 参数不是同义词，不要照字面互换：
+
+| 路由 | 工作 | 模型 | Reasoning |
+| --- | --- | --- | --- |
+| coordination_research | 例行 PM 协调、跨来源调研 | gpt-6.1-sol | high |
+| scoped_engineering | 有明确目标的范围内修复、UI 实现、视觉检查、电脑操作 | gpt-6.1-terra | high |
+| extraction | 从给定材料做简单抽取与例行摘要 | gpt-6.1-terra | medium |
+| complex_engineering | 复杂编码、架构、权限、事务、关键评审、跨系统发布 | gpt-6.1-sol | xhigh |
+| mechanical_supervision | 例行状态检查、重试记录、去重、完成候选分派 | gpt-6-luna | low |
+
+7. 升级规则：只有在批准范围内、出现冲突约束 / 关键决策 / 复杂状态 / 实质性验收失败时才升到 Sol/xhigh；抽取有歧义先上 Terra/high。--escalate-from 要求有实质失败和先前结果证据，最多升两级；--retry-from 保留已验证的原始 native 请求与质量历史，即使常规目录已过期。任何 pin、未知能力、不支持参数、预算不满足，都阻断选择；未知成本不等于省钱。先跑无凭据的 fixture 看它输出什么格式：
+```sh
+python scripts/model_route.py assets/routing.example.json --now 2030-01-02T00:00:00Z
+```
+fixture 结果固定 dispatch_ready: false，只能看结构；实际使用要替换合成证据、改用当前时间，并按 assets/routing.schema.json 的七段 schema 提供私有策略/目录输入和显式 profile。工具接受请求 ≠ 后端真的用了那个模型。
+8. 初始化私有状态与角色注册。初始化只创建 55 个 planned 从属角色，不建 chat，CTO 继续在当前 chat 里干：
+```powershell
+$teamStateDir = Join-Path $env:LOCALAPPDATA 'codex-cto-agent-team/my-team'
+python "$skillTarget/scripts/team_state.py" init --state-dir "$teamStateDir"
+python "$skillTarget/scripts/team_state.py" validate --state-dir "$teamStateDir"
+```
+建 chat 的工具返回真实身份后再登记，占位符不能当真实 ID 登记：
+```powershell
+python "$skillTarget/scripts/team_state.py" register --state-dir "$teamStateDir" --role PM01 --thread-id "<THREAD_ID_FROM_TOOL>" --host-id "<HOST_ID_FROM_TOOL>" --status created
+```
+收到真实 READY 回复后，用同一身份再登记一次 --status ready。要求 55 个从属角色全部就绪时才用：
+```powershell
+python "$skillTarget/scripts/team_state.py" validate --state-dir "$teamStateDir" --require-ready
+```
+9. 状态机注意：init 可用 --pm-model、--engineer-model、--effort 覆盖注册快照（--effort 同时作用于两类角色）；重复 init 遇到不兼容配置会拒绝而不是覆盖；老快照要重跑必须带上原始覆盖参数（例如 --effort xhigh）；validate 不做迁移。注册助手共用一份 registry.json 且没有跨进程锁，所以 CTO 必须串行化写入；它只记角色，不记每任务路由、真实执行或后端模型验证。私有状态目录里不得存凭据，只能存“凭据存储的引用”。
+10. 监控、交付与重试。每个独立请求给唯一 task ID 和归属 PM，发完整交接后 CTO 立刻结束本轮；PM 继续实现、评审、授权交付；新请求不得覆盖旧的未完成任务。例行监控交给便宜档（Luna/low）；复用已有监控和已保存的游标，未变化的检查和普通重试保持安静；不要再套一个高成本 CTO 循环去盯监控者。“完成候选”必须匹配任务与结果版本，并附带产出与验收证据；PM 保留实质验收权，CTO 做最终交付与跨团队决策。事件发布要原子、发布后不可变、更正用链接指向原事件；持久化已消费事件标识和源版本；发布、验收、派发、真实用户送达这四类回执要分开记。
+11. 容量失败重试：仅对已确认因临时模型容量导致失败/中断、且仍有未完成授权工作的回合重试。默认退避 0、2、5、10、15 分钟，之后每 15 分钟；供应商给的 retry-after 更长则以它为准。重试要用失败回合已验证的模型、完整 native 参数和质量历史，不要换成新默认值或监控者的模型。已知成功的输出和已完成的外部动作要保留。凭据问题、账号耗尽、审批请求、主动停止、永久错误走各自流程，不走这条重试。
+12. 关键限制：本轮结束不会自动安排自己回来，仓库不含后台调度器；宿主 schedules 是可配置能力，唤醒仍需明确的接收方与范围授权；一次性监控在无职责后要退役。最小试用：先 plan-only + 1 个 PM + 2–3 个工程师，在真实小项目上跑一轮，不铺 56 角色。预期：任务单五要素齐全、交接不靠聊天记录、完成候选带验收证据；是否扩到全组织由你自己的返工率与人工介入次数决定。
+
+### 做法 AJ：用 G0–G7 状态机 + gate_runner.py 做基线冻结、审批签名与黑盒 QA（O9 治理）
+1. 前提：已安装 Python 3（只用标准库）；项目根目录可写；准备至少 16 字符的签名密钥，通过环境变量 O9_APPROVAL_SECRET 或 --key 传入；未配置时操作会 fail-closed。外部信任锚在 ~/.o9-trust/（密钥指纹固定、单调序列）。规格文件中必须有结构化的 AC-xxx 表格行，否则 freeze 会阻止。若用 AI IDE，需把 .cursorrules 或 CLAUDE.md 复制到项目根目录。
+2. 选项 A（最快）：把仓库中的 .cursorrules 复制到 Cursor 项目根目录；或把 CLAUDE.md 复制到 Claude Code 项目根目录。之后 AI 代理在生成代码时会受到 G0.5 确认、反桩代码、黑盒验证等规则约束。预期：能观察到代理在动手前先确认、被要求给出可验证证据、不直接改验收标准。
+3. 选项 B（可执行控制面）：初始化工作区，会复制完整四件套模板，并写入 .o9_project_id 与本地 index.tsv 注册表：
+```bash
+python gate_runner.py init
+```
+4. 冻结 G3 基线。会阻止空规格或缺少 AC-xxx 表格行；签署 spec_sha256 与复合 manifest_sha256：
+```bash
+O9_APPROVAL_SECRET="my-super-secret-key-16" python gate_runner.py freeze
+```
+5. 绑定分离式人工审批。同时绑定规格和 manifest 哈希；如果冻结后基线被改动会拒绝：
+```bash
+O9_APPROVAL_SECRET="my-super-secret-key-16" python gate_runner.py approve station_master
+```
+6. 对缺陷关闭做密码学签名。缺陷必须先在 YAML 中存在；条目键顺序不限：
+```bash
+O9_APPROVAL_SECRET="my-super-secret-key-16" python gate_runner.py close-bug BUG-001 qa_lead
+```
+7. 运行 fail-closed 的 G5 验证。校验 HMAC 信任根、manifest、仓库内证据，并按 recorded_at 选择最新 QA 运行：
+```bash
+O9_APPROVAL_SECRET="my-super-secret-key-16" python gate_runner.py check ./src --gate=G5 --require-approval
+```
+8. 仅在外部信任锚丢失/损坏时恢复信任。会归档旧锚和账本：
+```bash
+O9_APPROVAL_SECRET="my-super-secret-key-16" python gate_runner.py trust-reset PRJ-2026-001
+```
+9. 注意：接口契约文件放在 o9_workspace/contracts/ 下会自动纳入 G3 的 manifest_sha256，冻结后任何修改都会在 approve 和 check 时触发熔断。这就是“代理偷偷改验收标准”的拦截点。
+10. 按风险选轨道：S 轨道适合 UI/文案修改，2 个接触点快速通道；M 轨道适合功能开发，需要完整契约审查；L 轨道适合 Auth / Billing / DB 操作，需要严格沙箱 + 模糊测试。角色上区分 Coder、QA lead、Station master；QA 代理先黑盒测试（无 src/ 读权限），再白盒检查。
+11. 选项 C（定制工作流）：打开 prompts/MAO-Workflow-Coach-en.md，将全文粘贴到 Claude 或 ChatGPT，回答 4 个关于技术栈的简短问题，它会为你的仓库生成定制化的、规模合适的多智能体工作流。
+12. 最小试用：先在一个小型项目或分支上采用选项 A，观察代理是否按 G0.5 确认、反桩代码、黑盒验证规则工作；再采用选项 B，跑 init 和 freeze 建立最小规格与契约，让一个编码代理在 M 轨道完成一个小功能，按 approve → 编码 → check --gate=G5 走一遍。预期：freeze 能拦住空规格、冻结后改契约会熔断、check 在没有证据时失败；是否长期使用由你自己的通过/失败记录决定。
+
 ## 怎么判断变好了
 **可观察的指标**
 - A：盲评比分；冠军扛过的攻击里有多少条指向你原本没写进要求、但确实在意的缺口；是否实际采用；token 开销 vs plan --quick 的预估。
@@ -615,6 +714,8 @@ idea
 - AF：与基线相比看首次草稿时间、总周转时间、人工修改次数、返工率、遗漏或重复操作次数、权限误操作次数、credits/API 成本、引用准确率、自动化按时运行率、复核通过率。若时间下降且返工和权限风险没有上升，可继续扩大范围；若主要收益只是“看起来自动化”但复核成本更高，则退回 study，只保留其 project/to-dos/权限门控的设计思路。
 - AG：停止后仍然存活的子进程数——应为 0（原文自证 160/160，你的负载上要自己复现）；迟到完成被接受的比例——应为 0；从 skein stop 到全部终结的时延——对照原文中位 141.663 ms，看你的机器与子进程形态；同一图多次运行的 report.json 一致性；与自写脚本 / asyncio 在同一张任务图上的端到端耗时对比（原文显示 100 个独立任务时 asyncio 中位 0.740 ms 反而快于 Skein 1.040 ms，别假设它一定更快）。
 - AH：人工介入是否集中在 spec/design 门、发布与凭据；红测是否真的阻止合并；QA 在发布前发现的可复现问题数；返工轮次；从想法到可运行安装包的时间；事故指标——密钥进聊天、残留进程、状态只存在对话里、QA 改了代码、红测后仍然合并。对照基线：同类 Python CLI/本地小工具此前由你或单人 Claude Code 完成时的发布前缺陷、返工和人工介入。
+- AI：任务单五项要素的齐全率（目标/权限/产出/验收/可写资源）；“委派被误当成授权”的事故数（应为 0）；完成候选里带产出与验收证据的比例；交接靠聊天记录 vs 靠共享事件的比例；人工介入次数是否集中在验收与授权；返工轮次；每条任务的 token 与耗时；模型路由是否被真的执行（工具接受请求不等于后端用了那个模型，需要自己抽查）；重试是否只发生在已确认的容量失败上；私有状态是否串行写入、有没有并发写坏 registry.json。对照基线：同一项目用单会话 Claude Code/Codex 做同类任务时的返工与人工介入。
+- AJ：freeze 是否成功阻止空规格或缺少 AC-xxx 行的规格；冻结后修改 spec_and_contracts.md 或 o9_workspace/contracts/ 下文件，approve / check 是否如预期熔断；close-bug 是否在没有对应缺陷 YAML 时拒绝签名、有缺陷时是否生成可验证的 HMAC 记录；check --gate=G5 是否在证据不在仓库根目录、或 QA 运行不是最新 recorded_at 时失败；G6 的 RTM 表是否完整；G7 的 3 决策签核是否齐全。对比使用前后：规格被代理擅自修改的次数、缺陷被未授权关闭的次数、测试被删除/写桩的次数是否下降。原文没有给这些指标的量化基线，需要自己记录通过/失败次数和人工审查耗时。
 
 **最小试用**
 - A：挑 1–2 个真实、不满意的任务，跑 /arena --quick --seed 7 并用 baseline 传入旧答案。
@@ -651,6 +752,8 @@ idea
 - AF：选一个边界清楚、交付物明确的流程，例如“每周研究简报+幻灯片”或“一条 30 秒产品推广视频”。先记录当前人工/单 agent 做法的基线。安装打包应用或从源码运行，配置一个模型 provider，建一个 project，放入目标、规则、参考文件和验收标准；拆 3–5 个 to-dos，先手动跑第一项并复核，再只对下一项开启 Auto-advance。加一个 daily 或 weekly 的 scheduled automation，连接一个低风险 connector，并保持默认发送/发布/删除前确认。若本机已有 Claude Code 或 Codex，可让一个 agent 做实现、另一个做复核，与单 agent 做法对比。视频场景直接用上面的提示词，要求先给 breakdown 和 plan。对照基线：同类流程先用人工或单 agent 做 1–2 次，记录首次草稿时间、总周转时间、人工修改次数、返工率、credits/API 成本。
 - AG：跑示例 → 做一次停止演练 → 把 3–5 个真实子步骤写成 manifest 再演练一次；半天内可做完。先记录 .skein/runs/<run-id>/report.json 与 events.jsonl 作为基线，再检查退出码是否为 4、status 是否为 stopped true 且 epoch 递增、旧 epoch 的迟到结果是否被拒绝、停止后残留子进程是否为 0。
 - AH：选一个 1–2 天可完成的 Python CLI 或本地小工具；只启用 coordinator、coder、qa，可选 product 先写 SPEC.md；要求产出 SPEC.md、代码与测试、QA-REPORT.md；设置 spec 审批门；公开发布和凭据仍由人处理；跑 2 个任务。记录人工介入次数是否集中在审批门和公开/凭据、红测是否阻止合并、QA 在发布前发现的可复现问题数、返工轮次、从想法到可运行安装包的时间、是否出现密钥进聊天/残留进程/状态只存在对话里等事故。
+- AI：先只做 plan-only：在真实小项目上让 CTO 计划一个目标，产出任务归属与验收标准，明确“Do not make chats”。然后只建 1 个 PM + 2–3 个工程师的 chat，跑一个真实小任务；任务单必须写全五项；完成候选必须带产出与验收证据；PM 做实质验收。全程对照你自己跑同一任务的返工与人工介入次数。不要一上来铺 56 个角色。
+- AJ：先在一个小型项目或分支上采用选项 A，把 .cursorrules 或 CLAUDE.md 复制到项目根目录，观察代理是否按 G0.5 确认、反桩代码、黑盒验证规则工作；再采用选项 B，跑 init 和 freeze 建立最小规格与契约，让一个编码代理在 M 轨道完成一个小功能，按 approve → 编码 → check --gate=G5 走一遍。做一个反向测试：冻结后改一下 contracts 下的文件，确认 approve / check 会熔断。
 
 **试多久、什么时候升级**
 - A：若 --quick 在 3 个以上任务上稳定优于 baseline，且攻击确实命中你没考虑到的地方，再升到 --agents 32。
@@ -684,6 +787,8 @@ idea
 - AF：先试 1–2 周，只做一条流程、3–5 个 to-do、一个 daily 或 weekly automation、一个低风险 connector。若首次草稿时间或总周转时间下降，且人工修改次数、返工率、权限误操作次数没有上升，再考虑对下一项开启 Auto-advance、增加 automation 或接入更多外部 CLI agent；若复核成本更高、自动化按时运行率低、或 credits/API 成本不可接受，退回手动跑 to-do，只保留 project 和权限门控的设计思路。
 - AG：先在你自己的工作负载上验证停止证明，再用于生产；三项安全指标（残留子进程 0、迟到完成被接受 0、停止时延可接受）成立，且任务确实是“本地 + 有依赖 + 需要可中断”，再扩大；涉及外部写入、不可信命令或跨机调度，按原文的“不覆盖”清单另补沙箱、网关和幂等层。
 - AH：先只跑 2 个任务、三角色、Windows + Python 本地小工具；若人工介入集中在审批门与发布/凭据、红测确实阻止合并、QA 在发布前抓到可复现问题、返工和发布前缺陷不高于你此前同类做法，且没有安全/清理事故，再考虑启用 designer、media、docs 和更多角色。若 QA 报告不可用于修复、红测仍被合并、或密钥/清理事故出现，先退回 coordinator + coder 并补门禁，不要扩角色。
+- AI：先只做 plan-only 一轮，再 1 个 PM + 2–3 个工程师跑 1–2 个真实小任务。若任务单五项齐全率接近 100%、完成候选都带验收证据、委派与授权事故为 0、返工不高于你原来的做法，再考虑扩大 PM 数和工程师数；如果每次都要你手工补任务单、或 PM 验收形同虚设，先退回单 agent + 一张任务单，不要扩角色。
+- AJ：先只复制规则文件观察一周，再跑 init/freeze 走一个小功能的 M 轨道。如果 freeze 能稳定拦住空规格和缺 AC-xxx、冻结后改契约确实熔断、check 在证据不足时确实失败，且人工审查耗时没有明显上升，再扩到更多任务和 L 轨道；如果团队不愿管理密钥与信任锚、或熔断频繁打断正常改动，先只保留 CLAUDE.md/.cursorrules 这一层规则。
 
 ## 常见坑
 - A：任务含糊，100 个 agent 会一起含糊；任务文件是唯一信息源；judge 也是 Claude，评分有偏差。
@@ -720,6 +825,8 @@ idea
 - AF：README 主要是产品说明，没有独立基准、客户案例数据或前后对比；16 个 agent 的能力、DeepResearcher 的“verified sources”、ProductDeveloper 的“verifiable results”都是作者主张。项目/待办/自动化的按钮级操作步骤没有给出，任务路由的具体判定标准也没有展开。打包应用需要登录，内置模型走 Orkas 管理服务；源码版不支持共享项目、云同步和 web-app 发布。自动化依赖电脑唤醒和 Orkas 运行，不能关机后继续。视频复刻不支持社交平台分享链接下载，也不保证精确运镜、真人表演和逐帧匹配。后台学习 review 也可能判断没有值得保存的内容。不要一上来建 13 个 Bot 或全量开 Auto-advance；先把 project、to-dos、权限确认和人工复核跑顺。
 - AG：0.2.0 早期版本，单作者项目，社区验证有限；基准全部在作者单机、单一 OS 上测得，无第三方复现；100 个独立任务时 asyncio 中位更低（0.740 ms vs 1.040 ms），Skein 并非处处领先；manifest 完整契约不在 README，需读 docs/INTEGRATION.md；lease 是 fencing token 不是凭证，外部系统要认它必须另做校验网关；manifest 命令沿用当前 OS 用户权限，不可信负载要另用 OS 沙箱；它不覆盖沙箱、鉴权、agent 输出语义校验、外部副作用恰好一次、崩溃后自动恢复、分布式共识、远程或脱离本机的作业；不要把“叫停”当成结果正确性的证明——它只保证旧任务不偷偷完成，不保证结果对。
 - AH：README 只给角色表、主流程、两处审批门和七条经验规则，没有 SOUL.md 正文、adopt.md 细节和命令，不能据此完整复现；tested on 只有 Windows + Python 本地桌面应用/CLI/小 Web UI，macOS/Linux、带服务器/账户/支付的在线服务、移动应用、非 Python 栈未测试；没有量化数据、案例结果或对比实验，多数规则是作者设计主张；第三方技能不在仓库内，需要从来源安装；两处人审门之外，发布动作和凭据必须人处理，QA 只写报告不改代码，红测必须阻断合并；不要把“三角色跑通”当成结果正确性的证明。
+- AI：仓库 31 stars，只有设计与流程说明，没有效果数据，且明确声明不带后台调度、未做过客户端实测——不要当生产调度器；Claude Code / Cursor / 通用云环境只有 host-adapters.md 的文字指引，不是已在你的宿主上验证；角色登记 ≠ 建了 chat ≠ READY ≠ 真在算，这四个是不同状态，别把 registry.json 里的登记当成“团队已经在工作”；registry.json 没有跨进程锁，CTO 必须串行写入，否则会写坏；init 遇到不兼容配置会拒绝而不是覆盖，老快照要重跑必须带原始覆盖参数，validate 不做迁移；私有状态目录不得存凭据，只能存引用；模型档位表里的模型名不是所有宿主的默认值，也不是可用性承诺，不同厂商的 effort/speed 参数不是同义词；工具接受请求 ≠ 后端真的用了那个模型；重试只能用于已确认的容量失败，凭据、账号耗尽、审批、主动停止、永久错误走各自流程，且不要换成新默认值或监控者模型；不要在消息里中转例行进度，那会把交接变成聊天记录；不要一上来建 56 个 chat。
+- AJ：项目较新（v1.6.4，34 stars），生态与长期稳定性未知；没有实际项目的前后对比数据或用户案例，反桩代码、防改验收标准、黑盒 QA 等效果是作者主张；同 UID 威胁模型限制下，G2 语义同行评审、容器级 E2 沙箱、针对同 UID 代理的秘密保管、生产发布执行仍由 SOP 协议、IDE 规则和 CI 保管负责，不是本 CLI 完全覆盖；需要团队愿意管理签名密钥、外部信任锚和证据目录，对个人小项目偏重；O9_APPROVAL_SECRET 未配置会 fail-closed，别以为不填也能跑；接口契约文件放在 o9_workspace/contracts/ 下会自动纳入 manifest_sha256，冻结后改它会在 approve 和 check 时熔断——这是设计，不是 bug；trust-reset 会归档旧锚和账本，只在外部信任锚丢失/损坏时用；它只做治理与校验，不替你写业务代码，也不证明结果正确。
 
 ## 证据与来源
 - A 依据调研《Jakeschincariol/arena-skill》。可核对：成本表、bracket.py plan 输出、赛程表、rubric 权重、默认并发 10、单元测试、117 stars。质量提升属作者主张。
@@ -756,6 +863,8 @@ idea
 - AF 依据调研《Orkas-AI/Orkas》。可核对：MIT 许可；源码运行命令 git clone https://github.com/Orkas-AI/Orkas.git、cd Orkas、./run.sh，Windows 用 run.cmd；macOS 12+/Windows 10+ 打包安装，Linux 源码需 glibc 2.34+ x64/arm64 且不支持 Alpine/musl；源码需 Node 22.12+；首次启动准备 pinned Python、uv、Node、embedding model（约 95 MB）、OfficeCLI、FFmpeg、whisper.cpp 和多语言语音模型资源；工作区 ~/.orkas/；Settings → AI Providers 配置模型；Account settings → Models → Chat → Add model → Custom 配置本地 OpenAI-compatible 或 Anthropic-compatible endpoint；支持 Claude、OpenAI、Gemini、DeepSeek、Kimi、GLM、Qwen、MiniMax、Doubao；project 保存目标、规则、记忆和文件；to-dos 与 Auto-advance；scheduled automations 支持 hourly/daily/weekly/monthly，v1.9 起错过后 12 小时内补跑；connectors 默认在发送、发布或删除前询问；外部 CLI agent 通过本地会话接入，Commander 用 dispatch_to、hand_off_to、run_worker 路由；视频复刻提示词原文；npm run native:repair 与 npm run native:check，Node.js 24 LTS 最低 22.12.0；GitHub 显示 6785 stars、当日 1044 stars。属作者主张、无独立验证：16 个内置 agent 的能力、DeepResearcher 的 verified sources、ProductDeveloper 的 verifiable results、后台 review 会更新自我评估与学习技能；没有准确率、返工率、成本或前后对比数据；项目/待办/自动化的按钮级操作步骤和任务路由判定标准未给出；打包应用需登录并走 Orkas 管理服务；源码版不支持共享项目、云同步和 web-app publishing；自动化依赖电脑唤醒和 Orkas 运行；视频复刻不支持社交平台分享链接下载，也不保证精确运镜、真人表演和逐帧匹配。本手册中的最小试用与判断指标是据此补充的试用设计，不是原文数据。
 - AG 依据调研《Balanov/skein》。可核对：install.sh 与 install.ps1、SHA256SUMS 校验、SKEIN_INSTALL_DIR、源码构建命令 go build -trimpath -o bin/skein ./cmd/skein、skein run/stop/status/reset、退出码 0/3/4/1/2、.skein/runs/<run-id>/ 下的 report.json 与 events.jsonl、examples/fanout.json、examples/embed-go、docs/INTEGRATION.md、manifest 要点（JSON、argv 数组、无隐式 shell、依赖图、multi-pass、worker/pass 上限、每趟超时）、Go 1.26+、MIT、0.2.0。数据：Windows 11 / Ryzen 9 5950X 上 1000 节点图三种形态的耗时（Independent 1.580 ms、Serial chain 3.272 ms、Fan-out/join 2.080 ms；对照 Python asyncio 与 LangGraph）；冷进程 24 个真实 Python SHA-256 worker、15 次全新进程，Skein 中位 156.463 ms，asyncio 288.644 ms，LangGraph 998.010 ms，360/360 结果校验通过；停止证明 160/160 父子进程树被终结、160/160 子进程心跳被冻结，20 次运行中位 141.663 ms。作者主动承认 100 个独立任务时 asyncio 中位更快（0.740 ms vs 1.040 ms），并声明这些是本地观测，不是通用排名，也不是模型质量结果。明确不覆盖：任意命令沙箱化、鉴权或签名 lease、agent 输出语义校验、外部副作用恰好一次、崩溃后自动恢复、分布式共识、远程或脱离本机的作业、已经越过外部边界的副作用。256 stars、单作者项目，社区验证有限；0.2.0 早期版本，作者要求先在工作负载上验证停止证明再用于生产。
 - AH 依据调研《SamueleBassoli/hermes-fleet-apps》。可核对：README 给出七个角色（协调者、产品、设计、编码、QA、媒体、文档）、主流程、两处人工审批门（spec 与 design）、QA 独立运行构建/审查/复现 but 不改代码、只写 QA-REPORT.md 和 punch-list、红测中止合并、只有 coordinator 规划任务和创建卡片、项目状态只放仓库、每个任务结束清理临时文件/测试输出/残留服务、上下文压缩两次后写 handoff；tested on 为 Windows + Python + 本地桌面应用/CLI/小 Web UI，由一个人从想法做到安装包和发布；not tested 为 macOS/Linux、带服务器/账户/支付的在线服务、移动应用、非 Python 栈；第三方技能不在仓库内，需要从来源安装。没有量化数据、案例结果或对比实验，多数规则是作者设计主张；README 未提供 SOUL.md 内容、adopt.md 细节和命令，无法据此完整复现。因此只列为小范围试候选，不列为直接采用的稳定流程。
+- AI 依据调研《StochasticResult/codex-cto-agent-team》。可核对：仓库 31 stars；Skills 目录结构与个人级/项目级安装路径；plan-only 与全组织两条提示词原文；“Skill selection alone does not authorize chat creation or task messages”这一授权边界；任务单五项（目标、权限、产出、验收标准、可写资源）；“委派不等于授权”“同一共享资源一个写者”“不要用消息中转例行进度”三条规则；compatibility-6.1 档位表（coordination_research / scoped_engineering / extraction / complex_engineering / mechanical_supervision）；model_route.py fixture 命令与 dispatch_ready:false；--escalate-from 最多升两级、--retry-from 保留原始 native 请求；任何 pin、未知能力、不支持参数、预算不满足都阻断；team_state.py init/validate/register 与 --require-ready；init 只创建 55 个 planned 角色、不建 chat；registry.json 无跨进程锁需串行写；私有状态不存凭据只存引用；容量失败退避 0/2/5/10/15 分钟之后每 15 分钟、retry-after 更长以它为准；发布/验收/派发/真实用户送达四类回执分开记；仓库不含后台调度器。属作者主张、无独立验证：角色分工能提升交付质量、模型路由能降本、验收契约能减少返工；没有任务成功率、成本、返工率或对照实验数据。原文自述 Claude Code / Cursor / 通用云环境只是 documented guidance, not live client validation；模型名 gpt-6.1-sol / gpt-6.1-terra / gpt-6-luna 与档位表原文声明不是所有宿主默认值、也不是可用性承诺。本手册中的最小试用组合与判断指标是据此补充的试用设计，不是原文数据。
+- AJ 依据调研《Over9rowth/O9-RD-MAO-Governance》。可核对：版本 v1.6.4；仓库 34 stars；gate_runner.py 的 init / freeze / approve / close-bug / check / trust-reset 子命令与参数；O9_APPROVAL_SECRET 至少 16 字符、未配置时 fail-closed；外部信任锚 ~/.o9-trust/（密钥指纹固定、单调序列）；freeze 会阻止空规格或缺少 AC-xxx 表格行并签署 spec_sha256 与复合 manifest_sha256；approve 同时绑定规格和 manifest 哈希，冻结后基线被改动会拒绝；close-bug 要求缺陷先在 YAML 中存在并生成 HMAC BUG_CLOSE 记录；check --gate=G5 校验 HMAC 信任根、manifest、仓库内证据、按 recorded_at 选最新 QA 运行，证据必须限制在仓库根目录内；o9_workspace/contracts/ 下的接口契约文件自动纳入 manifest_sha256；G0–G7 状态机、G5 发现缺陷可回 G4（Bug 且 Coder != Close）、G6 结构化 RTM 表、G7 3 决策签核；S/M/L 三条风险轨道与 Coder / QA lead / Station master 角色；QA 先黑盒（无 src/ 读权限）再白盒；.cursorrules 与 CLAUDE.md 两个规则文件；prompts/MAO-Workflow-Coach-en.md 与 4 个问题；tests/test_v16_controls.py 覆盖每个 tool-enforced 行；docs/CONTROL-MATRIX.md 区分 tool-enforced / tool-validated / manual-verified / infra-boundary。属作者主张、无独立验证：能解决“野生”多智能体编码中的需求幻觉、互相奉承、奖励黑客（删测试断言、写 TODO 桩、偷偷降低验收标准）等问题；没有实际项目的前后对比数据或用户案例。局限：项目较新、生态和长期稳定性未知；同 UID 威胁模型下，G2 语义同行评审、容器级 E2 沙箱、针对同 UID 代理的秘密保管、生产发布执行仍由 SOP 协议、IDE 规则和 CI 保管负责，不是本 CLI 完全覆盖；需要团队管理签名密钥、外部信任锚和证据目录，对个人小项目偏重。本手册中的最小试用与判断指标是据此补充的试用设计，不是原文数据。
 
 ## 依据的调研
 
@@ -793,3 +902,5 @@ idea
 - [@MindfulReturn: yetone 这套 Magpie 运维看着朴素，总结下来的方法如下：Claude Code + 官方 Opus，并行三条 /loop——一条盯 GitHub issue/PR 和 Discord（PR](../research/radar/2026-11-02/9530-yetone-magpie-claude-code-opus-loop-github-issue-p.md)：值得一试，先在一个仓库上照搬“三条并行 loop + PR 必须拉下来真跑 + 便宜模型先拦截 X 杂音”这套骨架，跑一两周再决定是否扩展；它的价值不在工具新奇，而在于把 issue/PR 值守、舆情筛选、技术债清理拆成三个互不干扰的常驻循环，人工只留下 UI/UX 决策，分工清晰、可小成本验证。
 - [Balanov/skein](../research/radar/2026-11-03/9850-balanov-skein.md)：值得一试，先装好，用示例任务图跑一次，再用 `skein stop` 演练“旧 epoch 排队任务失效 + 迟到完成被拒绝 + 进程树被终结”，验证通过后再考虑把你自己的多步子任务迁到显式任务图上；它给出了可照做的安装、运行、停止命令和明确的退出码语义，但仍是 0.2.0 早期版本、单机自测基准，且明确不覆盖沙箱、鉴权和外部副作用恰好一次。
 - [SamueleBassoli/hermes-fleet-apps](../research/radar/2026-11-03/9950-samuelebassoli-hermes-fleet-apps.md)：值得一试，建议小范围试：先用 Hermes Agent 搭 coordinator、coder、qa 三个角色，在 Windows/Python 本地小工具上跑通两道人审门和绿灯合并，再决定是否扩到七角色；理由是 README 给出了可操作的编排规则，但缺少完整配置与跨平台/非 Python 证据。
+- [StochasticResult/codex-cto-agent-team](../research/radar/2026-11-04/10024-stochasticresult-codex-cto-agent-team.md)：值得一试，先只借用它的「任务交接模板（目标/权限/产出/验收/可写资源）+ 模型路由分级 + 验收证据规则」，用 plan-only 提示词和 1 个 PM+2~3 个工程师的最小配置在真实小项目上跑一轮；56 角色全铺开和私有状态机暂缓，因为原文只有设计与流程说明、没有效果数据，且明确声明不带后台调度、未做过客户端实测。
+- [Over9rowth/O9-RD-MAO-Governance](../research/radar/2026-11-04/10028-over9rowth-o9-rd-mao-governance.md)：值得一试，建议小范围试用：该仓库提供了可直接复制的规则文件、零依赖 CLI 和 G0–G7 流程，能对多智能体编码工作流施加可验证的治理约束；但项目较新、缺少实际案例，需在团队内先做小规模验证。
