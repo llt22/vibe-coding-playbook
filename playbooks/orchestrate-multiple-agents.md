@@ -1,15 +1,15 @@
-# 让多个编码 agent 并行干活，验证通过才算完成、叫停就能真停
+# 让 AI 交付先过证据门：多 agent、独立 QA、人工审批与可叫停
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：多个 AI agent 并行干活时，如何分工、验证、合入、控成本，并且在叫停时真的停住，不让旧任务的迟到结果混进交付。
-> 先试这一步：先给你手上一个可拆分、有测试命令的小任务设一道合入闸门（例如 FARM_VERIFY_CMD='pytest -q'），再并行派 2 个子代理。
+> 解决的问题：把 AI 的一次性回答或多 agent 并行产出，变成有验证、有审批、有止损、能叫停的交付流程。
+> 先试这一步：先在一个低风险任务上只跑一条最小链路：任务写成文件 → 独立验证或 QA → 人工审批 → 再合并，记录返工和耗时。
 > 最近修订：2026-11-03
 
 ## 解决什么问题
-单个 AI 回答或单条串行 agent 会话，交付的往往是你没有验证过的结果。手册把“不满意就重问一次”升级成一套可执行流程：任务写清、并行分工、独立验证、合入门禁、成本检查、注意力路由、共享账本核销、叫停与围栏，并在探索卡住时按预算止损。做法 A–AG 覆盖从单次答案竞赛到多项目控制台、文件状态+心跳编排、多 agent 共享账本、长时运行骨架、跨会话/跨人的消息交接、把多个编码 agent 编成有频道、有审批闸门的团队，以及用显式任务图 + epoch 围栏做本地执行控制面。共同底线是：并行只负责产出，接受与否必须由测试、独立 verifier、校验器、接收人本人确认或人工复核决定；消息层和编排层只负责把问题送到、把人叫来，不负责证明结果正确。新增的做法 AG 补的是另一层：任务要能随时安全收手——叫停后旧 epoch 的排队任务失效、迟到完成被拒绝、进程树被终结，而不是只把任务标成 canceled；它同样不证明结果正确。
+单个 AI 回答或单条串行 agent 会话，交付的往往是你没有验证过的结果。手册把“不满意就重问一次”升级成一套可执行流程：任务写清、并行分工、独立验证、合入门禁、成本检查、注意力路由、共享账本核销、叫停与围栏，以及用角色化 fleet 把 spec、实现、独立 QA 分开。做法 A–AH 覆盖从单次答案竞赛到多项目控制台、文件状态+心跳编排、多 agent 共享账本、长时运行骨架、跨会话/跨人的消息交接、把多个编码 agent 编成有频道、有审批闸门的团队、用显式任务图 + epoch 围栏做本地执行控制面，以及用 coordinator + coder + qa 三角色起步的角色化交付。共同底线是：并行只负责产出，接受与否必须由测试、独立 verifier、校验器、接收人本人确认或人工复核决定；消息层和编排层只负责把问题送到、把人叫来，不负责证明结果正确。做法 AH 补的是角色分工这一层：coordinator 只规划和创建任务卡，product 写 spec 后由人批准，designer 写视觉方案后由人批准，coder 写代码和测试，QA 独立运行构建、审查代码与安全、复现 bug，但不改代码，只写 QA-REPORT.md 和 punch-list；只有测试全绿才允许合并，红测中止合并；发布动作和凭据始终等人处理。它同样不证明结果正确。
 
-做法 A–AG 概览：
+做法 A–AH 概览：
 - A：把不满意的回答送进锦标赛（arena-skill）。
 - B：并行子代理+测试合入闸门（clodfarm）。
 - C：多 harness、多座位的统一编排与恢复（openrig）。
@@ -43,6 +43,7 @@
 - AE：把多个编码代理编成有频道、有角色、按代理授权工具的团队，写操作先过人工审批（Tucano；先一个频道、2–3 个代理、一个只读连接器）。
 - AF：用 project + to-dos + Auto-advance + scheduled automations 把多 agent 工作流固定下来，并接入本机 Claude Code、Codex 等 CLI agent（Orkas；先手动跑一项待办，再只对下一项开 Auto-advance）。
 - AG：用显式任务图 + epoch 围栏做本地执行控制面，叫停后旧 epoch 排队任务失效、迟到完成被拒绝、进程树被终结（skein；先跑示例和停止演练）。
+- AH：用 Hermes fleet 的 coordinator + coder + qa 三角色起步，设 spec/design 两道人审门和红测合并门，QA 只报告不改代码（先只启用三角色，在 Windows/Python 本地小工具上试）。
 
 ## 适用与不适用
 **适用（按处境选路径）**
@@ -82,6 +83,7 @@
 | 手上有 2–3 个编码代理（Claude Code / Codex / OpenCode / Pi），想让它们在频道里互相 @ 交接与评审，且合并、外发、删除这类写操作必须先经人审批 | AE（先一个频道、2–3 个代理、一个只读连接器） |
 | 想把多 agent 工作流固定成“项目+待办+自动推进+定时自动化”，并让本机 Claude Code、Codex、OpenCode 等 CLI agent 参与，但不想一上来全自动 | AF（先手动跑一项待办，再只对下一项开 Auto-advance） |
 | 有一组本地、有依赖、需要可中断的多步子任务，想验证“叫停就真停、旧任务不会偷偷完成” | AG（先跑示例 + 停止演练，再迁真实任务图） |
+| 用 Windows + Python 做本地桌面应用/CLI/小 Web UI，想把 spec、实现、独立 QA 分开，先小范围试角色化 fleet | AH（先只启用 coordinator、coder、qa，保留 spec 门） |
 
 **不适用（关键边界）**
 - A：任务描述本身就含糊，100 个 agent 会一起含糊；不愿承担 token 成本不要用。
@@ -117,6 +119,7 @@
 - AE：不在受支持的桌面系统上（macOS Apple silicon、Linux x64/ARM64、Windows 10/11 x64），或一个 harness 都没装好并登录，不要用；Windows 安装包未代码签名，公司电脑可能被 IT 阻止；只有项目自述、没有独立效果数据，不要把它当高安全场景的唯一控制，也不要指望它替代测试与合入门禁——它只是编排层，底层 harness 仍是 Claude Code / Codex / OpenCode / Pi。
 - AF：只想要一次性问答、不能保持电脑唤醒且 Orkas 运行、不能接受打包应用登录或源码版无共享项目/云同步/web-app publishing，不要用；没有明确交付物和人工验收人，不要开 Auto-advance；把 16 个内置 agent 的能力、DeepResearcher 的 verified sources、ProductDeveloper 的 verifiable results 当独立验证结果，不要用。
 - AG：需要跨机/分布式调度、沙箱隔离、鉴权、外部副作用恰好一次或崩溃后自动恢复，不要用；manifest 的完整 schema 不在 README，要先读 docs/INTEGRATION.md；0.2.0 单作者项目，基准只在作者单机、单一 OS 测得，社区验证有限；它只管调度与停止，不证明结果正确。
+- AH：README 只给高层流程和规则，没有 SOUL.md 正文、adopt.md 细节和命令，不能据此完整复现；tested on 只有 Windows + Python 本地桌面应用/CLI/小 Web UI，macOS/Linux、带服务器/账户/支付的在线服务、移动应用、非 Python 栈未测试；没有量化数据、案例结果或对比实验，多数规则是作者设计主张；第三方技能不在仓库内，需要从来源安装；两处人审门之外，发布动作和凭据必须人处理，QA 只写报告不改代码，红测必须阻断合并；不要把“三角色跑通”当成结果正确性的证明。
 
 ## 前置条件
 - 共同前提：把任务写成独立、自包含的文件。子代理看不到你的聊天记录，任务文件是它唯一的信息源。
@@ -153,9 +156,10 @@
 - AE：macOS Apple silicon（M1 或更新）、Linux x64/ARM64、或 Windows 10/11 x64；至少安装并登录一个 harness（Claude Code / Codex / OpenCode / Pi）；Docker 和 Chrome 是可选项；Windows 还需 Git for Windows，因为代理命令由 Git Bash 执行。Linux 上保存密码依赖系统 keyring。
 - AF：macOS 12+（Apple Silicon/Intel）或 Windows 10+ 可直接用打包安装包；Linux 源码运行需 glibc 2.34+ 的 x64/arm64，且不支持 Alpine/musl。源码方式需要 Node 22.12+；保留 Python 3 和 C/C++ 构建工具链，用于少数原生模块回退编译。打包应用首次启动需登录，自带 500 credits；也可以用自己的 provider key。源码工作区在 macOS/Linux 的 ~/.orkas/，Windows 下在最小非系统盘符的 .orkas 目录。
 - AG：Linux / macOS / Windows，amd64 或 arm64；或本机有 Go 1.26+ 用于源码构建；一个持久状态目录（示例用 .skein）；要迁真实任务时，先读 docs/INTEGRATION.md 的 manifest 契约。
+- AH：已安装 Hermes Agent；有一个代码仓库作为项目状态载体；README 的 tested on 是 Windows + Python + 本地小工具，未测试 macOS/Linux、带服务器/账户/支付的在线服务、移动应用、非 Python 栈；每个角色需要独立 Hermes profile，从 roles/<role>/ 复制 SOUL.md 和 skills/ 到对应 profile；具体命令、SOUL.md 正文和 adopt 细节按 docs/adopt.md，本次材料没有给出可复制命令与正文。
 
 ## 操作步骤
-先按上表选路径。以下保留 A–AG 的核心操作。每条都先做最小试用，不先上全量；验证与接受仍走测试、独立 verifier、校验器、接收人本人确认或人工复核。
+先按上表选路径。以下保留 A–AH 的核心操作。每条都先做最小试用，不先上全量；验证与接受仍走测试、独立 verifier、校验器、接收人本人确认或人工复核。
 
 ### 做法 A：把不满意的回答送进锦标赛（arena-skill）
 1. 前提：Claude Code 可 spawn 子 agent，Python 3.8+；任务已写成独立文件。安装三选一：粘贴仓库地址说 Install this skill, then confirm /arena works；或 clone 后复制 skills/arena 到 ~/.claude/skills/；或 /plugin marketplace add 后安装。
@@ -530,9 +534,9 @@ skein run --state .skein --workers 2 --include-tasks examples/fanout.json
 预期：跑完后 .skein/runs/<run-id>/ 下有 report.json、events.jsonl、lease 与 payload 数据；先记录这份基线。
 4. 做停止演练，验证三件事：
 ```sh
-skein stop --state .skein --reason "manual emergency stop"
-skein status --state .skein   # {"stopped":true,"epoch":2}
-skein reset --state .skein    # inspect first; epoch is never reused
+skein stop --state .skein --reason 'manual emergency stop'
+skein status --state .skein   # 预期 stopped=true，epoch 递增
+skein reset --state .skein    # 先检查；epoch 永不复用
 ```
 预期：旧 epoch 的排队工作失效；旧 epoch 的迟到完成被拒绝，而不是记成普通 canceled；被跟踪的进程树被终结、子进程心跳被冻结。reset 前先检查，epoch 永不复用——这是围栏语义成立的前提。
 5. 用退出码分流，把“失败”和“被停止”分开处理：
@@ -545,7 +549,7 @@ skein reset --state .skein    # inspect first; epoch is never reused
 ```
 预期：停止演练返回 4，而不是 3 或 0；不要把 4 当失败重跑。
 6. 迁自己的任务图前先读 docs/INTEGRATION.md。README 只给概述、没给完整 schema；已知要点：JSON 格式；argv 数组、没有隐式 shell；依赖图；可复用的多趟（multi-pass）块；worker 与 pass 上限；每趟超时。把现在用脚本/对话串行跑的 3–5 个子步骤写成 manifest，其中至少一个步骤是真实子进程，再重复第 4 步的停止演练。
-7. 需要嵌进自己的程序时，用 Go 嵌入 API：import skein "github.com/Balanov/skein"，可运行示例在 examples/embed-go/。
+7. 需要嵌进自己的程序时，用 Go 嵌入 API：import skein github.com/Balanov/skein，可运行示例在 examples/embed-go/。
 8. 从源码构建后自检：
 ```sh
 go test -count=1 ./...
@@ -554,6 +558,26 @@ go test -race -count=1 ./... # requires CGO and a C compiler
 ```
 预期：测试与 vet 通过；race 检查需要 CGO 和 C 编译器。
 9. 边界：外部系统要认它的 lease，必须另做会校验 lease 的网关；lease 是 fencing token，不是凭证；manifest 里的命令沿用当前 OS 用户权限，不可信负载要另用 OS 沙箱。它明确不覆盖沙箱化、鉴权或签名 lease、agent 输出语义校验、外部副作用恰好一次、崩溃后自动恢复、分布式共识、远程作业。
+
+### 做法 AH：用 coordinator + coder + qa 三角色起步，设两道人审门和红测合并门（Hermes fleet）
+1. 前提：已安装 Hermes Agent；有一个代码仓库承载项目状态；README 的 tested on 是 Windows + Python + 本地桌面应用/CLI/小 Web UI，未测试 macOS/Linux、带服务器/账户/支付的在线服务、移动应用、非 Python 栈。README 只给高层流程和规则，没有可直接复制的命令、SOUL.md 正文或提示词；具体采用步骤按 docs/adopt.md，交接规则按 docs/handoff-rules.md，第三方技能清单按 docs/third-party-skills.md，但这些正文本次材料未提供，不要编造。
+2. 为每个角色创建独立 Hermes profile。先从 roles/<role>/ 复制该角色的 SOUL.md 和 skills/ 到对应 profile；第一步只启用 coordinator 和 coder，下一步再加 qa。需要 product 时再加 product 写 SPEC.md。不要一上来启用七个角色。
+3. 设两处人工审批门。主流程原样如下：
+```text
+idea
+ -> product      writes the spec
+ -> [gate: you approve the spec]
+ -> designer     writes the visual plan
+ -> [gate: you approve the design]
+ -> coder        builds it, with tests
+ -> qa           checks it, independently
+ -> media + docs videos, README, release notes
+ -> release
+```
+三角色起步时至少保留 spec 门；启用 designer 后保留 design 门。任何公开发布动作（push、tag、post）和任何凭据都必须等待你处理；不要让 agent 读取、复制或打印密钥，只让它告诉你填哪个文件和变量。
+4. 强制 QA 独立性。QA 独立运行构建、审查代码和安全、复现 bug，但不改代码，只写 QA-REPORT.md 和 punch-list；coder 负责修复。只有测试全绿才允许合并，红测中止合并。只有 coordinator 规划任务和创建卡片；worker 只在自己的报告里写后续事项。
+5. 项目状态只放仓库，不放 agent 记忆。每个任务结束清理临时文件、测试输出和残留服务，并说明清理了什么。当任务上下文被压缩两次后，写 handoff 并停止，让新会话从文件而不是模糊对话继续。
+6. 最小试用：选一个 1–2 天可完成的 Python CLI 或本地小工具；只启用 coordinator、coder、qa，可选 product 先写 SPEC.md。要求产出 SPEC.md、代码与测试、QA-REPORT.md。设置 spec 审批门；公开发布和凭据仍由人处理。跑 2 个任务，记录：人工介入次数是否集中在审批门和公开/凭据；红测是否阻止合并；QA 在发布前发现的可复现问题数；返工轮次；从想法到可运行安装包的时间；是否出现密钥进聊天、残留进程、状态只存在对话里等事故。预期：人工介入集中在审批门与发布/凭据；QA 在发布前抓到可复现问题；没有安全/清理事故。是否扩到 design、media、docs 和七角色，由对照指标决定。
 
 ## 怎么判断变好了
 **可观察的指标**
@@ -574,7 +598,7 @@ go test -race -count=1 ./... # requires CGO and a C compiler
 - O：从代理开始等待到人察觉的时间；从察觉到回答完成的时间；是否出现重复回答或冲突；关掉后设置文件是否精确还原。
 - P：安装检查通过；团队是否按计划产出 diff/提交；gate 是否把每一步运行到日志并验证通过；cleanup 是否只移除 manifest 记录的内容。
 - Q：进入下一阶段前是否真的能看到该阶段成本；实际总成本 vs 你设的预算；token 增长是否与任务复杂度匹配；新增代理前是否能估出边际成本。
-- R：R1 看最近 3 天 issue 中有多少被真正复现；有多少修复在改代码前存在会失败的测试；这些测试在修复后是否通过；产出的 PR 有多少被合并或至少进入人工 review；人工返工比例；是否产生误报、重复处理或无关改动。R2 看 issue/PR 首次响应时间（人工介入前）；你本人每天花在非 UI/UX 事务上的时长；每天/每周 token 与 API 成本，与人工时薪对照；loop 给出的 PR 判断中事后被推翻的比例，用来衡量“拉下来真跑”降低了多少误判；定时清债清掉了多少、教训文档是否被后续 loop 实际读取；被拉黑提交的误伤比例。
+- R：R1 看最近 3 天 issue 中有多少被真正复现；有多少修复在改代码前存在会失败的测试；这些测试在修复后是否通过；产出的 PR 有多少被合并或至少进入人工 review；人工返工比例；是否产生误报、重复处理或无关改动。R2 看 issue/PR 首次响应时间（人工介入前）；你本人每天花在非 UI/UX 事务上的时长；每天/每周 token 与 API 成本，与人工时薪对照；loop 给出的 PR 判断中事后被推翻的比例；定时清债清掉了多少、教训文档是否被后续 loop 实际读取；被拉黑提交的误伤比例。
 - S：开关是否真的生效，能否观察到多个 agent 被创建/并行工作；单位任务总开销是否下降；Opus 侧上下文占用是否明显减少；测试通过率、diff 规模、返工次数是否不劣于基线；是否报错、中途丢失上下文、重复劳动或互相覆盖改动。
 - T：单次 land 的端到端耗时；同一分支上并发 land 的成功率与需要人工介入的冲突比例；自动冲突解决被接受且后续没被 revert 的比例；graft-verify 捕获的回归数量、bisect 定位是否准确、自动 revert 是否误伤；权限控制是否真的挡住越权操作；增加服务节点后横向扩展是否如预期。README 未给数值目标，需自建基线。
 - U：并行期间是否出现互相覆盖、需要人工解冲突的次数；把各自结果合并回主线所花的时间（对照组：不用 --worktree，两个代理直接在同一工作树里改同样的东西）；主工作树是否被代理污染、副本能否一键丢弃回退；副本目录是否按预期自动创建和清理。
@@ -590,6 +614,7 @@ go test -race -count=1 ./... # requires CGO and a C compiler
 - AE：任务完成率——派进去的小任务有多少拿到可评审 PR；从开始到可评审 PR 的时间；评审轮次与返工次数；人工介入次数与审批等待时间；每个完成任务的 token 成本（看 Usage and limits 与 weekly Report）；未授权的写操作次数（应为 0）；被审批拦下的危险调用条数；记忆或技能复用后同类任务时间是否下降；反向信号——你不断给代理补规则、或某个代理的产出你从不采用。
 - AF：与基线相比看首次草稿时间、总周转时间、人工修改次数、返工率、遗漏或重复操作次数、权限误操作次数、credits/API 成本、引用准确率、自动化按时运行率、复核通过率。若时间下降且返工和权限风险没有上升，可继续扩大范围；若主要收益只是“看起来自动化”但复核成本更高，则退回 study，只保留其 project/to-dos/权限门控的设计思路。
 - AG：停止后仍然存活的子进程数——应为 0（原文自证 160/160，你的负载上要自己复现）；迟到完成被接受的比例——应为 0；从 skein stop 到全部终结的时延——对照原文中位 141.663 ms，看你的机器与子进程形态；同一图多次运行的 report.json 一致性；与自写脚本 / asyncio 在同一张任务图上的端到端耗时对比（原文显示 100 个独立任务时 asyncio 中位 0.740 ms 反而快于 Skein 1.040 ms，别假设它一定更快）。
+- AH：人工介入是否集中在 spec/design 门、发布与凭据；红测是否真的阻止合并；QA 在发布前发现的可复现问题数；返工轮次；从想法到可运行安装包的时间；事故指标——密钥进聊天、残留进程、状态只存在对话里、QA 改了代码、红测后仍然合并。对照基线：同类 Python CLI/本地小工具此前由你或单人 Claude Code 完成时的发布前缺陷、返工和人工介入。
 
 **最小试用**
 - A：挑 1–2 个真实、不满意的任务，跑 /arena --quick --seed 7 并用 baseline 传入旧答案。
@@ -625,6 +650,7 @@ go test -race -count=1 ./... # requires CGO and a C compiler
 - AE：先在一个低风险真实小任务上跑一遍（例如修一个非关键 bug）：一个频道、2–3 个代理（Claude Code 修复+Codex 评审，可选一个调查/路由）、一个只读 MCP（GitHub/GitLab 读 issue）、只借出一个仓库文件夹、merge/post/email/delete/purchase 全部设为审批、开一个每周例程扫新 issue。对照基线：同一类任务先用单人 Claude Code 或人工流程做 1–2 次，记录同样的指标（完成率、到可评审 PR 的时间、评审轮次、人工介入次数、token 成本）。
 - AF：选一个边界清楚、交付物明确的流程，例如“每周研究简报+幻灯片”或“一条 30 秒产品推广视频”。先记录当前人工/单 agent 做法的基线。安装打包应用或从源码运行，配置一个模型 provider，建一个 project，放入目标、规则、参考文件和验收标准；拆 3–5 个 to-dos，先手动跑第一项并复核，再只对下一项开启 Auto-advance。加一个 daily 或 weekly 的 scheduled automation，连接一个低风险 connector，并保持默认发送/发布/删除前确认。若本机已有 Claude Code 或 Codex，可让一个 agent 做实现、另一个做复核，与单 agent 做法对比。视频场景直接用上面的提示词，要求先给 breakdown 和 plan。对照基线：同类流程先用人工或单 agent 做 1–2 次，记录首次草稿时间、总周转时间、人工修改次数、返工率、credits/API 成本。
 - AG：跑示例 → 做一次停止演练 → 把 3–5 个真实子步骤写成 manifest 再演练一次；半天内可做完。先记录 .skein/runs/<run-id>/report.json 与 events.jsonl 作为基线，再检查退出码是否为 4、status 是否为 stopped true 且 epoch 递增、旧 epoch 的迟到结果是否被拒绝、停止后残留子进程是否为 0。
+- AH：选一个 1–2 天可完成的 Python CLI 或本地小工具；只启用 coordinator、coder、qa，可选 product 先写 SPEC.md；要求产出 SPEC.md、代码与测试、QA-REPORT.md；设置 spec 审批门；公开发布和凭据仍由人处理；跑 2 个任务。记录人工介入次数是否集中在审批门和公开/凭据、红测是否阻止合并、QA 在发布前发现的可复现问题数、返工轮次、从想法到可运行安装包的时间、是否出现密钥进聊天/残留进程/状态只存在对话里等事故。
 
 **试多久、什么时候升级**
 - A：若 --quick 在 3 个以上任务上稳定优于 baseline，且攻击确实命中你没考虑到的地方，再升到 --agents 32。
@@ -657,6 +683,7 @@ go test -race -count=1 ./... # requires CGO and a C compiler
 - AE：先按最小组合跑 1–2 周、2–3 个代理、一次一个真实小任务。若任务完成率不降、到可评审 PR 的时间缩短或返工减少，且未授权的写操作始终为 0、审批等待没有把节奏拖死，再考虑加代理、开第二个连接器写权限或接例程自动化；若只是频道热闹、PR 你从不采用，或审批变成无脑点“允许”，就退回单人 Claude Code+明确的测试/评审门禁，只保留其按代理授权与审批的思路。
 - AF：先试 1–2 周，只做一条流程、3–5 个 to-do、一个 daily 或 weekly automation、一个低风险 connector。若首次草稿时间或总周转时间下降，且人工修改次数、返工率、权限误操作次数没有上升，再考虑对下一项开启 Auto-advance、增加 automation 或接入更多外部 CLI agent；若复核成本更高、自动化按时运行率低、或 credits/API 成本不可接受，退回手动跑 to-do，只保留 project 和权限门控的设计思路。
 - AG：先在你自己的工作负载上验证停止证明，再用于生产；三项安全指标（残留子进程 0、迟到完成被接受 0、停止时延可接受）成立，且任务确实是“本地 + 有依赖 + 需要可中断”，再扩大；涉及外部写入、不可信命令或跨机调度，按原文的“不覆盖”清单另补沙箱、网关和幂等层。
+- AH：先只跑 2 个任务、三角色、Windows + Python 本地小工具；若人工介入集中在审批门与发布/凭据、红测确实阻止合并、QA 在发布前抓到可复现问题、返工和发布前缺陷不高于你此前同类做法，且没有安全/清理事故，再考虑启用 designer、media、docs 和更多角色。若 QA 报告不可用于修复、红测仍被合并、或密钥/清理事故出现，先退回 coordinator + coder 并补门禁，不要扩角色。
 
 ## 常见坑
 - A：任务含糊，100 个 agent 会一起含糊；任务文件是唯一信息源；judge 也是 Claude，评分有偏差。
@@ -692,6 +719,7 @@ go test -race -count=1 ./... # requires CGO and a C compiler
 - AE：材料只有 README，没有独立复现；仓库 36 stars，采用规模有限，多代理协作效果、审批体验、长期记忆质量、例程可靠性都未量化，没有 benchmark、任务成功率、成本对比或安全审计。README 里的 Iris 在 Datadog 找到错误、Leo 修复并开 merge request、Nico 评审并请求合并审批只是产品说明中的示例，不是独立测评。“数据留在本机、无 Tucano 服务器、密码不进数据库、每轮隔离、工具按代理授权”都是作者主张，需要自行验证。Claude Code 只读 ~/.claude/settings.json 的 env 和 apiKeyHelper，hooks、插件和权限不进入 Tucano；Codex 用独立 home，避免个人 skills、AGENTS.md 和插件泄漏——这两条意味着你在原 CLI 里配好的 hooks/权限不会自动生效，别以为换个壳就继承了旧防护。Windows 安装包未代码签名，公司电脑可能被 IT 阻止，Windows 还需 Git for Windows。审批一旦变成无脑点“允许”，等于没有闸门；它只是编排层，不能替代测试、独立 verifier 或合入门禁。
 - AF：README 主要是产品说明，没有独立基准、客户案例数据或前后对比；16 个 agent 的能力、DeepResearcher 的“verified sources”、ProductDeveloper 的“verifiable results”都是作者主张。项目/待办/自动化的按钮级操作步骤没有给出，任务路由的具体判定标准也没有展开。打包应用需要登录，内置模型走 Orkas 管理服务；源码版不支持共享项目、云同步和 web-app 发布。自动化依赖电脑唤醒和 Orkas 运行，不能关机后继续。视频复刻不支持社交平台分享链接下载，也不保证精确运镜、真人表演和逐帧匹配。后台学习 review 也可能判断没有值得保存的内容。不要一上来建 13 个 Bot 或全量开 Auto-advance；先把 project、to-dos、权限确认和人工复核跑顺。
 - AG：0.2.0 早期版本，单作者项目，社区验证有限；基准全部在作者单机、单一 OS 上测得，无第三方复现；100 个独立任务时 asyncio 中位更低（0.740 ms vs 1.040 ms），Skein 并非处处领先；manifest 完整契约不在 README，需读 docs/INTEGRATION.md；lease 是 fencing token 不是凭证，外部系统要认它必须另做校验网关；manifest 命令沿用当前 OS 用户权限，不可信负载要另用 OS 沙箱；它不覆盖沙箱、鉴权、agent 输出语义校验、外部副作用恰好一次、崩溃后自动恢复、分布式共识、远程或脱离本机的作业；不要把“叫停”当成结果正确性的证明——它只保证旧任务不偷偷完成，不保证结果对。
+- AH：README 只给角色表、主流程、两处审批门和七条经验规则，没有 SOUL.md 正文、adopt.md 细节和命令，不能据此完整复现；tested on 只有 Windows + Python 本地桌面应用/CLI/小 Web UI，macOS/Linux、带服务器/账户/支付的在线服务、移动应用、非 Python 栈未测试；没有量化数据、案例结果或对比实验，多数规则是作者设计主张；第三方技能不在仓库内，需要从来源安装；两处人审门之外，发布动作和凭据必须人处理，QA 只写报告不改代码，红测必须阻断合并；不要把“三角色跑通”当成结果正确性的证明。
 
 ## 证据与来源
 - A 依据调研《Jakeschincariol/arena-skill》。可核对：成本表、bracket.py plan 输出、赛程表、rubric 权重、默认并发 10、单元测试、117 stars。质量提升属作者主张。
@@ -727,6 +755,7 @@ go test -race -count=1 ./... # requires CGO and a C compiler
 - AE 依据调研《eduwxyz/tucano》。可核对：README 给出的平台要求（macOS Apple silicon、Linux x64/ARM64、Windows 10/11 x64）、各平台安装命令、首次运行向导步骤、Connectors 与按代理的 no access / read / read and write 授权、审批模型（approve once / always allow safe one / refuse with reason）、Telegram 手机审批、月度 token 限额、Pause everything、Memory 页与 skill 提议、Routines 的定时与连接器事件触发、quiet hours、托盘常驻、Docker/浏览器借出、searched/read/ran/edited 回执与 weekly Report、Claude Code 只读 settings.json 的 env 与 apiKeyHelper、Codex 独立 home、仓库 36 stars。属产品说明示例、非独立测评：Iris/Leo/Nico 那条 Datadog → 修复 → merge request → 评审 → 审批的链路。“数据留在本机、无 Tucano 服务器、密码不进数据库、每轮隔离、工具按代理授权”是作者主张；没有 benchmark、用户数、任务成功率、成本对比或安全审计，多代理协作效果、审批体验、长期记忆质量、例程可靠性均未量化。本手册中的最小试用组合与判断指标是据此补充的试用设计，不是原文数据。
 - AF 依据调研《Orkas-AI/Orkas》。可核对：MIT 许可；源码运行命令 git clone https://github.com/Orkas-AI/Orkas.git、cd Orkas、./run.sh，Windows 用 run.cmd；macOS 12+/Windows 10+ 打包安装，Linux 源码需 glibc 2.34+ x64/arm64 且不支持 Alpine/musl；源码需 Node 22.12+；首次启动准备 pinned Python、uv、Node、embedding model（约 95 MB）、OfficeCLI、FFmpeg、whisper.cpp 和多语言语音模型资源；工作区 ~/.orkas/；Settings → AI Providers 配置模型；Account settings → Models → Chat → Add model → Custom 配置本地 OpenAI-compatible 或 Anthropic-compatible endpoint；支持 Claude、OpenAI、Gemini、DeepSeek、Kimi、GLM、Qwen、MiniMax、Doubao；project 保存目标、规则、记忆和文件；to-dos 与 Auto-advance；scheduled automations 支持 hourly/daily/weekly/monthly，v1.9 起错过后 12 小时内补跑；connectors 默认在发送、发布或删除前询问；外部 CLI agent 通过本地会话接入，Commander 用 dispatch_to、hand_off_to、run_worker 路由；视频复刻提示词原文；npm run native:repair 与 npm run native:check，Node.js 24 LTS 最低 22.12.0；GitHub 显示 6785 stars、当日 1044 stars。属作者主张、无独立验证：16 个内置 agent 的能力、DeepResearcher 的 verified sources、ProductDeveloper 的 verifiable results、后台 review 会更新自我评估与学习技能；没有准确率、返工率、成本或前后对比数据；项目/待办/自动化的按钮级操作步骤和任务路由判定标准未给出；打包应用需登录并走 Orkas 管理服务；源码版不支持共享项目、云同步和 web-app publishing；自动化依赖电脑唤醒和 Orkas 运行；视频复刻不支持社交平台分享链接下载，也不保证精确运镜、真人表演和逐帧匹配。本手册中的最小试用与判断指标是据此补充的试用设计，不是原文数据。
 - AG 依据调研《Balanov/skein》。可核对：install.sh 与 install.ps1、SHA256SUMS 校验、SKEIN_INSTALL_DIR、源码构建命令 go build -trimpath -o bin/skein ./cmd/skein、skein run/stop/status/reset、退出码 0/3/4/1/2、.skein/runs/<run-id>/ 下的 report.json 与 events.jsonl、examples/fanout.json、examples/embed-go、docs/INTEGRATION.md、manifest 要点（JSON、argv 数组、无隐式 shell、依赖图、multi-pass、worker/pass 上限、每趟超时）、Go 1.26+、MIT、0.2.0。数据：Windows 11 / Ryzen 9 5950X 上 1000 节点图三种形态的耗时（Independent 1.580 ms、Serial chain 3.272 ms、Fan-out/join 2.080 ms；对照 Python asyncio 与 LangGraph）；冷进程 24 个真实 Python SHA-256 worker、15 次全新进程，Skein 中位 156.463 ms，asyncio 288.644 ms，LangGraph 998.010 ms，360/360 结果校验通过；停止证明 160/160 父子进程树被终结、160/160 子进程心跳被冻结，20 次运行中位 141.663 ms。作者主动承认 100 个独立任务时 asyncio 中位更快（0.740 ms vs 1.040 ms），并声明这些是本地观测，不是通用排名，也不是模型质量结果。明确不覆盖：任意命令沙箱化、鉴权或签名 lease、agent 输出语义校验、外部副作用恰好一次、崩溃后自动恢复、分布式共识、远程或脱离本机的作业、已经越过外部边界的副作用。256 stars、单作者项目，社区验证有限；0.2.0 早期版本，作者要求先在工作负载上验证停止证明再用于生产。
+- AH 依据调研《SamueleBassoli/hermes-fleet-apps》。可核对：README 给出七个角色（协调者、产品、设计、编码、QA、媒体、文档）、主流程、两处人工审批门（spec 与 design）、QA 独立运行构建/审查/复现 but 不改代码、只写 QA-REPORT.md 和 punch-list、红测中止合并、只有 coordinator 规划任务和创建卡片、项目状态只放仓库、每个任务结束清理临时文件/测试输出/残留服务、上下文压缩两次后写 handoff；tested on 为 Windows + Python + 本地桌面应用/CLI/小 Web UI，由一个人从想法做到安装包和发布；not tested 为 macOS/Linux、带服务器/账户/支付的在线服务、移动应用、非 Python 栈；第三方技能不在仓库内，需要从来源安装。没有量化数据、案例结果或对比实验，多数规则是作者设计主张；README 未提供 SOUL.md 内容、adopt.md 细节和命令，无法据此完整复现。因此只列为小范围试候选，不列为直接采用的稳定流程。
 
 ## 依据的调研
 
@@ -763,3 +792,4 @@ go test -race -count=1 ./... # requires CGO and a C compiler
 - [Orkas-AI/Orkas](../research/radar/2026-11-01/9199-orkas-ai-orkas.md)：值得一试，建议小范围试用 Orkas 的“项目 + 待办 + 自动推进 + 定时自动化”工作流，把它当作多智能体协作的编排层；理由是 README 给出了可运行的安装/配置步骤、外部 CLI 接入方式和明确的复核/权限机制，但缺少效果数据和按钮级操作步骤，不宜直接全面采用。
 - [@MindfulReturn: yetone 这套 Magpie 运维看着朴素，总结下来的方法如下：Claude Code + 官方 Opus，并行三条 /loop——一条盯 GitHub issue/PR 和 Discord（PR](../research/radar/2026-11-02/9530-yetone-magpie-claude-code-opus-loop-github-issue-p.md)：值得一试，先在一个仓库上照搬“三条并行 loop + PR 必须拉下来真跑 + 便宜模型先拦截 X 杂音”这套骨架，跑一两周再决定是否扩展；它的价值不在工具新奇，而在于把 issue/PR 值守、舆情筛选、技术债清理拆成三个互不干扰的常驻循环，人工只留下 UI/UX 决策，分工清晰、可小成本验证。
 - [Balanov/skein](../research/radar/2026-11-03/9850-balanov-skein.md)：值得一试，先装好，用示例任务图跑一次，再用 `skein stop` 演练“旧 epoch 排队任务失效 + 迟到完成被拒绝 + 进程树被终结”，验证通过后再考虑把你自己的多步子任务迁到显式任务图上；它给出了可照做的安装、运行、停止命令和明确的退出码语义，但仍是 0.2.0 早期版本、单机自测基准，且明确不覆盖沙箱、鉴权和外部副作用恰好一次。
+- [SamueleBassoli/hermes-fleet-apps](../research/radar/2026-11-03/9950-samuelebassoli-hermes-fleet-apps.md)：值得一试，建议小范围试：先用 Hermes Agent 搭 coordinator、coder、qa 三个角色，在 Windows/Python 本地小工具上跑通两道人审门和绿灯合并，再决定是否扩到七角色；理由是 README 给出了可操作的编排规则，但缺少完整配置与跨平台/非 Python 证据。
