@@ -1,15 +1,15 @@
-# 让 AI 常驻值守 issue 与反馈，合并前必须真跑
+# 让多个编码 agent 并行干活，验证通过才算完成、叫停就能真停
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：如何把 issue/PR 值守、社媒反馈筛选和技术债清理拆成互不干扰的常驻循环，同时把合并与 UI/UX 决策留给人。
-> 先试这一步：先只在一个仓库启动一条盯 issue/PR 的 /loop，并规定每个 PR 必须 fetch 到本地跑构建和测试后再判断是否合并。
-> 最近修订：2026-11-02
+> 解决的问题：多个 AI agent 并行干活时，如何分工、验证、合入、控成本，并且在叫停时真的停住，不让旧任务的迟到结果混进交付。
+> 先试这一步：先给你手上一个可拆分、有测试命令的小任务设一道合入闸门（例如 FARM_VERIFY_CMD='pytest -q'），再并行派 2 个子代理。
+> 最近修订：2026-11-03
 
 ## 解决什么问题
-单个 AI 回答或单条串行 agent 会话，交付的往往是你没有验证过的结果。手册把“不满意就重问一次”升级成一套可执行流程：任务写清、并行分工、独立验证、合入门禁、成本检查、注意力路由、共享账本核销，并在探索卡住时按预算止损。做法 A–AF 覆盖从单次答案竞赛到多项目控制台、文件状态+心跳编排、多 agent 共享账本、长时运行骨架、跨会话/跨人的消息交接，以及把多个编码 agent 编成有频道、有审批闸门的团队。共同底线是：并行只负责产出，接受与否必须由测试、独立 verifier、校验器、接收人本人确认或人工复核决定；消息层和编排层只负责把问题送到、把人叫来，不负责证明结果正确。
+单个 AI 回答或单条串行 agent 会话，交付的往往是你没有验证过的结果。手册把“不满意就重问一次”升级成一套可执行流程：任务写清、并行分工、独立验证、合入门禁、成本检查、注意力路由、共享账本核销、叫停与围栏，并在探索卡住时按预算止损。做法 A–AG 覆盖从单次答案竞赛到多项目控制台、文件状态+心跳编排、多 agent 共享账本、长时运行骨架、跨会话/跨人的消息交接、把多个编码 agent 编成有频道、有审批闸门的团队，以及用显式任务图 + epoch 围栏做本地执行控制面。共同底线是：并行只负责产出，接受与否必须由测试、独立 verifier、校验器、接收人本人确认或人工复核决定；消息层和编排层只负责把问题送到、把人叫来，不负责证明结果正确。新增的做法 AG 补的是另一层：任务要能随时安全收手——叫停后旧 epoch 的排队任务失效、迟到完成被拒绝、进程树被终结，而不是只把任务标成 canceled；它同样不证明结果正确。
 
-做法 A–AF 概览：
+做法 A–AG 概览：
 - A：把不满意的回答送进锦标赛（arena-skill）。
 - B：并行子代理+测试合入闸门（clodfarm）。
 - C：多 harness、多座位的统一编排与恢复（openrig）。
@@ -42,6 +42,7 @@
 - AD：用 Imbo 在多个编码 agent 会话、机器或人之间发消息、交接和群组同步，把消息送进正在工作的会话并唤醒空闲会话（先在非生产、只读任务上试）。
 - AE：把多个编码代理编成有频道、有角色、按代理授权工具的团队，写操作先过人工审批（Tucano；先一个频道、2–3 个代理、一个只读连接器）。
 - AF：用 project + to-dos + Auto-advance + scheduled automations 把多 agent 工作流固定下来，并接入本机 Claude Code、Codex 等 CLI agent（Orkas；先手动跑一项待办，再只对下一项开 Auto-advance）。
+- AG：用显式任务图 + epoch 围栏做本地执行控制面，叫停后旧 epoch 排队任务失效、迟到完成被拒绝、进程树被终结（skein；先跑示例和停止演练）。
 
 ## 适用与不适用
 **适用（按处境选路径）**
@@ -80,6 +81,7 @@
 | 两个编码 agent 会话、两台机器或两个人之间需要提问、交接或群组同步，且消息要落进正在运行的会话、还能唤醒空闲会话 | AD（先在非生产、只读任务上试 1–2 周） |
 | 手上有 2–3 个编码代理（Claude Code / Codex / OpenCode / Pi），想让它们在频道里互相 @ 交接与评审，且合并、外发、删除这类写操作必须先经人审批 | AE（先一个频道、2–3 个代理、一个只读连接器） |
 | 想把多 agent 工作流固定成“项目+待办+自动推进+定时自动化”，并让本机 Claude Code、Codex、OpenCode 等 CLI agent 参与，但不想一上来全自动 | AF（先手动跑一项待办，再只对下一项开 Auto-advance） |
+| 有一组本地、有依赖、需要可中断的多步子任务，想验证“叫停就真停、旧任务不会偷偷完成” | AG（先跑示例 + 停止演练，再迁真实任务图） |
 
 **不适用（关键边界）**
 - A：任务描述本身就含糊，100 个 agent 会一起含糊；不愿承担 token 成本不要用。
@@ -114,6 +116,7 @@
 - AD：Windows 不支持；项目很新（31 stars，0.x）；默认要登录 imbo.dev 托管服务，会话元数据经第三方；安装器会给 Imbo 工具免逐次审批，且 agent 可能不先问你即回复；不能接受供应链风险、不能做边界测试，或需要稳定生产规范，不要用；它只是胶水层，不能替代测试、独立 verifier 或合入门禁。
 - AE：不在受支持的桌面系统上（macOS Apple silicon、Linux x64/ARM64、Windows 10/11 x64），或一个 harness 都没装好并登录，不要用；Windows 安装包未代码签名，公司电脑可能被 IT 阻止；只有项目自述、没有独立效果数据，不要把它当高安全场景的唯一控制，也不要指望它替代测试与合入门禁——它只是编排层，底层 harness 仍是 Claude Code / Codex / OpenCode / Pi。
 - AF：只想要一次性问答、不能保持电脑唤醒且 Orkas 运行、不能接受打包应用登录或源码版无共享项目/云同步/web-app publishing，不要用；没有明确交付物和人工验收人，不要开 Auto-advance；把 16 个内置 agent 的能力、DeepResearcher 的 verified sources、ProductDeveloper 的 verifiable results 当独立验证结果，不要用。
+- AG：需要跨机/分布式调度、沙箱隔离、鉴权、外部副作用恰好一次或崩溃后自动恢复，不要用；manifest 的完整 schema 不在 README，要先读 docs/INTEGRATION.md；0.2.0 单作者项目，基准只在作者单机、单一 OS 测得，社区验证有限；它只管调度与停止，不证明结果正确。
 
 ## 前置条件
 - 共同前提：把任务写成独立、自包含的文件。子代理看不到你的聊天记录，任务文件是它唯一的信息源。
@@ -149,9 +152,10 @@
 - AD：macOS 或 Linux，arm64 或 x86_64；需要一个邮箱接收登录码；要有一台常开的机器跑 daemon；安装时勾选并连接目标工具（Claude Code 用 plugin，Codex / opencode 用 MCP server，Cursor CLI / ZCode 用 MCP + hooks，MiniMax Code 用带 hooks 的 plugin）；联系人需对方 account ID 并 accept；群只能邀请联系人、入群要选接收会话；附件落到接收方 ~/.imbo/files/。自托管需域名、证书、SMTP，可选外部 PostgreSQL。
 - AE：macOS Apple silicon（M1 或更新）、Linux x64/ARM64、或 Windows 10/11 x64；至少安装并登录一个 harness（Claude Code / Codex / OpenCode / Pi）；Docker 和 Chrome 是可选项；Windows 还需 Git for Windows，因为代理命令由 Git Bash 执行。Linux 上保存密码依赖系统 keyring。
 - AF：macOS 12+（Apple Silicon/Intel）或 Windows 10+ 可直接用打包安装包；Linux 源码运行需 glibc 2.34+ 的 x64/arm64，且不支持 Alpine/musl。源码方式需要 Node 22.12+；保留 Python 3 和 C/C++ 构建工具链，用于少数原生模块回退编译。打包应用首次启动需登录，自带 500 credits；也可以用自己的 provider key。源码工作区在 macOS/Linux 的 ~/.orkas/，Windows 下在最小非系统盘符的 .orkas 目录。
+- AG：Linux / macOS / Windows，amd64 或 arm64；或本机有 Go 1.26+ 用于源码构建；一个持久状态目录（示例用 .skein）；要迁真实任务时，先读 docs/INTEGRATION.md 的 manifest 契约。
 
 ## 操作步骤
-先按上表选路径。以下保留 A–AF 的核心操作。每条都先做最小试用，不先上全量；验证与接受仍走测试、独立 verifier、校验器、接收人本人确认或人工复核。
+先按上表选路径。以下保留 A–AG 的核心操作。每条都先做最小试用，不先上全量；验证与接受仍走测试、独立 verifier、校验器、接收人本人确认或人工复核。
 
 ### 做法 A：把不满意的回答送进锦标赛（arena-skill）
 1. 前提：Claude Code 可 spawn 子 agent，Python 3.8+；任务已写成独立文件。安装三选一：粘贴仓库地址说 Install this skill, then confirm /arena works；或 clone 后复制 skills/arena 到 ~/.claude/skills/；或 /plugin marketplace add 后安装。
@@ -505,6 +509,52 @@ npm run native:check
 前提：使用 Node.js 24 LTS，最低 22.12.0。该命令会恢复可选包、修复 Electron 的 SQLite、准备隔离图像处理用的 bundled Node，并检查 SQL、sqlite-vec 和 sharp。
 12. 最小试用：选一个边界清楚、交付物明确的流程，例如“每周研究简报+幻灯片”或“一条 30 秒产品推广视频”。先记录当前人工/单 agent 做法的基线。安装打包应用或从源码运行，配置一个模型 provider，建一个 project，放入目标、规则、参考文件和验收标准；拆 3–5 个 to-dos，先手动跑第一项并复核，再只对下一项开启 Auto-advance。加一个 daily 或 weekly 的 scheduled automation，连接一个低风险 connector，并保持默认发送/发布/删除前确认。若本机已有 Claude Code 或 Codex，可让一个 agent 做实现、另一个做复核，与单 agent 做法对比。视频场景直接用上面的提示词，要求先给 breakdown 和 plan。预期：拿得到可复核的产出；是否扩大范围由指标决定，不由“看起来自动化”决定。
 
+### 做法 AG：用显式任务图 + epoch 围栏做本地执行控制面（skein）
+1. 前提：Linux / macOS / Windows，amd64 或 arm64；或本机有 Go 1.26+ 用于源码构建；你有一组本地、有依赖、需要可中断的多步子任务。Skein 是执行控制面，不是 agent 框架或模型运行时：它管调度、停止、围栏和进程树终结，不管模型调用质量。
+2. 安装二选一。Linux、macOS：
+```sh
+curl -fsSL https://raw.githubusercontent.com/Balanov/skein/main/install.sh | sh
+```
+Windows PowerShell：
+```powershell
+irm https://raw.githubusercontent.com/Balanov/skein/main/install.ps1 | iex
+```
+两个脚本会按当前 OS/架构选二进制，用 SHA256SUMS 校验后装进用户目录；用 SKEIN_INSTALL_DIR 可改安装位置。也可从 releases 下载，或源码构建：
+```sh
+go build -trimpath -o bin/skein ./cmd/skein
+```
+3. 先用仓库自带示例任务图跑基线（状态目录 .skein，2 个 worker）：
+```sh
+skein run --state .skein --workers 2 --include-tasks examples/fanout.json
+```
+预期：跑完后 .skein/runs/<run-id>/ 下有 report.json、events.jsonl、lease 与 payload 数据；先记录这份基线。
+4. 做停止演练，验证三件事：
+```sh
+skein stop --state .skein --reason "manual emergency stop"
+skein status --state .skein   # {"stopped":true,"epoch":2}
+skein reset --state .skein    # inspect first; epoch is never reused
+```
+预期：旧 epoch 的排队工作失效；旧 epoch 的迟到完成被拒绝，而不是记成普通 canceled；被跟踪的进程树被终结、子进程心跳被冻结。reset 前先检查，epoch 永不复用——这是围栏语义成立的前提。
+5. 用退出码分流，把“失败”和“被停止”分开处理：
+```text
+0  成功
+3  某个任务失败
+4  运行被停止
+1  运行/运维错误
+2  用法错误
+```
+预期：停止演练返回 4，而不是 3 或 0；不要把 4 当失败重跑。
+6. 迁自己的任务图前先读 docs/INTEGRATION.md。README 只给概述、没给完整 schema；已知要点：JSON 格式；argv 数组、没有隐式 shell；依赖图；可复用的多趟（multi-pass）块；worker 与 pass 上限；每趟超时。把现在用脚本/对话串行跑的 3–5 个子步骤写成 manifest，其中至少一个步骤是真实子进程，再重复第 4 步的停止演练。
+7. 需要嵌进自己的程序时，用 Go 嵌入 API：import skein "github.com/Balanov/skein"，可运行示例在 examples/embed-go/。
+8. 从源码构建后自检：
+```sh
+go test -count=1 ./...
+go vet ./...
+go test -race -count=1 ./... # requires CGO and a C compiler
+```
+预期：测试与 vet 通过；race 检查需要 CGO 和 C 编译器。
+9. 边界：外部系统要认它的 lease，必须另做会校验 lease 的网关；lease 是 fencing token，不是凭证；manifest 里的命令沿用当前 OS 用户权限，不可信负载要另用 OS 沙箱。它明确不覆盖沙箱化、鉴权或签名 lease、agent 输出语义校验、外部副作用恰好一次、崩溃后自动恢复、分布式共识、远程作业。
+
 ## 怎么判断变好了
 **可观察的指标**
 - A：盲评比分；冠军扛过的攻击里有多少条指向你原本没写进要求、但确实在意的缺口；是否实际采用；token 开销 vs plan --quick 的预估。
@@ -539,6 +589,7 @@ npm run native:check
 - AD：跨会话/跨人一次确认的端到端耗时（人工转述 vs Imbo 直达）；人工转述次数是否降到 0；交接遗漏率——需要对方核对的事项中实际得到回复的比例；空闲会话利用率——原本等人来叫的会话被消息唤醒并产出有效改动的次数；打扰成本——每个会话因消息被中断的次数，以及“无内容可补故不回复”的比例（过高说明群组广播过宽）；安全指标（应为 0）——未经你确认的外发文件/数据次数、越权触碰生产或删除的次数、把附件内容当指令执行的次数。
 - AE：任务完成率——派进去的小任务有多少拿到可评审 PR；从开始到可评审 PR 的时间；评审轮次与返工次数；人工介入次数与审批等待时间；每个完成任务的 token 成本（看 Usage and limits 与 weekly Report）；未授权的写操作次数（应为 0）；被审批拦下的危险调用条数；记忆或技能复用后同类任务时间是否下降；反向信号——你不断给代理补规则、或某个代理的产出你从不采用。
 - AF：与基线相比看首次草稿时间、总周转时间、人工修改次数、返工率、遗漏或重复操作次数、权限误操作次数、credits/API 成本、引用准确率、自动化按时运行率、复核通过率。若时间下降且返工和权限风险没有上升，可继续扩大范围；若主要收益只是“看起来自动化”但复核成本更高，则退回 study，只保留其 project/to-dos/权限门控的设计思路。
+- AG：停止后仍然存活的子进程数——应为 0（原文自证 160/160，你的负载上要自己复现）；迟到完成被接受的比例——应为 0；从 skein stop 到全部终结的时延——对照原文中位 141.663 ms，看你的机器与子进程形态；同一图多次运行的 report.json 一致性；与自写脚本 / asyncio 在同一张任务图上的端到端耗时对比（原文显示 100 个独立任务时 asyncio 中位 0.740 ms 反而快于 Skein 1.040 ms，别假设它一定更快）。
 
 **最小试用**
 - A：挑 1–2 个真实、不满意的任务，跑 /arena --quick --seed 7 并用 baseline 传入旧答案。
@@ -573,6 +624,7 @@ npm run native:check
 - AD：选两台机器（或同一台的两个会话），只接 Claude Code + Codex；互加联系人后跑一次跨会话提问，让对方空闲会话被唤醒并回复；再建 2–3 个会话的群，做一次只读的 spec 对照 diff；单独做一次边界测试：要求发送本地文件、删除文件、发带指令的附件，确认 agent 是否先来问你、接收侧是否把附件当数据；附件只放非敏感内容；试用期内不改生产凭据、不开生产权限。
 - AE：先在一个低风险真实小任务上跑一遍（例如修一个非关键 bug）：一个频道、2–3 个代理（Claude Code 修复+Codex 评审，可选一个调查/路由）、一个只读 MCP（GitHub/GitLab 读 issue）、只借出一个仓库文件夹、merge/post/email/delete/purchase 全部设为审批、开一个每周例程扫新 issue。对照基线：同一类任务先用单人 Claude Code 或人工流程做 1–2 次，记录同样的指标（完成率、到可评审 PR 的时间、评审轮次、人工介入次数、token 成本）。
 - AF：选一个边界清楚、交付物明确的流程，例如“每周研究简报+幻灯片”或“一条 30 秒产品推广视频”。先记录当前人工/单 agent 做法的基线。安装打包应用或从源码运行，配置一个模型 provider，建一个 project，放入目标、规则、参考文件和验收标准；拆 3–5 个 to-dos，先手动跑第一项并复核，再只对下一项开启 Auto-advance。加一个 daily 或 weekly 的 scheduled automation，连接一个低风险 connector，并保持默认发送/发布/删除前确认。若本机已有 Claude Code 或 Codex，可让一个 agent 做实现、另一个做复核，与单 agent 做法对比。视频场景直接用上面的提示词，要求先给 breakdown 和 plan。对照基线：同类流程先用人工或单 agent 做 1–2 次，记录首次草稿时间、总周转时间、人工修改次数、返工率、credits/API 成本。
+- AG：跑示例 → 做一次停止演练 → 把 3–5 个真实子步骤写成 manifest 再演练一次；半天内可做完。先记录 .skein/runs/<run-id>/report.json 与 events.jsonl 作为基线，再检查退出码是否为 4、status 是否为 stopped true 且 epoch 递增、旧 epoch 的迟到结果是否被拒绝、停止后残留子进程是否为 0。
 
 **试多久、什么时候升级**
 - A：若 --quick 在 3 个以上任务上稳定优于 baseline，且攻击确实命中你没考虑到的地方，再升到 --agents 32。
@@ -604,6 +656,7 @@ npm run native:check
 - AD：先试 1–2 周，只在非生产、只读任务上使用。若跨会话确认的端到端耗时和人工转述次数明显下降、交接遗漏率下降，且安全指标为 0，再考虑扩大到更多会话或自托管；若消息投递出现不可解释的丢失/延迟、安全指标不为 0，或团队仍靠人工转述兜底，就退回人工转述+清单内已有的单会话做法。
 - AE：先按最小组合跑 1–2 周、2–3 个代理、一次一个真实小任务。若任务完成率不降、到可评审 PR 的时间缩短或返工减少，且未授权的写操作始终为 0、审批等待没有把节奏拖死，再考虑加代理、开第二个连接器写权限或接例程自动化；若只是频道热闹、PR 你从不采用，或审批变成无脑点“允许”，就退回单人 Claude Code+明确的测试/评审门禁，只保留其按代理授权与审批的思路。
 - AF：先试 1–2 周，只做一条流程、3–5 个 to-do、一个 daily 或 weekly automation、一个低风险 connector。若首次草稿时间或总周转时间下降，且人工修改次数、返工率、权限误操作次数没有上升，再考虑对下一项开启 Auto-advance、增加 automation 或接入更多外部 CLI agent；若复核成本更高、自动化按时运行率低、或 credits/API 成本不可接受，退回手动跑 to-do，只保留 project 和权限门控的设计思路。
+- AG：先在你自己的工作负载上验证停止证明，再用于生产；三项安全指标（残留子进程 0、迟到完成被接受 0、停止时延可接受）成立，且任务确实是“本地 + 有依赖 + 需要可中断”，再扩大；涉及外部写入、不可信命令或跨机调度，按原文的“不覆盖”清单另补沙箱、网关和幂等层。
 
 ## 常见坑
 - A：任务含糊，100 个 agent 会一起含糊；任务文件是唯一信息源；judge 也是 Claude，评分有偏差。
@@ -638,6 +691,7 @@ npm run native:check
 - AD：项目很新（31 stars）、仍在 0.x，原文只有作者自述文档，没有安全审计、第三方评测或真实团队使用案例；默认走 imbo.dev 托管服务并用邮箱注册，会话元数据经第三方；curl | sh 安装方式引入供应链风险；安装器会给 Imbo 工具免逐次审批，等于扩大 agent 的自主动作面；agent 可能不先问你即回复，多 agent 环路上存在信息外泄与被诱导风险——原文只做了“发送文件/数据、删除、对外发送、花钱、碰生产前先问”的约束声明，必须自己做边界测试；消息“在两次工具调用之间落地”“回复唤醒空闲会话”“没内容可补的会话不回复”来自 README 的 GIF 说明文字，没有延迟数据、成功率、并发上限、失败重试语义、消息持久化/离线补投行为的说明；平台不含 Windows；自托管需要域名、证书、SMTP，运维成本不低；它只是胶水层，不能替代测试、独立 verifier 或合入门禁。
 - AE：材料只有 README，没有独立复现；仓库 36 stars，采用规模有限，多代理协作效果、审批体验、长期记忆质量、例程可靠性都未量化，没有 benchmark、任务成功率、成本对比或安全审计。README 里的 Iris 在 Datadog 找到错误、Leo 修复并开 merge request、Nico 评审并请求合并审批只是产品说明中的示例，不是独立测评。“数据留在本机、无 Tucano 服务器、密码不进数据库、每轮隔离、工具按代理授权”都是作者主张，需要自行验证。Claude Code 只读 ~/.claude/settings.json 的 env 和 apiKeyHelper，hooks、插件和权限不进入 Tucano；Codex 用独立 home，避免个人 skills、AGENTS.md 和插件泄漏——这两条意味着你在原 CLI 里配好的 hooks/权限不会自动生效，别以为换个壳就继承了旧防护。Windows 安装包未代码签名，公司电脑可能被 IT 阻止，Windows 还需 Git for Windows。审批一旦变成无脑点“允许”，等于没有闸门；它只是编排层，不能替代测试、独立 verifier 或合入门禁。
 - AF：README 主要是产品说明，没有独立基准、客户案例数据或前后对比；16 个 agent 的能力、DeepResearcher 的“verified sources”、ProductDeveloper 的“verifiable results”都是作者主张。项目/待办/自动化的按钮级操作步骤没有给出，任务路由的具体判定标准也没有展开。打包应用需要登录，内置模型走 Orkas 管理服务；源码版不支持共享项目、云同步和 web-app 发布。自动化依赖电脑唤醒和 Orkas 运行，不能关机后继续。视频复刻不支持社交平台分享链接下载，也不保证精确运镜、真人表演和逐帧匹配。后台学习 review 也可能判断没有值得保存的内容。不要一上来建 13 个 Bot 或全量开 Auto-advance；先把 project、to-dos、权限确认和人工复核跑顺。
+- AG：0.2.0 早期版本，单作者项目，社区验证有限；基准全部在作者单机、单一 OS 上测得，无第三方复现；100 个独立任务时 asyncio 中位更低（0.740 ms vs 1.040 ms），Skein 并非处处领先；manifest 完整契约不在 README，需读 docs/INTEGRATION.md；lease 是 fencing token 不是凭证，外部系统要认它必须另做校验网关；manifest 命令沿用当前 OS 用户权限，不可信负载要另用 OS 沙箱；它不覆盖沙箱、鉴权、agent 输出语义校验、外部副作用恰好一次、崩溃后自动恢复、分布式共识、远程或脱离本机的作业；不要把“叫停”当成结果正确性的证明——它只保证旧任务不偷偷完成，不保证结果对。
 
 ## 证据与来源
 - A 依据调研《Jakeschincariol/arena-skill》。可核对：成本表、bracket.py plan 输出、赛程表、rubric 权重、默认并发 10、单元测试、117 stars。质量提升属作者主张。
@@ -672,6 +726,7 @@ npm run native:check
 - AD 依据调研《Bearisbug/imbo》。可核对：安装命令与安装器行为（写入 ~/.local/bin、邮箱码登录、launchd/systemd user service、勾选工具、列出改动、imbo uninstall 回滚）；六种工具的接入方式对照表；CLI 命令样例（whoami、contact add/requests/accept/list、group create/invite/join、send、inbox、status、update）；附件路径 ~/.imbo/files/；agent 侧五个工具名；授权边界清单（外发文件、删除、花钱、碰生产前先问）；自托管 docker 命令与六个环境变量语义；cargo build --release / cargo test --workspace；License Apache-2.0；平台 macOS/Linux、arm64/x86_64；31 stars，0.2.11 之前无 imbo update。只是作者主张、无独立证据的部分：消息“在两次工具调用之间落地”“回复唤醒空闲会话”“没内容可补的会话不回复”，均来自 README 的 GIF 说明文字，没有延迟数据、成功率、并发上限、失败重试语义、消息持久化/离线补投行为的说明；没有安全审计、没有第三方评测、没有真实团队使用案例与前后对比指标。风险：默认托管服务、curl | sh、安装器免审批、agent 可能不先问即回复；不能替代测试与合入门禁。
 - AE 依据调研《eduwxyz/tucano》。可核对：README 给出的平台要求（macOS Apple silicon、Linux x64/ARM64、Windows 10/11 x64）、各平台安装命令、首次运行向导步骤、Connectors 与按代理的 no access / read / read and write 授权、审批模型（approve once / always allow safe one / refuse with reason）、Telegram 手机审批、月度 token 限额、Pause everything、Memory 页与 skill 提议、Routines 的定时与连接器事件触发、quiet hours、托盘常驻、Docker/浏览器借出、searched/read/ran/edited 回执与 weekly Report、Claude Code 只读 settings.json 的 env 与 apiKeyHelper、Codex 独立 home、仓库 36 stars。属产品说明示例、非独立测评：Iris/Leo/Nico 那条 Datadog → 修复 → merge request → 评审 → 审批的链路。“数据留在本机、无 Tucano 服务器、密码不进数据库、每轮隔离、工具按代理授权”是作者主张；没有 benchmark、用户数、任务成功率、成本对比或安全审计，多代理协作效果、审批体验、长期记忆质量、例程可靠性均未量化。本手册中的最小试用组合与判断指标是据此补充的试用设计，不是原文数据。
 - AF 依据调研《Orkas-AI/Orkas》。可核对：MIT 许可；源码运行命令 git clone https://github.com/Orkas-AI/Orkas.git、cd Orkas、./run.sh，Windows 用 run.cmd；macOS 12+/Windows 10+ 打包安装，Linux 源码需 glibc 2.34+ x64/arm64 且不支持 Alpine/musl；源码需 Node 22.12+；首次启动准备 pinned Python、uv、Node、embedding model（约 95 MB）、OfficeCLI、FFmpeg、whisper.cpp 和多语言语音模型资源；工作区 ~/.orkas/；Settings → AI Providers 配置模型；Account settings → Models → Chat → Add model → Custom 配置本地 OpenAI-compatible 或 Anthropic-compatible endpoint；支持 Claude、OpenAI、Gemini、DeepSeek、Kimi、GLM、Qwen、MiniMax、Doubao；project 保存目标、规则、记忆和文件；to-dos 与 Auto-advance；scheduled automations 支持 hourly/daily/weekly/monthly，v1.9 起错过后 12 小时内补跑；connectors 默认在发送、发布或删除前询问；外部 CLI agent 通过本地会话接入，Commander 用 dispatch_to、hand_off_to、run_worker 路由；视频复刻提示词原文；npm run native:repair 与 npm run native:check，Node.js 24 LTS 最低 22.12.0；GitHub 显示 6785 stars、当日 1044 stars。属作者主张、无独立验证：16 个内置 agent 的能力、DeepResearcher 的 verified sources、ProductDeveloper 的 verifiable results、后台 review 会更新自我评估与学习技能；没有准确率、返工率、成本或前后对比数据；项目/待办/自动化的按钮级操作步骤和任务路由判定标准未给出；打包应用需登录并走 Orkas 管理服务；源码版不支持共享项目、云同步和 web-app publishing；自动化依赖电脑唤醒和 Orkas 运行；视频复刻不支持社交平台分享链接下载，也不保证精确运镜、真人表演和逐帧匹配。本手册中的最小试用与判断指标是据此补充的试用设计，不是原文数据。
+- AG 依据调研《Balanov/skein》。可核对：install.sh 与 install.ps1、SHA256SUMS 校验、SKEIN_INSTALL_DIR、源码构建命令 go build -trimpath -o bin/skein ./cmd/skein、skein run/stop/status/reset、退出码 0/3/4/1/2、.skein/runs/<run-id>/ 下的 report.json 与 events.jsonl、examples/fanout.json、examples/embed-go、docs/INTEGRATION.md、manifest 要点（JSON、argv 数组、无隐式 shell、依赖图、multi-pass、worker/pass 上限、每趟超时）、Go 1.26+、MIT、0.2.0。数据：Windows 11 / Ryzen 9 5950X 上 1000 节点图三种形态的耗时（Independent 1.580 ms、Serial chain 3.272 ms、Fan-out/join 2.080 ms；对照 Python asyncio 与 LangGraph）；冷进程 24 个真实 Python SHA-256 worker、15 次全新进程，Skein 中位 156.463 ms，asyncio 288.644 ms，LangGraph 998.010 ms，360/360 结果校验通过；停止证明 160/160 父子进程树被终结、160/160 子进程心跳被冻结，20 次运行中位 141.663 ms。作者主动承认 100 个独立任务时 asyncio 中位更快（0.740 ms vs 1.040 ms），并声明这些是本地观测，不是通用排名，也不是模型质量结果。明确不覆盖：任意命令沙箱化、鉴权或签名 lease、agent 输出语义校验、外部副作用恰好一次、崩溃后自动恢复、分布式共识、远程或脱离本机的作业、已经越过外部边界的副作用。256 stars、单作者项目，社区验证有限；0.2.0 早期版本，作者要求先在工作负载上验证停止证明再用于生产。
 
 ## 依据的调研
 
@@ -707,3 +762,4 @@ npm run native:check
 - [eduwxyz/tucano](../research/radar/2026-10-31/8661-eduwxyz-tucano.md)：值得一试，建议小范围试用：先用 2–3 个编码代理在一个频道里跑真实小任务，并把合并、发布、删除等写操作设为人工审批；理由是 README 给出了可照做的安装、连接器、权限和定时触发步骤，但只有项目自述、缺少独立效果数据，暂不宜直接 adopt。
 - [Orkas-AI/Orkas](../research/radar/2026-11-01/9199-orkas-ai-orkas.md)：值得一试，建议小范围试用 Orkas 的“项目 + 待办 + 自动推进 + 定时自动化”工作流，把它当作多智能体协作的编排层；理由是 README 给出了可运行的安装/配置步骤、外部 CLI 接入方式和明确的复核/权限机制，但缺少效果数据和按钮级操作步骤，不宜直接全面采用。
 - [@MindfulReturn: yetone 这套 Magpie 运维看着朴素，总结下来的方法如下：Claude Code + 官方 Opus，并行三条 /loop——一条盯 GitHub issue/PR 和 Discord（PR](../research/radar/2026-11-02/9530-yetone-magpie-claude-code-opus-loop-github-issue-p.md)：值得一试，先在一个仓库上照搬“三条并行 loop + PR 必须拉下来真跑 + 便宜模型先拦截 X 杂音”这套骨架，跑一两周再决定是否扩展；它的价值不在工具新奇，而在于把 issue/PR 值守、舆情筛选、技术债清理拆成三个互不干扰的常驻循环，人工只留下 UI/UX 决策，分工清晰、可小成本验证。
+- [Balanov/skein](../research/radar/2026-11-03/9850-balanov-skein.md)：值得一试，先装好，用示例任务图跑一次，再用 `skein stop` 演练“旧 epoch 排队任务失效 + 迟到完成被拒绝 + 进程树被终结”，验证通过后再考虑把你自己的多步子任务迁到显式任务图上；它给出了可照做的安装、运行、停止命令和明确的退出码语义，但仍是 0.2.0 早期版本、单机自测基准，且明确不覆盖沙箱、鉴权和外部副作用恰好一次。
