@@ -1,14 +1,14 @@
-# 让 AI 操作界面前，先验证反馈回路、安全边界和可回滚性
+# 让 agent 操作界面前，先跑通观察—动作—复验的最小闭环
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：在把浏览器、桌面、终端、手机或电视界面交给 AI 操作前，用成本递增的最小试用验证它能不能用、边界在哪、坏了怎么回滚，并把效果变成同批任务上的可比数字。
-> 先试这一步：先选最接近你现有环境的一条路线，只做一次可判对错的最小任务并记录基线；设备改造类先在可弃用设备上读仓库说明，不执行未核实的命令。
-> 最近修订：2026-10-21
+> 解决的问题：在把浏览器、桌面、终端、手机或电视界面交给 AI 操作之前，用成本递增的步骤验证反馈回路、验收标准、安全边界和可回滚性，并把“高效”变成同批任务上的可比较数字。
+> 先试这一步：先只跑做法 A 的 Cua Bench 最小任务，确认参考解 reward 为 1.0；已有 agent 时，再用做法 K 在 Finder 上跑一次 snapshot → click → snapshot 复验。
+> 最近修订：2026-11-03
 
 ## 解决什么问题
 
-在把浏览器、桌面、终端、手机或电视界面交给 AI 操作之前，用成本递增的步骤先验证它的反馈回路、验收标准、安全边界和可回滚性，并把“高效”变成同批任务上的可比较数字，避免装完一堆组件却不知道能不能用。浏览器路线有四种可选形态：dsh 的文本快照路线、Chrome Relay 借用真实登录态后台标签页、qz 本地优先浏览器扩展、axuse 的 MCP + 无障碍树 + diff 路线；桌面/终端/iOS 有 Cua 生态与 AutoCua；安卓有 ADB 技能；Android TV / Google TV 有一条用 Claude Code 通过 Wi-Fi 调试做去臃肿的试用路线（cleanyourtv）。
+在把浏览器、桌面、终端、手机或电视界面交给 AI 操作之前，用成本递增的步骤先验证它的反馈回路、验收标准、安全边界和可回滚性，并把“高效”变成同批任务上的可比较数字，避免装完一堆组件却不知道能不能用。浏览器路线有四种可选形态：dsh 的文本快照路线、Chrome Relay 借用真实登录态后台标签页、qz 本地优先浏览器扩展、axuse 的 MCP + 无障碍树 + diff 路线；桌面/终端/iOS 有 Cua 生态与 AutoCua；安卓有 ADB 技能；Android TV / Google TV 有一条用 Claude Code 通过 Wi-Fi 调试做去臃肿的试用路线（cleanyourtv）。桌面 GUI 还新增一条 agent-desktop 路线：用无障碍树快照 + ref 动作 + 再次快照复验，给已有 agent 补一层桌面执行接口，不绑定模型。
 
 ## 适用与不适用
 
@@ -17,6 +17,10 @@
 - 你已有 Claude Code / Codex / Cursor / OpenClaw 等 agent，想通过 MCP 或 skill 接上界面操作能力。
 - 你在 macOS + Google Chrome + Node.js 20+，希望编码 agent 借用你已登录的 Chrome 后台标签页做网页操作，且不抢焦点、不弹对话框：Chrome Relay。
 - 你要在 macOS / Windows / Linux 上让 agent 操作真实桌面、自己的 Chrome、真实终端或 iOS 模拟器/已配对 iPhone/iPad：AutoCua 或 Cua 生态。
+- 你已有 Claude Code / Codex / Cursor / OpenClaw 等能执行 shell 命令的 agent，想让它操作有 GUI 但没有 API/CLI 的桌面软件，且任务能靠结构化 ref 定位元素而不是像素匹配：agent-desktop。
+- 你在 macOS / Windows / Linux 上，愿意给 macOS 辅助功能权限，或 Linux 在用户图形会话中并装 at-spi2-core；希望默认 headless、不移动指针不抢焦点；需要时再加 --headed。
+- 你要先用一个无风险应用（如 Finder）验证 snapshot → 对 ref 执行动作 → 再 snapshot 复验，再扩大到真实桌面任务。
+- 密集应用（如 Slack）需要先 --skeleton --compact 出骨架图，再 --root 下钻。
 - 你已有 agent，想让它通过 ADB 操控一台已授权的安卓测试机：打开 App、查找页面、点击/滑动/长按/输入文字，查看授权范围内的界面信息、处理有限列表、复现测试操作、准备消息草稿（明确授权后才执行发送）。
 - 你在 Chrome 或 Edge 上，希望用一句话让浏览器智能体跨站执行、翻页、滚动加载并抽取数据；要在已登录站点做多源调研、对比表、带来源的报告，且愿意自带模型 API key：qz。
 - 你要 MCP 接入 Claude Code / Codex / OpenCode，让 agent 用无障碍树 + diff 操作浏览器，任务以表单填写、滚动查找、批量打开 URL 为主，并愿意先与现有做法做同任务对照：axuse。
@@ -24,8 +28,8 @@
 
 **不适用 / 先别用：**
 - 团队不在用 dsh 桌面端：浏览器路线完全绑定 dsh 生态；手机或平板不支持 dsh 浏览器方案。
-- 你要的是成熟稳定的 1.0 产品：Cua Spaces 为 0.1.0，Pro/Teams 标注“即将推出”；CUA-S1 是早期源码研究版；dsh 扩展在 Chrome / Firefox 均标注 not yet listed；android-adb-control 作者自述尚未完成修订版真机端到端验收。
-- 你的机器不满足硬性条件：Spaces 需 macOS 26+，Lume 需 Apple Silicon；dsh 需 Node ≥ 20、桌面版 Chrome/Chromium/Edge ≥ 116 或 Firefox ≥ 140.0；Chrome Relay 仅 macOS + Google Chrome + Node.js 20+；AutoCua 需 Python 3.10+；axuse 需 Node.js 22+ 且机器上装有 Chrome、Edge、Chromium 或 Chrome for Testing 之一。
+- 你要的是成熟稳定的 1.0 产品：Cua Spaces 为 0.1.0，Pro/Teams 标注“即将推出”；CUA-S1 是早期源码研究版；dsh 扩展在 Chrome / Firefox 均标注 not yet listed；android-adb-control 作者自述尚未完成修订版真机端到端验收；agent-desktop 是 Vercel Labs 早期项目。
+- 你的机器不满足硬性条件：Spaces 需 macOS 26+，Lume 需 Apple Silicon；dsh 需 Node ≥ 20、桌面版 Chrome/Chromium/Edge ≥ 116 或 Firefox ≥ 140.0；Chrome Relay 仅 macOS + Google Chrome + Node.js 20+；AutoCua 需 Python 3.10+；axuse 需 Node.js 22+ 且机器上装有 Chrome、Edge、Chromium 或 Chrome for Testing 之一；agent-desktop 需本机有 Node 环境，Linux 需图形会话和 at-spi2-core。
 - 你要做对外托管或商用集成：Cua 的许可不是单一的；dsh README 通篇没有给出基准实测结果；Chrome Relay 的 0.15s/命令、2 分钟 setup 也只是作者自述；axuse 是 PolyForm Noncommercial 1.0.0，商业使用需单独授权。
 - 你想用安卓路线绕过锁屏、验证码、支付验证或企业策略，或做无人值守监控、自动交易、无限重试：android-adb-control 明确排除这些用途；云端会话或远程容器不会自动获得本地 USB 设备。
 - 你打算把手里的主力机（承载凭据的设备）当试验田：ADBKeyboard 的部分实现允许其他本地应用发送控制广播，应优先用于可信测试设备，不用于凭据输入。
@@ -34,6 +38,12 @@
 - 你需要独立评测或高采用度背书：qz 仓库仅 46 stars，README 没有准确率、耗时、成功率数据；axuse 47 stars、单一公司维护，基准为作者自建自评且统计口径有疑点。
 - 你要把 axuse 用于商业用途：PolyForm Noncommercial 1.0.0 免费仅限非商业，商业使用需向 CTOL Digital Solutions 单独授权。
 - 你主要在纯视觉判断（canvas、图表）或需要绕过反爬：axuse 不适用；它不实现流量标注和反爬交接。
+- 你要的是像素/视觉匹配或 Computer Use 模型：agent-desktop 明确不做像素匹配，决策循环留在你的 agent 里。
+- 你要依赖“按住不放”的长按拖拽：key-down / key-up / mouse-down / mouse-up 在 daemon 能释放被按住的键或按钮之前会拒绝执行。
+- 你要定时调度、事件订阅或常驻守护：agent-desktop README 没有给出这些机制；wait / session / trace / batch 和轮询 snapshot/is/find 只是状态驱动的基础件，时间触发需要外部编排。
+- 你不能给 macOS 辅助功能权限，或 Linux 不在图形会话、没装 at-spi2-core；Wayland 下要用剪贴板还需 wl-clipboard。
+- 你要把快照、剪贴板读取、截图、命令输出或调试产物直接进公共日志/上传：这些可能含私人桌面内容。
+- 你照旧教程去 brew tap 装 agent-desktop：Homebrew 与 Scoop 官方包还在提交、默认源里拿不到，旧 tap/bucket 已不再维护。
 - 你不接受手动 Load unpacked 扩展：Chrome Relay、axuse bridge 都需要这一步。
 - 你要用 AutoCua 操作安卓手机：mobile use, android 尚不可用；iOS 模式仅 macOS 宿主。
 - 电视去臃肿路线不适用于：主力电视、不愿意恢复出厂设置兜底的设备、无法打开开发者选项的设备、你还没读 cleanyourtv 仓库说明就想执行命令的情况。原文只保留了流程前两步，后续连接方式、去臃肿清单和执行命令均缺失；不要凭猜测执行 adb 或 pm 命令。非官方改造可能影响保修、OTA 和系统更新，不同厂商菜单命名与位置有差异，单一个案不可外推为“AI 能改造任何设备”。
@@ -52,10 +62,11 @@
 - qz：Chrome 或 Edge；扩展已安装并打开侧边栏；一个支持 tool calling 的模型 provider 或兼容本地模型服务，或一个 ChatGPT 账号；外部 agent 桥接需 Node.js 22+；源码构建需 Node.js 24 LTS 与 npm；使用前核查 docs/permissions.md（材料只给链接，未给内容）。
 - axuse：Node.js 22+；机器上装有 Chrome、Edge、Chromium 或 Chrome for Testing 之一（浏览器不在默认位置时设 AXUSE_BROWSER=/path/to/chrome）；宿主 CLI（Codex / Claude Code / OpenCode 等）；bridge 模式需手动在 Chrome/Edge 开发者模式 Load unpacked 指向 bridge/extension，并注册 native messaging host。
 - 电视去臃肿路线（cleanyourtv）：同一局域网 + 电脑已装 Claude Code；电视能进入“设置 → 关于”，在“版本号 / Build”上连续按 7 次开启开发者选项；先读仓库 README，确认每条命令的作用；准备一台可弃用的旧电视，并记录改动前基线；保留恢复出厂设置这一兜底手段。
+- agent-desktop：本机有 Node 环境；macOS 需能授予“辅助功能”权限；Linux 需在用户的图形会话中且安装了 at-spi2-core，鼠标输入与窗口控制依赖 X11，截图在 Wayland 下走 xdg-desktop-portal，剪贴板在 Wayland 需要 wl-clipboard；Windows 下操作与终端同完整性级别的应用无需授权。若从 GitHub Releases 下对应平台的 native archive，helper 必须和可执行文件放在一起；不要照旧教程去 brew tap。
 
 ## 操作步骤
 
-下面按路线分组。建议先做做法 A；如果团队已在用 dsh 桌面端，做法 B 是最短的一条“模型真的读浏览器”的路；如果你已有 agent 和一台可信安卓测试机，做法 E 是最短的一条“agent 真的操作手机”的路；如果你有一台可弃用旧电视并愿意先读仓库，做法 J 是最小风险的去臃肿试用路线。
+下面按路线分组。建议先做做法 A；如果团队已在用 dsh 桌面端，做法 B 是最短的一条“模型真的读浏览器”的路；如果你已有 agent 和一台可信安卓测试机，做法 E 是最短的一条“agent 真的操作手机”的路；如果你有一台可弃用旧电视并愿意先读仓库，做法 J 是最小风险的去臃肿试用路线；如果你已有 agent、只需要补一层桌面 GUI 执行接口，做法 K 是最小的一条；如果你要一个 pip 包同时覆盖桌面、Chrome、终端和 iOS，选做法 G；如果你要 MCP 接入和浏览器 AX 树 + diff，选做法 I。
 
 ### 做法 A：只跑评测回路，不碰界面（最便宜的入口）
 
@@ -441,6 +452,105 @@ node src/cli.js bridge verify
 
 8. 推广门槛：一台设备观察 1–2 周无异常且体验指标确有改善，再考虑扩大到第二台不同厂商的设备，用于验证这套流程的可迁移性。
 
+### 做法 K：用 agent-desktop 给已有 agent 补桌面 GUI 执行层（无障碍树 + ref + 复验）
+
+前提：本机有 Node 环境；macOS 能授予辅助功能权限；Linux 在用户图形会话中且装 at-spi2-core；Windows 操作与终端同完整性级别的应用无需授权。预期结果：agent-desktop version 能跑；permissions --guide 通过；list-apps 能列出应用；snapshot --app Finder -i 返回 ok:true、complete:true 和带 ref_id 的 tree；对 ref 执行动作后再 snapshot 能看到预期 UI 变化。
+
+1. 全局安装并确认版本：
+
+```bash
+npm install -g agent-desktop
+agent-desktop version
+```
+
+Bun / Yarn / pnpm 可装同一个包；包里自带 x64 与 ARM64 的原生二进制和平台 helper。若不想走 JS 启动器，可从 GitHub Releases 下对应平台的 native archive，helper 必须和可执行文件放在一起。Homebrew 与 Scoop 官方包还在提交、默认源里拿不到，原来的自定义 tap/bucket 已不再维护。
+
+2. macOS 上跑权限引导：
+
+```bash
+agent-desktop permissions --guide
+```
+
+3. Linux 上先确认会话与依赖：处于用户的图形会话中，且安装 at-spi2-core；鼠标输入与窗口控制依赖 X11，截图在 Wayland 下走 xdg-desktop-portal，剪贴板在 Wayland 需要 wl-clipboard。
+
+4. 先把与版本匹配的说明书交给 agent：
+
+```bash
+agent-desktop skills get desktop
+agent-desktop skills get platform
+agent-desktop <command> --help
+```
+
+预期结果：agent 读到 loop、refs、验证与重试规则，以及当前 OS 的差异。
+
+5. 把 skill 装进 agent harness，或往 AGENTS.md 加提示词：
+
+```bash
+npx skills add https://github.com/vercel-labs/agent-desktop --skill agent-desktop
+```
+
+```markdown
+Use `agent-desktop` to see and operate desktop apps. Before the first use, run
+`agent-desktop skills get desktop` and `agent-desktop skills get platform`, and follow them.
+```
+
+6. 列出可操作的应用名（snapshot --app 的取值来自这里）：
+
+```bash
+agent-desktop list-apps
+```
+
+7. 首次快照，只取可交互元素：
+
+```bash
+agent-desktop snapshot --app Finder -i
+```
+
+预期结果：返回 JSON envelope，含 snapshot_id、ref_count、complete 和带 ref_id 的 tree；ref 形如 @s8f3k2p9:e8。
+
+8. 对 ref 执行动作：
+
+```bash
+agent-desktop click @s8f3k2p9:e8
+```
+
+9. 再快照一次验证：
+
+```bash
+agent-desktop snapshot --app Finder -i
+```
+
+预期结果：用新快照确认 UI 状态，而不是靠动作返回值自证。
+
+10. 遵守 ref 与快照绑定：裸写 @e8 会被 INVALID_ARGS 拒绝；UI 变了会返回 STALE_REF 或 AMBIGUOUS_TARGET，此时重新快照换新 ref，不要重试旧 ref。每个命令输出一个 envelope，错误带 code、disposition，通常还有 suggestion；只有 error.disposition.retry 为 safe 时才重试。契约、错误码与退出码见 docs/json-output.md。
+
+11. 多窗口直接操作会得到 AMBIGUOUS_TARGET；错误里 error.details 会列出候选 window id，用 --window-id 指定。
+
+12. 元素很多的密集应用先出骨架图，再对某一区域下钻：
+
+```bash
+agent-desktop snapshot --skeleton --app Slack -i --compact
+agent-desktop snapshot --root @s8f3k2p9:e3 -i --compact
+```
+
+13. 默认 headless：走无障碍 API，不移动指针、不抢焦点；确实需要物理输入才加全局 --headed。
+
+14. PowerShell 必须给每个 ref 加引号（裸 @token 是 splatting 运算符）：
+
+```powershell
+agent-desktop click '@s8f3k2p9:e8'
+```
+
+15. 数据卫生：快照、剪贴板读取、截图、命令输出、调试产物都可能含私人桌面内容，不要进公共日志和上传；可选的 JEV helper 会把屏幕描述发给配置的模型提供方，它独立于原生 CLI，需单独评估。
+
+16. 只有高频调用才考虑 FFI：每个 release 带 libagent_desktop_ffi，可进程内调用而不用每条命令起一次 CLI，入口、内存归属与线程规则见：
+
+```bash
+agent-desktop skills get ffi
+```
+
+17. 能力边界：共 60 个命令名、56 个可操作命令；key-down / key-up / mouse-down / mouse-up 这四个在“有 daemon 能释放被按住的键或按钮”之前会拒绝执行，所以“按住不放”的交互目前不可依赖。
+
 ### 怎么选
 
 - 只想验证“这套东西在我这儿能不能用起来”：选做法 A，成本最低。
@@ -453,6 +563,11 @@ node src/cli.js bridge verify
 - 你在 Chrome/Edge 上、想用一句话在已登录站点跨站执行并产出带来源的报告：选做法 H。
 - 你要 MCP 接入 Claude Code / Codex / OpenCode，让 agent 用无障碍树 + diff 操作浏览器：选做法 I。
 - 你有一台可弃用旧安卓/Google TV，想试去臃肿但原文不完整：选做法 J，先记录基线、读仓库说明，只在一台设备上跑一轮。
+- 你已有 agent，想让它操作有 GUI 但没有 API/CLI 的桌面软件，且任务能靠结构化 ref 定位而不是像素匹配：选做法 K。
+- 做法 K 与做法 C 的差异：C 是 Cua Driver + MCP/skill，装 Driver 后让 agent 做计算器 6 × 7=42；K 是 agent-desktop CLI/C 库，用无障碍树 snapshot + ref + 再 snapshot 复验，默认 headless，不附带模型，决策留在 agent。需要 Cua 生态/MCP 选 C；只要桌面执行层选 K。
+- 做法 K 与做法 G 的差异：G 是 pip 包 run_agent(...)，覆盖桌面、自己的 Chrome、真实终端、iOS；K 只做桌面 GUI 执行层，不负责模型和跨端 mode。要一站式多端选 G；已有 agent 要轻量桌面层选 K。
+- 做法 K 与做法 I 的差异：I 是 MCP 浏览器/桌面 server，强调 AX 树 + diff、可接 Claude Code/Codex/OpenCode；K 是 CLI + C 库的桌面无障碍树接口，用 ref + 再快照复验。浏览器任务选 I；桌面 GUI 选 K。
+- 做法 K 与做法 D 的差异：D 装整套/沙箱/VM；K 不提供沙箱/VM，只是桌面执行接口。需要隔离沙箱选 D。
 - 做法 I 与做法 B 的差异：B 绑定 dsh 桌面端，走自己的 MV3 扩展与文本快照，提供 17 个工具和成对基准；I 是零 npm 依赖的 MCP server，用 AX 树 + diff + 稳定引用，可接多种 MCP 宿主。需要成对基准和 dsh 生态选 B；需要 MCP 接入和 AX 树 + diff 选 I。
 - 做法 I 与做法 H 的差异：H 是 Chrome/Edge 扩展，侧边栏人机同视，BYO 模型，可保存 Skill；I 是 MCP 浏览器/桌面操作 server，强调 AX 树 + diff，可复用登录态（bridge），但没有侧边栏式人机同视和 Skill 保存描述。
 - 做法 I 与做法 F 的差异：F 仅 macOS + Google Chrome + 四类 agent 应用，用 Chrome Relay 复用真实登录态后台标签页，不附带模型配置；I 通过 bridge 复用已登录 Chrome/Edge，但需要手动 Load unpacked，宿主是 MCP 宿主，且非商业许可。
@@ -471,6 +586,7 @@ node src/cli.js bridge verify
 - 做法 H：2–3 个真实的多源调研/登录态数据抽取任务能跑完；输出带来源链接；逐条核对来源后，未核实项被标注；跑通的流程能“Save this as a Skill”并用一句话再次触发；外部 agent 通过 npx qz-browser-agent@latest create ... --stream 或 MCP 能拿到结果。材料没有给出准确率、耗时、成功率；不要用 46 stars 或作者对比表当效果证据。
 - 做法 I：node src/cli.js doctor 能完成一次快照；首次验证任务能找到 https://example.com 上的 "More information" 链接并给出目标地址；ax_open 拿全量快照后，后续动作只返回 diff；ax_fill 能一次设完整个表单；ax_observe {find:"text"} 大页面只回匹配行；ax_scroll {until:"text"} 能滚到目标文本；ax_upload 遇到文件选择框会报出来而不是挂住；ax_open_many 有界打开 URL。作者自报的基准（16 个服务端评分任务、同一 harness/模型）：axuse 28/28、Codex + Chrome 扩展 27/27、browser-use 0.13 27/27；中位每任务 17s / 26s / 56s；token 总量 4.7M / 9.8M / 8.8M；中位工具调用 5 / 7 / 12。注意称 16 个任务却给出 28/28，统计口径未解释；全部为作者自建自评，不能当定论。
 - 做法 J：改动后可用存储增加、开机时间缩短、后台占用下降、App 启动变快、卡顿次数减少；崩溃/异常次数不上升；核心功能零回归——投屏、HDMI 输入、遥控配对、系统更新、应用商店安装与更新、常见视频 App 登录与播放正常。任一核心功能失效即判为失败并恢复出厂设置。材料没有给出成功率、耗时或机型覆盖数据；单一个案不可外推。
+- 做法 K：agent-desktop version 能跑；permissions --guide 通过；list-apps 能列出；snapshot --app Finder -i 返回 ok:true、complete:true 和 ref_count；click 一个 ref 后再次 snapshot 能看到预期 UI 变化；错误码能区分 STALE_REF / AMBIGUOUS_TARGET / INVALID_ARGS，且只在 disposition.retry 为 safe 时重试；trace / session 有执行记录。README 没有成功率、耗时或基准数据，指标要自己定：同一 GUI-only 任务手动做 vs agent 做，记录步骤数、人工接管次数、旧 ref 重试次数、私密内容是否进公共日志。
 
 最小试用方式：
 - 先只跑做法 A 的两条安装命令，建最小任务、跑参考解，确认 reward 为 1.0。
@@ -481,12 +597,13 @@ node src/cli.js bridge verify
 - 做法 H 的最小试用：在个人 Chrome/Edge 装扩展并接一个自带 API key 的模型；选一个已登录的真实站点，跑一个带来源要求的小任务，逐条核对来源；再跑 1–2 个多源调研或登录态抽取任务；只把跑通的流程说“Save this as a Skill”。
 - 做法 I 的最小试用（半天内）：一台机器 clone 并跑通 node src/cli.js doctor；接到 Claude Code 或 Codex 的一个会话，把 SKILL.md 指给 skill 系统或系统提示；用 3–5 个手上真实的浏览任务跑一遍，覆盖一个整表填写加提交、一个滚动查找、一个多 URL 批量；同一批任务用现有做法做对照，记录通过数、中位耗时、总 token、中位工具调用数。
 - 做法 J 的最小试用：挑一台可以弃用的旧电视，先读仓库说明，再只在一台设备上跑一轮；改动前记录基线；改动后当天与一周后各做一次回归检查；一台设备观察 1–2 周无异常且体验指标确有改善，再考虑第二台不同厂商设备。
+- 做法 K 的最小试用：npm install -g agent-desktop 并跑 agent-desktop version；macOS 跑 permissions --guide；跑 skills get desktop / platform 并把输出交给 agent；用 list-apps 找到 Finder；snapshot --app Finder -i，点一个 treeitem 的 ref，再 snapshot 一次确认变化；换一个 GUI-only、无风险的小任务，在隔离环境里重复一遍；密集应用先 skeleton --compact 再 --root 下钻；检查日志与上传路径，确认快照/剪贴板/截图没有外泄。
 
-试多久：材料没有给出耗时或成功率的数字；以“参考解拿到 1.0”“快照能给出编号控件并且点得中”“只读任务不改动设置”“Chrome Relay 的 doctor 通过且四步流程一次跑通”“AutoCua 能驱动目标界面一次且模型只选编号元素”“qz 的 2–3 个真实任务来源核对通过且 Skill 一句话复用成功”“axuse 的 doctor 通过且 3–5 个真实任务与现有做法对照有结果”“电视去臃肿一台设备观察 1–2 周无核心功能回归”这类单点事实跑通为准，不要用 star 数或视频演示判定。
+试多久：材料没有给出耗时或成功率的数字；以“参考解拿到 1.0”“快照能给出编号控件并且点得中”“只读任务不改动设置”“Chrome Relay 的 doctor 通过且四步流程一次跑通”“AutoCua 能驱动目标界面一次且模型只选编号元素”“qz 的 2–3 个真实任务来源核对通过且 Skill 一句话复用成功”“axuse 的 doctor 通过且 3–5 个真实任务与现有做法对照有结果”“电视去臃肿一台设备观察 1–2 周无核心功能回归”“agent-desktop 的 permissions 通过、Finder 快照 → ref 动作 → 再快照复验一次成功且错误码按 disposition 处理”这类单点事实跑通为准，不要用 star 数或视频演示判定。
 
 ## 常见坑
 
-- 把关注度当可用性：28,641 stars、今日 +229 只说明有人看；dsh README 没有基准实测结果；android-adb-control 标称 40 stars，也没有效果数据；AutoCua 只有作者自述的演示时长；qz 仅 46 stars；axuse 47 stars、单一公司维护，基准为作者自建自评且统计口径有疑点。
+- 把关注度当可用性：28,641 stars、今日 +229 只说明有人看；dsh README 没有基准实测结果；android-adb-control 标称 40 stars，也没有效果数据；AutoCua 只有作者自述的演示时长；qz 仅 46 stars；axuse 47 stars、单一公司维护，基准为作者自建自评且统计口径有疑点；agent-desktop 是 Vercel Labs 早期项目，README 没有成功率、耗时或基准数据。
 - 以为插件能替你装浏览器扩展：不能。命令行 --load-extension 只维持一个会话，Chrome 137+ 品牌版已忽略；必须在 profile 里正式装一次。
 - 上架包传错：普通构建带 manifest key，Chrome Web Store 会拒收，要传 -store 包。
 - 以为默认有人把关：unrestrictedBrowserAccess 出厂为开，新装不做询问；关掉才恢复动手前提示，而且它还会覆盖“读页面前先问”的选择。
@@ -497,11 +614,11 @@ node src/cli.js bridge verify
 - 拿主力机做实验、或把截图与 UI XML 往外发：截图和 UI XML 可能含私人内容；ADBKeyboard 优先用于可信测试设备，不用于凭据输入。
 - 把设备连接问题当技能问题：unauthorized、offline、Linux no permissions 先解决连接；不要将 ADB 端口暴露到公网。
 - 以为技能会自己无限跑：默认预算是最多 30 个设备状态变更动作、5 分钟；原文没有时间/事件触发的持续运行、无人值守监控或无限重试。
-- 忽略成熟度：Cua Spaces 是 0.1.0；CUA-S1 是早期源码研究版；dsh 扩展在 Chrome / Firefox 均 not yet listed。
-- 环境不满足硬装：Spaces 需 macOS 26+，Lume 需 Apple Silicon；dsh 需 Node ≥ 20；AutoCua 需 Python 3.10+；axuse 需 Node.js 22+ 且机器上有 Chromium 系浏览器。
+- 忽略成熟度：Cua Spaces 是 0.1.0；CUA-S1 是早期源码研究版；dsh 扩展在 Chrome / Firefox 均 not yet listed；agent-desktop 是早期项目。
+- 环境不满足硬装：Spaces 需 macOS 26+，Lume 需 Apple Silicon；dsh 需 Node ≥ 20；AutoCua 需 Python 3.10+；axuse 需 Node.js 22+ 且机器上有 Chromium 系浏览器；agent-desktop 需 Node 环境，Linux 需图形会话 + at-spi2-core。
 - 跑错已废弃包：cuabot（npm）有已知安全问题，原文明确写 Do not run it；应停用并卸载。
-- 商用许可踩坑：Cua 的 SDK、CLI、Driver、Lume 是 MIT；Cua Spaces 是 FSL-1.1-MIT；cua-som 是 AGPL-3.0-or-later；android-adb-control 是 MIT；AutoCua 是 MIT，其 Windows Interception 驱动是 LGPL-3.0 非商业 / 付费商业双许可；axuse 是 PolyForm Noncommercial 1.0.0。做商用集成前必须逐目录查 LICENSING.md。
-- 以为 README 就是全部：Cua 的权限授予、平台支持边界、任务编写格式在外链文档里；dsh 的安装确认要按 docs/INSTALL.md；android-adb-control 的具体命令在 references 和 docs/testing.md 里。
+- 商用许可踩坑：Cua 的 SDK、CLI、Driver、Lume 是 MIT；Cua Spaces 是 FSL-1.1-MIT；cua-som 是 AGPL-3.0-or-later；android-adb-control 是 MIT；AutoCua 是 MIT，其 Windows Interception 驱动是 LGPL-3.0 非商业 / 付费商业双许可；axuse 是 PolyForm Noncommercial 1.0.0；agent-desktop 是 Apache-2.0。做商用集成前必须逐目录查 LICENSING.md。
+- 以为 README 就是全部：Cua 的权限授予、平台支持边界、任务编写格式在外链文档里；dsh 的安装确认要按 docs/INSTALL.md；android-adb-control 的具体命令在 references 和 docs/testing.md 里；agent-desktop 的命令契约在 docs/json-output.md，使用规则要用 skills get 取。
 - 以为 Chrome Relay 能覆盖所有浏览器：仅 macOS + Google Chrome + Node.js 20+；只放行 Claude Code / Codex / Cursor / Paseo 四类 agent 应用。
 - 以为 setup 会自动装扩展：不会。每个希望 agent 使用的 Chrome profile 都要手动 Load unpacked。
 - 把 Chrome Relay 当恶意软件安全边界：作者明确说它不是对“已以你身份运行的恶意软件”的安全边界。
@@ -519,6 +636,17 @@ node src/cli.js bridge verify
 - 在 axuse 的 extension backend 下想进入 OOPIF 帧：只能列出、不能进入；CDP backend 可以。
 - 以为 axuse 能绕过反爬：它不实现流量标注和反爬交接。
 - 在 Linux 上找 axuse 桌面驱动：没有；浏览器工具仍可用。
+- 把 agent-desktop 当 Computer Use 模型：它不是，决策循环留在你的 agent 里；它只提供 observe/act 原语，明确不做像素匹配。
+- 裸写 @e8 或重试旧 ref：ref 绑定 snapshot；裸写会被 INVALID_ARGS 拒绝，UI 变了会返回 STALE_REF 或 AMBIGUOUS_TARGET，必须重新快照换新 ref。
+- 多窗口不指定 --window-id：会得到 AMBIGUOUS_TARGET；错误里的 error.details 会列候选 window id。
+- 密集应用直接全量快照：先 --skeleton --compact 出骨架图，再 --root 下钻。
+- 以为默认会移动指针：agent-desktop 默认 headless，不移动指针、不抢焦点；需要物理输入才加 --headed。
+- PowerShell 里不给 ref 加引号：裸 @token 是 splatting 运算符，会出错；写成 agent-desktop click '@s8f3k2p9:e8'。
+- 把快照、剪贴板、截图、命令输出、调试产物传公共日志：可能含私人桌面内容；可选的 JEV helper 会把屏幕描述发给配置的模型提供方，需单独评估。
+- 以为 agent-desktop 有定时调度/常驻守护：README 没有给出这些机制；wait / session / trace / batch 和轮询只是基础件，时间触发需要外部编排。
+- 依赖长按拖拽：key-down / key-up / mouse-down / mouse-up 在 daemon 能释放被按住的键或按钮之前会拒绝执行。
+- 照旧教程 brew tap 装 agent-desktop：Homebrew 与 Scoop 官方包还在提交、默认源里拿不到；native archive 的 helper 必须和可执行文件放在一起。
+- Linux 上直接跑 agent-desktop：需在用户图形会话中且装 at-spi2-core；鼠标输入与窗口控制依赖 X11，Wayland 剪贴板需 wl-clipboard。
 - 电视去臃肿路线：原文截断，不要猜 adb / pm 命令；不要在没有读仓库说明、没有记录基线、没有恢复出厂设置兜底的情况下执行；不要拿主力电视试；不同厂商菜单命名和位置不同；非官方改造可能影响保修、OTA 和系统更新；单一个案不可外推。
 
 ## 证据与来源
@@ -531,6 +659,7 @@ node src/cli.js bridge verify
 - 做法 H 的安装路径、模型接入、任务示例、Skill 保存与复用示例、npx skills add、connect、create --stream、mcp、源码构建命令、provider 预设列表、Node.js 版本要求、Chrome/Edge、Firefox 不支持、Apache-2.0、46 stars：来自 alibaba/qz-browser-agent README（本次整理的调研材料）。README 没有成功率或案例数据；对比表是作者按公开文档自评。
 - 做法 I 的 clone、node src/cli.js doctor、MCP 接入命令、print-config、SKILL.md、bridge setup/verify、环境变量、open-urls、自测命令、工具面（ax_fill / ax_observe / ax_scroll / ax_upload / ax_open_many）：来自 ctoldigital/axuse README（本次整理的调研材料）。基准数据（16 个服务端评分任务、axuse 28/28、Codex + Chrome 扩展 27/27、browser-use 0.13 27/27；中位每任务 17s/26s/56s；token 4.7M/9.8M/8.8M；中位工具调用 5/7/12）为作者自建自评，统计口径未解释；7 任务扩展只跑过一次；没有第三方复现。PolyForm Noncommercial 1.0.0 许可、47 stars、单一公司维护来自同一份调研。
 - 做法 J 的来源：@yyyole 的 X 推文（采集时 205 赞 / 42 转 / 18 回复），附 GitHub 仓库卡片 Gathin23/cleanyourtv，描述为“Debloat any Android or Google TV over Wi-Fi...”。原文明确给出的只有：同一局域网 + 电脑已装 Claude Code；电视进入 设置 → 关于，在“版本号 / Build”上连续按 7 次开启开发者选项。原文在流程第 2 步中途被截断，后续连接方式、去臃肿清单和执行命令均缺失；“可以这么简单”“平替 Apple TV”是作者个人评价，没有对比测试、设备型号、Android 版本、失败案例或指标数据；仓库内容未提供，无法核实是否会误删系统组件、是否需要 root、是否影响 OTA 和保修。试用方法中的基线指标、单轮执行、回归检查和 1–2 周观察属于基于该调研的保守建议，不是原文实测结果。
+- 做法 K 的安装命令、permissions --guide、skills get desktop/platform、npx skills add、AGENTS.md 提示词、snapshot/ref/click/再快照、错误码与 disposition.retry、多窗口 --window-id、skeleton/root、--headed、PowerShell 引号、数据卫生、FFI、60 个命令名/56 个可操作命令、key-down/up/mouse-down/up 未就绪：来自 vercel-labs/agent-desktop README（本次整理的调研材料）。Apache-2.0；Vercel Labs 早期项目；README 没有给出成功率、耗时或基准数据，也没有定时调度/事件订阅/常驻守护机制；JEV helper 会把屏幕描述发给配置的模型提供方，需单独评估。
 
 ## 依据的调研
 
@@ -543,3 +672,4 @@ node src/cli.js bridge verify
 - [alibaba/qz-browser-agent](../research/radar/2026-10-19/4769-alibaba-qz-browser-agent.md)：值得一试，先在个人 Chrome/Edge 上装扩展、接一个自带 API key 的模型，跑 2–3 个真实的多源调研与登录态数据抽取任务，逐条核对来源后再把跑通的流程存成 Skill 复用；理由是 README 给出了完整的安装、配模型、CLI/MCP 接入与源码构建步骤，可照做，但可靠性只有作者自述、没有独立评测，仓库采用度也低，还不宜直接 adopt。
 - [ctoldigital/axuse](../research/radar/2026-10-20/5183-ctoldigital-axuse.md)：值得一试，建议先小范围试用：按 README 的步骤把 axuse 以 MCP 方式接入 Claude Code 或 Codex，只用于表单填写、滚动查找、批量打开 URL 这类浏览器任务，与现有做法做同任务对照。理由是安装、配置、错误处理约定和自测命令都可以直接复制，但它仅在非商业许可下免费使用，基准数据由作者自行报告且统计口径有疑点，桌面控制也只有 Windows 经过验证。
 - [@yyyole: 今日最佳！](../research/radar/2026-10-21/5447-item.md)：值得一试，建议小范围试：照 cleanyourtv 仓库的说明，在一台可弃用的旧安卓电视上，先用 Wi-Fi 调试和 Claude Code 完整执行一轮去臃肿，确认无损后再推广；原文只保留了流程的前两步，具体命令必须以仓库为准，并且要先记录基线以便验证与回滚。
+- [vercel-labs/agent-desktop](../research/radar/2026-11-03/9842-vercel-labs-agent-desktop.md)：值得一试，按 README 给出的“snapshot → 对 ref 执行动作 → 再 snapshot 复验”闭环，在非敏感桌面或隔离环境小范围试用 agent-desktop，并先把 `agent-desktop skills get desktop/platform` 的输出喂给智能体再让它上手。它能补上“只有 GUI、没有 API”的软件操作能力（能力发现与条件供给都有具体做法），但仍是 Vercel Labs 早期项目、需要系统辅助功能权限、快照中可能包含隐私内容，因此先试不直接上生产。
