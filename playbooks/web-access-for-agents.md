@@ -1,14 +1,14 @@
-# 给编码 agent 补上网页、PDF 与浏览器操作能力：先选路，再小范围验证
+# 给编码 agent 补上网页、PDF 和登录态渠道的读取与浏览器操作能力
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：怎么以最小风险给能执行 shell 的 agent 补上网页、PDF、JS 页面和登录态渠道的读取/操作能力，并在读网页/PDF 时控制进入上下文的 token 与成本，渠道失效时能定位换路而不是重写代码。
-> 先试这一步：先跑 `agent-reach install --env=auto --dry-run` 预览安装范围，再执行默认安装并用 `agent-reach doctor` 体检。
-> 最近修订：2026-11-01
+> 解决的问题：让已有能执行 shell 的 agent 以最小风险获得网页、PDF、JS 页面、登录态渠道和浏览器交互能力，并在渠道失效时定位换路、控制 token 与成本。
+> 先试这一步：先跑 `agent-reach install --env=auto --dry-run` 预览，再默认安装并用 `agent-reach doctor` 体检；只在上下文预算敏感时再试 fatsearch。
+> 最近修订：2026-11-04
 
 ## 解决什么问题
 
-已有 agent（Claude Code、Cursor、Windsurf、OpenClaw 等）能执行 shell，但默认不知道该怎么读外部平台的内容，也容易把整页 HTML 或整份 PDF 直接塞进上下文；遇到 JS 渲染页、需要点击/填表/复用 Cookie 的页面时，又缺少一个可脚本化、可给 MCP 调用的浏览器。Agent-Reach 是一个 CLI 形式的“能力层”：它自己不实现抓取，负责选型、安装、体检、路由；真正的读取由 Agent 直接调用上游工具完成，没有包装层。fatsearch（命令 `fats`）把单个 URL 或 PDF 抓取、清洗、生成大纲并缓存成 id，让 Agent 先拿大纲，需要细节时再按节读取或页内过滤，并记录每次抓取的 provider、耗时、成本和 token。Lightpanda 是一个从零写的无头浏览器（Zig 实现，非 Chromium/WebKit 分支），定位为“给 AI agent 和自动化用的浏览器”；它提供 `fetch --dump`、CDP/MCP 服务和 `agent` 原生模式，用自然语言跑通后可导出 PandaScript 回放。这篇手册要解决的是：怎么以最小风险给 agent 补上网页、PDF、JS 页面和登录态渠道的读取/操作能力，并在读网页/PDF 时控制进入上下文的 token 与成本；某个渠道失效时能定位、换路，而不是重写代码。
+已有 agent（Claude Code、Cursor、Windsurf、OpenClaw 等）能执行 shell，但默认不知道该怎么读外部平台的内容，也容易把整页 HTML 或整份 PDF 直接塞进上下文；遇到 JS 渲染页、需要点击/填表/复用 Cookie 的页面时，又缺少一个可脚本化、可给 MCP 调用的浏览器。Agent-Reach 是一个 CLI 形式的“能力层”：它自己不实现抓取，负责选型、安装、体检、路由；真正的读取由 Agent 直接调用上游工具完成，没有包装层。fatsearch（命令 `fats`）把单个 URL 或 PDF 抓取、清洗、生成大纲并缓存成 id，让 Agent 先拿大纲，需要细节时再按节读取或页内过滤，并记录每次抓取的 provider、耗时、成本和 token。Lightpanda 是一个从零写的无头浏览器（Zig 实现，非 Chromium/WebKit 分支），定位为“给 AI agent 和自动化用的浏览器”；它提供 `fetch --dump`、CDP/MCP 服务和 `agent` 原生模式，用自然语言跑通后可导出 PandaScript 回放。BrowserAct 是面向 AI agent 的浏览器自动化 CLI/Skill，提供云端托管执行与本地浏览器控制，强调真实浏览器操作、受保护页面抽取、登录态复用、多账号隔离、并发会话和人工接管。这篇手册要解决的是：怎么以最小风险给 agent 补上网页、PDF、JS 页面和登录态渠道的读取/操作能力，并在读网页/PDF 时控制进入上下文的 token 与成本；某个渠道失效时能定位、换路，而不是重写代码。
 
 Agent-Reach 覆盖渠道：网页（Jina Reader）、YouTube 字幕+搜索（yt-dlp）、RSS/Atom（feedparser）、全网语义搜索（Exa，经 mcporter 以 MCP 接入）、GitHub（gh CLI）、Twitter/X、B站（bili-cli）、Reddit、Facebook、Instagram、小红书、LinkedIn、Boss直聘、V2EX、雪球、小宇宙播客转写（Whisper）。
 
@@ -32,6 +32,9 @@ Agent-Reach 覆盖渠道：网页（Jina Reader）、YouTube 字幕+搜索（yt-
 - 你已有 Puppeteer/Playwright 脚本，想通过 CDP 换一个浏览器引擎；或想让 MCP 客户端直接拿到一个浏览器工具。
 - 你想先用自然语言把网页任务跑通，再固化成不消耗 token 的 PandaScript 回放。
 - 你想验证“把浏览器自动化作为技能交给编码 agent”是否能省掉写爬虫：在 Node.js 20+ 环境装 Playwright CLI 并执行 `playwright-cli install --skills`，用自然语言驱动 Claude Code 抓公开页面，再与手写脚本做对照。这是试验性做法，不是已验证流程。
+- 你想给 Claude Code、Cursor、OpenCode、OpenClaw、Codex、Gemini CLI 等可执行 shell 且能加载 Skill 的 agent 增加真实浏览器执行层，并愿意小范围试用 BrowserAct。
+- 你需要复用本地 Chrome 登录态、无登录隐私批处理、固定身份多账号、跨浏览器/同浏览器多 session 并发隔离、CAPTCHA 处理、人工接管、重复网站生成 Skill。
+- 你能接受 BrowserAct 账号登录（stealth-extract、remote-assist 等登录后免费；代理和超过 5 个 stealth browser 需付费），并愿意逐次批准浏览器创建/删除、Profile 导入、代理变更等敏感操作。
 
 不适用：
 
@@ -46,6 +49,10 @@ Agent-Reach 覆盖渠道：网页（Jina Reader）、YouTube 字幕+搜索（yt-
 - 你在 Windows 上想要原生二进制，或在 Alpine/musl、Android/Termux 上直接跑：Windows 走 WSL2；Linux 二进制链接 glibc，Alpine 等 musl 系统会报 `cannot execute: required file not found`，需换 Debian/Ubuntu 基础镜像或源码编译；Android/Termux 不可用。
 - 你要求它在所有站点上都与 Chrome 行为一致：结论提示 Lightpanda 无渲染引擎，兼容性必须在自家目标站点上验证；不要因为内存/速度数字好看就直接替换现有 Chrome + Playwright。
 - 你要求一条已验证、可复现的浏览器自动化标准流程：Playwright CLI 这条只有一条推文，原文第二步被截断，没有提示词、使用示例、成功率或失败案例；只能作为试验，不能写进生产链路。
+- 你没有可执行 shell 且能加载 Skill 的 agent，或机器不能联网安装 BrowserAct Skill。
+- 你想直接全量采用 BrowserAct 的 stealth 反封锁、CAPTCHA 处理或多账号操作：README 没有成功率、准确率、延迟、成本或对比实验数据，核心 stealth 功能需登录，代理和超过 5 个 stealth browser 需付费，合规边界也未展开。
+- 你需要时间/事件/状态触发或调度器：BrowserAct 材料只支持可复用 scraping Bot、重复运行、多 session 并行和 Skill Forge 的“探索一次、后续稳定运行”，没有给出时间触发、事件触发或状态触发机制。
+- 你未获授权抓取受保护页面、处理 CAPTCHA 或做多账号操作：这些可能涉及目标网站条款和合规风险。
 
 ## 前置条件
 
@@ -98,9 +105,18 @@ openclaw gateway restart
 - 原文未说明是否还需额外安装浏览器内核，需用 `playwright-cli --help` 确认。
 - 原文在 `playwright-cli install --skills` 处被截断，后续步骤、执行目录要求均未给出，不能当作已验证流程。
 
+**BrowserAct（做法 F，试用性）**
+
+- agent 能执行 shell 命令并加载 Skills，机器可联网；README 声明兼容 Windows/macOS/Linux，并适配 Claude Code、Cursor、VS Code、OpenCode、OpenClaw、Codex、Gemini CLI 等可执行 shell 且能加载 Skill 的 agent。
+- 安装 Skill 的提示词见操作步骤；更细的安装说明在 docs/installation.md，但本次材料未包含该文档内容。
+- 本地登录态场景需要 Chrome profile 或 CDP attach；无登录批处理用 stealth 隐私模式；登录账号多开用 stealth 固定身份。
+- stealth 相关能力需要 BrowserAct 登录；代理和超过 5 个 stealth browser 需要付费。`stealth-extract`、`remote-assist` 属于登录后免费功能。
+- 浏览器创建/删除、Profile 导入、代理变更、安全与隐私开关等敏感操作需要用户显式批准，且此前的批准不会延续。
+- 只对已获授权的页面使用；CAPTCHA 处理、代理轮换、多账号操作可能涉及目标网站条款和合规风险。
+
 ## 操作步骤
 
-先做做法 A；需要精读网页/PDF 且 token 敏感时试做法 B；需要登录态渠道再进做法 C；需要 JS 渲染、浏览器交互或 MCP 浏览器工具时试做法 D。这四者材料相对完整，可并存、不要求按顺序全做。做法 E 是试验性做法，只在你想验证“自然语言驱动浏览器能否替代手写爬虫”时做，默认不进入生产链路。材料没有给出 Agent-Reach、fatsearch、Lightpanda 三者的集成命令，本手册只把它们并列为可选做法；Playwright CLI 也没有与前三者的集成说明。
+先做做法 A；需要精读网页/PDF 且 token 敏感时试做法 B；需要登录态渠道再进做法 C；需要 JS 渲染、浏览器交互或 MCP 浏览器工具时试做法 D。这四者材料相对完整，可并存、不要求按顺序全做。做法 E 与做法 F 都是试用性做法：E 只在你想验证“自然语言驱动浏览器能否替代手写爬虫”时做；F 只在你想给编码 agent 增加浏览器执行层、并愿意小范围验证时做。默认都不进入生产链路。材料没有给出 Agent-Reach、fatsearch、Lightpanda、BrowserAct 的集成命令，本手册只把它们并列为可选做法；Playwright CLI 也没有与前三者的集成说明。
 
 ### 做法 A：最小可行试用 Agent-Reach
 
@@ -491,6 +507,72 @@ playwright-cli install --skills
 
 5. 记录过程与指标。前提：你要判断这种做法是否值得保留。预期结果：拿到一组可与手写脚本对照的数字（人工投入时间、人工干预次数、是否改代码、字段完整率/准确率、翻页/渲染失败率、是否主动做合规检查）。判定规则见“怎么判断变好了”。
 
+### 做法 F（试用性）：用 BrowserAct Skills 给编码 agent 增加浏览器执行层
+
+说明：依据 BrowserAct README，有安装提示词、Quick Start 命令、浏览器模式表、并发说明、免费/付费表、兼容列表、MIT License 和 6318 stars 的仓库指标；但本次材料缺 docs/installation.md、quick-start.md、skills.md 等详细文档，remote-assist、云端托管、Skill Forge 的具体命令和异常处理无法核对。反封锁效果、token 效率“数是 JSON/HTML 的数倍”、账号不被标记、零干扰并发等，都是作者主张，没有测试方法、样本量、失败率或独立复现。不要把它当已验证生产链路。
+
+1. 安装/加载 Skill。前提：agent 能执行 shell 命令并加载 Skills，机器可联网。对 agent 说：
+
+```
+Install browser-act. Skill source: https://github.com/browser-act/skills/tree/main/browser-act . Verify it works after installation.
+```
+
+预期结果：Skill 安装后由 agent 自行验证；更细的安装说明在 docs/installation.md，但本次材料未包含该文档内容。
+
+2. 每个会话开始时先探测环境。前提：Skill 已安装。运行：
+
+```
+browser-act get-skills core --skill-version 2.0.2
+```
+
+预期结果：README 称该命令一次返回环境状态、浏览器列表和可用命令，便于 agent 选择后续动作。命令中的 `2.0.2` 来自 README 示例，材料未说明版本兼容范围。
+
+3. 选择执行模式。前提：明确任务是本地浏览器控制还是云端托管。
+
+- 云端：无需自己搭 agent，描述目标网站、筛选条件和字段，BrowserAct 在真实云浏览器中构建并测试可复用 scraping Bot，再从云端运行。README 没有给出具体命令，只给了网站入口和演示链接。
+- 本地：适合需要本地 Chrome 登录态复用或直接嵌入自有 agent 工作流。登录态可用 chrome 模式的 profile import 或 CDP attach；无登录批处理用 stealth 隐私模式，每次新指纹加代理轮换；登录账号多开用 stealth 固定身份，要求稳定指纹加稳定 IP。
+
+预期结果：选定模式后再执行后续命令。
+
+4. 受保护页面抽取（需登录后免费功能，只对已获授权的页面使用）。前提：README 的免费表显示 `stealth-extract` 属于登录后免费功能，因此需要 BrowserAct 账号。运行：
+
+```
+browser-act stealth-extract https://example.com
+```
+
+预期结果：抽取受保护页面内容；材料没有给成功率与失败处理。
+
+5. 单任务浏览器自动化。前提：把 `<id>` 换成 `get-skills` 返回的浏览器 id，并给任务起唯一 session 名。运行：
+
+```
+browser-act --session my-task browser open <id> https://example.com
+browser-act --session my-task state
+browser-act --session my-task click 3
+browser-act --session my-task input 2 "hi"
+```
+
+预期结果：`state` 返回带索引的可交互元素列表，随后用 `click 3`、`input 2 "hi"` 按索引操作，不需要解析 DOM。
+
+6. 并发与隔离。前提：不同任务使用不同 `--session` 名称；需要账号隔离时使用不同 browser/profile，而不是只换 session。预期结果：跨浏览器并行时 cookie、指纹、代理独立；同浏览器多 session 共享登录态但独立执行、任务互不阻塞。浏览器创建/删除、Profile 导入、代理变更、安全与隐私开关等敏感操作需要用户显式批准，且此前的批准不会延续。
+
+7. 卡住时人工接管。前提：`remote-assist` 属于登录后免费功能；README 未给出具体命令，需查 docs。流程是生成一个实时 URL，用户从任意设备打开接管，完成后 agent 继续。不要让 agent 在未授权或高风险账号上无人值守运行。
+
+8. 对重复网站做批量化 Skill。前提：同一网站需要反复、规模化抽取。先对 agent 说：
+
+```
+Install browser-act-skill-forge. Skill source: https://github.com/browser-act/skills/tree/main/browser-act-skill-forge . Verify it works after installation.
+```
+
+然后描述需求，例如：
+
+```
+Forge a Skill that extracts job listings from LinkedIn — title, company, salary, URL. I'll run 300 keywords later.
+```
+
+预期结果：README 称 Skill Forge 会探索一次网站、发现 API 和数据模式、生成可部署 Skill，之后不再重复探索；但本次材料没有给出 Skill Forge 的底层命令和失败处理细节。
+
+9. 安全边界。前提：所有敏感操作走确认门禁。README 强调确认门禁在 Skill 层强制执行，不是配置开关；因此不要把浏览器创建/删除、Profile 导入、代理变更等权限预先批量授予 agent。
+
 ### 维护：更新与卸载 Agent-Reach
 
 更新：
@@ -524,9 +606,11 @@ pip uninstall agent-reach              # 卸载 Python 包本身
 - Playwright CLI 的最小对照：选 3 个公开站点做同一件任务——一个静态页面、一个 JS 渲染页面、一个需要翻页的列表页；每类任务做两次对照：A = 手写脚本或手动复制，B = 在 Claude Code 中用自然语言驱动 Playwright，任务目标与字段完全相同；记录 B 组从发指令到拿到可用结果的完整过程（含 agent 反复试错、是否需要人工纠正）。这是调研报告给出的最小试用设计，不是实测结论。
 - Playwright CLI 看这些指标：人工投入时间（分钟）与人工干预次数（每次卡住需人介入算一次）；是否需要写/改代码（原文主张零代码，这是主要待验证点）；字段完整率与准确率（对照人工核对的前 20 条）；翻页/渲染类页面上的失败率与重试次数；合规检查是否被 agent 主动执行（如遇到 robots 禁止是否停下）。
 - Playwright CLI 的判定规则：若在静态页和列表页这两类任务上 B 组显著省时、无需改代码、准确率不低于人工核对基准，可作为 Claude Code 的一条可选工具供给做法保留；若只在静态页成立，降级为“特定场景可用”的注记，不进入标准流程。
-- 试用时长：材料没有给出 Agent-Reach 和 fatsearch 的试用时长；Lightpanda 材料只给出“先小范围对比”的建议；Playwright CLI 这条，调研报告把最小试用设计为“半天内可完成”。至少先完成上述最小任务对比，再决定是否扩大。
+- BrowserAct 的最小试用：选 3 类低风险任务各 1 个——公开页面字段抽取；已登录内部系统的只读查询；一个需要人工接管的登录或验证码场景（须获授权）。在 Claude Code 或其他兼容 agent 中安装 Skill，先用 `get-skills` 确认浏览器列表和命令；每个任务用独立 `--session`；并行时用不同 browser/profile，避免同账号并发；记录每次是否完成、字段是否准确、是否触发 CAPTCHA/封锁、是否需要 remote-assist、接管耗时、是否出现串号、总耗时和费用。
+- BrowserAct 的判断指标：与现有手工流程或旧工具做基线对比，看任务成功率、字段抽检准确率、人工接管率与接管时长、阻塞率、跨会话污染次数、单任务耗时、token/命令开销、付费 credits 消耗、合规事件数。建议每类任务重复足够次数（例如 10 次）再判断；若成功率与准确率不低于基线、接管和阻塞可控、无串号与合规问题，再扩大范围；否则退回手动或换工具。这是调研报告给出的试用设计，不是实测结论。
+- 试用时长：材料没有给出 Agent-Reach 和 fatsearch 的试用时长；Lightpanda 材料只给出“先小范围对比”的建议；Playwright CLI 这条，调研报告把最小试用设计为“半天内可完成”；BrowserAct 这条，调研报告建议每类任务重复足够次数（例如 10 次）再判断。至少先完成上述最小任务对比，再决定是否扩大。
 
-最小试用方式：Agent-Reach 先 `agent-reach install --env=auto --dry-run` 预览 → 默认安装 → `agent-reach doctor` → 挑 1～2 个零配置渠道的示例任务跑通；fatsearch 先安装 CLI → 注册 MCP → 用 `dry:true` 和 `fats stats` 量几个真实网页/PDF 的 token 与成本；Lightpanda 先 `./lightpanda version` → `fetch --dump markdown` 抓一个真实页面 → 用 MCP 或 agent 模式跑一条任务 → 与现有 Chrome + Playwright 对比成功率、耗时、内存；Playwright CLI（试验性）先 `node -v` 确认 20+ → 装 CLI → `playwright-cli install --skills` → 用 `playwright-cli --help` 确认可用 → 按静态页、JS 渲染页、翻页列表页做 A/B 对照。
+最小试用方式：Agent-Reach 先 `agent-reach install --env=auto --dry-run` 预览 → 默认安装 → `agent-reach doctor` → 挑 1～2 个零配置渠道的示例任务跑通；fatsearch 先安装 CLI → 注册 MCP → 用 `dry:true` 和 `fats stats` 量几个真实网页/PDF 的 token 与成本；Lightpanda 先 `./lightpanda version` → `fetch --dump markdown` 抓一个真实页面 → 用 MCP 或 agent 模式跑一条任务 → 与现有 Chrome + Playwright 对比成功率、耗时、内存；Playwright CLI（试验性）先 `node -v` 确认 20+ → 装 CLI → `playwright-cli install --skills` → 用 `playwright-cli --help` 确认可用 → 按静态页、JS 渲染页、翻页列表页做 A/B 对照；BrowserAct（试用性）先安装 Skill → `browser-act get-skills core --skill-version 2.0.2` 探测环境 → 用独立 `--session` 跑 3 类低风险任务 → 记录成功率、字段准确率、接管率、串号、费用与合规事件。
 
 ## 常见坑
 
@@ -560,6 +644,14 @@ pip uninstall agent-reach              # 卸载 Python 包本身
 - 原文没有说明是否还需额外安装浏览器内核；`npm install -g @playwright/cli@latest` 成功不等于浏览器能启动。
 - 原文没讨论封禁、速率限制、版权与合规风险；对需要登录、强反爬或高频请求的站点，“almost any website”未经验证，不要直接跑。
 - 不要把做法 E 当成已验证的标准流程或生产链路；它只用于和手写脚本做对照试验。
+- BrowserAct 材料只有 README，缺 docs/installation.md、quick-start.md、skills.md 等详细文档；remote-assist、云端托管、Skill Forge 的具体命令和异常处理无法核对。
+- 反封锁效果、token 效率“数是 JSON/HTML 的数倍”、账号不被标记、零干扰并发等是作者主张，没有测试方法、样本量、失败率或独立复现；不要因为 6318 stars 和 MIT License 就直接全量采用。
+- 核心 stealth 功能需要 BrowserAct 登录，代理和超过 5 个 stealth browser 需要付费；不要在不评估成本与授权的情况下直接采用。
+- CAPTCHA 处理、代理轮换、多账号操作可能涉及目标网站条款和合规风险；README 没有展开合规边界，只对已获授权的页面使用。
+- 浏览器创建/删除、Profile 导入、代理变更、安全与隐私开关等敏感操作的确认门禁在 Skill 层强制执行，不是配置开关；不要把权限预先批量授予 agent，且此前的批准不会延续。
+- 同浏览器多 session 只共享登录态但独立执行；要账号隔离必须用不同 browser/profile，不要只换 session，否则可能串号。
+- BrowserAct 材料没有时间触发、事件触发、状态触发机制或调度器说明；不要把它当定时任务或主动推进方案。
+- `browser-act get-skills core --skill-version 2.0.2` 中的 `2.0.2` 来自 README 示例；材料未说明版本兼容范围，执行时以实际返回为准。
 
 ## 证据与来源
 
@@ -576,6 +668,8 @@ pip uninstall agent-reach              # 卸载 Python 包本身
 - Lightpanda 的项目判断：只有 nightly 构建；结论提示无渲染引擎；建议先用 Docker 或二进制启动，用 `fetch --dump markdown` 和 MCP / agent 模式各跑一条真实的网页采集与操作任务，并与现有 Chrome + Playwright 方案对比成功率、耗时和内存。这是调研报告的建议，不是实测结论。
 - 三者关系：Agent-Reach 负责多渠道选型、安装、体检、路由；fatsearch 负责单页/PDF 的“先大纲、按节读”与成本可见；Lightpanda 负责 JS 渲染与浏览器交互。给出的材料没有提供三者集成的命令，本手册只把它们并列为可选做法；这是依据材料做的编排，不是原文集成说明。
 - Playwright CLI 做法 E：@plusxbt 推文（46 赞、1 转发、10 回复）。`node -v` 要求 Node.js 20+、`npm install -g @playwright/cli@latest`、`playwright-cli install --skills` 两条命令来自原文；原文在第二步中途被截断，后续步骤、提示词、使用示例、成功率与失败案例均缺失。调研报告的结论是：先做小范围试验，用“耗时/人工干预次数/是否改代码”对比手写脚本，不宜直接写进手册作为标准做法。第 4 步的提示词是调研报告自拟的待验证写法，不是原文内容。Playwright CLI 与前面三者没有集成说明，只是并列的试验性浏览器供给方式。
+- BrowserAct 做法 F：browser-act/skills 调研报告。安装提示词、`get-skills`、`stealth-extract`、session 命令、三种浏览器模式、并发说明、remote-assist、Skill Forge、免费/付费表、兼容列表、MIT License、6318 stars 均来自 README；属作者自述，没有第三方核验。材料缺 docs/installation.md、quick-start.md、skills.md 等详细文档；remote-assist、云端托管、Skill Forge 的具体命令和异常处理无法核对。反封锁效果、token 效率“数是 JSON/HTML 的数倍”、账号不被标记、零干扰并发等是作者主张，没有测试方法、样本量、失败率或独立复现。CAPTCHA、代理轮换、多账号操作可能涉及合规风险，README 未展开。
+- BrowserAct 最小试用与指标：调研报告建议选 3 类低风险任务各 1 个、独立 session、不同 browser/profile、记录成功率/准确率/接管/串号/费用/合规事件，每类重复例如 10 次；这是建议，不是实测结论。
 
 ## 依据的调研
 
@@ -583,3 +677,4 @@ pip uninstall agent-reach              # 卸载 Python 包本身
 - [fatsearch/fatsearch](../research/radar/2026-10-22/5707-fatsearch-fatsearch.md)：值得一试，把 fatsearch 装成 Claude Code 的 MCP 工具，在“代理需要读网页或 PDF、但上下文预算敏感”的场景里小范围试用，先用 `fats stats` 和 `dry:true` 自己量 token 与成本，再决定是否推广。因为它给出可直接照抄的安装、MCP 注册和“先看大纲、按节读取”的操作流程，但效果数字全部来自作者自published benchmark，48 stars 的早期项目（v0.2.x），还不足以直接 adopt。
 - [lightpanda-io/browser](../research/radar/2026-10-31/8886-lightpanda-io-browser.md)：值得一试，建议小范围试：先用 Docker 或二进制启动 Lightpanda，用 `fetch --dump markdown` 和 MCP / agent 模式各跑一条真实的网页采集与操作任务，并与现有 Chrome + Playwright 方案对比成功率、耗时和内存；理由在于 README 给出了可直接复制的安装、MCP 配置、PandaScript 录制回放流程，但只有 nightly 构建、基准为自测且无渲染引擎，兼容性必须在自家目标站点上验证。
 - [@plusxbt: It is becoming f*cking dangerous: Claude Code turns into a web crawler for almost any website, and y](../research/radar/2026-11-01/9089-it-is-becoming-f-cking-dangerous-claude-code-turns.md)：值得一试，先做小范围试验：在 Node.js 20+ 环境安装 Microsoft Playwright CLI 并执行 skills 安装，让 Claude Code 用自然语言驱动浏览器抓取公开页面，再用「耗时/人工干预次数/是否改代码」对比手写脚本；原文只给出两步安装线索、第二步还被截断，没有流程细节和验证数据，因此不宜直接写进手册作为标准做法。
+- [browser-act/skills](../research/radar/2026-11-04/10216-browser-act-skills.md)：值得一试，建议把 BrowserAct Skills 作为现有编码代理的浏览器执行层做小范围试用：先用 get-skills 探测环境，用独立 session 跑只读或低风险任务，并用 remote-assist 兜底；README 给出一手安装与命令，但关键稳定性和反封锁效果多为作者主张，且 stealth 能力需登录或付费，暂不宜直接 adopt。
