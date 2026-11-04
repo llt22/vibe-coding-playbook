@@ -4,10 +4,10 @@
 
 | 手册 | 解决的问题 | 先试这一步 | 最近修订 |
 |---|---|---|---|
+| [把编码 agent 关进生成、门禁和人工复核的笼子里](adopt-coding-agent-workflows.md) | 解决 agent 在重复流程、硬约束和复杂工程中跑偏、绕过检查、没有证据就宣布完成的问题。 | 先选一个低风险小项目，把一条可判定的硬约束做成 pre-commit 门禁并让 agent 读到失败输出；要试硬件路线，先按 README Quick start 跑示例板，不要直接改真实板。 | 2026-11-05 |
 | [给 AI 结论做季度保质期回归：该撤的防护就撤，该留的护栏就留](regression-test-ai-claims.md) | 把“AI 能不能做、该不该信”的旧结论当成会过期的东西，用固定提示词和测试集按季度重测，据此撤掉空转的人工防护或保留长期护栏。 | 从工作流里挑 5 条正在影响决策的 AI 假设，各写死一句可验证断言、测试样本、指标和失效值，用 2–3 个当前主力模型默认配置跑一遍并保存原始输出。 | 2026-11-05 |
 | [交稿前把 AI 参与过的文稿变成可复查的清单](audit-ai-generated-papers.md) | AI 参与产出但无人真正负责时，如何在交稿前把引用、AI 痕迹、作者责任和逐句可读性问题变成可复查、可定位的候选清单，而不是把工具输出当判决。 | 先用一份 3–5 页短稿或一节英文论文跑确定性候选脚本（absent-author lint、paper-preflight 或 academic-revision-checklist 的 flag_candidates.py），逐条人工复核后再决定是否扩大。 | 2026-11-04 |
 | [让多 agent 的跨 owner 动作先批准、由本人执行、再由另一席位验证](orchestrate-multiple-agents.md) | 多 agent 协作里，提案、批准、执行和验证混在一起时，没人能说清谁授权、谁执行、凭什么算完成；手册用共享账本、席位协议和独立验证把这条链固定下来。 | 先跑 mcode-agent-table 的离线 demo 和 npm test，再搭一桌两 owner 的小任务走一次 propose→approve→execute→verify。 | 2026-11-04 |
-| [把编码 agent 的工作流程固化成可检查、可回退的团队资产](adopt-coding-agent-workflows.md) | 解决编码 agent 重复消耗提示词、流程漂移、完成无证据、配置不可复制和权限不可见的问题。 | 先选一个每周重复至少 3 次的流程做成 skill，并给一条能被 diff 判定的硬约束加提交门禁；配置层方案先在隔离环境试装并跑校验。 | 2026-11-04 |
 | [给编码 agent 补上网页、PDF 和登录态渠道的读取与浏览器操作能力](web-access-for-agents.md) | 让已有能执行 shell 的 agent 以最小风险获得网页、PDF、JS 页面、登录态渠道和浏览器交互能力，并在渠道失效时定位换路、控制 token 与成本。 | 先跑 `agent-reach install --env=auto --dry-run` 预览，再默认安装并用 `agent-reach doctor` 体检；只在上下文预算敏感时再试 fatsearch。 | 2026-11-04 |
 | [让 AI 代码评审从“看一眼 diff”变成可复核、可回灌的门禁](code-review-with-agents.md) | 解决 AI 代码评审中结构看不懂、检查不可核对、风险与证据缺失、每轮改动没有闭环的问题，让评审在合并前真正能挡住问题。 | 先在一个非关键 PR 上，新开一个会话把“独立审查者”两条规则交给 agent 审 diff，再人工逐条复核它标为 block 的意见。 | 2026-11-04 |
 | [让常驻 AI agent 接管周期性重复工作：九条路线的两周试跑](self-hosted-agent-automation.md) | 周期性重复工作看起来适合交给常驻 AI agent，但项目 README 只给安装配置和能力清单，不给效果数据与评估方法；这份手册给出一条可执行的试跑路径和统一判断标准。 | 先选一条路线跑通最小闭环；如果手边已有登录好的 Claude Code / Codex CLI，优先用 agent-autoloop 的 `try` 验证「事件→单轮执行→人工拍板→续跑」。 | 2026-11-04 |
