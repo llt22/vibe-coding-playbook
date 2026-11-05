@@ -1,46 +1,44 @@
-# 让编码 agent 的数据分析可复核：从统一口径到可重跑复制包
+# 让编码 agent 做数据分析时拿出可核对的答案
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：这篇手册解决把数据分析、账号复盘、数据工程任务和经济学实证流程交给编码 agent 时，指标口径不一致、结论不可复核、流程不可复用、读写边界不清的问题。
-> 先试这一步：先选一个只碰公开数据或单个导出文件的最小闭环：写一版 CLAUDE.md，用 Plan mode 让 agent 产出带数字的图或结论，再按验收清单检查别人能否重跑。
-> 最近修订：2026-11-03
+> 解决的问题：编码 agent 能做数据分析，但直接让它写代码或裸 SQL 容易口径不一致、结论没数字、流程不可版本化、交付物无法被别人重跑；本篇给出六套可照做的做法，把口径、流程和证据固定下来。
+> 先试这一步：先做一个只读副本上的最小闭环：跑通一个语义层（Graphene 示例项目或 auto-ontology Quickstart），用一个真实业务问题核对它给出的答案、SQL 和步骤能否人工复核通过。
+> 最近修订：2026-11-05
 
 ## 解决什么问题
 
-编码 agent 能做数据分析，但直接让它写 Python/JS 或裸 SQL 容易导致外观和指标口径不一致，同一关键指标用不同公式计算。另一种情况，是把数据交给 AI 分析后，得到一段读起来像样、但没有具体数字、也无法据此行动的结论。还有一种常见情况：自己的 X 账号里已有历史帖子数据，却没有被读出来用于内容复盘。第四种情况是：每次让 AI 做数据工程类工作（新数据源摸底、失败管道排查、对账、变更影响分析）都从头写长提示词，流程无法版本化，也没写清它能读什么、写什么、绝不能碰什么。第五种情况是经济学实证研究：数据清理、计量分析、论文复现、理论建模和写作都交给编码 agent，但没有留下可核对的证据，交付物变成“我跑出来了”，而不是“别人能重跑”。
+编码 agent 能做数据分析，但直接让它写 Python/JS 或裸 SQL 容易导致外观和指标口径不一致，同一关键指标用不同公式计算。另一种情况，是把数据交给 AI 分析后，得到一段读起来像样、但没有具体数字、也无法据此行动的结论。还有一种常见情况：自己的 X 账号里已有历史帖子数据，却没有被读出来用于内容复盘。第四种情况是：每次让 AI 做数据工程类工作（新数据源摸底、失败管道排查、对账、变更影响分析）都从头写长提示词，流程无法版本化，也没写清它能读什么、写什么、绝不能碰什么。第五种情况是经济学实证研究：数据清理、计量分析、论文复现、理论建模和写作都交给编码 agent，但没有留下可核对的证据，交付物变成“我跑出来了”，而不是“别人能重跑”。第六种情况是：企业已有元数据和业务术语，但智能体不知道数据在哪、是什么意思、该不该用、怎么 join，直接写 SQL 容易算错指标；原文说“a revenue metric answered faster is worth nothing if the number is wrong”。
 
-本篇给五套可照做的做法：做法 A 用 Graphene 的「everything-as-code」语义层，把 metrics 和 modeled joins 写成代码，通过 CLI 启动服务，让编码 agent 在本地迭代、自检、产出可复用的报表和 dashboard；做法 B 把 X 账号后台导出的数据作为附件上传到 Claude Artifacts 的 Dashboard，让 Claude 做账号复盘；做法 C 把 X 账号的数据归档下载到本地，解压后在归档目录启动 Claude Code，让它读取 `data/tweets.js`，作为基于自己历史帖子做内容分析的入口；做法 D 把数据工程任务固化成 Claude Code 技能文件（`SKILL.md`），只挑 1–2 个装进项目的 `.claude/skills`，用真实任务跑两周，再决定是否扩到全部 16 个；做法 E 按经济学研究课程路径，用 `CLAUDE.md`、Plan mode、验收清单和可重跑复制包，把实证流程交给编码代理，先从只碰公开数据的最小闭环开始。五篇调研都建议先小范围实测，再决定是否纳入手册或固化进工作流。
+本篇给六套可照做的做法：做法 A 用 Graphene 的「everything-as-code」语义层，把 metrics 和 modeled joins 写成代码，通过 CLI 启动服务，让编码 agent 在本地迭代、自检、产出可复用的报表和 dashboard；做法 B 把 X 账号后台导出的数据作为附件上传到 Claude Artifacts 的 Dashboard，让 Claude 做账号复盘；做法 C 把 X 账号的数据归档下载到本地，解压后在归档目录启动 Claude Code，让它读取 `data/tweets.js`，作为基于自己历史帖子做内容分析的入口；做法 D 把数据工程任务固化成 Claude Code 技能文件（`SKILL.md`），只挑 1–2 个装进项目的 `.claude/skills`，用真实任务跑两周，再决定是否扩到全部 16 个；做法 E 按经济学研究课程路径，用 `CLAUDE.md`、Plan mode、验收清单和可重跑复制包，把实证流程交给编码代理，先从只碰公开数据的最小闭环开始；做法 F 用 NVIDIA auto-ontology 从企业元数据自动生成语义本体，由人认证术语、SQL 属性和 join 关系，再通过 MCP/REST 暴露给任意 agent，让智能体先判断可回答性、再写 SQL，并返回答案、SQL 和步骤。
+
+六篇调研都建议先小范围实测，再决定是否纳入手册或固化进工作流。
 
 ## 适用与不适用
 
-做法 A 适用：你有一个受支持的数据源（Snowflake、BigQuery、ClickHouse、Postgres、MotherDuck 或本地 DuckDB）；你已经在用编码代理（如 Claude Code 等，原文未指定具体代理）；你希望把数据分析和业务代码放在同一个仓库里，让代理获得上下文；你愿意把模型和页面文件纳入 git 和 CI。
+做法 A 适用：你有一个受支持的数据源（Snowflake、BigQuery、ClickHouse、Postgres、MotherDuck 或本地 DuckDB）；你已经在用编码代理；你希望把数据分析和业务代码放在同一个仓库里，让代理获得上下文；你愿意把模型和页面文件纳入 git 和 CI。不适用：你不想使用编码代理（除非改用其托管的 Graphene Cloud）；你需要从零安装的确切命令和完整 setup 文档（原文未给出）；你需要量化效果数据再决定（原文没有任何量化成功指标）；你要做商业再分发（Elastic License 2.0，内部使用永久免费，做商用应用需联系）。
 
-做法 A 不适用：你不想使用编码代理（原文说除非改用其托管的 Graphene Cloud，提供 Slack agent、MCP server、浏览器 SaaS）；你需要从零安装的确切命令和完整 setup 文档（原文未给出）；你需要量化效果数据再决定是否采用（原文没有任何量化成功指标）；你要做商业再分发（Elastic License 2.0，内部使用永久免费，做商用应用需联系）。
+做法 B 适用：你有一个可用的 X 账号，并且该账号能打开数据分析页；你有一个可访问 Artifacts 的 Claude 账号；你想做账号复盘（内容、互动、趋势），不想写 SQL 或搭语义层。不适用：你不愿把自己的账号数据上传给第三方服务（原文未讨论隐私影响）；你需要现成的分析提示词（原文提示词被截断，需要自己补）；你需要效果数据证明它比手动翻后台更好（原文未给）。
 
-做法 B 适用：你有一个可用的 X（Twitter）账号，并且该账号能打开数据分析页；你有一个可访问 Artifacts 的 Claude 账号；你想做账号复盘（内容、互动、趋势），不想写 SQL 或搭语义层。
+做法 C 适用：你有可登录的 X 账号，能进入 `Settings → Your account → Download an archive of your data` 申请下载个人数据归档；归档中包含 `data/tweets.js`；本地有 Claude Code 使用环境；你想基于自己的历史帖子做内容分析，并愿意自己补后续分析提示词。不适用：你需要一套完整的内容分析流程、现成提示词或验证指标（原文只到读取文件这一入口）；你不愿把个人归档交给第三方或模型服务（原文未讨论隐私与脱敏）；你需要定时或事件触发自动运行（原文未涉及）；你没有 Claude Code 环境或不想用编码代理。
 
-做法 B 不适用：你不愿把自己的账号数据上传给第三方服务（原文未讨论隐私影响）；你需要现成的分析提示词（原文提示词被截断，需要自己补）；你需要效果数据证明它比手动翻后台更好（原文未给）。
+做法 D 适用：数据工程团队；已具备 Claude Code 付费计划（Claude Pro、Max、Team、Enterprise 或 Claude Console 账号）；项目内有 Claude Code 能读到的仓库、数据与日志；有人愿意先读 `SKILL.md` 再使用；你想把「一类任务怎么做」从临时长提示词变成可版本化、带读写边界的技能文件。不适用：你需要效果数据再决定是否采用（原文没有任何数据、基线或前后对比，作者自述是首版草稿）；你想先核对每个技能的步骤是否够具体再装（原文只提供 README，没有 `SKILL.md` 正文）；你的任务缺少必要输入（big-review 和 cost-review 依赖查询日志，incident 依赖运行记录）；你需要定时调度、事件订阅或状态机的具体配置（原文只到「技能名 + 一句话职责」）；你需要具体的权限配置项或 MCP/工具接入细节（原文未给出）；你不接受把虚构公司与虚构数据的示例页当作参考基准。
 
-做法 C 适用：你有可登录的 X 账号，能进入 `Settings → Your account → Download an archive of your data` 申请下载个人数据归档；归档中包含 `data/tweets.js`；本地有 Claude Code 使用环境；你想基于自己的历史帖子做内容分析，并愿意自己补后续分析提示词。
+做法 E 适用：经济学实证研究场景（Stata/R/Python + 微观调查数据）；会用 Stata 或 R/Python 中的一种，懂基础计量；不需要用过智能体工具；愿意按课程顺序做，每课按验收清单自查；能提前申请 CHNS 或 CHARLS 等授权数据；接受以“别人能重跑”作为交付标准；本地能装 Claude Code（或 Codex）、Git、Python 或 Stata。不适用：无计量基础者（本科生被明确建议先用传统方式打基础）；需要立刻使用 CHNS/CHARLS（数据需自行申请，可能需要几天到几周，课程不分发数据）；你需要效果数据再决定是否采用（原文没有学员成果、前后对照、复现成功率或耗时对比）；你只拿到课程 README 索引，却想直接照抄每课详细步骤（讲义 PDF、作业说明 PDF、作业包 zip 与验收清单正文不在本次材料中）；你需要定时触发、事件触发或状态机的具体配置（原文未给出）；你不接受社媒数据只用于个人学习研究、遵守平台协议、控制采集频率、个人信息去标识化、原始数据不公开。
 
-做法 C 不适用：你需要一套完整的内容分析流程、现成提示词或验证指标（原文只到读取文件这一入口，提示词被截断）；你不愿把个人归档交给第三方或模型服务（原文未讨论隐私与脱敏）；你需要定时或事件触发自动运行（原文未涉及）；你没有 Claude Code 环境或不想用编码代理。
+做法 F 适用：你有 Docker + Compose v2、`uv`、一个来自 build.nvidia.com 的 `nvapi-...` key；你有一个只读数据库副本（支持 PostgreSQL、MySQL、Databricks、Snowflake、ClickHouse、Trino、Kyuubi、HeavyDB、DuckDB、SQLite 十种数据源）；你希望把术语、经审核的 SQL 属性和 join 关系作为智能体的上下文层，让自然语言转 SQL 的答案可核对；你愿意先按 README 的 Docker Compose Quickstart 跑通样例库，再换到自己的只读副本。不适用：你需要轻量部署（F 依赖 NVIDIA NIM 端点，组件多、部署较重）；你需要准确率数据再决定（原文不含准确率数据）；你不能提供 NVIDIA NIM key；你不想先跑 Docker Compose；你需要定时/事件触发配置（原文未给）；你希望语义层完全手写并纳入代码仓库（那更接近做法 A）。
 
-做法 D 适用：数据工程团队；已具备 Claude Code 付费计划（Claude Pro、Max、Team、Enterprise 或 Claude Console 账号）；项目内有 Claude Code 能读到的仓库、数据与日志；有人愿意先读 `SKILL.md` 再使用；你想把「一类任务怎么做」从临时长提示词变成可版本化、带读写边界的技能文件。
+做法 B 与做法 C 的差异：B 用 X 后台 analytics 页各 Tab 导出的数据，上传到 Claude Artifacts；C 用完整数据归档，在本地目录用 Claude Code 读取 `data/tweets.js`。B 更接近快速 dashboard 复盘，C 更接近本地文件 + 编码代理的内容分析入口；两者原文都没有给出完整分析提示词和效果验证。B 会把账号数据上传给第三方服务；C 在本地目录启动 Claude Code，但原文未讨论隐私与脱敏，试用时只处理脱敏副本，避免把归档上传到不需要的外部位置。
 
-做法 D 不适用：你需要效果数据再决定是否采用（原文没有任何数据、基线或前后对比，作者自述是首版草稿）；你想先核对每个技能的步骤是否够具体再装（原文只提供 README，没有 `SKILL.md` 正文）；你的任务缺少必要输入（big-review 和 cost-review 依赖查询日志，incident 依赖运行记录，缺这些时技能无法工作）；你需要定时调度、事件订阅或状态机的具体配置（原文只到「技能名 + 一句话职责」）；你需要具体的权限配置项或 MCP/工具接入细节（原文未给出）；你不接受把虚构公司与虚构数据的示例页当作参考基准。
+做法 D 与做法 A 的差异：A 用语义层（`.gsql` 模型 + `.md` 页面）统一指标口径，产出是可复用的报表和 dashboard，前置是有一个受支持的数据源；D 用 `SKILL.md` 固化一类任务的流程与读写边界，产出多是可直接阅读分享的网页报告，前置只是一个 Claude Code 能读到的项目目录。两者可以并用：口径放 A 的语义层，流程放 D 的技能文件。
 
-做法 E 适用：经济学实证研究场景（Stata/R/Python + 微观调查数据）；会用 Stata 或 R/Python 中的一种，懂基础计量（微观/宏观/计量）；不需要用过智能体工具；愿意按课程顺序做，每课按验收清单自查；能提前申请 CHNS 或 CHARLS 等授权数据；接受以“别人能重跑”作为交付标准；本地能装 Claude Code（或 Codex）、Git、Python 或 Stata。
+做法 F 与做法 A 的差异：A 用 `.gsql` 手写表、维度、度量、连接关系，产出是 `.md` 页面里的报表和 dashboard，语义模型是代码；F 从企业元数据自动生成 ontology（Terms、SQL attributes、Relationships），由人在 Chat 或 MCP 里用真实问题认证，再通过 MCP/REST 暴露给任意 agent，产出是「答案 + SQL + 步骤」。A 更接近「手写语义层 + 报表」，F 更接近「自动生成 + 人工认证的上下文层」。两者都解决指标口径问题：A 靠 measure 组合，F 靠经审核的 SQL attributes 和术语映射。可以并用：F 做上下文层，A 做 dashboard 层；但两者都需要只读副本和小范围实测。
 
-做法 E 不适用：无计量基础者（本科生被明确建议先用传统方式打基础）；需要立刻使用 CHNS/CHARLS（数据需自行申请，可能需要几天到几周，课程不分发数据）；你需要效果数据再决定是否采用（原文没有学员成果、前后对照、复现成功率或耗时对比）；你只拿到课程 README 索引，却想直接照抄每课详细步骤（讲义 PDF、作业说明 PDF、作业包 zip 与验收清单正文不在本次材料中）；你需要定时触发、事件触发或状态机的具体配置（原文未给出）；你不接受社媒数据只用于个人学习研究、遵守平台协议、控制采集频率、个人信息去标识化、原始数据不公开。
-
-做法 B 与做法 C 的差异：B 用 X 后台 analytics 页各 Tab 导出的数据，上传到 Claude Artifacts；C 用完整数据归档，在本地目录用 Claude Code 读取 `data/tweets.js`。B 更接近快速 dashboard 复盘，C 更接近本地文件 + 编码代理的内容分析入口；两者原文都没有给出完整分析提示词和效果验证。
-
-做法 D 与做法 A 的差异：A 用语义层（`.gsql` 模型 + `.md` 页面）统一指标口径，产出是可复用的报表和 dashboard，前置是有一个受支持的数据源；D 用 `SKILL.md` 固化一类任务的流程与读写边界，产出多是可直接阅读分享的网页报告，前置只是一个 Claude Code 能读到的项目目录。两者可以并用：口径放 A 的语义层，流程放 D 的技能文件。D 与 B/C 的差异：B/C 是「读自己 X 数据」的两个具体入口，D 是通用任务框架，不针对某个数据源。
+做法 F 与做法 D 的差异：D 固化一类任务的流程与读写边界（`SKILL.md`），F 固化的是数据含义、可用指标和 join 关系（本体）。D 管「怎么做」，F 管「数据是什么、能不能答」。先有 F 的术语和可回答性判断，再用 D 的技能跑具体任务，可以减少 agent 猜表名和字段含义。
 
 做法 E 与做法 D 的差异：D 是通用数据工程技能仓库，重点是 `/profile`、`/incident` 等技能与“读什么/写什么/绝不做什么”的边界；E 是经济学实证研究的课程路径，重点是 `CLAUDE.md`、Plan mode、六阶段研究 harness、每课验收清单和“别人能重跑的复制包”，并补上 Codex 替代 Claude Code 时的适配与沙箱联网配置。E 第 4 课也会写自己的 `SKILL.md`，可与 D 的技能文件做法并用；但 E 的领域前置更强，需要计量基础和数据授权。
 
-五套做法都不适用的情况：你需要定时或事件触发的自动运行（五篇原文均未给出可照做的调度配置）；你需要明确的数据源凭据配置、代理权限限定或回滚方案（原文均未说明，E 只给了 Codex 沙箱联网这一项）；你不接受先做小范围试用。
+六套做法都不适用的情况：你需要定时或事件触发的自动运行（六篇原文均未给出可照做的调度配置）；你需要明确的数据源凭据配置、代理权限限定或回滚方案（原文均未说明，E 只给了 Codex 沙箱联网这一项，F 给了 MCP 只读工具和按用户权限执行，但未给具体权限配置项）；你不接受先做小范围试用。
 
 ## 前置条件
 
@@ -49,22 +47,20 @@
 - 做法 C：一个可登录的 X 账号；已申请并收到数据归档（原文说明归档可能需要一天到达）；解压后的归档目录中存在 `data/tweets.js`；本地有 Claude Code 使用环境。
 - 做法 D：已安装 Claude Code，并有 Claude Pro、Max、Team、Enterprise 计划或 Claude Console 账号；有一个 Claude Code 能读到代码和数据的工程目录；愿意先读 `skills/<name>/SKILL.md` 确认读写边界再运行。
 - 做法 E：已装 Claude Code（或 Codex）、Git、Python 或 Stata；第 1 课作业说明里有图文安装步骤；第 3、4 课要用的 CHNS 或 CHARLS 需按各数据官网流程自行申请，可能需要几天到几周，课程不分发数据，授权数据不得分享、不得上传公开仓库；若用 Codex 下载数据，需处理沙箱联网；若只做最小试用，先只碰公开数据。
+- 做法 F：Docker + Compose v2；`uv`；一个来自 build.nvidia.com 的 `nvapi-...` key；一个只读数据库副本（或先用微软 Wide World Importers 样例库）；愿意按 Quickstart 改 `.env` 里所有默认口令；能访问本地 3000/3001/3002/3003/5432 端口。
 - 共同：愿意先做小范围试用，再决定是否接入关键业务数据或固化流程。
 
 ## 操作步骤
 
 ### 做法 A：用 Graphene 语义层让编码 agent 做数据分析
 
-1. 先用本地 DuckDB + 官方示例项目跑通最小闭环，不接公司数据源。
-   - 克隆官方示例项目：`https://github.com/graphene-data/example-flights`
-   - 按 `/docs/setup.md` 安装依赖（原文未给出确切安装命令，不要凭空补）。
-   - 启动开发服务器：
-     ```bash
-     npm exec graphene serve
-     # 或
-     pnpm graphene serve
-     ```
-   - 预期结果：服务起来，能在浏览器中看到示例页面渲染。确认代理能读懂随 npm 包发布的 agent skill 文档（代理无需外部检索即可获得用法）。
+1. 先用本地 DuckDB + 官方示例项目跑通最小闭环，不接公司数据源。克隆官方示例项目 `https://github.com/graphene-data/example-flights`，按 `/docs/setup.md` 安装依赖（原文未给出确切安装命令，不要凭空补）。启动开发服务器：
+   ```bash
+   npm exec graphene serve
+   # 或
+   pnpm graphene serve
+   ```
+   预期结果：服务起来，能在浏览器中看到示例页面渲染。确认代理能读懂随 npm 包发布的 agent skill 文档（代理无需外部检索即可获得用法）。
 
 2. 准备一个项目目录。独立 repo 或更大代码库（例如 dbt 项目）里的一个目录。预期：后续模型和页面文件都放在这个目录里，能纳入 git。
 
@@ -265,6 +261,121 @@ network_access = true
 
 18. 要照做后续课程，先下载 lab1/lab2 作业包，把 PDF 与 zip 里的具体步骤、提示词、脚本和验收清单补齐。本次材料只有 README 索引，不能据此编造每课逐条操作。预期：手册里写的第 5—10、12 步只作为“做什么、产出什么”，补齐作业包后再写“逐条怎么做”。
 
+### 做法 F：用 NVIDIA auto-ontology 给 agent 一个可认证的数据上下文层
+
+1. 前提：Docker + Compose v2、`uv`、一个来自 build.nvidia.com 的 `nvapi-...` key。克隆并准备环境变量：
+   ```bash
+   git clone https://github.com/NVIDIA/auto-ontology.git && cd auto-ontology
+   cp .env.example .env
+   ```
+   在 `.env` 中至少改这些（每个默认口令都要换，Compose 会把 Postgres、pgAdmin、Web 应用发布到宿主机）：
+   ```dotenv
+   DEFAULT_MODELS_API_KEY=nvapi-...
+   AUTH_SECRET=<a long random string, e.g. from openssl rand -base64 32>
+   APP_URL=http://localhost:3000
+   POSTGRES_PASSWORD=<a new password>
+   CONNECTION_STRINGS=postgresql://postgres:<the same password>@postgres:5432/wideworldimporters
+   AUTO_ONTOLOGY_ADMIN_PASSWORD=<a new password>
+   PGADMIN_PASSWORD=<a new password>
+   ```
+   注意：`.env.example` 里每个模型角色各有一行 `nvapi-your-api-key-here`，要么逐个替换，要么删掉让它们回退到 `DEFAULT_MODELS_API_KEY`。预期：`.env` 中没有默认口令和占位 key。
+
+2. 起 Postgres 并灌入微软 Wide World Importers 样例库（种子脚本在另一个仓库，需要 `uv`）：
+   ```bash
+   docker compose up -d --wait postgres
+   git clone https://github.com/NVIDIA/auto-ontology-eval.git ../auto-ontology-eval
+   (cd ../auto-ontology-eval && uv sync && cp .env.example .env && \
+     POSTGRES_PASSWORD='<the same password>' \
+     uv run python scripts/seed/seed_wwi.py --database-name wideworldimporters --drop)
+   ```
+   预期：Postgres 起来，`wideworldimporters` 库有数据。
+
+3. 构建并启动其余组件：
+   ```bash
+   docker compose up -d --build
+   ```
+   预期：前端 3000、后端 3001、摄取 worker 3002、MCP server 3003、Postgres 5432 起来。
+
+4. 打开 http://localhost:3000，用 `.env` 里的 `AUTO_ONTOLOGY_ADMIN_EMAIL` / `AUTO_ONTOLOGY_ADMIN_PASSWORD` 登录，进 **Settings → Semantic Compilation** 打开它。摄取在启动时执行，编译立即开始，完成后界面显示 **Semantic compilation is ready**。预期：本体已生成，可以进入 Chat 测试。
+
+5. 在 **Chat** 里问一个需要跨多表 join 的问题，检查答案是否同时给出 SQL 和推理步骤：
+   ```text
+   What was revenue for the USB food flash drive - sushi roll in Pennsylvania in June 2015?
+   ```
+   合格输出应长这样（原文示例），可用来比对源库：
+   ```text
+   Answer:  Revenue for USB food flash drive - sushi roll in Pennsylvania in
+            June 2015 was $588.80, from 3 invoice lines.
+
+   SQL:     SELECT SUM(il.extendedprice) AS revenue, COUNT(*) AS invoice_lines
+            FROM sales.invoicelines il
+            JOIN sales.invoices i             ON il.invoiceid = i.invoiceid
+            JOIN warehouse.stockitems si      ON il.stockitemid = si.stockitemid
+            JOIN sales.customers c            ON i.customerid = c.customerid
+            JOIN application.cities ct        ON c.deliverycityid = ct.cityid
+            JOIN application.stateprovinces sp ON ct.stateprovinceid = sp.stateprovinceid
+            WHERE si.stockitemname = 'USB food flash drive - sushi roll'
+              AND sp.stateprovincename = 'Pennsylvania'
+              AND i.invoicedate >= '2015-06-01' AND i.invoicedate < '2015-07-01'
+
+   Steps:   Resolved terms: Invoice Line (revenue), Stock Item, State Province, Invoice
+            Joined: invoice line -> invoice -> customer -> city -> state province
+            Validated the filter values against the data, then executed
+   ```
+   预期：答案、SQL、步骤三件都在，能回到源库核对。
+
+6. 反向测试「数据回答不了的问题」——WWI 没有广告数据：
+   ```text
+   What was return on ad spend for the sushi roll flash drive in June 2015?
+   ```
+   期望行为（通过 MCP 接入时）：`check_answerable` 返回低覆盖率（示例 coverage 0.5，无术语覆盖 "ad spend"），智能体说明缺什么并请求澄清或要求接新数据源，而不是编一个数。预期：它没有硬编一个答案。
+
+7. 排障：重启后左侧导航消失是浏览器持有了过期会话 cookie，清掉 `localhost:3000` 的站点数据再登录；其他失败见 `skills/nvidia-ontology-setup/references/troubleshooting.md`。
+
+8. 把本体接进你自己的智能体（前提：上面栈已跑起来，且已登录拿到权限）。起 MCP server（只读工具；每个用户经 Auto-Ontology 登录，调用按该用户权限执行）：
+   ```bash
+   AUTO_ONTOLOGY_API_URL=http://localhost:3000 \
+     uvx --from "git+https://github.com/NVIDIA/auto-ontology.git#subdirectory=mcp" auto-ontology-mcp
+   ```
+
+9. 在客户端配 MCP。Cursor（`~/.cursor/mcp.json`）：
+   ```json
+   {
+     "mcpServers": {
+       "auto-ontology": { "url": "http://localhost:3003/mcp" }
+     }
+   }
+   ```
+   Claude Desktop（`claude_desktop_config.json`，经 `mcp-remote` 桥接）：
+   ```json
+   {
+     "mcpServers": {
+       "auto-ontology": {
+         "command": "npx",
+         "args": ["mcp-remote", "http://localhost:3003/mcp"]
+       }
+     }
+   }
+   ```
+   改完重启客户端，按提示登录。预期：客户端能连上 3003 的 MCP server。
+
+10. 选对工具：就绪检查 `check_readiness`；查术语 `search_terms`、`get_term`、`get_term_columns`、`get_term_sql_attributes`、`get_sql_attribute`、`describe_table`；可回答性 `check_answerable`；提问 `ask_question`（返回答案、SQL、行）。在写 SQL 之前先调 `check_answerable`，是这套做法里最值得照抄的一条纪律。预期：每次提问前先判断「数据能不能答」，而不是先写 SQL 再硬凑。
+
+11. 或用 REST：在用户菜单 → **API Tokens** 里签发 token，然后：
+   ```bash
+   curl -N http://localhost:3000/api/chat/completions \
+     -H "x-api-key: $AUTO_ONTOLOGY_API_TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"question": "How many orders shipped last week?"}'
+   ```
+   响应是 SSE 流：`result` 事件带答案，`data: [DONE]` 结束。原文给出的 Python 客户端示例在材料中被截断；先用上面的 `curl` 和 SSE 约定跑通，不要凭空补全客户端代码。
+
+12. 在只读副本上用自己的真实业务问题测试：先跑 `check_answerable`，再 `ask_question`，把答案、SQL、步骤三件与源库人工核对。预期：能人工核对通过，再考虑接生产。原文建议先在你自己的只读数据库副本上跑一遍，先用一批真实业务问题测“答案＋SQL＋步骤”能否人工核对通过，再决定是否接入生产。
+
+13. 认证与精修：在 Chat 里用真实问题测，或在 MCP 上调 `check_answerable`/`ask_question`，然后精修并认证术语、描述、SQL 属性。预期：术语、SQL 属性、join 关系经过人认证，而不是自动生成后直接用。
+
+14. 可选：如果要接自己的数据源，支持 10 种数据源（PostgreSQL、MySQL、Databricks、Snowflake、ClickHouse、Trino、Kyuubi、HeavyDB、DuckDB、SQLite）。原文未给出每种数据源的详细接入配置；先按 Quickstart 用样例库跑通，再换只读副本。预期：不把样例库的配置直接当生产配置。
+
 ### 怎么选
 
 - 需要长期复用、多人协作、统一口径、把分析纳入 git/CI：选做法 A。
@@ -272,10 +383,13 @@ network_access = true
 - 想基于完整 X 归档在本地用编码代理读文件，并且愿意自己补分析提示词：选做法 C。
 - 想固定「一类数据工程任务怎么做」（新数据源摸底、故障根因、对账、变更影响面），并且已经在用 Claude Code：选做法 D。
 - 做经济学实证研究、愿意按课程顺序做、能提前申请授权数据、接受“别人能重跑”作为验收：选做法 E。只想先验证 agent 是否改善研究流程，先做 E 的第 1 课 + 第 2 课世界银行公开数据分支，不要直接上 CHNS/CHARLS 或社媒采集。
+- 企业已有元数据和业务术语，希望智能体知道数据在哪、是什么意思、该不该用、怎么 join，并且要「答案 + SQL + 步骤」可核对：选做法 F。先按 Docker Compose Quickstart 在只读副本上跑，不要直接接生产。
 - B 与 C 的取舍：B 用后台各 Tab 导出上传到 Claude Artifacts，适合快速 dashboard 复盘；C 用完整归档 + 本地 Claude Code，适合本地文件分析入口，但原文只到读取文件，后续分析要自己设计。B 会把账号数据上传给第三方服务；C 在本地目录启动 Claude Code，但原文未讨论隐私与脱敏，试用时只处理脱敏副本，避免把归档上传到不需要的外部位置。
 - A 与 D 的取舍：A 管口径，产出是报表和 dashboard；D 管流程与读写边界，产出多为网页报告。两者不冲突，可以先在 A 的 demo 项目上验证代理能不能稳定读模型、写页面，同时用 D 的 `profile` 技能做新数据源摸底。
+- A 与 F 的取舍：A 手写 `.gsql` 语义模型，适合把 metrics 和 modeled joins 写成代码、产出报表和 dashboard；F 从元数据自动生成 ontology，由人认证后通过 MCP/REST 暴露给任意 agent，适合给已有的 agent 补上下文层。两者都解决口径问题：A 靠 measure 组合，F 靠经审核的 SQL attributes。可以并用：F 做上下文层，A 做 dashboard 层。
+- F 与 D 的取舍：D 管「一类任务怎么做」，F 管「数据是什么、能不能答」。先有 F 的术语和可回答性判断，再用 D 的技能跑具体任务，减少 agent 猜表名和字段含义。
 - D 与 E 的取舍：D 是通用数据工程技能仓库，适合先把 1—2 个技能装进项目试默认行为；E 是经济学实证研究课程路径，适合把 `CLAUDE.md`、Plan mode、验收清单、复现包和新会话审稿串成研究流程。E 第 4 课也会写 `SKILL.md`，可以和 D 的技能文件结构互相参照。
-- 先试哪个：想快速看到 AI 分析是否对自己有增量价值，先试 B 或 C 做一次轻量复盘；想验证「把流程固化成技能文件」是否减少重复交代，先试 D 的 `profile` 或 `incident`；如果已经在用编码代理且数据源受支持，再考虑 A；如果是经济学实证研究，先试 E 的公开数据最小闭环。
+- 先试哪个：想快速看到 AI 分析是否对自己有增量价值，先试 B 或 C 做一次轻量复盘；想验证「把流程固化成技能文件」是否减少重复交代，先试 D 的 `profile` 或 `incident`；如果已经在用编码代理且数据源受支持，再考虑 A；如果是经济学实证研究，先试 E 的公开数据最小闭环；如果企业已有元数据、又不想一上来手写完整语义层，先试 F 的 Quickstart。
 
 ## 怎么判断变好了
 
@@ -286,16 +400,18 @@ network_access = true
 - 做法 C（先只验证读取入口）：①复制一份归档数据，按原文步骤解压。②在归档目录打开 Claude Code，只用它读取 `data/tweets.js`。③确认它能正确识别文件结构和帖子字段后，再自行追加分析要求（例如先汇报字段、再基于字段做描述性统计）。原文没有给这些追加提示词，需在试用中自行设计并记录。
 - 做法 D（连续两周、3–5 个真实任务）：①只选 1–2 个技能，优先 `profile` 或 `incident`。②在测试项目的 `.claude/skills` 里只放这两个，先不改写，直接跑一遍看默认行为。③然后按第 6 步把项目路径与标准写进 `SKILL.md`（或 `CLAUDE.md`），再跑一遍，比较改写前后的差别。④同时用人工方式（或另一位同事）独立完成同一件事，作为对照。⑤连续两周、用 3–5 个真实任务重复，记录每次结果。⑥通过后再逐个增加技能。
 - 做法 E（1—2 小时最小闭环，只碰公开数据）：①装 Claude Code（或 Codex）+ Git + Python。②只做第 1 课：写一版自己的 `CLAUDE.md`，用 Plan mode 完成一个可核对的小任务，对照验收清单打分。③只做第 2 课的公开数据分支：从一个空文件夹出发，用世界银行数据产出一张图。④若用 Codex，先加 `[sandbox_workspace_write] network_access = true` 并重启，确认下载脚本不再报 `WinError 10013`。⑤不碰 CHNS/CHARLS 与社媒采集，直到前两步跑通、数据授权到手。
+- 做法 F（先样例库、再只读副本）：①按 Quickstart 跑通样例库，问跨多表 join 的问题，检查输出是否同时有答案、SQL、步骤。②问一个数据回答不了的问题，看 `check_answerable` 是否返回低覆盖率、智能体是否说明缺什么而不是编数。③换到自己的只读副本，用 5–10 个真实业务问题测「答案＋SQL＋步骤」能否人工核对通过。④记录 `check_answerable` 的覆盖率、人工核对通过率、需要修复 SQL 的次数。原文没有给准确率基线，以上指标需自己记录。
 
 可观察的指标：
 
-- 做法 A：代理首次生成查询的语法检查通过率，与让它直接写等价裸 SQL 相比需要几轮修正；同一个指标（如 revenue / aov）在 ≥2 个页面上是否算出同一数值（验证语义层是否真的统一了口径）；生成一个可用 dashboard 所需的对话轮次与 token 消耗，与让它写 python/JS 方案相比；代理产出的页面中需要人工手工调整样式/布局的比例；修改模型后，旧页面是否自动跟随更新而不需逐页改（体现「promote/demote logic into or out of the semantic layer」的价值）。
+- 做法 A：代理首次生成查询的语法检查通过率，与让它直接写等价裸 SQL 相比需要几轮修正；同一个指标（如 revenue / aov）在 ≥2 个页面上是否算出同一数值（验证语义层是否真的统一了口径）；生成一个可用 dashboard 所需的对话轮次与 token 消耗，与让它写 python/JS 方案相比；代理产出的页面中需要人工手工调整样式/布局的比例；修改模型后，旧页面是否自动跟随更新而不需逐页改。
 - 做法 B：输出的结论里是否包含具体数字（而不是「有所增长」这类空话）；是否给出可执行动作（能直接照着改发布时间、内容类型、互动策略等）；与自己手动翻后台对比，得出结论所花的时间是否明显缩短；换一份数据（比如换时间段或换另一个 Tab）重跑，结论是否跟着数据变化——如果两次输出几乎一样，说明它没有真的在分析数据。
 - 做法 C：读取是否成功——Claude Code 能否稳定打开并解析 `data/tweets.js`；结构识别是否正确——它列出的字段、帖子数量级和样例是否与人工抽查一致；分析是否可复核——它给出的「高表现帖子」判断能否回到原始字段核对；是否产生可执行改进——能否据此形成具体的选题、开头、发布时机等调整建议，并与人工基线比较判断一致性和耗时；风险控制——是否只处理脱敏副本，是否避免把个人归档数据上传到不需要的外部位置。
-- 做法 D：耗时——从「拿到失败运行 / 新数据源」到「写出可用的根因 / 画像」的分钟数，AI 组 vs 人工组；结论质量——根因是否正确、画像是否覆盖了后续建模真正用到的字段和边界案例，与人工独立结论的重合度与遗漏项数量；返工率——生成的页面有多少能直接发给同事，需要重写的段落比例；边界遵守——`SKILL.md` 里「绝不做什么」是否被遵守，有没有写到不该写的路径或表；稳定性——同一输入跑 3 次结论是否一致，不一致的地方是否正好是需要人判断的地方；可复用性——改写一次 `SKILL.md` 后，下一次同类任务是否不再需要重复交代背景（这直接检验「条件供给」是否到位）。同时保留失败案例：如果失败集中在「缺少某类输入」或「步骤写得不够具体」，那正好是决定要不要自己重写 `SKILL.md` 的依据——这时仓库的价值从「拿来用」转为「拿来当模板」。
+- 做法 D：耗时——从「拿到失败运行 / 新数据源」到「写出可用的根因 / 画像」的分钟数，AI 组 vs 人工组；结论质量——根因是否正确、画像是否覆盖了后续建模真正用到的字段和边界案例，与人工独立结论的重合度与遗漏项数量；返工率——生成的页面有多少能直接发给同事，需要重写的段落比例；边界遵守——`SKILL.md` 里「绝不做什么」是否被遵守，有没有写到不该写的路径或表；稳定性——同一输入跑 3 次结论是否一致，不一致的地方是否正好是需要人判断的地方；可复用性——改写一次 `SKILL.md` 后，下一次同类任务是否不再需要重复交代背景。同时保留失败案例：如果失败集中在「缺少某类输入」或「步骤写得不够具体」，那正好是决定要不要自己重写 `SKILL.md` 的依据——这时仓库的价值从「拿来用」转为「拿来当模板」。
 - 做法 E：可复现性最硬——把仓库交给另一个人或另一台机器，从空目录能否重跑出同一张图、同一组数字；不能重跑则视为无效改善。验收清单通过项占比（每课自查）。人工返工次数与“纠正智能体错误”的耗时（第 6 课列了八种常见错误，可当错误分类表计数）。同一任务“纯手工 vs 带 `CLAUDE.md` 的智能体”的耗时与出错率对比（自行记录，原文未提供基线）。阶段性扩展指标：第 3 课 codebook 变量定义完整率；第 4 课复现结果与原论文的数值差距；第 5 课复制包能否被第三方在无指导情况下重跑成功——这条应作为是否升级到长期采用的最终判据。
+- 做法 F：`check_answerable` 的覆盖率（原文示例 coverage 0.5）；答案、SQL、步骤三件齐全的比例；SQL 能直接执行且结果与源库人工核对一致的比例；需要修复 SQL 的次数；同一问题重复问 3 次结果是否一致；接入 MCP 后 agent 是否减少猜表名/字段名的次数。原文不含准确率数据，以上需自行记录基线。
 
-试多久：做法 A 的最小试用半天内可完成；做法 B 先一个 Tab、一次对话即可判断是否有增量价值；做法 C 先验证一次读取和字段核对即可判断入口是否可用；做法 D 需要连续两周、3–5 个真实任务，才有足够样本和人工对照；做法 E 的最小闭环 1—2 小时内可完成，但只碰公开数据，完整课程要等数据授权和作业包补齐。以上指标若明显优于现有做法，再考虑写入手册或固化进复盘习惯；若差异不明显，则退回研究阶段。
+试多久：做法 A 的最小试用半天内可完成；做法 B 先一个 Tab、一次对话即可判断是否有增量价值；做法 C 先验证一次读取和字段核对即可判断入口是否可用；做法 D 需要连续两周、3–5 个真实任务，才有足够样本和人工对照；做法 E 的最小闭环 1—2 小时内可完成，但只碰公开数据，完整课程要等数据授权和作业包补齐；做法 F 的 Quickstart 半天内可跑通，换到自己的只读副本后，先用 5–10 个真实业务问题试 1–2 天，再决定是否接生产。以上指标若明显优于现有做法，再考虑写入手册或固化进复盘习惯；若差异不明显，则退回研究阶段。
 
 ## 常见坑
 
@@ -324,6 +440,15 @@ network_access = true
 - 做法 E：审稿要新开会话，用干净上下文审自己的稿，避免同一上下文里的自我确认；不要在同一会话里既写又审还宣称已经验证。
 - 做法 E：Trae、WorkBuddy 等工具更新很快，README 的界面说明以各自当前官方文档为准，不要把旧版设置路径当成永久做法。
 - 做法 E：原文没有给出定时触发、事件触发或状态机的具体配置；六阶段流水线只说明流程可固化并重复执行，不能外推为自动调度。
+- 做法 F：依赖 NVIDIA NIM 端点，需要 `nvapi-...` key；没有 key 跑不起来。
+- 做法 F：部署较重（前端 3000、后端 3001、摄取 worker 3002、MCP server 3003、Postgres 5432），本地端口和资源要留够。
+- 做法 F：`.env.example` 里每个模型角色各有一行占位 key，要么逐个替换，要么删掉让它们回退到 `DEFAULT_MODELS_API_KEY`；不要留着占位 key。
+- 做法 F：每个默认口令都要换，Compose 会把 Postgres、pgAdmin、Web 应用发布到宿主机。
+- 做法 F：重启后左侧导航消失是浏览器持有了过期会话 cookie，清掉 `localhost:3000` 的站点数据再登录。
+- 做法 F：先调 `check_answerable` 再写 SQL；不要跳过可回答性判断直接让 agent 写 SQL。
+- 做法 F：原文不含准确率数据；「a revenue metric answered faster is worth nothing if the number is wrong」是设计主张，不是实测结论。
+- 做法 F：MCP server 是只读工具，每个用户经 Auto-Ontology 登录，调用按该用户权限执行；但仍要先在只读副本上试，不要直接接生产。
+- 做法 F：原文未给出定时/事件触发配置，也未给出每种数据源的详细接入配置；先按 Quickstart 用样例库跑通。
 - 共同：不要跳过最小试用直接接入关键业务数据或授权数据。
 
 ## 证据与来源
@@ -338,7 +463,9 @@ network_access = true
 
 做法 E 依据调研报告《maxwell2732/chenzhu-claude-econ》。可核实的内容：6 次课，每次约 2 小时，5 次实操 + 1 次研讨；每课资料结构固定为讲义 PDF → 图文作业说明 PDF → 作业包 zip（可在网页直接浏览）→ 验收清单；原创材料 MIT；数据不分发，CHNS/CHARLS 需自行申请；5 个配套工具仓库及对应课次：`claudecode-research-harness-workflow`（实证流程）、`codex-stata-for-economists`（Stata 流水线）、`paper-replicate-agent-demo`（复现）、`pAI-Econ-claude`（理论建模）、`hler-working-papers`（人机协作研究工作论文）；第 1 课写 `CLAUDE.md`、用 Plan mode；第 2 课用世界银行公开数据或人扫码登录采集小红书评论；第 3 课清理 CHNS 产出审查报告、清理后面板、codebook；第 4 课跑 CHARLS 长护险 staggered DID、复现论文、练习变量验证、写第一个 `SKILL.md`；第 5 课用 pAI-Econ 构建理论模型、按作者论文写作顺序写作、新开会话审稿；第 5 课综合作业二选一（别人能重跑的复制包或一节理论机制）；第 6 课研讨 AI for Social Science 验证问题、Project APE 与 HLER 案例、智能体八种常见错误；Codex 适配提示词在 lab1 作业包 `codex_adapt_prompt.md`；Codex 联网配置 `[sandbox_workspace_write] network_access = true`；Trae 可读取 `CLAUDE.md` 和 `AGENTS.md`，WorkBuddy 支持 skill；六阶段为审查 → 清理 → 计划 → 执行 → 审阅 → 发布。只是作者主张、未给证据：课程“能明显改善研究方式”没有数据支撑——没有学员成果、前后对照、复现成功率或耗时对比；50 stars 也不构成质量证据；README 中“2026 年 11 月 3 日”等日期未核实。关键局限：本次拿到的只有 README 索引，真正的操作步骤、提示词、脚本和验收清单正文都在 PDF 与 zip 作业包内，不在材料中；因此第 5—10、12 步只能给出“做什么、产出什么”，给不出“逐条怎么做”；原文也没有给出定时触发、事件触发或状态机的具体配置。适用条件：经济学实证研究场景（Stata/R/Python + 微观调查数据）；需要提前几周申请授权数据；不适用于无计量基础者。
 
-五篇调研的共同点：都没有给出可复现的量化收益数据；都需要小范围实测再决定是否纳入长期工作流。
+做法 F 依据调研报告《NVIDIA/auto-ontology》。可核实的内容：Apache 2.0 开源；三阶段 Generate → Certify → Answer；本体三类定义 Terms、SQL attributes、Relationships；组件与端口（前端 3000、后端 3001、摄取 worker 3002、MCP server 3003、Postgres 17 + pgvector 5432、可选 HashiCorp Vault）；支持 10 种数据源（PostgreSQL、MySQL、Databricks、Snowflake、ClickHouse、Trino、Kyuubi、HeavyDB、DuckDB、SQLite）；Quickstart 的确切命令（`git clone`、`cp .env.example .env`、`docker compose up -d --wait postgres`、seed 脚本、`docker compose up -d --build`）；`.env` 必改项；样例问题与合格输出（答案、SQL、步骤）；MCP server 启动命令与 Cursor/Claude Desktop 配置；MCP 工具清单（`check_readiness`、`search_terms`、`get_term`、`get_term_columns`、`get_term_sql_attributes`、`get_sql_attribute`、`describe_table`、`check_answerable`、`ask_question`）；REST 的 `curl` 示例与 SSE 约定（`result` 事件带答案，`data: [DONE]` 结束）；排障说明。只是作者主张、未被数据支撑的部分：「a revenue metric answered faster is worth nothing if the number is wrong」是设计主张；原文不含准确率数据；没有给出量化收益或前后对比。信息缺口与局限：Python 客户端示例在原文中被截断；每种数据源的详细接入配置未给出；未给出定时/事件触发配置；部署较重、依赖 NVIDIA NIM 端点；需要自己记录可回答性覆盖率和人工核对通过率。本篇采用的最小试用方案（Quickstart → 样例库 → 只读副本 → 5–10 个真实问题）来自该报告的建议，尚未有实测结果支撑。
+
+六篇调研的共同点：都没有给出可复现的量化收益数据；都需要小范围实测再决定是否纳入长期工作流。
 
 ## 依据的调研
 
@@ -347,3 +474,4 @@ network_access = true
 - [@RoundtableSpace: Your X account already knows which of your posts work. You just never read the data.](../research/radar/2026-10-29/8131-your-x-account-already-knows-which-of-your-posts-w.md)：值得一试，可以按原文小范围试通“X 归档 + Claude Code 读取 tweets.js”这一入口，但不要把它当成完整内容分析手册；原文只给了下载、解压和一条被截断的读取提示，缺少分析指令与验证指标。
 - [DataWithBaraa/claude-code-data-engineering-skills](../research/radar/2026-10-30/8578-datawithbaraa-claude-code-data-engineering-skills.md)：值得一试，先在一个测试项目里挑 1–2 个技能（profile 或 incident）装进 .claude/skills 跑两周，对比人工完成同一任务的耗时与产出质量，再决定是否扩到全部 16 个；理由是仓库给出了可直接复制的安装和调用方式、每个 SKILL.md 都固定声明读写边界，但原文只有 README、看不到技能正文，且作者自述为首版草稿、无任何效果数据。
 - [maxwell2732/chenzhu-claude-econ](../research/radar/2026-11-03/9719-maxwell2732-chenzhu-claude-econ.md)：值得一试，建议小范围试：照这门课的路径先跑第 1—2 课的最小流程（写 CLAUDE.md、用 Plan mode、从空文件夹到一张别人能重跑的图，并用验收清单自查），跑通后再决定要不要投入 CHNS/CHARLS 的完整实证流水线；理由是 README 给出了可执行的课程结构、每课产出物、验收清单、配套工具仓库和一段可直接复制的 Codex 网络配置，但具体步骤在 PDF 与作业包里，本次材料只到索引层，还没有效果数据。
+- [NVIDIA/auto-ontology](../research/radar/2026-11-05/10524-nvidia-auto-ontology.md)：值得一试，照 README 的 Docker Compose Quickstart 在你自己的只读数据库副本上跑一遍，先用一批真实业务问题测“答案＋SQL＋步骤”能否人工核对通过，再决定是否接入生产。理由：它给出可直接复制的部署、模型角色配置、MCP/REST 接入步骤，并内建“先判可回答性、查询后返回 SQL 与出处”的验证闭环，正好补上智能体做结构化分析时缺的上下文层；但它依赖 NVIDIA NIM 端点、部署较重、且不含准确率数据。
