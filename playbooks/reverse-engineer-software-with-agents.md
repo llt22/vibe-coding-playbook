@@ -1,15 +1,16 @@
-# 在授权范围内搞懂并重建软件：让 agent 用证据、验收器和签收清单做到可验收
+# 从二进制到网站：让 agent 带着证据搞懂并重建，再用可判定标准验收
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：当你要在授权范围内搞懂并重建一个软件、Web 产品或原生应用时，如何避免 agent 停在‘看起来完成’，而是用证据、可机器验收或签收的 parity checklist 证明完成。
-> 先试这一步：先选一个已获授权的小目标，把 5–10 条 must-have 行为写成带输入、期望输出和检查方法的 parity checklist，让操作者签收，再让 agent 构建并用同一输入对照原版。
-> 最近修订：2026-10-28
+> 解决的问题：当目标没有源码、只能靠逆向或浏览器探索来理解并重建时，如何让 agent 的每条结论带证据、让“完成”可被检查，而不是交付看着合理却无法核验的猜测。
+> 先试这一步：先用做法 B 对一个已提取的 JS/Electron 目录跑一次不需 Hopper/Ghidra 的静态分析，检查是否返回内联 Evidence、恢复图与 limitations/unknowns；若目标是网站重建，再用做法 M 跑通一个 WebsiteBench 任务建立能力基线。
+> 最近修订：2026-11-06
 
 ## 解决什么问题
 当目标没有源码——原生二进制、Electron/JS 前端包、.NET 程序集、APK、固件，或一个已打开的网页——而你需要搞懂某个功能并在自己的项目里重建，靠‘让 agent 随便看看’只会得到看着合理但无法核验的猜测。主线是 Decompile → Understand → Recreate，并让每条结论带 Evidence 与 limitations。更硬的前提是：没有机器可判定的 PASS/FAIL，reviewer 会被 worker 写在 commit/代码里的理由说服（非故意 prompt injection），第一月代码‘极其可读但语义错误’。因此，只要存在可机器比对的 ground truth，就应在 Evidence 之上加客观验收器（Oracle）；没有 ground truth 时，至少保留 Evidence/limitations，把 unknown 标出来。
 Companion 把证据接成规格、架构、实现计划和验证流程；RES 面向运行中的 Web 产品/SaaS；rederive 面向‘源码在手但设计意图不明’的学习型任务；aidbg 补 Windows x86/x64 动态调试，把每条调试命令输出成一行 JSON；BAMA 补原生 macOS 应用，把截屏→界面索引→用户故事→逐故事构建→每页亮/暗快照回归拆成 skill 循环；GhidraMCP 是把 Ghidra 分析结果以 MCP 递给 Claude Code 的薄接入线，本次材料只到重启 Ghidra，完整接入要按仓库文档补齐。
 新加的 L 补的是‘完成定义’：构建前先把可测试的 parity checklist 写出来并让操作者签收，用同一输入对照原版，每项标 pass/fail/not testable 并附文件证据，所有 must-have 连续两轮 review 全过才算完成；未测试项永远不算 100%。它不替代取证工具，也不等于 E 的逐字节 Oracle。
+新加的 M 补的是能力评测入口：WebsiteBench 用统一任务包让 agent 通过浏览器探索生产级网站并重建全栈版本，但 README 只给运行方式，没有评分标准和基线结果，因此只能用来摸‘某个 agent+模型组合能否跑通网站重建任务’的边界，不能当验收器。
 
 ## 适用与不适用
 - **REA**：适用原生二进制（Mach-O、ELF、PE、macOS .app，经 Hopper 或 Ghidra）、JavaScript/Electron（ASAR、source map、IPC、原生插件，可不运行应用静态映射）、.NET 程序集、网站（本机 Chrome 系浏览器 loopback CDP 被动观察）、Android APK（Linux + headless JADX，静态）、固件（Linux 上自备 Binwalk/Unblob）。不适用：当作通用工作方法推广；它只适合‘搞懂别人的东西并重建’之外的逆向与互操作场景。
@@ -21,6 +22,7 @@ Companion 把证据接成规格、架构、实现计划和验证流程；RES 面
 - **GhidraMCP 路线**：适用已安装 Ghidra 12.1.4、本机能跑 Java、已在用 Claude Code、要分析本地二进制样本，并愿意按 GhidraMCP 仓库文档补齐 MCP 启动、注册与验证。不适用：本次只有一条 X 推文，正文在‘重启’处截断；不能把它当完整配置手册；原文没有准确率、耗时或案例对比；安全与合规完全未涉及；不要外推为‘任何工作都该接 MCP’。如果已经用 REA 并把 Ghidra 配成分析引擎，不要再叠 GhidraMCP：两者都在把 Ghidra 结果交给 agent，叠用只会让 agent 在两套 MCP 之间切换。
 - **BAMA**：适用 macOS 26+、Xcode 26+ 环境，用 Claude Code、Codex、Cursor、Gemini CLI 等支持 skills 的 agent，把一个原生 macOS 应用从想法做到 Dock：Swift + SwiftUI、本地数据、全程不打开 Xcode GUI；需要从目标 app 截屏做界面索引、转用户故事、逐故事构建；需要每 commit 前对每个页面做亮/暗快照、用可勾选验收标准推进；想照 `specs/` 里的小型 build plan 做练习。`clone` 需要 computer use（Claude Pro/Max）。不适用非 macOS 原生应用；没有 macOS 26+/Xcode 26+；不想用 computer use 却要截屏原生应用；把它当二进制反编译工具——它靠截图和用户故事复刻界面，不替代 REA；把它当通用工作方法；本次只有 README，21 个 SKILL.md、脚本、模板、snapshot mode 与 debug bridge 实现均未出现，构建成功率、耗时、质量评估和案例都没有。
 - **做法 L / Speedrunlab 自学习循环**：适用已获授权重建的产品；有独立批准人，单独工作时可把自己记录为 approver 并注明；能把‘完成’定义成可测试的 parity checklist；智能体支持 skills 目录或可加载 `SKILL.md`；能提供隔离检查环境、版本控制构建目录、固定版本工具、操作者拥有的 fixtures；任务能分出 must-have / should-have / out of scope。不适用未授权、需绕过访问控制、依赖厂商后端、需要搬运受保护资产的任务；没有隔离检查环境或 fixtures；不能把行为写成可测试检查；把它当完整技能正文——本次只到 README，`SKILL.md` 与 `references/` 未展开，没有 benchmark、对照实验、真实案例或得分变化数据，31 stars 属早期项目。
+- **WebsiteBench / 做法 M**：适用想用统一任务包评测 AI 智能体‘通过浏览器探索生产级网站并逆向重建全栈版本’的能力边界；需要 git、uv、Docker、agent 凭证（如 codex）和模型标识符；任务包在 `local-tasks/`，结果写 `jobs/`，更多运行选项与 oracle checks 见 `docs/running.md`。不适用：把它当生产验收器或评分标准——README 没有给出任务数量、评分标准、基线结果或案例数据；没有 Docker、agent 凭证或模型访问权限；未确认网站授权与条款就做竞品重建；想找可直接复用的取证方法——它不替代 REA/RES；把它当成熟平台——30 stars 属早期仓库，接口与任务包可能变动。
 
 ## 前置条件
 - **REA**：macOS 12+ 或 Ubuntu 24.04+/Fedora 41+/64 位 Arch；Node.js 22.x（≥22.19）/24.x（≥24.11）/26+，已装 npm；纯静态 JS 检查只需 Node/npm；原生二进制需 Hopper（独立 license，demo 有厂商限额）或 Ghidra 12.1.4 + 64 位 JDK 21（macOS 还需带本机架构的 native decompiler）；可接入 Claude Code、Claude Desktop、Codex、Cursor、Gemini CLI、Windsurf、Devin、OpenCode、Antigravity、GitHub Copilot CLI、Command Code、VS Code，其他 agent 可手工配 MCP。
@@ -32,6 +34,7 @@ Companion 把证据接成规格、架构、实现计划和验证流程；RES 面
 - **GhidraMCP 路线**：Ghidra 12.1.4（从 ghidra-sre.org 下载安装）；本机有 Java 运行环境（推文未写，属 Ghidra 运行前提，需自行确认）；Claude Code 可用；一个本地可运行的二进制样本；已下载 GhidraMCP 发行版。原文缺失：GhidraMCP 服务端启动方式（端口、是否随 Ghidra 启动）、Claude Code 侧 MCP 注册命令/配置、连接成功验证方法。
 - **BAMA**：macOS 26 或更高；Xcode 26 或更高（只为 Swift 6.2 工具链，全程不打开）；一个支持 skills 的 agent（Claude Code、Codex、Cursor、Gemini CLI）；若要用 `clone` 抓原生应用界面，需要 computer use（Claude Pro 或 Max）；每个 agent 只选一条安装路线，不要两条路线并用；从 `specs/` 挑最小的 build plan 做最小试用。
 - **做法 L**：已获授权的产品重建任务；授权记录、批准人、范围、工作目录四件事显式化；检查环境由操作者提供，无网络、无凭据；任何 live 步骤使用一次性 VM；构建目录单独放在版本控制下；目标路线需要的开源工具按固定版本显式安装，技能自己不安装工具；准备操作者拥有的 fixtures；批准人应独立于请求者；智能体支持 skills 目录或可加载外部指令文件。Claude Code 用 `~/.claude/skills`，OpenClaw 用 `~/.openclaw/skills`，其他智能体把文件夹复制进其 skills 目录，或把 `SKILL.md` 载入指令，并把 `references/` 和 `templates/` 放在智能体可读的位置。
+- **WebsiteBench / 做法 M**：本机 git、uv、Docker；一个可用的 agent 凭证（README 以 codex 为例）；可用的模型标识符，命令里的 `<model>` 要替换成实际值；完整任务包在 `local-tasks/`；结果目录 `jobs/`；需要读 `docs/running.md` 了解运行选项、其他 agent 与 oracle checks；任务数据与轨迹在 HuggingFace 数据集 TIGER-Lab/WBArtifacts。README 没有说明如何安装 Docker、如何配置凭证、如何解读评分，这些需按各自文档补齐。
 
 ## 操作步骤
 ### 做法 A：注册 REA，跑一次完整的‘搞懂 + 重建’
@@ -354,10 +357,10 @@ cp -r rederive/skills/rederive ~/.agents/skills/
 ```
 build.bat Release
 ```
-2. 跑一条最小批处理调试链。前提：已生成 `aidbg.exe`，准备一个你有权调试的测试 exe；把 `tests\target.exe` 换成实际路径。`--json` 让每条命令输出一行 JSON，多个 `-c` 按顺序执行。`break accumulate` 是 README 示例；若目标没有该符号，换成实际函数名或地址。
+2. 跑一条最小批处理调试链。前提：已生成 `aidbg.exe`，准备一个你有权调试的测试 exe；把 `tests\\target.exe` 换成实际路径。`--json` 让每条命令输出一行 JSON，多个 `-c` 按顺序执行。`break accumulate` 是 README 示例；若目标没有该符号，换成实际函数名或地址。
 ```
 aidbg --json ^
-  -c "file tests\target.exe" ^
+  -c "file tests\\target.exe" ^
   -c "run" ^
   -c "break accumulate" ^
   -c "continue" ^
@@ -455,8 +458,32 @@ git clone https://github.com/Speedrunlab/reverse-engineer-anything-self-learning
 9. 使用停止条件。完成定义为：所有 must-have 在连续两次 review 中通过。出现以下情况停止并询问：得分连续两轮停滞；某个 gap 需要受保护材料或厂商后端；预算耗尽；任何检查停止条件触发。永远不要对未测试项宣布 100%。
 10. 从每轮迭代学习，但不污染规则。把 checklist 模式、review 技术、路线、工具配方和修复配方保存到技能中，先 staging，等操作者批准。不要把失败直接固化为规则，不要捕获 secrets，也不要捕获来自目标产品的材料。
 
+### 做法 M：用 WebsiteBench 任务包摸清‘浏览器探索→重建全栈网站’的能力边界
+前提：本机 git、uv、Docker；一个可用的 agent 凭证（README 以 codex 为例）；可用的模型标识符。差异：A–L 是实际取证、重建与验收流程；M 是评测基准，只回答‘某个 agent+模型组合能不能跑通网站重建任务’，不提供评分标准和基线结果，不能替代 A–L 的取证与验收。
+1. 克隆仓库并进入目录。前提：已装 git。预期：仓库就绪。
+```sh
+git clone https://github.com/TIGER-AI-Lab/WebsiteBench.git
+cd WebsiteBench
+```
+2. 安装依赖。前提：已装 uv。预期：依赖安装完成。
+```sh
+uv sync
+```
+3. 跑单个任务。前提：Docker 可用、agent 凭证已配、`<model>` 换成实际模型标识符。预期：任务运行，结果写入 `jobs/`。
+```sh
+uv run harbor run --path ./local-tasks/medium \
+  --agent codex --model '<model>'
+```
+4. 跑全部任务。前提：单任务已跑通；`--n-concurrent 1` 控制并发。预期：全部任务依次运行，结果写入 `jobs/`。
+```sh
+uv run harbor run --path ./local-tasks \
+  --agent codex --model '<model>' --n-concurrent 1
+```
+5. 读 `docs/running.md` 了解更多运行选项、其他 agent 与 oracle checks。前提：需要解读结果或换 agent。预期：知道如何看结果；但 README 未给评分标准，不要自行宣布‘重建质量提升’。
+6. 任务数据与轨迹在 HuggingFace 数据集 TIGER-Lab/WBArtifacts。用途：复核任务与轨迹；README 未说明具体字段，需按数据集页面确认。注意：这属于外部数据集，不是本地评分器。
+
 ### 怎么选
-想让 agent 自己调查并实现特性 → 做法 A；不想配 MCP/分析引擎 → B；只想要 agent 指令 → C；要 CLI、诊断、快照、证据、浏览器/V8 观察 → D；要长期多 agent 反编译且存在 ground truth → E；要把 REA 证据接成规格、路线图、实现计划与验证流程 → F；目标是运行中的 Web 产品/SaaS 且有可控试用账号 → G；源码在手、目标是学习/设计理解/新人上手 → H；需要在授权的 Windows x86/x64 目标上做动态调试、并让 agent 逐行解析 JSON → I；已用 Ghidra、只想把反编译结果直接喂给 Claude Code、且愿意自己补齐 MCP 文档 → J；目标是原生 macOS 应用、有 macOS 26+/Xcode 26+、想按截屏→用户故事→逐故事构建→快照回归做 → K；已获授权、能定义 must-have 行为、想让 agent 循环到‘连续两轮 must-have 全过且有文件证据’ → L。二进制、Electron 内部、桌面/移动应用回到 REA（A–F），不要用 RES；BAMA 也不替代 REA，它靠截图和用户故事复刻界面。rederive 不替代取证和验收。REA 的 Evidence/limitations 与 E 的字节级 PASS/FAIL 不冲突但不等价：能比对时把 E 的验收器作为提交门；不能比对时至少按 REA 口径标 unknown，或用 F 的‘与证据挂钩的验收标准’兜底。L 与 E/F 也不冲突：有机器 ground truth 优先 E；只有证据和规格用 F；L 适合把已签收的可测试行为循环到连续两轮全过，但不能替代 A–K 的取证工具。RES 的 `check-kb` 和证据标签是‘知识库完整性 + 可追溯’级别，不等同于机器 PASS/FAIL；它能防无标签结论和丢证据，但不能证明重建行为与目标一致，后者要靠 parity tests 或 Oracle。aidbg 的 JSONL 是动态调试证据，不是 PASS/FAIL；地址一致性、断点命中和反反调试效果都要交叉验证。J 与 REA+Ghidra 重叠：REA 走自己的 MCP 工具并带 Evidence/limitations/快照/导出；J 走 GhidraMCP，原文未闭环、无效果数据。二选一，不要在同一目标上同时接两套 MCP。K 的验收标准、每 commit 全页快照、一故事一 commit 是可观察流程，但目前只有 README 描述，没有产出数据；先按最小试用验证，不成立就只借鉴流程骨架。
+想让 agent 自己调查并实现特性 → 做法 A；不想配 MCP/分析引擎 → B；只想要 agent 指令 → C；要 CLI、诊断、快照、证据、浏览器/V8 观察 → D；要长期多 agent 反编译且存在 ground truth → E；要把 REA 证据接成规格、路线图、实现计划与验证流程 → F；目标是运行中的 Web 产品/SaaS 且有可控试用账号 → G；源码在手、目标是学习/设计理解/新人上手 → H；需要在授权的 Windows x86/x64 目标上做动态调试、并让 agent 逐行解析 JSON → I；已用 Ghidra、只想把反编译结果直接喂给 Claude Code、且愿意自己补齐 MCP 文档 → J；目标是原生 macOS 应用、有 macOS 26+/Xcode 26+、想按截屏→用户故事→逐故事构建→快照回归做 → K；已获授权、能定义 must-have 行为、想让 agent 循环到‘连续两轮 must-have 全过且有文件证据’ → L；想用统一任务包评测 agent 通过浏览器探索重建全栈网站的能力边界、且已有 Docker/agent 凭证 → M。二进制、Electron 内部、桌面/移动应用回到 REA（A–F），不要用 RES；BAMA 也不替代 REA，它靠截图和用户故事复刻界面。rederive 不替代取证和验收。REA 的 Evidence/limitations 与 E 的字节级 PASS/FAIL 不冲突但不等价：能比对时把 E 的验收器作为提交门；不能比对时至少按 REA 口径标 unknown，或用 F 的‘与证据挂钩的验收标准’兜底。L 与 E/F 也不冲突：有机器 ground truth 优先 E；只有证据和规格用 F；L 适合把已签收的可测试行为循环到连续两轮全过，但不能替代 A–K 的取证工具。RES 的 `check-kb` 和证据标签是‘知识库完整性 + 可追溯’级别，不等同于机器 PASS/FAIL；它能防无标签结论和丢证据，但不能证明重建行为与目标一致，后者要靠 parity tests 或 Oracle。aidbg 的 JSONL 是动态调试证据，不是 PASS/FAIL；地址一致性、断点命中和反反调试效果都要交叉验证。J 与 REA+Ghidra 重叠：REA 走自己的 MCP 工具并带 Evidence/limitations/快照/导出；J 走 GhidraMCP，原文未闭环、无效果数据。二选一，不要在同一目标上同时接两套 MCP。K 的验收标准、每 commit 全页快照、一故事一 commit 是可观察流程，但目前只有 README 描述，没有产出数据；先按最小试用验证，不成立就只借鉴流程骨架。M 不是取证工具，也不能当验收器；它只负责用统一任务包暴露‘能不能跑通网站重建任务’的能力边界，质量判断仍要回到 A–L 的证据与验收。
 
 ## 怎么判断变好了
 - **REA**：每条结论是否带 Evidence 与 limitations；reconstruction check 是否给出明确 pass/fail/unknown，而不是‘看起来懂了’；出现 unknown 应继续调查或明确标注。最小试用：做法 B，对一个已提取的 JS/Electron 目录跑一次静态分析，不需要 Hopper/Ghidra，不改动、不执行目标应用，看能否返回内联 Evidence、恢复图与 limitations/unknowns。另看第 6 步重建特性能否在你的技术栈通过测试；导出的 Evidence 经 `compare` 后能否复现同一结论。
@@ -468,6 +495,7 @@ git clone https://github.com/Speedrunlab/reverse-engineer-anything-self-learning
 - **做法 J / GhidraMCP**：A/B 两组的事实正确率（逐条与你自己已知的答案比对）、幻觉率（凭空编造的函数名/库名/行为描述次数）、返工成本（你需要纠正模型多少次才能得到可用结论）、接入成本（从零到跑通第一次查询的实际耗时；调研作者建议，若明显超过一两个小时，说明该集成还不适合写进日常流程）。最小试用半天：按 J 的步骤走，先在自己写的小程序上跑；只有 B 组明显优于 A 组才扩大。原文只有 Ghidra 94k 星和推文互动数据（99 赞/18 转发/7 回复），这些只说明热度，不是效果证据。
 - **做法 K / BAMA**：milestone 1 内每个故事是否一次通过它自己的验收标准（返工次数）；commit 前快照是否稳定生成、是否真的抓到过视觉回归（记录抓到的次数，0 次说明这道检查可能是形式）；agent 能否自己跑通构建—安装—快照—测试这条链，需要人介入的次数与原因分布；从空文件夹到 milestone 1 的总时长与人工投入小时数；`improve-architecture` 重构后‘行为不变’是否可被既有测试与快照证实。最小试用 1–2 天：一台满足 macOS 26+/Xcode 26+ 的机器，装 Claude Code，只用一条路线安装 BAMA；从 `specs/` 挑最小的那份 build plan（如 window-snapper）拷进空文件夹，让 agent 跑到 milestone 1。若不想做新 app，退一步只跑 `clone` + `user-stories` 两段，看 screen index 和验收标准是否可直接用。注意不要两条安装路线并用。对照方式：同一需求用 BAMA 和不用 BAMA 各做一遍（或与团队现有做法对比），比较人工介入次数、返工次数、视觉回归数量、总时长。若 BAMA 组的介入次数没有下降，说明这套 skill 在当前团队/项目上不成立，降级为 study 只借鉴‘验收标准 + 每 commit 全页快照 + 一故事一 commit’的流程骨架即可。
 - **做法 L**：每轮 must-have 通过率；未测试项数量；每个 review 结果是否有文件证据；连续两轮 must-have 全过所需轮数；fresh-eyes reviewer 与原评分的一致率；回归采样中发现的问题数；从开始到 walking skeleton 可运行的时间；总耗时与工具成本；人工判断‘是否真的可交付’。最小试用：选一个已获授权的内部小产品，列出 5 到 10 个 must-have 行为；按 README 安装到 Claude Code 或加载 `SKILL.md`；提供授权人、范围和工作目录；让操作者签收 parity checklist；跑至少两轮‘构建—对照—补差距’。同时保留一个基线：用同一智能体、同一范围，但不使用该技能，直接要求‘做出等价版本’。如果使用技能后 must-have 通过率更高、未测试项更少、证据更完整，并且能以可接受成本达到连续两轮全过，才值得扩大到更多任务；否则维持 study 或回到 watch。
+- **WebsiteBench / 做法 M**：单任务能否跑通并把结果写入 `jobs/`；换 `--agent` / `--model` 后任务完成率与运行日志错误是否可比较；读 `docs/running.md` 的 oracle checks 后能否解释结果。README 未提供任务数量、评分标准、基线结果和案例数据，所以只能把‘跑通、可复现、日志可读’当最小观察，不能把分数或质量当已验证收益。最小试用：按 M 的步骤跑 `local-tasks/medium` 一次，确认 `jobs/` 有输出；再决定是否用 `--n-concurrent 1` 批量跑。若缺少 Docker 或 agent 凭证，先不要把它排进日常流程。
 - **判定方式**：同一任务做引入 oracle 前后的对照；通过率明显上升、返工下降即改善；通过率不变但同等质量下 token 成本与模型等级下降，也按改善计。原文数据：做法 E 项目约 3 个月；token 消耗为作者估算 600–700B（agent 用畸形命令周期性清空 VM，丢了一批 session log，作者不知道确切数字）；第一月 4 个 agent 完成约 80% 游戏反编译，游戏能启动、主菜单可见、地图能加载；末期 99% 函数存在、83% 逐字节精确；末期 14 个 Luna 与 2 个 Opus 5.5 agent。RES 每次会话约增加 130 token，运行时约 4600 token（用 `claude plugin details` 测得，作者自述）；版本 0.4.0。材料没有给出成功率、时间节省等量化收益数字，本文不据此承诺。
 
 ## 常见坑
@@ -544,6 +572,12 @@ git clone https://github.com/Speedrunlab/reverse-engineer-anything-self-learning
 - 做法 L：捕获 secrets 或目标产品材料；把失败直接固化为规则；未 staging 就改技能规则。
 - 做法 L：把 README 当完整技能正文；本次材料没有 `SKILL.md`、`references/`、`templates/` 的展开内容，也没有 benchmark、对照实验、真实项目案例、得分变化数据或完整提示词。
 - 做法 L：把 31 stars 或作者‘补上最后 20%’‘下一产品起点更靠前’当效果证据；这些目前只是作者主张。
+- WebsiteBench：把 README 当完整评测手册；它只给了安装/运行命令、任务目录和结果位置，没有评分标准、任务数量、基线结果或案例数据。
+- WebsiteBench：没有 Docker、agent 凭证或模型访问权限就开跑；Quickstart 明确需要完整任务包、Docker 和 agent 凭证。
+- WebsiteBench：把 `jobs/` 有输出当成‘重建质量变好’；输出存在不等于质量达标，质量指标要等文档定义。
+- WebsiteBench：未确认网站授权与条款就用来做竞品重建；评测任务本身不解决授权与合规。
+- WebsiteBench：一上来就批量跑；先跑 `local-tasks/medium` 单任务，确认环境和输出，再用 `--n-concurrent 1`。
+- WebsiteBench：把 30 stars 的早期仓库当稳定 API；接口与任务包可能变动。
 
 ## 证据与来源
 - REA 的命令、路径、版本要求、六步调查流程与工具名、snapshot 与 Evidence 语义、浏览器/V8 Inspector 边界、卸载行为，来自调研报告 **morluto/rea**（仓库 README）。作者主张（非实测）：不声称恢复原始源码、不自动克隆；分析本地运行、不上传托管分析服务；snapshot 复用条件与不缓存范围；`doctor` 只检查不修改。调研作者对适用面的判断‘应用面局限在逆向与互操作场景，不适合当作通用工作方法推广’是结论性主张，不是量化数据。
@@ -555,6 +589,7 @@ git clone https://github.com/Speedrunlab/reverse-engineer-anything-self-learning
 - GhidraMCP 的 Ghidra 12.1.4、ghidra-sre.org、免费且由 NSA 发布、`File -> Install Extensions`、重启、下载 release、94k 星，来自调研报告 **@ArchiveExplorer 推文（GhidraMCP 接入 Claude Code）**。原文是一条 X 推文，正文极短且在‘重启’处截断；GhidraMCP 服务端启动、Claude Code 注册、验证方法均未给出，需查 GhidraMCP 仓库文档。效果主张（‘让你的代理读取编译后的程序，而不是猜测它做什么’‘这变得他妈的危险了’）是作者断言，没有对比数据、案例或复现结果；互动数据（99 赞/18 转发/7 回复）只说明热度。安全与合规原文未涉及。适用条件：本地桌面版 Ghidra、Java 环境、Claude Code、二进制/逆向任务；不能外推为通用工作方法。
 - BAMA 的安装命令、`/bama` 路由、Start/Plan/Code/Design/Ship 五阶段、21 个 skill、`clone` 截屏→screen index→用户故事→逐故事构建、每 commit 前亮/暗快照、`layout-grid` 三道检查、`design-from-app` 逐像素比对、`specs/` 12 份 build plan、macOS 26+/Xcode 26+、clone 需 computer use、41 stars，来自调研报告 **daveebbelaar/bama**（仓库 README）。本次只到 README：21 个 SKILL.md 的具体内容、脚本、模板、snapshot mode 与 debug bridge 实现均未出现，步骤是可执行骨架，未核实内部执行；没有任何产出数据，构建成功率、耗时对比、生成 app 质量评估或使用案例都没有，只有‘21 skills’‘12 build plans’这类数量声明。README 中插入作者自家产品 Glaido 推广，作者自述‘we are biased’，按宣传处理。‘一个故事一个 commit’‘每次 commit 前全页快照能提升质量’是设计理念，无对照实验支撑；`/bama` 路由器准确性亦无验证。适用硬限制：macOS 26+/Xcode 26+/Swift 6.2；只覆盖 macOS 原生应用开发；跨领域需自己重写 skill；41 stars 属早期项目，接口与 skill 划分可能变动。
 - 做法 L 的安装命令、支持 Claude Code/OpenClaw/其他智能体、文件结构（`SKILL.md`、`references/`、`templates/`）、方法流程、停止条件和安全约束，来自调研报告 **Speedrunlab/reverse-engineer-anything-self-learning-loop**（仓库 README）。可见证据：授权与范围门禁、隔离检查环境、静态优先/证据优先、构建前写 parity checklist 并让操作者签收、must-have 通过率计分、相同输入对照、diff/hash、round-trip、屏幕阈值比较、耗时测量、fresh-eyes reviewer 抽样复核、连续两次 review 全过才算完成、停止条件、从迭代学习但先 staging 再批准。仓库标记为 MIT，当前抓取材料显示 31 stars。原文没有给出 benchmark、对照实验、真实项目案例、得分变化数据或完整提示词；完整方法在 `SKILL.md` 和 `references/` 中，本次材料未展开，无法判断其提示词和模板质量。效果主张‘补上最后 20%’‘下一产品起点更靠前’目前只是作者主张，未由材料中的数据验证。适用条件很窄：必须已获授权、有独立批准人、有隔离检查环境、有 fixtures、工具固定版本，且不得克隆第三方产品、绕过访问控制或搬运受保护资产。调研作者的试用建议（选一个已获授权的内部小产品，列 5 到 10 个 must-have，跑至少两轮，保留不用技能的基线）是判断，不是实测收益。
+- WebsiteBench 的克隆、`uv sync`、`harbor run` 单任务/全任务命令、`jobs/` 输出、`docs/running.md`、HuggingFace 数据集 TIGER-Lab/WBArtifacts、需要 git/uv/Docker/agent 凭证，来自调研报告 **TIGER-AI-Lab/WebsiteBench**（仓库 README）。局限：原文只有 README，没有任务数量、评分标准、基线结果或案例数据；‘agents must reverse-engineer...’是作者主张，需结合文档和实际运行验证；仓库 30 stars，社区采用情况不明。
 - 材料没有给出成功率、时间节省等任何量化收益数字，本文不据此做承诺。
 
 ## 依据的调研
@@ -568,3 +603,4 @@ git clone https://github.com/Speedrunlab/reverse-engineer-anything-self-learning
 - [@ArchiveExplorer: 这变得他妈的危险了：NSA 自己的逆向工程工具现在直接接入 Claude Code - Ghidra 有 94k 星，GhidraMCP 让你的代理读取编译后的程序，而不是猜测它做什么](../research/radar/2026-10-25/6976-nsa-claude-code-ghidra-94k-ghidramcp.md)：值得一试，按推文给出的三步把 Ghidra 12.1.4 与 GhidraMCP 扩展装起来，再把 MCP 端点接进 Claude Code，先在一个自己写的小程序或开源二进制上试；理由是这条线索给的是“让智能体读取真实编译产物”的具体接入路径，但原文只讲到重启，Claude Code 侧的配置需要去 GhidraMCP 仓库文档补齐。
 - [daveebbelaar/bama](../research/radar/2026-10-27/7407-daveebbelaar-bama.md)：值得一试，在一台满足 macOS 26+/Xcode 26+ 的机器上，按单一安装路线装 BAMA，用 specs/ 里最小的 build plan 跑到 milestone 1，验证"一个故事一个 commit + 每页亮暗快照 + 可勾选验收标准"这套循环是否真能减少人工干预；它的价值在于把逆向复刻、设计还原、回归验证拆成可调用的 skill 并给了可复制的安装与提示词，但目前只有 README 证据、无任何产出数据。
 - [Speedrunlab/reverse-engineer-anything-self-learning-loop](../research/radar/2026-10-28/7907-speedrunlab-reverse-engineer-anything-self-learnin.md)：值得一试，建议小范围试：把该技能装进 Claude Code 或兼容智能体，用一个已获授权的小产品，按“签收 parity checklist → 构建 → 对照验证 → 补差距”跑两轮，只有连续两轮 must-have 全过且有证据才算完成。理由是它把“做完”写成可测清单并强制证据复核，能补足智能体常停在 80% 的问题；但当前只有 README 层面的方法说明，缺少实测数据和完整 SKILL.md 内容，不宜直接 adopt。
+- [TIGER-AI-Lab/WebsiteBench](../research/radar/2026-11-06/10688-tiger-ai-lab-websitebench.md)：值得一试，可以小范围试用 WebsiteBench，用其提供的命令评估 AI 智能体通过浏览器探索重建网站的能力，以界定全栈网站逆向工程的能力边界；理由是仓库给出了可运行的评测流程和任务包，但 README 未提供评分标准和结果数据，需结合文档进一步确认。
