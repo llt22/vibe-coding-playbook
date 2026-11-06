@@ -1,16 +1,16 @@
-# 让编码 agent 在说“完成”之前拿出证据
+# 让 agent 在宣布完成前拿出检查证据
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：把“确保正确”拆成可执行的检查，并要求 agent 用可复核的证据证明完成，而不是自述。
-> 先试这一步：先在一个小仓库上，把一条改动走完“改动前失败的测试 → 独立评审 → 干净 checkout 的 CI”，拿不到证据就只报 built。
-> 最近修订：2026-11-01
+> 解决的问题：这篇手册解决 agent 把未运行、未验证或只覆盖局部改动的工作说成“完成”，并把“完成”变成可核验证据的问题。
+> 先试这一步：先在你最常用的 agent 项目里加入一行 AGENTS.md 规则：未运行检查必须说明，未运行检查不算通过，并按第 67 步小范围试用。
+> 最近修订：2026-11-06
 
 ## 解决什么问题
 
 每个功能请求都以“确保代码正确、无 bug、覆盖所有缺口、100% 确定”结尾，但 agent 检查的往往只有它刚写的那几行。作者的完整审计在代码库里发现 318 个问题，其中 25 个高严重度；按原因分类，只有 45 个落在正在写的那些行里，其余都在改动周围的代码里。其中一些还是更早审计已发现并修过的——每次只补一个点，教训没有带到下一个会话。
 
-这篇手册把“确保正确”换成一串具名、可执行的检查，并规定 agent 在宣布“完成”之前必须交出证据。第二件事：“跑过测试”不等于“用户看到的界面是对的”——移动端横向滚动、console 报错、接口 4xx/5xx、坏图坏链、按钮“没反应”、上线前的样式回归，这些代码和测试都拦不住。第三件事：“测试通过”这四个字本身也可能是假的。第四件事：“完成”是主张，不是事实。第五件事：agent 定位 bug 时多数只能读代码猜，看不见一次点击实际走了哪条路径。第六件事：工作项是否真的从 Asked 走到 Proven，需要按证据而不是自述推进。第七件事：研究/数据类工作里的“已验证”结论，会在 grader、数据管道或辅助函数被改后悄悄失去依据；只靠 agent 嘴上说结论没变，挡不住。第八件事：便宜模型更容易跳过计划、没运行就声称修好、反复重试同一个坏思路、长任务漂移；可以把短循环、硬停止条件和真实证据做成技能包。下面八组做法可以各自单独用。
+这篇手册把“确保正确”换成一串具名、可执行的检查，并规定 agent 在宣布“完成”之前必须交出证据。第二件事：“跑过测试”不等于“用户看到的界面是对的”——移动端横向滚动、console 报错、接口 4xx/5xx、坏图坏链、按钮“没反应”、上线前的样式回归，这些代码和测试都拦不住。第三件事：“测试通过”这四个字本身也可能是假的。第四件事：“完成”是主张，不是事实。第五件事：agent 定位 bug 时多数只能读代码猜，看不见一次点击实际走了哪条路径。第六件事：工作项是否真的从 Asked 走到 Proven，需要按证据而不是自述推进。第七件事：研究/数据类工作里的“已验证”结论，会在 grader、数据管道或辅助函数被改后悄悄失去依据；只靠 agent 嘴上说结论没变，挡不住。第八件事：便宜模型更容易跳过计划、没运行就声称修好、反复重试同一个坏思路、长任务漂移；可以把短循环、硬停止条件和真实证据做成技能包。此外，本次补一条可独立叠加的最小规则：未运行检查必须明确说明，未运行的检查不算通过；它只要求披露，不替代验证。下面八组做法可以各自单独用，第 67 步的一条最小规则可以与任一组叠加。
 
 ## 适用与不适用
 
@@ -24,6 +24,7 @@
 - Vantage：以 Claude Code + git 为主的小仓库；愿意安装 hooks；想观察工作项是否按证据从 Asked 到 Built 到 Proven，而不是听 agent 说做了什么；接受先 dry-run 再安装、数据默认留在本机。
 - Agent-Cockpit：以“跑代码/跑实验 → 写结论”为主线的研究流程；目标目录是 git 仓库；agent 支持 MCP（Claude Code、Codex、Cursor、Gemini CLI 等）；愿意接受三条纪律——所有实验用 cockpit run 执行、变更用 cockpit_report 上报、claim 证据必须是某次记录 run 实际写出的文件字段。
 - deepseek-stack：在支持 SKILL.md 的编码 agent 里，用 DeepSeek V4.1 Flash、V4 Pro 这类便宜模型做代码/PR 任务；你愿意让 agent 跑真实检查和 CI；想先用一套短循环补“跳过计划、没运行就声称修好、重复坏思路、长任务漂移”这四个缺口。
+- AGENTS.md 未运行检查规则：代理会读取项目根目录的 AGENTS.md（或同类指令文件），且任务中存在可运行的检查；你只想先用一行规则减少“没跑检查就说完成”，不想安装插件或闸门。
 
 **不适用 / 需要知道**
 
@@ -35,6 +36,7 @@
 - Vantage 仍是 Phase 1、未发布 release；当前只对 Claude Code 和 git 建好可用切片，只有 Asked/Built/Proven 阶段机，Reviewed、Shipped、Verified 还需要后续阶段的数据源。Stop gate 默认只是 warn 模式，只提示、不阻塞；不能当完整交付验收系统或强制闸门。README 自称尚未按日使用满一周，没有独立基准、对照实验或长期使用数据。README 没有提到 Cursor 集成，不能把 Vantage 用于 Cursor 的依据写入手册。
 - Agent-Cockpit 很年轻（36 stars），材料只有 README 与作者自述的一次会话录像；误报率和流程摩擦需要自行验证。Python 依赖做到函数级，其他语言的处理方式原文未说明，不要外推。它只给事件/状态触发，没有定时调度或长期后台轮询。不装 graphify 或 open-code-review 时用内置规则，不代表有同等强度的外部审查。
 - deepseek-stack 只有 README 级描述（58 stars、MIT）：约 30 个技能只给名称和一句话功能，没有展开每个 SKILL.md 的提示词全文，也没有 benchmark、成功率、成本对比或用户案例。README 称它能让 DeepSeek 像更贵的模型、称 thinking mode 比任何技能都重要，都是作者主张。ds-ship 是无人值守从变更走到合并，ds-watch-pr 会自动盯 CI 和 review bot，ds-adopt / ds-revive 会接手旧 PR；README 没有给权限边界、失败回滚或人工审批点的细节，自动合并、自动修 CI、自动接手他人 PR 都可能造成误改。ds-jury、ds-best-of-n、ds-swarm 需要子代理或第二模型，没有时会退化为在新上下文里串行尝试。Cline、OpenCode 只被列为支持 harness，没有专门配置或案例；Graft 原文未提及。
+- AGENTS.md 未运行检查规则只是一行披露要求，不拦截工具调用、不阻断合并，也不自己运行检查；原文第二条规则在 Every time I correct you, 后被截断，不能复原成完整流程；没有案例、数据或前后对比，只够小范围试这一条。任务本身没有可执行检查时，它只能促使 agent 写“未检查”，不能替代验证。
 
 ## 前置条件
 
@@ -99,9 +101,15 @@
 - ds-jury、ds-best-of-n、ds-swarm 需要子代理或第二模型；没有时技能会在新上下文中串行跑多次尝试。
 - 安装后先打开对应 SKILL.md 审阅，再决定是否用于无人值守或自动合并场景。
 
+**AGENTS.md 未运行检查规则**
+
+- 代理能读取并遵守项目根目录的 AGENTS.md，或同类代理指令文件。
+- 任务中存在可运行的检查；没有可执行检查时，这条规则只能要求披露“未检查”。
+- 不需要额外安装；原文只给出 AGENTS.md 这一种配置方式。
+
 ## 操作步骤
 
-下面 1–20 是“规定什么才算完成”和“让它自己看到界面事实”；21–28 是去核对 agent 说的“测试通过”是不是真的；29–38 是同一件事的“不装闸门”做法——把证据要求写成规则、模板和本地回执，不依赖某个宿主的 hooks；39–43 是去补上“agent 看不见实际执行”这块；44–51 是用 Vantage 观察工作项是否按证据从 Asked 推进到 Proven；52–60 是把研究/数据工作的“已验证”结论锁在运行记录和代码哈希上；61–66 是新增第八组：用 deepseek-stack 把便宜模型的短验证循环固化成技能。八组可以各自单独用。
+下面 1–20 是“规定什么才算完成”和“让它自己看到界面事实”；21–28 是去核对 agent 说的“测试通过”是不是真的；29–38 是同一件事的“不装闸门”做法——把证据要求写成规则、模板和本地回执，不依赖某个宿主的 hooks；39–43 是去补上“agent 看不见实际执行”这块；44–51 是用 Vantage 观察工作项是否按证据从 Asked 推进到 Proven；52–60 是把研究/数据工作的“已验证”结论锁在运行记录和代码哈希上；61–66 是新增第八组：用 deepseek-stack 把便宜模型的短验证循环固化成技能。八组可以各自单独用。第 67 步是一条可独立叠加的最小规则，不属于八组，可与任一组一起用。
 
 ### 1. 安装 first-pass：选做法 A 还是 B
 
@@ -784,6 +792,22 @@ Pair a stronger planner with DeepSeek as the implementer if your harness support
 
 ds-verify-loop 最多 5 轮；同一失败出现两次就转 ds-unstick，不要继续原样重试。ds-review-loop 最多 4 轮；ds-jury 用两三个不同模型直到一致。每次失败后把可复用的检查写回技能或项目规则：例如把重复错误转成类型、lint、测试，或写进 ds-principles 的触发条件。预期结果：同一坏思路不会无限重试；失败留下可复用的检查，而不是只留下聊天记录。
 
+### 67. 最小规则：把“未运行检查不算通过”写进 AGENTS.md
+
+前提：你的代理工作流会读取项目根目录的 AGENTS.md，或同类代理指令文件；任务中存在可运行的检查。原文只提到 AGENTS.md，没有给出其他配置方式。
+
+1. 在 AGENTS.md 的检查或验证相关段落加入这一行，原样照抄：
+
+```md
+- Didn't run a check? Say so. An unrun check is not a pass.
+```
+
+2. 在需要检查或验证的任务中，要求代理在最终答复里区分两种状态：实际运行了检查，或没有运行检查并明确说明。不要让它把“未运行”写成“已通过”。
+3. 不要根据推文标题或开头补写 Every time I correct you, 之后的第二条规则；采集到的正文在这里被截断，补写会把未知内容当成原文。
+4. 最小试用：在一个会读取 AGENTS.md 的代理项目中加入上述一行，选一类容易“没跑检查就说完成”的任务，例如代码修改、文档事实核对或配置变更，连续试用若干次，并在每次交付时记录代理是否明确说明检查状态。
+
+预期结果：代理在报告里开始出现“没有运行检查”或“未验证”的说明；未运行却被表述为“已通过”或“已完成”的次数应下降。它不会自动运行检查，也不会拦住任何动作。
+
 ## 怎么判断变好了
 
 **可观察的指标（first-pass）**
@@ -846,6 +870,13 @@ ds-verify-loop 最多 5 轮；同一失败出现两次就转 ds-unstick，不要
 - 长任务用 ds-context-reset + ds-ledger 后，跨上下文是否丢状态；ds-ready 停在合并前时，CI 修复和 review 处理质量是否可接受。
 - 注意：仓库只有 README 级描述，没有 benchmark、成功率或成本对比；以上是试用时要自己记录的指标，不是已验证收益。
 
+**可观察的指标（AGENTS.md 未运行检查规则）**
+
+- 未运行检查却被表述为“已通过”或“已完成”的次数是否下降。
+- 代理明确写出“没有运行检查”或“未验证”的比例是否上升。
+- 人工复核发现未验证却漏报的次数是否下降。
+- 因该规则产生的无效声明是否可控，例如所有任务都机械写“未检查”。
+
 **最小试用方式**
 
 - first-pass：在一个仓库上小范围试装，第一个改动完整走一遍 premortem → 修改（只当场修真实伤害）→ breaker 评审 → ship-check。
@@ -856,6 +887,7 @@ ds-verify-loop 最多 5 轮；同一失败出现两次就转 ds-unstick，不要
 - Vantage：选一个真实小仓库、一个开发者，先跑 vantage add --dry-run 检查会改哪些文件，再安装并运行 1 到 2 周。只启用默认功能，先不要开 classify；明确记录安装前的基线工作方式，作为对照。
 - Agent-Cockpit：先按第 52–53 步跑 demo，确认你看到 claim 变红和恢复；再在一个已有 git 的小型计算型研究仓库上 cockpit init、用 cockpit run 记录实验、用 cockpit_claim 登记结论，并做一次“改未触达函数”与“改可达函数/import”的对照。报告没有给试用时长；项目仅 36 stars、只有 README 与自述一次会话录像，先记录误报和流程摩擦再决定是否扩大。
 - deepseek-stack：按第 64 步做 10 个同类型小任务的 A/B；B 组只装 ds-mode、ds-plan-loop、ds-verify-loop，重复失败再加 ds-unstick，先不要上 ds-ship。长任务另测 ds-context-reset + ds-ledger；Ship 类先在非关键仓库用 ds-ready 观察。
+- AGENTS.md 未运行检查规则：在一个会读取 AGENTS.md 的代理项目中只加入这一行，选一类容易“没跑检查就说完成”的任务，连续试用若干次；每次交付记录代理是否明确说明检查状态，并人工复核它说的和实际是否一致。不要同时加入被截断的第二条规则。
 
 **试多久**
 
@@ -867,6 +899,7 @@ ds-verify-loop 最多 5 轮；同一失败出现两次就转 ds-unstick，不要
 - Vantage：调研建议先跑 1 到 2 周；README 自称 Phase 1、尚未按日使用满一周，且没有独立基准。若 Stop gate 误报过多，先用 VANTAGE_GATE_MODE=off 关闭并记录误报场景；若两周后仍无法稳定产生编辑后有新测试的证据，说明该流程不适合当前团队，不应升级为 adopt。
 - Agent-Cockpit：报告没有给出试用时长；项目仅 36 stars，材料只有 README 和作者自述的一次会话录像。先用 demo 确认机制，再在一个小仓库上走几轮真实实验和 claim，记录 claim 变红是否准确、误报几次、流程摩擦多大，再决定是否扩大。
 - deepseek-stack：报告没有给试用时长；先按 10 个同类型小任务跑一轮 A/B，记录验证执行率、返工、人工干预和成本，再决定是否加 ds-review-loop、ds-best-of-n 或进入 Ship 类技能。
+- AGENTS.md 未运行检查规则：原文只说连续试用若干次，没有给具体时长或次数；按任务次数记录，直到你能判断“未运行却报通过”的比例是否下降、机械声明是否可控，再决定是否保留。
 
 ## 常见坑
 
@@ -906,12 +939,14 @@ ds-verify-loop 最多 5 轮；同一失败出现两次就转 ds-unstick，不要
 - ds-ship 风险最高：无人值守从变更走到合并；ds-watch-pr 会自动盯 CI 和 review bot；ds-adopt / ds-revive 会接手旧 PR。README 没有给权限边界、失败回滚或人工审批点的细节，自动合并、自动修 CI、自动接手他人 PR 都可能造成误改。先在非关键仓库用 ds-ready 停在合并前。
 - ds-jury、ds-best-of-n、ds-swarm 需要子代理或第二模型；没有时会退化为在新上下文里串行尝试，不要以为一定有并行加速。ds-watch-pr 需要 gh 登录和 python3；Ship 组需要 gh。
 - 别把“安装全部技能”当默认。先只装 ds-mode、ds-plan-loop、ds-verify-loop；同一失败出现两次再转 ds-unstick，不要原样重试到第 5 轮以后。ds-verify-loop 最多 5 轮，ds-review-loop 最多 4 轮，这是硬停止条件，不是建议。
+- 这条 AGENTS.md 规则不是闸门。它只要求代理披露“没跑检查”，不拦截工具调用、不阻断合并，也不会自己运行检查；想真的拦住，仍要靠 first-pass 的 hooks、dotpals 的测试状态核对或 CI，或 done-is-a-claim 的回执与复核。
+- 不要补写被截断的第二条规则。原文在 Every time I correct you, 之后不可见；只使用完整显示的那一行，否则会把未知内容当成原文。
+- 机械写“未检查”不等于改善。若代理只是每个任务都追加一句“未检查”，但没有改变实际检查行为，这条规则没有产生效果。
+- 任务本身没有可执行检查时，这条规则不能替代验证；它只能促使代理说清楚“没有检查”。
 
 ## 证据与来源
 
-**first-pass 部分**来自本次调研的 joetawil7/first-pass 报告：安装命令、一次性 setup、premortem 十问、建造期间的它需要存在吗？规则、完成的定义（改动前失败的测试 + breaker 评审 + 干净 checkout 的 CI）、fix-the-class、review 的调用方式、habit-words 的读取范围与脱敏规则、sharpen 在 Claude Code 里的 hook 行为、多仓库的漂移与 hook 钉住机制、可选 jev 的行为与限制、以及写到机器上的文件清单。
-
-报告里的数据（均为作者自述，未看到第三方复现）：完整审计发现 318 个问题、25 个高严重度，其中只有 45 个在正在写的那些行里；只用指令时，11 次测试中有 7 次跳过了 sharpen 改写；三个会话三天里 70 组问题中 17 组等了一小时以上；jev 排序测试用了 269 个审计问题；小 demo 上修一个重复扣费 bug 加 ship-check 约 29 美元。其他依据：让没有写这段代码的第二个 agent 在全新上下文里评审这条，报告称作者引用 Huang et al. 2024（模型不擅长在同一上下文里发现自己的错误）；它需要存在吗？规则来自与 Ponytail 的对照测试；README 把 obra/superpowers 列为 Related；回复规则借鉴 i-have-adhd 检查第一行和最后一行的做法。作者主张、尚无数据：这是 0.5 版、收益尚未测量，且每次改动更慢更贵。报告明确：原文只提到 Cursor、Codex、Windsurf、Claude Code，没有提及 Cline；也没有描述后台自主推进的长任务。
+**first-pass 部分**来自本次调研的 joetawil7/first-pass 报告：安装命令、一次性 setup、premortem 十问、建造期间的它需要存在吗？规则、完成的定义（改动前失败的测试 + breaker 评审 + 干净 checkout 的 CI）、fix-the-class、review 的调用方式、habit-words 的读取范围与脱敏规则、sharpen 在 Claude Code 里的 hook 行为、多仓库的漂移与 hook 钉住机制、可选 jev 的行为与限制、以及写到机器上的文件清单。报告里的数据（均为作者自述，未看到第三方复现）：完整审计发现 318 个问题、25 个高严重度，其中只有 45 个在正在写的那些行里；只用指令时，11 次测试中有 7 次跳过了 sharpen 改写；三个会话三天里 70 组问题中 17 组等了一小时以上；jev 排序测试用了 269 个审计问题；小 demo 上修一个重复扣费 bug 加 ship-check 约 29 美元。其他依据：让没有写这段代码的第二个 agent 在全新上下文里评审这条，报告称作者引用 Huang et al. 2024（模型不擅长在同一上下文里发现自己的错误）；它需要存在吗？规则来自与 Ponytail 的对照测试；README 把 obra/superpowers 列为 Related；回复规则借鉴 i-have-adhd 检查第一行和最后一行的做法。作者主张、尚无数据：这是 0.5 版、收益尚未测量，且每次改动更慢更贵。报告明确：原文只提到 Cursor、Codex、Windsurf、Claude Code，没有提及 Cline；也没有描述后台自主推进的长任务。
 
 **浏览器 skill 部分**来自本次调研的 AndyShiu/claude-skill-playwright-browser 报告（仓库 MIT、49 stars，单作者）：克隆路径与目录名要求、setup.mjs 的两种装法、自然语言例句、登录站点的人工登录与后台复用会话流程、CLI 命令清单、三张文件位置表与 7 天清理、Windows / Git Bash 路径改写坑、排错表、维护与卸载步骤、与 Claude in Chrome 的分工判据。报告里的数据与局限：README 中所有示意图（响应式截图、健康检查、前后比对）都由该 skill 对一个小型 demo 站生成；与 Claude in Chrome 的对头测试是同一任务对 3 个报表页拍移动端截图（登录态内部 admin，URL 由人给出），两个全新 Claude agent 各跑一次，token 48,045 vs 48,853、耗时 93 s vs 47 s、工具调用 9 vs 7（原文此处截断，未说明哪一组属于哪个工具），样本只有一次，不足以判定优劣；token 成本估算为单图 5k–7k、三尺寸 8k–10k、单页健康检查 12k–18k、排查一个问题/走一条流程 20k–40k、批量多页 25k–40k、每张图约 1.5k–2k；你的项目目录永不被碰是 README 的说法，未做独立验证；与清单里已有做法的关系：Claude Code（adopt）——本 skill 就是它的扩展；Playwright Test（try）——README 说能把流程转成项目内 Playwright Test 在 CI 跑，但细节只在 references/project-tests.md，原文未展开。
 
@@ -927,7 +962,9 @@ ds-verify-loop 最多 5 轮；同一失败出现两次就转 ds-unstick，不要
 
 **deepseek-stack 部分**来自本次调研的 aicodeking/deepseek-stack 报告（仓库 58 stars、MIT）：README 把便宜模型的常见失败归为四类——跳过计划、没运行就声称修好、反复重试同一个坏思路、长任务漂移；技能分 Core、Loops、Build、Ship、Understand 五组，约 30 个，可在任何读取 SKILL.md 的 harness 中使用，README 列出 Claude Code、Codex、Cline、OpenCode、PandaCode 等。可核验的具体内容：安装命令 npx skills add aicodeking/deepseek-stack、全局 -g、单技能 --skill ds-verify-loop、手动复制 skills/*、/ds-help；依赖 npx、gh、python3、子代理或第二模型；技能名与一句话分工；DeepSeek 配置建议原文。属于作者主张、尚无数据：这些技能能让 DeepSeek 像更贵的模型、便宜模型总在同样几处失败、thinking mode 比任何技能都重要、错峰更便宜、多花 token 很划算；README 没有 benchmark、成功率、成本对比、用户案例或技能内部提示词，无法验证。成熟度：58 stars，低关注度，技能质量、维护频率、与各 harness 的兼容性未证明。风险：自动合并、自动修 CI、自动接手他人 PR 可能误改；README 没有给权限边界、失败回滚或人工审批点。最小试用是 10 个同类型小任务的 A/B，B 组只装 ds-mode、ds-plan-loop、ds-verify-loop，记录验证执行率、返工、人工干预、成本和耗时；报告没有给试用时长。
 
-**没有证据支撑的部分**：把 dotpals 的测试状态核对接在 first-pass 的完成的定义之后、在已有测试套件的小项目上小范围试并加一次改绿测试看它是否识别这套试用方式，把 done-is-a-claim 的回执 + 新鲜度复核作为 first-pass 完成定义的无 hook 替代，把 Shrike 的真实执行轨迹 + Apply 审批 + replay 验收接在 first-pass 与浏览器 skill 之后，把 Vantage 的 stats 与 Stop gate 作为观察工作项是否按证据推进的第六组做法，把 Agent-Cockpit 的 claim/run/代码哈希作为研究结论时效的第七组做法，以及把 deepseek-stack 作为第八组、用 10 个同类型小任务做 A/B 并把 ds-mode/ds-plan-loop/ds-verify-loop 作为最小三件套，都是本次合并时按上述材料做的编排；报告本身没有给出这些编排的验证结论，也没有给试用时长。各组做法之间可以互相替代的部分，材料里也没有做过交叉验证。
+**AGENTS.md 未运行检查规则部分**来自本次调研的 @Voxyz_ai 推文线索：可确认的只有一条完整规则 Didn't run a check? Say so. An unrun check is not a pass.；第二条以 Every time I correct you, 开头后被截断，无法还原完整规则。原文没有案例、数据、前后对比或失败率；这条规则属于作者主张。可试的做法只有：把这一行加入 AGENTS.md 的检查/验证段落，要求代理在最终答复区分实际运行了检查与没有运行检查，并用“未运行却报通过的比例、明确披露未检查的比例、漏报次数、机械声明是否可控”来观察。适用条件是代理能读取并遵守 AGENTS.md，且任务中存在可运行检查；没有可执行检查时它只能披露“未检查”，不能替代验证。
+
+**没有证据支撑的部分**：把 dotpals 的测试状态核对接在 first-pass 的完成的定义之后、在已有测试套件的小项目上小范围试并加一次改绿测试看它是否识别这套试用方式，把 done-is-a-claim 的回执 + 新鲜度复核作为 first-pass 完成定义的无 hook 替代，把 Shrike 的真实执行轨迹 + Apply 审批 + replay 验收接在 first-pass 与浏览器 skill 之后，把 Vantage 的 stats 与 Stop gate 作为观察工作项是否按证据推进的第六组做法，把 Agent-Cockpit 的 claim/run/代码哈希作为研究结论时效的第七组做法，以及把 deepseek-stack 作为第八组、用 10 个同类型小任务做 A/B 并把 ds-mode/ds-plan-loop/ds-verify-loop 作为最小三件套，都是本次合并时按上述材料做的编排；报告本身没有给出这些编排的验证结论，也没有给试用时长。各组做法之间可以互相替代的部分，材料里也没有做过交叉验证。把这条 AGENTS.md 规则作为第 67 步、与 first-pass/dotpals/done-is-a-claim 的证据要求并列，是本次合并时按材料做的编排；推文本身没有给出交叉验证、试用时长或效果数据。
 
 ## 依据的调研
 
@@ -939,3 +976,4 @@ ds-verify-loop 最多 5 轮；同一失败出现两次就转 ds-unstick，不要
 - [ymatrix1/vantage](../research/radar/2026-10-20/5186-ymatrix1-vantage.md)：值得一试，建议在一个以 Claude Code + git 为主的小仓库试用 Vantage，先 dry-run 安装，再用 Stop gate 和 stats 检验“只有证据才推进”的验收流程；它给出了可照做的安装与配置，但仍是 Phase 1、未发布、只覆盖 Asked/Built/Proven，不能当作完整交付验收系统。
 - [chutingyean/Agent-Cockpit](../research/radar/2026-10-30/8506-chutingyean-agent-cockpit.md)：值得一试，建议在一个已有 git 的小型计算型研究仓库上小范围试用 Agent-Cockpit：先跑 demo 观察“改一行 grader→相关结论变红→回滚后恢复”，再用 `cockpit init` 接入自有仓库、用 `cockpit run` 记录实验并通过 MCP 的 `cockpit_claim` 登记结论；理由是它把“结论—运行—代码”的失效检测做成确定性哈希规则（零 token、无 LLM 调用），并挂进 Claude Code/Cursor 等 MCP agent 的 Stop hook 与 pre-commit，直接作用于效果验证，但项目很年轻（36 stars、仅有 README 与自述的一次会话录像佐证），误报率与流程摩擦需自行验证。
 - [aicodeking/deepseek-stack](../research/radar/2026-11-01/9047-aicodeking-deepseek-stack.md)：值得一试，建议小范围试：在支持 SKILL.md 的编码 agent 里安装 ds-mode、ds-plan-loop、ds-verify-loop 三件套，用一批小任务对比裸跑 DeepSeek 时的验证执行率、返工次数和人工干预。仓库给出了可直接复制的安装命令和清楚的技能分工，但只有 README 级描述、没有效果数据和技能内部提示词，暂不宜直接 adopt。
+- [@Voxyz_ai: These days I talk to my agents 𝗺𝗼𝗿𝗲 𝘁𝗵𝗮𝗻 𝗺𝘆 𝘁𝗲𝗮𝗺𝗺𝗮𝘁𝗲𝘀.](../research/radar/2026-11-06/10923-these-days-i-talk-to-my-agents.md)：值得一试，建议把“未运行检查必须明确说明，未运行的检查不算通过”作为一条 AGENTS.md 规则小范围试用；它能减少代理把未验证结果说成通过，但原文被截断且没有证据，只够试这一条规则，不足以采用整套多智能体方法。

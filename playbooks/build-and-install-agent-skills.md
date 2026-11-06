@@ -1,18 +1,20 @@
-# 让 agent 在对的时机加载对的技能
+# 把 agent 技能用出效果：先小范围对照，再打包成可触发的工作规范
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：这篇手册给出一套可照做的流程：把重复工作封装成 agent 能自动发现、按需加载的技能，并用同一任务做有/无对照，判断它是否真的减少返工，而不是只凭安装成功或星标数。
-> 先试这一步：先选一个每周重复、输入输出稳定的多步任务，按 SKILL.md + scripts/references/assets 建一个最小技能，再在同一批真实任务上做不用/用技能的对照。
-> 最近修订：2026-11-05
+> 解决的问题：解决装了技能不知道是否有效、重复规范无法复用、agent 凭想象或过度工程的问题，给出可对照、可验收、可维护的技能落地方法。
+> 先试这一步：在一个非关键项目上选一类重复任务，用同一输入做有技能和无技能各 3 次对照，记录返工、人工修改和关键错误。
+> 最近修订：2026-11-06
 
 ## 解决什么问题
 
-你已经在用编码 agent、写作 agent 或通用 agent，但经常遇到这些问题：每次都要重复描述同一套规范；装了一个技能包也不确定是否真的减少返工；同类排障反复出现，踩过的坑没有变成下一次可直接调用的经验；让 agent 复刻动效视频或 UI 录屏时，它只能凭想象写节拍、缓动、颜色和文字；读过的技术书或内部文档无法按需变成 agent 能调用的知识；编码 agent 过度工程，重复造轮子、写占位符或注释代码、自测失败却不回去修；要把线上内容站迁成静态 Astro 站，却担心 URL、内容、SEO、重定向、媒体路径和三档视觉不一致；要让 agent 先出设计图、人工审图，再照图建站；要把某个领域的团队约定、公开权威来源和交付前检查清单打包成可安装、可自动触发的技能；要在做一人公司的 AI 产品时按阶段路由到对应子技能。
+你已经在用编码 agent、写作 agent 或通用 agent，但经常遇到这些问题：每次都要重复描述同一套规范；装了一个技能包也不确定是否真的减少返工；同类排障反复出现，踩过的坑没有变成下一次可直接调用的经验；让 agent 复刻动效视频或 UI 录屏时，它只能凭想象写节拍、缓动、颜色和文字；读过的技术书或内部文档无法按需变成 agent 能调用的知识；编码 agent 过度工程，重复造轮子、写占位符或注释代码、自测失败却不回去修；要把线上内容站迁成静态 Astro 站，却担心 URL、内容、SEO、重定向、媒体路径和三档视觉不一致；要让 agent 先出设计图、人工审图，再照图建站；要把某个领域的团队约定、公开权威来源和交付前检查清单打包成可安装、可自动触发的技能；要在做一人公司的 AI 产品时按阶段路由到对应子技能；要让编码 agent 在后端默认处理鉴权作用域、幂等键和 schema 迁移。
 
 本版新增一个基础问题：你打算把重复工作写成技能，但不确定技能应该怎么组织，才能让 agent 启动时只看到名称和描述、任务匹配后再读完整说明、执行时再按需运行脚本或加载引用材料。Agent Skills 的 README 给出了一个轻量格式：技能是一个文件夹，至少包含 SKILL.md，里面写 metadata（至少有 name 和 description）和 instructions；可选 scripts/、references/、assets/。它用渐进披露分三阶段加载：启动时只读每个技能的 name 和 description；任务匹配后读取完整 SKILL.md；执行时按需运行附带代码或加载引用文件。这个格式值得先小范围试，但 README 不是完整规范。
 
-这篇手册的主线是：先用做法 A 在一个非关键项目上试装一个现成技能包，用同一任务做有/无技能对照；确认有效后，再用做法 B 把自己的重复工作写成 SKILL.md，并按 Agent Skills 的 scripts/references/assets 结构和渐进披露机制自检；需要领域权威规范时用做法 BE，先写 SKILL.md 和 references/，再建 evals 做装/不装对照；重复排障用做法 AX 写成按现象触发的经验卡；动效复刻用做法 BA 先看片、再按页面契约写代码、逐帧打分；技术书或内部文档转技能用做法 M 先做小范围试用；站点静态迁移用做法 BC 跑到 PR + noindex staging 再验收；先出图再建站用做法 BD；一人公司 AI 产品按阶段路由用做法 BF。专门场景保留为索引，统一要求先小范围对照再采用。
+本版还新增一个具体场景：编码 agent 写后端时，默认不做登录限流、查询按调用者作用域过滤、扣费或发送类操作的幂等键、迁移的 expand-contract、并发建索引、分批回填和 down migration。做法 BG 用 backendskills 把这三类后端安全默认值装进 agent，并用 agent 看不到的隐藏检查做有/无对照，避免只看它自己说完成。
+
+这篇手册的主线是：先用做法 A 在一个非关键项目上试装一个现成技能包，用同一任务做有/无技能对照；确认有效后，再用做法 B 把自己的重复工作写成 SKILL.md，并按 Agent Skills 的 scripts/references/assets 结构和渐进披露机制自检；需要领域权威规范时用做法 BE，先写 SKILL.md 和 references/，再建 evals 做装/不装对照；重复排障用做法 AX 写成按现象触发的经验卡；动效复刻用做法 BA 先看片、再按页面契约写代码、逐帧打分；技术书或内部文档转技能用做法 M 先做小范围试用；站点静态迁移用做法 BC 跑到 PR + noindex staging 再验收；先出图再建站用做法 BD；一人公司 AI 产品按阶段路由用做法 BF；后端安全默认值用做法 BG，先挑 2–3 个后端任务、每个任务跑 5 次有/无对照。专门场景保留为索引，统一要求先小范围对照再采用。
 
 ## 适用与不适用
 
@@ -34,6 +36,7 @@
 - 你要让 agent 先产出落地页分区视觉稿、App 屏幕与流程或品牌规范板，人工审图后再建站（做法 BD）。
 - 你要把某个领域的权威来源、团队约定和交付前检查清单打包成可安装、可自动触发的技能，并愿意为它写 3 个左右真实任务和断言式评测（做法 BE）。
 - 你在用 Codex 或 Claude Code，正在做一人公司的 AI 产品，需要按阶段判断下一步并路由到对应子技能（做法 BF）。
+- 你在维护后端仓库，使用 Claude Code、读取 AGENTS.md 的 agent 或 Cursor，希望 agent 默认处理鉴权作用域、幂等键和 schema 迁移（做法 BG）。
 
 不适用：
 
@@ -43,7 +46,7 @@
 - Agent Skills 的 README 没有给出完整 SKILL.md schema、必填字段格式、安全模型、版本兼容性和客户端名单；不要把它当成完整规范或安全审查结论。它的跨产品复用、上下文占用小、领域专长可封装都只是作者主张，没有量化案例或对比数据。
 - 不要一次性建很多技能。先选一个高频多步流程，建一个最小技能并做对照。
 - 做法 AX 不适合把全部经验常驻注入；不适合没有明确失败现象、不会复发的任务；也不适合不愿维护短卡、不愿对入库和删卡做人审的团队。
-- 做法 M 目前只适合先小范围试用：原文只给了一条 `/book-to-skill ./my-book.pdf` 示例命令、项目名和 GitHub 链接卡片，没有安装命令、生成后的文件结构或调用命令、实际转换案例、准确率、耗时和失败场景；不得再分发第三方版权书生成的 skill。
+- 做法 M 目前只适合先小范围试用：原文只给了一条 /book-to-skill ./my-book.pdf 示例命令、项目名和 GitHub 链接卡片，没有安装命令、生成后的文件结构或调用命令、实际转换案例、准确率、耗时和失败场景；不得再分发第三方版权书生成的 skill。
 - 做法 AY 只针对仪表盘/数据屏，偏 Web 与 SwiftUI；材料只有 README，不能确认内部规则质量；它的 Sign-off 推广语会出现在对话里，采用前要处理。
 - 做法 AZ 适合愿意维护 Markdown 规格、按阶段调用命令的团队；不需要规格文档、只想快速写代码的团队价值有限；Windows 安装需另行适配。
 - 做法 BA 只覆盖扁平矢量风格的动效/排版动画/UI 动效录屏到代码，绑定 GSAP 生态；不适合实拍、复杂 3D、需要保留原始视频或逐帧描摹的任务。
@@ -52,6 +55,7 @@
 - 做法 BD 当前只有 README，未拿到 SKILL.md 正文，无法核实技能内部提示词、参数与判定标准；人工审图应作为闸门。
 - 做法 BE 当前样例只覆盖 Rust + Claude Code；评测只有 3 个任务、每个任务约 10 条断言，且 grader 由作者自己编写，存在自评偏差。
 - 做法 BF 目前只适合先小范围试用：材料只有 README，没有各子 skill 的具体步骤、提示词、配置或模板；政策、注册与合规内容主要针对中国大陆，且会过期。
+- 做法 BG 只覆盖电商/支付域常见的鉴权、并发、迁移三类风险；不覆盖批处理、搜索、缓存一致性；每任务仅 5 次运行，样本小；Cursor 通过 rules 适配不等价于原生 skill；Haiku 在乱序 webhook 上仍失败，payment-webhook 一栏出现 1/5→2/5 的反向波动；迁移建议能否迁移到你的技术栈未知。
 
 ## 前置条件
 
@@ -78,7 +82,7 @@
 
 做法 M 额外前置：
 
-- 一本结构清晰、章节明确的技术书、PDF 或内部文档，且本地路径可被工具读取；原文示例为 `./my-book.pdf`。
+- 一本结构清晰、章节明确的技术书、PDF 或内部文档，且本地路径可被工具读取；原文示例为 ./my-book.pdf。
 - 已安装并使用 Claude Code，并按仓库说明获取或安装 book-to-skill；原文没有给出安装命令。
 - 先准备一组覆盖不同章节的基线问题，并保存不用技能时的回答。
 - 只处理自有或已获书面授权的文档；不要把第三方版权书生成的 skill 再分发。
@@ -133,7 +137,7 @@
 - Claude Code CLI；本次样例只处理 Rust 相关任务；在 claude.ai 上使用需先开启 code execution。
 - 一个真实但范围小的 Rust 任务，以及不装技能时的基线输出。
 - 一个领域至少有 3–5 份可引用的权威来源或团队明文规范。
-- 能运行 `claude plugin eval . --allow-tools Write,Edit,Bash --scaffold`；评测会真实调用模型并产生费用。
+- 能运行 claude plugin eval . --allow-tools Write,Edit,Bash --scaffold；评测会真实调用模型并产生费用。
 - 已确认来源许可。
 
 做法 BF 额外前置：
@@ -144,11 +148,18 @@
 - 愿意保存每一步产出，并在下一步调用时把上一步产出附上。
 - 政策、注册、合规、平台获客相关任务，需要能点开官方原文核对最新版本。
 
-专门做法 C–BF 另有前置，按索引条目和对应仓库 README 准备；不要跳过 A 的对照方法直接纳入常规流程。
+做法 BG 额外前置：
+
+- 一个后端仓库；使用 Claude Code，或会读 AGENTS.md 的 agent，或 Cursor。
+- 能执行 npx skills add globalmpc/backendskills；或能手动把 dist/AGENTS.md 追加到项目 AGENTS.md，或把 dist/cursor/ 复制到项目 .cursor/rules/。
+- 能填每个技能末尾的 Make it yours，至少写清错误格式和 API 文档约定；不填时 agent 跟随仓库已有做法。
+- 能写 agent 看不到的隐藏检查；若要复现评测，能按 bench/ 产出 runs.jsonl。
+
+专门做法 C–BG 另有前置，按索引条目和对应仓库 README 准备；不要跳过 A 的对照方法直接纳入常规流程。
 
 ## 操作步骤
 
-怎么选：先做做法 A；A 里某个技能确实有效、且你有一件每周重复且规范明确的工作，再做做法 B。做法 B 优先按 Agent Skills 的轻量格式组织：一个技能文件夹，至少一个 SKILL.md；需要执行代码就放 scripts/，需要参考资料就放 references/，需要模板资源就放 assets/。建好后用渐进披露自检：启动时是否只暴露名称和描述；任务匹配时是否读取完整 SKILL.md；执行时是否只加载所需脚本或引用文件。如果你有一批领域权威来源和交付前检查清单，做做法 BE；如果你有一类重复排障任务，做做法 AX；如果你要约束编码 agent 过度工程，做做法 BB；如果你要把技术书、PDF 或内部文档变成按需加载技能，先做做法 M 的最小试用；如果你要做仪表盘/数据屏，先做 AY 的半天试用；如果你要 BA/PO 规格链，先做 AZ 的一个小需求试用；如果你要把动效视频复刻成代码，先做 BA 的 10 秒小片闭环；如果你要把内容站迁成静态 Astro 站，先做 BC 的低流量站点或 20–50 页子站试用；如果你要先出设计图再建站，先做 BD 的一个真实落地页需求对照；如果你在做一人公司的 AI 产品，先做 BF 的一次总入口 + 一次直接点名对照。以上都套用 A 的对照方法，其余按场景从专门做法索引里选。
+怎么选：先做做法 A；A 里某个技能确实有效、且你有一件每周重复且规范明确的工作，再做做法 B。做法 B 优先按 Agent Skills 的轻量格式组织：一个技能文件夹，至少一个 SKILL.md；需要执行代码就放 scripts/，需要参考资料就放 references/，需要模板资源就放 assets/。建好后用渐进披露自检：启动时是否只暴露名称和描述；任务匹配时是否读取完整 SKILL.md；执行时是否只加载所需脚本或引用文件。如果你有一批领域权威来源和交付前检查清单，做做法 BE；如果你有一类重复排障任务，做做法 AX；如果你要约束编码 agent 过度工程，做做法 BB；如果你要把技术书、PDF 或内部文档变成按需加载技能，先做做法 M 的最小试用；如果你要做仪表盘/数据屏，先做 AY 的半天试用；如果你要 BA/PO 规格链，先做 AZ 的一个小需求试用；如果你要把动效视频复刻成代码，先做 BA 的 10 秒小片闭环；如果你要把内容站迁成静态 Astro 站，先做 BC 的低流量站点或 20–50 页子站试用；如果你要先出设计图再建站，先做 BD 的一个真实落地页需求对照；如果你在做一人公司的 AI 产品，先做 BF 的一次总入口 + 一次直接点名对照；如果你要给后端 agent 补鉴权、幂等和迁移安全默认值，先做 BG 的 2–3 个任务、每个任务 5 次有/无对照。以上都套用 A 的对照方法，其余按场景从专门做法索引里选。
 
 ### 做法 A：先用现成技能包做小范围试装（推荐先做）
 
@@ -690,7 +701,37 @@ python3 scripts/validate.py
 10. 使用政策、注册与合规内容时，点开官方原文确认最新版本。
 11. 做最小试用与判定。只装到 Codex 或 Claude Code 中的一个工具；先用总入口跑一次，记录阶段判断、追问的问题数、调用的子 skill；再用直接点名同一子 skill 的方式跑一次作为对照；把每一步产出保存下来，下一步调用时附上。
 
-### 专门做法索引（C–BF）
+### 做法 BG：用后端安全默认技能，并用隐藏检查验收
+
+1. 选一个后端仓库，挑 2–3 个任务，尽量覆盖三类风险：一个登录或高成本接口（是否限流）；一个按 id 读取资源的接口（是否按调用者作用域过滤）；一次列重命名迁移（是否 expand-contract、是否带 down migration）。为每个任务写一份 agent 看不到的隐藏检查，例如并发下单是否超卖、A 用户能否读到 B 用户的订单、旧版本应用在新 schema 下是否报错。
+2. 安装到 Claude Code，在项目里执行：
+
+```sh
+npx skills add globalmpc/backendskills
+```
+
+3. 安装到 Codex 及其他读取 AGENTS.md 的 agent：把仓库的 dist/AGENTS.md 追加到项目的 AGENTS.md。前提是 agent 会读取 AGENTS.md；追加而非覆盖，避免清掉已有约定。
+4. 安装到 Cursor：把 dist/cursor/ 下的内容复制到项目 .cursor/rules/。这是 rules 适配，不是原生 skill 机制；原文只说复制到 .cursor/rules/，未说明两者行为是否完全等价。
+5. 填团队约定：打开每个技能末尾的 Make it yours，例如 skills/api-endpoint/SKILL.md、skills/data-integrity/SKILL.md、skills/db-migration/SKILL.md，写明错误格式、API 文档要求。不填时 agent 跟随仓库已有做法。
+6. 按三条清单做代码验收：api-endpoint 检查查询是否带调用者作用域、非法输入是否返回 4xx、登录和高成本路由是否限流；data-integrity 检查 read-then-write 是否用锁或条件更新、是否加 UNIQUE 约束、扣费或发送类操作是否有幂等键；db-migration 检查是否 expand-then-contract、是否并发建索引并设 lock timeout、回填是否分批、是否有 down migration。
+7. 做有/无对照。同一 prompt 各跑 5 次：一次不装技能做基线，一次按上面步骤装好技能并填完 Make it yours 做试验组。逐次记录是否触发 critical mistake、是否漏 down migration 或 API 文档；检查放在 agent 上下文之外，只在跑完后执行。
+8. 复现或自建评测。仓库 bench/ 下有任务集、每次运行的原始记录和重跑方法；结果表由脚本生成：
+
+```sh
+node bench/summarize.mjs bench/results/<date>/runs.jsonl
+```
+
+前提是按 bench/ 的方式产出 runs.jsonl。
+9. 改技能后重建分发产物：编辑 skills/ 下的文件，然后运行：
+
+```sh
+node scripts/build-dist.mjs
+```
+
+10. 技能仍失效时反馈：开 issue，附上原始 prompt 和 agent 产生的 diff，这也是收集自己团队失败样本的入口。
+11. 做最小试用与判定：3 个任务、每个任务各 5 次；主指标是 critical mistake 的运行占比，按任务分别看，不要只看总和；次指标是团队约定遗漏数（down migration、API 文档）；成本侧记录达到同一结果的轮数、token 或耗时、人工 review 问题数、回滚和返工次数。若 3 个任务上 critical mistake 至少减半、约定遗漏下降、成本无明显恶化，再扩大；若只在部分任务有效，按任务类型裁剪技能，只保留 login-rate-limit、rename-column 这类已被原文证明有增量的部分。出现 payment-webhook 那样的负向变化，或 agent 为满足规则写出过度复杂代码（如无条件加锁）时，记录并回退对应技能条款。
+
+### 专门做法索引（C–BG）
 
 下表保留各专门做法的用途和入口；完整边界以对应仓库 README 和本手册的判断原则为准。所有条目都先套用做法 A 的对照方法。
 
@@ -751,6 +792,7 @@ python3 scripts/validate.py
 | BD | 先出设计图、人工审图，再让编码 agent 照图建站 | 安装 Leonxlnx/imagegen-skills；纯出图选 imagegen-frontend-web、imagegen-frontend-mobile 或 brandkit；图到代码选 image-to-code |
 | BE | 把领域权威规范打包成可安装技能，并用断言式评测对照 | 安装 morganlinton/BeautifulRust；按 13 节写 SKILL.md 和 references/；建 evals 后做装/不装对照 |
 | BF | 用总入口按创业阶段路由到 7 个子技能，并把上一步产出交给下一步 | 克隆 huaxialucaicaizi/ai-startup-skills；把 skills/* 和总入口拷到 ~/.agents/skills 或 ~/.claude/skills；用总入口和直接点名做对照 |
+| BG | 给后端编码 agent 补鉴权、幂等、迁移安全默认值 | npx skills add globalmpc/backendskills；AGENTS.md 追加 dist/AGENTS.md；Cursor 复制 dist/cursor/ 到 .cursor/rules/；填 Make it yours；用隐藏检查做有/无对照；node bench/summarize.mjs 聚合 runs.jsonl |
 
 ## 怎么判断变好了
 
@@ -778,9 +820,11 @@ python3 scripts/validate.py
 
 做法 BF 的最小试用方式：只装到 Codex 或 Claude Code 中的一个工具；选一个真实 AI 产品想法或一个真实任务；先用总入口跑一次，记录阶段判断、追问的问题数、调用的子 skill；再用直接点名同一子 skill 的方式跑一次作为对照；把每一步产出保存下来，下一步调用时附上。可观察指标：路由准确性、产出可用性、交接完整性、引用可靠性、结构校验、效率对比。若连续几次都出现路由错误、产出无法进入下一步或引用不可靠，就降级为 study。
 
-专门做法 C–BF 的统一试用方式：选一个与所装技能对应的真实小任务，先在不装该技能的会话里做一次并保存输出，再装上做一次；同一任务至少跑 3 次，或换 2–3 个任务再下结论。通用指标是首稿可用率、人工修改次数、返工轮数、查文档时间、命令或配置正确率、权限申请次数、耗时和成本。各条目的特别指标按索引执行。
+做法 BG 的最小试用方式：选 3 个后端任务，尽量覆盖登录/高成本接口、按 id 读取资源、列重命名迁移；每个任务写一份 agent 看不到的隐藏检查；同一 prompt 不装技能和装好技能各跑 5 次。主指标是 critical mistake 的运行占比，按任务分别看；次指标是团队约定遗漏数（down migration、API 文档）；成本侧记录轮数、token 或耗时、人工 review 问题数、回滚/返工次数。原文量级：15 个后端任务，Sonnet 5.5 与 Haiku 5.5 各跑 5 次/任务；critical mistake 无技能 25/150、有技能 2/150；Haiku 12/75→2/75，Sonnet 13/75→0/75；约定遗漏 30→4；login-rate-limit 和 rename-column 两模型均 5/5→0/5；多数任务本来 0/5→0/5，对总量贡献为零。Haiku 在乱序 webhook 上仍失败，payment-webhook 一栏 1/5→2/5 反向波动。这些是作者自测，样本小，需自行复验。
 
-反向指标：加了技能后仍要口头纠正同一件事，先改 SKILL.md 或 description；文档改完只是删空话没补事实，先把代码、配置和真实报错给它读；agent 只凭自己的声明就宣布完成，而 git status 和测试报告不支持，作废重跑；同一断言连续失败 3 次还在本地重试，升级到强模型；出图技能每次失败都盲重试，说明没用上 diagnostics；plugin-eval 分数不错但真实任务没改善，说明把筛子当成了结论；AX 跑几个会话后 observation-log 或读卡行为仍不存在，先补钩子、触发词或探针，不要先加卡；M 只跑通 /book-to-skill 但同组问题的事实准确率、定位能力和完整性没有改善，就保留为待验证候选；AY 三档截图 QA 抓不出代码看不出的问题，就降级为 study；AZ 只是文档变多而追溯和评审返工没改善，就降级为 study/watch；BA 的 frame_diff 只给出整体分数却定位不到最差时刻，或 agent 仍在偷偷内嵌视频、描帧、改文字，先修契约和硬规则；BB 只在代码变少上看效果，不看测试通过率和 review 返工，先停用或只保留为研究项；BC 只看转换成功或像素一致，不检查重定向、SEO、媒体和 staging 功能，就降级为 study；BD 只看生成的图好看，不看审图通过率、图到页面的返工轮次和文字可读性硬问题，就降级为 study；BE 只看技能装上了、断言通过数比基线多 1–2 条，就宣布有效，或忽略 token 多三分之一和 grader 自评偏差，就降级为待验证候选；BF 只看装上、validate.py 通过或总入口说得头头是道，不看路由是否正确、产出能否交给下一步、政策引用是否可点开官方原文，就降级为 study。
+专门做法 C–BG 的统一试用方式：选一个与所装技能对应的真实小任务，先在不装该技能的会话里做一次并保存输出，再装上做一次；同一任务至少跑 3 次，或换 2–3 个任务再下结论。通用指标是首稿可用率、人工修改次数、返工轮数、查文档时间、命令或配置正确率、权限申请次数、耗时和成本。各条目的特别指标按索引执行。
+
+反向指标：加了技能后仍要口头纠正同一件事，先改 SKILL.md 或 description；文档改完只是删空话没补事实，先把代码、配置和真实报错给它读；agent 只凭自己的声明就宣布完成，而 git status 和测试报告不支持，作废重跑；同一断言连续失败 3 次还在本地重试，升级到强模型；出图技能每次失败都盲重试，说明没用上 diagnostics；plugin-eval 分数不错但真实任务没改善，说明把筛子当成了结论；AX 跑几个会话后 observation-log 或读卡行为仍不存在，先补钩子、触发词或探针，不要先加卡；M 只跑通 /book-to-skill 但同组问题的事实准确率、定位能力和完整性没有改善，就保留为待验证候选；AY 三档截图 QA 抓不出代码看不出的问题，就降级为 study；AZ 只是文档变多而追溯和评审返工没改善，就降级为 study/watch；BA 的 frame_diff 只给出整体分数却定位不到最差时刻，或 agent 仍在偷偷内嵌视频、描帧、改文字，先修契约和硬规则；BB 只在代码变少上看效果，不看测试通过率和 review 返工，先停用或只保留为研究项；BC 只看转换成功或像素一致，不检查重定向、SEO、媒体和 staging 功能，就降级为 study；BD 只看生成的图好看，不看审图通过率、图到页面的返工轮次和文字可读性硬问题，就降级为 study；BE 只看技能装上了、断言通过数比基线多 1–2 条，就宣布有效，或忽略 token 多三分之一和 grader 自评偏差，就降级为待验证候选；BF 只看装上、validate.py 通过或总入口说得头头是道，不看路由是否正确、产出能否交给下一步、政策引用是否可点开官方原文，就降级为 study；BG 只看 32 stars 或 25/150→2/150 的总和，不看按任务分布、约定遗漏、负向波动和过度复杂代码，就降级为 study。
 
 ## 常见坑
 
@@ -825,6 +869,15 @@ python3 scripts/validate.py
 - 做法 BF：把 230 stars、MIT 许可或 validate.py 通过当效果证据；它只校验 frontmatter 和案例引用。
 - 做法 BF：把政策、注册、合规、平台获客的摘要当最终依据；这些内容主要针对中国大陆，规则会过期，必须点开官方原文确认最新版本。
 - 做法 BF：只跑总入口不停留产出，下一步没有输入；应保存每一步产出并在下一步调用时附上。
+- 做法 BG：把 32 stars、25/150→2/150 当独立证据；这是作者自建任务和隐藏检查，无第三方复现。
+- 做法 BG：只看 critical mistake 总和，不看按任务分别看；多数任务基线本来就是 0/5，总和会掩盖差异。
+- 做法 BG：每任务只跑 5 次就当结论；像 payment-webhook 1/5→2/5 这类单格波动不足以判断方向。
+- 做法 BG：忽略 Haiku 在乱序 webhook 上仍失败、payment-webhook 出现反向波动。
+- 做法 BG：把 Cursor 的 rules 适配当成与原生 skill 完全等价；原文未说明两者行为是否完全等价。
+- 做法 BG：不写 agent 看不到的隐藏检查，只用 agent 自测或 review 当验收。
+- 做法 BG：agent 为满足规则写出过度复杂代码，例如无条件加锁，却不记录、不回退对应技能条款。
+- 做法 BG：不填 Make it yours 却期望 agent 遵守团队错误格式和 API 文档约定；不填时它会跟随仓库已有做法。
+- 做法 BG：把电商/支付域的任务结论直接外推到批处理、搜索、缓存一致性；这些类型未被材料覆盖。
 - 其他专门做法的坑按索引条目和对应 README 执行。
 
 ## 证据与来源
@@ -853,7 +906,9 @@ Agent Skills 格式来自本次调研《agentskills/agentskills》README。可�
 
 做法 BF 来自调研《huaxialucaicaizi/ai-startup-skills》README。可核查信息包括：7 个子 skill 的名称与一句话用途加一个总入口；总入口最多问两个问题再路由；默认推进顺序 1 → 2 → 3 / 7 → 4 → 5 → 6；git clone、mkdir -p ~/.agents/skills / ~/.claude/skills 与 cp -R 安装命令；python3 scripts/validate.py 校验 frontmatter 和案例引用；./scripts/sync.sh 从 7 个独立仓库重新拉取；两条可直接照抄的提示词；原则是不编数据、政策法规只引官方来源、信息参考不构成法律或税务意见。原文给出的元数据是 230 stars、MIT 许可。原文没有给出各子 skill 的具体步骤、提示词、配置或模板，也没有结果数据、用户反馈或对照实验。
 
-做法 C–BF 的证据与局限按本手册现有正文所合并的各篇调研保留；本版新增了 Agent Skills 的可核查格式、渐进披露机制、star 数、作者主张与局限，但没有新增其独立效果数据，也没有把它升级为已验证结论。文中提到的 star 数来自 metrics 或作者主张，不构成有效性证据。
+做法 BG 来自本次调研《globalmpc/backendskills》。可核查信息包括：32 stars、MIT；三个技能 api-endpoint、data-integrity、db-migration 及各自默认行为；每个技能末尾有 Make it yours 段落；Claude Code 安装命令 npx skills add globalmpc/backendskills；Codex/AGENTS.md 类 agent 追加 dist/AGENTS.md；Cursor 复制 dist/cursor/ 到 .cursor/rules/；review 清单；bench/ 任务集、原始记录和重跑方法；node bench/summarize.mjs bench/results/<date>/runs.jsonl；node scripts/build-dist.mjs。原文数据：15 个后端任务，Sonnet 5.5 与 Haiku 5.5 各跑 5 次/任务；critical mistake 无技能 25/150、有技能 2/150；Haiku 12/75→2/75，Sonnet 13/75→0/75；团队约定遗漏 30→4；login-rate-limit 与 rename-column 两模型均 5/5→0/5；多数任务 0/5→0/5；Haiku 在乱序 webhook 事件上仍失败；payment-webhook 一栏 Haiku 1/5→2/5 反向波动。这些是作者自建任务与隐藏检查，无第三方复现；任务集偏电商/支付域；每任务仅 5 次；README 未说明评测所用语言/框架/数据库；critical mistake 定义来自作者写的隐藏检查，换一套检查口径结论可能变化；部分任务基线已是 0/5，说明技能并非对所有任务都有增量，收益高度依赖任务是否踩在这些风险点上。
+
+做法 C–BG 的证据与局限按本手册现有正文所合并的各篇调研保留；本版新增了 Agent Skills 的可核查格式、渐进披露机制、star 数、作者主张与局限，但没有新增其独立效果数据，也没有把它升级为已验证结论。文中提到的 star 数来自 metrics 或作者主张，不构成有效性证据。
 
 ## 依据的调研
 
@@ -922,3 +977,4 @@ Agent Skills 格式来自本次调研《agentskills/agentskills》README。可�
 - [morganlinton/BeautifulRust](../research/radar/2026-10-25/6797-morganlinton-beautifulrust.md)：值得一试，可直接照抄它的安装命令和评测流程，在自己的 Rust 仓库里对比跑一轮；但先小范围试，别急着推广——它只覆盖 Rust 一个领域，评测只有 3 个任务、由作者自评（有 skill 时通过 29/30，没有时 24/30 条断言通过，token 约多三分之一），迁移价值在于方法不在这个插件本身。
 - [huaxialucaicaizi/ai-startup-skills](../research/radar/2026-10-26/7126-huaxialucaicaizi-ai-startup-skills.md)：值得一试，建议小范围试用它的“总入口 + 子 skill”安装与阶段路由层：在 Codex 或 Claude Code 中装入总入口和 7 个子 skill，用真实项目走一遍“阶段判断→子 skill→产出交接”，再决定是否保留；理由是 README 给出了可复制的安装命令、调用提示词和默认顺序，但各子 skill 的具体步骤与效果证据未在原文中展开，暂不宜直接 adopt。
 - [agentskills/agentskills](../research/radar/2026-11-05/10578-agentskills-agentskills.md)：值得一试，建议小范围试：先用一个高频多步流程，按 SKILL.md 文件夹格式封装成技能，并验证 agent 能否按 description 触发、按需加载脚本和参考材料。README 只给出格式与渐进披露机制，缺少完整规范和案例，暂不宜直接全面采用。
+- [globalmpc/backendskills](../research/radar/2026-11-06/10952-globalmpc-backendskills.md)：值得一试，建议小范围试：按 README 装的 `npx skills add globalmpc/backendskills`（或把 dist/AGENTS.md、dist/cursor 分别接入 Codex/Cursor），挑 2–3 个后端任务做“隐藏检查”对照实验，同时对比有无技能时的 critical mistake 数和团队约定遗漏数；理由是仓库给出了可直接执行的安装方式、三条具体到规则的技能定义（鉴权作用域、幂等键、expand-contract 迁移），以及可重跑的评测脚手架，但证据目前只有作者自测（15 任务、2 个模型、每任务 5 次），且原文自己指出 Haiku 在 webhook 乱序上仍失败、payment-webhook 一栏 1/5→2/5 出现反向波动，需自行复验。
