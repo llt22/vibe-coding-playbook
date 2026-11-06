@@ -4,6 +4,7 @@
 
 | 手册 | 解决的问题 | 先试这一步 | 最近修订 |
 |---|---|---|---|
+| [让编码 agent 能读网页/PDF 并操作浏览器，失效时能换路](web-access-for-agents.md) | 怎么以最小风险给 agent 补上网页、PDF、JS 渲染页和登录态渠道的读取/操作能力，并在读网页/PDF 时控制进入上下文的 token 与成本，某个渠道失效时能定位、换路，而不是重写代码。 | 先做做法 A：用 `agent-reach install --env=auto --dry-run` 预览，再默认安装并跑 `agent-reach doctor`，只启用零配置渠道。 | 2026-11-06 |
 | [给代理接第三方工具：先隔离试用，再拿对照证据决定去留](add-mcp-servers-to-agents.md) | 把 MCP、CLI、技能包、插件、浏览器扩展、本地数据集或真机桥接接给代理时，用统一流程验证它是否可用、花多少钱、数据去了哪里、是否真的更好。 | 选一个低风险真实任务，先在隔离环境跑未接入基线，再接入并核对工具清单、做冒烟和同任务对照。 | 2026-11-06 |
 | [在编码会话里试用“主模型执行 + 强模型顾问”前，先做对照](model-routing-for-coding-agents.md) | 解决是否值得把贵模型降为只在关键判断介入的顾问，以及如何用可观察指标验证的问题。 | 先跑 `claude --help` 确认 `--advisor` 是否存在，再用同一批真实任务对照 `claude --model sonnet` 与 `claude --model sonnet --advisor opus`。 | 2026-11-06 |
 | [让 AI 编码助手的每次动作都有据可查](review-agent-conversation-logs.md) | AI 编码助手的会话、执行动作和决策理由散落在各自本地存储里，导致你既说不清它到底做了什么、也说不清为什么这么定，还难以及时发现密钥外发和高风险命令。 | 先在一个仓库跑 `npx @stroq/cli` 做只读审计（不装 hooks），看清最近 30 天有哪些命令、密钥外发和可疑会话。 | 2026-11-06 |
@@ -17,7 +18,6 @@
 | [给 AI 结论做季度保质期回归：该撤的防护就撤，该留的护栏就留](regression-test-ai-claims.md) | 把“AI 能不能做、该不该信”的旧结论当成会过期的东西，用固定提示词和测试集按季度重测，据此撤掉空转的人工防护或保留长期护栏。 | 从工作流里挑 5 条正在影响决策的 AI 假设，各写死一句可验证断言、测试样本、指标和失效值，用 2–3 个当前主力模型默认配置跑一遍并保存原始输出。 | 2026-11-05 |
 | [交稿前把 AI 参与过的文稿变成可复查的清单](audit-ai-generated-papers.md) | AI 参与产出但无人真正负责时，如何在交稿前把引用、AI 痕迹、作者责任和逐句可读性问题变成可复查、可定位的候选清单，而不是把工具输出当判决。 | 先用一份 3–5 页短稿或一节英文论文跑确定性候选脚本（absent-author lint、paper-preflight 或 academic-revision-checklist 的 flag_candidates.py），逐条人工复核后再决定是否扩大。 | 2026-11-04 |
 | [让多 agent 的跨 owner 动作先批准、由本人执行、再由另一席位验证](orchestrate-multiple-agents.md) | 多 agent 协作里，提案、批准、执行和验证混在一起时，没人能说清谁授权、谁执行、凭什么算完成；手册用共享账本、席位协议和独立验证把这条链固定下来。 | 先跑 mcode-agent-table 的离线 demo 和 npm test，再搭一桌两 owner 的小任务走一次 propose→approve→execute→verify。 | 2026-11-04 |
-| [给编码 agent 补上网页、PDF 和登录态渠道的读取与浏览器操作能力](web-access-for-agents.md) | 让已有能执行 shell 的 agent 以最小风险获得网页、PDF、JS 页面、登录态渠道和浏览器交互能力，并在渠道失效时定位换路、控制 token 与成本。 | 先跑 `agent-reach install --env=auto --dry-run` 预览，再默认安装并用 `agent-reach doctor` 体检；只在上下文预算敏感时再试 fatsearch。 | 2026-11-04 |
 | [让 AI 代码评审从“看一眼 diff”变成可复核、可回灌的门禁](code-review-with-agents.md) | 解决 AI 代码评审中结构看不懂、检查不可核对、风险与证据缺失、每轮改动没有闭环的问题，让评审在合并前真正能挡住问题。 | 先在一个非关键 PR 上，新开一个会话把“独立审查者”两条规则交给 agent 审 diff，再人工逐条复核它标为 block 的意见。 | 2026-11-04 |
 | [让常驻 AI agent 接管周期性重复工作：九条路线的两周试跑](self-hosted-agent-automation.md) | 周期性重复工作看起来适合交给常驻 AI agent，但项目 README 只给安装配置和能力清单，不给效果数据与评估方法；这份手册给出一条可执行的试跑路径和统一判断标准。 | 先选一条路线跑通最小闭环；如果手边已有登录好的 Claude Code / Codex CLI，优先用 agent-autoloop 的 `try` 验证「事件→单轮执行→人工拍板→续跑」。 | 2026-11-04 |
 | [让口播稿在进 TTS 前先过一遍 lint 和 A/B](prepare-tts-scripts.md) | 解决文稿直接丢给 TTS 后出现念稿感、标签被大声读出、笑声和语气不按预期执行的问题，用免费 lint、语速校准和固定 seed 的 A/B 在消耗额度前先验证。 | 选一条准备送 TTS 的短脚本，安装 tts-director 后先跑 `python scripts/tag_lint.py examples/reel-fa.txt --model eleven_v4 --tempo 1.15`（把示例路径换成你的脚本），不消耗额度地修掉过度标签和模型特有问题。 | 2026-11-04 |

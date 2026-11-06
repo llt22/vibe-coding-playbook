@@ -1,14 +1,14 @@
-# 给编码 agent 补上网页、PDF 和登录态渠道的读取与浏览器操作能力
+# 让编码 agent 能读网页/PDF 并操作浏览器，失效时能换路
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：让已有能执行 shell 的 agent 以最小风险获得网页、PDF、JS 页面、登录态渠道和浏览器交互能力，并在渠道失效时定位换路、控制 token 与成本。
-> 先试这一步：先跑 `agent-reach install --env=auto --dry-run` 预览，再默认安装并用 `agent-reach doctor` 体检；只在上下文预算敏感时再试 fatsearch。
-> 最近修订：2026-11-04
+> 解决的问题：怎么以最小风险给 agent 补上网页、PDF、JS 渲染页和登录态渠道的读取/操作能力，并在读网页/PDF 时控制进入上下文的 token 与成本，某个渠道失效时能定位、换路，而不是重写代码。
+> 先试这一步：先做做法 A：用 `agent-reach install --env=auto --dry-run` 预览，再默认安装并跑 `agent-reach doctor`，只启用零配置渠道。
+> 最近修订：2026-11-06
 
 ## 解决什么问题
 
-已有 agent（Claude Code、Cursor、Windsurf、OpenClaw 等）能执行 shell，但默认不知道该怎么读外部平台的内容，也容易把整页 HTML 或整份 PDF 直接塞进上下文；遇到 JS 渲染页、需要点击/填表/复用 Cookie 的页面时，又缺少一个可脚本化、可给 MCP 调用的浏览器。Agent-Reach 是一个 CLI 形式的“能力层”：它自己不实现抓取，负责选型、安装、体检、路由；真正的读取由 Agent 直接调用上游工具完成，没有包装层。fatsearch（命令 `fats`）把单个 URL 或 PDF 抓取、清洗、生成大纲并缓存成 id，让 Agent 先拿大纲，需要细节时再按节读取或页内过滤，并记录每次抓取的 provider、耗时、成本和 token。Lightpanda 是一个从零写的无头浏览器（Zig 实现，非 Chromium/WebKit 分支），定位为“给 AI agent 和自动化用的浏览器”；它提供 `fetch --dump`、CDP/MCP 服务和 `agent` 原生模式，用自然语言跑通后可导出 PandaScript 回放。BrowserAct 是面向 AI agent 的浏览器自动化 CLI/Skill，提供云端托管执行与本地浏览器控制，强调真实浏览器操作、受保护页面抽取、登录态复用、多账号隔离、并发会话和人工接管。这篇手册要解决的是：怎么以最小风险给 agent 补上网页、PDF、JS 页面和登录态渠道的读取/操作能力，并在读网页/PDF 时控制进入上下文的 token 与成本；某个渠道失效时能定位、换路，而不是重写代码。
+已有 agent 能执行 shell，但默认不知道如何读外部平台的内容，也容易把整页 HTML 或整份 PDF 直接塞进上下文；遇到 JS 渲染页、需要点击/填表/复用 Cookie 的页面时，又缺少一个可脚本化、可给 MCP 调用的浏览器。Agent-Reach 是一个 CLI 形式的“能力层”：它自己不实现抓取，负责选型、安装、体检、路由；真正的读取由 Agent 直接调用上游工具完成，没有包装层。fatsearch（命令 `fats`）把单个 URL 或 PDF 抓取、清洗、生成大纲并缓存成 id，让 Agent 先拿大纲，需要细节时再按节读取或页内过滤，并记录每次抓取的 provider、耗时、成本和 token。Lightpanda 是一个从零写的无头浏览器（Zig 实现，非 Chromium/WebKit 分支），定位为“给 AI agent 和自动化用的浏览器”；它提供 `fetch --dump`、CDP/MCP 服务和 `agent` 原生模式，用自然语言跑通后可导出 PandaScript 回放。BrowserAct 是面向 AI agent 的浏览器自动化 CLI/Skill，提供云端托管执行与本地浏览器控制，强调真实浏览器操作、受保护页面抽取、登录态复用、多账号隔离、并发会话和人工接管。agent-browser 是一个用 Rust 写的原生 CLI，用 `snapshot` 把当前页面转成带 ref 的紧凑文本，agent 对 ref 执行动作后重新读页面确认结果；每条命令发给首次调用时启动的后台 daemon，daemon 通过 Chrome DevTools Protocol 控制浏览器，浏览器在命令之间保持打开。这篇手册要解决的是：怎么以最小风险给 agent 补上网页、PDF、JS 页面和登录态渠道的读取/操作能力，并在读网页/PDF 时控制进入上下文的 token 与成本；某个渠道失效时能定位、换路，而不是重写代码。
 
 Agent-Reach 覆盖渠道：网页（Jina Reader）、YouTube 字幕+搜索（yt-dlp）、RSS/Atom（feedparser）、全网语义搜索（Exa，经 mcporter 以 MCP 接入）、GitHub（gh CLI）、Twitter/X、B站（bili-cli）、Reddit、Facebook、Instagram、小红书、LinkedIn、Boss直聘、V2EX、雪球、小宇宙播客转写（Whisper）。
 
@@ -16,11 +16,13 @@ Agent-Reach 覆盖渠道：网页（Jina Reader）、YouTube 字幕+搜索（yt-
 
 另有一条试验性做法：用 Microsoft Playwright CLI 及其 skills 把浏览器自动化作为“技能”供给 Claude Code，让 agent 用自然语言驱动浏览器抓公开页面，再与手写脚本做对照。来源只有一条推文、原文在第二步被截断，没有成功率与失败案例，所以本手册只把它列为“做法 E（试验性）”，不进入默认链路。
 
+还有两条试用性做法：BrowserAct（做法 F）依据 README 可小范围验证浏览器执行层；agent-browser（做法 G）依据 README 可小范围验证“snapshot→动作→复查”的浏览器操作循环。两者都没有成功率、耗时或对照数据，默认不进入生产链路。
+
 ## 适用与不适用
 
 适用：
 
-- 你已有一个能执行 shell 的 agent。Claude Code、Cursor、Windsurf 不需要额外设置；OpenClaw 需要先开 exec 权限。
+- 你已有能执行 shell 的 agent。Claude Code、Cursor、Windsurf 不需要额外设置；OpenClaw 需要先开 exec 权限。
 - 你想先用最小范围验证 Agent-Reach：`--dry-run` 预览、只用默认零配置渠道、固定用 `agent-reach doctor` 体检。
 - 你有多个可替代渠道的需求，想在某个后端失效时只调整路由顺序而不重写代码。
 - 你要读网页、YouTube 字幕、RSS、GitHub、B站、V2EX 等零配置渠道的内容。
@@ -35,24 +37,30 @@ Agent-Reach 覆盖渠道：网页（Jina Reader）、YouTube 字幕+搜索（yt-
 - 你想给 Claude Code、Cursor、OpenCode、OpenClaw、Codex、Gemini CLI 等可执行 shell 且能加载 Skill 的 agent 增加真实浏览器执行层，并愿意小范围试用 BrowserAct。
 - 你需要复用本地 Chrome 登录态、无登录隐私批处理、固定身份多账号、跨浏览器/同浏览器多 session 并发隔离、CAPTCHA 处理、人工接管、重复网站生成 Skill。
 - 你能接受 BrowserAct 账号登录（stealth-extract、remote-assist 等登录后免费；代理和超过 5 个 stealth browser 需付费），并愿意逐次批准浏览器创建/删除、Profile 导入、代理变更等敏感操作。
+- 你想用“一次一条命令、每步后复查”的方式让 agent 操作浏览器；想把页面以 accessibility tree 的紧凑文本喂给模型，而不是整页 HTML；想用 `snapshot -i` 的 ref 做动作，并在导航/DOM 变化后重新 snapshot。
+- 你想让 agent 通过 CLI 或 MCP 接入浏览器；需要按 `--session` 隔离浏览器实例与登录态；需要在 Chrome for Testing、现有 Chrome（`--cdp`/`--auto-connect`）、Lightpanda/Obscura 引擎、iOS 模拟器 Mobile Safari 或 Browserbase/Browserless/Browser Use/Kernel/AgentCore 等云浏览器之间切换。
+- 你想把 discovery skill 装进 agent harness（`npx skills add vercel-labs/agent-browser` 或 AGENTS.md 指令），让技能随 CLI 版本同步；能接受 Vercel Labs 实验产品、接口可能变，并愿意先小范围试。
 
 不适用：
 
 - agent 不能执行 shell。Agent-Reach 的 shell 是前提，OpenClaw 还要额外开 exec；fatsearch 也要先安装 CLI 并注册 MCP，至少要有能落地的安装环境。
 - 你想一次性全量接入所有登录态渠道。原文的口径是默认只装零配置渠道，登录态渠道列菜单点名才装；且这些渠道存在平台反爬与封号风险，稳定性必须自己验证。
-- 你想用它评测产出质量。Agent-Reach 的效果验证只到“渠道是否可用”这一层；fatsearch 给的是 token/成本可见性，效果数字全部来自作者自发布 benchmark，不能当第三方评测；Lightpanda 的基准也是作者自测。
-- 你想靠它做主动推进或定时触发。Agent-Reach 只在需求列表里提到“帮我订阅这几个 RSS 源，有更新告诉我”，实现侧只给了 feedparser 解析，没有给出定时轮询、事件触发或状态触发的配置；fatsearch 明确写“no daemon”，没有 watch、cron、回调、重试队列。
+- 你想用它评测产出质量。Agent-Reach 的效果验证只到“渠道是否可用”这一层；fatsearch 给的是 token/成本可见性，效果数字全部来自作者自发布 benchmark，不能当第三方评测；Lightpanda 的基准也是作者自测；agent-browser 只有 star 关注度指标。
+- 你想靠它做主动推进或定时触发。Agent-Reach 只在需求列表里提到“帮我订阅这几个 RSS 源，有更新告诉我”，实现侧只给了 feedparser 解析，没有给出定时轮询、事件触发或状态触发的配置；fatsearch 明确写“no daemon”，没有 watch、cron、回调、重试队列；BrowserAct 材料和 agent-browser README 都没有时间/事件/状态触发机制。
 - 你打算从 PyPI 安装同名包。原文明确说那不是本项目。
 - 你要读扫描版 PDF（OCR，fatsearch 返回 `! no_text`）、DOCX/XLSX（fatsearch 返回 `! not_in_v1 zip`）、登录墙后的页面，或需要语义近似/主题匹配（`match:near`/`match:topic` 需本地模型）。
 - 你要求必须通读全文才能下结论：fatsearch 默认只给大纲、按节读；作者没有讨论这种任务是否会被大纲机制削掉信息，这是试用时要专门验的点。
-- 你要求稳定发行版而非 nightly：Lightpanda 目前只有 nightly 构建，不适合作为唯一生产依赖。
-- 你在 Windows 上想要原生二进制，或在 Alpine/musl、Android/Termux 上直接跑：Windows 走 WSL2；Linux 二进制链接 glibc，Alpine 等 musl 系统会报 `cannot execute: required file not found`，需换 Debian/Ubuntu 基础镜像或源码编译；Android/Termux 不可用。
-- 你要求它在所有站点上都与 Chrome 行为一致：结论提示 Lightpanda 无渲染引擎，兼容性必须在自家目标站点上验证；不要因为内存/速度数字好看就直接替换现有 Chrome + Playwright。
+- 你要求稳定发行版而非 nightly：Lightpanda 目前只有 nightly 构建，不适合作为唯一生产依赖；agent-browser 是 Vercel Labs 实验产品，接口可能变。
+- 你在 Windows 上想要原生 Lightpanda 二进制，或在 Alpine/musl、Android/Termux 上直接跑：Windows 走 WSL2；Linux 二进制链接 glibc，Alpine 等 musl 系统会报 `cannot execute: required file not found`，需换 Debian/Ubuntu 基础镜像或源码编译；Android/Termux 不可用。
+- 你要求 Lightpanda 在所有站点上都与 Chrome 行为一致：结论提示 Lightpanda 无渲染引擎，兼容性必须在自家目标站点上验证；不要因为内存/速度数字好看就直接替换现有 Chrome + Playwright。
 - 你要求一条已验证、可复现的浏览器自动化标准流程：Playwright CLI 这条只有一条推文，原文第二步被截断，没有提示词、使用示例、成功率或失败案例；只能作为试验，不能写进生产链路。
 - 你没有可执行 shell 且能加载 Skill 的 agent，或机器不能联网安装 BrowserAct Skill。
 - 你想直接全量采用 BrowserAct 的 stealth 反封锁、CAPTCHA 处理或多账号操作：README 没有成功率、准确率、延迟、成本或对比实验数据，核心 stealth 功能需登录，代理和超过 5 个 stealth browser 需付费，合规边界也未展开。
-- 你需要时间/事件/状态触发或调度器：BrowserAct 材料只支持可复用 scraping Bot、重复运行、多 session 并行和 Skill Forge 的“探索一次、后续稳定运行”，没有给出时间触发、事件触发或状态触发机制。
 - 你未获授权抓取受保护页面、处理 CAPTCHA 或做多账号操作：这些可能涉及目标网站条款和合规风险。
+- 你需要 agent-browser 的时间/事件/状态触发或调度器：README 没有提到调度能力；默认 daemon 在 1 小时无命令后关闭 headless 浏览器并退出。
+- 你要求用 README 直接配置 agent-browser 的 auth vault、域名允许列表、动作策略、内容边界：README 只给链接，具体字段与默认值在 agent-browser.dev/security，本次材料未包含。
+- 你不想首次安装浏览器/联网，或从源码构建但环境不满足 Node.js 24+、pnpm 11+、Rust。
+- 你想把 agent-browser 的“快照紧凑因而更适合 agent”“daemon + 每条命令一次短调用更好用”当已验证结论：这是作者主张，没有基准测试、任务成功率或对照实验。
 
 ## 前置条件
 
@@ -114,9 +122,20 @@ openclaw gateway restart
 - 浏览器创建/删除、Profile 导入、代理变更、安全与隐私开关等敏感操作需要用户显式批准，且此前的批准不会延续。
 - 只对已获授权的页面使用；CAPTCHA 处理、代理轮换、多账号操作可能涉及目标网站条款和合规风险。
 
+**agent-browser（做法 G，试用性）**
+
+- 本机有 Node/npm 环境；首次需要联网下载浏览器（默认 Chrome for Testing）。安装 `npm install -g agent-browser` 后执行 `agent-browser install`；Homebrew 用 `brew install agent-browser` 后再 `agent-browser install`；Linux 用 `agent-browser install --with-deps` 一并装系统库；不想装可用 `npx agent-browser open example.com`。
+- 执行者（人或 agent）有 shell 命令权限。
+- agent harness 支持 skill 机制，或你能改它的 AGENTS.md；否则只能手工按命令循环跑。
+- 平台支持：macOS ARM64/x64、Linux ARM64/x64 glibc 与 musl、Windows x64；Apache-2.0。
+- 从源码构建要求 Node.js 24+、pnpm 11+、Rust。
+- 安全相关（auth vault、domain allowlists、action policies、content boundaries）README 只给链接，具体字段与默认值在 agent-browser.dev/security，本次材料未包含；使用前另读。
+- 需要保留登录态或多任务并发时，按 `--session` 隔离；默认 daemon 在 1 小时无命令后关闭 headless 浏览器并退出，配置 session persistence 时会先保存状态。
+- Vercel Labs 实验产品，接口可能变；README 没有效果数据。
+
 ## 操作步骤
 
-先做做法 A；需要精读网页/PDF 且 token 敏感时试做法 B；需要登录态渠道再进做法 C；需要 JS 渲染、浏览器交互或 MCP 浏览器工具时试做法 D。这四者材料相对完整，可并存、不要求按顺序全做。做法 E 与做法 F 都是试用性做法：E 只在你想验证“自然语言驱动浏览器能否替代手写爬虫”时做；F 只在你想给编码 agent 增加浏览器执行层、并愿意小范围验证时做。默认都不进入生产链路。材料没有给出 Agent-Reach、fatsearch、Lightpanda、BrowserAct 的集成命令，本手册只把它们并列为可选做法；Playwright CLI 也没有与前三者的集成说明。
+先做做法 A；需要精读网页/PDF 且 token 敏感时试做法 B；需要登录态渠道再进做法 C；需要 JS 渲染、浏览器交互或 MCP 浏览器工具时试做法 D。做法 E、F、G 都是试用性做法：E 只验证自然语言驱动 Playwright CLI；F 只验证 BrowserAct 浏览器执行层；G 只验证 agent-browser 的 snapshot→动作→复查循环。默认都不进入生产链路。材料没有给出 Agent-Reach、fatsearch、Lightpanda、BrowserAct、agent-browser 之间的集成命令，本手册只把它们并列为可选做法；Playwright CLI 也没有与前三者的集成说明。
 
 ### 做法 A：最小可行试用 Agent-Reach
 
@@ -573,6 +592,95 @@ Forge a Skill that extracts job listings from LinkedIn — title, company, salar
 
 9. 安全边界。前提：所有敏感操作走确认门禁。README 强调确认门禁在 Skill 层强制执行，不是配置开关；因此不要把浏览器创建/删除、Profile 导入、代理变更等权限预先批量授予 agent。
 
+### 做法 G（试用性）：用 agent-browser 的 snapshot→动作→复查循环让 agent 操作浏览器
+
+说明：依据 vercel-labs/agent-browser README，有安装命令、quick start 五步、snapshot/ref 机制、skills/MCP/源码构建命令、平台支持、Apache-2.0 许可；但除 star 数外没有任何效果数据，且属 Vercel Labs 实验产品。不要把它当已验证生产链路。
+
+1. 安装。前提：本机有 Node/npm 环境；首次需要联网下载浏览器。预期结果：得到 `agent-browser` 命令和默认 Chrome for Testing。
+
+```bash
+npm install -g agent-browser
+agent-browser install           # download Chrome for Testing (first time only)
+```
+
+替代路径：Homebrew 用 `brew install agent-browser` 后再 `agent-browser install`；Linux 用 `agent-browser install --with-deps` 一并装系统库；不想装可用 `npx agent-browser open example.com`。
+
+```bash
+brew install agent-browser
+agent-browser install
+```
+
+```bash
+agent-browser install --with-deps
+```
+
+```bash
+npx agent-browser open example.com
+```
+
+2. 手工跑通核心循环。前提：执行者（人或 agent）有 shell 命令权限。预期结果：打开页面、看到带 ref 的可交互元素、对 ref 执行动作、复查 URL、关闭。
+
+```bash
+agent-browser open example.com
+agent-browser snapshot -i       # interactive elements, each with a ref
+agent-browser click @e1         # act on a ref from that snapshot
+agent-browser get url           # check the result
+agent-browser close
+```
+
+配套的三条硬规则，要写进给 agent 的指令里：
+
+- ref 只描述快照那一刻的页面，导航或 DOM 变化后必须重新 `snapshot` 再用 ref。
+- 除 ref 外也支持 CSS selector、文本、XPath 和语义定位器，例如 `agent-browser find role button click --name "Submit"`。
+- 目标隐藏、禁用、在视口外、或被 cookie 横幅之类的元素遮挡时，click 会失败报错而不是谎报成功；处理办法是关掉遮挡元素、重新 snapshot、再重试。
+
+3. 给 agent 装载与已安装 CLI 版本匹配的 skill。前提：agent harness 支持 skill 机制，或你能改它的 AGENTS.md。预期结果：agent 知道先加载 core skill，指令与已安装 CLI 版本对齐。
+
+```bash
+agent-browser skills get core                 # the core loop, refs, waiting, and common workflows
+agent-browser skills get core --ref commands  # one reference, such as the full command list
+agent-browser skills get core --full          # adds the full command reference and templates
+agent-browser skills list                     # specialized skills: electron, slack, dogfood, and more
+```
+
+把 discovery skill 装进 agent harness：
+
+```bash
+npx skills add vercel-labs/agent-browser
+```
+
+或在 `AGENTS.md` 里加：
+
+```markdown
+Use `agent-browser` for browser automation. Before the first use, run
+`agent-browser skills get core` and follow it.
+```
+
+原文说明：装进去的 skill 只是一个薄壳，让 agent 去加载 `agent-browser skills get core`，因此指令始终与已安装的 CLI 版本对齐。
+
+4. MCP 客户端接入（可选）。前提：客户端支持 stdio MCP。预期结果：客户端出现 `agent-browser` MCP server。
+
+```bash
+agent-browser mcp
+```
+
+5. 会话隔离与生命周期。前提：需要多任务并发或需要保留登录态。预期结果：每个 `--session` 有自己的 daemon 和浏览器；默认情况下，daemon 在 1 小时无命令后关闭 headless 浏览器并退出；配置了 session persistence 时会先保存状态。原文未给出具体持久化配置命令，需查文档。
+
+6. 换引擎/连已有 Chrome/云浏览器（可选）。按原文选项：`--cdp` / `--auto-connect` 挂到已运行的 Chrome，`--engine` 换 Lightpanda / Obscura 引擎，驱动 iOS 模拟器里的 Mobile Safari，或接 Browserbase / Browserless / Browser Use / Kernel / AgentCore 等云浏览器。原文未给出这些选项的完整配置示例，执行前查文档。
+
+7. 从源码构建（可选）。前提：Node.js 24+、pnpm 11+、Rust。预期结果：构建并全局链接原生 CLI，再装浏览器。
+
+```bash
+pnpm install
+pnpm build:source               # builds the dashboard and the native CLI
+pnpm link --global
+agent-browser install
+```
+
+8. 最小试用。前提：CLI 已装、agent 已能执行 shell。预期结果：选一个高频、步骤固定的浏览器任务（例如每周从某站点取几个固定数字，或反复填写同一张内部表单），按 quick start 五步手工跑一遍确认可用，再把 AGENTS.md 指令加进 agent，让它自己按“snapshot → 动作 → 复查”跑同一任务 5～10 次；同时用现有做法（人工操作、一次性 Playwright 脚本、或其它浏览器工具）跑同样次数对照。记录指标见“怎么判断变好了”。
+
+9. 安全配置。使用 auth vault、domain allowlists、action policies、content boundaries 前，另读 `agent-browser.dev/security`；README 未给具体字段与默认值。
+
 ### 维护：更新与卸载 Agent-Reach
 
 更新：
@@ -608,9 +716,13 @@ pip uninstall agent-reach              # 卸载 Python 包本身
 - Playwright CLI 的判定规则：若在静态页和列表页这两类任务上 B 组显著省时、无需改代码、准确率不低于人工核对基准，可作为 Claude Code 的一条可选工具供给做法保留；若只在静态页成立，降级为“特定场景可用”的注记，不进入标准流程。
 - BrowserAct 的最小试用：选 3 类低风险任务各 1 个——公开页面字段抽取；已登录内部系统的只读查询；一个需要人工接管的登录或验证码场景（须获授权）。在 Claude Code 或其他兼容 agent 中安装 Skill，先用 `get-skills` 确认浏览器列表和命令；每个任务用独立 `--session`；并行时用不同 browser/profile，避免同账号并发；记录每次是否完成、字段是否准确、是否触发 CAPTCHA/封锁、是否需要 remote-assist、接管耗时、是否出现串号、总耗时和费用。
 - BrowserAct 的判断指标：与现有手工流程或旧工具做基线对比，看任务成功率、字段抽检准确率、人工接管率与接管时长、阻塞率、跨会话污染次数、单任务耗时、token/命令开销、付费 credits 消耗、合规事件数。建议每类任务重复足够次数（例如 10 次）再判断；若成功率与准确率不低于基线、接管和阻塞可控、无串号与合规问题，再扩大范围；否则退回手动或换工具。这是调研报告给出的试用设计，不是实测结论。
-- 试用时长：材料没有给出 Agent-Reach 和 fatsearch 的试用时长；Lightpanda 材料只给出“先小范围对比”的建议；Playwright CLI 这条，调研报告把最小试用设计为“半天内可完成”；BrowserAct 这条，调研报告建议每类任务重复足够次数（例如 10 次）再判断。至少先完成上述最小任务对比，再决定是否扩大。
+- agent-browser 的最小试用：选一个高频、步骤固定的浏览器任务（例如每周从某站点取几个固定数字，或反复填写同一张内部表单）。装完 CLI 后按 quick start 五步手工跑一遍确认可用，再把 AGENTS.md 指令加进 agent，让它自己按“snapshot → 动作 → 复查”跑同一任务 5～10 次。
+- agent-browser 的判断指标：任务成功率（首次即成功比例、需要人工接管次数）；输入成本（同一页面下 `snapshot -i` 的文本体积 vs 直接取整页 HTML 的体积，以及每次任务的总命令数/token 数）；完成耗时（含失败重试的端到端时间）；假成功次数（是否存在“点了但页面没变”却报成功的实例，README 声称不会，正好实测）；可诊断性（失败时能否只靠 `console` / `errors` / `screenshot` 定位原因）。
+- agent-browser 的对照方式：同任务用现有做法（人工操作、一次性 Playwright 脚本、或其它浏览器工具）跑同样次数比较。
+- agent-browser 的判定：成功率不低于现状且人工介入次数下降，或同等成功率下搭建与维护成本更低，才继续扩大使用；仅仅 star 多、安装顺不代表有效果。
+- 试用时长：材料没有给出 Agent-Reach 和 fatsearch 的试用时长；Lightpanda 材料只给出“先小范围对比”的建议；Playwright CLI 这条，调研报告把最小试用设计为“半天内可完成”；BrowserAct 这条，调研报告建议每类任务重复足够次数（例如 10 次）再判断；agent-browser 原文没有给试用时长，调研报告建议同一任务跑 5～10 次并与现有做法对照。至少先完成上述最小任务对比，再决定是否扩大。
 
-最小试用方式：Agent-Reach 先 `agent-reach install --env=auto --dry-run` 预览 → 默认安装 → `agent-reach doctor` → 挑 1～2 个零配置渠道的示例任务跑通；fatsearch 先安装 CLI → 注册 MCP → 用 `dry:true` 和 `fats stats` 量几个真实网页/PDF 的 token 与成本；Lightpanda 先 `./lightpanda version` → `fetch --dump markdown` 抓一个真实页面 → 用 MCP 或 agent 模式跑一条任务 → 与现有 Chrome + Playwright 对比成功率、耗时、内存；Playwright CLI（试验性）先 `node -v` 确认 20+ → 装 CLI → `playwright-cli install --skills` → 用 `playwright-cli --help` 确认可用 → 按静态页、JS 渲染页、翻页列表页做 A/B 对照；BrowserAct（试用性）先安装 Skill → `browser-act get-skills core --skill-version 2.0.2` 探测环境 → 用独立 `--session` 跑 3 类低风险任务 → 记录成功率、字段准确率、接管率、串号、费用与合规事件。
+最小试用方式：Agent-Reach 先 `agent-reach install --env=auto --dry-run` 预览 → 默认安装 → `agent-reach doctor` → 挑 1～2 个零配置渠道的示例任务跑通；fatsearch 先安装 CLI → 注册 MCP → 用 `dry:true` 和 `fats stats` 量几个真实网页/PDF 的 token 与成本；Lightpanda 先 `./lightpanda version` → `fetch --dump markdown` 抓一个真实页面 → 用 MCP 或 agent 模式跑一条任务 → 与现有 Chrome + Playwright 对比成功率、耗时、内存；Playwright CLI（试验性）先 `node -v` 确认 20+ → 装 CLI → `playwright-cli install --skills` → 用 `playwright-cli --help` 确认可用 → 按静态页、JS 渲染页、翻页列表页做 A/B 对照；BrowserAct（试用性）先安装 Skill → `browser-act get-skills core --skill-version 2.0.2` 探测环境 → 用独立 `--session` 跑 3 类低风险任务 → 记录成功率、字段准确率、接管率、串号、费用与合规事件；agent-browser（试用性）先 `npm install -g agent-browser` → `agent-browser install` → 手工跑 quick start 五步 → 装 skill/AGENTS.md → 用同一固定任务跑 5～10 次并与现有做法对照。
 
 ## 常见坑
 
@@ -652,6 +764,17 @@ pip uninstall agent-reach              # 卸载 Python 包本身
 - 同浏览器多 session 只共享登录态但独立执行；要账号隔离必须用不同 browser/profile，不要只换 session，否则可能串号。
 - BrowserAct 材料没有时间触发、事件触发、状态触发机制或调度器说明；不要把它当定时任务或主动推进方案。
 - `browser-act get-skills core --skill-version 2.0.2` 中的 `2.0.2` 来自 README 示例；材料未说明版本兼容范围，执行时以实际返回为准。
+- agent-browser 是 Vercel Labs 实验产品，接口可能变；README 只有 46,053 stars、当日 +150 的关注度指标，没有成功率、耗时或对照数据。
+- `agent-browser install` 首次需要联网下载 Chrome for Testing；Linux 还要 `--with-deps` 装系统库；不装可用 `npx agent-browser open example.com` 临时跑。
+- ref 只描述快照那一刻；导航或 DOM 变化后必须重新 `snapshot` 再用 ref，否则会点错/失败。
+- 目标隐藏、禁用、在视口外、或被 cookie 横幅遮挡时，click 会失败报错而不是谎报成功；要关掉遮挡元素、重新 snapshot、再重试。
+- 默认 daemon 在 1 小时无命令后关闭 headless 浏览器并退出；长任务或需要保活要显式处理 session persistence，原文未给具体配置命令。
+- 每个 `--session` 有自己的 daemon 和浏览器；不要以为不同 session 共享登录态，除非你显式用同一会话/持久化。
+- README 没有提到时间/事件/状态触发或调度能力；不要把它当定时任务或主动推进方案。
+- auth vault、domain allowlists、action policies、content boundaries 只在 Security 文档链接里，README 没给字段与默认值；要用必须另读 `agent-browser.dev/security`。
+- “快照紧凑因而更适合 agent”“daemon + 每条命令一次短调用更好用”是作者主张，没有基准测试、任务成功率或对照实验；不要因为 star 多就直接替换现有浏览器方案。
+- 从源码构建要求 Node.js 24+、pnpm 11+、Rust；不满足就别走源码路线。
+- 需要换引擎/连已有 Chrome/云浏览器时，`--cdp` / `--auto-connect` / `--engine` 的完整配置示例原文未给，执行前查文档。
 
 ## 证据与来源
 
@@ -670,6 +793,12 @@ pip uninstall agent-reach              # 卸载 Python 包本身
 - Playwright CLI 做法 E：@plusxbt 推文（46 赞、1 转发、10 回复）。`node -v` 要求 Node.js 20+、`npm install -g @playwright/cli@latest`、`playwright-cli install --skills` 两条命令来自原文；原文在第二步中途被截断，后续步骤、提示词、使用示例、成功率与失败案例均缺失。调研报告的结论是：先做小范围试验，用“耗时/人工干预次数/是否改代码”对比手写脚本，不宜直接写进手册作为标准做法。第 4 步的提示词是调研报告自拟的待验证写法，不是原文内容。Playwright CLI 与前面三者没有集成说明，只是并列的试验性浏览器供给方式。
 - BrowserAct 做法 F：browser-act/skills 调研报告。安装提示词、`get-skills`、`stealth-extract`、session 命令、三种浏览器模式、并发说明、remote-assist、Skill Forge、免费/付费表、兼容列表、MIT License、6318 stars 均来自 README；属作者自述，没有第三方核验。材料缺 docs/installation.md、quick-start.md、skills.md 等详细文档；remote-assist、云端托管、Skill Forge 的具体命令和异常处理无法核对。反封锁效果、token 效率“数是 JSON/HTML 的数倍”、账号不被标记、零干扰并发等是作者主张，没有测试方法、样本量、失败率或独立复现。CAPTCHA、代理轮换、多账号操作可能涉及合规风险，README 未展开。
 - BrowserAct 最小试用与指标：调研报告建议选 3 类低风险任务各 1 个、独立 session、不同 browser/profile、记录成功率/准确率/接管/串号/费用/合规事件，每类重复例如 10 次；这是建议，不是实测结论。
+- agent-browser 做法 G：vercel-labs/agent-browser 调研报告。安装命令、quick start 五步、`snapshot -i` 的 ref 机制、点击失败报错、skills / MCP / 源码构建命令、平台支持、Apache-2.0 许可，均来自该报告与 README 原文；属作者自述，没有第三方核验。
+- agent-browser 项目状态：46,053 stars、当日 +150；README 有 npm 月下载徽章但文本中没给具体数值；这些不是效果证据。
+- agent-browser 作者主张：“快照紧凑因而更适合 agent”“daemon + 每条命令一次短调用更好用”，没有基准测试、任务成功率或对照实验。
+- agent-browser 安全内容：auth vault、域名允许列表、动作策略、内容边界 README 只给链接，具体字段与默认值在 agent-browser.dev/security，本次材料未包含。
+- agent-browser 与 Vercel Sandbox / skills.sh 的关系：README 指向 agent-browser.dev/next 的 Next.js and Vercel 文档，说明可在 Vercel Sandbox 里运行；`npx skills add vercel-labs/agent-browser` 把 discovery skill 装进 agent harness，skill 是薄壳、运行时才拉 `skills get core`，从而与已安装 CLI 版本对齐。这些来自 README，属作者自述。
+- agent-browser 最小试用与指标：调研报告建议选一个高频、步骤固定的浏览器任务，按 quick start 五步手工跑一遍，再让 agent 跑同一任务 5～10 次，对照现有做法记录成功率、人工接管、snapshot 体积 vs 整页 HTML、总命令数/token、端到端耗时、假成功次数、可诊断性；这是建议，不是实测结论。
 
 ## 依据的调研
 
@@ -678,3 +807,4 @@ pip uninstall agent-reach              # 卸载 Python 包本身
 - [lightpanda-io/browser](../research/radar/2026-10-31/8886-lightpanda-io-browser.md)：值得一试，建议小范围试：先用 Docker 或二进制启动 Lightpanda，用 `fetch --dump markdown` 和 MCP / agent 模式各跑一条真实的网页采集与操作任务，并与现有 Chrome + Playwright 方案对比成功率、耗时和内存；理由在于 README 给出了可直接复制的安装、MCP 配置、PandaScript 录制回放流程，但只有 nightly 构建、基准为自测且无渲染引擎，兼容性必须在自家目标站点上验证。
 - [@plusxbt: It is becoming f*cking dangerous: Claude Code turns into a web crawler for almost any website, and y](../research/radar/2026-11-01/9089-it-is-becoming-f-cking-dangerous-claude-code-turns.md)：值得一试，先做小范围试验：在 Node.js 20+ 环境安装 Microsoft Playwright CLI 并执行 skills 安装，让 Claude Code 用自然语言驱动浏览器抓取公开页面，再用「耗时/人工干预次数/是否改代码」对比手写脚本；原文只给出两步安装线索、第二步还被截断，没有流程细节和验证数据，因此不宜直接写进手册作为标准做法。
 - [browser-act/skills](../research/radar/2026-11-04/10216-browser-act-skills.md)：值得一试，建议把 BrowserAct Skills 作为现有编码代理的浏览器执行层做小范围试用：先用 get-skills 探测环境，用独立 session 跑只读或低风险任务，并用 remote-assist 兜底；README 给出一手安装与命令，但关键稳定性和反封锁效果多为作者主张，且 stealth 能力需登录或付费，暂不宜直接 adopt。
+- [vercel-labs/agent-browser](../research/radar/2026-11-06/10838-vercel-labs-agent-browser.md)：值得一试，照着 README 的 quick start 五步（open → snapshot -i → 对 ref 执行动作 → get/is 复查 → close）挑一个真实浏览器任务小范围试，并把 `agent-browser skills get core` 或对应的 AGENTS.md 指令装进 agent；理由是原文给出了可直接复制的安装命令、命令循环、失败语义和给 agent 的指令文本，但除 star 数外没有任何效果数据，且属 Vercel Labs 实验产品。
