@@ -1,14 +1,14 @@
-# 把编码 agent 关进可控边界：项目规则、隔离执行与可复核证据
+# 让编码 agent 在一次性 Windows 干净机上验证桌面应用并留下证据
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：解决把编码 agent 从“在本机随手跑一次”变成“在明确规则、隔离边界和可复核证据下反复跑”，并把模型、文件、shell、凭证放在你选定的边界两侧的问题。
-> 先试这一步：先在一个可回退的小仓库里写不超过一屏的 CLAUDE.md、配好 .claude/settings.json 的 allow/ask/deny，用 plan mode 跑 3–5 个同类任务，与手工基线对比完成率、返工和权限询问。
+> 解决的问题：把 Windows 桌面应用的干净机冒烟测试、安装/卸载残留审计、UI 自动化和不可信文件 detonate 交给编码 agent 在一次性 Windows Sandbox 里执行，并留下可复核的报告、截图和审计日志。
+> 先试这一步：先在符合前提的 Windows 11 24H2 Pro/Enterprise 机器上运行 `./sbx.cmd doctor`，再用系统自带 `charmap` 跑通一次最小闭环。
 > 最近修订：2026-11-07
 
 ## 解决什么问题
 
-本手册把编码 agent（Claude Code / Codex CLI / OpenCode / goose / pi / agentbox / Xiryn / Omnara 等）从“在本机随手跑一次”变成“在可控环境里、按项目规则反复跑”，并能实时看到它在读什么、写什么；需要时在真实（仿真）系统里执行并拿到可判定结果；断网或数据不出本机时，也能用本地模型跑小任务并用项目自带测试独立验收；需要给每个任务留下可离线复核的证据时，把任务关进无网卡的 micro-VM，由宿主 signer 逐项放行并导出签名审计包；需要把模型与会话放到远端、而文件、shell 和密钥留在本机时，用 ACP 中间层把工具执行点切在本机。二十三次做法 A-W 按层覆盖：项目规则与观察（C/D/F/H）、会话与多机（N/O/P）、云端与托管（K/Q/R）、隔离与验证（J/L/U/V）、离线与收尾（S/T）、分离部署（W），以及起步/替代实现（A/B/E/G/I/M）。
+本手册把编码 agent（Claude Code / Codex CLI / OpenCode / goose / pi / agentbox / Xiryn / Omnara 等）从“在本机随手跑一次”变成“在可控环境里、按项目规则反复跑”，并能实时看到它在读什么、写什么；需要时在真实（仿真）系统里执行并拿到可判定结果；断网或数据不出本机时，也能用本地模型跑小任务并用项目自带测试独立验收；需要给每个任务留下可离线复核的证据时，把任务关进无网卡的 micro-VM，由宿主 signer 逐项放行并导出签名审计包；需要把模型与会话放到远端、而文件、shell 和密钥留在本机时，用 ACP 中间层把工具执行点切在本机；需要验证 Windows 桌面应用在干净机上能否安装、启动、通过 UI 冒烟、卸载无残留时，用一次性 Windows Sandbox 跑闭环并留下报告、截图和审计日志。二十四次做法 A-X 按层覆盖：项目规则与观察（C/D/F/H）、会话与多机（N/O/P）、云端与托管（K/Q/R）、隔离与验证（J/L/U/V）、Windows 桌面干净机验证（X）、离线与收尾（S/T）、分离部署（W），以及起步/替代实现（A/B/E/G/I/M）。
 
 ## 适用与不适用
 
@@ -37,16 +37,17 @@
 | U | Linux + KVM 主机上，agent 要改真实系统又需要隔离与可审计；想把一次任务导出成 .tkb 离线验证；在 GitHub Actions 里跑 Claude Code/Codex 修测试，并只在 signer 逐文件放行后应用改动 | v0、无 release、需从源码构建；必须自带并常驻 Tracekit signer，同机 dev signer 只有 Assurance: dev、isolation: same-user；Action 里的 dev signer 没有 witness，只证明 job 后记录未被改动，不证明 runner 本身诚实；Mac 只能按 docs/development.md 走 Lima VM；无 KVM 的机器跑不起来；材料没有并发调度、成本、性能数据 |
 | V | macOS 或 Linux 上，想让现有编程智能体把不受信任代码、桌面操作、并行修复放进可丢弃 VM，真实密钥留在 host，按需授权 | README 自标 early-stage、experimental；exe.dev、boat.dev、Cloud Hypervisor 后端标注 experimental；仓库 38 stars；Windows 未提；docs/grants.md、docs/security.md、docs/pool.md 正文未获取，授权细节不能照抄；无正确性/成本/质量验证数据 |
 | W | 本机有代码和环境、想统一用某台常开服务器上的模型/订阅/会话记录；不愿或不能把 shell 交给远端；用 Zed/paseo 等 ACP 客户端 | 依赖项目级 .claude/（commands、skills、agents、settings）、checkpoint/rewind、LSP、Monitor、worktree 工具的工作流；需要定时/事件触发；服务器未登录或 claude 低于 2.1.248；Windows OpenSSH 不能共享连接 |
+| X | Windows 11 24H2（build 26100）+ Pro/Enterprise/Education、已开虚拟化，需要对 Windows 桌面应用做干净机冒烟测试、安装/卸载残留审计、UI 自动化、不可信文件 detonate，并留下报告/截图/审计日志 | 仅 Windows 11 24H2+ Pro/Enterprise/Education，Home/Server 不支持；同一时间只能跑一个沙箱；ARM64 当前未打包；不适合 Linux、持久环境、多机并行；不自带调度器，时间/事件触发需外层 agent 或 CI 编排；provision 后的通过不算干净机通过 |
 
 ## 前置条件
 
 通用：非生产、可回退的仓库或环境；受管/涉密环境先审阅所有 curl | bash、irm | iex、./install.sh、./setup.sh 类脚本，或改用包管理器/源码审阅后执行。
 
-A：Linux 服务器 + systemd + 本地 Docker；Ubuntu 22.04+/Debian 12+ 可自动补依赖；源码构建需 Docker 访问权限。B：本机可装 CLI，有受支持供应商 key 或订阅，非生产环境。C：macOS/Linux/WSL、Node+npm 或 curl、真实 Git 项目、可回退。D：macOS/Linux/Windows 开发机，安装前清 0.1.x 前旧版。E：Mac/Linux/Windows；ChatGPT 订阅需 Plus/Pro/Business/Edu/Enterprise；API key 需 additional setup。F：一次性项目、合成数据、无生产凭据、已批准 Claude Code、能设 CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1、能生成 /plugin-types、有回滚负责人。G：Node.js 22.19+、非关键可回退仓库、优先容器环境、模型订阅或 API key。H：Claude Code 2.1.287+（README 自述，无法独立验证）、Code 视图需 macOS+Chrome+图片终端、非关键 Git 仓库。I：macOS/Windows 10/11、已运行 Codex App、电脑保持唤醒联网、手机同局域网、通知需 Bark/ntfy。J：Python 3.8+、QEMU、Go 1.22+、首次联网、非关键环境。K：Pro/Max/Team/Enterprise 且 claude.ai 登录；GitHub 连接；private repo 装 Claude GitHub App；终端路径已用 gh 且可 /web-setup；claude --cloud 前先 push。L：约 4 GB 空闲磁盘、至少一个 provider key（必需）、Firecrawl 可选、Node ≥20.9、Docker；Telegram 可选。M：Node 18+、可用 provider key、非关键小仓库；Homebrew 路径会拉 Rust 工具链。N：较新的 Claude Code，claude --help 能看到 -w/--worktree 与 --tmux；本机有 tmux；远程机器可 SSH；iTerm2 上内置路径用 native panes 而非真 tmux，脚本化必须加 =classic。O：macOS；从 Releases 下载 dmg 或按源码构建；源码构建需 rust-toolchain.toml 指定的 Rust 工具链；接受非官方 Warp fork、AGPL-3.0、上游登录未测试；要 tmux 同步需 tmux；额度环需能定期生成 docs/limit-rings.md 格式 JSON；Claude Code 后台任务 hook 可选。P：已装 Node.js / npm；目标机可 SSH 登录（README 建议用 Tailscale 处理 NAT）且已安装要用的智能体 CLI；macOS 26 可用 Apple 开源 container 运行时，或改用 Docker / Podman；Claude Code 订阅或 API key 用于 claude setup-token；人工接管需 Mac 开启屏幕共享或 Linux 运行绑定 localhost 的 VNC 服务；SDK 路径需 Node/TS 工程。Q：Omnara Cloud 账号；Node.js 22 或更新；使用首项目自带的模型 provider 和 sandbox pool。SDK 路径需 dashboard 创建 API key、导出 OMNARA_TOKEN、npm install @omnara/sdk、用 npx omnara config 获得 org/project ID。自托管需 Docker 和 Compose；新实例需在控制台添加 model provider 和 model、在 Machines 连接本机并共享给项目；沙箱还需实例有 public URL。工具权限、cron 完整参数、memory/subagents 配置需查 docs.omnara.com。R：Node.js >= 22.13（依赖内置 node:sqlite）；macOS 或 Linux（内核级沙箱仅 macOS 提供，Linux 需自行用专用用户或容器兜底）；Claude Code 已安装并登录、claude 在 PATH 上；一个飞书/Lark 账号，手机能打开授权链接；init 会创建 ~/.wardendeck（权限 0700），需备份 master.key 与数据库。S：笔记本内存足够（9B 建议 12–16 GB 以上，64k 上下文再留余量）；装有 Python3；项目及依赖、测试、README 已在本地；先在一次联网会话里完成安装和模型下载；OpenCode 1.19.4 与 qwen3.5:9b 需在自己环境核实。T：项目已有 AGENTS.md 且智能体会读取并遵守；项目工作流确实创建 git worktree（含 subagent 的 .claude/worktrees/agent-*）；智能体具备删除 worktree 和分支的权限；需要知道 worktree 路径；原文提到专用 cargo target，但材料截断，需按 https://github.com/JimLiu/baocut/blob/main/AGENTS.md 示例核对。U：Linux x86_64 或 arm64，daemon 用户能打开 /dev/kvm（裸机、支持嵌套虚拟化的云 VM，或 GitHub 托管的 ubuntu-latest runner，action 会启用 KVM）；Mac 按 docs/development.md 走 Lima VM；装 e2fsprogs（需要 mkfs.ext4）和 git；同一主机安装 Tracekit 1.4.2 signer，开发环境可先 tracekit init --dev --v2 --no-hooks && tracekit up --wait；主机能出站 HTTPS 到镜像仓库（Docker Hub 或 GHCR）；daemon 首次启动会从 GitHub 下载 Firecracker v1.17.0、从 Firecracker 项目的 S3 下载 guest kernel 6.1.155，按 SHA-256 校验后缓存到 <state dir>/images/assets，无外网时用 tkbox daemon --firecracker FILE --kernel FILE 传本地文件。V：macOS 或 Linux（README 徽章只标 macOS | Linux，未提 Windows）；能安装 brew、jq、node；选 Lima 后端时本机能运行 VM；需要一台可信 host（同一台 Mac、Linux 服务器或小 VPS）；VM 内默认没有真实凭证，必须显式授权；docs/grants.md、docs/security.md、docs/pool.md 正文未获取，授权细节需先补齐。W：本机 ssh 免密可登录一台常开服务器（key + ~/.ssh/config 配好端口/用户/跳板机）；服务器上 Claude Code 2.1.248+ 已安装并登录、POSIX login shell；本机装 Bun（仅构建，产出的二进制无依赖）；本机不需要装 claude；需要自定义 ssh 时能设 CC_REMOTE_SSH；Windows 需 PATH 上有 pwsh（可选）和 ripgrep（rg）。
+A：Linux 服务器 + systemd + 本地 Docker；Ubuntu 22.04+/Debian 12+ 可自动补依赖；源码构建需 Docker 访问权限。B：本机可装 CLI，有受支持供应商 key 或订阅，非生产环境。C：macOS/Linux/WSL、Node+npm 或 curl、真实 Git 项目、可回退。D：macOS/Linux/Windows 开发机，安装前清 0.1.x 前旧版。E：Mac/Linux/Windows；ChatGPT 订阅需 Plus/Pro/Business/Edu/Enterprise；API key 需 additional setup。F：一次性项目、合成数据、无生产凭据、已批准 Claude Code、能设 CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1、能生成 /plugin-types、有回滚负责人。G：Node.js 22.19+、非关键可回退仓库、优先容器环境、模型订阅或 API key。H：Claude Code 2.1.287+（README 自述，无法独立验证）、Code 视图需 macOS+Chrome+图片终端、非关键 Git 仓库。I：macOS/Windows 10/11、已运行 Codex App、电脑保持唤醒联网、手机同局域网、通知需 Bark/ntfy。J：Python 3.8+、QEMU、Go 1.22+、首次联网、非关键环境。K：Pro/Max/Team/Enterprise 且 claude.ai 登录；GitHub 连接；private repo 装 Claude GitHub App；终端路径已用 gh 且可 /web-setup；claude --cloud 前先 push。L：约 4 GB 空闲磁盘、至少一个 provider key（必需）、Firecrawl 可选、Node ≥20.9、Docker；Telegram 可选。M：Node 18+、可用 provider key、非关键小仓库；Homebrew 路径会拉 Rust 工具链。N：较新的 Claude Code，claude --help 能看到 -w/--worktree 与 --tmux；本机有 tmux；远程机器可 SSH；iTerm2 上内置路径用 native panes 而非真 tmux，脚本化必须加 =classic。O：macOS；从 Releases 下载 dmg 或按源码构建；源码构建需 rust-toolchain.toml 指定的 Rust 工具链；接受非官方 Warp fork、AGPL-3.0、上游登录未测试；要 tmux 同步需 tmux；额度环需能定期生成 docs/limit-rings.md 格式 JSON；Claude Code 后台任务 hook 可选。P：已装 Node.js / npm；目标机可 SSH 登录（README 建议用 Tailscale 处理 NAT）且已安装要用的智能体 CLI；macOS 26 可用 Apple 开源 container 运行时，或改用 Docker / Podman；Claude Code 订阅或 API key 用于 claude setup-token；人工接管需 Mac 开启屏幕共享或 Linux 运行绑定 localhost 的 VNC 服务；SDK 路径需 Node/TS 工程。Q：Omnara Cloud 账号；Node.js 22 或更新；使用首项目自带的模型 provider 和 sandbox pool。SDK 路径需 dashboard 创建 API key、导出 OMNARA_TOKEN、npm install @omnara/sdk、用 npx omnara config 获得 org/project ID。自托管需 Docker 和 Compose；新实例需在控制台添加 model provider 和 model、在 Machines 连接本机并共享给项目；沙箱还需实例有 public URL。工具权限、cron 完整参数、memory/subagents 配置需查 docs.omnara.com。R：Node.js >= 22.13（依赖内置 node:sqlite）；macOS 或 Linux（内核级沙箱仅 macOS 提供，Linux 需自行用专用用户或容器兜底）；Claude Code 已安装并登录、claude 在 PATH 上；一个飞书/Lark 账号，手机能打开授权链接；init 会创建 ~/.wardendeck（权限 0700），需备份 master.key 与数据库。S：笔记本内存足够（9B 建议 12–16 GB 以上，64k 上下文再留余量）；装有 Python3；项目及依赖、测试、README 已在本地；先在一次联网会话里完成安装和模型下载；OpenCode 1.19.4 与 qwen3.5:9b 需在自己环境核实。T：项目已有 AGENTS.md 且智能体会读取并遵守；项目工作流确实创建 git worktree（含 subagent 的 .claude/worktrees/agent-*）；智能体具备删除 worktree 和分支的权限；需要知道 worktree 路径；原文提到专用 cargo target，但材料截断，需按 https://github.com/JimLiu/baocut/blob/main/AGENTS.md 示例核对。U：Linux x86_64 或 arm64，daemon 用户能打开 /dev/kvm（裸机、支持嵌套虚拟化的云 VM，或 GitHub 托管的 ubuntu-latest runner，action 会启用 KVM）；Mac 按 docs/development.md 走 Lima VM；装 e2fsprogs（需要 mkfs.ext4）和 git；同一主机安装 Tracekit 1.4.2 signer，开发环境可先 tracekit init --dev --v2 --no-hooks && tracekit up --wait；主机能出站 HTTPS 到镜像仓库（Docker Hub 或 GHCR）；daemon 首次启动会从 GitHub 下载 Firecracker v1.17.0、从 Firecracker 项目的 S3 下载 guest kernel 6.1.155，按 SHA-256 校验后缓存到 <state dir>/images/assets，无外网时用 tkbox daemon --firecracker FILE --kernel FILE 传本地文件。V：macOS 或 Linux（README 徽章只标 macOS | Linux，未提 Windows）；能安装 brew、jq、node；选 Lima 后端时本机能运行 VM；需要一台可信 host（同一台 Mac、Linux 服务器或小 VPS）；VM 内默认没有真实凭证，必须显式授权；docs/grants.md、docs/security.md、docs/pool.md 正文未获取，授权细节需先补齐。W：本机 ssh 免密可登录一台常开服务器（key + ~/.ssh/config 配好端口/用户/跳板机）；服务器上 Claude Code 2.1.248+ 已安装并登录、POSIX login shell；本机装 Bun（仅构建，产出的二进制无依赖）；本机不需要装 claude；需要自定义 ssh 时能设 CC_REMOTE_SSH；Windows 需 PATH 上有 pwsh（可选）和 ripgrep（rg）。X：Windows 11 24H2（build 26100）或更高，Pro/Enterprise/Education，UEFI/BIOS 已开虚拟化；Home/Server 不支持；同一时间只能跑一个沙箱；需要管理员 PowerShell 开启 Windows Sandbox 并重启，重启后从开始菜单打开一次 Windows Sandbox 再关闭以安装 wsb；下载 Windows x64 portable ZIP，先用相邻 .sha256 校验再解压，ZIP 自带 Node.js、sbx、MCP server、guest agent 和 skills，无需安装 Node/npm；MCP 配置需要绝对路径；部署目标必须是专用目录；录 MP4 需要 host 上有 ffmpeg，但不会静默安装。
 
 ## 操作步骤
 
-按层选：C/D/F/H 先定项目规则与观察面；N/O 做保活与状态侧栏；P 做多机线程；K/Q/R 把会话放到云端或托管审批；J/L/U/V 做隔离与可验证执行；S 做断网路径；T 做 worktree 收尾；A/B/E/G/I/M 做起步或替代实现；W 做“模型在远端、文件与 shell 在本机”的分离部署。V 是隔离供给层：给 Claude Code/Codex/Cursor/opencode/pi 补“一次性 VM + 凭证边界”，不替代 C 的项目规则，也不替代 N/O/P 的保活与多机会话。C 可与 A 叠加；F 是 C 的扩展面试点；H 是第三方插件集合，不替代 F；I 与 E 并存；J 补执行目标；K 补会话跑在哪里；L 与 A 不同层；M 与 D 是同一层两个实现；N 是 C/E/K 等做保活外壳；O 是 C/E/N 等做状态侧栏与 tmux 布局同步，不替代 N 的脚本化外壳，也不是自动化编排器；P 与 A/L 不同层，是发起方统一管理多机线程的直连层，可与 C/E 的 agent 规则叠加，不替代 N 的 tmux 脚本化，也不替代 O 的状态侧栏，且不提供定时/重试；Q 与 C/E/K 等互补：Claude Code/Codex/OpenCode 是单终端/单机 agent loop，Omnara 补云托管、跨机器、跨用户、Slack/GitHub/定时触发，可用 MCP 让 Claude Code 管理 Omnara 代理；Q 不替代 C 的项目护栏，也不替代 N/O/P 的本地/多机外壳；R 是 C/E/K 等的授权与审计层：Claude Code 仍是唯一执行引擎，WardenDeck 在其上补移动触发、逐工具审批、macOS 内核沙箱和哈希链审计，不替代 C 的项目护栏，也不替代 N/O/P 的本地/多机外壳，且不提供定时触发；S 与 D 是同一工具不同配置：D 是 build/plan 与桌面版，S 是离线本地模型；S 与 C/E/K 等不冲突，是断网/隐私受限时的补充路径；S 不能替代 A/L 的隔离，因为模型、依赖、测试都在本机；T 是项目规则层，补 N 的 worktree 收尾，可与 C 的 CLAUDE.md/规则并存；T 不替代隔离、审批、验收或 tmux 保活；U 是隔离+审计层：C/E 的规则管 agent 做什么，U 管它能碰到什么、每次触碰是否被签名记录，可与 C 的 CLAUDE.md 和 E 的 CLI 叠加；U 不替代 N/O/P 的保活与多机会话，也不提供定时触发、任务队列或重试（Action 的触发来自 CI job 本身）。V 是 VM 供给层：给已有智能体补“隔离运行环境 + 凭证边界”，把允许 agent 执行命令的权限问题从本机移到一次性 VM；V 不替代 C 的项目规则，不替代 U 的签名审计包，也不提供基于时间/事件/状态触发的调度。W 是部署形态层：把 Claude Code 的推理端（模型、system prompt、会话、Web search、subagents、skills）放到远端服务器，把 Read/Write/Edit/NotebookEdit/Bash/Glob/Grep 和本地 MCP 留本机；W 不替代 C 的项目规则（项目级 .claude/ 不下发，服务器用自己的设置），不替代 U/V 的隔离（文件仍在本机执行，没有 VM 边界），不替代 N 的 tmux 保活（worktree 工具关闭，内置 --worktree/--tmux 路径不可用），也不提供定时/事件触发。W 与 K 都是“远端”，但边界不同：K 把模型和文件都放进云端一次性 VM，W 只把模型与会话放远端、文件与 shell 留在本机。
+按层选：C/D/F/H 先定项目规则与观察面；N/O 做保活与状态侧栏；P 做多机线程；K/Q/R 把会话放到云端或托管审批；J/L/U/V 做隔离与可验证执行；X 做 Windows 桌面干净机验证；S 做断网路径；T 做 worktree 收尾；A/B/E/G/I/M 做起步或替代实现；W 做“模型在远端、文件与 shell 在本机”的分离部署。V 是隔离供给层：给 Claude Code/Codex/Cursor/opencode/pi 补“一次性 VM + 凭证边界”，不替代 C 的项目规则，也不替代 N/O/P 的保活与多机会话。C 可与 A 叠加；F 是 C 的扩展面试点；H 是第三方插件集合，不替代 F；I 与 E 并存；J 补执行目标；K 补会话跑在哪里；L 与 A 不同层；M 与 D 是同一层两个实现；N 是 C/E/K 等做保活外壳；O 是 C/E/N 等做状态侧栏与 tmux 布局同步，不替代 N 的脚本化外壳，也不是自动化编排器；P 与 A/L 不同层，是发起方统一管理多机线程的直连层，可与 C/E 的 agent 规则叠加，不替代 N 的 tmux 脚本化，也不替代 O 的状态侧栏，且不提供定时/重试；Q 与 C/E/K 等互补：Claude Code/Codex/OpenCode 是单终端/单机 agent loop，Omnara 补云托管、跨机器、跨用户、Slack/GitHub/定时触发，可用 MCP 让 Claude Code 管理 Omnara 代理；Q 不替代 C 的项目护栏，也不替代 N/O/P 的本地/多机外壳；R 是 C/E/K 等的授权与审计层：Claude Code 仍是唯一执行引擎，WardenDeck 在其上补移动触发、逐工具审批、macOS 内核沙箱和哈希链审计，不替代 C 的项目护栏，也不替代 N/O/P 的本地/多机外壳，且不提供定时触发；S 与 D 是同一工具不同配置：D 是 build/plan 与桌面版，S 是离线本地模型；S 与 C/E/K 等不冲突，是断网/隐私受限时的补充路径；S 不能替代 A/L 的隔离，因为模型、依赖、测试都在本机；T 是项目规则层，补 N 的 worktree 收尾，可与 C 的 CLAUDE.md/规则并存；T 不替代隔离、审批、验收或 tmux 保活；U 是隔离+审计层：C/E 的规则管 agent 做什么，U 管它能碰到什么、每次触碰是否被签名记录，可与 C 的 CLAUDE.md 和 E 的 CLI 叠加；U 不替代 N/O/P 的保活与多机会话，也不提供定时触发、任务队列或重试（Action 的触发来自 CI job 本身）。V 是 VM 供给层：给已有智能体补“隔离运行环境 + 凭证边界”，把允许 agent 执行命令的权限问题从本机移到一次性 VM；V 不替代 C 的项目规则，不替代 U 的签名审计包，也不提供基于时间/事件/状态触发的调度。W 是部署形态层：把 Claude Code 的推理端（模型、system prompt、会话、Web search、subagents、skills）放到远端服务器，把 Read/Write/Edit/NotebookEdit/Bash/Glob/Grep 和本地 MCP 留本机；W 不替代 C 的项目规则（项目级 .claude/ 不下发，服务器用自己的设置），不替代 U/V 的隔离（文件仍在本机执行，没有 VM 边界），不替代 N 的 tmux 保活（worktree 工具关闭，内置 --worktree/--tmux 路径不可用），也不提供定时/事件触发。W 与 K 都是“远端”，但边界不同：K 把模型和文件都放进云端一次性 VM，W 只把模型与会话放远端、文件与 shell 留在本机。X 是 Windows 桌面验证层：给 Windows 桌面应用补“一次性真实 Windows 干净机 + 报告/截图/审计日志”，CLI 可独立使用，MCP 只是给需要工具 schema 和内联截图的客户端；X 不替代 C 的项目规则，不替代 U 的签名审计包，不替代 V 的通用 VM 隔离，也不提供基于时间/事件/状态触发的调度。X 与 J 不同：J 是 QEMU 真实内核/网络 guest，X 是 Windows Sandbox 里的真实 Windows 桌面应用场景；X 与 V 不同：V 给现有智能体补可丢弃 VM，X 专门做 Windows 桌面干净机测试与证据收集。
 
 ### 做法 A：Linux 服务器 agentbox
 
@@ -743,6 +744,107 @@ bun run build                     # dist/cc-remote-{linux-x64,linux-arm64,darwin
 
 测试目录 test/e2e/ 里有最小 ACP 客户端和一个 fake ssh，用独立的 HOME 在本机模拟“远端”，用法见 test/e2e/client.ts 头部注释——这是不碰真实服务器就能验证改动的方式。
 
+### 做法 X：sandbox-mcp Windows 干净机测试与证据
+
+1. 开启 Windows Sandbox。前提：管理员 PowerShell、Windows 11 24H2（build 26100）+ Pro/Enterprise/Education、UEFI/BIOS 已开虚拟化；Home/Server 不支持。运行：
+
+```powershell
+Enable-WindowsOptionalFeature -Online -FeatureName Containers-DisposableClientVM -All
+```
+
+运行后重启；重启后从开始菜单打开一次 Windows Sandbox 再关闭，以安装 `wsb`。预期：功能启用，`wsb` 可用；同一时间只能跑一个沙箱。
+
+2. 下载 portable ZIP（Windows x64），先用相邻 `.sha256` 校验再解压；ZIP 自带 Node.js、`sbx`、MCP server、guest agent 和 skills，无需安装 Node/npm。解压后在 PowerShell 运行只读检查：
+
+```powershell
+./sbx.cmd doctor
+```
+
+预期：`doctor` 只解释缺什么和怎么修，不自动开功能、不提权、不改 PATH、不重启；通过再往下。
+
+3. 用系统自带程序跑通最小闭环：
+
+```powershell
+./sbx.cmd run C:/Windows/System32/charmap.exe --open
+```
+
+预期：在 `%LOCALAPPDATA%/sandbox-mcp/runs/<timestamp>` 留下 `report.md`、`report.json`、截图和 `audit.jsonl`。
+
+4. 对自有 Windows 应用做干净机冒烟测试。前提：应用能在 Windows Sandbox 运行；测试脚本存在时用 `--test`；默认不安装任何运行时。
+
+```powershell
+./sbx.cmd run ./dist/YourApp.exe --network off --test ./test/smoke.ps1 --open
+```
+
+预期：启动全新 guest、部署/启动、观察、收集、销毁并出报告。如果失败并提示缺 VC++/.NET/Windows App Runtime，可显式选择自动补齐：
+
+```powershell
+./sbx.cmd run ./dist/YourApp.exe --provision auto --open
+```
+
+但这会把报告标记为 `PROVISIONED (not a clean-machine test)`，不能当作干净机通过。也可先用只读静态诊断：
+
+```powershell
+./sbx.cmd deps ./dist/YourApp.exe
+```
+
+预期：`deps` 是保守静态扫描，不证明所有动态依赖存在；WebView2 等可选组件必须在真实 guest 中检查。
+
+5. 测安装器和卸载残留。前提：有安装包和可选测试脚本。
+
+```powershell
+./sbx.cmd install-test ./setup.msi --test ./test/after-install.ps1 --fail-on-leftovers --open
+```
+
+预期：报告列出安装器新增、卸载器遗漏的文件、注册表、服务、计划任务、自启动项。
+
+6. 不可信文件在无网沙箱中 detonate。前提：只在一次性 guest 中运行；默认无网。
+
+```powershell
+./sbx.cmd detonate ./suspicious.ps1 --network off --open
+```
+
+预期：报告列出进程、域名查询、连接尝试、持久化和文件变化。
+
+7. 需要反复改代码时用 warm sandbox 快循环。前提：目标目录专用，guest 中该目录的多余文件会被删除；`deploy` 只传变更并用 SHA256 校验。
+
+```powershell
+./sbx.cmd start --network off
+./samples/HelloSandbox/build.ps1
+./sbx.cmd deploy ./samples/HelloSandbox/bin C:/apps/HelloSandbox --launch HelloSandbox.exe --restart
+./sbx.cmd shot --window 'Hello Sandbox'
+./sbx.cmd stop
+```
+
+预期：先 `start`，再 build/deploy/shot，改完重复，最后 `stop`；`deploy` 报告 added/changed/removed/unchanged、传输字节、耗时和 `verified: true`。
+
+8. 让 agent 直接走 CLI 或接 MCP。前提：agent 能执行 shell 时优先直接用 `sbx`/`sbx.cmd`，不必配 MCP；只有需要可发现工具 schema、结构化结果和内联截图时才配 MCP。VS Code `.vscode/mcp.json` 形状如下，路径替换为解压目录，且用绝对路径：
+
+```json
+{
+  "servers": {
+    "windows-sandbox": {
+      "type": "stdio",
+      "command": "C:/Users/you/Downloads/sandbox-mcp/node.exe",
+      "args": ["C:/Users/you/Downloads/sandbox-mcp/src/server.js"]
+    }
+  }
+}
+```
+
+GitHub Copilot CLI 的 `%USERPROFILE%/.copilot/mcp-config.json` 用 `mcpServers` 顶层键并加 `tools`；Claude Desktop 用 `mcpServers` 且省略 `type` 和 `tools`。重载客户端后，可让 agent 执行“build it, test it on a clean machine, look at the screenshot, fix it, repeat”。
+
+9. 可选：安装 agent skills/plugin。前提：Node.js 20+；只用 CLI 时不需要。skills 覆盖 setup、干净机运行、交互 UI 测试、安装器测试、不可信文件 detonate。
+
+```powershell
+copilot plugin marketplace add shanselman/sandbox-mcp
+copilot plugin install sandbox-mcp@sandbox-mcp
+```
+
+也可把 `skills/` 中需要的目录复制到 agent 的 skills 文件夹，例如 `~/.copilot/skills/`。
+
+10. 知道它不做什么：README 没有说它自带调度器；时间/事件触发需要外层 agent 或 CI 来编排。适合 Windows 桌面应用（Win32、WinForms、WPF、WinUI、console、PyInstaller、Electron 等）的干净机验证、GUI 测试、安装器和不可信文件；不适合需要 Linux、持久环境、多机并行或 ARM64 打包的场景。CLI 适合能跑 shell 的 agent；MCP 适合需要工具 schema、结构化结果和内联截图的客户端。
+
 ## 怎么判断变好了
 
 A：用量页按用户/模型/时间过滤 tokens、成本来源、单轮延迟，可 CSV 导出；缓存命中率 cache reads / (uncached input + cache reads + cache writes)；每条回复显示时间、模型、设置快照和记录成本；变更页看 diff 和整文件。无效果评测。
@@ -791,6 +893,8 @@ V：最小试用半天以内：只走 headless 路径（跳过 build-base），�
 
 W：最小试用半天到一天，一台常开服务器 + 本机一个可回退的小仓库。按步骤 1–5 跑通 cc-remote doctor 与第一个 ACP 会话；给一个边界清晰任务（跑测试、定位失败、单文件修）；全程盯权限询问，确认 Read、Glob、Grep 不问、Bash 只按前缀问、含 ; & | 重定向 $(…) 反引号换行的命令每次都问；退出后在本机 git status 看改动是否只落在预期文件。可观察：doctor 是否一次通过（ssh + 远端 claude 版本）；同一任务相对本地 Claude Code 的人工介入次数与到可审查 diff 的耗时；权限询问次数与你实际误批的次数；长会话里前缀批准累积到第几轮时你主动重启；断 ssh 后是约一分钟失败还是挂死；会话是否能在本机 ~/.claude/projects/ 列表、重放、fork；服务器端是否只出现工作夹路径而不见本机其它文件；Windows 上 PowerShell 与 rg 是否按预期工作。原文没有任何质量、延迟或成本量化数据，以上指标是本手册提出的试用设计。止损：工作流依赖项目级 .claude/（commands、skills、agents、settings）、依赖 checkpoint/rewind、依赖 LSP 或 worktree 工具，或需要定时/事件触发，则不要切到 W，保留本地 Claude Code 或改用 K/U/V。
 
+X：最小试用：在一台符合前提的 Windows 11 24H2 Pro/Enterprise 开发机上，按步骤 1–3 跑通 `doctor` 和 `charmap`；再跑仓库自带样例：`HelloSandbox` 正常测试应通过，`--args --crash` 应失败并给出崩溃证据，`LeakyApp` 应报告卸载残留，`Suspicious` 应报告模拟恶意行为。然后用一个真实 Windows 应用做 3 次 `sbx run --network off --test ... --open`，记录每次 pass/fail、耗时、截图/报告是否齐全、是否发现只在干净机出现的问题。接入 agent 后做 A/B：同一批 3–5 个已知问题，比较“不用沙箱”和“用沙箱闭环”的修复成功率、首次诊断时间、人工介入次数、证据完整性、误判为通过的比例、单次运行成本。可观察：干净机通过率、干净机专属失败发现数、从失败到定位缺依赖/崩溃原因的时间、安装器残留发现数、agent 需要人手动操作桌面的次数、报告和截图可复现率。作者仓库记录的参考数据：GUI 样例端到端约 40–50 秒；干净机运行 `NativeProof.exe` 29.8 秒失败，退出码 -1073741515，诊断为缺 VC++ redistributable；显式 provision 后另一台新 guest 30.9 秒通过，安装器为 Microsoft 签名 14.51.36247.0，guest 网络保持 off；兼容性矩阵覆盖七种配置，WinUI/WPF/Win32 有真实离线 guest 截图；build 26100.9882 的可选组件基线记录在 `test/fixtures/sandbox-26100.9882.json`。这些是作者仓库内实测记录，不是对所有 Windows 应用或未来 guest 镜像的保证。止损：团队没有 Windows 桌面应用测试需求，或机器不满足 Windows 11 24H2 Pro/Enterprise，则不值得采用，最多作为思路研读。
+
 ## 常见坑
 
 - A：agentbox 默认 bypassPermissions、凭据可被终端用户读、单机单进程；撤销账号访问不会收回已下发凭据、不会终止运行进程；Web 提交不 push、不跑 Git hooks/签名；默认备份不含工作区；持久文件只放 /workspace、/home/agent、每用户 /shared；容器停止或重建就终止进程。
@@ -816,6 +920,7 @@ W：最小试用半天到一天，一台常开服务器 + 本机一个可回退�
 - U：v0、无 release，只能从源码构建；Mac 只能按 docs/development.md 走 Lima VM；没有 /dev/kvm 的机器直接跑不起来。必须自己装并常驻 Tracekit signer：daemon 启动时没有 signer 应答就退出；同机 dev signer 是 same-user，bundle 只显示 Assurance: dev 和 isolation: same-user，更高保证要把 signer 作为独立用户运行、并在另一台主机放 witness 共同签名 signer 日志。Action 里的 signer 是同一 job 内创建的 dev signer、没有 witness，Assurance: dev 只证明记录在 job 后未被改动，不证明 runner 本身诚实；action 会把 agent 改动应用到 runner 的 checkout，随后构建/测试等于在 runner 上运行 agent 的代码，要按 examples/claude-code-fix.yml 的三 job 形状把写 token 隔开。固定你预期的 trust 文件（提交到仓库或放 CI 外），不要直接信任 bundle 旁边附带的那个。tkbox apply 只能在已停止的 box 上、导出前执行，且对每个文件先问 signer；示例 demo 不 apply。网络不在 allowlist 会被挂起，无人处理 2 分钟后拒绝；云 metadata 地址 169.254.169.254 无论 allowlist 或人工批准都直接拒绝；明文 HTTP 把 secret 占位符带到未绑定主机会被阻断并记 tkbox.secret.leak；绑定主机才换入真实值并记 tkbox.secret.use。无外网时用 --firecracker/--kernel 传本地文件；tkbox 默认在自身二进制旁找 guest 二进制，也可 --guest-dir 指定。材料没有并发调度、任务队列、成本或性能数据；不要把它当多任务编排器。
 - V：README 顶部明确警告 Early-stage, experimental software. Expect rough edges and breaking changes between releases.；exe.dev、boat.dev、Cloud Hypervisor 三个后端标注 experimental；仓库 38 stars；本次只拿到 README，docs/grants.md、docs/security.md、docs/pool.md、docs/cli.md、docs/install.md 正文均未获取，授权具体配置、CLI 参数、安全边界细则无法照抄；约 13 秒启动完整桌面 VM、约 1 秒快照、约 3 分钟构建基础镜像都是作者主张，没有基准测试方法或环境说明；密钥永不进入 VM 是设计声明，实际隔离强度需读 docs/security.md；VM 默认连 LLM 都没有，必须显式授权；Windows 不适用；多智能体共享池要用 vm_lease 并补 docs/pool.md；不要把 V 当成定时调度器，原文没有基于时间/事件/状态触发的调度机制。
 - W：项目级 .claude/（commands、skills、agents、settings）不会下发到服务器，服务器用自己的设置，本机的 CLAUDE.md 在本机读；依赖这些的工作流行为会不一致。checkpoint/rewind 失效；LSP、Monitor、worktree 工具被关闭，N 的内置 --worktree/--tmux 路径在这条线上不可用，要保活改用 N 的手工 tmux 会话。前缀批准持续到 cc-remote 退出，长会话权限只增不减，必须主动重启；“含 ; & | 重定向 $(…) 反引号换行永不自动批准”不等于完整沙箱，Bash 仍在本机执行。服务器上的 claude 必须已登录且 2.1.248+；本机不需要装 claude，但需要 Bun 构建。Windows OpenSSH 不能共享连接，PowerShell 版本与 rg 缺失会影响 shell 与 Grep。重名 MCP 优先级是客户端 > 本地配置 > 服务器；OAuth token 与 Claude Code 分开存，换机要重新授权。没有定时/事件触发；resume/fork 只是“接着上次”，不是自动推进。原文没有独立评测或量化数据；先小范围试用，不要直接全面替换本地 Claude Code。
+- X：仅 Windows 11 24H2+ Pro/Enterprise/Education；Home/Server 不支持；需要虚拟化和管理员操作；同一时间只能一个沙箱，不支持并行；ARM64 当前未打包；不适合 Linux 或持久环境。`deps` 是保守静态扫描，不证明所有动态依赖存在；WebView2 等可选组件必须在真实 guest 中检查；provision 后的通过不是干净机通过。不是所有 Windows 应用或依赖硬件的负载都能在 Sandbox 工作；录 MP4 需要 host 上有 ffmpeg，但不会静默安装。原文在 CLI 段落被截断，部分命令选项只能按已给内容判断。部署目标必须是专用目录，guest 中该目录的多余文件会被删除；MCP 配置需要绝对路径；`doctor` 不自动修，只解释；首次必须手动打开一次 Windows Sandbox 才能安装 `wsb`；它不自带调度器，时间/事件触发需要外层 agent 或 CI 编排；报告标记 `PROVISIONED (not a clean-machine test)` 不能当作干净机通过；下载后先用相邻 `.sha256` 校验再解压。
 
 ## 证据与来源
 
@@ -844,8 +949,9 @@ W：最小试用半天到一天，一台常开服务器 + 本机一个可回退�
 | U | 《Cygnux-Labs/Tracekit-box》：/dev/kvm、e2fsprogs、Tracekit 1.4.2 signer、tracekit init --dev --v2 --no-hooks、make linux 构建与安装、tkbox daemon 首次下载 Firecracker v1.17.0 与 guest kernel 6.1.155 并 SHA-256 校验、tkbox run/exec/approvals/approve/reject/diff/stop/export、--secret GH=env:GH_TOKEN@api.github.com 语法、allowlist 挂起与 2 分钟拒绝、metadata 地址直接拒绝、tkbox.secret.leak/tkbox.secret.use、tracekit verify --trust 打印 Integrity: VERIFIED.、Action YAML 与三 job 安全形状、Python SDK 示例、fail-closed 与 tkbox.gap 均来自 README/报告转述；v0、无 release、需 KVM 为报告结论 | 无独立评测、用户案例、性能或成本数据；更高保证需把 signer 作为独立用户运行并在另一台主机放 witness 为 README 说明；Assurance: dev 不证明 runner 诚实为 README 明示；小范围试用、不宜直接作为生产默认为调研结论；最小试用与观察项为本手册提出 |
 | V | 《modem-dev/boxery》：安装命令序列（brew install lima jq node、npm install -g boxery-vm、boxery-host init --backend lima && boxery-host build-base、boxery setup local）、npx add-mcp boxery-vm、pi install npm:boxery-vm、vm_* 工具清单、后端清单（本地 Lima/libvirt/Cloud Hypervisor、云端 exe.dev/boat.dev）、默认拒绝的 grant 机制、VM 只持有可撤销 token、boxery attach/desktop、vm_lease 来自 README；38 stars、early-stage experimental、三个后端 experimental 为报告数据 | 约 13 秒启动完整桌面 VM、约 1 秒快照、约 3 分钟构建基础镜像均为作者主张，无基准方法或环境说明；密钥永不进入 VM 是设计声明，实际隔离强度需读 docs/security.md；docs/grants.md、docs/security.md、docs/pool.md、docs/cli.md、docs/install.md 正文未获取，授权具体配置、CLI 参数、安全边界细则不能照抄；无正确性、成本、质量验证数据；Windows 不适用；最小试用与 adopt 条件为报告建议/本手册试用设计 |
 | W | 《AkaraChen/cc-remote》：远端 claude + 本机工具的切分表、ssh 传输与 claude-agent-acp 的单处 patch、bun install/compile/link 与全平台 build、host 查找顺序与 CC_REMOTE_SSH 语义、cc-remote doctor、--cli auth login、Zed agent_servers 与 paseo agents.providers 配置及 paseo 插件、命令清单、权限模型（Read/Glob/Grep 不问、Accept edits 限会话目录、Bash 按命令前缀、危险 shell 语法永不自动批准、前缀批准持续到退出）、MCP 本地启动与重名优先级、OAuth token 目录、ControlMaster/ServerAlive 参数、会话镜像 ~/.claude/projects/、服务器工作夹路径、Windows PowerShell 与 ripgrep、test/e2e 的 fake ssh 均来自原文 | 原文没有任务质量、延迟或成本数据；只有 doctor（ssh + 版本）与 test/e2e fake ssh 两类检查；项目级 .claude/ 不下发、checkpoint/rewind 失效、LSP/Monitor/worktree 关闭为原文/调研结论；结论是 try 而非 adopt，不建议直接全面替换本地 Claude Code；最小试用与观察项为本手册提出 |
+| X | 《shanselman/sandbox-mcp》：Windows Sandbox 开关命令、portable ZIP 与 `.sha256`、`sbx.cmd doctor`、`run`/`install-test`/`detonate`/`start`/`deploy`/`shot`/`stop`/`deps`、MCP 配置形状、skills/plugin 安装、报告与 `audit.jsonl`、`PROVISIONED` 标记、约 40–50 秒 GUI 样例、NativeProof 29.8 秒失败与 30.9 秒 provision 通过、安装器签名、七种配置兼容矩阵、build 26100.9882 基线来自 README/报告转述；作者仓库内实测，非独立第三方评测 | 仅 Windows 11 24H2+ Pro/Enterprise/Education；Home/Server 不支持；单沙箱、不支持并行；ARM64 未打包；不自带调度器；`deps` 保守静态扫描；provision 后不算干净机通过；原文 CLI 段落截断；无独立评测；小范围试用建议来自调研结论 |
 
-二十三条做法都没有独立的“AI 是否让结果变好了”的对照评测或基准数据；A 是记账维度，F 是验收矩阵/成本公式，J 是退出码/probe/dry-run，K 是点名命令证据，M 是工具自检数据，N 是保活/读回能力，O 是侧栏状态与 tmux 布局同步，P 是线程续聊/日志/清理/权限行为与 fan-out 能力，Q 是运行可观测性/审批/断点恢复，R 是逐工具审批/哈希链审计/内核沙箱，S 是项目自带测试的独立验收与断网越界检查，T 是 AGENTS.md 清理规则与残留检查，U 是 micro-VM 隔离、密钥/网络/文件写入的签名记录与离线 verify，V 是 VM 隔离、凭证默认拒绝、宿主机零污染与可回滚性，W 是 doctor 连通/版本检查与 fake ssh 的本机端到端测试；均非独立基准。
+二十四条做法都没有独立的“AI 是否让结果变好了”的对照评测或基准数据；A 是记账维度，F 是验收矩阵/成本公式，J 是退出码/probe/dry-run，K 是点名命令证据，M 是工具自检数据，N 是保活/读回能力，O 是侧栏状态与 tmux 布局同步，P 是线程续聊/日志/清理/权限行为与 fan-out 能力，Q 是运行可观测性/审批/断点恢复，R 是逐工具审批/哈希链审计/内核沙箱，S 是项目自带测试的独立验收与断网越界检查，T 是 AGENTS.md 清理规则与残留检查，U 是 micro-VM 隔离、密钥/网络/文件写入的签名记录与离线 verify，V 是 VM 隔离、凭证默认拒绝、宿主机零污染与可回滚性，W 是 doctor 连通/版本检查与 fake ssh 的本机端到端测试，X 是 Windows 干净机闭环的作者仓库实测记录（GUI 样例约 40–50 秒、NativeProof 失败后 provision 通过等）；均非独立基准。
 
 ## 依据的调研
 
@@ -872,3 +978,4 @@ W：最小试用半天到一天，一台常开服务器 + 本机一个可回退�
 - [Cygnux-Labs/Tracekit-box](../research/radar/2026-10-30/8511-cygnux-labs-tracekit-box.md)：值得一试，建议小范围试用：在一次性 Linux+KVM 主机或 GitHub Actions 中按 README 的 demo/action 跑一个修测试任务，导出 .tkb 并用固定 trust 文件离线验证；原因是步骤具体可复现，但项目仍是 v0、需自建 signer，默认只有 dev 级担保，不宜直接作为生产默认。
 - [modem-dev/boxery](../research/radar/2026-11-03/9948-modem-dev-boxery.md)：值得一试，可以在 macOS 或 Linux 上小范围试用：按 README 的步骤安装 boxery host，用 Lima 或 libvirt 启动 VM，通过 MCP 把 VM 工具交给现有编程智能体（如 Claude Code），用来运行不受信任的代码、执行桌面操作和并行尝试，真实密钥保留在 host 上而不进入 VM。原因是原文给出了可直接照抄的安装命令、MCP 工具清单和默认拒绝、按需授权的凭证模型，属于少见的“任务供给 + 权限边界”完整闭环；但项目自标早期实验阶段、多个后端尚为实验性，因此还不宜作为手册主线直接采用。
 - [AkaraChen/cc-remote](../research/radar/2026-11-07/11234-akarachen-cc-remote.md)：值得一试，可以在有一台常开服务器（已登录 claude）的前提下，按 README 的步骤搭一套 cc-remote 做小范围试用，把"模型/会话在远端、文件与 shell 在本机"当作一条可复用的部署与权限边界模板；但它有明确的已知限制（.claude/ 不下发、checkpoint/rewind 失效、LSP/worktree 关闭），不建议直接全面替换本地 Claude Code。
+- [shanselman/sandbox-mcp](../research/radar/2026-11-07/11330-shanselman-sandbox-mcp.md)：值得一试，建议小范围试用：在符合 Windows 11 Pro/Enterprise 条件、且确有 Windows 桌面应用干净机验证需求的团队，先按 README 跑通 doctor 和内置样例，再接入编码智能体。原因是它给出了可复制的 CLI/MCP 配置、沙箱流程和证据链，但环境限制明显，当前只适合 Windows 桌面测试这一窄场景。
