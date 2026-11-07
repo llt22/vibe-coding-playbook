@@ -1,14 +1,14 @@
-# 让编码 agent 在可控环境里干活，并留下可复核的证据
+# 把编码 agent 关进可控边界：项目规则、隔离执行与可复核证据
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：把编码 agent 从在本机随手跑一次，变成在隔离环境里按项目规则反复跑，能看清读写、按需审批、用测试验收，并在需要时导出可离线复核的审计包。
-> 先试这一步：先在一个可回退的真实仓库里落地短 CLAUDE.md、.claude/settings.json 的 allow/ask/deny 和一个 PostToolUse hook，用 plan 模式跑 3–5 个同类小任务并人工审查 diff，建立基线后再决定加保活、远程审批或 VM 隔离。
-> 最近修订：2026-11-03
+> 解决的问题：解决把编码 agent 从“在本机随手跑一次”变成“在明确规则、隔离边界和可复核证据下反复跑”，并把模型、文件、shell、凭证放在你选定的边界两侧的问题。
+> 先试这一步：先在一个可回退的小仓库里写不超过一屏的 CLAUDE.md、配好 .claude/settings.json 的 allow/ask/deny，用 plan mode 跑 3–5 个同类任务，与手工基线对比完成率、返工和权限询问。
+> 最近修订：2026-11-07
 
 ## 解决什么问题
 
-本手册把编码 agent（Claude Code / Codex CLI / OpenCode / goose / pi / agentbox / Xiryn / Omnara 等）从“在本机随手跑一次”变成“在可控环境里、按项目规则反复跑”，并能实时看到它在读什么、写什么；需要时在真实（仿真）系统里执行并拿到可判定结果；断网或数据不出本机时，也能用本地模型跑小任务并用项目自带测试独立验收；需要给每个任务留下可离线复核的证据时，把任务关进无网卡的 micro-VM，由宿主 signer 逐项放行并导出签名审计包。二十二次做法 A-V 按层覆盖：项目规则与观察（C/D/F/H）、会话与多机（N/O/P）、云端与托管（K/Q/R）、隔离与验证（J/L/U/V）、离线与收尾（S/T），以及起步/替代实现（A/B/E/G/I/M）。
+本手册把编码 agent（Claude Code / Codex CLI / OpenCode / goose / pi / agentbox / Xiryn / Omnara 等）从“在本机随手跑一次”变成“在可控环境里、按项目规则反复跑”，并能实时看到它在读什么、写什么；需要时在真实（仿真）系统里执行并拿到可判定结果；断网或数据不出本机时，也能用本地模型跑小任务并用项目自带测试独立验收；需要给每个任务留下可离线复核的证据时，把任务关进无网卡的 micro-VM，由宿主 signer 逐项放行并导出签名审计包；需要把模型与会话放到远端、而文件、shell 和密钥留在本机时，用 ACP 中间层把工具执行点切在本机。二十三次做法 A-W 按层覆盖：项目规则与观察（C/D/F/H）、会话与多机（N/O/P）、云端与托管（K/Q/R）、隔离与验证（J/L/U/V）、离线与收尾（S/T）、分离部署（W），以及起步/替代实现（A/B/E/G/I/M）。
 
 ## 适用与不适用
 
@@ -36,16 +36,17 @@
 | T | 项目已有 AGENTS.md 且智能体会读取并遵守；工作流会创建 git worktree，尤其 subagent 的 .claude/worktrees/agent-*；智能体有删除 worktree 和分支的权限 | 证据只有一条推文和一个 AGENTS.md 示例链接；规则片段在“它专用的 cargo target”处截断，删除命令、分支命名规则、cargo target 处理细节不可见；无验证数据；不能防误删，需额外保护未合并工作 |
 | U | Linux + KVM 主机上，agent 要改真实系统又需要隔离与可审计；想把一次任务导出成 .tkb 离线验证；在 GitHub Actions 里跑 Claude Code/Codex 修测试，并只在 signer 逐文件放行后应用改动 | v0、无 release、需从源码构建；必须自带并常驻 Tracekit signer，同机 dev signer 只有 Assurance: dev、isolation: same-user；Action 里的 dev signer 没有 witness，只证明 job 后记录未被改动，不证明 runner 本身诚实；Mac 只能按 docs/development.md 走 Lima VM；无 KVM 的机器跑不起来；材料没有并发调度、成本、性能数据 |
 | V | macOS 或 Linux 上，想让现有编程智能体把不受信任代码、桌面操作、并行修复放进可丢弃 VM，真实密钥留在 host，按需授权 | README 自标 early-stage、experimental；exe.dev、boat.dev、Cloud Hypervisor 后端标注 experimental；仓库 38 stars；Windows 未提；docs/grants.md、docs/security.md、docs/pool.md 正文未获取，授权细节不能照抄；无正确性/成本/质量验证数据 |
+| W | 本机有代码和环境、想统一用某台常开服务器上的模型/订阅/会话记录；不愿或不能把 shell 交给远端；用 Zed/paseo 等 ACP 客户端 | 依赖项目级 .claude/（commands、skills、agents、settings）、checkpoint/rewind、LSP、Monitor、worktree 工具的工作流；需要定时/事件触发；服务器未登录或 claude 低于 2.1.248；Windows OpenSSH 不能共享连接 |
 
 ## 前置条件
 
 通用：非生产、可回退的仓库或环境；受管/涉密环境先审阅所有 curl | bash、irm | iex、./install.sh、./setup.sh 类脚本，或改用包管理器/源码审阅后执行。
 
-A：Linux 服务器 + systemd + 本地 Docker；Ubuntu 22.04+/Debian 12+ 可自动补依赖；源码构建需 Docker 访问权限。B：本机可装 CLI，有受支持供应商 key 或订阅，非生产环境。C：macOS/Linux/WSL、Node+npm 或 curl、真实 Git 项目、可回退。D：macOS/Linux/Windows 开发机，安装前清 0.1.x 前旧版。E：Mac/Linux/Windows；ChatGPT 订阅需 Plus/Pro/Business/Edu/Enterprise；API key 需 additional setup。F：一次性项目、合成数据、无生产凭据、已批准 Claude Code、能设 CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1、能生成 /plugin-types、有回滚负责人。G：Node.js 22.19+、非关键可回退仓库、优先容器环境、模型订阅或 API key。H：Claude Code 2.1.287+（README 自述，无法独立验证）、Code 视图需 macOS+Chrome+图片终端、非关键 Git 仓库。I：macOS/Windows 10/11、已运行 Codex App、电脑保持唤醒联网、手机同局域网、通知需 Bark/ntfy。J：Python 3.8+、QEMU、Go 1.22+、首次联网、非关键环境。K：Pro/Max/Team/Enterprise 且 claude.ai 登录；GitHub 连接；private repo 装 Claude GitHub App；终端路径已用 gh 且可 /web-setup；claude --cloud 前先 push。L：约 4 GB 空闲磁盘、至少一个 provider key（必需）、Firecrawl 可选、Node ≥20.9、Docker；Telegram 可选。M：Node 18+、可用 provider key、非关键小仓库；Homebrew 路径会拉 Rust 工具链。N：较新的 Claude Code，claude --help 能看到 -w/--worktree 与 --tmux；本机有 tmux；远程机器可 SSH；iTerm2 上内置路径用 native panes 而非真 tmux，脚本化必须加 =classic。O：macOS；从 Releases 下载 dmg 或按源码构建；源码构建需 rust-toolchain.toml 指定的 Rust 工具链；接受非官方 Warp fork、AGPL-3.0、上游登录未测试；要 tmux 同步需 tmux；额度环需能定期生成 docs/limit-rings.md 格式 JSON；Claude Code 后台任务 hook 可选。P：已装 Node.js / npm；目标机可 SSH 登录（README 建议用 Tailscale 处理 NAT）且已安装要用的智能体 CLI；macOS 26 可用 Apple 开源 container 运行时，或改用 Docker / Podman；Claude Code 订阅或 API key 用于 claude setup-token；人工接管需 Mac 开启屏幕共享或 Linux 运行绑定 localhost 的 VNC 服务；SDK 路径需 Node/TS 工程。Q：Omnara Cloud 账号；Node.js 22 或更新；使用首项目自带的模型 provider 和 sandbox pool。SDK 路径需 dashboard 创建 API key、导出 OMNARA_TOKEN、npm install @omnara/sdk、用 npx omnara config 获得 org/project ID。自托管需 Docker 和 Compose；新实例需在控制台添加 model provider 和 model、在 Machines 连接本机并共享给项目；沙箱还需实例有 public URL。工具权限、cron 完整参数、memory/subagents 配置需查 docs.omnara.com。R：Node.js >= 22.13（依赖内置 node:sqlite）；macOS 或 Linux（内核级沙箱仅 macOS 提供，Linux 需自行用专用用户或容器兜底）；Claude Code 已安装并登录、claude 在 PATH 上；一个飞书/Lark 账号，手机能打开授权链接；init 会创建 ~/.wardendeck（权限 0700），需备份 master.key 与数据库。S：笔记本内存足够（9B 建议 12–16 GB 以上，64k 上下文再留余量）；装有 Python3；项目及依赖、测试、README 已在本地；先在一次联网会话里完成安装和模型下载；OpenCode 1.19.4 与 qwen3.5:9b 需在自己环境核实。T：项目已有 AGENTS.md 且智能体会读取并遵守；项目工作流确实创建 git worktree（含 subagent 的 .claude/worktrees/agent-*）；智能体具备删除 worktree 和分支的权限；需要知道 worktree 路径；原文提到专用 cargo target，但材料截断，需按 https://github.com/JimLiu/baocut/blob/main/AGENTS.md 示例核对。U：Linux x86_64 或 arm64，daemon 用户能打开 /dev/kvm（裸机、支持嵌套虚拟化的云 VM，或 GitHub 托管的 ubuntu-latest runner，action 会启用 KVM）；Mac 按 docs/development.md 走 Lima VM；装 e2fsprogs（需要 mkfs.ext4）和 git；同一主机安装 Tracekit 1.4.2 signer，开发环境可先 tracekit init --dev --v2 --no-hooks && tracekit up --wait；主机能出站 HTTPS 到镜像仓库（Docker Hub 或 GHCR）；daemon 首次启动会从 GitHub 下载 Firecracker v1.17.0、从 Firecracker 项目的 S3 下载 guest kernel 6.1.155，按 SHA-256 校验后缓存到 <state dir>/images/assets，无外网时用 tkbox daemon --firecracker FILE --kernel FILE 传本地文件。V：macOS 或 Linux（README 徽章只标 macOS | Linux，未提 Windows）；能安装 brew、jq、node；选 Lima 后端时本机能运行 VM；需要一台可信 host（同一台 Mac、Linux 服务器或小 VPS）；VM 内默认没有真实凭证，必须显式授权；docs/grants.md、docs/security.md、docs/pool.md 正文未获取，授权细节需先补齐。
+A：Linux 服务器 + systemd + 本地 Docker；Ubuntu 22.04+/Debian 12+ 可自动补依赖；源码构建需 Docker 访问权限。B：本机可装 CLI，有受支持供应商 key 或订阅，非生产环境。C：macOS/Linux/WSL、Node+npm 或 curl、真实 Git 项目、可回退。D：macOS/Linux/Windows 开发机，安装前清 0.1.x 前旧版。E：Mac/Linux/Windows；ChatGPT 订阅需 Plus/Pro/Business/Edu/Enterprise；API key 需 additional setup。F：一次性项目、合成数据、无生产凭据、已批准 Claude Code、能设 CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1、能生成 /plugin-types、有回滚负责人。G：Node.js 22.19+、非关键可回退仓库、优先容器环境、模型订阅或 API key。H：Claude Code 2.1.287+（README 自述，无法独立验证）、Code 视图需 macOS+Chrome+图片终端、非关键 Git 仓库。I：macOS/Windows 10/11、已运行 Codex App、电脑保持唤醒联网、手机同局域网、通知需 Bark/ntfy。J：Python 3.8+、QEMU、Go 1.22+、首次联网、非关键环境。K：Pro/Max/Team/Enterprise 且 claude.ai 登录；GitHub 连接；private repo 装 Claude GitHub App；终端路径已用 gh 且可 /web-setup；claude --cloud 前先 push。L：约 4 GB 空闲磁盘、至少一个 provider key（必需）、Firecrawl 可选、Node ≥20.9、Docker；Telegram 可选。M：Node 18+、可用 provider key、非关键小仓库；Homebrew 路径会拉 Rust 工具链。N：较新的 Claude Code，claude --help 能看到 -w/--worktree 与 --tmux；本机有 tmux；远程机器可 SSH；iTerm2 上内置路径用 native panes 而非真 tmux，脚本化必须加 =classic。O：macOS；从 Releases 下载 dmg 或按源码构建；源码构建需 rust-toolchain.toml 指定的 Rust 工具链；接受非官方 Warp fork、AGPL-3.0、上游登录未测试；要 tmux 同步需 tmux；额度环需能定期生成 docs/limit-rings.md 格式 JSON；Claude Code 后台任务 hook 可选。P：已装 Node.js / npm；目标机可 SSH 登录（README 建议用 Tailscale 处理 NAT）且已安装要用的智能体 CLI；macOS 26 可用 Apple 开源 container 运行时，或改用 Docker / Podman；Claude Code 订阅或 API key 用于 claude setup-token；人工接管需 Mac 开启屏幕共享或 Linux 运行绑定 localhost 的 VNC 服务；SDK 路径需 Node/TS 工程。Q：Omnara Cloud 账号；Node.js 22 或更新；使用首项目自带的模型 provider 和 sandbox pool。SDK 路径需 dashboard 创建 API key、导出 OMNARA_TOKEN、npm install @omnara/sdk、用 npx omnara config 获得 org/project ID。自托管需 Docker 和 Compose；新实例需在控制台添加 model provider 和 model、在 Machines 连接本机并共享给项目；沙箱还需实例有 public URL。工具权限、cron 完整参数、memory/subagents 配置需查 docs.omnara.com。R：Node.js >= 22.13（依赖内置 node:sqlite）；macOS 或 Linux（内核级沙箱仅 macOS 提供，Linux 需自行用专用用户或容器兜底）；Claude Code 已安装并登录、claude 在 PATH 上；一个飞书/Lark 账号，手机能打开授权链接；init 会创建 ~/.wardendeck（权限 0700），需备份 master.key 与数据库。S：笔记本内存足够（9B 建议 12–16 GB 以上，64k 上下文再留余量）；装有 Python3；项目及依赖、测试、README 已在本地；先在一次联网会话里完成安装和模型下载；OpenCode 1.19.4 与 qwen3.5:9b 需在自己环境核实。T：项目已有 AGENTS.md 且智能体会读取并遵守；项目工作流确实创建 git worktree（含 subagent 的 .claude/worktrees/agent-*）；智能体具备删除 worktree 和分支的权限；需要知道 worktree 路径；原文提到专用 cargo target，但材料截断，需按 https://github.com/JimLiu/baocut/blob/main/AGENTS.md 示例核对。U：Linux x86_64 或 arm64，daemon 用户能打开 /dev/kvm（裸机、支持嵌套虚拟化的云 VM，或 GitHub 托管的 ubuntu-latest runner，action 会启用 KVM）；Mac 按 docs/development.md 走 Lima VM；装 e2fsprogs（需要 mkfs.ext4）和 git；同一主机安装 Tracekit 1.4.2 signer，开发环境可先 tracekit init --dev --v2 --no-hooks && tracekit up --wait；主机能出站 HTTPS 到镜像仓库（Docker Hub 或 GHCR）；daemon 首次启动会从 GitHub 下载 Firecracker v1.17.0、从 Firecracker 项目的 S3 下载 guest kernel 6.1.155，按 SHA-256 校验后缓存到 <state dir>/images/assets，无外网时用 tkbox daemon --firecracker FILE --kernel FILE 传本地文件。V：macOS 或 Linux（README 徽章只标 macOS | Linux，未提 Windows）；能安装 brew、jq、node；选 Lima 后端时本机能运行 VM；需要一台可信 host（同一台 Mac、Linux 服务器或小 VPS）；VM 内默认没有真实凭证，必须显式授权；docs/grants.md、docs/security.md、docs/pool.md 正文未获取，授权细节需先补齐。W：本机 ssh 免密可登录一台常开服务器（key + ~/.ssh/config 配好端口/用户/跳板机）；服务器上 Claude Code 2.1.248+ 已安装并登录、POSIX login shell；本机装 Bun（仅构建，产出的二进制无依赖）；本机不需要装 claude；需要自定义 ssh 时能设 CC_REMOTE_SSH；Windows 需 PATH 上有 pwsh（可选）和 ripgrep（rg）。
 
 ## 操作步骤
 
-按层选：C/D/F/H 先定项目规则与观察面；N/O 做保活与状态侧栏；P 做多机线程；K/Q/R 把会话放到云端或托管审批；J/L/U/V 做隔离与可验证执行；S 做断网路径；T 做 worktree 收尾；A/B/E/G/I/M 做起步或替代实现。V 是隔离供给层：给 Claude Code/Codex/Cursor/opencode/pi 补“一次性 VM + 凭证边界”，不替代 C 的项目规则，也不替代 N/O/P 的保活与多机会话。C 可与 A 叠加；F 是 C 的扩展面试点；H 是第三方插件集合，不替代 F；I 与 E 并存；J 补执行目标；K 补会话跑在哪里；L 与 A 不同层；M 与 D 是同一层两个实现；N 是 C/E/K 等做保活外壳；O 是 C/E/N 等做状态侧栏与 tmux 布局同步，不替代 N 的脚本化外壳，也不是自动化编排器；P 与 A/L 不同层，是发起方统一管理多机线程的直连层，可与 C/E 的 agent 规则叠加，不替代 N 的 tmux 脚本化，也不替代 O 的状态侧栏，且不提供定时/重试；Q 与 C/E/K 等互补：Claude Code/Codex/OpenCode 是单终端/单机 agent loop，Omnara 补云托管、跨机器、跨用户、Slack/GitHub/定时触发，可用 MCP 让 Claude Code 管理 Omnara 代理；Q 不替代 C 的项目护栏，也不替代 N/O/P 的本地/多机外壳；R 是 C/E/K 等的授权与审计层：Claude Code 仍是唯一执行引擎，WardenDeck 在其上补移动触发、逐工具审批、macOS 内核沙箱和哈希链审计，不替代 C 的项目护栏，也不替代 N/O/P 的本地/多机外壳，且不提供定时触发；S 与 D 是同一工具不同配置：D 是 build/plan 与桌面版，S 是离线本地模型；S 与 C/E/K 等不冲突，是断网/隐私受限时的补充路径；S 不能替代 A/L 的隔离，因为模型、依赖、测试都在本机；T 是项目规则层，补 N 的 worktree 收尾，可与 C 的 CLAUDE.md/规则并存；T 不替代隔离、审批、验收或 tmux 保活；U 是隔离+审计层：C/E 的规则管 agent 做什么，U 管它能碰到什么、每次触碰是否被签名记录，可与 C 的 CLAUDE.md 和 E 的 CLI 叠加；U 不替代 N/O/P 的保活与多机会话，也不提供定时触发、任务队列或重试（Action 的触发来自 CI job 本身）。V 是 VM 供给层：给已有智能体补“隔离运行环境 + 凭证边界”，把允许 agent 执行命令的权限问题从本机移到一次性 VM；V 不替代 C 的项目规则，不替代 U 的签名审计包，也不提供基于时间/事件/状态触发的调度。
+按层选：C/D/F/H 先定项目规则与观察面；N/O 做保活与状态侧栏；P 做多机线程；K/Q/R 把会话放到云端或托管审批；J/L/U/V 做隔离与可验证执行；S 做断网路径；T 做 worktree 收尾；A/B/E/G/I/M 做起步或替代实现；W 做“模型在远端、文件与 shell 在本机”的分离部署。V 是隔离供给层：给 Claude Code/Codex/Cursor/opencode/pi 补“一次性 VM + 凭证边界”，不替代 C 的项目规则，也不替代 N/O/P 的保活与多机会话。C 可与 A 叠加；F 是 C 的扩展面试点；H 是第三方插件集合，不替代 F；I 与 E 并存；J 补执行目标；K 补会话跑在哪里；L 与 A 不同层；M 与 D 是同一层两个实现；N 是 C/E/K 等做保活外壳；O 是 C/E/N 等做状态侧栏与 tmux 布局同步，不替代 N 的脚本化外壳，也不是自动化编排器；P 与 A/L 不同层，是发起方统一管理多机线程的直连层，可与 C/E 的 agent 规则叠加，不替代 N 的 tmux 脚本化，也不替代 O 的状态侧栏，且不提供定时/重试；Q 与 C/E/K 等互补：Claude Code/Codex/OpenCode 是单终端/单机 agent loop，Omnara 补云托管、跨机器、跨用户、Slack/GitHub/定时触发，可用 MCP 让 Claude Code 管理 Omnara 代理；Q 不替代 C 的项目护栏，也不替代 N/O/P 的本地/多机外壳；R 是 C/E/K 等的授权与审计层：Claude Code 仍是唯一执行引擎，WardenDeck 在其上补移动触发、逐工具审批、macOS 内核沙箱和哈希链审计，不替代 C 的项目护栏，也不替代 N/O/P 的本地/多机外壳，且不提供定时触发；S 与 D 是同一工具不同配置：D 是 build/plan 与桌面版，S 是离线本地模型；S 与 C/E/K 等不冲突，是断网/隐私受限时的补充路径；S 不能替代 A/L 的隔离，因为模型、依赖、测试都在本机；T 是项目规则层，补 N 的 worktree 收尾，可与 C 的 CLAUDE.md/规则并存；T 不替代隔离、审批、验收或 tmux 保活；U 是隔离+审计层：C/E 的规则管 agent 做什么，U 管它能碰到什么、每次触碰是否被签名记录，可与 C 的 CLAUDE.md 和 E 的 CLI 叠加；U 不替代 N/O/P 的保活与多机会话，也不提供定时触发、任务队列或重试（Action 的触发来自 CI job 本身）。V 是 VM 供给层：给已有智能体补“隔离运行环境 + 凭证边界”，把允许 agent 执行命令的权限问题从本机移到一次性 VM；V 不替代 C 的项目规则，不替代 U 的签名审计包，也不提供基于时间/事件/状态触发的调度。W 是部署形态层：把 Claude Code 的推理端（模型、system prompt、会话、Web search、subagents、skills）放到远端服务器，把 Read/Write/Edit/NotebookEdit/Bash/Glob/Grep 和本地 MCP 留本机；W 不替代 C 的项目规则（项目级 .claude/ 不下发，服务器用自己的设置），不替代 U/V 的隔离（文件仍在本机执行，没有 VM 边界），不替代 N 的 tmux 保活（worktree 工具关闭，内置 --worktree/--tmux 路径不可用），也不提供定时/事件触发。W 与 K 都是“远端”，但边界不同：K 把模型和文件都放进云端一次性 VM，W 只把模型与会话放远端、文件与 shell 留在本机。
 
 ### 做法 A：Linux 服务器 agentbox
 
@@ -665,6 +666,83 @@ Clone my repo in a VM, start the dev server, and screenshot the homepage in Chro
 9. 需要长时间常驻任务时，把 host 放到服务器或云端，智能体在本地，VM 在远端；关掉笔记本后任务继续运行。预期：本地只保留 MCP 客户端，长任务在远端 host 上继续。
 10. 最小试用（半天以内）：只走 headless 路径（跳过 build-base），用 --backend lima 执行 boxery-host init；只接 Claude Code；选一个本来就要在本机执行、且会安装依赖或运行外部代码的真实任务（克隆仓库→装依赖→跑测试→输出失败用例）；全程不授予任何 grant，观察智能体在无凭证状态下能否完成任务；跑不通时再逐个加授权并记录每一步加了什么；重复同一任务 3 次，其中至少一次在任务中途执行 vm_manage 的 fork 或 snapshot/revert，验证回滚是否可用。
 
+### 做法 W：cc-remote 远端模型、本机文件与 shell
+
+1. 前提核对：本机 ssh 免密能登录一台常开服务器（key + ~/.ssh/config 配好端口/用户/跳板机）；服务器上 Claude Code 2.1.248+ 已安装并登录、POSIX login shell；本机装 Bun（只为构建，产出的二进制无依赖）；本机不需要装 claude。预期：ssh devbox 直接进 shell；服务器上 claude --version 有输出。先记住切分：本机跑 Read、Write、Edit、NotebookEdit、Bash（Windows 为 PowerShell）、Glob、Grep，以及 ACP 客户端带来的 MCP servers 和本地 Claude Code 配置里的 MCP servers；服务器跑模型、system prompt、会话、Web search、subagents、skills 和服务器自己的设置与 MCP servers。
+2. 本机克隆并构建：
+
+```sh
+git clone https://github.com/AkaraChen/cc-remote && cd cc-remote
+bun install
+bun run compile    # builds the binary for this machine into dist/cc-remote
+bun link           # puts cc-remote on your PATH, in ~/.bun/bin
+```
+
+要一次构建全平台（linux-x64、linux-arm64、darwin-arm64、windows-x64、windows-arm64）用 bun run build，产物落在 dist/。预期：cc-remote --version 有输出。
+3. 写 host 配置并自检。host 查找顺序：--host → $CC_REMOTE_HOST → ~/.config/cc-remote/host；host 可以是任何 ssh 接受的值，端口/key/跳板机放 ~/.ssh/config：
+
+```sh
+mkdir -p ~/.config/cc-remote && echo devbox > ~/.config/cc-remote/host
+cc-remote doctor
+```
+
+预期：doctor 同时检查 ssh 与远端 claude 版本；这一步通过再往下走，否则后面全是黑盒排错。需要自定义 ssh 命令时（语义同 rsync 的 RSYNC_RSH）：
+
+```sh
+export CC_REMOTE_SSH="ssh -p 2222 -i ~/.ssh/devbox"
+```
+
+4. 服务器还没登录过时：cc-remote --cli auth login。预期：服务器上的 claude 完成登录；本机不装 claude 也能用。
+5. 在 ACP 客户端注册 agent，命令为 cc-remote --host devbox（写过 host 文件后可直接 cc-remote）。Zed 在 settings.json 加：
+
+```json
+"agent_servers": {
+  "Claude (devbox)": { "command": "cc-remote", "args": ["--host", "devbox"] }
+}
+```
+
+paseo 在 ~/.paseo/config.json 的 agents.providers 下加：
+
+```json
+"claude-devbox": {
+  "extends": "acp",
+  "label": "Claude (devbox)",
+  "command": ["cc-remote", "--host", "devbox"]
+}
+```
+
+或改用插件（带 host / ssh 命令 / 可执行路径的设置界面，“Check” 按钮即执行 cc-remote doctor）：
+
+```sh
+paseo plugin install github:AkaraChen/cc-remote:paseo-plugin
+```
+
+预期：客户端能起会话，diff 与终端在客户端里正常渲染。
+6. 命令清单：
+
+```
+cc-remote [--host <host>"]                  speak ACP on stdio (what your client runs)
+cc-remote [--host <host>] doctor           check ssh and the remote claude version
+cc-remote [--host <host>] --cli <args...>  run `claude <args...>` on the server
+cc-remote --version | --help
+```
+
+7. 按边界配置权限，这是最值得照抄的部分：权限请求转发给你的 ACP 客户端；Read、Glob、Grep 从不询问；“Accept edits” 只批准会话目录内的 Write、Edit、NotebookEdit；Bash（Windows 为 PowerShell）询问时，批准的是命令前缀（如 npm test:*），不是整个 Bash；含 ;、&、|、重定向、$(…)、反引号或换行的命令永不自动批准；前缀批准持续到 cc-remote 退出为止——长会话里等于权限只增不减，需要主动重启。预期：危险组合命令每次都问；你清楚自己批的是哪一段前缀。
+8. MCP：除客户端传入的 server 外，cc-remote 还会启动你本地 Claude Code 会启动的那些（~/.claude.json 的 user servers、为该目录添加的 servers、项目 .mcp.json 中已批准的 servers，批准记录在 ~/.claude/settings.json、.claude/settings.local.json 或本地 claude 里），这些都在本机运行。重名时优先级：客户端 > 本地配置 > 服务器上同名 server。需要 OAuth 的 http/sse server 会先提供一个 authenticate 工具，调用后在本机浏览器打开登录页、在 localhost 接收回调，token 存在 ~/.config/cc-remote/mcp-auth/（与 Claude Code 的分开）。预期：服务器端不出现这些 MCP 的凭据。
+9. 知道 ssh 与会话怎么走：所有会话共享一条连接（ControlMaster，保持 10 分钟）；每条连接带 ServerAliveInterval=15、ServerAliveCountMax=3，断链约一分钟失败而不是挂死；若 CC_REMOTE_SSH 里更早出现同名 -o，以它为准；Windows 的 OpenSSH 不能共享连接，每个会话各开一条。每个会话镜像到本机 ~/.claude/projects/（与本地 Claude Code 同位置），客户端可列表、重放、加载、fork；resume 服务器没见过的会话（如 fork）时 cc-remote 会先拷到服务器。服务器上每个本地目录对应一个空工作夹 ~/.cc-remote/ws/<your hostname>/<local path>/（Windows 上 C:\\Users\\me\\app → ~/.cc-remote/ws/<your hostname>/C/Users/me/app/）。预期：断线后客户端约一分钟内报错而不是永久卡住；会话记录能在本机找到。
+10. Windows 补充：shell 工具是 PowerShell（PATH 上有 pwsh 用 PowerShell 7，否则 5.1）；Grep 需要 PATH 上有 ripgrep（rg）。预期：Windows 上 Bash 类工具按 PowerShell 语义执行，Grep 不退化成慢速遍历。
+11. 要改 cc-remote 本身时走开发回路：
+
+```sh
+bun install
+bun test
+bun src/main.ts --host devbox     # speaks ACP on stdio
+bun run compile                   # dist/cc-remote, for this machine
+bun run build                     # dist/cc-remote-{linux-x64,linux-arm64,darwin-arm64,windows-x64,windows-arm64}
+```
+
+测试目录 test/e2e/ 里有最小 ACP 客户端和一个 fake ssh，用独立的 HOME 在本机模拟“远端”，用法见 test/e2e/client.ts 头部注释——这是不碰真实服务器就能验证改动的方式。
+
 ## 怎么判断变好了
 
 A：用量页按用户/模型/时间过滤 tokens、成本来源、单轮延迟，可 CSV 导出；缓存命中率 cache reads / (uncached input + cache reads + cache writes)；每条回复显示时间、模型、设置快照和记录成本；变更页看 diff 和整文件。无效果评测。
@@ -711,6 +789,8 @@ U：最小试用：在一次性 Linux+KVM 主机或 GitHub Actions 中，按本�
 
 V：最小试用半天以内：只走 headless 路径（跳过 build-base），用 --backend lima 执行 boxery-host init；只接 Claude Code；选一个本来就要在本机执行、且会安装依赖或运行外部代码的真实任务（克隆仓库→装依赖→跑测试→输出失败用例）；全程不授予任何 grant，观察智能体在无凭证状态下能否完成任务；跑不通时再逐个加授权，记录每一步实际加的是什么；重复同一任务 3 次，其中至少一次在任务中途执行 vm_manage 的 fork 或 snapshot/revert，验证回滚是否可用。可观察：宿主机零污染（任务完成后主机上是否新增依赖、环境变量或残留进程，目标：无）；凭证没有外泄（VM 内是否确实没有任何真实密钥，只有可撤销 token）；人工介入次数（一次任务中需要人工执行 vm_grant 或手工操作的次数）；可复现性（同任务 3 次结果是否一致，snapshot/revert 重放后是否收敛）；任务成功率与耗时（与直接在本机让智能体做的基线对比，README 中的 13 秒/1 秒/3 分钟是作者主张，必须用自己环境实测替换）；长任务持续能力（把 host 放到远端，任务发起后关闭笔记本，回来检查任务是否完成）；失败模式清单（破坏性变更、后端不稳、授权卡住各出现几次）。升级为 adopt 的建议条件：上述试用在 2 周内稳定跑通，人工介入次数降到接近 0，且补齐 docs/grants.md 和 docs/security.md 中可照抄的配置后，再考虑写入手册主线；否则保留为 try，作为隔离执行环境的可选方案列出。
 
+W：最小试用半天到一天，一台常开服务器 + 本机一个可回退的小仓库。按步骤 1–5 跑通 cc-remote doctor 与第一个 ACP 会话；给一个边界清晰任务（跑测试、定位失败、单文件修）；全程盯权限询问，确认 Read、Glob、Grep 不问、Bash 只按前缀问、含 ; & | 重定向 $(…) 反引号换行的命令每次都问；退出后在本机 git status 看改动是否只落在预期文件。可观察：doctor 是否一次通过（ssh + 远端 claude 版本）；同一任务相对本地 Claude Code 的人工介入次数与到可审查 diff 的耗时；权限询问次数与你实际误批的次数；长会话里前缀批准累积到第几轮时你主动重启；断 ssh 后是约一分钟失败还是挂死；会话是否能在本机 ~/.claude/projects/ 列表、重放、fork；服务器端是否只出现工作夹路径而不见本机其它文件；Windows 上 PowerShell 与 rg 是否按预期工作。原文没有任何质量、延迟或成本量化数据，以上指标是本手册提出的试用设计。止损：工作流依赖项目级 .claude/（commands、skills、agents、settings）、依赖 checkpoint/rewind、依赖 LSP 或 worktree 工具，或需要定时/事件触发，则不要切到 W，保留本地 Claude Code 或改用 K/U/V。
+
 ## 常见坑
 
 - A：agentbox 默认 bypassPermissions、凭据可被终端用户读、单机单进程；撤销账号访问不会收回已下发凭据、不会终止运行进程；Web 提交不 push、不跑 Git hooks/签名；默认备份不含工作区；持久文件只放 /workspace、/home/agent、每用户 /shared；容器停止或重建就终止进程。
@@ -735,6 +815,7 @@ V：最小试用半天以内：只走 headless 路径（跳过 build-base），�
 - T：证据只有一条推文和一个 AGENTS.md 示例链接；规则片段在“它专用的 cargo target”处截断，完整规则、删除命令、分支命名规则、cargo target 处理都不可见；没有前后对比、残留数量、清理耗时或失败案例，作者“最佳策略”只是主张；智能体必须能读取 AGENTS.md 且有删除 worktree/分支权限，否则规则不会生效；必须防误删未合并工作；不要凭空补命令。
 - U：v0、无 release，只能从源码构建；Mac 只能按 docs/development.md 走 Lima VM；没有 /dev/kvm 的机器直接跑不起来。必须自己装并常驻 Tracekit signer：daemon 启动时没有 signer 应答就退出；同机 dev signer 是 same-user，bundle 只显示 Assurance: dev 和 isolation: same-user，更高保证要把 signer 作为独立用户运行、并在另一台主机放 witness 共同签名 signer 日志。Action 里的 signer 是同一 job 内创建的 dev signer、没有 witness，Assurance: dev 只证明记录在 job 后未被改动，不证明 runner 本身诚实；action 会把 agent 改动应用到 runner 的 checkout，随后构建/测试等于在 runner 上运行 agent 的代码，要按 examples/claude-code-fix.yml 的三 job 形状把写 token 隔开。固定你预期的 trust 文件（提交到仓库或放 CI 外），不要直接信任 bundle 旁边附带的那个。tkbox apply 只能在已停止的 box 上、导出前执行，且对每个文件先问 signer；示例 demo 不 apply。网络不在 allowlist 会被挂起，无人处理 2 分钟后拒绝；云 metadata 地址 169.254.169.254 无论 allowlist 或人工批准都直接拒绝；明文 HTTP 把 secret 占位符带到未绑定主机会被阻断并记 tkbox.secret.leak；绑定主机才换入真实值并记 tkbox.secret.use。无外网时用 --firecracker/--kernel 传本地文件；tkbox 默认在自身二进制旁找 guest 二进制，也可 --guest-dir 指定。材料没有并发调度、任务队列、成本或性能数据；不要把它当多任务编排器。
 - V：README 顶部明确警告 Early-stage, experimental software. Expect rough edges and breaking changes between releases.；exe.dev、boat.dev、Cloud Hypervisor 三个后端标注 experimental；仓库 38 stars；本次只拿到 README，docs/grants.md、docs/security.md、docs/pool.md、docs/cli.md、docs/install.md 正文均未获取，授权具体配置、CLI 参数、安全边界细则无法照抄；约 13 秒启动完整桌面 VM、约 1 秒快照、约 3 分钟构建基础镜像都是作者主张，没有基准测试方法或环境说明；密钥永不进入 VM 是设计声明，实际隔离强度需读 docs/security.md；VM 默认连 LLM 都没有，必须显式授权；Windows 不适用；多智能体共享池要用 vm_lease 并补 docs/pool.md；不要把 V 当成定时调度器，原文没有基于时间/事件/状态触发的调度机制。
+- W：项目级 .claude/（commands、skills、agents、settings）不会下发到服务器，服务器用自己的设置，本机的 CLAUDE.md 在本机读；依赖这些的工作流行为会不一致。checkpoint/rewind 失效；LSP、Monitor、worktree 工具被关闭，N 的内置 --worktree/--tmux 路径在这条线上不可用，要保活改用 N 的手工 tmux 会话。前缀批准持续到 cc-remote 退出，长会话权限只增不减，必须主动重启；“含 ; & | 重定向 $(…) 反引号换行永不自动批准”不等于完整沙箱，Bash 仍在本机执行。服务器上的 claude 必须已登录且 2.1.248+；本机不需要装 claude，但需要 Bun 构建。Windows OpenSSH 不能共享连接，PowerShell 版本与 rg 缺失会影响 shell 与 Grep。重名 MCP 优先级是客户端 > 本地配置 > 服务器；OAuth token 与 Claude Code 分开存，换机要重新授权。没有定时/事件触发；resume/fork 只是“接着上次”，不是自动推进。原文没有独立评测或量化数据；先小范围试用，不要直接全面替换本地 Claude Code。
 
 ## 证据与来源
 
@@ -762,8 +843,9 @@ V：最小试用半天以内：只走 headless 路径（跳过 build-base），�
 | T | 《@dotey: 避免 worktree 残留的最佳策略是在 AGENTS.md 里面添加规则……》：AGENTS.md 规则方向、可见规则文本（截断）、JimLiu/baocut 示例链接、推文互动数据（38 点赞、7 转发、40 回复）来自原文 | 原文没有给出删除命令、分支命名规则或 cargo target 处理细节，也没有验证数据；最佳策略为作者主张；3–5 个任务的试用与指标为报告建议/本手册试用设计 |
 | U | 《Cygnux-Labs/Tracekit-box》：/dev/kvm、e2fsprogs、Tracekit 1.4.2 signer、tracekit init --dev --v2 --no-hooks、make linux 构建与安装、tkbox daemon 首次下载 Firecracker v1.17.0 与 guest kernel 6.1.155 并 SHA-256 校验、tkbox run/exec/approvals/approve/reject/diff/stop/export、--secret GH=env:GH_TOKEN@api.github.com 语法、allowlist 挂起与 2 分钟拒绝、metadata 地址直接拒绝、tkbox.secret.leak/tkbox.secret.use、tracekit verify --trust 打印 Integrity: VERIFIED.、Action YAML 与三 job 安全形状、Python SDK 示例、fail-closed 与 tkbox.gap 均来自 README/报告转述；v0、无 release、需 KVM 为报告结论 | 无独立评测、用户案例、性能或成本数据；更高保证需把 signer 作为独立用户运行并在另一台主机放 witness 为 README 说明；Assurance: dev 不证明 runner 诚实为 README 明示；小范围试用、不宜直接作为生产默认为调研结论；最小试用与观察项为本手册提出 |
 | V | 《modem-dev/boxery》：安装命令序列（brew install lima jq node、npm install -g boxery-vm、boxery-host init --backend lima && boxery-host build-base、boxery setup local）、npx add-mcp boxery-vm、pi install npm:boxery-vm、vm_* 工具清单、后端清单（本地 Lima/libvirt/Cloud Hypervisor、云端 exe.dev/boat.dev）、默认拒绝的 grant 机制、VM 只持有可撤销 token、boxery attach/desktop、vm_lease 来自 README；38 stars、early-stage experimental、三个后端 experimental 为报告数据 | 约 13 秒启动完整桌面 VM、约 1 秒快照、约 3 分钟构建基础镜像均为作者主张，无基准方法或环境说明；密钥永不进入 VM 是设计声明，实际隔离强度需读 docs/security.md；docs/grants.md、docs/security.md、docs/pool.md、docs/cli.md、docs/install.md 正文未获取，授权具体配置、CLI 参数、安全边界细则不能照抄；无正确性、成本、质量验证数据；Windows 不适用；最小试用与 adopt 条件为报告建议/本手册试用设计 |
+| W | 《AkaraChen/cc-remote》：远端 claude + 本机工具的切分表、ssh 传输与 claude-agent-acp 的单处 patch、bun install/compile/link 与全平台 build、host 查找顺序与 CC_REMOTE_SSH 语义、cc-remote doctor、--cli auth login、Zed agent_servers 与 paseo agents.providers 配置及 paseo 插件、命令清单、权限模型（Read/Glob/Grep 不问、Accept edits 限会话目录、Bash 按命令前缀、危险 shell 语法永不自动批准、前缀批准持续到退出）、MCP 本地启动与重名优先级、OAuth token 目录、ControlMaster/ServerAlive 参数、会话镜像 ~/.claude/projects/、服务器工作夹路径、Windows PowerShell 与 ripgrep、test/e2e 的 fake ssh 均来自原文 | 原文没有任务质量、延迟或成本数据；只有 doctor（ssh + 版本）与 test/e2e fake ssh 两类检查；项目级 .claude/ 不下发、checkpoint/rewind 失效、LSP/Monitor/worktree 关闭为原文/调研结论；结论是 try 而非 adopt，不建议直接全面替换本地 Claude Code；最小试用与观察项为本手册提出 |
 
-二十二条做法都没有独立的“AI 是否让结果变好了”的对照评测或基准数据；A 是记账维度，F 是验收矩阵/成本公式，J 是退出码/probe/dry-run，K 是点名命令证据，M 是工具自检数据，N 是保活/读回能力，O 是侧栏状态与 tmux 布局同步，P 是线程续聊/日志/清理/权限行为与 fan-out 能力，Q 是运行可观测性/审批/断点恢复，R 是逐工具审批/哈希链审计/内核沙箱，S 是项目自带测试的独立验收与断网越界检查，T 是 AGENTS.md 清理规则与残留检查，U 是 micro-VM 隔离、密钥/网络/文件写入的签名记录与离线 verify，V 是 VM 隔离、凭证默认拒绝、宿主机零污染与可回滚性；均非独立基准。
+二十三条做法都没有独立的“AI 是否让结果变好了”的对照评测或基准数据；A 是记账维度，F 是验收矩阵/成本公式，J 是退出码/probe/dry-run，K 是点名命令证据，M 是工具自检数据，N 是保活/读回能力，O 是侧栏状态与 tmux 布局同步，P 是线程续聊/日志/清理/权限行为与 fan-out 能力，Q 是运行可观测性/审批/断点恢复，R 是逐工具审批/哈希链审计/内核沙箱，S 是项目自带测试的独立验收与断网越界检查，T 是 AGENTS.md 清理规则与残留检查，U 是 micro-VM 隔离、密钥/网络/文件写入的签名记录与离线 verify，V 是 VM 隔离、凭证默认拒绝、宿主机零污染与可回滚性，W 是 doctor 连通/版本检查与 fake ssh 的本机端到端测试；均非独立基准。
 
 ## 依据的调研
 
@@ -789,3 +871,4 @@ V：最小试用半天以内：只走 headless 路径（跳过 build-base），�
 - [@dotey: 避免 worktree 残留的最佳策略是在 AGENTS.md 里面添加规则，要求 worktree 不遗留，让 Agent 自己去清理。](../research/radar/2026-10-28/7828-worktree-agents-md-worktree-agent.md)：值得一试，建议小范围试用：在 AGENTS.md 中明确要求智能体完成任务后删除 worktree 及分支；原文给出了可照抄的规则雏形，但内容被截断且无验证数据，不宜直接 adopt。
 - [Cygnux-Labs/Tracekit-box](../research/radar/2026-10-30/8511-cygnux-labs-tracekit-box.md)：值得一试，建议小范围试用：在一次性 Linux+KVM 主机或 GitHub Actions 中按 README 的 demo/action 跑一个修测试任务，导出 .tkb 并用固定 trust 文件离线验证；原因是步骤具体可复现，但项目仍是 v0、需自建 signer，默认只有 dev 级担保，不宜直接作为生产默认。
 - [modem-dev/boxery](../research/radar/2026-11-03/9948-modem-dev-boxery.md)：值得一试，可以在 macOS 或 Linux 上小范围试用：按 README 的步骤安装 boxery host，用 Lima 或 libvirt 启动 VM，通过 MCP 把 VM 工具交给现有编程智能体（如 Claude Code），用来运行不受信任的代码、执行桌面操作和并行尝试，真实密钥保留在 host 上而不进入 VM。原因是原文给出了可直接照抄的安装命令、MCP 工具清单和默认拒绝、按需授权的凭证模型，属于少见的“任务供给 + 权限边界”完整闭环；但项目自标早期实验阶段、多个后端尚为实验性，因此还不宜作为手册主线直接采用。
+- [AkaraChen/cc-remote](../research/radar/2026-11-07/11234-akarachen-cc-remote.md)：值得一试，可以在有一台常开服务器（已登录 claude）的前提下，按 README 的步骤搭一套 cc-remote 做小范围试用，把"模型/会话在远端、文件与 shell 在本机"当作一条可复用的部署与权限边界模板；但它有明确的已知限制（.claude/ 不下发、checkpoint/rewind 失效、LSP/worktree 关闭），不建议直接全面替换本地 Claude Code。
