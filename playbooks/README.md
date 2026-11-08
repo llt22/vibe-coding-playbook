@@ -4,6 +4,7 @@
 
 | 手册 | 解决的问题 | 先试这一步 | 最近修订 |
 |---|---|---|---|
+| [把自己的编码会话微调成本地模型，并用行为对比证明它真的变好了](fine-tune-agents-on-session-data.md) | 如何把编码 agent 的历史会话变成可自托管的本地模型，并且在不白烧钱、不泄漏隐私的前提下，用行为对比而不是 loss 判断它是否值得上线。 | 先用合成 transcript 跑通 collect→normalize→anonymize→build_dataset→train_tinker.py 离线 smoke test（不加 --train，全程零费用），确认流水线可用再碰自己的会话。 | 2026-11-08 |
 | [让编码 agent 有一套会整理、会按需检索的长期记忆](persistent-memory-for-coding-agents.md) | AI 跨会话重复交代、把旧笔记当事实、记忆越积越乱；需要一套小型索引、会话笔记、离线反思与按需搜索结合的记忆机制。 | 先在一个非关键项目建持久 memory 目录，只把一页索引注入会话，其余让 agent 按需搜索；连续用一周后加一次离线反思。 | 2026-11-08 |
 | [给代理接第三方工具前，先隔离、核对清单、做同任务对照](add-mcp-servers-to-agents.md) | 第三方 MCP、CLI、技能包、插件、扩展或真机桥接接入代理时，如何避免把「注册成功」当成「可用」，用隔离、清单核对、冒烟和对照试验决定 try / study / stop。 | 先选一个低风险真实任务，在隔离环境里记录未接入基线，再接入一个工具做同任务对照；先看工具清单、回执和权限边界，不要从主力环境开始。 | 2026-11-07 |
 | [让编码 agent 在一次性 Windows 干净机上验证桌面应用并留下证据](host-coding-agents.md) | 把 Windows 桌面应用的干净机冒烟测试、安装/卸载残留审计、UI 自动化和不可信文件 detonate 交给编码 agent 在一次性 Windows Sandbox 里执行，并留下可复核的报告、截图和审计日志。 | 先在符合前提的 Windows 11 24H2 Pro/Enterprise 机器上运行 `./sbx.cmd doctor`，再用系统自带 `charmap` 跑通一次最小闭环。 | 2026-11-07 |
