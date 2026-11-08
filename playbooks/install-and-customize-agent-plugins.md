@@ -1,18 +1,18 @@
-# 让 AI 在长任务里按工作单元划清上下文边界
+# 让 AI 在长会话里不丢上下文、不谎报完成：五层工作栈的落地做法
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：解决 AI 长会话中上下文越滚越大、跨任务交接靠自动压缩丢失关键约束、以及多层工具叠加后说不清有没有变好的问题。
-> 先试这一步：先记录 2–3 次真实任务的基线，再只加一层（收口、观测或交接）跑同一类任务对照；如果你在用 DSH PTC，先用一个含 4–6 个独立子任务的任务试一次块级压缩。
-> 最近修订：2026-10-21
+> 解决的问题：让 Claude Code 这类编码 agent 在真实职能工作和长会话里，少重复解释、少丢上下文、少谎报完成，并且每加一层都能用指标判断有没有变好。
+> 先试这一步：先记录 2–3 次基线（完成时间、返工次数、补齐上下文次数），只装一个与你职能最接近的插件跑一个真实任务；如果最痛的是长会话上下文被撑爆，再单独试 billion-context 原生插件，并用 `/acp-cache` 看前缀缓存命中率。
+> 最近修订：2026-11-08
 
 ## 解决什么问题
 
 你已经在用 Claude Code 或 Cowork，但每次让 AI 做某个职能的活（写 SQL、准备客户通话、审合同、对账、做 3D 资产、写 PRD、画论文示意图等），都要重新解释领域知识、反复交代公司上下文、手动把外部工具的数据贴进去，而且 AI 给出的流程往往是教科书做法，不是你团队实际的做法。另外几个常见缺口：AI 在会话中途问你的问题、顺手发现的 bug、失败的测试，过一会儿就淹没在对话里；装完一堆插件后，你说不清到底有没有变好；任务跑得比一个上下文窗口更久时，交接、唤醒和拍板都靠人守着；真正做一次中大型编码变更时，单个会话往往一口气写到底，没有计划、没有独立审查、landing 之前没人核对。
 
-长会话还会遇到另一个问题：自动压缩按 token 阈值切，不知道哪些消息属于同一个工作单元。在 DeepSeek Harness 的 PTC 模式里，可以让模型按工作单元给消息打块，转场时用自己写的交接摘要替换整段；原始消息仍保留在 append-only 日志里，人看到的 transcript 完整，模型下一次请求看到摘要。这个做法只适用于 DSH PTC，不装插件时也可以只借它的机制。
+长会话还会遇到另一个问题：自动压缩按 token 阈值切，不知道哪些消息属于同一个工作单元。两种补法：在 DeepSeek Harness 的 PTC 模式里，可以让模型按工作单元给消息打块，转场时用自己写的交接摘要替换整段（`dsh-block-ptc`）；更通用的是在客户端和模型 API 之间插一个压缩代理（`billion-context`），由模型自己决定何时、压缩哪一段，并且可以按需还原。两者都在动上下文边界，先只选一个跑通。
 
-本手册用五层叠加来补：官方插件市场层、职能层（含独立 Agent Skills、按域技能包与编码变更编排）、收口层、观测层（广/深）、交接层。职能层除了官方职能插件和独立技能包，还可选 `alirezarezvani/claude-skills` 这类按域技能包：把领域流程固化成 `SKILL.md`＋`scripts/`＋`references/`，安装前先用它自带的审计脚本扫一遍，只装一个域。编码变更编排层有两个可选项：`priyanshujha/subagent-studio` 偏重计划、worktree、两轮 review 和可审计 landing；`iha2/superlite` 偏重把 spec 交给 agent、回来拿已完成且已测试的代码，支持人工审批计划和 AI 无人驾驶两种编排模式。两者都做多代理编排，但买的东西不同，先选一个跑通，不要在同一任务上叠。交接层也有两个做法：`Arjun0014/project-sentinel` 做跨上下文窗口的控制台；你在 DSH PTC 里时，可以用 `mengwEX/dsh-block-ptc` 让模型按工作单元划块并自己写交接摘要。两者都在动上下文边界，先只选一个。
+本手册用五层叠加来补：官方插件市场层、职能层（含独立 Agent Skills、按域技能包与编码变更编排）、收口层、观测层（广/深）、交接层与上下文压缩层。职能层除了官方职能插件和独立技能包，还可选 `alirezarezvani/claude-skills` 这类按域技能包：把领域流程固化成 `SKILL.md`＋`scripts/`＋`references/`，安装前先用它自带的审计脚本扫一遍，只装一个域。编码变更编排层有两个可选项：`priyanshujha/subagent-studio` 偏重计划、worktree、两轮 review 和可审计 landing；`iha2/superlite` 偏重把 spec 交给 agent、回来拿已完成且已测试的代码，支持人工审批计划和 AI 无人驾驶两种编排模式。两者都做多代理编排，但买的东西不同，先选一个跑通，不要在同一任务上叠。交接层也有几个做法：`Arjun0014/project-sentinel` 做跨上下文窗口的控制台；你在 DSH PTC 里时，可以用 `mengwEX/dsh-block-ptc` 让模型按工作单元划块并自己写交接摘要；`ranxianglei/billion-context` 则是跨客户端的压缩代理，让模型用 `compress` / `decompress` / `search_context` / `acp_status` 自己管理上下文。三者在动上下文边界，先只选一个。
 
 ## 适用与不适用
 
@@ -30,6 +30,8 @@
 
 **block-ptc（DSH PTC 专用）**：适用——你在用 DeepSeek Harness（DSH）>=0.2.1-rc.2 和 PTC 模式；一个会话里有多个相对独立子任务、需要跨任务交接；你愿意让模型自己写交接摘要并遵守 `content` 写作规范；你需要完整 transcript 保留和确定性回放。不适用——单块连续、信息强耦合、需要逐字回溯原始对话的任务；不在 DSH 上；期望它自动跑或替代 DSH 内置自动压缩引擎；不愿接受“被省略的信息在后续请求里就不存在”；需要先看到量化收益才采用——作者自己声明节省 token、降低成本等收益尚未验证。
 
+**billion-context**：适用——长跑型编码会话（小时级到天级、单会话上千次调用）；上下文经常被撑爆，或宿主内置压缩把有用细节切掉；客户端有插件缝（pi、omp、opencode、dsh、kimi、hermes、zcode）或有可用启动器；你愿意每个会话用 `/acp-cache` 核对前缀缓存命中率。不适用——短任务，收益不明；不能用 npm 全局安装；用 Claude Desktop 的 Code 标签页（会绕过代理）；需要 Remote Control 等账号绑定功能；闭源客户端既不支持 baseURL 改写、也不能信任代理 CA；不愿接受“被压缩的区间在还原前只剩摘要”。
+
 ## 前置条件
 
 1. 能使用 Claude Code（有 `claude` CLI）或访问 claude.com/plugins 的 Cowork。
@@ -44,6 +46,9 @@
 10. 同时用多层前先 `claude --version` 核对；升级 Claude Code 后先 `/reload-plugins`。
 11. claude-skills 需要 git 与 Python 3；Windows 用 `git clone -c core.symlinks=true` 并开启开发者模式，设 `PYTHONUTF8=1`；安装前能运行其 `skill_security_auditor.py`，并把 PASS 作为继续安装的门槛，WARN/FAIL 先人工检查或放弃。
 12. block-ptc 需要 DSH >=0.2.1-rc.2，随附 Cordis >=4.0.5；插件零运行时依赖（仅 `node:crypto`）；安装后必须重启一次；新建会话时选 Block PTC preset。本次发布只用 DSH 0.2.1-rc.2 做过 live 验证；peer 依赖只声明下限、无上限，新宿主只是“允许加载”，事件语义与 preset 配置仍需重新验证。
+13. billion-context 需要 Node/npm；Linux/macOS 建议用用户级 prefix `--prefix=~/.local`，Windows 默认 prefix（`%APPDATA%\npm`）可写；需要能全局安装 npm 包的权限；端口 8787（`bili start` 手动模式）与 18787 起的管理区可用。
+14. billion-context 原生插件支持的客户端：pi、omp、opencode 1.x/2.x、dsh、kimi（Kimi Code ≥ 2.0.0）、hermes、zcode；启动器还支持 codex、claude、gemini、qwen、aider、goose。
+15. Claude Desktop 的 Code 标签页会自设 `ANTHROPIC_BASE_URL` 绕过代理，而 `DISABLE_AUTO_COMPACT=1` 仍生效——既没压缩也没原生自动压缩；终端会话不受影响。走自定义 baseURL 会让 Claude Code 把会话当作第三方/API-key，Remote Control 等账号绑定功能会消失。
 
 ## 操作步骤
 
@@ -639,7 +644,112 @@ plugin_manager  set_bundle  dsh-block-ptc enabled=false
 
 不在 DSH 上，或不想引入社区插件时，保留三条做法即可：按相对独立的工作单元给会话分段；在转场时手写一份交接摘要，必须包含用户要求、纠正、约束、已完成、未完成和下一步；原始对话不要删，摘要只作为下一段工作的入口。这个做法的代价是边界和摘要都靠人，不会像做法 A 那样由 guard 强制 header、由插件替换整段消息。
 
-**怎么选**：在 DSH PTC 上、且任务确实有多个独立子任务，用做法 A；否则用做法 B，或者先用第 7 步的 Project Sentinel 做跨会话交接。块级压缩和 Project Sentinel 都在动上下文边界，材料没有说明同时装会不会互相干扰，先只在一个任务上用一套。
+**怎么选**：在 DSH PTC 上、且任务确实有多个独立子任务，用做法 A；否则用做法 B，或者先用第 7 步的 Project Sentinel 做跨会话交接。块级压缩、billion-context 和 Project Sentinel 都在动上下文边界，材料没有说明同时装会不会互相干扰，先只在一个任务上用一套。
+
+### 第 7 步之三：把上下文压缩的时机交给模型（billion-context，做法 A / 做法 B / 做法 C）
+
+**什么时候用**：长跑型编码会话（小时级到天级、单会话上千次调用）；上下文接近窗口时你只能手动 `/compact`，或宿主自动压缩把有用细节切掉；你希望压缩是增量、可逆、前缀缓存友好的，而不是硬截断。**什么时候跳过**：短任务，收益不明；只跑一两次的会话；不能用 npm 全局安装；用 Claude Desktop 的 Code 标签页；需要 Remote Control 等账号绑定功能。
+
+**做法 A：原生插件（推荐先试 `bili plugin install opencode` 或 `bili claude`）**
+
+1. 安装 npm 包（Linux / macOS 用户级 prefix，避免 sudo 与自更新权限问题）：
+
+```bash
+npm install -g billion-context --prefix=~/.local
+```
+
+把 `~/.local/bin` 加进 PATH：
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+前提与失败处理：用 nvm / Homebrew Node 时默认 prefix 已属当前用户，可直接 `npm install -g billion-context`；Windows 默认 prefix（`%APPDATA%\npm`）可写，直接装；旧 root-owned prefix 报 `EACCES` 时带 `--prefix=~/.local` 重装，不要用 `sudo`，今后每次重装该包都要再带一次。
+
+2. 装原生插件（一次只装一个客户端）：
+
+```bash
+bili plugin install opencode
+bili plugin install claude
+bili plugin install pi
+bili plugin install omp
+bili plugin install dsh
+bili plugin install kimi
+bili plugin install hermes
+bili plugin install zcode
+```
+
+前提：kimi 需 Kimi Code ≥ 2.0.0；dsh 走 npm 形式，粘贴 GitHub 地址会装到无 `dist/` 的源码导致加载失败。
+
+opencode 必须同时关掉原生自动压缩，否则双重压缩。先备份配置文件，再改：
+
+```json
+"plugin": ["billion-context"]
+```
+
+```json
+"compaction": { "auto": false }
+```
+
+claude 也可走插件市场：
+
+```text
+/plugin marketplace add ranxianglei/billion-context
+/plugin install billion-context@billion-context
+/billion-context:bili-setup
+```
+
+3. 照常启动客户端（插件模式无启动器命令、无固定端口、无 URL 改写）。**预期结果**：会话里出现四个上下文工具（`compress`、`decompress`、`search_context`、`acp_status`）。**失败处理**：工具不出现先回查客户端插件条目是否写入，再重启客户端；不要继续叠装第二种接入形态。
+
+4. 每个会话做一次健康检查：
+
+```text
+/acp
+/acp-cache
+```
+
+判定标准：健康会话的前缀缓存命中率保持 **95–97%**，压缩本身开销 **≤2%**。持续偏低时按顺序排查：上游缓存 TTL 过期 → 切换模型 → 插件 bug（应上报）→ 其他。
+
+5. 让模型用起四个工具：接近窗口时用 `compress` 折叠较早区间；需要精确细节时用 `decompress` 还原；查旧信息先用 `search_context` 而不是重读全文；需要总览时调 `acp_status` 看哪些区间仍可压缩。这四个工具由模型自己决定何时、压缩哪一段，不是硬截断。
+
+6. 卸载：
+
+```bash
+bili plugin remove <client>
+```
+
+配置快照在 `.bili-bak`。
+
+**做法 B：启动器（无配置改动）**
+
+```bash
+bili claude
+bili codex
+bili pi
+bili omp
+bili opencode
+bili hermes
+bili dsh
+bili kimi
+bili gemini
+bili qwen
+bili aider
+bili goose
+```
+
+前提：启动器每次新起代理实例、不复用端口；对不支持 baseURL 改写的闭源客户端（qoder/trae/jcode/mcode/aider/copilot/amp/crush/zed 等）用证书 MITM，需要客户端信任代理 CA；`goose` 因 rustls 不信任 CA 文件，无法 MITM，只能走 baseURL 重定向。
+
+**做法 C：URL 改写（最通用）**
+
+把客户端 baseURL 前缀改成「代理 origin + `/bili/`」。适合有 baseURL 配置项、但没有插件缝的客户端。
+
+**Codex 的特殊前提**：`bili plugin install codex` 只写入一个 `[mcp_servers.bili]` 块（暴露四个 ACP 工具），**不能**让 codex 自身流量走代理；必须先有可用代理（`bili start` 或任一 lane 的代理，环境变量 `BILI_MCP_PROXY` 优先，其次活实例记录，最后 8787 默认）。要零配置完整效果就用 `bili codex` 启动器。
+
+**端口与常驻**：`bili start` 手动模式独占 8787；各 lane 自管理区从 18787 起，冲突则 +1 并各自记住漂移；升级重启时若旧构建仍在端口上排空，最多等 5s 后重绑同一端口。
+
+**避免双重压缩**：原生插件与本仓库的独立进程内扩展（`billion-context-pi`、`opencode-acp`）互斥，两者同时生效即双压；安装器会替换旧条目并把原配置快照为 `.bili-bak`，**项目级安装不会被自动处理，需手工删除**；pi 侧需要 `billion-context-pi` 0.1.72+ 才能靠 `BILLION_CONTEXT_NATIVE=<host>` 标记自动让位。
+
+**怎么选**：有插件缝的客户端用做法 A；闭源二进制无插件缝、或不想改配置用做法 B；只能改 baseURL 的用做法 C。不要在同一客户端上叠加两种形态。与第 7 步之二（block-ptc）的关系：两者都在动上下文边界，材料未说明同时装会不会互相干扰，先只在一个任务上用一套；block-ptc 是 DSH PTC 专用、按工作单元替换整段消息，billion-context 是跨客户端的代理、由模型自己选区间压缩并可还原。
 
 ### 第 8 步：打开 Control Room，先开 Autopilot
 
@@ -696,11 +806,11 @@ Machine load 默认 Off：给 CPU 和内存建议上限（Low / Medium / High / 
 
 ### 第 11 步：贡献回仓库（可选）
 
-职能插件是 markdown 文件，fork 后改，提 PR。交接层是 MIT、无构建步骤的 TypeScript，按本地 clone 改、`/reload-plugins` 热加载即可。Blender 是 MIT，可 fork 后运行 `validate_skills.py` 和 `run_tests.py`；PM 是 CC BY-NC-SA 4.0，fork 和再分发要遵守许可，添加技能遵守 `## Input` 和不用 `$ARGUMENTS` 的约定；schematic-figure 代码是 MIT，内置 Latin Modern 字体是 GUST 字体许可。claude-skills 是 MIT，按仓库自带审计与贡献方式改；superlite 和 subagent-studio 按各自仓库的贡献方式和许可来。block-ptc 是 MIT，按仓库的测试与贡献方式改；它是社区插件，不是 DSH 官方组件。
+职能插件是 markdown 文件，fork 后改，提 PR。交接层是 MIT、无构建步骤的 TypeScript，按本地 clone 改、`/reload-plugins` 热加载即可。Blender 是 MIT，可 fork 后运行 `validate_skills.py` 和 `run_tests.py`；PM 是 CC BY-NC-SA 4.0，fork 和再分发要遵守许可，添加技能遵守 `## Input` 和不用 `$ARGUMENTS` 的约定；schematic-figure 代码是 MIT，内置 Latin Modern 字体是 GUST 字体许可。claude-skills 是 MIT，按仓库自带审计与贡献方式改；superlite 和 subagent-studio 按各自仓库的贡献方式和许可来。block-ptc 是 MIT，按仓库的测试与贡献方式改；它是社区插件，不是 DSH 官方组件。billion-context 按仓库许可与贡献方式确认后再用于生产。
 
 ## 怎么判断变好了
 
-先分清来源：职能插件原文没有给出验证方法或指标；收口层只有成本口径；交接层只有机制描述；观测层（深）明确没有给出四配置性能结果；Blender、PM、示意图材料都只到 README；subagent-studio 只有作者单项目自述、仓库仅 30 星，关键证据在未包含的 `docs/evidence.md`；superlite 的 3.9 倍与 52% 是作者用自建 harness 单次或少量运行自测得出，材料未说明 52% 的具体口径，且鲁棒性探针低于对照组，不能当定论；claude-skills README 全是目录与宣传、没有效果数据、没有用户案例或基准测试，规模数字还自相矛盾；block-ptc 的作者明确说节省 token、降低成本等收益尚未验证。
+先分清来源：职能插件原文没有给出验证方法或指标；收口层只有成本口径；交接层只有机制描述；观测层（深）明确没有给出四配置性能结果；Blender、PM、示意图材料都只到 README；subagent-studio 只有作者单项目自述、仓库仅 30 星，关键证据在未包含的 `docs/evidence.md`；superlite 的 3.9 倍与 52% 是作者用自建 harness 单次或少量运行自测得出，材料未说明 52% 的具体口径，且鲁棒性探针低于对照组，不能当定论；claude-skills README 全是目录与宣传、没有效果数据、没有用户案例或基准测试，规模数字还自相矛盾；block-ptc 的作者明确说节省 token、降低成本等收益尚未验证；billion-context 的 ContextBench / LongMemEval-S / MemoryAgentBench 数字是作者自测或自建基准，短任务收益不明。
 
 **通用最小试用**：先记录 2–3 次基线（完成时间、返工次数、补齐上下文次数），装一个插件或技能包，跑一个真实任务，再对照同一类任务。试一两周；没有可感知改善就卸载，并记为“该插件无实质增益”。
 
@@ -721,6 +831,8 @@ Machine load 默认 Off：给 CPU 和内存建议上限（Low / Medium / High / 
 **交接层（Project Sentinel）**：看 Handoff Health、跨交接的里程碑连续性、上下文溢出/被迫压缩次数、你手动 `/clear` 或 `/compact` 的次数、你守着 run 的时间、Watchers 是否按时间唤醒、Mission Queue 是否只在边界投递且只投一次、Decision Inbox 是否让拍板不阻塞 run。几次交接后里程碑仍连续、Handoff Health 没有明显空洞，才算有价值。
 
 **block-ptc（DSH PTC）**：最小试用是在一个 DSH 0.2.1-rc.2 实例上装 bundle、重启、新开 Block PTC 会话，选一个含 4–6 个相对独立子任务的真实任务（例：读仓库 → 讲 tokenizer → 讲 lexer → 写并跑测试），每个子任务一个 block id，转场时 compact 前一个块；同一任务再用默认 `ptc` preset 跑一遍作基线。看五项：同一任务每次请求的输入 token 曲线；provider 侧缓存命中与账单（必须实测，不能拿 `tokensFreed` 当结论）；后续步骤里是否还记得用户此前给出的要求、纠正与约束，记录“用户不得不重述”的次数；返工次数与完成时间；机制健康度（是否频繁 `pending: true`、guard 拒绝、`compaction/start` 无配对 `end` 导致压缩停摆）。判定规则：上下文占用与账单不上升，且重述次数/返工次数不增加、关键约束零丢失，则继续用；若 token 降了但账单或缓存命中变差、或出现关键信息丢失导致返工，结论降为 study——只借鉴“模型自写交接摘要 + 完整日志保留 + 确定性回放”这套设计，不绑这个插件。
+
+**billion-context**：最小试用是在一个具体客户端上装原生插件（推荐先 `bili plugin install opencode` 或 `bili claude`），跑一个真实长会话；每个会话看 `/acp` 与 `/acp-cache`：健康会话前缀缓存命中率保持 95–97%，压缩本身开销 ≤2%；持续偏低按“上游缓存 TTL 过期 → 切换模型 → 插件 bug → 其他”顺序排查。再看上下文占用曲线、你手动 `/compact` 的次数、重述次数、返工次数与完成时间。作者的 ContextBench `0.3097` Utilized F1 且比 full 省 `-58.3%` 成本、LongMemEval-S `79.20%` 对最佳 RAG `62.60%`（+16.6%）、独立会话成本省 `-71.1%`、MemoryAgentBench 1.48M token TTL 上 100% 存活（full 199/199 失败）、稳态压缩 30×，都是作者自测或自建基准，需自行复现；短任务收益不明。
 
 ## 常见坑
 
@@ -761,6 +873,12 @@ Machine load 默认 Off：给 CPU 和内存建议上限（Low / Medium / High / 
 - block-ptc 会话里压缩突然失效，先查是否存在没有配对 `compaction/end` 的 `compaction/start`（持久锁）；本插件每次失败都会自己闭合括号，旧版本遗留则新开会话。
 - block-ptc 的 `tokensFreed` 不是 provider 的 cache-hit 度量；更小的上下文不等于更高缓存命中或更低账单，必须实测。
 - block-ptc 本次只用 DSH 0.2.1-rc.2 做过 live 验证；peer 依赖只声明下限、无上限，新宿主只是“允许加载”，事件语义与 preset 配置仍需重新验证。块是 per-session 的，子代理各跑自己的上下文与块。
+- billion-context 的 Claude Desktop Code 标签页会自设 `ANTHROPIC_BASE_URL` 绕过代理，而 `DISABLE_AUTO_COMPACT=1` 仍生效——既没压缩也没原生自动压缩；终端会话不受影响。
+- 走自定义 baseURL 会让 Claude Code 把会话当作第三方/API-key，Remote Control 等账号绑定功能消失；需要这些功能时用不带 bili 的 plain `claude`，或 `bili plugin remove claude`。
+- opencode 装了插件但没关 `"compaction": { "auto": false }` 会双重压缩；项目级安装的旧条目不会被安装器自动清掉，要手工删。
+- billion-context 健康会话前缀缓存命中率应保持 95–97%、压缩本身开销 ≤2%；持续偏低先查上游缓存 TTL 和模型切换，不要先怪插件。
+- `bili plugin install codex` 只写 MCP 块，不让 codex 流量走代理；要完整效果用 `bili codex` 启动器。
+- billion-context 的 ContextBench / LongMemEval-S / MemoryAgentBench 数字是作者自测或自建基准，短任务收益不明，需自行复现；不要把机制指标当成账单结论。
 
 ## 证据与来源
 
@@ -786,7 +904,9 @@ Machine load 默认 Off：给 CPU 和内存建议上限（Low / Medium / High / 
 
 **block-ptc**：v0.4.0、MIT、37 stars、DSH >=0.2.1-rc.2、Cordis >=4.0.5、零运行时依赖（仅 `node:crypto`）、安装/配置/工具调用/返回值/排错、`npm run check` 与 `tests/logic.test.mjs`、两个可选原生检查、快速上手样例 `{ replaced: 3, tokensFreed: 346 }` 均来自 `mengwEX/dsh-block-ptc` README；插件自己给出 `replaced` 与 `tokensFreed`，但原文明确 `tokensFreed` 不是 provider 的 cache-hit 度量，上下文变小不保证缓存命中率更高或账单更低；`docs/assets/context-comparison.en.png` 明确标注为机制示意、不是 API benchmark；“模型自己划线比自动压缩更好”是作者论证，不是实验；本次发布只用 DSH 0.2.1-rc.2 做过 live 验证，两个原生检查都离线、不跑模型，因此不验证实际块选择、压缩时机与信息保留质量。
 
-**属于调研建议、非原文数据**：官方市场的最小试用路径（1–2 小时 + 一周观察、只挑一个、检查来源、低风险任务、记录完成时间/轮次/手工切换/失败比例/新任务，一周无改善则卸载）来自调研报告建议；职能插件与独立技能的自测指标来自调研报告建议；claude-skills 的“先只装一个域、安装前审计、与不装基线比返工轮数、没有改善就卸载”来自调研结论，不是原文效果数据；subagent-studio 的最小试用建议（装 `studio-core`、跑 `studio-init`、用 plan-then-build 跑中等以上变更、验证第二遍 review 与 guard/audit）来自调研结论；superlite 的最小试用建议（先人工审批计划、记录 metrics.jsonl 与测试通过率、用内置 harness 自测、不要直接采信 3.9 倍与 52%）来自调研结论；block-ptc 的最小试用与判定规则（4–6 个独立子任务、对比默认 ptc、看 token 曲线/账单/重述次数/返工/机制健康度）来自调研报告的“怎么试、怎么验证”部分，不是原文效果数据；收口层、观测层、交接层的最小试用与指标也来自各调研报告的“怎么试、怎么验证”部分，不是原文效果数据。
+**billion-context**：安装命令、三种接入形态、支持客户端清单、`bili plugin install/remove`、opencode 需手写 `"plugin": ["billion-context"]` 与 `"compaction": { "auto": false }`、kimi 需 Kimi Code ≥ 2.0.0、dsh 需 npm 形式、claude 插件市场命令、`/acp` 与 `/acp-cache`、95–97% 前缀缓存命中率与 ≤2% 压缩开销、排查顺序、Codex 只写 `[mcp_servers.bili]` 且需先有代理、`BILI_MCP_PROXY` 优先级、8787 与 18787 端口规则、双重压缩互斥与 `.bili-bak`、项目级安装需手工删除、pi 需 `billion-context-pi` 0.1.72+、Claude Desktop Code 标签页绕过代理、自定义 baseURL 导致 Remote Control 等账号绑定功能消失、ContextBench `0.3097` Utilized F1 与省 `-58.3%` 成本、LongMemEval-S `79.20%` 对最佳 RAG `62.60%`（+16.6%）与省 `-71.1%`、MemoryAgentBench 1.48M token TTL 100% 存活与稳态压缩 30×，均来自 `ranxianglei/billion-context` README 与本次调研报告；效果数字是作者自测或自建基准，材料未给出独立复现，短任务收益不明；`bili plugin install codex` 不代理 codex 自身流量、goose 因 rustls 无法 MITM 等限制来自原文。
+
+**属于调研建议、非原文数据**：官方市场的最小试用路径（1–2 小时 + 一周观察、只挑一个、检查来源、低风险任务、记录完成时间/轮次/手工切换/失败比例/新任务，一周无改善则卸载）来自调研报告建议；职能插件与独立技能的自测指标来自调研报告建议；claude-skills 的“先只装一个域、安装前审计、与不装基线比返工轮数、没有改善就卸载”来自调研结论，不是原文效果数据；subagent-studio 的最小试用建议（装 `studio-core`、跑 `studio-init`、用 plan-then-build 跑中等以上变更、验证第二遍 review 与 guard/audit）来自调研结论；superlite 的最小试用建议（先人工审批计划、记录 metrics.jsonl 与测试通过率、用内置 harness 自测、不要直接采信 3.9 倍与 52%）来自调研结论；block-ptc 的最小试用与判定规则（4–6 个独立子任务、对比默认 ptc、看 token 曲线/账单/重述次数/返工/机制健康度）来自调研报告的“怎么试、怎么验证”部分，不是原文效果数据；billion-context 的最小试用（先 `bili plugin install opencode` 或 `bili claude`、每会话看 `/acp-cache`、按 95–97% 与 ≤2% 判定、短任务收益不明）来自调研报告结论，不是原文效果数据；收口层、观测层、交接层的最小试用与指标也来自各调研报告的“怎么试、怎么验证”部分，不是原文效果数据。
 
 ## 依据的调研
 
@@ -803,3 +923,4 @@ Machine load 默认 Off：给 CPU 和内存建议上限（Low / Medium / High / 
 - [iha2/superlite](../research/radar/2026-10-19/4923-iha2-superlite.md)：值得一试，可以在 Claude Code 中装上 superlite，先在一个 spec 清晰的中小型功能上采用“人工审批计划”模式跑一轮，同时用 metrics.jsonl 和测试通过率自行复核它的速度与质量，再决定是否推广。它把规划、并行分发、按任务难度路由到 Haiku、Sonnet、Opus 以及审查修复做成了一套可执行的插件流程；但 3.9 倍和 52% 的数据是作者用自建 harness 单次或少量运行自测得出的，鲁棒性探针还低于对照组，因此不宜直接当成定论采纳。
 - [alirezarezvani/claude-skills](../research/radar/2026-10-21/5609-alirezarezvani-claude-skills.md)：值得一试，先只装一个域、并在安装前用仓库自带的 skill-security-auditor 扫一遍，再挑两个真实任务与“不装 skill”的基线对比返工轮数；值得试的理由是它把领域流程固化成 SKILL.md＋脚本＋参考文档的可复制结构，但 README 全是目录与宣传、没有任何效果数据，规模数字还自相矛盾，不能直接 adopt。
 - [mengwEX/dsh-block-ptc](../research/radar/2026-10-21/5616-mengwex-dsh-block-ptc.md)：值得一试，如果团队正在使用 DeepSeek Harness 的 PTC 模式，可以按 README 的安装步骤和 block 使用流程先做小范围试用，把模型自己写的交接摘要当作可控的上下文边界；如果不用这套宿主，就只借鉴它的机制。理由：安装、配置、工具调用和收尾规范都能照着做，但它只是有 37 个 star 的社区插件，只在一个宿主版本上做过实测，节省 token、降低成本等收益连作者自己都声明尚未验证。
+- [ranxianglei/billion-context](../research/radar/2026-11-08/11533-ranxianglei-billion-context.md)：值得一试，值得在一个具体客户端上小范围试装（推荐先试 `bili plugin install opencode` 或 `bili claude` 启动器），用 `/acp`、`/acp-cache` 观察前缀缓存命中率与压缩收益，再决定是否推广；理由是安装、插件安装、启停和健康检查都给了可复制的命令和判定阈值，但省 token 与长会话效果主要是作者自测与自建基准，需自行复现。
