@@ -1,17 +1,15 @@
-# 让多 agent 的跨 owner 动作先批准、由本人执行、再由另一席位验证
+# 让多代理编码在隔离、审批和独立验证后才算完成
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：多 agent 协作里，提案、批准、执行和验证混在一起时，没人能说清谁授权、谁执行、凭什么算完成；手册用共享账本、席位协议和独立验证把这条链固定下来。
-> 先试这一步：先跑 mcode-agent-table 的离线 demo 和 npm test，再搭一桌两 owner 的小任务走一次 propose→approve→execute→verify。
-> 最近修订：2026-11-04
+> 解决的问题：这篇手册解决多代理/多 CLI 协作时“跑通就算完成”的问题：用任务规格、隔离执行、独立审查、审批签名和账本核销，把接受与否交给可复核的证据。
+> 先试这一步：如果你在 Windows 上已有至少两个已登录订阅 CLI，先在一个小仓库把构建/测试命令写进 config.yaml，跑一次 python director.py run -p <repo> -g "<一个明确的小改动>"，检查 ORDER 的允许路径、文件数、diff 上限、REVIEWER 是否独立，以及原仓库是否干净；不要先跑 mission。
+> 最近修订：2026-11-09
 
 ## 解决什么问题
-单个 AI 回答或单条串行 agent 会话，交付的往往是你没有验证过的结果。手册把“不满意就重问一次”升级成一套可执行流程：任务写清、并行分工、独立验证、合入门禁、成本检查、注意力路由、共享账本核销、叫停与围栏，以及用角色化 fleet 把 spec、实现、独立 QA 分开。做法 A–AJ 覆盖从单次答案竞赛到多项目控制台、文件状态+心跳编排、多 agent 共享账本、长时运行骨架、跨会话/跨人的消息交接、把多个编码 agent 编成有频道、有审批闸门的团队、用显式任务图 + epoch 围栏做本地执行控制面、用 coordinator + coder + qa 三角色起步的角色化交付，以及两层治理：AI 用 CTO/PM/工程师三层把任务单和验收证据固化成交接契约；AJ 用 G0–G7 状态机 + 零依赖 CLI 把基线冻结、审批签名、黑盒 QA 和 fail-closed 校验做成可执行的门。
+单个 AI 回答或单条串行 agent 会话，交付的往往是你没有验证过的结果。手册把“不满意就重问一次”升级成一套可执行流程：任务写清、并行分工、独立验证、合入门禁、成本检查、注意力路由、共享账本核销、叫停与围栏，以及用角色化 fleet 把 spec、实现、独立 QA 分开。做法 A–AL 覆盖从单次答案竞赛到多项目控制台、文件状态+心跳编排、多 agent 共享账本、长时运行骨架、跨会话/跨人的消息交接、把多个编码 agent 编成有频道、有审批闸门的团队、用显式任务图 + epoch 围栏做本地执行控制面、用 coordinator + coder + qa 三角色起步的角色化交付，以及两层治理：AI 用 CTO/PM/工程师三层把任务单和验收证据固化成交接契约；AJ 用 G0–G7 状态机 + 零依赖 CLI 把基线冻结、审批签名、黑盒 QA 和 fail-closed 校验做成可执行的门。已纳入做法 AK：它不替换 Claude Code、Codex、Cursor 等 agent，而是在它们之上补一层“桌子”协议——bot 提议，受影响的 owner 批准，该 owner 自己的 bot 执行，另一个席位验证；账本状态到 verified 才算完成，bot 自己说 done 只是发言。本次新增做法 AL：用 ai-dev-director 把 HEAD（出 ORDER）、BUILDER（整文件 JSON 提案）、REVIEWER（独立审查）三个订阅 CLI 角色串成一条本地流水线，所有构建只发生在隔离 git worktree，Scope Guard 检查允许路径/保护路径/文件数/diff 上限，REVIEWER fail-closed，验证命令外置在 config.yaml。共同底线不变：并行只负责产出，接受与否必须由测试、独立 verifier、校验器、接收人本人确认或人工复核决定；消息层和编排层只负责把问题送到、把人叫来，不负责证明结果正确。
 
-本次新增做法 AK：它不替换 Claude Code、Codex、Cursor 等 agent，而是在它们之上补一层“桌子”协议——bot 提议，受影响的 owner 批准，该 owner 自己的 bot 执行，另一个席位验证；账本状态到 verified 才算完成，bot 自己说 done 只是发言。共同底线不变：并行只负责产出，接受与否必须由测试、独立 verifier、校验器、接收人本人确认或人工复核决定；消息层和编排层只负责把问题送到、把人叫来，不负责证明结果正确。
-
-做法 A–AJ 概览：
+做法 A–AL 概览：
 - A：把不满意的回答送进锦标赛（arena-skill）。
 - B：并行子代理+测试合入闸门（clodfarm）。
 - C：多 harness、多座位的统一编排与恢复（openrig）。
@@ -49,6 +47,7 @@
 - AI：用 CTO/PM/工程师三层把任务单、验收证据和模型路由固化成交接契约（codex-cto-agent-team；先只出 plan-only，不建 chat）。
 - AJ：用 G0–G7 状态机 + gate_runner.py 做基线冻结、审批签名、黑盒 QA 与 fail-closed 校验（先复制规则文件，再跑 init/freeze）。
 - AK：用 mcode-agent-table 的共享账本、owner 签名席位和提交网关，把跨 owner 的 propose→approve→execute→verify 做成可 replay 的协议（先离线 demo 和 npm test，再一桌两 owner 小任务）。
+- AL：用 ai-dev-director 把 HEAD 出 ORDER、BUILDER 整文件 JSON 提案、REVIEWER 独立审查串成一条本地流水线，构建只发生在隔离 git worktree，Scope Guard 检查路径/文件数/diff 上限，REVIEWER fail-closed（Windows 优先，先 run 再 mission）。
 
 ## 适用与不适用
 **适用**
@@ -57,6 +56,8 @@
 - 你愿意用共享账本记录提案、批准、执行回执和验证结果，并接受“bot 说 done 不算完成，账本 verified 才算完成”。
 - 你想先在一台机器、一张桌子、两个 owner、一个小任务上验证协议本身，而不是一上来铺多机生产。
 - 你已有 A–AJ 中某条路径的验证门禁，AK 可作为“跨 owner 动作”的补充协议，不替代测试、独立 verifier 或合入门禁。
+- AL 适用于 Windows 10/11、Python 3.9+、Git，以及至少两个已用订阅账号登录的 CLI（claude、codex、agy）；你想把“规划、实现、审查”分给不同角色，并让构建只发生在隔离 worktree。
+- AL 适用于一个小仓库或一个明确的小改动：你能把项目级构建/测试命令写进 config.yaml，并接受订阅配额限制。
 
 **不适用**
 - 你只需要单 agent 串行问答，或任务没有跨 owner 的批准/执行/验证分离，AK 的席位和审批会变成额外开销。
@@ -66,8 +67,12 @@
 - 你把“多 agent 跑通”当成结果正确性的证明；AK 只负责审批、执行、验证和账本，不证明业务结果对。
 - 你需要已经量化过的缓存收益；调研中作者自己承认 prompt 缓存命中率尚未测量和调优，不能把缓存收益当成已验证结论。
 - 你要把 AK 直接写进团队生产规范；它仍是 v0.1、生态很早期，建议小范围试用。
+- AL 在 macOS/Linux 上代码已备但作者未在真机验证；不要把未验证平台直接当生产方案。
+- AL 需要已登录订阅 CLI，不需要也不要使用按量付费 API；只有 1 个 CLI 或没有订阅登录时不要硬套。
+- AL 的 BUILDER 用整文件 JSON 提案，大型改动会撞 CLI 输出上限；大改先拆小，或压缩重试、换供应商。
+- 你需要跨 owner 审批时仍走 AK；需要 G0–G7 审批/冻结状态机时仍走 AJ；需要 coordinator + coder + qa 三角色 fleet 时仍走 AH。AL 是单机三角色流水线，不替代这些治理层。
 
-**A–AJ 的适用路径选择**：仍按原路径表按处境选：单回答竞赛用 A；可拆分有测试的编码任务用 B；多 harness 用 C；同会话升档用 D；长时程底座用 E；固定多步流水线用 F；GitHub 小仓库自动链路用 G；轻量 worktree 隔离用 H；macOS 通知用 I；同 commit 独立验证用 J；多项目控制台用 K；daemon+dashboard 用 L；主 Agent 集中验证用 M；商业决策委员会用 N；菜单栏审批用 O；tmux 会话团队用 P；阶段成本检查用 Q；持续 issue/PR 值守用 R；实验性 agent teams 用 S；服务端并发落库用 T；worktree 副本用 U；后台子代理调度用 V；Bot 编排层用 W；本地控制台与危机室用 X；按类别并行代码审查用 Y；文件状态+heartbeat 编排用 Z；止损预算用 AA；共享账本核销用 AB；长时运行骨架用 AC；跨会话消息交接用 AD；频道化代理团队用 AE；project+to-dos+自动化用 AF；任务图+epoch 围栏用 AG；三角色 fleet 用 AH；CTO/PM/工程师交接契约用 AI；G0–G7 治理门用 AJ。
+**A–AL 的适用路径选择**：仍按原路径表按处境选：单回答竞赛用 A；可拆分有测试的编码任务用 B；多 harness 用 C；同会话升档用 D；长时程底座用 E；固定多步流水线用 F；GitHub 小仓库自动链路用 G；轻量 worktree 隔离用 H；macOS 通知用 I；同 commit 独立验证用 J；多项目控制台用 K；daemon+dashboard 用 L；主 Agent 集中验证用 M；商业决策委员会用 N；菜单栏审批用 O；tmux 会话团队用 P；阶段成本检查用 Q；持续 issue/PR 值守用 R；实验性 agent teams 用 S；服务端并发落库用 T；worktree 副本用 U；后台子代理调度用 V；Bot 编排层用 W；本地控制台与危机室用 X；按类别并行代码审查用 Y；文件状态+heartbeat 编排用 Z；止损预算用 AA；共享账本核销用 AB；长时运行骨架用 AC；跨会话消息交接用 AD；频道化代理团队用 AE；project+to-dos+自动化用 AF；任务图+epoch 围栏用 AG；三角色 fleet 用 AH；CTO/PM/工程师交接契约用 AI；G0–G7 治理门用 AJ；跨 owner 的 propose→approve→execute→verify 用 AK；Windows 上 HEAD/BUILDER/REVIEWER 三角色 + 隔离 worktree + Scope Guard 用 AL。
 
 ## 前置条件
 - 共同前提：把任务写成独立、自包含的文件；子代理看不到你的聊天记录，任务文件是它唯一的信息源。每条路径先做最小试用，不先上全量。
@@ -81,10 +86,17 @@ npm test
 npm run demo:scripted
 ```
 `demo:scripted` 离线跑，不需要 API key；`npm test` 覆盖 core、topologies、tasks、HTTP/SSE、persistence、MCP bridge、Rabbit Hole。
-- A–AJ 前置：按所选路径检查版本、平台、登录和仓库条件；例如 A 需 Claude Code 可 spawn 子 agent，B 需 Docker 和一条验证命令，J 需 git 与 Node 22.13+，AH 需 Hermes Agent，AJ 需 Python 3 和至少 16 字符签名密钥。没有对应前置就不要硬套。
+- AL 前置：Windows 10/11（macOS/Linux 代码已备但作者未验证）、Python 3.9+、Git，以及至少两个已用订阅账号登录的 CLI（claude、codex、agy）；不需要 API key（代码会把所有 *_API_KEY 从环境里剔除）；一个 git 仓库（v3.0 起空文件夹也可 greenfield）；config.yaml 中写项目级验证命令；ORDER 中写允许路径、保护路径、文件数、diff 上限；控制台端口/允许项目列表/桥接 token。理想情况下 HEAD/BUILDER/REVIEWER 分属不同供应商；同供应商会被标 REDUCED_INDEPENDENCE。
+- AL 安装与自检：
+```bash
+pip install -r requirements.txt
+python -m pytest -q
+```
+作者称测试套件用桩 CLI 运行、不需要真实 CLI；测试数量在文中出现“604 个测试，约 25 分钟”和“593/596”两种说法，数字有出入，以实际运行为准。
+- A–AK 前置：按所选路径检查版本、平台、登录和仓库条件；例如 A 需 Claude Code 可 spawn 子 agent，B 需 Docker 和一条验证命令，J 需 git 与 Node 22.13+，AH 需 Hermes Agent，AJ 需 Python 3 和至少 16 字符签名密钥。没有对应前置就不要硬套。
 
 ## 操作步骤
-先按处境选路径。A–AJ 的详细命令保留在原做法中；本次新增 AK 的完整最小路径如下。
+先按处境选路径。A–AJ 的详细命令保留在原做法中；AK 和 AL 的完整最小路径如下。
 
 ### 做法 AK：用共享账本+owner 签名席位做跨 owner 的 propose→approve→execute→verify
 1. 环境准备。前提：Node ≥ 22.19，能联网拉依赖。执行上面的 clone、npm install、npm test、npm run demo:scripted。预期：测试通过，离线 demo 能跑完 debate → decision → owner approval → execute → verify。若 demo 不通过，先不要接真实任务。
@@ -115,7 +127,53 @@ npm run demo:mcode
 场景是 bot-tao 正方、bot-jenny 反方且持有团队 taskboard 和私有记忆、judge 只看到双方发言，外加确定性 checker 占第四席；judge 的决议要动 Jenny 的 taskboard，因此等 Jenny 签名批准；Jenny 自己的 MCode 改文件并回执；checker 验证。账本、transcript、每轮 token 用量在 demo/out/。
 8. 最小试用。选一个低风险、边界清楚的小任务，搭一桌两 owner：一个 owner 提案，另一个 owner 受影响并批准，执行由该 owner 的 bot 完成，验证由另一席位完成。先只跑 1–2 个任务，检查账本 seq 是否 1..n 无缺口、replay 能否重建 floor/seats/tasks/budget、未批准动作是否为 0。不要一上来接生产凭据，也不要让 bot 代签。
 
-### 做法 A–AJ 的保留路径索引
+### 做法 AL：用 HEAD/BUILDER/REVIEWER 三角色 + 隔离 worktree + Scope Guard 做本地编码流水线
+1. 确认前提。前提：Windows 10/11、Python 3.9+、Git，以及至少两个已用订阅账号登录的 CLI（claude、codex、agy）。不需要 API key；代码会把所有 *_API_KEY 从环境里剔除。若某平台没有 agy，把 BUILDER 改成 codex 或 claude，两个 CLI 也能跑。预期：至少两个订阅 CLI 能在终端启动并已登录；不要用按量付费 API 作为后备。
+2. 装依赖并跑测试。
+```bash
+pip install -r requirements.txt
+python -m pytest -q
+```
+前提：在 ai-dev-director 仓库根目录。预期：测试套件用桩 CLI 运行，不需要真实 CLI；耗时较长，先留出时间。若测试不通过，先不要接真实仓库。
+3. 启动控制台。Windows：
+```powershell
+.\start-companion.ps1
+.\stop-companion.ps1
+```
+macOS/Linux（作者标注未验证）：
+```bash
+chmod +x start-companion.sh stop-companion.sh
+./start-companion.sh
+./stop-companion.sh
+```
+前提：依赖已安装。预期：Windows 上控制台起在 http://127.0.0.1:8081（TRINITY 舞台）和 /classic（工作区）；shell 版把 python3 companion_server.py 放后台，PID 写到 data/companion.pid；stop 脚本能停止。
+4. 配置 config.yaml。前提：你已选定一个 git 仓库，并能写出该项目的构建/测试命令。设置角色对应供应商（head/builder/reviewer）、超时、安全上限、项目级验证命令、自主模式 autonomy 与档位 quick / standard / deep。关键设计：验证命令放在 config.yaml 而不是项目内，使 BUILDER 无法弱化它。若 HEAD 与 REVIEWER 落到同一供应商，系统会标注 REDUCED_INDEPENDENCE 并放行，独立性会打折。预期：至少两个角色分属不同供应商；验证命令可由 Director 在隔离 worktree 里执行。
+5. 单次运行。前提：小仓库、小改动、验证命令已配置。
+```bash
+python director.py run -p D:/work/my_project -g "src/calc.py에 add(a, b)를 만들고 테스트를 추가해"
+```
+预期：HEAD 出 ORDER（写明允许路径、保护路径、文件数、diff 上限）；BUILDER 以整文件 JSON 提交提案；Director 用 Scope Guard 检查；写入 .director_worktrees/ 下的隔离 git worktree；跑构建/测试（Verifier）；REVIEWER 独立审查；HEAD 给 PASS/FAIL/修改指示。原项目目录永不被直接修改。
+6. 多里程碑 Mission。前提：单次 run 已跑通，原仓库保持干净。
+```bash
+python director.py mission -p D:/work/my_project -g "회원가입 흐름을 끝까지 구현"
+```
+预期：把一句话目标拆成多个里程碑逐步推进；每步从上一个 PASS 快照出发，依据测试/评审证据重新规划。
+7. 一步到位。前提：先用小仓库和 quick 档确认自动回写行为。
+```bash
+python director.py do -g "로그인 버그 고쳐" --profile quick
+```
+预期：Mission + 自动回写，使用 quick 档；先确认原项目保护策略和回写范围符合预期。
+8. 查看状态、清理隔离工作本。前提：先 dry-run。
+```bash
+python director.py status
+python director.py clean-worktrees -p D:/work/my_project --dry-run
+```
+预期：status 显示当前运行/任务状态；dry-run 列出将清理的隔离工作本，不实际删除。确认后再去掉 --dry-run。
+9. 确认硬规则确实生效。前提：在信任流水线前逐条检查。预期：禁用按量付费 API，只用已登录订阅 CLI；所有构建只发生在 .director_worktrees/ 的 git worktree 内，原项目不被修改；Scope Guard 检查 ORDER 的允许路径、保护路径、文件数、diff 上限，BUILDER 不能放宽；REVIEWER fail-closed，无响应或返回损坏即判 FAIL；支付、实盘下单代码（OrderSend 等）、账号创建、外部不可逆行为必须由人决定；卡住的 CLI 连同子进程一起超时终止；聊天里说“停止/stop”或按控制台停止按钮 → 运行的 CLI 立即终止、Mission 固定为 STOPPED、重启也不恢复。
+10. 安全边界。前提：控制台只在本机使用。预期：控制台只绑定 127.0.0.1；改变状态的请求要本地来源校验 + 桥接 token（data/solomon-bridge.token，首次运行生成）；companion.json 里放端口和可选允许项目列表。不要把端口暴露到局域网。
+11. 最小试用与对照。前提：一台 Windows 机器、两个已登录订阅 CLI、一个小仓库，把它的构建/测试命令写进 config.yaml 的 projects 段。先跑 run，观察 ORDER 的路径/文件数/diff 上限是否合理、Scope Guard 是否拦住越界、REVIEWER 是否真的独立于 BUILDER、原项目目录是否未被改动、stop 是否能立刻终止进程树。再对一个中等目标跑 mission。对照设计：选 3–5 个规模相近的任务，一半用 Director 流水线、一半直接单用 Claude Code（或 Codex）完成，任务与验收标准事先固定。预期：若指标没有明显改善，或隔离/评审机制被绕过，降级为 study，只借鉴流程思路，不继续使用该工具本身。
+
+### 做法 A–AJ 的保留路径索引（AK、AL 见上）
 - A：装 arena-skill，跑 `/arena --quick --seed 7`，用 baseline 传入旧答案；看盲评比分和攻击命中。
 - B：装 clodfarm，设 FARM_VERIFY_CMD，spawn 子代理；只有验证命令通过才合入。
 - C：装 openrig，选 starter 起两座位，用 rig ps 检查就绪；多 harness 可见可恢复。
@@ -163,10 +221,21 @@ npm run demo:mcode
 - 最小试用：1–2 天、一张桌子、两个 owner、一个小任务；先看协议闭环，不先追求吞吐。
 - 缓存收益暂不作为指标：调研作者自己说尚未测量和调优缓存命中率，不能用“前缀稳定”推断成本一定下降。
 
-**A–AJ 的指标**：沿用各路径原有指标，例如 B 看合入前测试通过率，J 看 gate 绿+verifier receipt，AH 看人工介入是否集中在审批门与发布/凭据，AJ 看 freeze 是否拦住空规格和冻结后改契约是否熔断。共同判断是：人工介入是否集中在授权、验收和发布；返工是否下降；验证是否由独立方完成；没有验证证据的“完成”是否被拒绝。
+**AL 的可观察指标**
+- 首次构建即通过测试的比例（第一轮 PASS 率）。
+- 人工介入次数与介入原因，是否只剩真正需要人决策的支付/凭据类动作。
+- REVIEWER 独立抓出的真实缺陷数，而不是风格挑刺。
+- 端到端耗时与订阅配额消耗。
+- 原仓库是否始终保持干净（git status 无意外改动）。
+- 失败恢复能力：人为制造 JSON 破损、超时、配额耗尽，看是否按设计重试、换供应商、重规划，而不是卡死或误判 PASS。
+- 最小试用：Windows 机器 + 两个已登录订阅 CLI + 一个小仓库 + 一个明确小改动；先跑 run，再跑 mission。对照设计选 3–5 个规模相近的任务，一半用 Director、一半直接单用 Claude Code 或 Codex，任务与验收标准事先固定。
+- 若上述指标相对单代理对照没有明显改善，或隔离/评审机制被绕过，降级为 study，只借鉴流程思路，不必继续使用该工具本身。
+
+**A–AK 的指标**：沿用各路径原有指标，例如 B 看合入前测试通过率，J 看 gate 绿+verifier receipt，AH 看人工介入是否集中在审批门与发布/凭据，AJ 看 freeze 是否拦住空规格和冻结后改契约是否熔断。共同判断是：人工介入是否集中在授权、验收和发布；返工是否下降；验证是否由独立方完成；没有验证证据的“完成”是否被拒绝。
 
 **试多久、什么时候升级**
 - AK 先试 1–2 天、1–2 个小任务。只有协议闭环稳定、未批准动作为 0、账本可 replay、验证席位独立，才考虑加第三个 owner 或接更多 MCP agent。
+- AL 先跑 3–5 个对照任务，不先跑全量 Mission。只有第一轮 PASS 率、人工介入原因、独立缺陷发现、原仓库干净度和失败恢复都相对单代理对照有改善，才考虑扩大任务范围或接更多仓库。
 - 如果多 agent 只是热闹、审批变成无脑点允许、或账本 verified 没有独立验证，退回单 agent + 明确测试/评审门禁，只保留“谁批准、谁执行、谁验证”的协议思路。
 - AK 从单机扩到多机前，先确认联邦仍在 roadmap，不要假设已经支持。
 
@@ -179,10 +248,20 @@ npm run demo:mcode
 - termination 不能省；缺终止条件的表会被拒建。watchdog 只是兜底，不是主动推进机制。
 - tao.owner.json 含私钥，不能外传；被 deny 规则拦下的发言根本到不了桌面，不要以为发出去后被过滤。
 - 不要一上来接生产凭据、不要一桌铺很多 owner；先用两 owner 小任务验证协议。
+- AL 是 Windows-first、韩语界面；macOS/Linux 代码齐备但未在真机验证，部分测试假定 Windows 盘符路径（C:/...）。
+- AL 的测试数量在文档中出现 604 与 593/596 两种说法，不要拿其中一个数字当验收标准，以实际运行为准。
+- AL 的整文件 JSON 提案在大型改动上会撞 CLI 输出上限；先压缩重试，再换供应商，或把任务拆小。
+- AL 完全受各 CLI 订阅配额约束；不要用按量付费 API 绕过。
+- HEAD 与 REVIEWER 落到同一供应商时系统会标 REDUCED_INDEPENDENCE 并放行；独立性会打折，不要把这种情况当成独立审查。
+- 验证命令必须放在 config.yaml，不要放回项目内让 BUILDER 有机会弱化。
+- 真实三 CLI 的 E2E 是 opt-in 标记；日常测试用的是桩，不要以为桩测试通过就等于真实 CLI 全链路覆盖。
+- 控制台只绑定 127.0.0.1，状态变更请求有本地来源校验和桥接 token；不要把端口暴露出去。
+- AL 不替代 AK 的 owner 签名，也不替代 AJ 的审批状态机；跨 owner 任务仍走 AK，需要 G0–G7 门禁仍走 AJ。
 - 共同坑不变：消息层和编排层只负责把问题送到、把人叫来，不证明结果正确；没有测试、独立 verifier、校验器或人工复核，不要接受完成。
 
 ## 证据与来源
 - AK 依据调研《MiniMax-AI/mcode-agent-table》。可核对：仓库与 BYOB Table Protocol v0.1；Node ≥ 22.19；`npm test` 覆盖 core、topologies、tasks、HTTP/SSE、persistence、MCP bridge、Rabbit Hole；`npm run demo:scripted` 离线跑；`npm run demo:mcode` 需 mcode ≥ 0.6.3 和 MiniMax API key；`npx tsx src/cli.ts serve/keygen/create/join/say/read` 命令；table-config.json 的 termination 缺失会拒建；12 个 MCP 工具；byob_approve 的 elicitation 行为；账本 append-only、seq 1..n、replay 重建；watchdog 标 stalled；verified 必须由不同席位完成。作者主张或未验证：prompt 缓存命中率尚未测量和调优；v0.1 单机、联邦在 roadmap；生态很早期，建议小范围试用，不要直接当生产方案。
+- AL 依据调研《digilogd-cmd/ai-dev-director》。可核对：Windows 10/11、Python 3.9+、Git；至少两个已用订阅账号登录的 CLI（claude、codex、agy）；不需要 API key，代码会剔除所有 *_API_KEY；`pip install -r requirements.txt` 与 `python -m pytest -q` 用桩 CLI 跑测试；`start-companion.ps1` / `start-companion.sh` 启停控制台；`python director.py run/mission/do/status/clean-worktrees` 命令；config.yaml 分 head/builder/reviewer、autonomy、quick/standard/deep，并把项目级验证命令放在 config.yaml；Scope Guard 检查允许路径/保护路径/文件数/diff 上限；构建只发生在 .director_worktrees/；REVIEWER fail-closed；HEAD 与 REVIEWER 同供应商时标 REDUCED_INDEPENDENCE；停止按钮/“stop”立即终止进程树且 Mission 固定 STOPPED；控制台只绑 127.0.0.1，状态变更需本地来源校验 + data/solomon-bridge.token。作者主张或未验证：作者称这是每天在用的代码；2026-11-04 基准 593/596 通过，两个旧 UI 测试期待“拒绝非仓库文件夹”而 v3.0 起支持空文件夹，一个快照排除列表 fixture 漂移；MIT 许可；42 stars；没有“用了它之后代码质量/交付速度提升多少”的量化对比，每日使用是自述；布局说明写“604 tests”，快速开始写“593/596”，数字不一致，以实际运行为准；macOS/Linux 代码齐备但未在真机验证，部分测试假定 Windows 盘符路径；整文件 JSON 提案在大型改动上会撞 CLI 输出上限；完全受订阅配额约束；真实三 CLI 端到端只以 opt-in 标记运行。
 - A 依据《Jakeschincariol/arena-skill》；B 依据《matank001/clodfarm》；C 依据《mvschwarz/openrig》；D 依据《code-yeongyu/oh-my-openagent》；E 依据《bytedance/deer-flow》；F 依据《crewAIInc/crewAI》；G 依据《leonvanzyl/cubefarm》；H 依据《Show HN: Offrun》；I 依据《manaflow-ai/cmux》；J 依据《pullboard-dev/pullboard》；K 依据《SaM-runtime/claude-console》；L 依据《glmn-ai/neurosquad-cli》；M 依据《@yanhua1010》；N 依据《nateherkai/roast-room》；O 依据《josefchen/muster》；P 依据《Cleveland-RD/hivehouse》；Q 依据《@Klonzu》；R 合并《@hwangxin》与《@MindfulReturn》；S 依据《@mirku21》；T 依据《feder-cr/git-ai》；U 依据《@thedelost》；V 依据《olivieropinotti/orchestrator-skill》；W 依据《timscheuerai/grokbot-gtm-team》；X 依据《BlackAngel242/MyTeam》；Y 依据《@RoundtableSpace》；Z 依据《tomtomsatnav/agent-orchestration-standard》；AA 依据《@runes_leo》；AB 与 AC 依据《We ran AI agent swarms in Minecraft and Mindustry》；AD 依据《Bearisbug/imbo》；AE 依据《eduwxyz/tucano》；AF 依据《Orkas-AI/Orkas》；AG 依据《Balanov/skein》；AH 依据《SamueleBassoli/hermes-fleet-apps》；AI 依据《StochasticResult/codex-cto-agent-team》；AJ 依据《Over9rowth/O9-RD-MAO-Governance》。这些路径中的效果描述多数是作者主张或 README 自述，具体可核对命令、版本、配置和测试以原调研为准；没有量化数据的地方不要当成已验证收益。
 
 ## 依据的调研
@@ -224,3 +303,4 @@ npm run demo:mcode
 - [StochasticResult/codex-cto-agent-team](../research/radar/2026-11-04/10024-stochasticresult-codex-cto-agent-team.md)：值得一试，先只借用它的「任务交接模板（目标/权限/产出/验收/可写资源）+ 模型路由分级 + 验收证据规则」，用 plan-only 提示词和 1 个 PM+2~3 个工程师的最小配置在真实小项目上跑一轮；56 角色全铺开和私有状态机暂缓，因为原文只有设计与流程说明、没有效果数据，且明确声明不带后台调度、未做过客户端实测。
 - [Over9rowth/O9-RD-MAO-Governance](../research/radar/2026-11-04/10028-over9rowth-o9-rd-mao-governance.md)：值得一试，建议小范围试用：该仓库提供了可直接复制的规则文件、零依赖 CLI 和 G0–G7 流程，能对多智能体编码工作流施加可验证的治理约束；但项目较新、缺少实际案例，需在团队内先做小规模验证。
 - [MiniMax-AI/mcode-agent-table](../research/radar/2026-11-04/10234-minimax-ai-mcode-agent-table.md)：值得一试，先按 README 跑通离线 demo 和测试，再搭一桌两 owner 的小任务，验证「propose→approve→execute→verify」这条审批-执行-验证闭环；这套东西真正可复用的是把「谁批准、谁执行、谁验证、何时必须停」写成协议和账本，而不是多代理框架本身。但它还只是 v0.1、单机运行、缓存收益未测量、生态很早期，建议小范围试用，不要直接当生产方案写进手册。
+- [digilogd-cmd/ai-dev-director](../research/radar/2026-11-09/11650-digilogd-cmd-ai-dev-director.md)：值得一试，可以在 Windows 环境下用两个已登录的订阅 CLI 小范围试用，把 HEAD/BUILDER/REVIEWER 分工、隔离 worktree、独立审查、Scope Guard 这套编排流程借鉴到自己的多代理编码验证中；理由是 README 给出了可复制的安装、运行命令与硬性安全规则，但 macOS/Linux 未验证、缺少效果量化数据，尚不宜全面采用。
