@@ -1,13 +1,13 @@
-# 让换模型变成对照实验：固定客户端，只换上游
+# 换模型、换框架、换上游之前，先量出一条可对比的基线
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：换模型或换上游时，客户端、提示词和工具定义一变，就无法判断差异来自模型还是接入层；本手册给出一套固定工作流、只换上游的对照做法，并保留性能、成本、缓存和工具调用 schema 的基线测量。
-> 先试这一步：先把 Claude Code 客户端指向本地网关，用同一个真实任务跑通工具调用与流式，再和直连基线逐项对照。
-> 最近修订：2026-11-05
+> 解决的问题：换模型、换推理框架、改服务配置、调 effort 或换上游供应商时，用七条互补路径量出可对比的基线，避免凭感觉判断快慢、贵贱、工具调用是否可靠。
+> 先试这一步：先对你已经在跑的那个模型服务做一次 attached 回放（agentperf-local run --base-url …），不动环境拿到 summary.json 里的 output tokens/s 与首 token 时间的 median 和 p95。
+> 最近修订：2026-11-09
 
 ## 解决什么问题
-换模型、换推理框架、改服务配置、调 effort，或者换一个上游模型供应商时，缺一条可对比的基线，只能凭感觉判断快慢、贵贱、工具调用是否可靠，甚至分不清差异来自模型还是接入层。本手册给六条互补路径：agentperf-local 回放多轮 agent 对话量吞吐与延迟；Claude Code `/usage` 量一次真实任务的 turn、cache 与 token 成本；Janas 把内存装不下的大 MoE 权重留在磁盘、按 token 从 NVMe 流式读专家，用 `--cache` 限内存并与同机 llama.cpp 对照；Strata 上把 Qwen 3.8 Flash Next 当编码代理时调 `--prompt-cache` 减少重复重读；vLLM 0.31 上用 `--tool-strict-level` 开启约束解码，让 Kimi K2.6 / DeepSeek V4 Flash 的工具调用符合 schema，并用 K2VV ToolCall 对比；Claude Code Gateway 把 Claude Code 客户端、提示词和工具定义固定住，只换后端上游模型，做同任务对照。前四条覆盖性能、成本与等待时间，第五条覆盖工具调用的结构正确性，第六条覆盖“同一工作流换模型”的归因；六条都不等于输出质量或任务完成度，必须另外评估。Strata、vLLM 和网关三条分别来自单条推文、单一厂商部署经验和项目 README，不能直接当普适结论。
+换模型、换推理框架、改服务配置、调 effort，或者换一个上游模型供应商时，缺一条可对比的基线，只能凭感觉判断快慢、贵贱、工具调用是否可靠，甚至分不清差异来自模型还是接入层。本手册给七条互补路径：agentperf-local 回放多轮 agent 对话量吞吐与延迟；Claude Code `/usage` 量一次真实任务的 turn、cache 与 token 成本；Janas 把内存装不下的大 MoE 权重留在磁盘、按 token 从 NVMe 流式读专家，用 `--cache` 限内存并与同机 llama.cpp 对照；Strata 上把 Qwen 3.8 Flash Next 当编码代理时调 `--prompt-cache` 减少重复重读；vLLM 0.31 上用 `--tool-strict-level` 开启约束解码，让 Kimi K2.6 / DeepSeek V4 Flash 的工具调用符合 schema，并用 K2VV ToolCall 对比；Claude Code Gateway 把 Claude Code 客户端、提示词和工具定义固定住，只换后端上游模型，做同任务对照（做法 A）；ACP-Ant 把手上已有的 Antigravity 账号包成 OpenAI Chat Completions / OpenAI Responses / Anthropic Messages 三种标准接口，给 Codex CLI、Cline、OpenAI SDK 这类现成 Agent 换一个模型后端（做法 B）。前四条覆盖性能、成本、能不能跑起来与等待时间，第五条覆盖工具调用的结构正确性，第六条覆盖“同一工作流换模型”的归因，第七条覆盖“手上没有 API key、只有订阅账号”这一种模型供给方式；七条都不等于输出质量或任务完成度，必须另外评估。Strata、vLLM、Claude Code Gateway 和 ACP-Ant 四条分别来自单条推文、单一厂商部署经验、项目 README 和项目 README，不能直接当普适结论。
 
 ## 适用与不适用
 适用：
@@ -19,14 +19,18 @@
 - 按任务形状选 Claude 模型、从 Sonnet 5 迁到 Sonnet 5.5、重跑 effort sweep、给真实任务建成本基线。
 - 编码代理 + 多轮长对话 + 重复前缀：在 Strata 上检查并调整 `--prompt-cache`（原文把 0 改成 6）。
 - 用 vLLM 0.31 服务 Kimi K2.6 或 DeepSeek V4 Flash，且 agent harness 依赖严格 tool schema（原文示例是 OpenCode 的 webfetch 工具）：开启 `--tool-strict-level` 做约束解码，用 K2VV ToolCall 验证后再上线。
-- 想在同一套 Claude Code 工作流、同一份提示词和工具定义下换上游模型做对照：Claude Code Gateway 把 Anthropic Messages API 转成 OpenAI Chat Completions，支持 Kimi、GLM、DeepSeek、OpenRouter、Mistral、Fireworks、Cerebras、Groq、Databricks，以及本地 Ollama / LM Studio / vLLM / llama.cpp。
-- 需要双向工具调用翻译和完整 SSE 流式：网关把 Anthropic `tools`/`tool_use`/`tool_result` 与 OpenAI `tools`/`tool_calls` 互转，并对分片做缓冲，避免工具参数 JSON 被截断。
-- 需要确定性模型路由、失败回退和熔断：精确映射 → glob 家族规则 → 透传 → 默认；连续失败打开熔断，半开探测成功后恢复。
-- 客户端说 Anthropic Messages 协议、不想改客户端代码：把 base URL 指到 `http://localhost:8787`，Claude Code 自身不改；原文称 Cline、Roo Code、Continue.dev、Aider、LibreChat、Open WebUI、LobeChat 亦可。
-- 需要一个本地观测面板：实时请求、单请求详情、翻译 playground、诊断、`/v1/models`、`POST /v1/chat/completions` 透传。
+- 想在同一套 Claude Code 工作流、同一份提示词和工具定义下换上游模型做对照（做法 A）：Claude Code Gateway 把 Anthropic Messages API 转成 OpenAI Chat Completions，支持 Kimi、GLM、DeepSeek、OpenRouter、Mistral、Fireworks、Cerebras、Groq、Databricks，以及本地 Ollama / LM Studio / vLLM / llama.cpp。
+- 需要双向工具调用翻译和完整 SSE 流式（做法 A）：网关把 Anthropic `tools`/`tool_use`/`tool_result` 与 OpenAI `tools`/`tool_calls` 互转，并对分片做缓冲，避免工具参数 JSON 被截断。
+- 需要确定性模型路由、失败回退和熔断（做法 A）：精确映射 → glob 家族规则 → 透传 → 默认；连续失败打开熔断，半开探测成功后恢复。
+- 客户端说 Anthropic Messages 协议、不想改客户端代码（做法 A）：把 base URL 指到 `http://localhost:8787`，Claude Code 自身不改；原文称 Cline、Roo Code、Continue.dev、Aider、LibreChat、Open WebUI、LobeChat 亦可。
+- 需要一个本地观测面板（做法 A）：实时请求、单请求详情、翻译 playground、诊断、`/v1/models`、`POST /v1/chat/completions` 透传。
+- 手上没有上游 API key、但有可用的 Antigravity（`agy`）Google 账号，且想让 Codex CLI / Cline / Roo Code / OpenAI SDK 这类现成 Agent 换一个模型后端（做法 B）：ACP-Ant 在本机默认 `127.0.0.1:8095` 起一个网关，把 `agy` 通过 ACP 包成三种标准接口，都支持流式、工具调用和图片输入（data URL、http(s) 图片由网关代下载、工具结果里的图片）。
+- 客户端只会说 Anthropic Messages 协议、但不是 Claude Code（做法 B）：ACP-Ant 也提供 `/v1/messages`。
+- 需要多账号摊额度（做法 B）：每个账号一个独立 HOME 目录（登录凭据只存在这里，账号间互不串）、可选独立代理（`http://`、`https://`、`socks5://`，可带用户名密码）；额度用完、被限速、要求验证时冷却并换下一个账号，登录失效则停用。
+
 不适用：
-- 判断 AI 干得更好没有：agentperf-local、成本 playbook、Janas、Strata 和 vLLM 的 schema 约束都不判任务对错或输出质量；vLLM 只保证工具调用结构合法，不保证该调哪个工具、参数合理或任务被解决；网关只归一格式，不归一能力。
-- 自动持续运行或监控：材料未描述按时间、事件或状态自动持续运行的机制；网关只有超时/5xx/熔断回退和流合成，属于可用性保障，不是任务级持续执行。
+- 判断 AI 干得更好没有：agentperf-local、成本 playbook、Janas、Strata、vLLM 的 schema 约束、两种网关都不判任务对错或输出质量；vLLM 只保证工具调用结构合法，不保证该调哪个工具、参数合理或任务被解决；网关只归一格式，不归一能力。
+- 自动持续运行或监控：材料未描述按时间、事件或状态自动持续运行的机制；两种网关都只有超时/5xx/熔断回退和流合成，属于可用性保障，不是任务级持续执行。
 - 测单次短 prompt 聊天：agentperf-local 默认回放是 agent 形状的多轮负载。
 - 为 dense 模型引入 Janas：原文数据里优势很小（Qwen3-4B 193 vs 164 tok/s，Gemma-4-12B-it 65 vs 46），MoE 才是它占便宜的形状。
 - 没有 NVMe、或机器不能独占时用 Janas：它会吃满空闲内存并以 O_DIRECT 全速读盘，余量不足可能被推进 swap、桌面变慢甚至无响应。
@@ -34,13 +38,19 @@
 - 把原文的价格、省钱比例和 effort 档位收益当结论照抄：金额与 token 数要么是 list price，要么是作者声明的示意值。
 - 环境不支持 `--prompt-cache`、或工作流里没有重复前缀时，改 Strata 不值得；原文没有模型权重版本、Strata 版本、量化方式、上下文长度和完整命令行，94.8 秒到 4.1 秒是单条推文转述的个案。
 - 把 vLLM 的严格工具调用默认开到所有模型：原文限定 Kimi K2.6 / DeepSeek V4 Flash，其他模型如 gpt-oss-20b、Qwen 3.6、GLM 5.1 有开启后出问题的报告；原文也没有完整启动命令和 `--tool-strict-level` 取值，不能当部署手册照抄。
-- 把格式转换成功当成模型能力等价：网关只归一协议，不归一能力；上下文窗口、工具调用保真度、流式语义、结构化输出因供应商而异。
-- 需要开箱即用的安装与启动命令：网关原文正文没有 clone / install / start 命令，只给了一个面向 Windows 的 PowerShell 安装页链接。
-- 需要成熟度证据：网关的 `USERS-1.2K`、`STATE-ACTIVE` 徽章不可核验；全篇没有延迟、成本、工具调用成功率或对照实验数据。
-- 需要质量指标或基线：网关有请求日志、单请求详情、playground、诊断和 usage 回传，但没有定义质量指标或基线。
-- 生产环境直接暴露网关管理面板：要设 `ADMIN_PASSWORD`，只绑回环或放在带 TLS 的反向代理后；`CORS_ORIGINS` 默认 `*`。
-- 依赖供应商模型 ID 长期不变：换供应商要做 `Sync Models` + `Auto-Map`，并保留 `fallback`；不做会静默走默认或 400。
-- 把网关当授权校验：项目明确“不做授权校验”，合规责任在部署者。
+- 把格式转换成功当成模型能力等价：两种网关都只归一协议，不归一能力；上下文窗口、工具调用保真度、流式语义、结构化输出因供应商而异。
+- 需要开箱即用的安装与启动命令（做法 A）：网关原文正文没有 clone / install / start 命令，只给了一个面向 Windows 的 PowerShell 安装页链接。
+- 需要成熟度证据（做法 A）：`USERS-1.2K`、`STATE-ACTIVE` 徽章不可核验；全篇没有延迟、成本、工具调用成功率或对照实验数据。
+- 要用 Claude Code 换上游（做法 B）：ACP-Ant 明确不支持 Claude Code，这条路走第九部分的做法 A。
+- 需要原生工具调用保真度（做法 B）：ACP-Ant 的工具调用是提示词模拟——网关把 Agent 的工具清单写进系统提示词，要求模型用 `<tool_calls>[...]</tool_calls>` 提出调用再解析成标准字段，所以 schema 合法混入了提示词遵从度，不等于模型原生 tool calling 能力。
+- 把个人订阅额度共享给多人或做商业服务（做法 B）：原文明确可能违反 Google 条款并导致账号被限制或封禁。
+- 依赖项目成熟度（做法 B）：个人开源项目、非 Google 官方，只在 `agy` 1.5.2 上验证，CLI 与 ACP 协议仍在变化；只宜作可选备用通道，不宜作主力依赖。
+- 想从公网直接访问 8095（做法 B）：只监听回环，跨机要用 SSH 隧道；确实要公网，前置 Nginx / Caddy 加 HTTPS 反向代理。
+- 客户端是 Cursor（做法 B）：Cursor 从自己的服务器发请求，本机地址和 SSH 隧道都不行，必须公网 HTTPS 地址。
+- 没有 Linux 或 Docker（做法 B）：原文前提是 Linux x86_64/arm64 + Python 3.10+ + curl + git，或者只要 Docker。
+- 生产环境直接暴露网关管理面板（做法 A）：要设 `ADMIN_PASSWORD`，只绑回环或放在带 TLS 的反向代理后；`CORS_ORIGINS` 默认 `*`。
+- 依赖供应商模型 ID 长期不变（做法 A）：换供应商要做 `Sync Models` + `Auto-Map`，并保留 `fallback`；不做会静默走默认或 400。
+- 把网关当授权校验（做法 A）：项目明确“不做授权校验”，合规责任在部署者。
 
 ## 前置条件
 agentperf-local：uv；一个 OpenAI 兼容模型服务（工具不安装推理框架）；完整运行需 65536 token 上下文、batch size 1，默认最大单轮约 58000 token；exact 策略需服务端支持 ignore_eos（Ollama 会改用 recorded）；API key 只放环境变量；live 工具模式需 Docker 和预构建镜像；Windows managed 运行需 NVIDIA GPU 且只能用 llama.cpp，vLLM/SGLang 仅 Linux，Splash 仅 Apple Silicon（M3 或更新，macOS 26.4 或更新）。
@@ -48,8 +58,9 @@ Janas：x86-64；Linux（Ubuntu 22.04、Debian 12+）或 Windows 10 1903+/11；�
 Claude：Anthropic API key 和 anthropic SDK；用 between_tools 前确认 SDK 已定义该字段；按成本 playbook 对比 Opus 5 与 Opus 5.5 需 Claude Code v2.1.280 或更高；在 Bedrock、Google Cloud Agent Platform 或 Claude apps gateway 上改 effort 会清掉缓存会话。
 Strata：已能在 Strata 上运行 Qwen 3.8 Flash Next 作为编码代理并能改启动参数；原文硬件是 RTX 5070 + RTX 5060；原文没有完整安装/启动命令、版本、量化方式和上下文长度设置。
 vLLM：目标是 Kimi K2.6 或 DeepSeek V4 Flash，推理引擎用 vLLM 0.31（原文基线是 vLLM 0.28 服务 Kimi K2.6 时 schema 准确率 92%）；已定义 tool schema JSON，每个 function 含 name、description、parameters（JSON Schema）和 required，parameters 说明类型、enum、默认值和必填项；有 agent harness（原文示例 OpenCode）和 K2VV ToolCall 基准（2000 个请求，衡量 trigger similarity 和 schema accuracy）或同规模请求集；所选模型支持 constrained decoding，解析器能把模型特定 token 解析成 JSON tool_calls；原文没有完整启动命令和 flag 取值，必须按 vLLM 0.31 文档确认；这是 per-model 开关，要能按模型关闭或回退，并验证所有服务模型版本。
-Claude Code Gateway：Node.js ≥ 20；Windows 10/11 或可跑容器的机器；不需要管理员权限；不需要 Anthropic API key；任一 OpenAI 兼容上游的 base URL 与 key；原文正文没有 clone / install / start 命令，只有安装页链接，必须先到仓库或该页确认；环境变量在表格里是 `GATEWAY_API_KEY` / `GATEWAY_BASE_URL`，FAQ 里又出现 `BLUESMINDS_BASE_URL` / `BLUESMINDS_API_KEY`，首次启动前要确认用哪套命名；`config/models.json` 里的 `vendor/model-a` 等要替换成上游真实模型 ID；换供应商后要能打开 `/admin` 做 `Sync Models` / `Auto-Map`；生产环境设 `ADMIN_PASSWORD`，可选 `PROXY_API_KEY`；请求历史、配置覆盖、路由覆盖写在 `.blueclaude-data/`，删掉该目录即回到文件默认值。
-agentperf-local 会在回放前检查自己的前提；Janas、vLLM 和网关不做这类检查，安全阀、回退和映射要自己先设。
+Claude Code Gateway（做法 A）：Node.js ≥ 20；Windows 10/11 或可跑容器的机器；不需要管理员权限；不需要 Anthropic API key；任一 OpenAI 兼容上游的 base URL 与 key；原文正文没有 clone / install / start 命令，只有安装页链接，必须先到仓库或该页确认；环境变量在表格里是 `GATEWAY_API_KEY` / `GATEWAY_BASE_URL`，FAQ 里又出现 `BLUESMINDS_BASE_URL` / `BLUESMINDS_API_KEY`，首次启动前要确认用哪套命名；`config/models.json` 里的 `vendor/model-a` 等要替换成上游真实模型 ID；换供应商后要能打开 `/admin` 做 `Sync Models` / `Auto-Map`；生产环境设 `ADMIN_PASSWORD`，可选 `PROXY_API_KEY`；请求历史、配置覆盖、路由覆盖写在 `.blueclaude-data/`，删掉该目录即回到文件默认值。
+ACP-Ant（做法 B）：Linux（x86_64 或 arm64）、Python 3.10+、`curl`、`git`，或者只要 Docker；一个或多个能用 Antigravity 的 Google 账号（原文举例 Google AI Pro）；可选每个账号一个代理节点。先读免责声明：个人开源项目、不是 Google 官方项目；把个人订阅额度提供给多人或商业服务使用可能违反条款并导致账号被限制或封禁；测试于 `agy` 1.5.2，CLI 与 ACP 协议仍在变化。
+agentperf-local 会在回放前检查自己的前提；Janas、vLLM 和两种网关都不做这类检查，安全阀、回退和映射要自己先设。
 
 ## 操作步骤
 ### 第一部分：量本机服务的 agent 负载基线（agentperf-local）
@@ -284,8 +295,13 @@ vLLM 使用 XGrammar 的 structural tags，在生成过程中按开始工具调�
 **27. 出问题按三类排查并回退，上线后继续监控**
 前提：开启后出现请求失败或准确率下降。预期：按模型关闭或回退，不默认全开。三类已知问题：一般模型问题，部分模型的无约束输出与工具 schema 或工具调用格式差异过大；grammar translation bugs，vLLM 把工具 schema 或工具调用格式翻译成模型语法时出错；feature interaction bugs，例如 constrained decoding 与 speculative decoding 交互导致请求失败。其他模型如 gpt-oss-20b、Qwen 3.6、GLM 5.1 有开启后出问题的报告。验证通过后再部署，并监控 malformed tool calls、请求失败、重试次数和上下文污染情况。
 
-### 第九部分：固定客户端，只换上游做对照（Claude Code Gateway）
-如果你已经按第三部分用 `/usage` 建了 Claude 直连基线，这一部分把客户端、提示词和工具定义固定，只换后端上游模型；它回答的是“同一套工作流换模型后，完成率、工具调用和每完成任务成本怎么变”，不回答“模型能力是否等价”。
+### 第九部分：固定客户端，只换上游做对照
+这一部分有两个做法，回答的是同一个问题：“同一套工作流换模型后，完成率、工具调用和每完成任务成本怎么变”，不回答“模型能力是否等价”。
+- 做法 A：Claude Code Gateway。把 Anthropic Messages API 转成 OpenAI Chat Completions，客户端仍是 Claude Code，上游换成任一 OpenAI 兼容服务。前提是你有上游的 base URL 和 key。如果你已经按第三部分用 `/usage` 建了 Claude 直连基线，这条路可以复用同一条基线。
+- 做法 B：ACP-Ant。反方向：把 Google 官方 Antigravity CLI（`agy`）通过 ACP 包成 OpenAI Chat Completions / OpenAI Responses / Anthropic Messages 三种接口，给 Codex CLI、Cline、OpenAI SDK 这类客户端换一个“模型后端”。前提是你没有上游 API key，但手上有能登录 Antigravity 的 Google 账号。它明确不支持 Claude Code。
+怎么选：要换的是 Claude Code 的上游，且手上有 OpenAI 兼容 key，选 A；手上只有 Antigravity 订阅账号、客户端是 Codex / Cline / OpenAI SDK，选 B；两边都想要原生工具调用保真度时都别指望——A 只做协议翻译，B 的工具调用是提示词模拟，测出来的数字含义不同，见第 44 步。
+
+#### 做法 A：Claude Code Gateway
 **28. 准备环境并确认安装与启动命令**
 前提：Node.js ≥ 20；Windows 10/11 或可跑容器的机器；不需要管理员权限；不需要 Anthropic key。预期：本地网关在 8787 端口可用。
 原文正文只给出一个面向 Windows 的 PowerShell 安装页链接（`https://FalihPrada.github.io/claude-code-gateway/`），没有给出 clone / install / start 命令；先到仓库或该页确认，不要照抄不存在的命令。启动后预期 `http://localhost:8787` 可访问。
@@ -345,6 +361,133 @@ MAX_RETRIES=2
 前提：已产生请求。预期：能从日志和面板定位失败点。
 `.blueclaude-data/request-log.json` 是有界环形缓冲；Admin 的 Live Requests 用 SSE 看实时请求，单请求详情看翻译细节；还有翻译 playground、诊断、`GET /v1/models`、`POST /v1/chat/completions` 透传（服务端注入 key）。日志对 key 与 Authorization 做脱敏。这些设施给的是可观测性，不是质量指标；质量结论仍来自第 35 步的三组任务对照。
 
+#### 做法 B：把手上已有的账号当模型供给层（ACP-Ant）
+**37. 先读免责声明，确认这属于哪类试用**
+前提：Linux（x86_64 或 arm64）+ Python 3.10+ + `curl` + `git`，或者只要 Docker；一个或多个能用 Antigravity 的 Google 账号（原文举例 Google AI Pro）；可选每个账号一个代理节点。预期：你清楚这是个人开源项目、不是 Google 官方；把个人订阅额度提供给多人或商业服务使用可能违反条款并导致账号被限制或封禁；原文只在 `agy` 1.5.2 上验证，CLI 与 ACP 协议仍在变化。所以它只宜作可选备用通道，不宜作主力依赖。
+**38. 安装（三种方式选一种，装好后都在网页面板操作）**
+方式一：系统服务（需要 sudo）。预期：从 `https://antigravity.google/cli/install.sh` 把 `agy` 装到 `/opt/acp-ant/bin`；建 Python 虚拟环境装 FastAPI/Uvicorn（缺 `python3-venv` 且有 apt 时自动补）；生成随机网关密钥写进 `/opt/acp-ant/gateway.env`（权限 600）；装成 systemd 服务 `acp-ant`，只监听 `127.0.0.1:8095`。
+```bash
+git clone https://github.com/czg86389-hub/ACP-Ant.git
+cd ACP-Ant
+./install.sh
+```
+改安装位置和端口、或不想装服务：
+```bash
+AGY_ROOT=/srv/acp-ant AGY_PORT=9000 ./install.sh
+./install.sh --no-systemd
+```
+方式二：用户服务（不用 sudo）。预期：装到 `~/acp-ant`，作为当前用户的服务运行。注意要用 SSH 直接登录该用户再安装（不要 `su` 过去），否则连不上用户的 systemd。
+```bash
+git clone https://github.com/czg86389-hub/ACP-Ant.git
+cd ACP-Ant
+./install.sh --user
+systemctl --user status acp-ant
+journalctl --user -u acp-ant -f
+```
+脚本会顺便开 `loginctl enable-linger`；若服务器不允许，让管理员跑一次 `sudo loginctl enable-linger 你的用户名`。
+方式三：Docker。预期：账号、密钥、面板密码、统计都在 `./data`，删掉重建容器也不丢。
+```bash
+git clone https://github.com/czg86389-hub/ACP-Ant.git
+cd ACP-Ant
+docker compose up -d --build
+cat data/panel-initial-password.txt     # 面板初始密码（可能要 sudo）
+```
+怎么选：能 sudo、要长期跑，选方式一；没有 sudo 但有用户级 systemd，选方式二；不想碰宿主 Python，选方式三。
+**39. 取两个凭据，别混用**
+前提：已安装完成。预期：你手上有两个不同的字符串——面板管理员密码和客户端用的网关密钥。
+```bash
+cat /opt/acp-ant/panel-initial-password.txt      # 面板初始密码
+grep AGY_GATEWAY_KEY /opt/acp-ant/gateway.env    # 客户端用的网关密钥
+```
+面板密码在「设置」里改成自己的之后，`panel-initial-password.txt` 会自动删除；也可以直接在 `gateway.env` 里写 `AGY_PANEL_PASSWORD=` 指定。
+**40. 登录面板，添加账号**
+前提：账号能登录 Antigravity；若走代理，先备好代理串。预期：面板里能看到每账号状态（正常 / 已关闭 / 需要 Google 验证 / 冷却中 / 需要重新登录）、代理与出口 IP、三组额度（Gemini 模型、Claude/GPT 模型、Gemini 4 Argon，各有每周和 5 小时剩余百分比与重置时间）、今天和近 7 天成功/失败次数与 Token 用量、最近错误。
+本机打开 `http://127.0.0.1:8095/`，绑定域名后打开 `https://你的域名/`。
+向导流程：填名字和代理 → 自动测出口 IP（同一 IP 被别的账号用过会提醒）→ 点按钮打开 Google 登录页 → 把授权码或落地页网址粘贴回面板 → 自动检测，通过后自动开启。登录全程在自己的浏览器里完成，面板只转交授权码、不保存。
+命令行等价做法（账号名只含字母、数字、`-`、`_`）：
+```bash
+/opt/acp-ant/account.sh add g1
+```
+1. 输入代理地址（输入时屏幕不显示，粘贴后直接回车），例如 `socks5://用户名:密码@1.2.3.4:1080`；脚本会测出口 IP 和国家。
+2. 屏幕出现授权网址，复制到自己电脑的浏览器打开，选这个账号并同意；浏览器最后会跳到打不开的 `localhost` 网址，或显示一串授权码，把整串网址或授权码粘贴回终端回车。
+3. 显示「已登录，可用模型：…」即成功。中途关掉没关系，再跑一次 `add g1` 会接着做。
+不想用代理（两处都要改）：
+```bash
+AGY_REQUIRE_PROXY=0 /opt/acp-ant/account.sh add g1
+# 同时在 gateway.env 里加一行：AGY_REQUIRE_PROXY=0
+```
+其它账号命令：
+```bash
+/opt/acp-ant/account.sh list        # 账号、代理（只显示主机端口）、出口 IP、登录状态、可用模型
+/opt/acp-ant/account.sh check g1    # 真发一句话测试；需要验证时打印验证网址
+/opt/acp-ant/account.sh login g1    # 重新登录（代理不变）
+/opt/acp-ant/account.sh proxy g1    # 换代理节点
+/opt/acp-ant/account.sh remove g1   # 删除账号（含凭据，会先确认）
+```
+多账号的作用：每个账号一个独立 HOME 目录（登录凭据只存在这里，账号间互不串）、可选独立代理；额度用完、被限速、要求验证时冷却并换下一个账号；登录失效则停用。
+**41. 在 Agent 侧填三要素**
+前提：网关已起、账号已登录。预期：客户端请求打到本机网关。
+- 地址：`http://127.0.0.1:8095/v1`（Anthropic 格式客户端填 `http://127.0.0.1:8095`）
+- 密钥：`grep AGY_GATEWAY_KEY /opt/acp-ant/gateway.env` 看到的那串
+- 模型名：推荐 `gemini-3.8-flash-medium`
+Agent 在本地、网关在服务器时，用 SSH 隧道，不要把 8095 暴露到公网：
+```bash
+ssh -N -L 8095:127.0.0.1:8095 用户名@服务器
+```
+确实要公网访问，前置 Nginx / Caddy 加 HTTPS 反向代理。
+Codex CLI 配置（原文原样）：
+```toml
+model_provider = "acpant"
+model = "gemini-3.8-flash-medium"
+
+[model_providers.acpant]
+name = "ACP-Ant"
+base_url = "http://127.0.0.1:8095/v1"
+env_key = "ACPANT_KEY"
+wire_api = "responses"
+```
+```bash
+export ACPANT_KEY=你的网关密钥
+codex
+```
+新版 Codex 已不支持 `wire_api = "chat"`，必须用 `responses`。
+其它客户端：Aider 命令行——
+```bash
+aider --openai-api-base http://127.0.0.1:8095/v1 --openai-api-key 你的密钥 --model openai/gemini-3.8-flash-medium
+```
+Python 带工具的例子（注意这是给模型声明的工具，真正的执行仍在你的 Agent 侧）：
+```python
+from openai import OpenAI
+client = OpenAI(base_url="http://127.0.0.1:8095/v1", api_key="你的网关密钥")
+r = client.chat.completions.create(
+    model="gemini-3.8-flash-medium",
+    messages=[{"role": "user", "content": "巴黎现在天气怎么样？"}],
+    tools=[{"type": "function", "function": {"name": "get_weather", "description": "查询城市天气",
+            "parameters": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}}}],
+)
+print(r.choices[0].message.tool_calls)
+```
+原文实测：Codex CLI 0.134（Responses）真跑通 shell 工具任务；三种接口的工具调用由 `scripts/agent_test.py` 覆盖；Claude Code 不可用。其余按 OpenAI 兼容填即可（接口已测，软件本身未逐一实测）：Cline / Roo Code / Kilo Code 选「OpenAI Compatible」，填 Base URL、API Key、Model ID；Continue、Cherry Studio、Open WebUI、LobeChat、Dify、n8n 加「OpenAI 兼容」模型供应商；OpenCode 在 `opencode.json` 里加一个 `@ai-sdk/openai-compatible` 供应商，`baseURL` 填地址；Cursor 需要公网 HTTPS 地址（它从自己的服务器发请求），本机地址和 SSH 隧道都不行。
+**42. 接完先跑自测，再谈效果**
+前提：客户端已能连上网关。预期：三种接口的工具调用、流式、JSON 模式通过；账号实际提供哪些模型和思考档位清楚。
+```bash
+python3 /opt/acp-ant/agent_test.py            # 三种接口的工具调用、流式、JSON 模式，约 1–2 分钟
+python3 /opt/acp-ant/smoke_test.py [图片路径] [并发数]   # 短回复、系统提示词、读图、并发
+HOME=/opt/acp-ant/accounts/g1 HTTPS_PROXY=<代理地址> python3 /opt/acp-ant/acp_probe.py --prompt "Reply with OK"
+```
+`acp_probe.py` 直接和 `agy acp` 握手、打印协议往来，用来确认账号实际提供哪些模型和思考档位。
+**43. 调并发与心跳**
+前提：面板能改的别改文件（以下都在 `gateway.env`，或面板「设置」）。预期：并发按账号数摊开，超出排队而不报错。
+- 每账号并发 `AGY_PER_ACCOUNT`，1–10，默认 3；N 个账号即同时 N×3。面板「设置」里改立即生效。
+- 流式心跳 `AGY_HEARTBEAT` 默认 15 秒。原文在此处截断，静默多久算超时、怎么调，材料里没有给出，先按默认跑。
+**44. 和直连基线对照，但别把模拟的工具调用当原生能力**
+前提：已经按第 35 步有过一个直连基线。预期：拿到同一提示词、同一工具定义下换到 Antigravity 账号后的完成率、工具调用正确性、流式稳定性和每完成任务成本。
+沿用第 35 步的三组任务（纯文本改写、多轮工具调用、长上下文中段）和同一份记录模板。额外记三件事：
+- 工具调用是不是被“翻译”过：ACP-Ant 给 `agy` 注册的 agent 没有任何内置工具、权限请求一律拒绝，工具只在 Agent 那边执行；而 ACP 本身不能把工具调用交还给上层 Agent，所以网关把 Agent 的工具清单（名字、说明、参数格式）写进系统提示词，要求模型用 `<tool_calls>[...]</tool_calls>` 提出调用，再解析成标准 `tool_calls` / `tool_use` / `function_call`。这里的 schema 准确率因此混入了提示词遵从度，不能和做法 A 的原生翻译或模型自带的 tool calling 直接比。
+- 账号层变量：同一请求在哪个账号、哪个出口 IP、剩多少额度，都会影响结果；记下账号名和当时的额度状态（面板有每周和 5 小时剩余百分比），否则差异归因不到模型。
+- 并发：`AGY_PER_ACCOUNT` 默认 3、多账号叠加；压测前先记下实际并发，否则延迟数字没法比。
+结论口径同第 35 步：完成率不低于基线且每完成任务成本明显下降才算改善；出现工具调用错乱或结构化输出失败，先分清是模型能力缺口、提示词模拟的格式问题，还是账号/额度切换造成的。
+
 ## 怎么判断变好了
 本机服务速度：看 summary.json 的 output tokens/s、首 token 时间的 median 与 p95、整轮时间的 median 与 p95。比较时必须同机、同一 replay（默认 agentperf-default-v1）、同一上下文条件（完整 65536）；低于 65536 token 标 reduced: true，不可对比；recorded 策略（如 Ollama、Splash）的端到端延迟只是归一化估计，与 exact 不可直接比较。最小试用：对已在跑的服务做一次 attached 回放，不动环境拿基线：
 ```console
@@ -355,17 +498,18 @@ Janas：能不能跑起来；读写 tok/s 是否达到可用（原文 80B 上 24
 一次真实任务的成本：打开 `/usage` 按三个比值读：cache 占比，长会话应该高，低就查长暂停、换模型、中途连 MCP、云环境改 effort；output 对 input 的比例，小改动却大量 output 说明 effort 过高或在重试；总 input 对会话大小的倍数，倍数大说明 turn 多，去读对话找重复循环。方法上：同一个真实任务在两个模型上各跑一次，做三到四个任务再下结论；团队层面用 Claude Code Analytics API 看每用户估算成本，用 Usage and Cost API 按模型和缓存/非缓存 token 拆分开支。原文参照基线：企业部署平均约 $13/开发者/活跃日，90% 用户在 $30/活跃日以下（作者数据，不是你的数字）。
 Strata：同一回合总耗时是否明显下降，重点看从 94.8 秒量级降到秒级；等待时间中重读对话/重复前缀的占比是否下降；tok/s 或首 token 延迟是否改善；输出答案正确性和编码任务结果是否不变，若质量下降则不能采用；显存占用和稳定性是否可接受。最小试用：在已有可运行的 Strata 编码代理上，选一个多轮、历史较长、接近 14K 令牌的任务，固定提示和对话历史，分别用 `--prompt-cache 0` 和 `--prompt-cache 6` 跑同一回合；原文未给时长，以同一回合对比跑完为准。
 vLLM：schema accuracy 原文 92% 到 100%，至少应明显提升且接近 100%；trigger similarity 不应变差；请求失败率和重试次数不应增加；p95 延迟不应出现不可接受回退；生产日志里 malformed tool calls、解析失败、重试和上下文污染是否下降。所有服务的模型版本都要验证。最小试用：选一个 Kimi K2.6 或 DeepSeek V4 Flash 的 vLLM 0.31 部署，固定 harness 和 tool schema，先用 K2VV ToolCall 或同规模代表性请求测基线，记录指标；确认 `--tool-strict-level` 的正确用法后启用，重跑同一批请求。试多久：以跑完一轮 K2VV ToolCall（2000 个请求）基线和同批重跑为准；原文未给时长。若出现 grammar translation 或 speculative decoding 交互问题，针对该模型关闭严格模式并回退。
-换上游模型（Claude Code Gateway）：最小试用半天内可完成。一台 Node.js 20+ 的机器；选一个上游（优先 DeepSeek，其次 OpenRouter）；只配 `default` + 一条家族规则，先不配熔断细节；开 `STRICT_MODEL_MAPPING=true`；用同一份提示词与工具定义跑三组真实任务：纯文本改写、多轮工具调用（读文件→改代码→跑测试）、长上下文（接近该模型窗口的中段），和 Claude 直连基线逐项对照。指标：工具调用往返正确率（`tool_use` 后能否收到结构完整 `tool_result`，参数 JSON 是否被截断，`stop_reason` 是否映射错）；流式稳定性（中断、重复块、合成流）；任务完成率；每完成任务成本（用日志 usage 与实际耗时算，不按每 token 价格）；延迟。结论口径：完成率不低于基线且每完成任务成本明显下降才算改善；出现工具调用错乱或结构化输出失败，记为该模型的能力缺口，不是网关 bug。建议同时记录反例：同一任务在两个上游上的失败模式差异；换供应商后 Auto-Map 是否给出错误映射。原文没有给任何延迟、成本、工具调用成功率或对照实验数据，以上是试用方法，不是已验证结论。
+换上游模型（做法 A，Claude Code Gateway）：最小试用半天内可完成。一台 Node.js 20+ 的机器；选一个上游（优先 DeepSeek，其次 OpenRouter）；只配 `default` + 一条家族规则，先不配熔断细节；开 `STRICT_MODEL_MAPPING=true`；用同一份提示词与工具定义跑三组真实任务：纯文本改写、多轮工具调用（读文件→改代码→跑测试）、长上下文（接近该模型窗口的中段），和 Claude 直连基线逐项对照。指标：工具调用往返正确率（`tool_use` 后能否收到结构完整 `tool_result`，参数 JSON 是否被截断，`stop_reason` 是否映射错）；流式稳定性（中断、重复块、合成流）；任务完成率；每完成任务成本（用日志 usage 与实际耗时算，不按每 token 价格）；延迟。结论口径：完成率不低于基线且每完成任务成本明显下降才算改善；出现工具调用错乱或结构化输出失败，记为该模型的能力缺口，不是网关 bug。建议同时记录反例：同一任务在两个上游上的失败模式差异；换供应商后 Auto-Map 是否给出错误映射。原文没有给任何延迟、成本、工具调用成功率或对照实验数据，以上是试用方法，不是已验证结论。
+把账号当模型供给层（做法 B，ACP-Ant）：最小试用半天内可完成。前提是一台 Linux 机器（或 Docker）加一个能登录 Antigravity 的 Google 账号。指标分两层。通道层：`agent_test.py` 通过（三种接口的工具调用、流式、JSON 模式，约 1–2 分钟），`smoke_test.py` 的短回复、系统提示词、读图、并发不报错，面板里账号状态稳定在“正常”、三组额度的剩余百分比和重置时间符合预期。任务层：沿用第 35 步的三组任务与记录模板，看完成率是否不低于直连基线、每完成任务成本是否下降、工具调用往返正确率、流式稳定性；同时记下账号名、出口 IP、当时额度和实际并发（`AGY_PER_ACCOUNT` × 账号数）。试多久：跑完一轮自测加三组任务各一遍为准；原文未给时长。注意它只解决“手上没有 API key、但有订阅账号”这一种供给问题，不解决质量评估；原文没有任何延迟、成本、工具调用成功率或对照实验数据，以上是试用方法，不是已验证结论。
 这些路径只说明服务变快/变慢了没有、任务变便宜了没有、模型跑得起来没有、长对话回合是否不再反复重读、工具调用结构是否合法、换上游后同一工作流是否还能完成；不能说明 AI 干得更好没有。要判断效果，仍需另外评估输出质量。
 
 ## 常见坑
-- 只测速度，不测输出质量。这是 agentperf-local 最大的限制，也适用于 Janas（模型相同，差异只在速度），直接决定了它们只能算半个证据；成本 playbook 同样不判对错；vLLM 的 schema accuracy 也不判任务对错；网关只归一协议，不判能力等价。
+- 只测速度，不测输出质量。这是 agentperf-local 最大的限制，也适用于 Janas（模型相同，差异只在速度），直接决定了它们只能算半个证据；成本 playbook 同样不判对错；vLLM 的 schema accuracy 也不判任务对错；两种网关都只归一协议，不判能力等价。
 - 低于 65536 token 的运行会被标 reduced: true，与完整上下文结果不可对比。
 - Ollama 无法遵守 ignore_eos，工具会在运行前检测并警告，改用 recorded 策略，其端到端延迟只是归一化估计，与 exact 运行不可直接比较。
 - Splash 的 recipe 只跑 recorded 策略且 KV cache 恒为 8bit，因此与 exact 运行不可比。
 - 默认会跳过轮次之间的工具耗时；要真实工具时间需设 `--tool-mode fixed_delay` 或 `--tool-mode live`。
 - live 工具模式有多条安全警告：录制的命令属于不可信输入，Docker 降低但不构成安全边界；能访问 Docker daemon 在多数主机上等同于 root；容器默认无网络但 manifest 可要求联网（可用 `--live-network none` 强制断网）；任务工作区以读写方式挂载；脚本会拉取/构建第三方镜像并从 GitHub 克隆 SWE-bench harness。
-- 隐私：结果目录可能包含路径、模型标签和错误信息；启动运行会把录制的 prompt 发给模型服务，因此用远端 URL 就等于把 prompt 送出本机。成本侧同理，prompt 会发给模型服务；网关侧请求历史和日志也会落盘，日志虽对 key 与 Authorization 脱敏，仍要按敏感数据管理。
+- 隐私：结果目录可能包含路径、模型标签和错误信息；启动运行会把录制的 prompt 发给模型服务，因此用远端 URL 就等于把 prompt 送出本机。成本侧同理，prompt 会发给模型服务；网关侧请求历史和日志也会落盘，日志虽对 key 与 Authorization 脱敏，仍要按敏感数据管理。ACP-Ant 侧账号凭据存在各自的 HOME 目录里，面板会展示出口 IP 和额度，这些同样算敏感信息。
 - 工具不安装推理框架，也不替你解决模型下载以外的环境问题；Janas 自带引擎，但它只解决装不下这一类问题，不是通用服务框架替代品；网关也不是推理框架，它只做协议转换和路由。
 - 崩掉的运行没有 summary.json，因为它最后写。
 - 平台限制：Windows 的 managed 运行需 NVIDIA GPU + llama.cpp；vLLM/SGLang 仅 Linux；Splash 仅 Apple Silicon（M3 或更新，macOS 26.4 或更新）。
@@ -392,9 +536,8 @@ vLLM：schema accuracy 原文 92% 到 100%，至少应明显提升且接近 100%
 - 验证时只测一个服务模型版本：原文要求验证所有服务的模型版本。
 - 工具调用 schema 错误会污染 agent 多轮上下文；修复后仍要监控 malformed tool calls、解析失败、重试和上下文污染。
 - 运行时开销原文称可忽略但无量化延迟数据，不要当结论；vLLM 这条是单一厂商部署经验，无独立复现或延迟数据。
-- 网关 README 正文没有 clone / install / start 命令，只有一个 Windows PowerShell 安装页链接；不能照抄不存在的命令，先到仓库或该页确认。
-- 网关环境变量命名不一致：表格 `GATEWAY_API_KEY` / `GATEWAY_BASE_URL`，FAQ 又出现 `BLUESMINDS_BASE_URL` / `BLUESMINDS_API_KEY`，数据目录叫 `.blueclaude-data/`；首次启动两套命名都要试或到代码确认。
-- 把格式转换成功当成模型能力等价：网关只归一格式，不归一能力；上下文窗口、工具调用保真度、流式语义、结构化输出因供应商而异。
+- 做法 A 的网关 README 正文没有 clone / install / start 命令，只有一个 Windows PowerShell 安装页链接；不能照抄不存在的命令，先到仓库或该页确认。
+- 做法 A 的环境变量命名不一致：表格 `GATEWAY_API_KEY` / `GATEWAY_BASE_URL`，FAQ 又出现 `BLUESMINDS_BASE_URL` / `BLUESMINDS_API_KEY`，数据目录叫 `.blueclaude-data/`；首次启动两套命名都要试或到代码确认。
 - 不设 `STRICT_MODEL_MAPPING=true`：未匹配模型会透传或走默认，静默兜底污染对比结论；设了之后未映射模型返回 400，要配合第 32 步对齐模型 ID。
 - 换供应商不做 `Sync Models` / `Auto-Map`：模型 ID 有 vendor 前缀和裸名两种写法，面板会显示 UNSAVED；Auto-Map 建议只在置信度 > 0.75 时出现，低置信度要人工确认。
 - 熔断阈值不按自身上游重调：默认值按公共免费额度端点调过，可能误熔断或该断不断。
@@ -403,9 +546,19 @@ vLLM：schema accuracy 原文 92% 到 100%，至少应明显提升且接近 100%
 - 用网关做任务级自动推进：它只有超时/5xx/熔断回退和流合成，属于可用性保障，不是任务级持续执行。
 - 只跑一个玩具例子就下结论：按第 35 步跑三组任务，并记录同一任务在两个上游上的失败模式差异；换供应商后还要检查 Auto-Map 是否给出错误映射。
 - 把工具调用错乱都当网关 bug：先看是格式翻译问题还是模型本身的能力缺口；后者应记为能力发现素材。
+- 以为做法 B 和做法 A 量的是同一件事：ACP-Ant 的工具调用是提示词模拟（系统提示词里写清单、要求模型输出 `<tool_calls>[...]</tool_calls>` 再解析），不是协议层原生 translation。用它量出的 schema 准确率、trigger similarity 混入了提示词遵从度，不能和做法 A 或模型自带 tool calling 直接比。
+- 用 ACP-Ant 去接 Claude Code：原文明确不支持。Claude Code 换上游走做法 A。
+- 把 ACP-Ant 面板上的账号额度当成“模型能力”：额度耗尽、被限速、要求验证会冷却换号，登录失效会停用；同一请求落到不同账号、不同出口 IP，结果就不可比。记录时必须带账号名和当时额度。
+- 忘记记实际并发：`AGY_PER_ACCOUNT` 默认 3，N 个账号就是 N×3，超出排队不报错——压测时看起来“没报错”，实际是排了队，延迟数字会失真。面板改立即生效，改完要重新记一次。
+- 把 8095 暴露到公网、或不设面板密码就上线：默认只监听 `127.0.0.1`，跨机用 SSH 隧道；确实要公网，前置 Nginx / Caddy 加 HTTPS，并先在「设置」里改掉面板初始密码（改完 `panel-initial-password.txt` 会自动删除）。
+- 混淆面板管理员密码和网关密钥：这是两个不同的字符串，前者进面板、后者给客户端。
+- 用 `su` 切换用户去跑 `./install.sh --user`：连不上该用户的 systemd，必须 SSH 直接登录该用户再装。
+- 客户端是 Cursor 却填本机地址或 SSH 隧道：Cursor 从自己的服务器发请求，必须公网 HTTPS 地址。
+- 把个人 Antigravity 订阅额度共享给多人或做商业服务：原文明确可能违反 Google 条款并导致账号被限制或封禁；这是“可选备用通道”，不是可对外提供的服务。
+- 把 ACP-Ant 当主力依赖：个人开源项目、非 Google 官方，只在 `agy` 1.5.2 上验证，CLI 与 ACP 协议仍在变化。原文在“流式心跳 `AGY_HEARTBEAT` 默认 15 秒”处截断，超时和重试行为材料里没有讲完，别假设它和做法 A 的 `REQUEST_TIMEOUT_MS` / `MAX_RETRIES` 等价。
 
 ## 证据与来源
-本手册做法来自本次调研报告《ArtificialAnalysis/aa-agentperf-local》《Building with Claude Sonnet 5.5》《What a task costs on Opus 5.5》《Janas: Run LLMs larger than RAM by streaming experts from SSD》《@VRAMCalculator: 在 Strata 上运行 Qwen 3.8 Flash Next 作为编码代理？在你追逐 tok/s 之前，先检查提示缓存。》《Fixing Tool-Call Accuracy in vLLM》以及本次新增的《FalihPrada/claude-code-gateway》。第一篇描述的命令、参数与边界来自该工具 README；Claude 两篇来自 claude.dev，作者 Addy Osmani（分别发布于 2026-09-28 与 2026-09-25）；Janas 一篇描述的命令、开关与基准表来自该项目 README；Strata 一篇是单条推文转述，来源是 @murasametech 的发现；vLLM 一篇来自 Ubicloud 的部署经验；网关一篇描述的环境变量、models.json 结构、路由顺序和面板功能来自该项目 README，作者自述社区维护、MIT、无担保。
+本手册做法来自本次调研报告《ArtificialAnalysis/aa-agentperf-local》《Building with Claude Sonnet 5.5》《What a task costs on Opus 5.5》《Janas: Run LLMs larger than RAM by streaming experts from SSD》《@VRAMCalculator: 在 Strata 上运行 Qwen 3.8 Flash Next 作为编码代理？在你追逐 tok/s 之前，先检查提示缓存。》《Fixing Tool-Call Accuracy in vLLM》《FalihPrada/claude-code-gateway》以及本次新增的《czg86389-hub/ACP-Ant》。前六篇的命令、参数与边界分别来自各自项目的 README 或厂商/作者文章；Claude 两篇来自 claude.dev，作者 Addy Osmani（分别发布于 2026-09-28 与 2026-09-25）；Janas 一篇描述的命令、开关与基准表来自该项目 README；Strata 一篇是单条推文转述，来源是 @murasametech 的发现；vLLM 一篇来自 Ubicloud 的部署经验；两个网关的环境变量、models.json 结构、路由顺序、面板功能、安装与账号流程均来自各自 README，其中 ACP-Ant 作者自述为个人开源项目、非 Google 官方。
 有具体依据的部分：
 - agentperf-local 的默认回放 agentperf-default-v1 规模：8 个录制 agent 任务、168 个模型轮次；aa-mini-v1 是 6 轮合成回放。
 - 上下文门槛：完整运行 65536 token、batch size 1；默认回放最大单轮约 58000 token；aa-mini-v1 需 8192。
@@ -420,7 +573,9 @@ vLLM：schema accuracy 原文 92% 到 100%，至少应明显提升且接近 100%
 - 成本侧命令与规则：/usage、/cost、/effort、/model、/clear、/compact、/rewind、/autocompact、/mcp、/claude-api prompt-audit、claude update、CLAUDE_CODE_SUBAGENT_MODEL、subagent 定义里的 model: 字段、CLAUDE.md 控制在 200 行以内、Opus 5.5 需 Claude Code v2.1.280 或更高。
 - Strata 的 --prompt-cache 从 0 改为 6 后，同一 14K 令牌回合从 94.8 秒降到 6.9 秒，再到 4.1 秒；原文说 94% 等待时间用于重读对话；硬件配置为 RTX 5070 + RTX 5060。
 - vLLM 0.31 的 server-side flag --tool-strict-level 开启 constrained decoding，借助 XGrammar 在生成时屏蔽不符合 tool schema 的 token；vLLM 0.28 服务 Kimi K2.6 时 schema 准确率 92%，上游 constrained decoding 默认关闭时曾降到 91%，Ubicloud 开启并验证后达到 100%；K2VV ToolCall 基准包含 2000 个请求，衡量 trigger similarity 和 schema accuracy；Kimi K2.6 工具调用语法和 XGrammar structural tags 的约束路径；适用模型是 Kimi K2.6 / DeepSeek V4 Flash，其他模型 gpt-oss-20b、Qwen 3.6、GLM 5.1 有开启后问题报告；三类问题为 general model issues、grammar translation bugs、feature interaction bugs（例如 constrained decoding 与 speculative decoding 交互）。原文没有给出完整启动命令和 flag 取值，且称运行时开销可忽略但没有量化延迟数据。
-- 网关的端点与翻译规则：`POST /v1/messages` 接收 Anthropic Messages API，转成 OpenAI Chat Completions 发给上游，再把响应翻译回 Anthropic 格式；完整 SSE 流式（`message_start` / `content_block_*` / `message_delta` / `message_stop`），对分片做缓冲避免工具参数 JSON 被截断；双向工具调用翻译（Anthropic `tools`/`tool_use`/`tool_result` ↔ OpenAI `tools`/`tool_calls`）；确定性模型路由顺序（精确 → glob 家族规则 → 透传 → 默认）、失败回退与熔断、流合成、管理面板、`POST /v1/chat/completions` 透传、`GET /v1/models`；环境变量默认值 `PORT=8787`、`REQUEST_TIMEOUT_MS=120000`、`MAX_RETRIES=2`、`CORS_ORIGINS=*`；`config/models.json` 结构；Auto-Map 的 0.75 置信度阈值；熔断半开恢复；`.blueclaude-data/` 持久化与日志脱敏。以上来自 README。
+- 做法 A 网关的端点与翻译规则：`POST /v1/messages` 接收 Anthropic Messages API，转成 OpenAI Chat Completions 发给上游，再把响应翻译回 Anthropic 格式；完整 SSE 流式（`message_start` / `content_block_*` / `message_delta` / `message_stop`），对分片做缓冲避免工具参数 JSON 被截断；双向工具调用翻译（Anthropic `tools`/`tool_use`/`tool_result` ↔ OpenAI `tools`/`tool_calls`）；确定性模型路由顺序（精确 → glob 家族规则 → 透传 → 默认）、失败回退与熔断、流合成、管理面板、`POST /v1/chat/completions` 透传、`GET /v1/models`；环境变量默认值 `PORT=8787`、`REQUEST_TIMEOUT_MS=120000`、`MAX_RETRIES=2`、`CORS_ORIGINS=*`；`config/models.json` 结构；Auto-Map 的 0.75 置信度阈值；熔断半开恢复；`.blueclaude-data/` 持久化与日志脱敏。以上来自 README。
+- 做法 B（ACP-Ant）的接口与设计：默认监听 `127.0.0.1:8095`，把 `agy` 通过 ACP 包成 OpenAI Chat Completions（`/v1/chat/completions`）、OpenAI Responses（`/v1/responses`，Codex 用这个）、Anthropic Messages（`/v1/messages`），三者都支持流式，并带工具调用与图片输入（data URL、http(s) 链接由网关代下载、工具结果里的图片）；“工具主权留在调用方”——给 `agy` 注册的 agent 没有任何内置工具、权限请求一律拒绝；工具调用靠系统提示词里的工具清单加 `<tool_calls>[...]</tool_calls>` 格式模拟并解析回标准字段；多账号每个独立 HOME 目录、可选独立代理（`http://`/`https://`/`socks5://`，可带用户名密码）、添加时测出口 IP 和国家、同 IP 提醒；额度用完/限速/要求验证时冷却换号，登录失用则停用。
+- 做法 B 的操作事实：`./install.sh` 会从 `https://antigravity.google/cli/install.sh` 装 `agy` 到 `/opt/acp-ant/bin`、建 venv 装 FastAPI/Uvicorn（缺 `python3-venv` 且有 apt 时自动补）、生成随机密钥写进 `/opt/acp-ant/gateway.env`（权限 600）、装 systemd 服务 `acp-ant` 并只监听 `127.0.0.1:8095`；支持 `AGY_ROOT` / `AGY_PORT` / `--no-systemd` / `--user`（装到 `~/acp-ant`，脚本会开 `loginctl enable-linger`）与 `docker compose up -d --build`（数据在 `./data`）；`panel-initial-password.txt` 在面板改密码后自动删除，也可用 `AGY_PANEL_PASSWORD=` 指定；`AGY_GATEWAY_KEY` 是客户端密钥；`account.sh` 有 add / list / check / login / proxy / remove；`AGY_REQUIRE_PROXY=0` 要在命令和 `gateway.env` 两处都改；三要素是地址 `http://127.0.0.1:8095/v1`（Anthropic 客户端填 `http://127.0.0.1:8095`）、`AGY_GATEWAY_KEY`、推荐模型 `gemini-3.8-flash-medium`；Codex 必须 `wire_api = "responses"`；`AGY_PER_ACCOUNT` 取值 1–10、默认 3，N 个账号即 N×3、超出排队不报错；`AGY_HEARTBEAT` 默认 15 秒。以上来自该项目 README。
 只是作者主张、没有数据支撑的部分：
 - agentperf-local 的 README 通篇没有给出任何实际 benchmark 数值、性能对比表或案例；其测量规则、证据边界被指向 docs/ARCHITECTURE.md，但该文档不在给出的材料里；仓库只有 66 stars，成熟度证据有限。
 - Janas 的全部开发与测量只在一台机器上完成（Debian 13、Intel Core Ultra 9 185H、集成 Arc GPU、32 GB DDR5、1 TB NVMe 约 5.7 GB/s）；作者自称这是实验而不是产品，API 和命令行每周都在变、稳定性 “Not verified”；另一台机器会得到另一组数字；两套工具的测量方式并不完全相同，且都是单机数据；用 GPU 曾导致一次驱动复位。因此第 9 步里把 janas-server 交给 agentperf-local 回放只是把两条材料接起来的组合，两边都没有明说，需要你自行验证。
@@ -429,9 +584,13 @@ vLLM：schema accuracy 原文 92% 到 100%，至少应明显提升且接近 100%
 - Sonnet 5.5 篇的 effort 档位被重新校准、删掉 workaround 再重跑 eval 是作者建议，没有给出对照数据。
 - Strata 那条是单条推文，未给出完整命令、版本、模型标识、并发设置、显存占用、输出质量对比和可复现实验脚本；94.8 秒到 4.1 秒是转述个案，不能保证在其他环境复现。
 - vLLM 这条来自 Ubicloud 单一部署经验，没有独立复现或延迟数据；上下文污染、模型性能下降和重试成本增加属于作者主张，未给出量化；flag 取值和完整命令缺失；其他模型回归是报告而非本手册验证。
-- 网关的 `USERS-1.2K`、`STATE-ACTIVE` 徽章不可核验；“out of the box 支持某某供应商”“客户端无需改动”都是声明而非测试结果；全篇没有任何延迟、成本、工具调用成功率或对照实验数据。
-- 网关 README 有明显文档问题：环境变量命名不一致（表格 `GATEWAY_*` vs FAQ `BLUESMINDS_*`），数据目录又叫 `.blueclaude-data/`；正文缺少安装与启动命令；项目自述社区维护、MIT、无任何担保，并明确“不做授权校验”，合规责任全在部署者。
-- 网关只做协议转换，不归一模型能力；上下文窗口、工具调用保真度、流式语义、结构化输出因供应商而异。因此第 35 步的三组任务对照是必要的，不能把“格式转换成功”当成“能力等价”。适用条件：只在本地或受控内网运行并设 `ADMIN_PASSWORD`；上游模型 ID 随供应商变更，每次换供应商都要 `Sync Models` + 保留 `fallback`。
+- 做法 A 网关的 `USERS-1.2K`、`STATE-ACTIVE` 徽章不可核验；“out of the box 支持某某供应商”“客户端无需改动”都是声明而非测试结果；全篇没有任何延迟、成本、工具调用成功率或对照实验数据。
+- 做法 A 网关有明显文档问题：环境变量命名不一致（表格 `GATEWAY_*` vs FAQ `BLUESMINDS_*`），数据目录又叫 `.blueclaude-data/`；正文缺少安装与启动命令；项目自述社区维护、MIT、无任何担保，并明确“不做授权校验”，合规责任全在部署者。
+- 做法 A 网关只做协议转换，不归一模型能力；上下文窗口、工具调用保真度、流式语义、结构化输出因供应商而异。因此第 35 步的三组任务对照是必要的，不能把“格式转换成功”当成“能力等价”。
+- 做法 B（ACP-Ant）的“Codex CLI 0.134 真跑通 shell 工具任务”是作者自测，没有给任务、成功率或对照；“三种接口已测、软件本身未逐一实测”也是作者表述；面板功能、多账号冷却换号策略、Auto-Map 式的体验描述都没有量化数据。
+- 做法 B 明确是个人开源项目、非 Google 官方，只在 `agy` 1.5.2 上验证，CLI 与 ACP 协议仍在变化；“共享订阅额度可能违反 Google 条款并导致账号被限制或封禁”是作者的风险提示，没有给出实际案例或条款条文。
+- 做法 B 全篇没有任何延迟、成本、工具调用成功率或对照实验数据；`AGY_PER_ACCOUNT`、`AGY_HEARTBEAT` 只给了默认值，没给调参效果；材料在第 9 节“流式心跳 `AGY_HEARTBEAT` 默认 15 秒，静默”处截断，静默判定与超时处理本手册无从补全，第 43 步按默认值是保守写法。
+- 做法 B 的工具调用是提示词模拟，这一条有 README 的设计说明作依据；但“这样够不够用”“和原生 tool calling 差多少”没有任何测量，属于需要你自己按第 44 步去量的东西，不是结论。
 
 ## 依据的调研
 
@@ -442,3 +601,4 @@ vLLM：schema accuracy 原文 92% 到 100%，至少应明显提升且接近 100%
 - [@VRAMCalculator: 在 Strata 上运行 Qwen 3.8 Flash Next 作为编码代理？在你追逐 tok/s 之前，先检查提示缓存。](../research/radar/2026-10-15/3533-strata-qwen-3-8-flash-next-tok-s.md)：值得一试，建议小范围试：在 Strata 编码代理中把 --prompt-cache 从 0 改为 6，优先验证长对话回合的等待时间是否大幅下降；原文给出了这一具体参数和 14K 令牌耗时对比，但缺少完整命令和版本条件，不能直接全量采用。
 - [Fixing Tool-Call Accuracy in vLLM](../research/radar/2026-10-26/7251-fixing-tool-call-accuracy-in-vllm.md)：值得一试，建议在 Kimi/DeepSeek 的 vLLM 0.31 服务上小范围试用：启用 `--tool-strict-level` 开启约束解码，并用 K2VV ToolCall 基准对比 schema accuracy 后再上线；原文给出了 92% 到 100% 的案例和验证流程，但没有完整启动命令或参数值，且对其他模型可能引入回归。
 - [FalihPrada/claude-code-gateway](../research/radar/2026-11-05/10417-falihprada-claude-code-gateway.md)：值得一试，可以小范围试：把它当成「同一套 Claude Code 工作流、换不同上游模型」的对照装置，先用单一上游加一个真实任务跑通工具调用与流式，再按任务比较成本与完成率；理由是 README 给出了可照抄的环境变量与模型路由配置，但缺安装启动命令，且兼容性与用户数均为作者自述。
+- [czg86389-hub/ACP-Ant](../research/radar/2026-11-09/11890-czg86389-hub-acp-ant.md)：值得一试，把 ACP-Ant 当作“模型供给层”小范围试：手上已有可用的 Antigravity 账号、又想让 Codex/Cline/OpenAI SDK 这类现成 Agent 换一个模型后端时，按 install.sh（或 Docker）+ 面板加账号 + 三要素接入的流程就能跑通，自测脚本也齐；但它是个人开源项目、只在 agy 1.5.2 上验证、把个人订阅额度共享出去可能违反 Google 条款，且明确不支持 Claude Code，所以只宜作为可选备用通道，不宜作主力依赖。
