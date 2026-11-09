@@ -1,10 +1,10 @@
-# 把派给 agent 的活收回来，核过再算完成
+# 把书和重复工作变成 agent 能调用、可验收的技能
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：让你把重复工作写成 agent 能自动发现、按需加载的技能，并用登记行和证据把派出去的活核到“已验收”，而不是装完、说完成就算改善。
-> 先试这一步：先按做法 A 在一个非关键项目上用同一任务做一次有/无技能对照；如果你已经在带多个 AI 助手派活，先按做法 BH 只装 dispatch-accept-verify 和 evidence-before-done 两支，用一行“待收”登记把一件两周内能收的小活跑到“已验收”。
-> 最近修订：2026-11-07
+> 解决的问题：你装了不少技能、读了不少书，但 agent 仍会编造、返工，你无法判断技能是否真的改善了工作。
+> 先试这一步：先在一个非关键项目上选一类重复任务，用同一输入做 3 次有/无技能对照，记录人工修改次数和返工轮数。
+> 最近修订：2026-11-10
 
 ## 解决什么问题
 
@@ -12,11 +12,13 @@
 
 本版新增一个协作问题：你一个人总控多个长期 AI 助手，活派出去没人收、说做好了其实没核过、给新手的步骤只有自己看得懂、同一个坑踩两遍。做法 BH 给出一条可照着走的闭环：派活前写一行“待收”登记，到点记“已接单”，收到成果记“已收到成果”并写明结果在哪，核过才记“已验收”；只有“已验收”或授权取消才从未完清单里拿掉。它不带定时、不带叫醒、不带自动回执，到点查要靠宿主定时能力或人。
 
+本版还新增一个“让书变成可调用技能”的具体问题：你读过一本方法论书或内部文档，想让 agent 忠实调用书里的框架和流程，而不是让模型自由发挥、把书里没讲的内容编出来。做法 BI 用 BookLeme 把书编译成两类可安装产物：knowledge_pack（知识包：Topic Index 路由表 + 按需加载的框架分片 + 决策速查 + 出处清单）和 behavior_skill（行为技能：角色 + 硬约束 + 状态机 + 具名输出契约 + 反模式 + 情绪护栏）。它明确拒绝做读书笔记；书里没讲必须拒答；并用 7 个忠实度指标、负例拒答和 6 条版权硬门验收。当前项目处于 M0–M3，coverage_score 0.667 未达标、LLM judge 未接入，只能先小范围试。
+
 本版还保留一个基础问题：你打算把重复工作写成技能，但不确定技能应该怎么组织，才能让 agent 启动时只看到名称和描述、任务匹配后再读完整说明、执行时再按需运行脚本或加载引用材料。Agent Skills 的 README 给出了一个轻量格式：技能是一个文件夹，至少包含 SKILL.md，里面写 metadata（至少有 name 和 description）和 instructions；可选 scripts/、references/、assets/。它用渐进披露分三阶段加载：启动时只读每个技能的 name 和 description；任务匹配后读取完整 SKILL.md；执行时按需运行附带代码或加载引用文件。这个格式值得先小范围试，但 README 不是完整规范。
 
 本版还新增一个具体场景：编码 agent 写后端时，默认不做登录限流、查询按调用者作用域过滤、扣费或发送类操作的幂等键、迁移的 expand-contract、并发建索引、分批回填和 down migration。做法 BG 用 backendskills 把这三类后端安全默认值装进 agent，并用 agent 看不到的隐藏检查做有/无对照，避免只看它自己说完成。
 
-这篇手册的主线是：先用做法 A 在一个非关键项目上试装一个现成技能包，用同一任务做有/无技能对照；确认有效后，再用做法 B 把自己的重复工作写成 SKILL.md，并按 Agent Skills 的 scripts/references/assets 结构和渐进披露机制自检；需要领域权威规范时用做法 BE，先写 SKILL.md 和 references/，再建 evals 做装/不装对照；重复排障用做法 AX 写成按现象触发的经验卡；动效复刻用做法 BA 先看片、再按页面契约写代码、逐帧打分；技术书或内部文档转技能用做法 M 先做小范围试用；站点静态迁移用做法 BC 跑到 PR + noindex staging 再验收；先出图再建站用做法 BD；一人公司 AI 产品按阶段路由用做法 BF；后端安全默认值用做法 BG，先挑 2–3 个后端任务、每个任务跑 5 次有/无对照；一个人带多个 AI 助手派活收不回来，用做法 BH 先装两支技能、用一行登记跑完一件小活。专门场景保留为索引，统一要求先小范围对照再采用。
+这篇手册的主线是：先用做法 A 在一个非关键项目上试装一个现成技能包，用同一任务做有/无技能对照；确认有效后，再用做法 B 把自己的重复工作写成 SKILL.md，并按 Agent Skills 的 scripts/references/assets 结构和渐进披露机制自检；需要领域权威规范时用做法 BE，先写 SKILL.md 和 references/，再建 evals 做装/不装对照；重复排障用做法 AX 写成按现象触发的经验卡；动效复刻用做法 BA 先看片、再按页面契约写代码、逐帧打分；技术书或内部文档转技能用做法 M 先做小范围试用，要求更高时用做法 BI 的编译流水线和忠实度指标；站点静态迁移用做法 BC 跑到 PR + noindex staging 再验收；先出图再建站用做法 BD；一人公司 AI 产品按阶段路由用做法 BF；后端安全默认值用做法 BG，先挑 2–3 个后端任务、每个任务跑 5 次有/无对照；一个人带多个 AI 助手派活收不回来，用做法 BH 先装两支技能、用一行登记跑完一件小活。专门场景保留为索引，统一要求先小范围对照再采用。
 
 ## 适用与不适用
 
@@ -27,7 +29,8 @@
 - 你要把高频、多步、输入输出相对稳定的工作封装成技能，并希望 agent 能按 description 自动发现、按需加载脚本和参考资料。
 - 你有重复性排障任务，且 agent 会读 AGENTS.md、CLAUDE.md 或等价指令文件，愿意把踩过的坑写成短卡并按现象检索（做法 AX）。
 - 你需要给 agent 补一块领域知识：UI/UX 设计、Postgres、Google 产品与技术、中国金融市场数据、移动端模拟器观测、中英文学术写作、SwiftUI、工作写作、AI 研究、Go 终端 UI、Elixir/Phoenix、Android 开发、Rust 等领域规范。
-- 你需要把文档站点、仓库、PDF、技术书或内部 docs 变成按需加载的技能；其中把技术书或内部文档转成技能先按做法 M 做小范围试用。
+- 你需要把文档站点、仓库、PDF、技术书或内部 docs 变成按需加载的技能；其中把技术书或内部文档转成技能先按做法 M 做小范围试用；要求可校验、可验收时按做法 BI 试用。
+- 你有一本有权使用的技术书、方法论书或内部文档，想把书里的工作方式（提问顺序、判断条件、证据规则、证伪条件）编译成可调用技能，并愿意用负例拒答、逐字溯源和 7 个指标验收（做法 BI）。
 - 你需要给多步、有明确交付物的复杂任务分阶段推进，或在编码 agent 里立行为约束、做路由、做审查回路。
 - 你需要安装或分发以 SKILL.md 为载体的技能到多个编码代理，或把团队规范同步给多人。
 - 你需要给 agent 补仪表盘/数据屏设计规范，并希望验收落在三档截图而不是代码自检（做法 AY）。
@@ -50,6 +53,7 @@
 - 不要一次性建很多技能。先选一个高频多步流程，建一个最小技能并做对照。
 - 做法 AX 不适合把全部经验常驻注入；不适合没有明确失败现象、不会复发的任务；也不适合不愿维护短卡、不愿对入库和删卡做人审的团队。
 - 做法 M 目前只适合先小范围试用：原文只给了一条 /book-to-skill ./my-book.pdf 示例命令、项目名和 GitHub 链接卡片，没有安装命令、生成后的文件结构或调用命令、实际转换案例、准确率、耗时和失败场景；不得再分发第三方版权书生成的 skill。
+- 做法 BI 只适合先小范围试用：项目处于 M0–M3，coverage_score 0.667 未达标，LLM judge 未接入，groundedness 恒为 null，professional_analysis 和 decision_checklist 两个插件仍在 M4，evals/baseline.json 要到 M5 才出。它只处理可解析的文本型书籍文件，扫描件、封面不可提交；只处理自有/授权/公版材料；第三方书籍生成的技能默认私有、不得分发。MIT 只覆盖转换器代码，不覆盖任何书籍。
 - 做法 AY 只针对仪表盘/数据屏，偏 Web 与 SwiftUI；材料只有 README，不能确认内部规则质量；它的 Sign-off 推广语会出现在对话里，采用前要处理。
 - 做法 AZ 适合愿意维护 Markdown 规格、按阶段调用命令的团队；不需要规格文档、只想快速写代码的团队价值有限；Windows 安装需另行适配。
 - 做法 BA 只覆盖扁平矢量风格的动效/排版动画/UI 动效录屏到代码，绑定 GSAP 生态；不适合实拍、复杂 3D、需要保留原始视频或逐帧描摹的任务。
@@ -90,6 +94,14 @@
 - 已安装并使用 Claude Code，并按仓库说明获取或安装 book-to-skill；原文没有给出安装命令。
 - 先准备一组覆盖不同章节的基线问题，并保存不用技能时的回答。
 - 只处理自有或已获书面授权的文档；不要把第三方版权书生成的 skill 再分发。
+
+做法 BI 额外前置：
+
+- Python ≥ 3.9、git；核心零第三方依赖。
+- 一本你有权使用的书（建议 10 万字内），格式为 PDF / EPUB / DOCX / MD / HTML / RTF / MOBI，且是可解析的文本型文件，不是扫描件或只有封面。
+- 启动时能声明 --user-rights owned|licensed|public_domain|unknown。
+- 接受产物默认私有；公开分发必须显式 --public --confirm-public PUBLISH，且第三方书籍生成的技能不得分发。
+- 准备至少 1 个负例问题（书里明确没讲的框架）和 5 条随机引文，用于拒答测试和逐字溯源。
 
 做法 AX 额外前置：
 
@@ -172,7 +184,7 @@
 
 ## 操作步骤
 
-怎么选：先做做法 A；A 里某个技能确实有效、且你有一件每周重复且规范明确的工作，再做做法 B。做法 B 优先按 Agent Skills 的轻量格式组织：一个技能文件夹，至少一个 SKILL.md；需要执行代码就放 scripts/，需要参考资料就放 references/，需要模板资源就放 assets/。建好后用渐进披露自检：启动时是否只暴露名称和描述；任务匹配时是否读取完整 SKILL.md；执行时是否只加载所需脚本或引用文件。如果你有一批领域权威来源和交付前检查清单，做做法 BE；如果你有一类重复排障任务，做做法 AX；如果你要约束编码 agent 过度工程，做做法 BB；如果你要把技术书、PDF 或内部文档变成按需加载技能，先做做法 M 的最小试用；如果你要做仪表盘/数据屏，先做 AY 的半天试用；如果你要 BA/PO 规格链，先做 AZ 的一个小需求试用；如果你要把动效视频复刻成代码，先做 BA 的 10 秒小片闭环；如果你要把内容站迁成静态 Astro 站，先做 BC 的低流量站点或 20–50 页子站试用；如果你要先出设计图再建站，先做 BD 的一个真实落地页需求对照；如果你在做一人公司的 AI 产品，先做 BF 的一次总入口 + 一次直接点名对照；如果你要给后端 agent 补鉴权、幂等和迁移安全默认值，先做 BG 的 2–3 个任务、每个任务 5 次有/无对照；如果你一个人带多个 AI 助手、派出去的活收不回来，先做 BH 的一次单宿主、单件小活闭环。以上都套用 A 的对照方法，其余按场景从专门做法索引里选。
+怎么选：先做做法 A；A 里某个技能确实有效、且你有一件每周重复且规范明确的工作，再做做法 B。做法 B 优先按 Agent Skills 的轻量格式组织：一个技能文件夹，至少一个 SKILL.md；需要执行代码就放 scripts/，需要参考资料就放 references/，需要模板资源就放 assets/。建好后用渐进披露自检：启动时是否只暴露名称和描述；任务匹配时是否读取完整 SKILL.md；执行时是否只加载所需脚本或引用文件。如果你有一批领域权威来源和交付前检查清单，做做法 BE；如果你有一类重复排障任务，做做法 AX；如果你要约束编码 agent 过度工程，做做法 BB；如果你要把技术书、PDF 或内部文档变成按需加载技能，先做做法 M 的最小试用，要求可校验和忠实度指标时做做法 BI 的半天试用；如果你要做仪表盘/数据屏，先做 AY 的半天试用；如果你要 BA/PO 规格链，先做 AZ 的一个小需求试用；如果你要把动效视频复刻成代码，先做 BA 的 10 秒小片闭环；如果你要把内容站迁成静态 Astro 站，先做 BC 的低流量站点或 20–50 页子站试用；如果你要先出设计图再建站，先做 BD 的一个真实落地页需求对照；如果你在做一人公司的 AI 产品，先做 BF 的一次总入口 + 一次直接点名对照；如果你要给后端 agent 补鉴权、幂等和迁移安全默认值，先做 BG 的 2–3 个任务、每个任务 5 次有/无对照；如果你一个人带多个 AI 助手、派出去的活收不回来，先做 BH 的一次单宿主、单件小活闭环。以上都套用 A 的对照方法，其余按场景从专门做法索引里选。
 
 ### 做法 A：先用现成技能包做小范围试装（推荐先做）
 
@@ -341,6 +353,74 @@ python3 scripts/extract.py --check
 4. 用同一组问题分别问基线会话和生成技能后的会话。预期结果不是转换成功，而是回答在事实、定位和完整性上有可比较差异。
 5. 处理版权与分发边界。只处理自有或已获书面授权的文档；不得再分发第三方版权书生成的 skill。
 6. 做判定。只有在一本真实文档上跑通，并且事实准确率、定位能力、完整性、稳定性、人工查找时间或失败率相对基线有改善，才值得把该流程写入手册或纳入常规；否则保留为待验证候选。
+
+### 做法 BI：把书编译成可校验的技能，并用忠实度和负例拒答验收（先做小范围试用）
+
+定位：bookleme/bookleme（读了么）是一个把书/文档编译成可安装 Agent Skill 的 Python 工具链（MIT，核心零第三方依赖，Python ≥ 3.9，输入支持 PDF / EPUB / DOCX / MD / HTML / RTF / MOBI）。它明确拒绝做读书笔记，而是产出两类可安装、可调用、可验证的产物：knowledge_pack 是结构化知识库，装 Topic Index 路由表 + 按需加载的框架分片 + 决策速查 + 出处清单，典型用法是问“这本书里 X 框架怎么用？”，书里没讲必须拒答；behavior_skill 是可运行的流程与状态机，装角色 + 硬约束 + 状态机 + 具名输出契约 + 反模式 + 情绪护栏，典型用法是“陪我做一次完整的人生设计对话”，可中断续聊。编译走 S0–S9 流水线：S0 输入登记 → S1 确定性提取 → S2 中文分段 →（S3 体裁路由 ∥ S4 原子能力抽取）→ S5 忠实度校验 → S6 双引擎渲染 → S7 四重校验 → S8 幂等安装 → S9 冒烟评测。两引擎共享 S1/S2/S4/S5 中间表示，只有 S6 分流。
+
+1. 拉取并确认可运行。前提是 Python ≥ 3.9、git；核心零第三方依赖。预期结果是能看到版本号。
+
+```bash
+git clone https://github.com/bookleme/bookleme.git
+cd bookleme
+python3 -m bookleme --version
+```
+
+2. 用仓库自带样例做一次端到端编译，先确认“书 → Skill”能跑通。预期结果是生成一个可校验的产物目录。
+
+```bash
+python3 -m bookleme run --input evals/cases/synthetic/coach_book.md --title "我的第一本书"
+```
+
+3. 校验产物。官方校验器 + 自有 lint + 版权硬门三重；不要只看 run 成功。
+
+```bash
+python3 -m bookleme validate examples/coach
+```
+
+4. 跑回归测试，确认环境与抽取器行为一致。
+
+```bash
+python3 -m unittest discover -s tests -v
+```
+
+5. 用自己的书时，按需指定引擎、体裁与使用权。默认 auto 按 12 个确定性体裁特征自动路由；不满意再用 --genre 强制。
+
+```bash
+--engine auto|knowledge_pack|behavior_skill|both   # 引擎选择
+--genre <plugin_id>                                # 强制指定体裁
+--no-router                                        # 关闭路由，双引擎全出
+--install                                          # 写入技能真源（默认关闭）
+--user-rights owned|licensed|public_domain|unknown # 使用权声明
+```
+
+6. 公开分发必须显式裸词确认。产物默认私有；第三方书籍生成的 Skill 不得分发。
+
+```bash
+--public --confirm-public PUBLISH
+```
+
+7. 新增体裁 = 写一个插件文件，零改核心。插件必须声明以下字段，缺一即拒绝加载：state_machine、output_contract、hard_constraints、anti_patterns、voice_calibration（语气 / 称谓 / 禁用语 / 结论归属）、copyright_profile、trigger_words（3–5 个中文触发词）、eval_prompts（必须含至少 1 个负例）。
+
+```text
+bookleme/plugins/user/<genre_id>.py
+```
+
+内置可参考的已实现插件：coach_dialogue（教练/自我对话）、knowledge_reference（框架速查）；professional_analysis、decision_checklist 尚在 M4。
+
+8. 提交或扩展前跑规范校验，这是作者写进 CONTRIBUTING 的红线检查。
+
+```bash
+python3 -m unittest discover -s tests -v
+python3 -m bookleme schema --state
+python3 -m bookleme plugin validate bookleme/plugins/builtin/coach_dialogue.py
+```
+
+9. 落地前先读四份规范：docs/ARCHITECTURE.md（流水线与幂等模型）、docs/PLUGIN_SPEC.md（16 个必填字段与安全扫描）、docs/FIDELITY.md（7 指标与未验证假设表）、docs/EVALS.md（评测集设计与 22 条硬验收清单）。README 只是入口，真正的可照做细节在这些文档里。
+
+10. 把 6 条版权硬门当作自己产物的验收清单，任一失败即不安装、不发布：单条引文 ≤150 字且逐字可追溯；总引文比 ≤0.03；连续复制 ≤150 字；13 字 shingle 重叠 ≤0.10；产物不含全文/切片；contains_original_text = false。
+
+11. 做最小试用与判定。选一本你熟悉、且有权使用的书（10 万字内），转成 md/epub/pdf；跑 run --input <你的书> --title "..." --user-rights owned，观察是否自动路由到合理体裁，不满意再用 --genre 强制；跑 validate <产物目录>，记录 7 个指标的实测值，尤其看 coverage_score 与 shingle_overlap_max；人工做三组对抗测试：负例拒答（问书里明确没讲的框架，必须拒答）、逐字溯源（随机抽 5 条引文回原文核对是否是精确子串）、触发词（用插件声明的 3–5 个中文触发词各触发一次）；最后把产物装进你日常用的 Agent，用 3 个真实工作任务跑一遍，记录不用 Skill 与用 Skill 的差异。
 
 ### 做法 AX：把重复踩坑写成按现象触发的经验卡
 
@@ -790,7 +870,7 @@ Cursor 的 CLI 形态如 cursor agent --print；对自己新建的工作区做�
 10. 完整跟做一遍，并故意走一次退回。照 examples/walkthrough-meeting-notes/ 走“给定输入 → 成果 → 证据 → 验收”，人为触发一次退回，看退回后状态是否还看得见。注意：该 walkthrough 是作者写的教学样例，不是实测记录。
 11. 做最小试用与判定。一人、一宿主、一件两周内能收的真实小活（可直接复刻原文的会议转写题）；派前写“待收”，到点人工去查；走完 待收 → 已接单 → 已收到成果（写明结果在哪）→ 取证 → 已验收；跑满两周，期间不加新字段，避免把记账负担也算成收益。若“说完成了但核不过的比例”和“超期到被发现的天数”都没有下降，说明多出来的只是记账，应停用或砍字段。
 
-### 专门做法索引（C–BH）
+### 专门做法索引（C–BI）
 
 下表保留各专门做法的用途和入口；完整边界以对应仓库 README 和本手册的判断原则为准。所有条目都先套用做法 A 的对照方法。
 
@@ -853,6 +933,7 @@ Cursor 的 CLI 形态如 cursor agent --print；对自己新建的工作区做�
 | BF | 用总入口按创业阶段路由到 7 个子技能，并把上一步产出交给下一步 | 克隆 huaxialucaicaizi/ai-startup-skills；把 skills/* 和总入口拷到 ~/.agents/skills 或 ~/.claude/skills；用总入口和直接点名做对照 |
 | BG | 给后端编码 agent 补鉴权、幂等、迁移安全默认值 | npx skills add globalmpc/backendskills；AGENTS.md 追加 dist/AGENTS.md；Cursor 复制 dist/cursor/ 到 .cursor/rules/；填 Make it yours；用隐藏检查做有/无对照；node bench/summarize.mjs 聚合 runs.jsonl |
 | BH | 一个人带多个 AI 助手，派活要能收回、核过再算完成 | 安装 dabingfy-dot/solo-to-team-skills 的 dispatch-accept-verify + evidence-before-done 两支；整目录拷并带上 templates/；派前写“待收”登记，按 待收→已接单→已收到成果→已验收 三态推进；用说完成但核不过的比例、超期到被发现的天数验收 |
+| BI | 把一本有权使用的书编译成可校验的知识包或行为技能，并要拒答书外问题 | 见做法 BI；git clone bookleme/bookleme；python3 -m bookleme run --input <书> --user-rights owned；python3 -m bookleme validate <产物目录>；看 7 个指标、负例拒答和 6 条版权硬门；coverage_score 未达标前只小范围试 |
 
 ## 怎么判断变好了
 
@@ -863,6 +944,8 @@ Cursor 的 CLI 形态如 cursor agent --print；对自己新建的工作区做�
 做法 BE 的最小试用方式：用 --plugin-dir 单会话试用，避免影响他人；选 3 个真实任务（一个库 API、一个 CLI/脚本、一个重构），每个任务在装 skill 和不装 skill 下各跑一次，共 6 次，尽量固定 prompt。参照原文 eval 结构给每个任务写 graders；没有 eval 工具时改人工盲评。可观察指标：断言通过率；cargo fmt --check、cargo clippy -- -D warnings、cargo test、cargo doc 四个命令的一次通过率；token 成本增量；人工 review 的返工轮次和评论条数。原文量级是有 skill 时 29/30、无 skill 时 24/30，token 约多三分之一；这是作者自述且样本很小，提升不到 2 条断言可视为噪声，通过率提升低于 10% 就不值得长期维护。
 
 做法 M 的最小试用方式：选一本结构清晰、章节明确的技术书或内部 PDF，先记录不用技能时 Claude Code 回答书中问题的基线；再运行 /book-to-skill 生成技能，在相同问题上对比。建议准备 10 到 20 个覆盖不同章节的问题，其中包含需要定位具体章节、步骤和条件的问题。可观察指标是：事实准确率、定位能力、完整性、稳定性、人工查找时间、失败率。只有在一本真实文档上跑通，并且上述指标相对基线有改善，才值得把该流程写入手册；否则保留为待验证候选。
+
+做法 BI 的最小试用方式：半天内选一本你熟悉、且有权使用的书（10 万字内），转成 md/epub/pdf；跑 run --input <你的书> --title "..." --user-rights owned，观察是否自动路由到合理体裁；跑 validate <产物目录>，记录 7 个指标的实测值；人工做三组对抗测试：负例拒答、逐字溯源 5 条、触发词各触发一次；再把产物装进日常 Agent，用 3 个真实工作任务比较不用 Skill 与用 Skill 的差异。硬指标（有则必看）：negative_refusal_rate = 1.00、verbatim_violation_rate = 0.00、citation_resolution_rate = 1.00，任一不达标即说明忠实链路有洞。及格线指标：trigger_hit_rate ≥ 0.90、shingle_overlap_max ≤ 0.10、artifact_compliance_rate = 1.00。需自行观察：coverage_score 作者自测仅 0.667，目标 ≥0.85，试用时若低于 0.85，说明该书的关键框架没被抽全，应降低对该产物的信任或换体裁插件重跑。业务指标：同一批真实任务上，有 Skill 相比直接把书丢给长上下文模型，是否减少了事实性返工、是否减少了人工查证次数；这一项 README 没有数据，只能自测。不建议现在依赖的：groundedness 等 judge 类指标，未接入，恒为 null。
 
 做法 AX 的最小试用方式：选 1 个重复排障多的仓库，建 procedures/，写全局钩子，只写 2–3 张复发卡；用 3–5 个现象问题新开会话验证是否读卡。试运行一段时间，记录重复试错轮次是否下降、同类坑复发次数是否下降、读卡命中率、无关读卡或乱翻次数、每张卡体积和维护耗时。可用 tools/procedures-probe.mjs 观察是否出现 <<< HIT，或用 tools/procedures-audit.mjs 检查结构缺段、断链、体积、触发词覆盖、对象失效和结论偏旧。判定门槛是同一现象第二次出现时能直接命中首选或别再来，且没有把大量未使用卡塞进上下文。
 
@@ -884,9 +967,9 @@ Cursor 的 CLI 形态如 cursor agent --print；对自己新建的工作区做�
 
 做法 BH 的最小试用方式：一人、一宿主、一件两周内能收的小活。只装 dispatch-accept-verify 和 evidence-before-done 两支，连 templates/ 整目录拷；建一张表当共享记录，用登记行模板；派前写“待收”，到点人工去查（本包不叫醒）；走完 待收 → 已接单 → 已收到成果（写明结果在哪）→ 取证 → 已验收，过程中人为触发一次退回，看退回后状态是否还看得见。跑满两周，期间不加新字段。可观察指标：说“完成了”但核不过的比例（目标下降）；超期未接单/未收的活数量，以及从超期到被发现的天数（目标显著缩短）；同一类错误重复出现的次数；每件活的返工轮次与从派到验收的总时长；登记行里“已验收”占比与“待收”积压量。停用判据：若“核不过比例”和“超期发现延迟”两项都没有下降，说明多出来的只是记账，应停用或砍字段；若降不下来是因为宿主没有定时能力而人也没按点查，那是流程执行问题，先把“谁到点查”这一个责任人补上再复测。原文数据是 Cursor CLI 约 29.6 秒打出登记行（不含装宿主、注册、手动打字时间），八家宿主各有“能装能调”记录和一份有限任务验收，队内日更主链跑了约两周余、复盘 3 次；没有对照实验，不表示每家四个技能都逐一被调用。
 
-专门做法 C–BH 的统一试用方式：选一个与所装技能对应的真实小任务，先在不装该技能的会话里做一次并保存输出，再装上做一次；同一任务至少跑 3 次，或换 2–3 个任务再下结论。通用指标是首稿可用率、人工修改次数、返工轮数、查文档时间、命令或配置正确率、权限申请次数、耗时和成本。各条目的特别指标按索引执行。
+专门做法 C–BI 的统一试用方式：选一个与所装技能对应的真实小任务，先在不装该技能的会话里做一次并保存输出，再装上做一次；同一任务至少跑 3 次，或换 2–3 个任务再下结论。通用指标是首稿可用率、人工修改次数、返工轮数、查文档时间、命令或配置正确率、权限申请次数、耗时和成本。各条目的特别指标按索引执行。
 
-反向指标：加了技能后仍要口头纠正同一件事，先改 SKILL.md 或 description；文档改完只是删空话没补事实，先把代码、配置和真实报错给它读；agent 只凭自己的声明就宣布完成，而 git status 和测试报告不支持，作废重跑；同一断言连续失败 3 次还在本地重试，升级到强模型；出图技能每次失败都盲重试，说明没用上 diagnostics；plugin-eval 分数不错但真实任务没改善，说明把筛子当成了结论；AX 跑几个会话后 observation-log 或读卡行为仍不存在，先补钩子、触发词或探针，不要先加卡；M 只跑通 /book-to-skill 但同组问题的事实准确率、定位能力和完整性没有改善，就保留为待验证候选；AY 三档截图 QA 抓不出代码看不出的问题，就降级为 study；AZ 只是文档变多而追溯和评审返工没改善，就降级为 study/watch；BA 的 frame_diff 只给出整体分数却定位不到最差时刻，或 agent 仍在偷偷内嵌视频、描帧、改文字，先修契约和硬规则；BB 只在代码变少上看效果，不看测试通过率和 review 返工，先停用或只保留为研究项；BC 只看转换成功或像素一致，不检查重定向、SEO、媒体和 staging 功能，就降级为 study；BD 只看生成的图好看，不看审图通过率、图到页面的返工轮次和文字可读性硬问题，就降级为 study；BE 只看技能装上了、断言通过数比基线多 1–2 条，就宣布有效，或忽略 token 多三分之一和 grader 自评偏差，就降级为待验证候选；BF 只看装上、validate.py 通过或总入口说得头头是道，不看路由是否正确、产出能否交给下一步、政策引用是否可点开官方原文，就降级为 study；BG 只看 32 stars 或 25/150→2/150 的总和，不看按任务分布、约定遗漏、负向波动和过度复杂代码，就降级为 study；BH 只看“装上了、能调用”或一篇教学 walkthrough，不看核不过比例、超期发现天数和退回后状态是否还看得见，就降级为 study。
+反向指标：加了技能后仍要口头纠正同一件事，先改 SKILL.md 或 description；文档改完只是删空话没补事实，先把代码、配置和真实报错给它读；agent 只凭自己的声明就宣布完成，而 git status 和测试报告不支持，作废重跑；同一断言连续失败 3 次还在本地重试，升级到强模型；出图技能每次失败都盲重试，说明没用上 diagnostics；plugin-eval 分数不错但真实任务没改善，说明把筛子当成了结论；AX 跑几个会话后 observation-log 或读卡行为仍不存在，先补钩子、触发词或探针，不要先加卡；M 只跑通 /book-to-skill 但同组问题的事实准确率、定位能力和完整性没有改善，就保留为待验证候选；BI 只看 run 成功、不看 coverage_score、负例拒答和逐字溯源，或把 coverage_score 0.667 当达标，就降级为 study；AY 三档截图 QA 抓不出代码看不出的问题，就降级为 study；AZ 只是文档变多而追溯和评审返工没改善，就降级为 study/watch；BA 的 frame_diff 只给出整体分数却定位不到最差时刻，或 agent 仍在偷偷内嵌视频、描帧、改文字，先修契约和硬规则；BB 只在代码变少上看效果，不看测试通过率和 review 返工，先停用或只保留为研究项；BC 只看转换成功或像素一致，不检查重定向、SEO、媒体和 staging 功能，就降级为 study；BD 只看生成的图好看，不看审图通过率、图到页面的返工轮次和文字可读性硬问题，就降级为 study；BE 只看技能装上了、断言通过数比基线多 1–2 条，就宣布有效，或忽略 token 多三分之一和 grader 自评偏差，就降级为待验证候选；BF 只看装上、validate.py 通过或总入口说得头头是道，不看路由是否正确、产出能否交给下一步、政策引用是否可点开官方原文，就降级为 study；BG 只看 32 stars 或 25/150→2/150 的总和，不看按任务分布、约定遗漏、负向波动和过度复杂代码，就降级为 study；BH 只看“装上了、能调用”或一篇教学 walkthrough，不看核不过比例、超期发现天数和退回后状态是否还看得见，就降级为 study。
 
 ## 常见坑
 
@@ -908,6 +991,14 @@ Cursor 的 CLI 形态如 cursor agent --print；对自己新建的工作区做�
 - 做法 M：把 35.7K 星标、一条 /book-to-skill ./my-book.pdf 命令或转换成功当效果证据；先在真实文档上做基线对照。
 - 做法 M：没有准备跨章节问题，只问一个泛泛总结就判断有效；应准备 10 到 20 个覆盖不同章节、步骤和条件的问题。
 - 做法 M：把第三方版权书生成的技能再分发；只处理自有或已获书面授权的文档。
+- 做法 BI：把 run 成功、validate 能跑或生成目录存在当效果证据；必须看 7 个指标的实测值、负例拒答和逐字溯源。
+- 做法 BI：把 coverage_score 0.667 当达标；作者自己标的目标是 ≥0.85，低于 0.85 应降低对该产物的信任或换体裁插件重跑。
+- 做法 BI：把 groundedness 当已有指标；LLM judge 未接入，当前恒为 null，V2/V3 也为 null。
+- 做法 BI：把第三方版权书生成的技能再分发；只处理自有/授权/公版材料，公开分发必须 --public --confirm-public PUBLISH。
+- 做法 BI：只跑 --install 不跑 validate；先 validate，确认版权硬门和指标，再决定是否装进日常 Agent。
+- 做法 BI：插件缺字段；state_machine、output_contract、hard_constraints、anti_patterns、voice_calibration、copyright_profile、trigger_words、eval_prompts 缺一即拒绝加载。
+- 做法 BI：把 BookLeme 当成 book-to-skill 的替代；两者路线不同，M 轻量、只有示例命令、无校验器；BI 有 stage DAG 和指标，但 coverage_score 未达标、两个插件仍在 M4，不能当稳定生产依赖。
+- 做法 BI：提交扫描件或只有封面的文件；输入需为可解析的文本型书籍文件，且只处理自有/授权/公版材料。
 - 做法 AX：把 procedures/ 当成启动时全量扫描的注入库；正确做法是钩子常驻、按现象定向搜卡。
 - 做法 AX：等到收尾才回忆补卡；踩坑当下记 inbox 更可靠。
 - 做法 AX：一次写十几张卡；先从最近 2–3 个复发坑开始，每张不超过 2 KB。
@@ -962,6 +1053,8 @@ Agent Skills 格式来自本次调研《agentskills/agentskills》README。可�
 
 做法 M 来自调研《@RoundtableSpace: 你曾经读过一本很棒的书。三个月后，你甚至记不起第7章的存在。》。可核查信息只有：项目名 book-to-skill、GitHub 仓库链接卡片、示例命令 /book-to-skill ./my-book.pdf、原文称可把技术书 PDF 转成 Claude Code skill、也支持文档文件夹但没有文件夹用法示例、互动数据 265 点赞 / 26 转发 / 8 回复，以及 35.7K 星标的作者主张。原文没有给出安装命令、生成后的具体文件结构或调用命令、实际转换案例、准确率、耗时、失败场景或验证方法。本版同时保留既有索引 M 中的 npx skills add virgiliojr94/book-to-skill 和 python3 scripts/extract.py --check，那来自旧材料，不是本次新调研新增的证据。
 
+做法 BI 来自本次调研《bookleme/bookleme》。可核查信息包括：MIT、核心零第三方依赖、Python ≥ 3.9、输入支持 PDF / EPUB / DOCX / MD / HTML / RTF / MOBI；两类产物 knowledge_pack 与 behavior_skill；S0–S9 流水线与两引擎共享 S1/S2/S4/S5 中间表示的说明；git clone、python3 -m bookleme --version、run --input evals/cases/synthetic/coach_book.md --title、validate examples/coach、python3 -m unittest discover -s tests -v、schema --state、plugin validate、--engine、--genre、--no-router、--install、--user-rights、--public --confirm-public PUBLISH 等命令与参数；插件必填字段清单；6 条版权硬门；7 个忠实度指标与 22 条硬验收清单；docs/ARCHITECTURE.md、docs/PLUGIN_SPEC.md、docs/FIDELITY.md、docs/EVALS.md 四份规范。原文给出的本批评测数据：citation_resolution_rate 1.00、verbatim_violation_rate 0.00、negative_refusal_rate 1.00、trigger_hit_rate 1.00（目标 ≥0.90）、artifact_compliance_rate 1.00、shingle_overlap_max 0.084（目标 ≤0.10）、coverage_score 0.667（目标 ≥0.85，未达标，作者如实保留）、groundedness 为 null（LLM judge 未接入）。仓库有 CI badge、37 stars、MIT。作者自陈的边界：S4 当前为确定性抽取器，LLM 抽取器只是接口占位；LLM judge 未接入，groundedness / V2 / V3 为 null；coverage_score 未达标；professional_analysis、decision_checklist 两个插件尚在 M4；evals/baseline.json 实测数要到 M5 才出。三条设计原理（编译期/运行期分离、渐进式披露三级、确定性提取与概率性生成解耦）被作者自己标为 UNVERIFIED，「提炼结构而非摘要」也只是设计选择而非已验证结论。「一本书不会被读两遍」的共享 IR 收益、插件零改核心的可扩展性、双引擎自动路由的准确率，README 未给出对应数字，只是主张。适用条件：单机 Python 环境；输入需为可解析的文本型书籍文件，扫描件、封面不可提交；只处理自有/授权/公版材料；第三方书籍产物默认私有、不可分发；MIT 只覆盖转换器代码，不覆盖任何书籍。
+
 做法 AX 全部来自调研《MiHjy12138/DSH-agent-procedures》README。可核查信息包括：procedures/ 目录、INDEX.md、_模板.md、_inbox.md、卡片六段模板、四条全局钩子、templates/INDEX.template.md 与 templates/card-template.md 的指向、tools/scan-sessions.mjs、tools/procedures-probe.mjs、tools/procedures-audit.mjs、退出码 1 表示有 P0/P1。README 给出的自测数据是：新会话首轮查 procedures，5 题命中 5/5，对照题不命中不乱翻，读 6 张卡约 12 KB；索引从 5.2 KB 降到约 0.8 KB；13 张卡从 77.8 KB 压到 26.6 KB，约减 65%；38 张卡精简时一次移出 9 张，约 24%；两次收尾补卡实测未自发，而踩坑当下记 inbox 自发发生。这些多为作者自测，样本和统计口径有限。
 
 做法 AY 来自调研《abdiraimov-otabek/dashboard-design-skill》README。可核查信息包括：Claude Code 插件安装命令、普通 skill 手动放置命令、非 Claude Code 用 AGENTS.md 指向 SKILL.md、四个可直接照抄的提示词、Web 端 3440 / 1440 / 375 三档截图 QA、SwiftUI 模拟器覆盖设备尺寸和最大 Dynamic Type 与深色模式与 Reduce Motion、Sign-off 推广行。README 给的 before/after 对照表列了 9 条具体设计替换；作者自述方法学证据是 127 个已上线的仪表盘页面、对一个营收分析产品的完整拆解、一次每条规则被违反一次并被截图抓到的真实重设计。这些数字、规则可移植性和设计判断有效性没有外部数据或对照实验支撑。
@@ -982,7 +1075,7 @@ Agent Skills 格式来自本次调研《agentskills/agentskills》README。可�
 
 做法 BH 来自本次调研《dabingfy-dot/solo-to-team-skills》。可核查信息包括：MIT，文档自标 v0.9-draft；4 支技能 dispatch-accept-verify、evidence-before-done、beginner-ops-writing、ops-case-notes 的分工；1 个登记行模板和 2 份脱敏案例；Codex 的 codex plugin marketplace add "$(pwd)" 与 codex plugin add solo-to-team-skills@solo-to-team-skills 安装命令，以及撤回命令；八家宿主的目录路径和 Grok Bot 的“Save 为私有技能”做法；Cursor CLI 非交互可能要 --trust；Codex 非交互示例命令；三态登记 待收 → 已接单 → 已收到成果 → 已验收；原文明确 hooks: {}，不带定时、叫醒、自动回执。原文数据：Cursor CLI 实测约 0.5 分钟（29.6 秒）从拷入技能到打出可读“待收”行，不含装宿主、注册、手动打字时间；八家宿主“能装能调”均有走通记录，另各有一例有限任务验收，部分宿主受阻重跑或退回修订后才通过；队内日更主链跑了约两周余、复盘 3 次。作者主张但未证实的是：全队错误率是否下降、催办是否变少，没有对照实验；不表示每家四个技能都逐一被调用；部分宿主未保留技能加载的原始轨迹；主示例 walkthrough 是教学样例而非实测。材料局限：本次只抓到 README，四支 SKILL.md 正文、登记行模板原文、两个案例正文都未取到，技能内部的具体提示词与字段格式无法核对；README 中的日期与发起人传播量数字在本材料内无法核实，不应作为采用依据；Claude Code 侧原文明确“走通待补”，不能当已支持；Codex 正式建仓前不要填 GitHub URL。
 
-做法 C–BG 的证据与局限按本手册现有正文所合并的各篇调研保留；本版新增了 Agent Skills 的可核查格式、渐进披露机制、star 数、作者主张与局限，但没有新增其独立效果数据，也没有把它升级为已验证结论。文中提到的 star 数来自 metrics 或作者主张，不构成有效性证据。
+做法 C–BG 的证据与局限按本手册现有正文所合并的各篇调研保留；本版新增了 Agent Skills 的可核查格式、渐进披露机制、star 数、作者主张与局限，也新增了 BookLeme 的流水线、7 个指标、6 条版权硬门、coverage_score 0.667 未达标和插件 M4 边界；但没有新增其独立效果数据，也没有把它升级为已验证结论。文中提到的 star 数来自 metrics 或作者主张，不构成有效性证据。
 
 ## 依据的调研
 
@@ -1053,3 +1146,4 @@ Agent Skills 格式来自本次调研《agentskills/agentskills》README。可�
 - [agentskills/agentskills](../research/radar/2026-11-05/10578-agentskills-agentskills.md)：值得一试，建议小范围试：先用一个高频多步流程，按 SKILL.md 文件夹格式封装成技能，并验证 agent 能否按 description 触发、按需加载脚本和参考材料。README 只给出格式与渐进披露机制，缺少完整规范和案例，暂不宜直接全面采用。
 - [globalmpc/backendskills](../research/radar/2026-11-06/10952-globalmpc-backendskills.md)：值得一试，建议小范围试：按 README 装的 `npx skills add globalmpc/backendskills`（或把 dist/AGENTS.md、dist/cursor 分别接入 Codex/Cursor），挑 2–3 个后端任务做“隐藏检查”对照实验，同时对比有无技能时的 critical mistake 数和团队约定遗漏数；理由是仓库给出了可直接执行的安装方式、三条具体到规则的技能定义（鉴权作用域、幂等键、expand-contract 迁移），以及可重跑的评测脚手架，但证据目前只有作者自测（15 任务、2 个模型、每任务 5 次），且原文自己指出 Haiku 在 webhook 乱序上仍失败、payment-webhook 一栏 1/5→2/5 出现反向波动，需自行复验。
 - [dabingfy-dot/solo-to-team-skills](../research/radar/2026-11-07/11237-dabingfy-dot-solo-to-team-skills.md)：值得一试，建议小范围试：先在一个宿主（Cursor 或 Codex）装 `dispatch-accept-verify` 与 `evidence-before-done` 两支，用登记行把一件小活从「待收」跑到「已验收」，再决定是否扩到四支技能和多宿主。理由是原文给出了可直接照做的安装命令、各宿主目录路径和三态登记字段，方法本身不依赖具体产品；但它自认 v0.9-draft、无对照实验、定时催办要宿主或人来补，效果必须自己测。
+- [bookleme/bookleme](../research/radar/2026-11-10/12030-bookleme-bookleme.md)：值得一试，建议小范围试：用一本你有权使用的书跑通 `run` → `validate` → 冒烟评测，重点验证 7 个忠实度指标与负例拒答，再决定是否纳入工作流。理由是仓库给出了可直接执行的命令、产物契约和评测口径，但项目处于 M0–M3，coverage_score 0.667 未达标、LLM judge 未接入、两个插件仍在 M4，尚不足以直接作为稳定生产依赖。

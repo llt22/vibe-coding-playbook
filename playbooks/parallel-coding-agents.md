@@ -1,14 +1,16 @@
-# 同时开多个编码 agent：一个任务一个工作区，任务多了再加一层编排
+# 让多个编码 agent 并行干活：隔离工作区、分派任务、守住安全边界
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：多个编码 agent 并行时会互相改文件、状态看不清、收尾容易漏；任务跨项目多起来后，还需要知道谁在做什么、报告怎么回流。
-> 先试这一步：先在一个真实仓库里装好 worktrunk 和 shell 集成，选两三个文件重叠小、可独立验证的任务，各建一个 worktree 并行跑一轮，完整走完建—跑—看—合—清。
-> 最近修订：2026-11-09
+> 解决的问题：解决并行 agent 互相改文件、任务状态看不清、跨项目分派失控，以及多 agent 团队缺少沙箱、协调表和安全边界的问题。
+> 先试这一步：先在一个真实仓库里选两三个文件重叠小的任务，用 worktrunk 跑通「一任务一 worktree 一 agent 会话」的建—跑—看—收一轮，并记录冲突和返工。
+> 最近修订：2026-11-10
 
 ## 解决什么问题
 
-多个编码 agent 并行时，如果都在同一个工作目录里跑，会互相改文件；原生 git worktree 的创建、切换、查看、收尾又太笨，任务一多就不知道谁在哪、各自到哪一步。任务跨项目多起来后，还会多一层问题：需求该派给谁、worker 的报告往哪回流、哪些输入源可以自动触发任务。这篇手册先把「一个任务 = 一个 worktree = 一个 agent 会话」做成日常可维护的流程（建、跑、看、收），再给出任务多到自己盯不住时可选的「chief—manager—worker」三层编排做法，并标明后者的试用边界。
+多个编码 agent 并行时，如果都在同一个工作目录里跑，会互相改文件；原生 git worktree 的创建、切换、查看、收尾又太笨，任务一多就不知道谁在哪、各自到哪一步。任务跨项目多起来后，还会多一层问题：需求该派给谁、worker 的报告往哪回流、哪些输入源可以自动触发任务。再往上，如果任务本身可机器校验、需要几十到上千个 agent 自组织，还会遇到沙箱隔离、共享状态、分支合并和工具调用安全边界的问题。
+
+这篇手册先把「一个任务 = 一个 worktree = 一个 agent 会话」做成日常可维护的流程（建、跑、看、收），再给出任务多到自己盯不住时可选的「chief—manager—worker」三层编排做法，最后给出一个更重的「lead—helper + 共享 SQL + 独立沙箱」多 agent 团队骨架。后两种都标明试用边界，不当作默认做法。
 
 ## 适用与不适用
 
@@ -18,14 +20,16 @@
 - 任务彼此文件重叠小、可独立验证：材料里的示例是「加用户认证 / 修分页 bug / 为 API 写测试」。
 - macOS / Linux；Windows 与 Arch、conda 另有 worktrunk 安装路径（见做法 A 步骤 1）。
 - 任务跨多个项目、多到自己盯不过来，且愿意接受 herdr 还在试用期时，再考虑做法 B 的三层编排。
+- 任务可分解、可并行、结果能被机器客观校验（例如每个陈述是一个 Lean 定理，只有 Lean 检查器接受才算完成），且愿意搭沙箱、共享数据库和前置监控时，才小范围试做法 C。
 
 不适用：
 
 - 需要改同一批文件的重构，不适合按这套方式并行；冲突不会因为换了工具就消失。
-- 材料只是项目 README（带宣传性质），没有任何性能、冲突率、返工率、耗时数据；不要把它当成「并行一定更快」的证明。
+- 材料只是项目 README 和一篇实验报告，没有给出适用于你团队的性能、冲突率、返工率、耗时对照；不要把它当成「并行一定更快」的证明。
 - worktrunk 的 hooks、LLM commit、缓存共享的具体配置细节在 worktrunk.dev 外部文档，本条材料没有给出原文，本文不编造这些配置。
 - numbrone 依赖的 herdr 本身还在试用期，原文也没有效果数据；不要把三层编排当成已经验证的默认做法，更不要直接放到关键路径上。
 - numbrone 的前置是 macOS 或 Linux；Windows 走不通这条路径（材料未给 Windows 做法）。
+- 做法 C 来自一次内部模型的玩具实验，不是产品；没有自动裁判的开放任务不要直接套，否则自组织会退化成互相吹捧。
 
 ## 前置条件
 
@@ -48,6 +52,13 @@
 - 已安装 numbrone skill；已装 herdr 的 Claude 集成，否则 herdr 追踪不到 Claude 会话。
 - 要配 Watch 的话，数据源要先通过 MCP 连接器或 `gh` 之类 CLI 接进 agent；否则 Watch 没有可读的输入。
 
+做法 C（多 agent 团队骨架）另需：
+
+- 一个可机器校验的任务和自动裁判（原文是 Lean 检查器 + main 上的 grader）。
+- 能创建轻量 VM 或等价沙箱的基础设施；每个 agent 一个沙箱，镜像里预装工具链。
+- 一个共享 Postgres（或等价的并发安全存储），以及能拦截工具调用的 gateway/分类器。
+- 接受它只是一次实验结论：原文是 1,000 agent、28.7 小时完成一次形式化证明复现，没有给出你所在领域的推广证据。
+
 ## 操作步骤
 
 ### 先选做法
@@ -56,7 +67,9 @@
 
 做法 B：三层编排（numbrone）。适合项目多、任务多、需要把需求分派给不同项目、需要 worker → manager → chief → 你的报告回流，或者想把 Linear、Sentry 之类输入源变成触发事件。底层仍然是每个 worker 一个 herdr tab + 一个独立 git worktree（分支 `numbrone/<task>`），但多了一层角色和纯文本任务状态。
 
-怎么选：先用 A 跑通；当你每天并行数超过自己能盯的范围，或者任务已经跨项目、跨输入源，再小范围试 B。材料对 B 的结论是「在一两个项目上小范围试跑」，不是直接推广。
+做法 C：多 agent 团队骨架（Anthropic 实验做法）。适合任务可机器校验、需要几十到上千个 agent 自组织、并且愿意搭独立沙箱、共享 SQL、每 agent 一分支一 MR、工具调用前置分类器。它不是日常编码的默认层；先在一个可机器验证的小任务上照骨架试跑，再决定是否放大。
+
+怎么选：先用 A 跑通；当你每天并行数超过自己能盯的范围，或者任务已经跨项目、跨输入源，再小范围试 B。只有任务有自动裁判、且你愿意承担沙箱和监控成本时，才小范围试 C。材料对 B 的结论是「在一两个项目上小范围试跑」，对 C 的结论是「在一个可机器验证的小任务上照做试跑」，都不是直接推广。
 
 ### 做法 A：单层 worktree
 
@@ -235,15 +248,15 @@ export PATH="$HOME/.numbrone/bin:$PATH"   # in ~/.zshrc or ~/.bashrc
 
 ```bash
 AGENT_KIND=claude       # any `herdr agent start --kind` value
-AGENT_ARGUMENTS=""      # extra arguments for the agent
-BASE_BRANCH=""          # branch new worktrees start from ("" = project's current HEAD)
+AGENT_ARGUMENTS=''      # extra arguments for the agent
+BASE_BRANCH=''          # branch new worktrees start from ('' = project's current HEAD)
 PING_CHIEF=1            # 0 = don't type reports into the chief; just log and notify
 ```
 
 想减少权限打断（原文示例，需自行权衡风险）：
 
 ```bash
-AGENT_ARGUMENTS="--permission-mode acceptEdits"
+AGENT_ARGUMENTS='--permission-mode acceptEdits'
 ```
 
 默认行为是 worker 在每次权限提示处停下、在 herdr 里显示 `blocked` 直到你回答；这是原文明确说的「安全默认」。如果你改成 acceptEdits，等于用更大权限换更少打断，风险自己承担。
@@ -262,8 +275,8 @@ AGENT_ARGUMENTS="--permission-mode acceptEdits"
 
 ```markdown
 ## Watch
-- Linear: new issues in team ENG labelled "agent", every 15 minutes
-- Sentry: new unresolved issues in project "api", every 30 minutes
+- Linear: new issues in team ENG labelled 'agent', every 15 minutes
+- Sentry: new unresolved issues in project 'api', every 30 minutes
 ```
 
 前提：数据源已经通过 MCP 连接器或 `gh` 之类 CLI 接进 agent。agent 启动时用 `/loop` 起这些循环，重启后会恢复；也可以直接口头要求（例如「have the api manager keep an eye on Sentry」），manager 会自己写进 `context.md`。条目 ID 要写进任务 brief，避免同一 ticket/error 被重复捡起。
@@ -298,27 +311,190 @@ AGENT_ARGUMENTS="--permission-mode acceptEdits"
 | 命令 | 在 herdr / git 里做什么 |
 | --- | --- |
 | `numbrone up [project]` | `herdr workspace create --label numbrone/<project>`，再 `herdr agent start manager-<project>` |
-| `numbrone delegate <project> <task> "<brief>"` | 写 `tasks/<task>.md`，再 `herdr agent prompt manager-<project>` |
+| `numbrone delegate <project> <task> '<brief>'` | 写 `tasks/<task>.md`，再 `herdr agent prompt manager-<project>` |
 | `numbrone spawn <task>` | `git worktree add <project>/.numbrone/worktrees/<task> -b numbrone/<task>`、`herdr tab create`、`herdr agent start worker-<task>` |
-| `numbrone report <task> <status> "<note>"` | 更新任务文件；在 `blocked`/`review`/`done` 时逐级上报（worker → manager → chief）并发 herdr 通知 |
+| `numbrone report <task> <status> '<note>'` | 更新任务文件；在 `blocked`/`review`/`done` 时逐级上报（worker → manager → chief）并发 herdr 通知 |
 | `numbrone status [task]` | 读任务文件 + 实时 agent 状态（`herdr agent get`） |
 | `numbrone close <task>` | `herdr tab close` 关 worker，`git worktree remove`（保留分支） |
 | `numbrone chief` | `herdr agent rename <this pane> chief`，让回报能找到它 |
-| `numbrone log ["<note>" \| <date>]` | 追加到当天工作日志，或打印某天日志 |
+| `numbrone log ['<note>' | <date>]` | 追加到当天工作日志，或打印某天日志 |
 
-注意表里 `numbrone delegate`、`numbrone report`、`numbrone log` 的示例含双引号占位符，照抄时替换成你的任务名、状态和备注。
+注意表里 `numbrone delegate`、`numbrone report`、`numbrone log` 的示例是占位符，照抄时替换成你的任务名、状态和备注。
 
 #### 19. 收尾
 
 review `numbrone/<task>` 分支，按你平常的方式合并（PR 或本地合并都可以），然后让 chief 关任务。`numbrone close <task>` 会关掉 worker 的 herdr tab、移除 worktree，但保留分支；任务状态也会更新。不要只手工删目录而漏掉任务文件和 herdr tab。
 
-### 做法 A 与做法 B 的关系
+### 做法 C：多 agent 团队骨架（先在一个可机器验证的小任务上试）
 
-Worktrunk 不改变 Claude Code 怎么干活，只解决同时开多个会话时工作区怎么摆、状态怎么看、怎么收尾；numbrone 则是在 herdr 之上再加一层任务分派和报告回流。两者是互补，不是替代。材料没有说明两者能否对同一批 worktree 混用，本文不假设；先用 A 管手工起的 worktree，用 B 管 numbrone 自己 spawn 的 worktree，各自收尾。
+前提：任务必须可分解、可并行、结果能被机器客观校验。原文的任务里，每个陈述是一个 Lean 定理，只有 Lean 检查器接受才算证明完成，main 分支上另有 grader 复核。没有这个「自动裁判」，下面的自组织会退化成互相吹捧。先小规模照骨架试，不要直接上关键路径。
+
+#### 20. 确认自动裁判存在
+
+前提：你能说清「什么算完成」，并且这个判断不靠 agent 自评。预期结果：有一个外部检查器或 grader 能在提交后复核结果。若没有，先不要进入做法 C。
+
+#### 21. 每个 agent 一个独立沙箱
+
+原文实测：单台共享机器在约 100 个 agent 时到极限，100-agent 的运行里超过一半因内存/磁盘/CPU 耗尽被迫停止或重启。1,000 agent 用的是 1,000 个轻量 VM，每个 agent 一个。沙箱镜像里预装好工具链，agent 不需要自己装环境。
+
+```text
+每个 agent：1 个轻量 VM
+  - 预装：语言/构建工具链、依赖库、git、psql 客户端
+  - 网络：完全无网络
+  - 唯一出口：一条 pipe 连到 gateway，由 gateway 代发 Claude API 请求、代转 Git 与 SQL 请求
+```
+
+预期结果：agent 之间的文件系统互相隔离，所有外部请求集中到 gateway。
+
+#### 22. 最小权限与内核收敛
+
+原文明确列出的加固项：
+
+```text
+- 进程以非特权用户运行，移除 sudo 等可重新提权的工具
+- 内核关闭：loadable modules、kexec、raw memory access、kernel probes
+- 内核运行在 lockdown mode
+- agent 的工具无法读取或修改运行它的 agent loop
+- agent 之间没有专用消息工具，只能通过数据库和 Git 协调
+```
+
+预期结果：单个 agent 即使被诱导，也没有直接逃逸沙箱或篡改监控的常规手段。
+
+#### 23. Git：每个 agent 只写自己的分支，合并交给独立 job
+
+```text
+- 每个 agent 一个自己的分支
+- 只能推自己的分支，只能向 main 开 merge request
+- 由独立 job 负责合并进 main；仅在冲突或故障（如 unrelated history）时拒绝
+```
+
+预期结果：并行写文件不互相踩，同时保留一条可审计的落地路径。
+
+#### 24. 共享 Postgres：一个非特权角色 + 硬性资源上限
+
+```text
+- 所有数据库调用走同一个非特权角色
+- 每条 SQL 语句 5 秒超时
+- 单次写入超过 256 MiB 直接拒绝
+```
+
+选 SQL 的理由（原文）：提供组织信息的通用原语、事务能扛住 1,000 个 agent 的并发写、Claude 本来就熟。预期结果：协调表能承受并发认领和写入，不会被单条大写入拖垮。
+
+#### 25. 提示词：给目标清单、工具清单、角色，但不给方法
+
+原文给的东西只有四类：60 条待证陈述，每条一句非正式描述（含最终定理和 59 个中间里程碑）；经典路线的一句话梗概；这些陈述用到的定义；47 条此前已证明的引理；以及可用工具列表（shell、编辑器、Lean、Git 分支与 MR、Postgres）。
+
+角色只给一层：
+
+```text
+1 个 lead，999 个 helper。
+lead 负责把问题拆成部分并分配给 helper。
+helper 预期从 lead 处领活；任务不清楚就去找 lead 确认。
+```
+
+原文强调：没有给任何关于如何证明、如何组织自己的指导。预期结果：组织结构和任务拆解由 lead 现场生成，而不是你预先写死。
+
+#### 26. 让 lead 自己建协调表
+
+lead 在头 10 分钟建了 5 张表，用途如下，可以直接照搬成 schema 设计：
+
+| 表 | 用途 |
+|---|---|
+| Announce | lead 对全队的命令（例如怎么分工） |
+| Assign | 谁做什么（例如谁拥有或代理哪条陈述） |
+| Notes | 开放留言板：认领工作块、汇报进度 |
+| Subtasks | 待办清单，任何 agent 都能加任务，第一个认领的人拥有它 |
+| Landed | 已完成工作的日志 |
+
+预期结果：分工、认领、进度、完成都有共享记录，不靠 agent 之间的私聊。
+
+#### 27. 分配与「先估难度再干活」
+
+lead 建完表做了三件事：
+
+1. 给每条陈述分配一个 16–17 人的 crew，往 assign 表写 999 行（每个 helper 一行）；
+2. 每个 crew 指定一名 captain，负责把计划贴到 Notes、把工作拆成任务放进 Subtasks；
+3. 往 Announce 发指令：每个 helper 先判断自己那条陈述的难度，把判断贴到 Notes。
+
+约 27 分钟时已有 3 条证完，lead 读完判断后，把大多数 helper 认为「预算内不可行」的 47 条搁置，几乎全部人力转到剩下的 10 条，crew 从约 17 人扩到 46–139 人。预期结果：人力先按难度判断再集中，而不是平均撒开。
+
+#### 28. helper 的工作循环
+
+原文明确说大部分来自 lead 的命令：
+
+```text
+1. 在 Notes 表里找到本陈述的计划
+2. 从 Subtasks 表认领一个任务
+3. 写 Lean 证明，用 Lean 工具构建并检查，提交到 Git main 分支
+4. 把任务标记为完成
+5. 往 Notes 表发进度更新
+```
+
+预期结果：每个 helper 有明确的下一步，不需要中央调度器逐个派活。
+
+#### 29. 动态重分配：不设静态分工，按状态反复重排
+
+可照做的几个动作：
+
+- lead 持续重写 assign 表（原文：绝大多数重分配发生在头 6 小时）；
+- 约 45 分钟、10 条里证完约 5 条时，lead 在 Notes 写下判断：「团队吞吐远高于早期『预算内不可行』的估计」；
+- 10 条全部证完后，lead 写「没有理由闲着」，把 helper 转回先前被丢弃的难题；
+- 第三小时起，lead 对空闲 helper 说 `do not wait for me`，允许它们不等分配自己找活；
+- helper 完成一个任务后会主动招揽；
+- 任务可以自下而上产生：captain 呼救后，helper 自己往 Subtasks 写任务（到第 5.6 小时，73 个 helper 写了 756 个任务，其中只有 16 个是 captain）。
+
+预期结果：任务状态和瓶颈能触发重排，而不是等周会。
+
+#### 30. 用时间提醒驱动 lead
+
+harness 在运行中给 lead 发了 19 次剩余时间自动提醒，每次都鼓励 lead 继续推进。这是很便宜的一个「主动推进」机制。预期结果：lead 在长跑中持续检查剩余时间和优先级，而不是早早收工。
+
+#### 31. 大任务树化
+
+面对远超其他陈述的难点（任务量约 9 倍、新代码 2 倍以上）时的流程：
+
+```text
+1. captain 写计划，把陈述切成 10 个领域，每块列为一个任务
+2. helper 发现某块一个人做不完 → 把它再拆，在下面挂更小的任务
+3. 树可以一直长（本次达 2,418 个任务、10 层深）
+4. 每个片段可以「假设」它下面的片段成立，于是几百个 helper 能在下层尚未证完时就并行开工
+```
+
+注意第 4 条是并行度的关键，但它依赖「假设子结果」在形式上合法（Lean 里可用参数/公理占位）。换到别的领域，要确认这种「先假设后回填」不会污染最终结果——原文用 kernel 检查兜底。
+
+#### 32. 三层安全监控
+
+实时层：一个有提示词的 LLM 分类器，在每个工具调用执行前审查 shell 命令和文件编辑。监察目标是：逃逸沙箱、试探沙箱边界、篡改监控、以及万一逃出后的有害动作。
+
+```text
+命中拦截 → 整个 agent 团队停止 → 必须人工复核后才能重启
+（设计意图：防止另一个 agent 接着把被拦的动作做掉）
+原文本次规则：只有拦到 lead 才会终止整次运行；拦到 helper 只移除该 helper
+```
+
+并行层：同时跑一个「只看动作、不看思维链」的同款监控，防止 agent 的推理把监控说服。
+
+离线层：事后按同一套威胁模型复查，且有额外能力（例如可以调取其他 agent 的动作）。
+
+原文提到，带思维链和 agent 间通信的监控在红队评估（含 decomposition attacks）中检出了全部破坏尝试；但本次这次运行只用的是 action-based 监控，CoT 监控是之后才加的。
+
+#### 33. 人类介入点与检查点
+
+原文结论明确：agent 容易在难题上放弃并误判难度——早期 helper 判定 60 条里有 47 条预算内不可行，后来大部分被证完了。所以人的作用不是指挥，而是在这种时刻给鼓励。
+
+另外，原文提到第 18 小时从上次存档重启并追加 12 小时；长跑要有检查点。材料只提到重启事实，未给实现细节。
+
+#### 34. 小范围试跑与扩量
+
+先在一个可机器验证的小任务上照 21–32 的骨架试：独立沙箱、共享表、分支+MR、前置分类器。不要直接按 1,000 agent 开跑。记录任务树规模、重分配频次、拦截次数、人工纠偏次数，再决定是否扩大。
+
+### 做法 A/B/C 的关系
+
+Worktrunk 不改变 Claude Code 怎么干活，只解决同时开多个会话时工作区怎么摆、状态怎么看、怎么收尾；numbrone 是在 herdr 之上再加一层任务分派和报告回流；做法 C 则是在更底层加沙箱、共享 SQL、MR 合并和工具调用前置监控。三者不是互相替代：A 是日常单层隔离，B 是本地多项目分派，C 是可机器校验任务上的重编排。材料没有说明 worktrunk 与 numbrone 能否对同一批 worktree 混用，也没有说明 worktrunk 能否放进 C 的沙箱镜像；本文不假设。先用 A 管手工起的 worktree，用 B 管 numbrone 自己 spawn 的 worktree，用 C 管它自己创建的分支和沙箱，各自收尾。
 
 ## 怎么判断变好了
 
-材料没有给出任何效果指标，下面是可观察的替代信号，判定标准要自己定。
+材料没有给出适用于你团队的统一定量指标，下面是可观察的替代信号，判定标准要自己定。
 
 做法 A 可观察：
 
@@ -336,12 +512,20 @@ Worktrunk 不改变 Claude Code 怎么干活，只解决同时开多个会话时
 - Watch 配好后，同一 ticket/error 是否还会被重复捡起；条目 ID 写进 brief 后重复是否减少。
 - `CLAUDE.md` 的 Learned 是否保持短小；如果越写越长、重复条目多，说明没有合并和下沉。
 
+做法 C 可观察：
+
+- 自动裁判的通过率，而不是 agent 自评；原文的正确性由 Lean kernel 检查器 + main 上的 grader 双重判定。
+- 完成时间、输出 token、证明/产物长度、任务树规模、重分配频次；原文给出 28.7 小时、输出 token 约为上次三分之一、证明长度约为七分之一、2,418 个任务/10 层，但这些只来自一次实验。
+- 安全指标：工具调用拦截次数、命中后是否全队停机待人工复核、红队评估中的检出情况。原文称超过 100 万次工具调用中本次按当时规则无一次达到拦截门槛，回放时按 CoT 监控和今天的 rubric 只有一次（检查 root 权限）接近被拦。
+- 人类纠偏次数：agent 是否过早判定「不可行」。原文早期判定 60 条里有 47 条预算内不可行，后来大部分被证完，这是需要人鼓励的典型信号。
+
 最小试用：
 
 - 做法 A：选两三个文件重叠小、可独立验证的任务，用步骤 3 并行跑一轮，按步骤 5 看状态、按步骤 6 收尾。先完整走完一轮「建—跑—看—合—清」，再决定是否扩到更多并行。
 - 做法 B：先只开一两个项目、少量任务，跑完「chief 下派 → manager 分派 → worker 在独立 worktree 干活 → 报告回流 → 你 review 分支并合并 → `numbrone close`」的完整链路。不要一上来把所有项目都接进去。
+- 做法 C：先在一个可机器验证的小任务上照骨架试跑，不直接上 1,000 agent，也不直接接管关键路径。
 
-试多久：至少覆盖一个完整任务的周期（从建 worktree 到合并/删 worktree），并记录冲突与返工。做法 B 再至少多跑几轮，观察 blocked 频率、报告回流和任务文件是否可维护。README 主张 agent 可以管理 5–10 个以上并行，但没有数据；扩之前先用自己的记录验证。
+试多久：至少覆盖一个完整任务的周期（从建 worktree 到合并/删 worktree），并记录冲突与返工。做法 B 再至少多跑几轮，观察 blocked 频率、报告回流和任务文件是否可维护。做法 C 至少覆盖一个可校验任务的完整周期，记录通过率、重分配、拦截和人工纠偏。README 主张 agent 可以管理 5–10 个以上并行，但没有数据；扩之前先用自己的记录验证。
 
 ## 常见坑
 
@@ -361,17 +545,27 @@ Worktrunk 不改变 Claude Code 怎么干活，只解决同时开多个会话时
 - Learned 只加不清理：会越写越长、重复失效；要合并重复、替换失效、把项目细节下沉到 `context.md`。
 - 用 `numbrone close` 以外的方式收尾：只删 worktree 会漏掉 herdr tab 和任务文件状态；`numbrone close` 会关 tab、移除 worktree、保留分支。
 - 把 A 和 B 混着管同一批 worktree：材料没有说明两者如何交互；手工起的 worktree 用 A 收尾，numbrone spawn 的 worktree 用 B 收尾，不要交叉。
+- 把做法 C 当成日常默认：它来自一次玩具实验，依赖自动裁判、沙箱、共享 SQL 和前置监控；没有这些条件不要套。
+- 没有自动裁判就上 C：agent 的自组织会退化成互相吹捧，完成与否无法客观判断。
+- 单台共享机器硬扛上百 agent：原文实测约 100 个 agent 时到极限，超过一半运行因资源耗尽被停或重启；上千要一 agent 一轻量 VM。
+- 共享数据库没有硬上限：所有调用走同一非特权角色，但每条 SQL 要 5 秒超时、单次写入超过 256 MiB 直接拒绝，否则并发写会拖垮协调层。
+- MR 合并没有独立 job：每个 agent 只能推自己的分支、只能向 main 开 MR，合并要由独立 job 做，不然并行写会互相踩。
+- 只做 action-based 监控就以为覆盖了 CoT 风险：原文本次运行只用 action-based 监控，带思维链和 agent 间通信的监控是之后才加的。
+- 把 agent 的「不可行」判断当真：早期 60 条里 47 条被判定预算内不可行，后来大部分被证完；人类介入点之一是防止它太早放弃。
+- 长跑没有检查点：原文第 18 小时从上次存档重启并追加 12 小时；材料未给实现细节，但至少要自己留存档。
 
 ## 证据与来源
 
-- 做法 A 的命令与行为依据 max-sixty/worktrunk 的 README：六条安装路径（brew / cargo / winget / pacman / conda / pixi）、`wt switch` / `wt list` / `wt merge` / `wt remove` 四条核心命令、`wt switch`/`wt list`/`wt merge` 的真实终端输出样例、并行三 agent 的完整命令行、`-x` 与 `--` 的语义、`copy-ignored` 支持的文件系统（APFS/btrfs/XFS）、Windows 上 `wt` 与 Terminal 别名冲突及解法。仓库指标：10134 stars，当日 +77。
-- README 自带的与原生 git 对照：`wt switch feat` ↔ `cd ../repo.feat`；`wt switch -c -x claude feat` ↔ `git worktree add -b feat ../repo.feat && cd ../repo.feat && claude`；`wt remove` ↔ `cd ../repo && git worktree remove ../repo.feat && git branch -d feat`；`wt list` ↔ `git worktree list`（只有路径）。据此，这套做法的增益主要是操作成本和状态可见性，不是新能力。
-- 做法 B 的角色、命令、状态目录与配置依据 stevenmichaelthomas/numbrone 的 README 与本次调研报告：chief 路由、manager 分项目、worker 单任务单 worktree（分支 `numbrone/<task>`）、一个 skill / 一个 bash 脚本 / 三个 Markdown 角色文件、`~/.numbrone/` 纯文本状态、`/numbrone` 的 8 项引导、`settings.sh` 的四个变量、Watch 写法与 `/loop`、knowledge / context.md / Learned 的分流、日常操作对照表与命令语义表。调研结论是：可以在一两个项目上小范围试跑，优先借用它的纯文本任务文件、追加式日志和 Watch 循环结构；安装和命令可以照抄，但 herdr 本身还在试用期，且原文没有任何效果数据。
-- 只是作者主张、没有证据：worktrunk README 的「已成为最流行的 git worktree 管理器」「built with love (there's no slop)」「agent 可管理 5–10+ 并行」；numbrone 原文也没有给出性能、冲突率、返工率、耗时方面的度量。
-- 材料未覆盖：worktrunk 的 hooks、LLM commit、缓存共享的具体配置细节在 worktrunk.dev 外部文档，本条材料没有原文；numbrone 与 worktrunk 能否对同一批 worktree 混用，材料没有说明，本文不假设。
-- 与已有做法的关系：Worktrunk 不改变 Claude Code 怎么干活，只解决同时开多个会话时工作区怎么摆、状态怎么看、怎么收尾；numbrone 是 herdr 之上的编排层，负责分派和报告回流。两者都是互补，不是替代。
+做法 A 的命令与行为依据 max-sixty/worktrunk 的 README：六条安装路径（brew / cargo / winget / pacman / conda / pixi）、`wt switch` / `wt list` / `wt merge` / `wt remove` 四条核心命令、`wt switch`/`wt list`/`wt merge` 的真实终端输出样例、并行三 agent 的完整命令行、`-x` 与 `--` 的语义、`copy-ignored` 支持的文件系统（APFS/btrfs/XFS）、Windows 上 `wt` 与 Terminal 别名冲突及解法。仓库指标：10134 stars，当日 +77。README 自带的与原生 git 对照显示，这套做法的增益主要是操作成本和状态可见性，不是新能力。README 的「已成为最流行的 git worktree 管理器」「agent 可管理 5–10+ 并行」只是作者主张，没有对照和失败案例。
+
+做法 B 的角色、命令、状态目录与配置依据 stevenmichaelthomas/numbrone 的 README 与本次调研报告：chief 路由、manager 分项目、worker 单任务单 worktree（分支 `numbrone/<task>`）、一个 skill / 一个 bash 脚本 / 三个 Markdown 角色文件、`~/.numbrone/` 纯文本状态、`/numbrone` 的 8 项引导、`settings.sh` 的四个变量、Watch 写法与 `/loop`、knowledge / context.md / Learned 的分流、日常操作对照表与命令语义表。调研结论是：可以在一两个项目上小范围试跑，优先借用它的纯文本任务文件、追加式日志和 Watch 循环结构；安装和命令可以照抄，但 herdr 本身还在试用期，且原文没有任何效果数据。
+
+做法 C 的依据是 Anthropic（claude.dev）的《Safely scaling multi-agent teams with Claude Fable 5.2》调研报告：1,000 个 agent、通用工具（shell + 文件编辑器 + Git + 共享 Postgres）复现费马大定理形式化证明，28.7 小时完成，输出 token 约为 9 月那次的三分之一，证明长度约为七分之一；只给 1 个 lead + 999 个 helper 的层级，lead 在开头 10 分钟自建 5 张数据库表，后期把 Langlands–Tunnell 拆成 2,418 个任务、最多 10 层；单台共享机器约 100 个 agent 到极限，100-agent 运行里超过一半因资源耗尽被迫停止或重启；SQL 每条 5 秒超时、单次写入超过 256 MiB 拒绝；19 次剩余时间自动提醒；超过 100 万次工具调用中本次按当时规则无一次达到拦截门槛。调研结论明确：这只是内部模型的一次玩具实验，需自行验证后再放大；建议按「每 agent 独立沙箱、共享 SQL 表协调、每 agent 一个 Git 分支并提 MR、工具调用前置分类器」的骨架，在一个可机器验证的小任务上照做试跑。
+
+材料未覆盖：worktrunk 的 hooks、LLM commit、缓存共享的具体配置细节在 worktrunk.dev 外部文档，本条材料没有原文；numbrone 与 worktrunk 能否对同一批 worktree 混用，材料没有说明；worktrunk 能否放进做法 C 的沙箱镜像，材料也没有说明。本文不假设这些组合可直接套用。
 
 ## 依据的调研
 
 - [max-sixty/worktrunk](../research/radar/2026-11-03/9845-max-sixty-worktrunk.md)：值得一试，建议在一个真实 git 仓库上小范围试用：安装 worktrunk 并执行 `wt config shell install`，用 `wt switch -c -x claude <分支> -- '<任务>'` 给每个并行 agent 开独立 worktree，再用 `wt list` 汇总状态、`wt merge`/`wt remove` 收尾。README 给出了可直接照做的命令与并行 agent 工作流，但证据仅为作者主张和 star 数，没有效果数据，因此先小范围验证冲突与返工是否真的下降。
 - [stevenmichaelthomas/numbrone](../research/radar/2026-11-09/11813-stevenmichaelthomas-numbrone.md)：值得一试，在一两个项目上小范围试跑 numbrone 的“chief 路由—manager 分项目—worker 单任务单 worktree”三层编排，并优先借用它的纯文本任务文件、追加式日志和 Watch 循环结构；它的安装和命令都可以照抄，但底层依赖的 herdr 本身还在试用期，且原文没有任何效果数据，所以不适合直接写进手册当成定论。
+- [Safely scaling multi-agent teams with Claude Fable 5.2](../research/radar/2026-11-10/12031-safely-scaling-multi-agent-teams-with-claude-fable.md)：值得一试，建议按“每 agent 独立沙箱、用共享 SQL 表协调、每个 agent 一个 Git 分支并提 MR、工具调用前置分类器拦截”这套骨架，在一个可机器验证的小任务上照做试跑；原文给出了可复制的表结构用途、helper 循环流程与具体安全配置，但结论只来自一次内部模型的玩具实验，需自行验证后再放大。
