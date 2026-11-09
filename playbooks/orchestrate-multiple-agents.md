@@ -1,15 +1,16 @@
-# 让多代理编码在隔离、审批和独立验证后才算完成
+# 把散在多台机器上的编码 agent 接进可派活的收件箱
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：这篇手册解决多代理/多 CLI 协作时“跑通就算完成”的问题：用任务规格、隔离执行、独立审查、审批签名和账本核销，把接受与否交给可复核的证据。
-> 先试这一步：如果你在 Windows 上已有至少两个已登录订阅 CLI，先在一个小仓库把构建/测试命令写进 config.yaml，跑一次 python director.py run -p <repo> -g "<一个明确的小改动>"，检查 ORDER 的允许路径、文件数、diff 上限、REVIEWER 是否独立，以及原仓库是否干净；不要先跑 mission。
+> 解决的问题：多个 AI 会话之间仍靠人复制粘贴当消息总线，且单个回答没人验证；本手册给出跨机器派活、独立验证与合入门禁的可执行流程。
+> 先试这一步：先在一台机器上起 myco hub，只接入 2–3 个已登录的 Claude Code/Codex 会话，用 `myco message send --wait` 替代手工复制 prompt，跑一两周再决定是否扩到多机。
 > 最近修订：2026-11-09
 
 ## 解决什么问题
-单个 AI 回答或单条串行 agent 会话，交付的往往是你没有验证过的结果。手册把“不满意就重问一次”升级成一套可执行流程：任务写清、并行分工、独立验证、合入门禁、成本检查、注意力路由、共享账本核销、叫停与围栏，以及用角色化 fleet 把 spec、实现、独立 QA 分开。做法 A–AL 覆盖从单次答案竞赛到多项目控制台、文件状态+心跳编排、多 agent 共享账本、长时运行骨架、跨会话/跨人的消息交接、把多个编码 agent 编成有频道、有审批闸门的团队、用显式任务图 + epoch 围栏做本地执行控制面、用 coordinator + coder + qa 三角色起步的角色化交付，以及两层治理：AI 用 CTO/PM/工程师三层把任务单和验收证据固化成交接契约；AJ 用 G0–G7 状态机 + 零依赖 CLI 把基线冻结、审批签名、黑盒 QA 和 fail-closed 校验做成可执行的门。已纳入做法 AK：它不替换 Claude Code、Codex、Cursor 等 agent，而是在它们之上补一层“桌子”协议——bot 提议，受影响的 owner 批准，该 owner 自己的 bot 执行，另一个席位验证；账本状态到 verified 才算完成，bot 自己说 done 只是发言。本次新增做法 AL：用 ai-dev-director 把 HEAD（出 ORDER）、BUILDER（整文件 JSON 提案）、REVIEWER（独立审查）三个订阅 CLI 角色串成一条本地流水线，所有构建只发生在隔离 git worktree，Scope Guard 检查允许路径/保护路径/文件数/diff 上限，REVIEWER fail-closed，验证命令外置在 config.yaml。共同底线不变：并行只负责产出，接受与否必须由测试、独立 verifier、校验器、接收人本人确认或人工复核决定；消息层和编排层只负责把问题送到、把人叫来，不负责证明结果正确。
 
-做法 A–AL 概览：
+单个 AI 回答或单条串行 agent 会话，交付的往往是你没有验证过的结果；多个 agent 之间又常常靠人当消息总线——复制 prompt、等待、粘贴结果。手册把“不满意就重问一次”升级成一套可执行流程：任务写清、并行分工、独立验证、合入门禁、成本检查、注意力路由、共享账本核销、叫停与围栏，以及用角色化 fleet 把 spec、实现、独立 QA 分开；跨机器时再用 hub + runner 把会话接成收件箱，让派活、排队、重投和回执有明确语义。做法 A–AM 覆盖从单次答案竞赛到多项目控制台、文件状态+心跳编排、多 agent 共享账本、长时运行骨架、跨会话/跨人的消息交接、把多个编码 agent 编成有频道、有审批闸门的团队、用显式任务图 + epoch 围栏做本地执行控制面、用 coordinator + coder + qa 三角色起步的角色化交付，以及两层治理：AI 用 CTO/PM/工程师三层把任务单和验收证据固化成交接契约；AJ 用 G0–G7 状态机 + 零依赖 CLI 把基线冻结、审批签名、黑盒 QA 和 fail-closed 校验做成可执行的门。已纳入做法 AK：它不替换 Claude Code、Codex、Cursor 等 agent，而是在它们之上补一层“桌子”协议——bot 提议，受影响的 owner 批准，该 owner 自己的 bot 执行，另一个席位验证；账本状态到 verified 才算完成，bot 自己说 done 只是发言。本次新增做法 AL：用 ai-dev-director 把 HEAD（出 ORDER）、BUILDER（整文件 JSON 提案）、REVIEWER（独立审查）三个订阅 CLI 角色串成一条本地流水线，所有构建只发生在隔离 git worktree，Scope Guard 检查允许路径/保护路径/文件数/diff 上限，REVIEWER fail-closed，验证命令外置在 config.yaml。本次再新增做法 AM：用 myco 的单 Go 二进制 hub + 每台机器一个 runner，把散在多台机器上的 Claude Code、Codex 等 CLI 会话当成网络节点，消息进入目标 agent 收件箱，runner 长轮询取走、用该消息 resume agent 自己的会话，再把最终输出作为回复投回；消息有租约、未确认会过期重投、5 次失败标记失败。myco 不是 agent，不替任何人思考，只负责连接和投递。共同底线不变：并行只负责产出，接受与否必须由测试、独立 verifier、校验器、接收人本人确认或人工复核决定；消息层和编排层只负责把问题送到、把人叫来，不负责证明结果正确。
+
+做法 A–AM 概览：
 - A：把不满意的回答送进锦标赛（arena-skill）。
 - B：并行子代理+测试合入闸门（clodfarm）。
 - C：多 harness、多座位的统一编排与恢复（openrig）。
@@ -48,8 +49,10 @@
 - AJ：用 G0–G7 状态机 + gate_runner.py 做基线冻结、审批签名、黑盒 QA 与 fail-closed 校验（先复制规则文件，再跑 init/freeze）。
 - AK：用 mcode-agent-table 的共享账本、owner 签名席位和提交网关，把跨 owner 的 propose→approve→execute→verify 做成可 replay 的协议（先离线 demo 和 npm test，再一桌两 owner 小任务）。
 - AL：用 ai-dev-director 把 HEAD 出 ORDER、BUILDER 整文件 JSON 提案、REVIEWER 独立审查串成一条本地流水线，构建只发生在隔离 git worktree，Scope Guard 检查路径/文件数/diff 上限，REVIEWER fail-closed（Windows 优先，先 run 再 mission）。
+- AM：用 myco 的 hub + 每台机器一个 runner，把跨机器/跨会话的 Claude Code、Codex 等 CLI 接成收件箱；`myco message send --wait` 一对一派活，`myco broadcast send --selector` 按标签广播，消息有租约、过期重投、5 次失败上限，附件 SHA-256，权限走 per-agent allow-list 与 runner.access（先单机 2–3 个会话跑一两周）。
 
 ## 适用与不适用
+
 **适用**
 - 你有多个 agent，且这些 agent 属于不同 owner，或至少有“提案方”和“受影响方”的区别，需要写清谁批准、谁执行、谁验证。
 - 你已经用 Claude Code、Codex、Cursor 等 MCP agent 干活，只想在它们之上补协作层与审批层，不想换掉执行工具。
@@ -58,6 +61,9 @@
 - 你已有 A–AJ 中某条路径的验证门禁，AK 可作为“跨 owner 动作”的补充协议，不替代测试、独立 verifier 或合入门禁。
 - AL 适用于 Windows 10/11、Python 3.9+、Git，以及至少两个已用订阅账号登录的 CLI（claude、codex、agy）；你想把“规划、实现、审查”分给不同角色，并让构建只发生在隔离 worktree。
 - AL 适用于一个小仓库或一个明确的小改动：你能把项目级构建/测试命令写进 config.yaml，并接受订阅配额限制。
+- AM 适用于你同时使用至少 2 个 agent CLI（且至少一个是 Claude Code 或 Codex），并且存在跨机器或跨会话的派活需求：你受够了人肉复制 prompt、等待、粘贴结果，想把消息送进目标会话并拿回回复。
+- AM 适用于你能让 hub 常驻（VPS，或本机 + Cloudflare Tunnel / Tailscale Funnel），机器只出站 HTTPS、不需要公网 IP 和开放端口；你愿意先在一台机器上接 2–3 个已登录会话做最小试用。
+- AM 适用于你接受“定时触发要靠外部 cron / GitHub Actions 自己接”，因为编排模板与调度策略在 roadmap 里仍未完成。
 
 **不适用**
 - 你只需要单 agent 串行问答，或任务没有跨 owner 的批准/执行/验证分离，AK 的席位和审批会变成额外开销。
@@ -71,10 +77,18 @@
 - AL 需要已登录订阅 CLI，不需要也不要使用按量付费 API；只有 1 个 CLI 或没有订阅登录时不要硬套。
 - AL 的 BUILDER 用整文件 JSON 提案，大型改动会撞 CLI 输出上限；大改先拆小，或压缩重试、换供应商。
 - 你需要跨 owner 审批时仍走 AK；需要 G0–G7 审批/冻结状态机时仍走 AJ；需要 coordinator + coder + qa 三角色 fleet 时仍走 AH。AL 是单机三角色流水线，不替代这些治理层。
+- 你的场景只是单机单 agent；AM 的收益接近于零，直接用 Claude Code 或 Codex 即可。
+- 你需要内置的编排模板、调度策略、团队/角色、会话 fork 或 MCP endpoint；这些在 myco 的 roadmap 里仍是未完成项，不要当成已有能力。
+- 你需要 hub 的高可用、备份、SQLite 规模上限或并发上限数据；README 没有给出，hub 目前是单点。
+- 你要在 Windows 上直接上生产：myco 的 Windows 客户端标注 preview 且未代码签名，首次运行需“More info → Run anyway”；不适合作为首个试点。
+- 你准备把 Cursor、Gemini、OpenCode 作为首个试点：它们在 myco 里是 preset experimental，属于“两个未成熟叠在一起”，不宜先用。
+- 你无法管理 join link 和 per-agent allow-list；这套东西的权限边界靠这两样，不能默认“接进来就安全”。
+- 你需要现成的效果 benchmark；myco 的 README 没有任务成功率、延迟或对比实验，必须自建指标。
 
-**A–AL 的适用路径选择**：仍按原路径表按处境选：单回答竞赛用 A；可拆分有测试的编码任务用 B；多 harness 用 C；同会话升档用 D；长时程底座用 E；固定多步流水线用 F；GitHub 小仓库自动链路用 G；轻量 worktree 隔离用 H；macOS 通知用 I；同 commit 独立验证用 J；多项目控制台用 K；daemon+dashboard 用 L；主 Agent 集中验证用 M；商业决策委员会用 N；菜单栏审批用 O；tmux 会话团队用 P；阶段成本检查用 Q；持续 issue/PR 值守用 R；实验性 agent teams 用 S；服务端并发落库用 T；worktree 副本用 U；后台子代理调度用 V；Bot 编排层用 W；本地控制台与危机室用 X；按类别并行代码审查用 Y；文件状态+heartbeat 编排用 Z；止损预算用 AA；共享账本核销用 AB；长时运行骨架用 AC；跨会话消息交接用 AD；频道化代理团队用 AE；project+to-dos+自动化用 AF；任务图+epoch 围栏用 AG；三角色 fleet 用 AH；CTO/PM/工程师交接契约用 AI；G0–G7 治理门用 AJ；跨 owner 的 propose→approve→execute→verify 用 AK；Windows 上 HEAD/BUILDER/REVIEWER 三角色 + 隔离 worktree + Scope Guard 用 AL。
+**A–AM 的适用路径选择**：仍按原路径表按处境选：单回答竞赛用 A；可拆分有测试的编码任务用 B；多 harness 用 C；同会话升档用 D；长时程底座用 E；固定多步流水线用 F；GitHub 小仓库自动链路用 G；轻量 worktree 隔离用 H；macOS 通知用 I；同 commit 独立验证用 J；多项目控制台用 K；daemon+dashboard 用 L；主 Agent 集中验证用 M；商业决策委员会用 N；菜单栏审批用 O；tmux 会话团队用 P；阶段成本检查用 Q；持续 issue/PR 值守用 R；实验性 agent teams 用 S；服务端并发落库用 T；worktree 副本用 U；后台子代理调度用 V；Bot 编排层用 W；本地控制台与危机室用 X；按类别并行代码审查用 Y；文件状态+heartbeat 编排用 Z；止损预算用 AA；共享账本核销用 AB；长时运行骨架用 AC；跨会话消息交接用 AD；频道化代理团队用 AE；project+to-dos+自动化用 AF；任务图+epoch 围栏用 AG；三角色 fleet 用 AH；CTO/PM/工程师交接契约用 AI；G0–G7 治理门用 AJ；跨 owner 的 propose→approve→execute→verify 用 AK；Windows 上 HEAD/BUILDER/REVIEWER 三角色 + 隔离 worktree + Scope Guard 用 AL；跨机器/跨会话派活、需要离线排队和重投语义用 AM。若只是同机跨会话交接，先用 AD 更轻；若需要把别的机器上的会话也接进来、消息要能排队并在机器宕机后重投，用 AM。两者都是消息层，都不证明结果正确。
 
 ## 前置条件
+
 - 共同前提：把任务写成独立、自包含的文件；子代理看不到你的聊天记录，任务文件是它唯一的信息源。每条路径先做最小试用，不先上全量。
 - AK 前置：Node ≥ 22.19；git；npm；一台单机跑 table host；owner 私钥文件必须私有保管；表配置必须包含 termination；MCP agent 跑在 owner 自己的机器上；能力卡来自 owner 侧文件，不来自 agent 自己。
 - AK 安装与自检：
@@ -93,10 +107,13 @@ pip install -r requirements.txt
 python -m pytest -q
 ```
 作者称测试套件用桩 CLI 运行、不需要真实 CLI；测试数量在文中出现“604 个测试，约 25 分钟”和“593/596”两种说法，数字有出入，以实际运行为准。
+- AM 前置：hub 可达——在自己的 VPS 上用 sslip.io 自动拿真 HTTPS（`install-hub.sh --domain auto`），或在本机走 Cloudflare Tunnel（`myco hub up --tunnel cloudflare --hostname hub.example.com`），或走 Tailscale Funnel（`myco hub up --tunnel tailscale`），也可以用 App 选 **Start on this computer** / **Connect an existing Hub**。每台机器能出站访问 HTTPS；runner 和 session 只开 outbound，不需要公网 IP 和开放端口。目标机器上已安装并登录至少一个受支持的 CLI：Claude Code / Codex 为 native stable；Cursor / Gemini / OpenCode 为 preset experimental；Kiro 还需 `uv tool install kiro-acp-gateway` 且 `kiro-cli` 已登录。每个 agent 配一份“谁可以给它派活”的 allow-list，`runner.access` 取 `readonly` / `workspace` / `full`，native harness 会把它映射到该 CLI 自己的权限 flag 上。云端会话不能被 runner spawn，只能用 `myco inbox wait` 或 waker（webhook / claude_routine / github_dispatch / github_issue）兜底。
+- AM 安装与自检：装客户端一行 curl 完成；加机器用 hub 给出的 join link；`myco agent list --online` 应能看到在线 agent。先只用一台机器、2–3 个已登录会话，不先接生产凭据。
 - A–AK 前置：按所选路径检查版本、平台、登录和仓库条件；例如 A 需 Claude Code 可 spawn 子 agent，B 需 Docker 和一条验证命令，J 需 git 与 Node 22.13+，AH 需 Hermes Agent，AJ 需 Python 3 和至少 16 字符签名密钥。没有对应前置就不要硬套。
 
 ## 操作步骤
-先按处境选路径。A–AJ 的详细命令保留在原做法中；AK 和 AL 的完整最小路径如下。
+
+先按处境选路径。A–AJ 的详细命令保留在原做法中；AK、AL、AM 的完整最小路径如下。
 
 ### 做法 AK：用共享账本+owner 签名席位做跨 owner 的 propose→approve→execute→verify
 1. 环境准备。前提：Node ≥ 22.19，能联网拉依赖。执行上面的 clone、npm install、npm test、npm run demo:scripted。预期：测试通过，离线 demo 能跑完 debate → decision → owner approval → execute → verify。若 demo 不通过，先不要接真实任务。
@@ -173,7 +190,63 @@ python director.py clean-worktrees -p D:/work/my_project --dry-run
 10. 安全边界。前提：控制台只在本机使用。预期：控制台只绑定 127.0.0.1；改变状态的请求要本地来源校验 + 桥接 token（data/solomon-bridge.token，首次运行生成）；companion.json 里放端口和可选允许项目列表。不要把端口暴露到局域网。
 11. 最小试用与对照。前提：一台 Windows 机器、两个已登录订阅 CLI、一个小仓库，把它的构建/测试命令写进 config.yaml 的 projects 段。先跑 run，观察 ORDER 的路径/文件数/diff 上限是否合理、Scope Guard 是否拦住越界、REVIEWER 是否真的独立于 BUILDER、原项目目录是否未被改动、stop 是否能立刻终止进程树。再对一个中等目标跑 mission。对照设计：选 3–5 个规模相近的任务，一半用 Director 流水线、一半直接单用 Claude Code（或 Codex）完成，任务与验收标准事先固定。预期：若指标没有明显改善，或隔离/评审机制被绕过，降级为 study，只借鉴流程思路，不继续使用该工具本身。
 
-### 做法 A–AJ 的保留路径索引（AK、AL 见上）
+### 做法 AM：用 hub + runner 把跨机器/跨会话的编码 agent 接成收件箱
+1. 起 hub。前提：你有一台能常驻的机器（VPS 或本机），能出站 HTTPS。三种方式任选其一：
+```bash
+curl -fsSLO https://raw.githubusercontent.com/chenhg5/myco/main/deploy/install-hub.sh && sudo bash install-hub.sh --domain auto
+```
+或本机走 Cloudflare Tunnel：
+```bash
+myco hub up --tunnel cloudflare --hostname hub.example.com
+```
+或走 Tailscale Funnel：
+```bash
+myco hub up --tunnel tailscale
+```
+也可以直接用图形界面：打开 App 选 **Start on this computer**，或 **Connect an existing Hub** 粘贴 app link。预期：hub 给出可用的 app link / join link；hub 是单点，先接受这一点再往下走。
+2. 装客户端并把机器加入网络。前提：目标机器能访问 hub。装 CLI：
+```bash
+curl -fsSL https://raw.githubusercontent.com/chenhg5/myco/main/deploy/install-client.sh | bash
+```
+加一台机器（`<link>` 由 hub 给出）：
+```bash
+curl -fsSL https://<your-hub>/j/<link> | bash
+```
+也可以让 agent 自己装——把下面这段原样粘进 Claude Code 或 Codex：
+```text
+Read https://github.com/chenhg5/myco/blob/main/INSTALL.md
+Set up a myco hub for me and connect this session to it.
+```
+预期：runner 作为后台服务起来，机器完成注册，不需要手工复制 token。
+3. 把会话挂上网络。对另一台机器上的会话说一句 `join myco: https://<your-hub>/j/<link>`；本机会话可在 App 里点 **Add node → On this computer**，App 会列出最近的 Claude Code / Codex 会话，点一下即加入。需要在已连机器上新开会话时，用 App 选机器和文件夹启动。预期：会话出现在 agent 列表中，后续消息会 resume 这个会话而不是新开一个上下文。
+4. 确认在线状态：
+```bash
+myco agent list --online
+```
+预期：只看到你刚接入的 2–3 个会话；先不要把所有机器都加进来。
+5. 一对一派活并等结果。前提：目标 agent 在线，且你的身份在它的 allow-list 里。
+```bash
+myco message send --to build-backend --body "Fix the failing tests in ./pkg/api" --wait 15m
+```
+预期：`--wait` 到期返回回复；若 agent 离线，任务排队等它回来；消息有租约，取走未确认（比如机器宕机）会过期重投；5 次后标记失败；CLI 异常退出则任务失败并通知发送方。`--wait` 超时不一定等于任务失败，先区分“还在排队/运行”和“已失败”。
+6. 按标签广播派活。前提：你已给 agent 打过 group / machine 标签。
+```bash
+myco broadcast send --selector "group=review" --body "Review PR #42" --wait 30m
+```
+selector 支持 `group=`、`machine=` 等，如 `group=review,machine=vps`。预期：一对多发出，回复可逐个追踪；不要让广播变成“谁抢到谁做”的无主任务，回复仍要回到具体派活人。
+7. 需要远程执行 shell 而不是让 agent 干活时，用 exec 节点。前提：发件人在 allow-list，命令有审计。
+```bash
+myco exec --to build-shell --cmd "df -h"
+```
+预期：拿到远程命令输出；不要把 exec 当成绕过 agent 权限的通道，它类似 ssh，权限和审计要单独管。
+8. 配置权限与信任边界。每个 agent 有一份“谁可以给它派活”的 allow-list；`runner.access` 取 `readonly` / `workspace` / `full`，native harness 会把它映射到该 CLI 自己的权限 flag 上。加机器时的加入规则由那台机器自己的配置决定（谁能派、在哪个目录、什么权限）。预期：默认给 `readonly` 或 `workspace`，不要一上来给 `full`；join link 当凭据保管，不要发到公共频道。
+9. 需要带文件时用 `--attach`。预期：只有收件方能下载，且逐个做 SHA-256 校验；SHA-256 只证明文件完整，不证明文件安全，附件仍要人看来源。
+10. 让云端/外部 agent 也能被叫醒。前提：它们不能被 runner spawn。claude.ai 云会话用 `myco inbox wait` 等待任务；其余用 waker：`webhook`、`claude_routine`、`github_dispatch`、`github_issue`（细节在 docs/delivery.md）。预期：外部事件能把任务送进来，但“定时调度”仍要外部 cron / GitHub Actions 自己接，roadmap 里的 Orchestrator templates and scheduling policies 仍未勾选。
+11. 接入不在预设里的 CLI。用 `--harness template` 声明命令行和输出格式；纯脚本用 `--harness shell`（prompt 走 stdin，stdout 作为回复）；`myco harness list` 可看某台机器上装了哪些。预期：template / shell 是你自己声明的契约，输出格式错了就是错了，不要指望 myco 替你解析。
+12. 让 agent 自己调 myco。前提：你要把 CLI 当接口用。依赖 JSON 输出、带 `suggestion` 字段的结构化错误、区分退出码、`--dry-run`、`myco schema` 自省。预期：agent 能先 dry-run 再发，失败时能读到可执行的建议，而不是只看到一段自然语言报错。
+13. 最小试用。在一台开发机上用 `myco hub up --tunnel tailscale`（或 App 的 Start on this computer）起 hub，不引入 VPS；只接入 2–3 个已登录的 Claude Code/Codex 会话；用 `myco message send --wait` 和 `broadcast send --selector` 替代手工复制 prompt。先跑 1–2 周，观察重投、超时、上下文保持情况，再决定是否扩到多机。不要一上来接生产凭据，也不要把 Windows preview 客户端当第一站。
+
+### 做法 A–AJ 的保留路径索引（AK、AL、AM 见上）
 - A：装 arena-skill，跑 `/arena --quick --seed 7`，用 baseline 传入旧答案；看盲评比分和攻击命中。
 - B：装 clodfarm，设 FARM_VERIFY_CMD，spawn 子代理；只有验证命令通过才合入。
 - C：装 openrig，选 starter 起两座位，用 rig ps 检查就绪；多 harness 可见可恢复。
@@ -212,6 +285,16 @@ python director.py clean-worktrees -p D:/work/my_project --dry-run
 - AJ：先复制 .cursorrules 或 CLAUDE.md，再跑 gate_runner.py init、freeze、approve，让一个编码代理走 approve→编码→check --gate=G5。
 
 ## 怎么判断变好了
+
+**AM 的可观察指标**
+- 手工复制 prompt 的次数是否下降：试用前记录一天里你为转达任务复制/粘贴了几次，试用后用 `myco message send --wait` / `broadcast send --selector` 替代，比较同一类任务的转达次数。
+- 消息投递语义是否按设计工作：离线 agent 的任务是否排队；取走未确认是否过期重投；重投次数是否到 5 次后标记失败；CLI 异常退出是否通知发送方；`--wait` 超时与任务失败是否能区分。
+- 上下文是否保持：native stable 的 Claude Code/Codex 是否被 resume 到同一个会话，而不是每条消息新开上下文；如果每次都在重置，先查 adapter 和 `runner.access` 映射。
+- 权限是否真的收住：per-agent allow-list 是否只放该放的人；`runner.access` 是否默认 `readonly` / `workspace` 而不是 `full`；exec 命令是否有审计记录；join link 是否只在私域流转。
+- 附件是否可核验：收件方是否逐个拿到 SHA-256，且只有收件方能下载；SHA-256 不通过时是否拒绝使用。
+- 成熟度风险是否可控：Windows 客户端是否只是 preview 未签名；Cursor/Gemini/OpenCode 是否仍是 experimental；hub 是否仍是单点；这些问题是否被你写进试用边界，而不是假装不存在。
+- 最小试用：一台机器、2–3 个已登录的 Claude Code/Codex 会话、1–2 周；先看转达次数、重投、超时和上下文保持，再决定是否加第二台机器。README 没有任务成功率、延迟或对比实验，以上指标要你自己记录，不能引用作者主张当结论。
+
 **AK 的可观察指标**
 - npm test 是否通过；demo:scripted 是否完整跑通 debate → decision → owner approval → execute → verify。
 - 一桌两 owner 小任务中，账本是否出现完整链路：propose、owner 签名 approve、该 owner 的 bot 执行回执、另一席位 verify。
@@ -234,12 +317,25 @@ python director.py clean-worktrees -p D:/work/my_project --dry-run
 **A–AK 的指标**：沿用各路径原有指标，例如 B 看合入前测试通过率，J 看 gate 绿+verifier receipt，AH 看人工介入是否集中在审批门与发布/凭据，AJ 看 freeze 是否拦住空规格和冻结后改契约是否熔断。共同判断是：人工介入是否集中在授权、验收和发布；返工是否下降；验证是否由独立方完成；没有验证证据的“完成”是否被拒绝。
 
 **试多久、什么时候升级**
+- AM 先试 1–2 周、一台机器、2–3 个会话。只有转达次数下降、重投与超时语义符合预期、上下文保持、权限边界清楚，才考虑加第二台机器或接更多 CLI。
 - AK 先试 1–2 天、1–2 个小任务。只有协议闭环稳定、未批准动作为 0、账本可 replay、验证席位独立，才考虑加第三个 owner 或接更多 MCP agent。
 - AL 先跑 3–5 个对照任务，不先跑全量 Mission。只有第一轮 PASS 率、人工介入原因、独立缺陷发现、原仓库干净度和失败恢复都相对单代理对照有改善，才考虑扩大任务范围或接更多仓库。
 - 如果多 agent 只是热闹、审批变成无脑点允许、或账本 verified 没有独立验证，退回单 agent + 明确测试/评审门禁，只保留“谁批准、谁执行、谁验证”的协议思路。
-- AK 从单机扩到多机前，先确认联邦仍在 roadmap，不要假设已经支持。
+- AK 从单机扩到多机前，先确认联邦仍在 roadmap，不要假设已经支持。AM 从单机扩到多机前，先确认 hub 单点、备份和 SQLite 规模上限没有现成答案，自己补运维方案。
 
 ## 常见坑
+
+- AM 的项目成熟度很低：32 stars、单作者、部分 harness 标注 experimental、Windows 客户端 preview 且未签名；不要因为“命令能跑”就把它写进生产规范。
+- AM 的 Windows 客户端首次运行需“More info → Run anyway”；这不是安全证明，只是未签名提示。不要把 Windows 当第一个试点。
+- AM 的 Cursor / Gemini / OpenCode 是 preset experimental，README 自认“hasn't had long real-world use yet”；清单里处于 watch 的工具在 myco 里也仍是 experimental，属于“两个未成熟叠在一起”。首个试点用 Claude Code / Codex 的 native stable。
+- AM 的 hub 是单点；README 未提及高可用、备份、SQLite 规模上限、并发上限。不要假设它天生能扛团队级负载。
+- AM 的编排模板与调度策略、MCP endpoint、团队/角色、会话 fork 全在 roadmap 未完成项里；定时触发要靠外部 cron / GitHub Actions 自己接，不要写成“内置调度”。
+- AM 的 cloud session 不能被 runner spawn，只能靠 `myco inbox wait` 或 waker 兜底；Kiro 还要额外的 ACP 网关。
+- AM 的 join link 和 per-agent allow-list 是权限边界；`runner.access` 默认不要给 `full`。join link 泄漏等于把派活入口泄漏。
+- AM 的 `--attach` 只做 SHA-256 完整性校验，只有收件方能下载；它不证明文件安全，也不证明来源可信。
+- AM 的 `--wait` 超时不是任务失败的同义词；任务可能还在排队或运行，先看状态再重发，避免重复派活。
+- AM 只负责连接和投递，不替 agent 思考；bot 说 done 仍只是发言，结果要由测试、独立 verifier、校验器或人确认。
+- 本次 AM 材料只读了 README，未读 INSTALL.md / architecture.md / delivery.md；具体配置项和边界条件要再核对，不要拿 README 的“Safe by default”当安全审计。
 - AK 是 v0.1，单机 table host；联邦仍在 roadmap，不要写成已支持多机生产。
 - prompt 缓存收益未测量：投影设计保住了稳定前缀，但作者明确说还没测量和调优缓存命中率，不要把缓存当已验证收益。
 - 能力卡必须来自 owner 侧文件，不能来自 agent 自己；bot 不能代签，也不能自己扩权。
@@ -260,6 +356,8 @@ python director.py clean-worktrees -p D:/work/my_project --dry-run
 - 共同坑不变：消息层和编排层只负责把问题送到、把人叫来，不证明结果正确；没有测试、独立 verifier、校验器或人工复核，不要接受完成。
 
 ## 证据与来源
+
+- AM 依据调研《chenhg5/myco》。可核对：单 Go 二进制，hub（注册表 + 每 agent 收件箱，SQLite）+ 每台机器一个 runner；runner 只开出站 HTTPS，不需要公网 IP 和开放端口；消息状态机为长轮询 → 租约 → 未确认过期重投 → 5 次失败标记，CLI 异常退出则任务失败并通知发送方；per-agent allow-list；`runner.access` 三档 `readonly` / `workspace` / `full` 并映射到 CLI 权限 flag；附件逐个 SHA-256 且只有收件方能下载；native macOS 签名公证，Windows 为 preview 且未签名；MIT；32 stars、单作者。命令与配置：`deploy/install-hub.sh --domain auto`、`myco hub up --tunnel cloudflare --hostname hub.example.com`、`myco hub up --tunnel tailscale`、`deploy/install-client.sh`、join link、`myco agent list --online`、`myco message send --to ... --body ... --wait 15m`、`myco broadcast send --selector "group=review" --body "Review PR #42" --wait 30m`、`myco exec --to build-shell --cmd "df -h"`、`--attach`、`myco inbox wait`、waker（webhook / claude_routine / github_dispatch / github_issue）、`--harness template` / `--harness shell`、`myco harness list`、JSON 输出、带 `suggestion` 的结构化错误、`--dry-run`、`myco schema`。作者主张、无数据支撑：“No VPS required”“Delegation that scales”“Safe by default”“won't interrupt a session you are typing in”；README 没有 benchmark、用户案例、任务成功率、延迟数据或对比实验。未验证/局限：本次只读 README，未读 INSTALL.md / architecture.md / delivery.md；编排模板与调度策略、MCP endpoint、团队/角色、会话 fork 在 roadmap 未完成；hub 单点，未提 HA、备份、SQLite 规模上限、并发上限；cloud session 不能被 spawn；Cursor/Gemini/OpenCode 为 experimental；Windows 未签名。
 - AK 依据调研《MiniMax-AI/mcode-agent-table》。可核对：仓库与 BYOB Table Protocol v0.1；Node ≥ 22.19；`npm test` 覆盖 core、topologies、tasks、HTTP/SSE、persistence、MCP bridge、Rabbit Hole；`npm run demo:scripted` 离线跑；`npm run demo:mcode` 需 mcode ≥ 0.6.3 和 MiniMax API key；`npx tsx src/cli.ts serve/keygen/create/join/say/read` 命令；table-config.json 的 termination 缺失会拒建；12 个 MCP 工具；byob_approve 的 elicitation 行为；账本 append-only、seq 1..n、replay 重建；watchdog 标 stalled；verified 必须由不同席位完成。作者主张或未验证：prompt 缓存命中率尚未测量和调优；v0.1 单机、联邦在 roadmap；生态很早期，建议小范围试用，不要直接当生产方案。
 - AL 依据调研《digilogd-cmd/ai-dev-director》。可核对：Windows 10/11、Python 3.9+、Git；至少两个已用订阅账号登录的 CLI（claude、codex、agy）；不需要 API key，代码会剔除所有 *_API_KEY；`pip install -r requirements.txt` 与 `python -m pytest -q` 用桩 CLI 跑测试；`start-companion.ps1` / `start-companion.sh` 启停控制台；`python director.py run/mission/do/status/clean-worktrees` 命令；config.yaml 分 head/builder/reviewer、autonomy、quick/standard/deep，并把项目级验证命令放在 config.yaml；Scope Guard 检查允许路径/保护路径/文件数/diff 上限；构建只发生在 .director_worktrees/；REVIEWER fail-closed；HEAD 与 REVIEWER 同供应商时标 REDUCED_INDEPENDENCE；停止按钮/“stop”立即终止进程树且 Mission 固定 STOPPED；控制台只绑 127.0.0.1，状态变更需本地来源校验 + data/solomon-bridge.token。作者主张或未验证：作者称这是每天在用的代码；2026-11-04 基准 593/596 通过，两个旧 UI 测试期待“拒绝非仓库文件夹”而 v3.0 起支持空文件夹，一个快照排除列表 fixture 漂移；MIT 许可；42 stars；没有“用了它之后代码质量/交付速度提升多少”的量化对比，每日使用是自述；布局说明写“604 tests”，快速开始写“593/596”，数字不一致，以实际运行为准；macOS/Linux 代码齐备但未在真机验证，部分测试假定 Windows 盘符路径；整文件 JSON 提案在大型改动上会撞 CLI 输出上限；完全受订阅配额约束；真实三 CLI 端到端只以 opt-in 标记运行。
 - A 依据《Jakeschincariol/arena-skill》；B 依据《matank001/clodfarm》；C 依据《mvschwarz/openrig》；D 依据《code-yeongyu/oh-my-openagent》；E 依据《bytedance/deer-flow》；F 依据《crewAIInc/crewAI》；G 依据《leonvanzyl/cubefarm》；H 依据《Show HN: Offrun》；I 依据《manaflow-ai/cmux》；J 依据《pullboard-dev/pullboard》；K 依据《SaM-runtime/claude-console》；L 依据《glmn-ai/neurosquad-cli》；M 依据《@yanhua1010》；N 依据《nateherkai/roast-room》；O 依据《josefchen/muster》；P 依据《Cleveland-RD/hivehouse》；Q 依据《@Klonzu》；R 合并《@hwangxin》与《@MindfulReturn》；S 依据《@mirku21》；T 依据《feder-cr/git-ai》；U 依据《@thedelost》；V 依据《olivieropinotti/orchestrator-skill》；W 依据《timscheuerai/grokbot-gtm-team》；X 依据《BlackAngel242/MyTeam》；Y 依据《@RoundtableSpace》；Z 依据《tomtomsatnav/agent-orchestration-standard》；AA 依据《@runes_leo》；AB 与 AC 依据《We ran AI agent swarms in Minecraft and Mindustry》；AD 依据《Bearisbug/imbo》；AE 依据《eduwxyz/tucano》；AF 依据《Orkas-AI/Orkas》；AG 依据《Balanov/skein》；AH 依据《SamueleBassoli/hermes-fleet-apps》；AI 依据《StochasticResult/codex-cto-agent-team》；AJ 依据《Over9rowth/O9-RD-MAO-Governance》。这些路径中的效果描述多数是作者主张或 README 自述，具体可核对命令、版本、配置和测试以原调研为准；没有量化数据的地方不要当成已验证收益。
@@ -304,3 +402,4 @@ python director.py clean-worktrees -p D:/work/my_project --dry-run
 - [Over9rowth/O9-RD-MAO-Governance](../research/radar/2026-11-04/10028-over9rowth-o9-rd-mao-governance.md)：值得一试，建议小范围试用：该仓库提供了可直接复制的规则文件、零依赖 CLI 和 G0–G7 流程，能对多智能体编码工作流施加可验证的治理约束；但项目较新、缺少实际案例，需在团队内先做小规模验证。
 - [MiniMax-AI/mcode-agent-table](../research/radar/2026-11-04/10234-minimax-ai-mcode-agent-table.md)：值得一试，先按 README 跑通离线 demo 和测试，再搭一桌两 owner 的小任务，验证「propose→approve→execute→verify」这条审批-执行-验证闭环；这套东西真正可复用的是把「谁批准、谁执行、谁验证、何时必须停」写成协议和账本，而不是多代理框架本身。但它还只是 v0.1、单机运行、缓存收益未测量、生态很早期，建议小范围试用，不要直接当生产方案写进手册。
 - [digilogd-cmd/ai-dev-director](../research/radar/2026-11-09/11650-digilogd-cmd-ai-dev-director.md)：值得一试，可以在 Windows 环境下用两个已登录的订阅 CLI 小范围试用，把 HEAD/BUILDER/REVIEWER 分工、隔离 worktree、独立审查、Scope Guard 这套编排流程借鉴到自己的多代理编码验证中；理由是 README 给出了可复制的安装、运行命令与硬性安全规则，但 macOS/Linux 未验证、缺少效果量化数据，尚不宜全面采用。
+- [chenhg5/myco](../research/radar/2026-11-09/11723-chenhg5-myco.md)：值得一试，建议先在一台机器上起 hub，接入 2–3 个已登录的 Claude Code/Codex 会话，用 `myco message send --wait` 和 `broadcast send --selector` 替代手工复制 prompt，跑一两周看重投、超时和上下文保持情况再决定是否扩到多机；理由是 README 给出了可直接照抄的安装与派活命令、明确的消息投递语义（租约、重投、5 次失败）和权限档位，形态完整，但项目仅 32 stars、单作者、部分 harness 标注 experimental、Windows 未签名，成熟度不足以上手即采用。

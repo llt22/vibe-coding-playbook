@@ -1,18 +1,18 @@
-# 让编码 agent 做数据分析时拿出可核对的答案
+# 别把真实数据交给 AI：先用合成替身让它写分析代码
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：编码 agent 能做数据分析，但直接让它写代码或裸 SQL 容易口径不一致、结论没数字、流程不可版本化、交付物无法被别人重跑；本篇给出六套可照做的做法，把口径、流程和证据固定下来。
-> 先试这一步：先做一个只读副本上的最小闭环：跑通一个语义层（Graphene 示例项目或 auto-ontology Quickstart），用一个真实业务问题核对它给出的答案、SQL 和步骤能否人工复核通过。
-> 最近修订：2026-11-05
+> 解决的问题：在含 PII 或隐私敏感的表格数据上使用 AI 做 EDA 时，如何既让编码 agent 写出可运行、可检查的分析代码，又不把真实数据上传出去。
+> 先试这一步：选一个非关键或已脱敏的单表 CSV，在本地用 SDV 生成 100 行合成替身，只把合成 CSV 上传到 Claude Code 的 Cloud mode，用原文 Prompt 1 让它写 notebook，再下载到本地换成真实数据运行。
+> 最近修订：2026-11-09
 
 ## 解决什么问题
 
-编码 agent 能做数据分析，但直接让它写 Python/JS 或裸 SQL 容易导致外观和指标口径不一致，同一关键指标用不同公式计算。另一种情况，是把数据交给 AI 分析后，得到一段读起来像样、但没有具体数字、也无法据此行动的结论。还有一种常见情况：自己的 X 账号里已有历史帖子数据，却没有被读出来用于内容复盘。第四种情况是：每次让 AI 做数据工程类工作（新数据源摸底、失败管道排查、对账、变更影响分析）都从头写长提示词，流程无法版本化，也没写清它能读什么、写什么、绝不能碰什么。第五种情况是经济学实证研究：数据清理、计量分析、论文复现、理论建模和写作都交给编码 agent，但没有留下可核对的证据，交付物变成“我跑出来了”，而不是“别人能重跑”。第六种情况是：企业已有元数据和业务术语，但智能体不知道数据在哪、是什么意思、该不该用、怎么 join，直接写 SQL 容易算错指标；原文说“a revenue metric answered faster is worth nothing if the number is wrong”。
+编码 agent 能做数据分析，但直接让它写 Python/JS 或裸 SQL 容易导致外观和指标口径不一致，同一关键指标用不同公式计算。另一种情况，是把数据交给 AI 分析后，得到一段读起来像样、但没有具体数字、也无法据此行动的结论。还有一种常见情况：自己的 X 账号里已有历史帖子数据，却没有被读出来用于内容复盘。第四种情况是：每次让 AI 做数据工程类工作（新数据源摸底、失败管道排查、对账、变更影响分析）都从头写长提示词，流程无法版本化，也没写清它能读什么、写什么、绝不能碰什么。第五种情况是经济学实证研究：数据清理、计量分析、论文复现、理论建模和写作都交给编码 agent，但没有留下可核对的证据，交付物变成“我跑出来了”，而不是“别人能重跑”。第六种情况是：企业已有元数据和业务术语，但智能体不知道数据在哪、是什么意思、该不该用、怎么 join，直接写 SQL 容易算错指标；原文说“a revenue metric answered faster is worth nothing if the number is wrong”。第七种情况是隐私敏感数据：手里有含 PII 的表格数据，想用 AI 做 EDA，但不愿把真实数据上传到云端，直接上传又有泄露风险。
 
-本篇给六套可照做的做法：做法 A 用 Graphene 的「everything-as-code」语义层，把 metrics 和 modeled joins 写成代码，通过 CLI 启动服务，让编码 agent 在本地迭代、自检、产出可复用的报表和 dashboard；做法 B 把 X 账号后台导出的数据作为附件上传到 Claude Artifacts 的 Dashboard，让 Claude 做账号复盘；做法 C 把 X 账号的数据归档下载到本地，解压后在归档目录启动 Claude Code，让它读取 `data/tweets.js`，作为基于自己历史帖子做内容分析的入口；做法 D 把数据工程任务固化成 Claude Code 技能文件（`SKILL.md`），只挑 1–2 个装进项目的 `.claude/skills`，用真实任务跑两周，再决定是否扩到全部 16 个；做法 E 按经济学研究课程路径，用 `CLAUDE.md`、Plan mode、验收清单和可重跑复制包，把实证流程交给编码代理，先从只碰公开数据的最小闭环开始；做法 F 用 NVIDIA auto-ontology 从企业元数据自动生成语义本体，由人认证术语、SQL 属性和 join 关系，再通过 MCP/REST 暴露给任意 agent，让智能体先判断可回答性、再写 SQL，并返回答案、SQL 和步骤。
+本篇给七套可照做的做法：做法 A 用 Graphene 的「everything-as-code」语义层，把 metrics 和 modeled joins 写成代码，通过 CLI 启动服务，让编码 agent 在本地迭代、自检、产出可复用的报表和 dashboard；做法 B 把 X 账号后台导出的数据作为附件上传到 Claude Artifacts 的 Dashboard，让 Claude 做账号复盘；做法 C 把 X 账号的数据归档下载到本地，解压后在归档目录启动 Claude Code，让它读取 `data/tweets.js`，作为基于自己历史帖子做内容分析的入口；做法 D 把数据工程任务固化成 Claude Code 技能文件（`SKILL.md`），只挑 1–2 个装进项目的 `.claude/skills`，用真实任务跑两周，再决定是否扩到全部 16 个；做法 E 按经济学研究课程路径，用 `CLAUDE.md`、Plan mode、验收清单和可重跑复制包，把实证流程交给编码代理，先从只碰公开数据的最小闭环开始；做法 F 用 NVIDIA auto-ontology 从企业元数据自动生成语义本体，由人认证术语、SQL 属性和 join 关系，再通过 MCP/REST 暴露给任意 agent，让智能体先判断可回答性、再写 SQL，并返回答案、SQL 和步骤；做法 G 先在本地用 SDV 生成与真实数据同结构、同字段类型的合成替身，只把合成 CSV 上传到 Claude Code 的 Cloud mode，让它写 EDA notebook 和 dashboard，再把 notebook 和 requirements.txt 下载到本地，换成真实数据运行和修改。
 
-六篇调研都建议先小范围实测，再决定是否纳入手册或固化进工作流。
+七篇调研都建议先小范围实测，再决定是否纳入手册或固化进工作流。
 
 ## 适用与不适用
 
@@ -28,6 +28,8 @@
 
 做法 F 适用：你有 Docker + Compose v2、`uv`、一个来自 build.nvidia.com 的 `nvapi-...` key；你有一个只读数据库副本（支持 PostgreSQL、MySQL、Databricks、Snowflake、ClickHouse、Trino、Kyuubi、HeavyDB、DuckDB、SQLite 十种数据源）；你希望把术语、经审核的 SQL 属性和 join 关系作为智能体的上下文层，让自然语言转 SQL 的答案可核对；你愿意先按 README 的 Docker Compose Quickstart 跑通样例库，再换到自己的只读副本。不适用：你需要轻量部署（F 依赖 NVIDIA NIM 端点，组件多、部署较重）；你需要准确率数据再决定（原文不含准确率数据）；你不能提供 NVIDIA NIM key；你不想先跑 Docker Compose；你需要定时/事件触发配置（原文未给）；你希望语义层完全手写并纳入代码仓库（那更接近做法 A）。
 
+做法 G 适用：数据是表格型、可在本地用 Python 处理，且你有权限使用；你想用 AI 做 EDA，但不愿把真实数据上传到云端；你接受先在本地生成合成替身，只把合成数据交给 AI；你愿意在运行前审查 AI 生成的代码，确认不会把数据回传；你本地有 Python/Jupyter 环境，能安装 SDV 并运行 notebook。不适用：多表或复杂关系的数据（原文只演示单表；GaussianCopula 对复杂关系和高基数字段可能有限）；你需要合成数据保真度验证再决定（README 未给完整 SDV 代码和评估）；你需要完整可复制的 SDV 命令（原文只描述 notebook 步骤，需参照仓库 notebook 和 SDV 文档）；你需要与人工分析或直接上传真实数据的对照数据（原文没有）；你不接受使用 Claude Code 的 Cloud mode（原文称它零访问本地文件，但它是产品功能，未来可能变化）；你需要定时或事件触发（原文没有）。
+
 做法 B 与做法 C 的差异：B 用 X 后台 analytics 页各 Tab 导出的数据，上传到 Claude Artifacts；C 用完整数据归档，在本地目录用 Claude Code 读取 `data/tweets.js`。B 更接近快速 dashboard 复盘，C 更接近本地文件 + 编码代理的内容分析入口；两者原文都没有给出完整分析提示词和效果验证。B 会把账号数据上传给第三方服务；C 在本地目录启动 Claude Code，但原文未讨论隐私与脱敏，试用时只处理脱敏副本，避免把归档上传到不需要的外部位置。
 
 做法 D 与做法 A 的差异：A 用语义层（`.gsql` 模型 + `.md` 页面）统一指标口径，产出是可复用的报表和 dashboard，前置是有一个受支持的数据源；D 用 `SKILL.md` 固化一类任务的流程与读写边界，产出多是可直接阅读分享的网页报告，前置只是一个 Claude Code 能读到的项目目录。两者可以并用：口径放 A 的语义层，流程放 D 的技能文件。
@@ -38,7 +40,11 @@
 
 做法 E 与做法 D 的差异：D 是通用数据工程技能仓库，重点是 `/profile`、`/incident` 等技能与“读什么/写什么/绝不做什么”的边界；E 是经济学实证研究的课程路径，重点是 `CLAUDE.md`、Plan mode、六阶段研究 harness、每课验收清单和“别人能重跑的复制包”，并补上 Codex 替代 Claude Code 时的适配与沙箱联网配置。E 第 4 课也会写自己的 `SKILL.md`，可与 D 的技能文件做法并用；但 E 的领域前置更强，需要计量基础和数据授权。
 
-六套做法都不适用的情况：你需要定时或事件触发的自动运行（六篇原文均未给出可照做的调度配置）；你需要明确的数据源凭据配置、代理权限限定或回滚方案（原文均未说明，E 只给了 Codex 沙箱联网这一项，F 给了 MCP 只读工具和按用户权限执行，但未给具体权限配置项）；你不接受先做小范围试用。
+做法 G 与做法 B/C 的差异：B 把 X 后台导出的数据上传到 Claude Artifacts；C 把完整归档放在本地目录用 Claude Code 读取；G 只把合成替身上传到 Cloud mode，真实数据留在本地运行。B/C 原文未讨论隐私与脱敏，G 把隐私作为流程前提。代价是 G 的合成数据只有 100 行，且保真度未验证；如果换成真实数据后代码大量返工，说明合成替身不够有代表性。
+
+做法 G 与做法 A 的差异：A 用 `.gsql` 语义层统一指标口径，产出报表和 dashboard；G 用合成数据让 AI 写可本地运行的 EDA 代码，产出 notebook 和 requirements.txt。两者可并用：先用 G 在脱敏/合成数据上把分析代码跑通，再在 A 的语义层里固化指标口径；但 G 不解决口径统一，A 不解决隐私上传。
+
+七套做法都不适用的情况：你需要定时或事件触发的自动运行（七篇原文均未给出可照做的调度配置）；你需要明确的数据源凭据配置、代理权限限定或回滚方案（原文均未说明，E 只给了 Codex 沙箱联网这一项，F 给了 MCP 只读工具和按用户权限执行，但未给具体权限配置项）；你不接受先做小范围试用。
 
 ## 前置条件
 
@@ -48,6 +54,7 @@
 - 做法 D：已安装 Claude Code，并有 Claude Pro、Max、Team、Enterprise 计划或 Claude Console 账号；有一个 Claude Code 能读到代码和数据的工程目录；愿意先读 `skills/<name>/SKILL.md` 确认读写边界再运行。
 - 做法 E：已装 Claude Code（或 Codex）、Git、Python 或 Stata；第 1 课作业说明里有图文安装步骤；第 3、4 课要用的 CHNS 或 CHARLS 需按各数据官网流程自行申请，可能需要几天到几周，课程不分发数据，授权数据不得分享、不得上传公开仓库；若用 Codex 下载数据，需处理沙箱联网；若只做最小试用，先只碰公开数据。
 - 做法 F：Docker + Compose v2；`uv`；一个来自 build.nvidia.com 的 `nvapi-...` key；一个只读数据库副本（或先用微软 Wide World Importers 样例库）；愿意按 Quickstart 改 `.env` 里所有默认口令；能访问本地 3000/3001/3002/3003/5432 端口。
+- 做法 G：本地 Python/Jupyter 环境；按 SDV 官方文档安装 SDV；一个可用的 Claude Code Cloud mode（原文称它零访问本地文件）；一个非关键或已脱敏的单表 CSV，且有权限使用；能本地安装 `pip install -r requirements.txt` 并运行 notebook；愿意只保留回答分析问题所需的最小列。
 - 共同：愿意先做小范围试用，再决定是否接入关键业务数据或固化流程。
 
 ## 操作步骤
@@ -376,6 +383,43 @@ network_access = true
 
 14. 可选：如果要接自己的数据源，支持 10 种数据源（PostgreSQL、MySQL、Databricks、Snowflake、ClickHouse、Trino、Kyuubi、HeavyDB、DuckDB、SQLite）。原文未给出每种数据源的详细接入配置；先按 Quickstart 用样例库跑通，再换只读副本。预期：不把样例库的配置直接当生产配置。
 
+### 做法 G：先用本地合成数据让 Claude Code 写分析代码，再把代码拿回本地跑真实数据
+
+1. 明确分析问题并准备本地单表 CSV。前提：数据是表格型、可在本地用 Python 处理，且你有权限使用。原文示例是 2000 条酒店客人记录，含邮箱、账单地址、信用卡号等 PII；作者建议只保留回答分析问题所需的最小列，不需要的敏感列先删掉。预期：得到一个只含最小列的单表 CSV。
+
+2. 在本地生成合成替身。按仓库的 Synthetic Data Generation Notebook 流程：安装 SDV（具体安装方式按 SDV 官方文档），用 SDV 的 CSVHandler 加载 CSV，自动检测表元数据，人工检查并修正误识别列（原文例子：billing_address 被识别成 id 而不是 address），用 GaussianCopulaSynthesizer 拟合，采样 100 行，得到 hotel_guest_data_synthetic.csv。前提：单表、字段类型可识别；合成数据只用于让 AI 写代码，不用于得出业务结论。注意：原文 README 没有给出完整的 SDV 代码和命令，只描述了 notebook 中的步骤，实际执行需参照仓库 notebook 和 SDV 文档，不要凭空补命令。
+
+3. 打开 Claude Code 的 Cloud mode（原文称它零访问本地文件），只上传合成 CSV，并粘贴 Prompt 1：
+```text
+Create a Jupyter notebook to explore this hotel guest data. Use pandas and Plotly (or any other package or library you prefer).
+
+1. Firstly, I want to know how many nights our guests usually stay at our hotel.
+2. Secondly, I'm curious what are the most common email domains of our guests.
+3. Identify how many regular individual household customers and how many high-volume corporate office accounts we have in our data.
+
+Add code comments to walk the reader through, and mention all the gotchas and data warnings (such as missing values or invalid data). Finally, generate a live dashboard for me to look at the results.
+```
+前提：Cloud mode 可用；上传文件只含合成数据和最小列。预期：Claude 生成一个带注释、包含数据质量警告和 dashboard 的 EDA notebook。
+
+4. 让 Claude 生成依赖文件。原文在本地首次运行下载的 notebook 时遇到缺少 nbformat、导致 Plotly 图表无法渲染的错误，于是用了 Prompt 2：
+```text
+Please give me a requirements.txt file with the required packages to run this notebook.
+```
+预期：拿到 requirements.txt。
+
+5. 下载 notebook 和 requirements.txt 到本地，安装依赖并运行。原文给出的安装命令是：
+```bash
+pip install -r requirements.txt
+```
+原文还给出仓库试用命令（需替换占位符）：
+```bash
+git clone <your-repo-url>
+cd <your-repo-folder>
+```
+然后把 notebook 中的数据路径从合成 CSV 改成真实数据集（原文示例改为 hotel_guest_data.csv），重启 kernel，运行所有单元格。前提：本地有真实数据访问权限；运行前审查代码，确认不会把数据回传。预期：notebook 在本地真实数据上跑通，图表和 dashboard 正常渲染。
+
+6. 处理运行错误并核对结果。遇到缺依赖、渲染错误或数据格式问题时，把错误反馈给 Claude 让它补代码或补 requirements；同时检查 notebook 中的数据质量警告（缺失值、无效数据），并按需增删改代码。预期：代码可读、依赖完整，核心统计结果能与人工独立计算核对。
+
 ### 怎么选
 
 - 需要长期复用、多人协作、统一口径、把分析纳入 git/CI：选做法 A。
@@ -384,12 +428,15 @@ network_access = true
 - 想固定「一类数据工程任务怎么做」（新数据源摸底、故障根因、对账、变更影响面），并且已经在用 Claude Code：选做法 D。
 - 做经济学实证研究、愿意按课程顺序做、能提前申请授权数据、接受“别人能重跑”作为验收：选做法 E。只想先验证 agent 是否改善研究流程，先做 E 的第 1 课 + 第 2 课世界银行公开数据分支，不要直接上 CHNS/CHARLS 或社媒采集。
 - 企业已有元数据和业务术语，希望智能体知道数据在哪、是什么意思、该不该用、怎么 join，并且要「答案 + SQL + 步骤」可核对：选做法 F。先按 Docker Compose Quickstart 在只读副本上跑，不要直接接生产。
+- 需要把含 PII 的表格数据交给 AI 做 EDA、又不愿上传真实数据：选做法 G。先用一个非关键或已脱敏的单表数据集，只上传最小列的合成 CSV；如果换成真实数据后代码大量返工，降级为 study/watch。
 - B 与 C 的取舍：B 用后台各 Tab 导出上传到 Claude Artifacts，适合快速 dashboard 复盘；C 用完整归档 + 本地 Claude Code，适合本地文件分析入口，但原文只到读取文件，后续分析要自己设计。B 会把账号数据上传给第三方服务；C 在本地目录启动 Claude Code，但原文未讨论隐私与脱敏，试用时只处理脱敏副本，避免把归档上传到不需要的外部位置。
 - A 与 D 的取舍：A 管口径，产出是报表和 dashboard；D 管流程与读写边界，产出多为网页报告。两者不冲突，可以先在 A 的 demo 项目上验证代理能不能稳定读模型、写页面，同时用 D 的 `profile` 技能做新数据源摸底。
 - A 与 F 的取舍：A 手写 `.gsql` 语义模型，适合把 metrics 和 modeled joins 写成代码、产出报表和 dashboard；F 从元数据自动生成 ontology，由人认证后通过 MCP/REST 暴露给任意 agent，适合给已有的 agent 补上下文层。两者都解决口径问题：A 靠 measure 组合，F 靠经审核的 SQL attributes。可以并用：F 做上下文层，A 做 dashboard 层。
 - F 与 D 的取舍：D 管「一类任务怎么做」，F 管「数据是什么、能不能答」。先有 F 的术语和可回答性判断，再用 D 的技能跑具体任务，减少 agent 猜表名和字段含义。
 - D 与 E 的取舍：D 是通用数据工程技能仓库，适合先把 1—2 个技能装进项目试默认行为；E 是经济学实证研究课程路径，适合把 `CLAUDE.md`、Plan mode、验收清单、复现包和新会话审稿串成研究流程。E 第 4 课也会写 `SKILL.md`，可以和 D 的技能文件结构互相参照。
-- 先试哪个：想快速看到 AI 分析是否对自己有增量价值，先试 B 或 C 做一次轻量复盘；想验证「把流程固化成技能文件」是否减少重复交代，先试 D 的 `profile` 或 `incident`；如果已经在用编码代理且数据源受支持，再考虑 A；如果是经济学实证研究，先试 E 的公开数据最小闭环；如果企业已有元数据、又不想一上来手写完整语义层，先试 F 的 Quickstart。
+- G 与 B/C 的取舍：B/C 会把真实账号数据或归档交给第三方/模型服务，G 只上传合成替身；但 G 的合成数据只有 100 行、保真度未验证，复杂关系和高基数字段可能失真，适合先写代码而不是直接得结论。
+- G 与 A 的取舍：A 管口径和 dashboard 复用，G 管隐私保护下生成可本地运行的分析代码；可以先用 G 写代码，再在 A 的语义层固化指标。
+- 先试哪个：想快速看到 AI 分析是否对自己有增量价值，先试 B 或 C 做一次轻量复盘；想验证「把流程固化成技能文件」是否减少重复交代，先试 D 的 `profile` 或 `incident`；如果已经在用编码代理且数据源受支持，再考虑 A；如果是经济学实证研究，先试 E 的公开数据最小闭环；如果企业已有元数据、又不想一上来手写完整语义层，先试 F 的 Quickstart；如果数据含 PII、又不愿上传真实数据，先试 G 的单表合成替身流程。
 
 ## 怎么判断变好了
 
@@ -401,6 +448,7 @@ network_access = true
 - 做法 D（连续两周、3–5 个真实任务）：①只选 1–2 个技能，优先 `profile` 或 `incident`。②在测试项目的 `.claude/skills` 里只放这两个，先不改写，直接跑一遍看默认行为。③然后按第 6 步把项目路径与标准写进 `SKILL.md`（或 `CLAUDE.md`），再跑一遍，比较改写前后的差别。④同时用人工方式（或另一位同事）独立完成同一件事，作为对照。⑤连续两周、用 3–5 个真实任务重复，记录每次结果。⑥通过后再逐个增加技能。
 - 做法 E（1—2 小时最小闭环，只碰公开数据）：①装 Claude Code（或 Codex）+ Git + Python。②只做第 1 课：写一版自己的 `CLAUDE.md`，用 Plan mode 完成一个可核对的小任务，对照验收清单打分。③只做第 2 课的公开数据分支：从一个空文件夹出发，用世界银行数据产出一张图。④若用 Codex，先加 `[sandbox_workspace_write] network_access = true` 并重启，确认下载脚本不再报 `WinError 10013`。⑤不碰 CHNS/CHARLS 与社媒采集，直到前两步跑通、数据授权到手。
 - 做法 F（先样例库、再只读副本）：①按 Quickstart 跑通样例库，问跨多表 join 的问题，检查输出是否同时有答案、SQL、步骤。②问一个数据回答不了的问题，看 `check_answerable` 是否返回低覆盖率、智能体是否说明缺什么而不是编数。③换到自己的只读副本，用 5–10 个真实业务问题测「答案＋SQL＋步骤」能否人工核对通过。④记录 `check_answerable` 的覆盖率、人工核对通过率、需要修复 SQL 的次数。原文没有给准确率基线，以上指标需自己记录。
+- 做法 G（先试一个数据集）：①选一个非关键或已脱敏的单表数据集，按三步走一遍：本地生成 100 行合成替身 → 只上传最小列合成 CSV 到 Cloud mode，用 Prompt 1 和 Prompt 2 → 下载 notebook 和 requirements.txt，本地换成真实数据运行。②同时用同一分析问题手写一次 EDA 作为对照。③运行前审查代码，确认没有把真实数据回传。④记录 notebook 一次运行成功率、依赖错误数量、人工修改代码行数、核心统计结果与人工独立计算的一致率。
 
 可观察的指标：
 
@@ -410,8 +458,9 @@ network_access = true
 - 做法 D：耗时——从「拿到失败运行 / 新数据源」到「写出可用的根因 / 画像」的分钟数，AI 组 vs 人工组；结论质量——根因是否正确、画像是否覆盖了后续建模真正用到的字段和边界案例，与人工独立结论的重合度与遗漏项数量；返工率——生成的页面有多少能直接发给同事，需要重写的段落比例；边界遵守——`SKILL.md` 里「绝不做什么」是否被遵守，有没有写到不该写的路径或表；稳定性——同一输入跑 3 次结论是否一致，不一致的地方是否正好是需要人判断的地方；可复用性——改写一次 `SKILL.md` 后，下一次同类任务是否不再需要重复交代背景。同时保留失败案例：如果失败集中在「缺少某类输入」或「步骤写得不够具体」，那正好是决定要不要自己重写 `SKILL.md` 的依据——这时仓库的价值从「拿来用」转为「拿来当模板」。
 - 做法 E：可复现性最硬——把仓库交给另一个人或另一台机器，从空目录能否重跑出同一张图、同一组数字；不能重跑则视为无效改善。验收清单通过项占比（每课自查）。人工返工次数与“纠正智能体错误”的耗时（第 6 课列了八种常见错误，可当错误分类表计数）。同一任务“纯手工 vs 带 `CLAUDE.md` 的智能体”的耗时与出错率对比（自行记录，原文未提供基线）。阶段性扩展指标：第 3 课 codebook 变量定义完整率；第 4 课复现结果与原论文的数值差距；第 5 课复制包能否被第三方在无指导情况下重跑成功——这条应作为是否升级到长期采用的最终判据。
 - 做法 F：`check_answerable` 的覆盖率（原文示例 coverage 0.5）；答案、SQL、步骤三件齐全的比例；SQL 能直接执行且结果与源库人工核对一致的比例；需要修复 SQL 的次数；同一问题重复问 3 次结果是否一致；接入 MCP 后 agent 是否减少猜表名/字段名的次数。原文不含准确率数据，以上需自行记录基线。
+- 做法 G：隐私——上传文件是否只含合成数据和最小列；真实数据是否从未离开本地；运行前代码审查是否发现外传行为。效率——从提问到 notebook 在本地跑通的时间；依赖错误数量；人工修改代码的行数。质量——notebook 一次运行成功率；缺失值和无效值检查是否覆盖；核心统计结果与人工独立计算的一致率；图表和 dashboard 是否可复现。可维护性——代码注释是否足够、requirements.txt 是否完整、代码是否易读。原文没有量化基线，以上需自己记录。
 
-试多久：做法 A 的最小试用半天内可完成；做法 B 先一个 Tab、一次对话即可判断是否有增量价值；做法 C 先验证一次读取和字段核对即可判断入口是否可用；做法 D 需要连续两周、3–5 个真实任务，才有足够样本和人工对照；做法 E 的最小闭环 1—2 小时内可完成，但只碰公开数据，完整课程要等数据授权和作业包补齐；做法 F 的 Quickstart 半天内可跑通，换到自己的只读副本后，先用 5–10 个真实业务问题试 1–2 天，再决定是否接生产。以上指标若明显优于现有做法，再考虑写入手册或固化进复盘习惯；若差异不明显，则退回研究阶段。
+试多久：做法 A 的最小试用半天内可完成；做法 B 先一个 Tab、一次对话即可判断是否有增量价值；做法 C 先验证一次读取和字段核对即可判断入口是否可用；做法 D 需要连续两周、3–5 个真实任务，才有足够样本和人工对照；做法 E 的最小闭环 1—2 小时内可完成，但只碰公开数据，完整课程要等数据授权和作业包补齐；做法 F 的 Quickstart 半天内可跑通，换到自己的只读副本后，先用 5–10 个真实业务问题试 1–2 天，再决定是否接生产；做法 G 原文未给试用时长，先试一个数据集，跑通一次并核对核心数字，再决定是否扩大。以上指标若明显优于现有做法，再考虑写入手册或固化进复盘习惯；若差异不明显，则退回研究阶段。
 
 ## 常见坑
 
@@ -449,6 +498,13 @@ network_access = true
 - 做法 F：原文不含准确率数据；「a revenue metric answered faster is worth nothing if the number is wrong」是设计主张，不是实测结论。
 - 做法 F：MCP server 是只读工具，每个用户经 Auto-Ontology 登录，调用按该用户权限执行；但仍要先在只读副本上试，不要直接接生产。
 - 做法 F：原文未给出定时/事件触发配置，也未给出每种数据源的详细接入配置；先按 Quickstart 用样例库跑通。
+- 做法 G：原文 README 是教程索引，SDV 的完整代码和命令未在文本中给出，只描述了 notebook 步骤；实际执行需参照仓库 notebook 和 SDV 官方文档，不要凭空补命令。
+- 做法 G：100 行合成数据是否足够代表真实分布未验证；GaussianCopula 对复杂关系和高基数字段可能有限。合成数据只用于让 AI 写代码，不用于得出业务结论。
+- 做法 G：即使使用合成数据，也只应共享回答分析问题所需的最小列；真实数据是否从未离开本地、代码是否会把数据回传，要在运行前审查。
+- 做法 G：Cloud mode 是产品功能，未来可能变化；原文称它零访问本地文件，但不能替代自己的代码审查。
+- 做法 G：原文没有与人工分析或直接上传真实数据的对照数据；notebook 一次运行成功率、依赖错误数量、人工修改行数、结果一致率等指标需自己记录。
+- 做法 G：把 notebook 数据路径改成真实数据后要重启 kernel；原文遇到缺少 nbformat 导致 Plotly 图表无法渲染，用 Prompt 2 生成 requirements.txt 解决。
+- 做法 G：适用条件是单表结构化数据、有 Python/Jupyter 环境、可本地处理数据；多表或复杂关系的数据不要直接套用。
 - 共同：不要跳过最小试用直接接入关键业务数据或授权数据。
 
 ## 证据与来源
@@ -465,7 +521,9 @@ network_access = true
 
 做法 F 依据调研报告《NVIDIA/auto-ontology》。可核实的内容：Apache 2.0 开源；三阶段 Generate → Certify → Answer；本体三类定义 Terms、SQL attributes、Relationships；组件与端口（前端 3000、后端 3001、摄取 worker 3002、MCP server 3003、Postgres 17 + pgvector 5432、可选 HashiCorp Vault）；支持 10 种数据源（PostgreSQL、MySQL、Databricks、Snowflake、ClickHouse、Trino、Kyuubi、HeavyDB、DuckDB、SQLite）；Quickstart 的确切命令（`git clone`、`cp .env.example .env`、`docker compose up -d --wait postgres`、seed 脚本、`docker compose up -d --build`）；`.env` 必改项；样例问题与合格输出（答案、SQL、步骤）；MCP server 启动命令与 Cursor/Claude Desktop 配置；MCP 工具清单（`check_readiness`、`search_terms`、`get_term`、`get_term_columns`、`get_term_sql_attributes`、`get_sql_attribute`、`describe_table`、`check_answerable`、`ask_question`）；REST 的 `curl` 示例与 SSE 约定（`result` 事件带答案，`data: [DONE]` 结束）；排障说明。只是作者主张、未被数据支撑的部分：「a revenue metric answered faster is worth nothing if the number is wrong」是设计主张；原文不含准确率数据；没有给出量化收益或前后对比。信息缺口与局限：Python 客户端示例在原文中被截断；每种数据源的详细接入配置未给出；未给出定时/事件触发配置；部署较重、依赖 NVIDIA NIM 端点；需要自己记录可回答性覆盖率和人工核对通过率。本篇采用的最小试用方案（Quickstart → 样例库 → 只读副本 → 5–10 个真实问题）来自该报告的建议，尚未有实测结果支撑。
 
-六篇调研的共同点：都没有给出可复现的量化收益数据；都需要小范围实测再决定是否纳入长期工作流。
+做法 G 依据调研报告《thu-vu92/claude-code-data-analysis》。可核实的内容：仓库 README 给出的三步流程（本地 SDV 生成合成数据 → Claude Code Cloud mode 只上传合成 CSV 写 EDA notebook 和 dashboard → 下载 notebook 和 requirements.txt 到本地换成真实数据运行）；两个可直接复制的提示词 Prompt 1 与 Prompt 2（已放入操作步骤）；原文示例数据是 2000 条酒店客人记录，含邮箱、账单地址、信用卡号等 PII；合成数据采样 100 行，文件名 `hotel_guest_data_synthetic.csv`；原文在本地首次运行下载的 notebook 时遇到缺少 nbformat、导致 Plotly 图表无法渲染的错误；原文给出的安装命令 `pip install -r requirements.txt` 和仓库试用命令 `git clone <your-repo-url>`、`cd <your-repo-folder>`；作者建议只保留回答分析问题所需的最小列。只是作者主张、未被数据支撑的部分：「数据分析师不需要 AI 直接分析数据，只需要 AI 写可靠代码」；「即使使用合成数据，也只应共享回答问题所需的最小列」。信息缺口与局限：README 是教程索引，SDV 的完整代码和合成数据质量评估未在文本中给出；100 行合成数据是否足够代表真实分布未验证；GaussianCopula 对复杂关系和高基数字段可能有限；Cloud mode 是产品功能，未来可能变化；没有与人工分析或直接上传真实数据的对照数据；dashboard 的部署和运行细节也不充分。适用条件：单表结构化数据、有 Python/Jupyter 环境、可本地处理数据、Claude Code Cloud 可用。本篇采用的最小试用方案（一个非关键或已脱敏单表数据集、同一问题手写 EDA 对照、记录隐私/效率/质量/可维护性指标）来自该报告的建议，尚未有实测结果支撑。
+
+七篇调研的共同点：都没有给出可复现的量化收益数据；都需要小范围实测再决定是否纳入长期工作流。
 
 ## 依据的调研
 
@@ -475,3 +533,4 @@ network_access = true
 - [DataWithBaraa/claude-code-data-engineering-skills](../research/radar/2026-10-30/8578-datawithbaraa-claude-code-data-engineering-skills.md)：值得一试，先在一个测试项目里挑 1–2 个技能（profile 或 incident）装进 .claude/skills 跑两周，对比人工完成同一任务的耗时与产出质量，再决定是否扩到全部 16 个；理由是仓库给出了可直接复制的安装和调用方式、每个 SKILL.md 都固定声明读写边界，但原文只有 README、看不到技能正文，且作者自述为首版草稿、无任何效果数据。
 - [maxwell2732/chenzhu-claude-econ](../research/radar/2026-11-03/9719-maxwell2732-chenzhu-claude-econ.md)：值得一试，建议小范围试：照这门课的路径先跑第 1—2 课的最小流程（写 CLAUDE.md、用 Plan mode、从空文件夹到一张别人能重跑的图，并用验收清单自查），跑通后再决定要不要投入 CHNS/CHARLS 的完整实证流水线；理由是 README 给出了可执行的课程结构、每课产出物、验收清单、配套工具仓库和一段可直接复制的 Codex 网络配置，但具体步骤在 PDF 与作业包里，本次材料只到索引层，还没有效果数据。
 - [NVIDIA/auto-ontology](../research/radar/2026-11-05/10524-nvidia-auto-ontology.md)：值得一试，照 README 的 Docker Compose Quickstart 在你自己的只读数据库副本上跑一遍，先用一批真实业务问题测“答案＋SQL＋步骤”能否人工核对通过，再决定是否接入生产。理由：它给出可直接复制的部署、模型角色配置、MCP/REST 接入步骤，并内建“先判可回答性、查询后返回 SQL 与出处”的验证闭环，正好补上智能体做结构化分析时缺的上下文层；但它依赖 NVIDIA NIM 端点、部署较重、且不含准确率数据。
+- [thu-vu92/claude-code-data-analysis](../research/radar/2026-11-09/11721-thu-vu92-claude-code-data-analysis.md)：值得一试，建议按“本地 SDV 合成数据→Claude Code Cloud 写代码→本地真实数据运行”小范围试，原文的三步流程和提示词可直接照搬；但 README 未给完整 SDV 代码和合成数据保真度验证，先试一个数据集再决定是否纳入手册。
