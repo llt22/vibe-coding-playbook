@@ -1,36 +1,29 @@
-# 让 AI 在长任务里自主推进，并在边界处收口
+# 让 AI 跨会话复用已验证做法，而不是每次重新试错
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：你在用 AI 做多步骤、跨上下文的工作时，缺少可复用的职能流程、边界控制、观测和交接，导致反复解释、频繁打断、返工和说不清有没有变好。
-> 先试这一步：先记录 2–3 次基线，再只装一个最贴近当前痛点的插件或技能包跑真实任务，一周内用同一类任务对照；如果最痛的是可逆步骤频繁打断，先试 `/work-mode auto wrap`。
-> 最近修订：2026-11-08
+> 解决的问题：这篇手册解决：AI 在不同职能和长任务中反复补上下文、重复试错，装完插件又说不清是否变好；用分层试用、基线和可回退的方式，把经验沉淀成可复用做法。
+> 先试这一步：先选一台非关键机器和一个 agent，只启用 maxagent 的工作区加规则钩子跑两周，记录重复错误拦截次数和断点续做补充条数；或在现有 Claude Code 会话先记录 2–3 次基线，再只装一个层。
+> 最近修订：2026-11-10
 
 ## 解决什么问题
 
-你已经在用 Claude Code 或 Cowork，但每让 AI 做某个职能的活（写 SQL、准备客户通话、审合同、对账、做 3D 资产、写 PRD、画论文示意图等），都要重新解释领域知识、公司上下文，手动贴外部工具数据；AI 给出的往往是教科书流程，不是你团队实际做法。还有几个常见缺口：AI 在会话中途问你的问题、顺手发现的 bug、失败的测试，过一会儿就淹没在对话里；装完一堆插件后，你说不清到底有没有变好；任务跑得比一个上下文窗口更久时，交接、唤醒和拍板都靠人守着；真正做一次中大型编码变更时，单个会话往往一口气写到底，没有计划、没有独立审查、landing 之前没人核对。长会话还会遇到另一个问题：自动压缩按 token 阈值切，不知道哪些消息属于同一个工作单元。
+你已经在用 Claude Code 或 Cowork，但每让 AI 做某个职能的活（写 SQL、准备客户通话、审合同、对账、做 3D 资产、写 PRD、画论文示意图等），都要重新解释领域知识、公司上下文，手动贴外部工具数据；AI 给出的往往是教科书流程，不是你团队实际做法。还有几个常见缺口：AI 在会话中途问你的问题、顺手发现的 bug、失败的测试，过一会儿就淹没在对话里；装完一堆插件后，你说不清到底有没有变好；任务跑得比一个上下文窗口更久时，交接、唤醒和拍板都靠人守着；真正做一次中大型编码变更时，单个会话往往一口气写到底，没有计划、没有独立审查、landing 之前没人核对；长会话还会遇到自动压缩按 token 阈值切、不知道哪些消息属于同一个工作单元的问题；每个新会话还会从零重解同一个问题：搜索、尝试、失败、再找一遍。
 
-本手册用六类叠加来补：官方插件市场层、职能层（官方职能插件、独立 Agent Skills、按域技能包与编码变更编排）、会话模式层（work-mode 控制自主推进、批处理委派和收口）、收口层、观测层（广/深）、交接层与上下文压缩层。原则是：一次只上一个新层，用真实任务和基线对照，没有可感知改善就卸载，并记为“该插件无实质增益”，而不是“插件机制无效”。
+本手册用七类叠加来补：官方插件市场层、职能层（官方职能插件、独立 Agent Skills、按域技能包与编码变更编排）、会话模式层（work-mode 控制自主推进、批处理委派和收口）、收口层、观测层（广/深）、交接层与上下文压缩层、跨会话经验层。原则是：一次只上一个新层，用真实任务和基线对照，没有可感知改善就卸载，并记为“该插件无实质增益”，而不是“插件机制无效”。
 
 ## 适用与不适用
 
-**官方插件市场**：适用——本机已安装并运行 Claude Code、能访问该 marketplace；想先浏览再决定装哪个；想按官方规范打包团队能力；愿意安装前检查插件主页和来源。不适用——没在用 Claude Code；需要先看到具体插件名单、评价或效果数据；期望 Anthropic 替你审核插件行为；不能接受插件访问文件与外部服务。原文明确 Anthropic 不控制插件里的 MCP server、文件或其他软件，也无法验证它们会按预期工作或不会变化。
-
-**职能插件与独立 Agent Skills**：适用前提是团队已用 Claude Code 或 Cowork；所需外部工具能通过 MCP 接入；有人愿意读插件的 `skills/` 并按本团队流程改写；你希望把某职能的领域知识、工具连接和固定动作预打包复用。Blender 需要 Blender 5.2 LTS+ 并支持 Agent Skills；PM 需要能读结构化 Markdown 的代理；科研示意图需要 Node.js 22+ 与 Chromium。不适用——只看 README 就指望复现技能内部的提示词、脚本或 QA 规则；期望开箱即用、不做定制就大幅改善；需要先看到官方效果数据才采用。
-
-**claude-skills 按域技能包**：适用——现有 11 个职能插件没有覆盖你的域，或你想拿一个可复制的 `SKILL.md`＋`scripts/`＋`references/` 结构做团队模板；需要同一套 skill 跨 Claude Code、Codex、Cursor 等工具复用；愿意在安装前跑安全审计并按域隔离安装。不适用——只看 README 就想复现技能内部提示词、脚本或 QA；需要前后对比数据或用户案例才采用；不愿做安装前审计；想一次全装。前提是本地有 git 与 Python 3，已装 Claude Code 或任一编码智能体；Windows 需用 `git clone -c core.symlinks=true` 并开启开发者模式，同时设置 `PYTHONUTF8=1`。
-
-**subagent-studio**：适用——中大型代码库、复杂变更：每次改多个文件、有真实用户、代码要维护多年；或无人值守的定时运行；能用 git 和 worktree、能定义 check commands。不适用——小而明确的工作；需要先看到结果证据才采用；不能接受每个变更的数倍 token；无法确认 `docs/evidence.md` 里的证据细节。
-
-**superlite**：适用——已安装 Claude Code、git、Python 3.10+、bash（Windows 上用 Git Bash），`uv` 可选；有一个 spec 清晰的中小型功能；愿意先用人工审批计划模式跑一轮，并用 `.superlite/metrics.jsonl` 和测试通过率自行复核。不适用——需要独立效果证据才采用；不能接受它与 superpowers 技能名冲突、不能在同一会话同时启用；高风险变更需要你逐步把关时直接上 AI 编排；没有 git 或 Python 3.10+ 的环境。
-
-**work-mode**：适用——Claude Code 2.1.314+ 且支持 function-hook plugins；你希望 AI 不因内部、可逆步骤停下来询问（本地文件、本地提交、测试），把对外发送消息、安装、密钥、不可恢复删除、付款、权限变更、生产变更等硬停项集中到最后报告；你希望把抽取、分类、摘要、评审等可由 checker 或 spot check 验证的批处理交给后台 subagent 或外部 CLI；你希望收口时不开新分支、完成已打开事项、只列新增或变化的决策并带 label 和 recommendation。不适用——Claude Code 低于 2.1.314 或不支持 function-hook plugins；需要量化效果证据才采用；不能接受 gate 直接 deny 带来的摩擦；会把密钥、force push、部署等真正的硬停项错误转换；需要插件替你按时间、事件或状态自动调度任务（材料没有提供这种机制）。
-
-**收口层、观测层、交接层**：收口层适合经常被 AI 反问、经常要回头翻测试结果的人；观测层适合想把“有没有变好”变成数字的人，但面板只在 CLI 或 Claude Desktop 的 Code tab 显示；交接层的 Project Sentinel 适合任务跨上下文窗口、需要定时唤醒和拍板不阻塞的人，但只在 Windows 11 和作者验证过的 Claude Code 版本上验证过，远程会话未测试。
-
-**block-ptc（DSH PTC 专用）**：适用——你在用 DeepSeek Harness（DSH）>=0.2.1-rc.2 和 PTC 模式；一个会话里有多个相对独立子任务、需要跨任务交接；你愿意让模型自己写交接摘要并遵守 `content` 写作规范；你需要完整 transcript 保留和确定性回放。不适用——单块连续、信息强耦合、需要逐字回溯原始对话的任务；不在 DSH 上；期望它自动跑或替代 DSH 内置自动压缩引擎；不愿接受“被省略的信息在后续请求里就不存在”；需要先看到量化收益才采用——作者自己声明节省 token、降低成本等收益尚未验证。
-
-**billion-context**：适用——长跑型编码会话（小时级到天级、单会话上千次调用）；上下文经常被撑爆，或宿主内置压缩把有用细节切掉；客户端有插件缝（pi、omp、opencode、dsh、kimi、hermes、zcode）或有可用启动器；你愿意每个会话用 `/acp-cache` 核对前缀缓存命中率。不适用——短任务，收益不明；不能用 npm 全局安装；用 Claude Desktop 的 Code 标签页（会绕过代理）；需要 Remote Control 等账号绑定功能；闭源客户端既不支持 baseURL 改写、也不能信任代理 CA；不愿接受“被压缩的区间在还原前只剩摘要”。
+- **官方插件市场**：适用——本机已安装并运行 Claude Code、能访问该 marketplace；想先浏览再决定装哪个；想按官方规范打包团队能力；愿意安装前检查插件主页和来源。不适用——没在用 Claude Code；需要先看到具体插件名单、评价或效果数据；期望 Anthropic 替你审核插件行为；不能接受插件访问文件与外部服务。原文明确 Anthropic 不控制插件里的 MCP server、文件或其他软件，也无法验证它们会按预期工作或不会变化。
+- **职能插件与独立 Agent Skills**：适用前提是团队已用 Claude Code 或 Cowork；所需外部工具能通过 MCP 接入；有人愿意读插件的 `skills/` 并按本团队流程改写；你希望把某职能的领域知识、工具连接和固定动作预打包复用。Blender 需要 Blender 5.2 LTS+ 并支持 Agent Skills；PM 需要能读结构化 Markdown 的代理；科研示意图需要 Node.js 22+ 与 Chromium。不适用——只看 README 就指望复现技能内部的提示词、脚本或 QA 规则；期望开箱即用、不做定制就大幅改善；需要先看到官方效果数据才采用。
+- **claude-skills 按域技能包**：适用——现有 11 个职能插件没有覆盖你的域，或你想拿一个可复制的 `SKILL.md`＋`scripts/`＋`references/` 结构做团队模板；需要同一套 skill 跨 Claude Code、Codex、Cursor 等工具复用；愿意在安装前跑安全审计并按域隔离安装。不适用——只看 README 就想复现技能内部提示词、脚本或 QA；需要前后对比数据或用户案例才采用；不愿做安装前审计；想一次全装。前提是本地有 git 与 Python 3，已装 Claude Code 或任一编码智能体；Windows 需用 `git clone -c core.symlinks=true` 并开启开发者模式，同时设置 `PYTHONUTF8=1`。
+- **subagent-studio**：适用——中大型代码库、复杂变更：每次改多个文件、有真实用户、代码要维护多年；或无人值守的定时运行；能用 git 和 worktree、能定义 check commands。不适用——小而明确的工作；需要先看到结果证据才采用；不能接受每个变更的数倍 token；无法确认 `docs/evidence.md` 里的证据细节。
+- **superlite**：适用——已安装 Claude Code、git、Python 3.10+、bash（Windows 上用 Git Bash），`uv` 可选；有一个 spec 清晰的中小型功能；愿意先用人工审批计划模式跑一轮，并用 `.superlite/metrics.jsonl` 和测试通过率自行复核。不适用——需要独立效果证据才采用；不能接受它与 superpowers 技能名冲突、不能在同一会话同时启用；高风险变更需要你逐步把关时直接上 AI 编排；没有 git 或 Python 3.10+ 的环境。
+- **work-mode**：适用——Claude Code 2.1.314+ 且支持 function-hook plugins；你希望 AI 不因内部、可逆步骤停下来询问（本地文件、本地提交、测试），把对外发送消息、安装、密钥、不可恢复删除、付款、权限变更、生产变更等硬停项集中到最后报告；你希望把抽取、分类、摘要、评审等可由 checker 或 spot check 验证的批处理交给后台 subagent 或外部 CLI；你希望收口时不开新分支、完成已打开事项、只列新增或变化的决策并带 label 和 recommendation。不适用——Claude Code 低于 2.1.314 或不支持 function-hook plugins；需要量化效果证据才采用；不能接受 gate 直接 deny 带来的摩擦；会把密钥、force push、部署等真正的硬停项错误转换；需要插件替你按时间、事件或状态自动调度任务（材料没有提供这种机制）。
+- **收口层、观测层、交接层**：收口层适合经常被 AI 反问、经常要回头翻测试结果的人；观测层适合想把“有没有变好”变成数字的人，但面板只在 CLI 或 Claude Desktop 的 Code tab 显示；交接层的 Project Sentinel 适合任务跨上下文窗口、需要定时唤醒和拍板不阻塞的人，但只在 Windows 11 和作者验证过的 Claude Code 版本上验证过，远程会话未测试。
+- **block-ptc（DSH PTC 专用）**：适用——你在用 DeepSeek Harness（DSH）>=0.2.1-rc.2 和 PTC 模式；一个会话里有多个相对独立子任务、需要跨任务交接；你愿意让模型自己写交接摘要并遵守 `content` 写作规范；你需要完整 transcript 保留和确定性回放。不适用——单块连续、信息强耦合、需要逐字回溯原始对话的任务；不在 DSH 上；期望它自动跑或替代 DSH 内置自动压缩引擎；不愿接受“被省略的信息在后续请求里就不存在”；需要先看到量化收益才采用——作者自己声明节省 token、降低成本等收益尚未验证。
+- **billion-context**：适用——长跑型编码会话（小时级到天级、单会话上千次调用）；上下文经常被撑爆，或宿主内置压缩把有用细节切掉；客户端有插件缝（pi、omp、opencode、dsh、kimi、hermes、zcode）或有可用启动器；你愿意每个会话用 `/acp-cache` 核对前缀缓存命中率。不适用——短任务，收益不明；不能用 npm 全局安装；用 Claude Desktop 的 Code 标签页（会绕过代理）；需要 Remote Control 等账号绑定功能；闭源客户端既不支持 baseURL 改写、也不能信任代理 CA；不愿接受“被压缩的区间在还原前只剩摘要”。
+- **maxagent 跨会话经验层**：适用——本机装好 Node.js 18+，至少装一个受支持 agent（Claude Code、Codex、Antigravity、OpenClaw）；你受够了每个新会话从零重解同一个问题，愿意让工具修改 agent 的全局规则文件并先备份；偏个人/单机试用，想先看“已验证做法能不能在命令前被拦住”。不适用——需要团队协作或多人共享工作区（材料没有说明）；需要先看到基准、用户案例或前后对比数据才采用；不愿接受共享经验包是“他人编写的、会被注入 agent 上下文的指令文本”；不能接受 `adopt` 会把共享 atom 提升为可阻断命令的本地条目。
 
 ## 前置条件
 
@@ -41,7 +34,7 @@
 5. subagent-studio 需要 Claude Code 构建支持 plugin 和 marketplace；要用七步流程需能建分支和 `git worktree`，并先定义好 check commands。
 6. 收口层 PRs 标签页需要已安装并登录的 `gh`；测试/构建要由 Claude 作为独立命令运行。
 7. 交接层运行面为终端 CLI 或 Claude Desktop 的 Code tab 本地会话；远程云会话未测试。
-8. 自行确认仓库许可：Blender 是 MIT；PM 是 CC BY-NC-SA 4.0；schematic-figure 代码是 MIT，内置 Latin Modern 字体是 GUST 字体许可；superlite、subagent-studio 和 claude-skills 也按各自仓库许可确认后再用于生产。
+8. 自行确认仓库许可：Blender 是 MIT；PM 是 CC BY-NC-SA 4.0；schematic-figure 代码是 MIT，内置 Latin Modern 字体是 GUST 字体许可；superlite、subagent-studio 和 claude-skills 也按各自仓库许可确认后再用于生产；maxagent 是 MIT。
 9. 准备一个非敏感、小体量的现有项目做试用，并先记录 2–3 次基线：同一任务的完成时间、返工次数、补齐上下文的次数。
 10. 同时用多层前先 `claude --version` 核对；升级 Claude Code 后先 `/reload-plugins`。
 11. claude-skills 需要 git 与 Python 3；Windows 用 `git clone -c core.symlinks=true` 并开启开发者模式，设 `PYTHONUTF8=1`；安装前能运行其 `skill_security_auditor.py`，并把 PASS 作为继续安装的门槛，WARN/FAIL 先人工检查或放弃。
@@ -50,7 +43,8 @@
 14. billion-context 原生插件支持的客户端：pi、omp、opencode 1.x/2.x、dsh、kimi（Kimi Code ≥ 2.0.0）、hermes、zcode；启动器还支持 codex、claude、gemini、qwen、aider、goose。
 15. Claude Desktop 的 Code 标签页会自设 `ANTHROPIC_BASE_URL` 绕过代理，而 `DISABLE_AUTO_COMPACT=1` 仍生效——既没压缩也没原生自动压缩；终端会话不受影响。走自定义 baseURL 会让 Claude Code 把会话当作第三方/API-key，Remote Control 等账号绑定功能会消失。
 16. work-mode 主插件需要 Claude Code 2.1.314+ 且支持 function-hook plugins；gates 还需要 `bash`、`jq`、`git`、`python3`。模式按 session 生效，新会话要重新切换模式。
-17. 准备非敏感小项目，先记录 2–3 次基线：完成时间、返工次数、补齐上下文次数、确认提示次数、是否误提交或多写文档、最终决策是否完整。
+17. maxagent 需要本机装好 Node.js 18+；至少装一个受支持 agent；愿意让工具修改 agent 的全局规则文件（有备份）；首次试用只勾工作区加规则钩子，共享经验包与浏览器桥先不装。
+18. 准备非敏感小项目，先记录 2–3 次基线：完成时间、返工次数、补齐上下文次数、确认提示次数、是否误提交或多写文档、最终决策是否完整；用 maxagent 时另记重复错误拦截次数与断点续做补充条数。
 
 ## 操作步骤
 
@@ -91,9 +85,7 @@ plugin-name/
 
 ### 第 1 步：选一个与你当前工作最接近的职能插件
 
-原文列出 11 个插件：productivity、sales、customer-support、product-management、marketing、legal、finance、data、enterprise-search、bio-research、cowork-plugin-management。数据岗选 data，销售选 sales，法务选 legal，以此类推。只挑一个，不要一次装多个。
-
-如果你的职能不在上面，或需要跨运行时使用，去看第 4 步之二的独立 Agent Skills；如果现有 11 个职能插件仍不覆盖你的域，或你想拿一个可复制的 skill 结构做团队模板，看第 4 步之五的 claude-skills。如果你要动的是中大型代码库上的一次变更，看第 4 步之三的 subagent-studio，或第 4 步之四的 superlite。
+原文列出 11 个插件：productivity、sales、customer-support、product-management、marketing、legal、finance、data、enterprise-search、bio-research、cowork-plugin-management。数据岗选 data，销售选 sales，法务选 legal，以此类推。只挑一个，不要一次装多个。如果你的职能不在上面，或需要跨运行时使用，去看第 4 步之二的独立 Agent Skills；如果现有 11 个职能插件仍不覆盖你的域，或你想拿一个可复制的 skill 结构做团队模板，看第 4 步之五的 claude-skills。如果你要动的是中大型代码库上的一次变更，看第 4 步之三的 subagent-studio，或第 4 步之四的 superlite。
 
 ### 第 2 步：安装职能插件（做法 A / 做法 B）
 
@@ -127,9 +119,7 @@ plugin-name/
 └── skills/
 ```
 
-`skills/` 放领域知识和工作流，Claude 在相关时自动取用；`commands/` 放你显式触发的动作；`.mcp.json` 通过 MCP server 接外部工具；`plugin.json` 是清单。四个定制方向：换 connector、加公司上下文、调工作流、建新插件。原文只给了总体步骤和目录结构，没有收录任何单个插件的具体 skill 内容、提示词全文或命令清单，要照做必须自己打开仓库对应目录去读。
-
-**预期结果**：Claude 在相关交互中自动取用你改过的知识和流程；用斜杠命令触发时，输出更贴近团队实际做法。开箱插件只是通用起点。
+`skills/` 放领域知识和工作流，Claude 在相关时自动取用；`commands/` 放你显式触发的动作；`.mcp.json` 通过 MCP server 接外部工具；`plugin.json` 是清单。四个定制方向：换 connector、加公司上下文、调工作流、建新插件。原文只给了总体步骤和目录结构，没有收录任何单个插件的具体 skill 内容、提示词全文或命令清单，要照做必须自己打开仓库对应目录去读。**预期结果**：Claude 在相关交互中自动取用你改过的知识和流程；用斜杠命令触发时，输出更贴近团队实际做法。开箱插件只是通用起点。
 
 ### 第 4 步之二：用独立 Agent Skills 包落地一个具体职能（做法 A / 做法 B / 做法 C）
 
@@ -262,9 +252,7 @@ Reviewed-by: fresh reviewer agent, 3f1c2a9..8be04d1, 1 round (0 blocker, 1 major
 Fixed-after-review: author, 8be04d1..c47e9f0, 2 fixes (major: empty file gave a header-only CSV; minor: column order)
 ```
 
-`review_guard.sh audit` 读取这两个 range，检查 merge 是否恰好带入了它们覆盖的内容；guard 拒绝把未审查工作 push 到 main；可选 hook 自动运行 guard。
-
-**配置**：`core.review.reviewed_paths` 把 scratch 目录和一次性脚本排除，避免多付 review 成本；`core.review.land` 默认 `merge-no-ff`，团队让人类合并则设 `core.review.land: pr`，合并必须用保留 trailers 的 merge commit；`roles.<role>` 设置模型或 effort 需要 Claude Code v2.1.292+，老版本留空由 agent 文件 frontmatter 决定。
+`review_guard.sh audit` 读取这两个 range，检查 merge 是否恰好带入了它们覆盖的内容；guard 拒绝把未审查工作 push 到 main；可选 hook 自动运行 guard。**配置**：`core.review.reviewed_paths` 把 scratch 目录和一次性脚本排除，避免多付 review 成本；`core.review.land` 默认 `merge-no-ff`，团队让人类合并则设 `core.review.land: pr`，合并必须用保留 trailers 的 merge commit；`roles.<role>` 设置模型或 effort 需要 Claude Code v2.1.292+，老版本留空由 agent 文件 frontmatter 决定。
 
 ### 第 4 步之四：用 superlite 从 spec 跑到可测试代码（做法 A / 做法 B）
 
@@ -329,11 +317,7 @@ CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL=1h
 Build X. I am away, decide yourself
 ```
 
-计划、lint、分发全都自动，需要决策的事项记录为 rulings，而不会打断你询问。协调者以 medium effort 运行；最终审查是一个全新的 Opus `final-reviewer` 以 high effort 跑单轮，只报发现不改代码，读由日志拼成的 review packet，目标 30 秒内完成。
-
-**怎么选**：要先把计划和成本看住、再放它跑，用做法 A；已经信任这类流程、要长时间无人值守，用做法 B。第一次用不要直接上 AI 编排。
-
-**与 subagent-studio 怎么选**：要计划、worktree、每步 check、两轮 review、带 trailers 的 landing 和 audit 链，用 subagent-studio；要更轻的 spec 到代码、模型分层路由、无人驾驶 rulings 和内置 benchmark harness，用 superlite。两者都做多代理，材料未说明同时装会不会互相干扰，先只在一个任务上用一套。
+计划、lint、分发全都自动，需要决策的事项记录为 rulings，而不会打断你询问。协调者以 medium effort 运行；最终审查是一个全新的 Opus `final-reviewer` 以 high effort 跑单轮，只报发现不改代码，读由日志拼成的 review packet，目标 30 秒内完成。**怎么选**：要先把计划和成本看住、再放它跑，用做法 A；已经信任这类流程、要长时间无人值守，用做法 B。第一次用不要直接上 AI 编排。**与 subagent-studio 怎么选**：要计划、worktree、每步 check、两轮 review、带 trailers 的 landing 和 audit 链，用 subagent-studio；要更轻的 spec 到代码、模型分层路由、无人驾驶 rulings 和内置 benchmark harness，用 superlite。两者都做多代理，材料未说明同时装会不会互相干扰，先只在一个任务上用一套。
 
 ### 第 4 步之五：用 claude-skills 按域补一个领域的专业能力（做法 A / 做法 B / 做法 C）
 
@@ -386,7 +370,7 @@ npx agent-skills-cli add alirezarezvani/claude-skills --agent codex
 README 称全量转换约 15 秒；`--force` 可跳过确认。各工具目标目录不同：Cursor → `.cursor/rules/*.mdc`；Aider → `CONVENTIONS.md`；Kilo Code → `.kilocode/rules/`；Windsurf → `.windsurf/skills/`；OpenCode → `.opencode/skills/`；Augment → `.augment/rules/`；Antigravity → `~/.gemini/antigravity/skills/`；Hermes → `python scripts/sync-hermes-skills.py --verbose` 装到 `~/.hermes/skills/`；Mistral Vibe → `./scripts/vibe-install.sh` 装到 `~/.vibe/skills/`。校验示例：
 
 ```bash
-find .cursor/rules -name "*.mdc" | wc -l
+find .cursor/rules -name *.mdc | wc -l
 ```
 
 README 在期望值处写 346，同一页其他地方写 345 和 392，说明数字不可全信，以实际 `find` 结果为准。
@@ -414,9 +398,7 @@ python3 product-team/product-manager-toolkit/scripts/rice_prioritizer.py feature
 cp agents/personas/startup-cto.md ~/.claude/agents/
 ```
 
-自建时参照 `agents/personas/TEMPLATE.md`；自建 skill 参照 README 指向的 `alirezarezvani/claude-code-skills-agents-factory`。
-
-**怎么选**：官方职能插件是开箱通用起点；claude-skills 覆盖更广、可按域装、可跨工具转换；独立技能包是单点。先只装一个域或一个技能，用真实任务与“不装 skill”的基线比返工轮数，再决定是否保留。
+自建时参照 `agents/personas/TEMPLATE.md`；自建 skill 参照 README 指向的 `alirezarezvani/claude-code-skills-agents-factory`。**怎么选**：官方职能插件是开箱通用起点；claude-skills 覆盖更广、可按域装、可跨工具转换；独立技能包是单点。先只装一个域或一个技能，用真实任务与“不装 skill”的基线比返工轮数，再决定是否保留。
 
 ### 第 5 步：加一层收口，让 AI 把没收口的事交出来（inbox）
 
@@ -436,11 +418,7 @@ cp agents/personas/startup-cto.md ~/.claude/agents/
 /inbox
 ```
 
-三个标签页：Needs you（Claude 问你的问题、只有你能做的任务、失败的测试或构建）、Findings（任务之外注意到的 bug、风险和想法）、PRs（本会话和当前分支的 pull request、阻塞项、等你处理的 review 评论）。快捷键：`1 / 2 / 3` 切换标签页，`j / k` 上下移动，动作字母执行，`ctrl+x` 在面板与会话之间切换。
-
-插件会核对测试/构建状态：Claude 把每个测试或构建作为独立命令运行；如果 Claude 说某件事通过了，但上次运行失败、或改动后没再跑过，插件会要求重跑或声明未测试。会话空闲 15 分钟或恢复会话时，提示符上方会自动展开简短状态摘要。
-
-成本口径：每次 Claude 回复后触发一次轻量 Sonnet 调用，3–4k 输入（约 2k 命中缓存）、100–250 输出，约 0.5¢/回复；空闲 5 分钟后约 1¢；插件自身指令与工具约 1,350 token。作者称一次较长 Opus 会话中约占 1%，会话越短占比越高。
+三个标签页：Needs you（Claude 问你的问题、只有你能做的任务、失败的测试或构建）、Findings（任务之外注意到的 bug、风险和想法）、PRs（本会话和当前分支的 pull request、阻塞项、等你处理的 review 评论）。快捷键：`1 / 2 / 3` 切换标签页，`j / k` 上下移动，动作字母执行，`ctrl+x` 在面板与会话之间切换。插件会核对测试/构建状态：Claude 把每个测试或构建作为独立命令运行；如果 Claude 说某件事通过了，但上次运行失败、或改动后没再跑过，插件会要求重跑或声明未测试。会话空闲 15 分钟或恢复会话时，提示符上方会自动展开简短状态摘要。成本口径：每次 Claude 回复后触发一次轻量 Sonnet 调用，3–4k 输入（约 2k 命中缓存）、100–250 输出，约 0.5¢/回复；空闲 5 分钟后约 1¢；插件自身指令与工具约 1,350 token。作者称一次较长 Opus 会话中约占 1%，会话越短占比越高。
 
 ### 第 6 步：加一层观测 mod（广），把有没有变好变成数字
 
@@ -467,11 +445,7 @@ claude --plugin-dir ./mods/context-meter
 
 ### 第 6 步之二：加一层观测 mod（深）——时间去向、上下文浪费、编辑时间线
 
-第二个集合 `YeonwooSung/my-claude-code-mods` 建立在官方 Mods 机制之上。6 个 mod：`agent-profiler` 看会话时间去向并可导出 OTLP trace；`context-inspector` 看上下文浪费；`time-machine` 用 shadow-git 快照记录每一次工具调用；`loop-detective` 检测重复失败和 edit/retry 循环；`pin-memo` 固定备忘和 todo；`model-effort-band` 显示模型与 effort。
-
-先只装一个：反复同类失败选 `loop-detective`；上下文经常被塞满选 `context-inspector`；想知道时间花在哪选 `agent-profiler`；要定位哪次编辑弄坏了测试选 `time-machine`。安装机制按官方文档使用 `plugin@marketplace`；具体安装命令和配置项进各自 README 读，不要照抄看起来像的命令。
-
-量 mod 自身开销用四配置对照：一次性大型代表性仓库固定在一个 commit；同一工作负载跑无 mod、仅 profiler、仅 Time Machine、三个全上；用 `--plugin-dir` 显式加载并禁用其他插件；计时区间外重置文件和 recorder 存储；每种配置 warm-up 并至少 5 次测量，交替顺序；记录 wall time、tool-call 数量、model tokens、snapshot 平均值；按 median/p95 报告，把模型延迟与 snapshot/hook 时间分开。原文没有给出四配置的性能结果，别拿单元测试通过当作性能可接受。
+第二个集合 `YeonwooSung/my-claude-code-mods` 建立在官方 Mods 机制之上。6 个 mod：`agent-profiler` 看会话时间去向并可导出 OTLP trace；`context-inspector` 看上下文浪费；`time-machine` 用 shadow-git 快照记录每一次工具调用；`loop-detective` 检测重复失败和 edit/retry 循环；`pin-memo` 固定备忘和 todo；`model-effort-band` 显示模型与 effort。先只装一个：反复同类失败选 `loop-detective`；上下文经常被塞满选 `context-inspector`；想知道时间花在哪选 `agent-profiler`；要定位哪次编辑弄坏了测试选 `time-machine`。安装机制按官方文档使用 `plugin@marketplace`；具体安装命令和配置项进各自 README 读，不要照抄看起来像的命令。量 mod 自身开销用四配置对照：一次性大型代表性仓库固定在一个 commit；同一工作负载跑无 mod、仅 profiler、仅 Time Machine、三个全上；用 `--plugin-dir` 显式加载并禁用其他插件；计时区间外重置文件和 recorder 存储；每种配置 warm-up 并至少 5 次测量，交替顺序；记录 wall time、tool-call 数量、model tokens、snapshot 平均值；按 median/p95 报告，把模型延迟与 snapshot/hook 时间分开。原文没有给出四配置的性能结果，别拿单元测试通过当作性能可接受。
 
 ### 第 7 步：长任务跨上下文时，加一层交接控制台（Project Sentinel）
 
@@ -494,54 +468,38 @@ claude plugin install project-sentinel@control-room
 claude --plugin-dir /path/to/project-sentinel/plugins/project-sentinel
 ```
 
-只想验证有没有减少上下文溢出和人工盯守，先做这一步；决定长期用再正式安装。在 Claude Desktop 的 Code tab 用工作副本，把文件夹名写进 `~/.claude/settings.json` 的 `env` 块 `CLAUDE_CODE_PLUGIN_DIRS`。
-
-打开 Control Room：
+只想验证有没有减少上下文溢出和人工盯守，先做这一步；决定长期用再正式安装。在 Claude Desktop 的 Code tab 用工作副本，把文件夹名写进 `~/.claude/settings.json` 的 `env` 块 `CLAUDE_CODE_PLUGIN_DIRS`。打开 Control Room：
 
 ```text
 /cr
 ```
 
-六节：Overview / Context / Behavior / Guardrails / Activity / Setup。其它命令：`/cr status`、`/cr cache`、`/cr decisions`、`/cr decide D-2`、`/cr diagnostics`。
-
-Autopilot 默认 Off。在 Context 里设阈值（窗口百分比或 token 数；README 截图里的 70% 与 80% 只是截图示例，不是推荐值）。到阈值时 Claude 先做完当前步骤，然后记录里程碑、更新项目文档、CLAUDE.md 只留持久指令、跑一次最小验证、写 `NEXT_SESSION_PROMPT.md`；Project Sentinel 运行 `/clear`，用里程碑和目标播种新上下文，Claude 自行继续。每一步都在下一轮开始或结束时推进，绝不按定时器走。
-
-Watchers：
+六节：Overview / Context / Behavior / Guardrails / Activity / Setup。其它命令：`/cr status`、`/cr cache`、`/cr decisions`、`/cr decide D-2`、`/cr diagnostics`。Autopilot 默认 Off。在 Context 里设阈值（窗口百分比或 token 数；README 截图里的 70% 与 80% 只是截图示例，不是推荐值）。到阈值时 Claude 先做完当前步骤，然后记录里程碑、更新项目文档、CLAUDE.md 只留持久指令、跑一次最小验证、写 `NEXT_SESSION_PROMPT.md`；Project Sentinel 运行 `/clear`，用里程碑和目标播种新上下文，Claude 自行继续。每一步都在下一轮开始或结束时推进，绝不按定时器走。Watchers：
 
 ```text
 /cr watch in 2h S-002 result
 ```
 
-支持 `at 14:00`、`tomorrow at 9am`；三种策略 Keep warm / Fresh / Smart。Fresh 唤醒需要健康的 resume 状态；Watchers 只在 Claude Code 运行时工作。
-
-Mission Queue：
+支持 `at 14:00`、`tomorrow at 9am`；三种策略 Keep warm / Fresh / Smart。Fresh 唤醒需要健康的 resume 状态；Watchers 只在 Claude Code 运行时工作。Mission Queue：
 
 ```text
 /cr queue <text>
 ```
 
-每项只在边界投递：下一个安全边界、本轮之后、当前里程碑之后，或下一个新上下文。绝不插进某一轮推理中间；跨 `/clear`、交接、重载和恢复会话与 run 一起保留，只投递一次。
-
-Decision Inbox：
+每项只在边界投递：下一个安全边界、本轮之后、当前里程碑之后，或下一个新上下文。绝不插进某一轮推理中间；跨 `/clear`、交接、重载和恢复会话与 run 一起保留，只投递一次。Decision Inbox：
 
 ```text
 /cr decisions
 /cr decide D-2
 ```
 
-插件给 Claude 一个 `decision_request` 工具，选择停在 Activity → Operations → Needs review；答复随 Claude 下一批工具结果送达。Claude Code 自己的权限提示和确认永远不会被这里延后，插件也不代你回答权限提示。
-
-Run Budget 默认 Off：
+插件给 Claude 一个 `decision_request` 工具，选择停在 Activity → Operations → Needs review；答复随 Claude 下一批工具结果送达。Claude Code 自己的权限提示和确认永远不会被这里延后，插件也不代你回答权限提示。Run Budget 默认 Off：
 
 ```text
 /cr budget $30
 ```
 
-设成本、墙钟时间和交接次数上限，80% 时提示一次；到上限时可选只通知 / 自行开工前先问 / 让 Claude 做完当前里程碑再暂停。它不会中断正在进行的工具调用或轮次。Machine load 默认 Off：给 CPU 和内存建议上限（Low / Medium / High / Custom），不是 OS 配额。Cache Guardian 默认 On：会在会重发 100k+ 热 token 的模型切换前先确认；Keep warm 默认 Off，会在你离开时于缓存过期前不久重发一次最后请求，是明确的成本项。Cold Resume Guard 默认 On：向大上下文发送消息且缓存确定已失效时，先问 Continue full session / Start fresh from resume state / Compact first / Cancel。
-
-权限策略按类别给 Default / Ask / Deny（包安装、网络、下载、项目内编辑、项目外编辑、删文件、commit、push、force push 与 reset、部署发布、危险命令）。选 profile 而不是逐项配：Normal、Frontier Max、Low Resource、Release / QA 和自定义。Answer styles 只影响对你说的话，不影响代码、文件或提交信息。
-
-和 inbox 怎么选：最痛的是 Claude 谎报测试通过，先上 inbox；最痛的是长跑任务里被反复叫去拍板、或要等到某个时间点才继续，先用交接层。材料未说明两者同时装会不会互相干扰，先只用一个。
+设成本、墙钟时间和交接次数上限，80% 时提示一次；到上限时可选只通知 / 自行开工前先问 / 让 Claude 做完当前里程碑再暂停。它不会中断正在进行的工具调用或轮次。Machine load 默认 Off：给 CPU 和内存建议上限（Low / Medium / High / Custom），不是 OS 配额。Cache Guardian 默认 On：会在会重发 100k+ 热 token 的模型切换前先确认；Keep warm 默认 Off，会在你离开时于缓存过期前不久重发一次最后请求，是明确的成本项。Cold Resume Guard 默认 On：向大上下文发送消息且缓存确定已失效时，先问 Continue full session / Start fresh from resume state / Compact first / Cancel。权限策略按类别给 Default / Ask / Deny（包安装、网络、下载、项目内编辑、项目外编辑、删文件、commit、push、force push 与 reset、部署发布、危险命令）。选 profile 而不是逐项配：Normal、Frontier Max、Low Resource、Release / QA 和自定义。Answer styles 只影响对你说的话，不影响代码、文件或提交信息。和 inbox 怎么选：最痛的是 Claude 谎报测试通过，先上 inbox；最痛的是长跑任务里被反复叫去拍板、或要等到某个时间点才继续，先用交接层。材料未说明两者同时装会不会互相干扰，先只用一个。
 
 ### 第 7 步之二：让模型按工作单元划上下文块并自己写交接摘要（DSH PTC 专用，做法 A / 做法 B）
 
@@ -621,9 +579,7 @@ plugin_manager  set_bundle  dsh-block-ptc enabled=false
 
 两者都需重启。
 
-**做法 B：不装插件，只借机制**：不在 DSH 上，或不想引入社区插件时，保留三条做法——按相对独立的工作单元给会话分段；在转场时手写一份交接摘要，必须包含用户要求、纠正、约束、已完成、未完成和下一步；原始对话不要删，摘要只作为下一段工作的入口。代价是边界和摘要都靠人。
-
-**怎么选**：在 DSH PTC 上、且任务确实有多个独立子任务，用做法 A；否则用做法 B，或者先用第 7 步的 Project Sentinel 做跨会话交接。块级压缩、billion-context 和 Project Sentinel 都在动上下文边界，材料没有说明同时装会不会互相干扰，先只在一个任务上用一套。
+**做法 B：不装插件，只借机制**：不在 DSH 上，或不想引入社区插件时，保留三条做法——按相对独立的工作单元给会话分段；在转场时手写一份交接摘要，必须包含用户要求、纠正、约束、已完成、未完成和下一步；原始对话不要删，摘要只作为下一段工作的入口。代价是边界和摘要都靠人。**怎么选**：在 DSH PTC 上、且任务确实有多个独立子任务，用做法 A；否则用做法 B，或者先用第 7 步的 Project Sentinel 做跨会话交接。块级压缩、billion-context 和 Project Sentinel 都在动上下文边界，材料没有说明同时装会不会互相干扰，先只在一个任务上用一套。
 
 ### 第 7 步之三：把上下文压缩的时机交给模型（billion-context，做法 A / 做法 B / 做法 C）
 
@@ -698,11 +654,69 @@ bili goose
 
 前提：启动器每次新起代理实例、不复用端口；对不支持 baseURL 改写的闭源客户端用证书 MITM，需要客户端信任代理 CA；`goose` 因 rustls 不信任 CA 文件，无法 MITM，只能走 baseURL 重定向。
 
-**做法 C：URL 改写（最通用）**：把客户端 baseURL 前缀改成“代理 origin + `/bili/`”。适合有 baseURL 配置项、但没有插件缝的客户端。**Codex 的特殊前提**：`bili plugin install codex` 只写入一个 MCP 块（暴露四个 ACP 工具），不能 让 codex 自身流量走代理；必须先有可用代理（`bili start` 或任一 lane 的代理，环境变量 `BILI_MCP_PROXY` 优先，其次活实例记录，最后 8787 默认）。要零配置完整效果就用 `bili codex` 启动器。
+**做法 C：URL 改写（最通用）**：把客户端 baseURL 前缀改成“代理 origin + `/bili/`”。适合有 baseURL 配置项、但没有插件缝的客户端。**Codex 的特殊前提**：`bili plugin install codex` 只写入一个 MCP 块（暴露四个 ACP 工具），不能让 codex 自身流量走代理；必须先有可用代理（`bili start` 或任一 lane 的代理，环境变量 `BILI_MCP_PROXY` 优先，其次活实例记录，最后 8787 默认）。要零配置完整效果就用 `bili codex` 启动器。**端口与常驻**：`bili start` 手动模式独占 8787；各 lane 自管理区从 18787 起，冲突则 +1 并各自记住漂移；升级重启时若旧构建仍在端口上排空，最多等 5s 后重绑同一端口。**避免双重压缩**：原生插件与本仓库的独立进程内扩展（`billion-context-pi`、`opencode-acp`）互斥，两者同时生效即双压；安装器会替换旧条目并把原配置快照为 `.bili-bak`，项目级安装不会被自动处理，需手工删除；pi 侧需要 `billion-context-pi` 0.1.72+ 才能靠 `BILLION_CONTEXT_NATIVE=<host>` 标记自动让位。**怎么选**：有插件缝的客户端用做法 A；闭源二进制无插件缝、或不想改配置用做法 B；只能改 baseURL 的用做法 C。不要在同一客户端上叠加两种形态。与第 7 步之二（block-ptc）的关系：两者都在动上下文边界，材料未说明同时装会不会互相干扰，先只在一个任务上用一套；block-ptc 是 DSH PTC 专用、按工作单元替换整段消息，billion-context 是跨客户端的代理、由模型自己选区间压缩并可还原。
 
-**端口与常驻**：`bili start` 手动模式独占 8787；各 lane 自管理区从 18787 起，冲突则 +1 并各自记住漂移；升级重启时若旧构建仍在端口上排空，最多等 5s 后重绑同一端口。**避免双重压缩**：原生插件与本仓库的独立进程内扩展（`billion-context-pi`、`opencode-acp`）互斥，两者同时生效即双压；安装器会替换旧条目并把原配置快照为 `.bili-bak`，项目级安装不会被自动处理，需手工删除；pi 侧需要 `billion-context-pi` 0.1.72+ 才能靠 `BILLION_CONTEXT_NATIVE=<host>` 标记自动让位。
+### 第 8 步：用 maxagent 给多个 agent 加跨会话经验层（做法 A / 做法 B）
 
-**怎么选**：有插件缝的客户端用做法 A；闭源二进制无插件缝、或不想改配置用做法 B；只能改 baseURL 的用做法 C。不要在同一客户端上叠加两种形态。与第 7 步之二（block-ptc）的关系：两者都在动上下文边界，材料未说明同时装会不会互相干扰，先只在一个任务上用一套；block-ptc 是 DSH PTC 专用、按工作单元替换整段消息，billion-context 是跨客户端的代理、由模型自己选区间压缩并可还原。
+**什么时候用**：本机装好 Node.js 18+，至少装一个受支持 agent（Claude Code、Codex、Antigravity、OpenClaw）；你受够了每个新会话从零重解同一个问题：搜索、尝试、失败、再找一遍；你希望把工作中写下的短小已验证配方（atom）在“你发消息时 / 执行命令前 / 报错后”自动浮现；你愿意让工具修改 agent 的全局规则文件并先备份。**什么时候跳过**：需要团队协作或多人共享工作区（材料没有说明）；需要先看到基准、用户案例或前后对比数据才采用；不愿接受共享经验包是他人编写的、会被注入 agent 上下文的指令文本；不能接受 `adopt` 会把共享 atom 提升为可阻断命令的本地条目。
+
+**做法 A：亲自跑安装向导（推荐）**
+
+1. 前提：Node.js 18+；至少一个受支持 agent；接受工具写全局规则文件。首次只启用工作区加规则钩子，共享经验包与浏览器桥先不装。运行：
+
+```text
+npx maxagent init
+```
+
+向导会建工作区 `~/maxagent`（`AGENTS.md`、`experience/`、`projects/`、`sync.md`、`inbox/`），可选建私有 Git 仓库做同步；对它发现的每个 agent 写入带标记的规则块与钩子；就附加组件只问一个问题——全部安装 / 自选 / 都不装；最后输出总结。首次在自选项里只勾工作区加规则钩子。**预期结果**：`npx maxagent doctor` 能看到装了什么且健康；全局规则文件只多了带标记的块。**失败处理**：先比对备份或 `git diff`，确认没有覆盖你原有规则；不要继续装共享包。
+
+2. 日常运维命令：
+
+```text
+npx maxagent setup          # 改设置，如 updates: false 可彻底关掉网络请求
+npx maxagent doctor         # 查装了什么、健不健康
+npx maxagent update         # 更新规则/钩子/agent 块，不动工作区
+npx maxagent experience list | add <pack> | all | update | mute <pack> | adopt "<id>"
+npx maxagent uninstall      # 从 agent 里移除块与钩子，工作区保留
+```
+
+3. 按两层规则使用：自己写的 atom 在 `experience/`，优先浮现，且可以拦住已知会失败的命令；共享 atom 从仓库下载的 pack 只做参考，仅在自己那层为空时显示、阈值更高、每条消息最多一条、只给标题加第一步、永不阻断命令。觉得有用的共享 atom 用 `npx maxagent experience adopt "<id>"` 复制进自己的层；噪音用 `npx maxagent experience mute <pack>`。
+
+4. 隐私开关：在 `npx maxagent setup` 里设 `updates: false`，则完全无网络请求。
+
+5. 以后想开浏览器桥时：
+
+```text
+npx maxagent bridge
+```
+
+扩展需手动加载：`chrome://extensions` → 打开开发者模式 → “加载已解压的扩展程序” → 选目录；向导会等到桥连上。它通过 Chrome 扩展（Native Messaging）驱动你自己的 Chrome，使用你自己的 profile 和登录态，不开端口，逐 agent 审批，有站点黑名单、动作日志和停止按钮。
+
+6. 以后想开本地语义检索时：
+
+```text
+npx maxagent vectors
+```
+
+约 270 MB，模型 revision 固定并做 sha256 校验，Python 库落在 `~/.maxagent/vector`；无 Python 时向导会提议安装（Windows 走 winget，需另行确认）；没有它则只用词面搜索。
+
+7. 以后想开共享经验包时：
+
+```text
+npx maxagent experience add all
+```
+
+共享包是挂在 GitHub Release 上的单个 JSON，客户端校验 sha256、文件名和文本内容（下载即执行命令、试图改写 agent 规则、外发密钥、破坏性命令、隐藏字符），命中任一项整包拒收。即便如此，也应先按不可信内容对待；先 `mute` 到只留少量，再逐个 `adopt`。
+
+**注意**：atom 的具体书写格式由 `experience/_spec.md` 定义，该文件内容未出现在给出的材料中，因此“经验条目怎么写”这一步无法照抄，只能装完后读该文件。
+
+**做法 B：让 agent 代跑交互式安装（可选）**：README 给了一段可直接复制的委派提示词，价值在于它同时约束了“问全、不替用户选、跳过任何一项”的交互纪律：
+
+```text
+Install maxagent: run `npx maxagent init`. Without a terminal it prints the questions: ask me all of them, choose nothing for me and skip nothing, then pass me its report.
+```
+
+**怎么选**：想先看清楚装了什么、只开最小功能，用做法 A；已经在用 agent 跑安装、想让提问不被代选，用做法 B。无论哪种，首次都只勾工作区加规则钩子；共享经验包和浏览器桥等两周验证后再开。
 
 ### 第 9 步：用 work-mode 控制自主推进、批处理委派和收口（做法 A / 做法 B）
 
@@ -751,17 +765,17 @@ gates 会把模式写入 `~/.claude/state/tempo/<session_id>` 供 shell hooks �
 
 ### 第 10 步：贡献回仓库（可选）
 
-职能插件是 markdown 文件，fork 后改，提 PR。交接层是 MIT、无构建步骤的 TypeScript，按本地 clone 改、`/reload-plugins` 热加载即可。Blender 是 MIT，可 fork 后运行 `validate_skills.py` 和 `run_tests.py`；PM 是 CC BY-NC-SA 4.0，fork 和再分发要遵守许可，添加技能遵守 `## Input` 和不用 `$ARGUMENTS` 的约定；schematic-figure 代码是 MIT，内置 Latin Modern 字体是 GUST 字体许可。claude-skills 是 MIT，按仓库自带审计与贡献方式改；superlite 和 subagent-studio 按各自仓库的贡献方式和许可来。block-ptc 是 MIT，按仓库的测试与贡献方式改；它是社区插件，不是 DSH 官方组件。billion-context 和 work-mode 按仓库许可与贡献方式确认后再用于生产。
+职能插件是 markdown 文件，fork 后改，提 PR。交接层是 MIT、无构建步骤的 TypeScript，按本地 clone 改、`/reload-plugins` 热加载即可。Blender 是 MIT，可 fork 后运行 `validate_skills.py` 和 `run_tests.py`；PM 是 CC BY-NC-SA 4.0，fork 和再分发要遵守许可，添加技能遵守 `## Input` 和不用 `$ARGUMENTS` 的约定；schematic-figure 代码是 MIT，内置 Latin Modern 字体是 GUST 字体许可。claude-skills 是 MIT，按仓库自带审计与贡献方式改；superlite 和 subagent-studio 按各自仓库的贡献方式和许可来。block-ptc 是 MIT，按仓库的测试与贡献方式改；它是社区插件，不是 DSH 官方组件。billion-context 和 work-mode 按仓库许可与贡献方式确认后再用于生产。maxagent 是 MIT；改之前先备份全局规则文件，按仓库说明跑 `npx maxagent update` 或 `npx maxagent uninstall`，工作区文件归用户所有、升级不覆盖。
 
 ## 怎么判断变好了
 
-先分清来源：职能插件原文没有给出验证方法或指标；收口层只有成本口径；交接层只有机制描述；观测层（深）明确没有给出四配置性能结果；Blender、PM、示意图材料都只到 README；subagent-studio 只有作者单项目自述、仓库仅 30 星，关键证据在未包含的 `docs/evidence.md`；superlite 的 3.9 倍与 52% 是作者用自建 harness 单次或少量运行自测得出，材料未说明 52% 的具体口径，且鲁棒性探针低于对照组，不能当定论；claude-skills README 全是目录与宣传、没有效果数据、没有用户案例或基准测试，规模数字还自相矛盾；block-ptc 的作者明确说节省 token、降低成本等收益尚未验证；billion-context 的 ContextBench / LongMemEval-S / MemoryAgentBench 数字是作者自测或自建基准，短任务收益不明；work-mode 只有 README 和演示主张，没有量化数据、对照实验或案例结果。
+先分清来源：职能插件原文没有给出验证方法或指标；收口层只有成本口径；交接层只有机制描述；观测层（深）明确没有给出四配置性能结果；Blender、PM、示意图材料都只到 README；subagent-studio 只有作者单项目自述、仓库仅 30 星，关键证据在未包含的 `docs/evidence.md`；superlite 的 3.9 倍与 52% 是作者用自建 harness 单次或少量运行自测得出，材料未说明 52% 的具体口径，且鲁棒性探针低于对照组，不能当定论；claude-skills README 全是目录与宣传、没有效果数据、没有用户案例或基准测试，规模数字还自相矛盾；block-ptc 的作者明确说节省 token、降低成本等收益尚未验证；billion-context 的 ContextBench / LongMemEval-S / MemoryAgentBench 数字是作者自测或自建基准，短任务收益不明；work-mode 只有 README 和演示主张，没有量化数据、对照实验或案例结果；maxagent 全部来自仓库 README 自述，没有基准、用户案例、故障率或前后对比数据。
 
 **通用最小试用**：先记录 2–3 次基线（完成时间、返工次数、补齐上下文次数），装一个插件或技能包，跑一个真实任务，再对照同一类任务。试一两周；没有可感知改善就卸载，并记为“该插件无实质增益”。
 
 **职能插件**：同一任务完成时间、返工次数、补齐上下文的次数是否下降；`/xxx:yyy` 是否出现并成功执行，这是最硬的通过/不通过信号。
 
-**独立技能**：Blender 记录完成时间、人工干预次数、能否通过目标引擎导入检查、`blender-asset-qa` 是否报出 z-fighting、浮空部件、坏法线或权重问题；PM 用真实 PM 任务与裸提示对照，看完成时间、返工、输出能否直接使用；示意图看从需求到可用初稿的时间、人工调整轮次、SVG/PDF 能否逐处编辑、按 `standard` 口径复核每个计数/方向/连接时的漏检比例，以及字体授权是否满足投稿要求。
+**独立技能**：Blender 记录完成时间、人工干预次数、能否通过目标引擎导入检查、`blender-asset-qa` 是否报出 z-fighting、浮空部件、坏法线或权重问题；PM 用真实 PM 任务与裸提示对比，看完成时间、返工、输出能否直接使用；示意图看从需求到可用初稿的时间、人工调整轮次、SVG/PDF 能否逐处编辑、按 `standard` 口径复核每个计数/方向/连接时的漏检比例，以及字体授权是否满足投稿要求。
 
 **claude-skills**：先只装一个域，安装前审计必须 PASS；挑两个真实任务与“不装 skill”的基线对比返工轮数、完成时间和人工补齐次数。看 `skill-doctor`、`self-eval` 或 SkillCheck 徽章能否从真实会话取证并过确定性闸门，但材料没有前后对比数据、用户案例或基准测试，不能引用其结论。若返工轮数没有下降，或审计 WARN/FAIL 未处理，卸载；若只想借鉴思路，就保留“从真实会话取证＋闸门”的检查方式，不要采信规模数字。
 
@@ -781,16 +795,18 @@ gates 会把模式写入 `~/.claude/state/tempo/<session_id>` 供 shell hooks �
 
 **work-mode**：在隔离仓库或沙箱中试用，准备两类任务：一类是本地可逆修改加测试，另一类是有 checker 的批处理（抽取、分类、摘要或评审）。先记录不用插件的基线：完成时间、确认提示次数、返工次数、是否出现误提交或多余文档、最终决策是否完整。安装 `work-mode`，对本地可逆任务使用 `/work-mode auto wrap`；对可验证批处理使用 `/work-mode auto out`。先不安装 gates，观察模式本身的行为；再逐个启用 gates：先在沙箱验证 `scratch-doc-guard.sh` 和 `git-safe-commit-gate.sh`，再验证 `decision-label-guard.py`。每启用一个 gate，记录它拒绝的请求是否合理、是否造成额外返工。判断改善时看任务结果和安全事件，不要只看提示次数：硬停项是否仍被正确报告、是否发生未授权操作、是否减少可逆步骤的打断、批处理是否被正确委派并由主线程验证、是否减少多余文档和需修复的提交、`wrap` 的决策列表是否完整且 label 正确。若 gate 频繁拒绝合理操作或导致返工，先调整配置或停用对应 gate；只有在任务结果不差于基线、硬停项没有被绕过时，才考虑扩大使用范围。
 
+**maxagent**：最小试用两周。选一台非关键机器，只对一个 agent（建议 Claude Code）执行 `npx maxagent init`，附加项只勾工作区加规则钩子；`npx maxagent doctor` 确认状态，`git diff` 或备份比对确认全局规则文件只多了带标记的块；在 `npx maxagent setup` 里决定是否 `updates: false`；照常做 1–2 周真实工作，只记录指标，不额外干预；结束后读 `experience/_spec.md`，看自己写下的 atom 是否符合格式、是否被钩子真的调用过。指标：重复错误拦截次数——同一类错误第二次出现时是否被自己的 atom 在命令前拦住，两周内为 0 说明经验层没起作用；重新摸索成本——新会话从任务开始到第一条有效命令的轮数，与安装前同类任务对比；断点续做成本——靠 `projects/` 恢复任务时，用户需要额外补充的上下文条数是否下降；经验库活性——`experience/` 里新增 atom 数 vs 被实际引用的 atom 数，只增不引用比例过高说明钩子或格式不适配，应改写 atom 而非继续堆量；可控性——`npx maxagent uninstall` 后全局规则文件是否干净还原（diff 为空）。判定线：两周内若重复错误拦截次数与断点续做补充条数都没有可观察下降，判为对本工作流无改善，回退到 uninstall；只有在自建层跑通、且确实出现被拦住的重复错误之后，才考虑开共享包（先 `mute` 到只留少量，再逐个 `adopt`）和浏览器桥。
+
 ## 常见坑
 
 - 官方市场原文没有收录任何具体插件，也没有效果数据；Anthropic 不控制也不验证插件内容，安装前必须自己检查插件主页和来源。
 - marketplace 条目的 `name` 是不可变 slug；改名会让用户安装报 `plugin-not-found`；要改显示名改 `displayName`，必须改名时用 `renames` 映射。
 - `strict: false` 声明 skill 包时路径相对于 `source.path`；每个路径指向包含 `SKILL.md` 的目录，注册为 `<plugin-name>:<skill-name>`。
-- 仓库热度不是效果：39,182 stars、Blender 42 stars、PM 7421 stars、schematic-figure 31 stars、subagent-studio 30 stars、block-ptc 37 stars 都只反映关注度。
+- 仓库热度不是效果：39,182 stars、Blender 42 stars、PM 7421 stars、schematic-figure 31 stars、subagent-studio 30 stars、block-ptc 37 stars、maxagent 48 stars 都只反映关注度。
 - 材料可能被截断：PM README 末尾截断在 “worth a bookmark if you work”；交接层材料截断在 Lazy-exit guard；subagent-studio 材料截断在 “每个 agent 文件在 frontmatter 里固定 model、”。未给出的行为不要照抄。
 - 职能插件和三个独立技能包都只到 README，未展示技能内部提示词、脚本、配置或 QA 规则；开箱插件原文自称 general starting points，价值在定制。
 - 命令不出现 = 未生效；先检查 marketplace，不要继续往下做。
-- 不要一次装多个职能插件或技能；subagent-studio 先只装 `studio-core`；superlite 先只跑一个人工审批计划；claude-skills 先只装一个域或一个技能。
+- 不要一次装多个职能插件或技能；subagent-studio 先只装 `studio-core`；superlite 先只跑一个人工审批计划；claude-skills 先只装一个域或一个技能；maxagent 首次只开工作区加规则钩子。
 - 小而明确的编码工作不要上 subagent-studio：单会话更便宜，小变更上很少买到东西。
 - subagent-studio 的七步流程有关键留白：plan 的固定 shape、`reviewer-prompt.md` 的检查项、占位符完整内容都要自己补；copy-in 会合并 hooks 并重写命名空间；`core.review.land: pr` 合并时必须保留 trailers；`review_guard.sh` 如果从不拦停，先怀疑配置没接上。
 - superlite 不能与 superpowers 同时启用：二者共享 skill 名且都注入会话上下文，会冲突。
@@ -834,6 +850,12 @@ gates 会把模式写入 `~/.claude/state/tempo/<session_id>` 供 shell hooks �
 - 真正的硬停项（密钥、force push、部署等）不要放进 `tempo-auto.sh` 转换；只把希望被 `auto` 转换的检查放进去。
 - gates 依赖 `bash`、`jq`、`git`、`python3`；版本不够或缺少 function-hook plugins 时只考虑主插件，不要装 gates。
 - work-mode 与 inbox、Project Sentinel 有部分重叠；材料没有说明同时装会不会互相干扰，先只在一个任务上用一套。
+- maxagent 全部来自仓库 README 自述，没有基准测试、用户案例、故障率或前后对比数据；仓库 48 stars、单作者项目，README 自承翻译未经母语者校对。
+- maxagent 的 `experience/_spec.md` 未出现在材料中，atom 的实际书写格式无法照抄；不安装就无法复现“经验怎么写”，钩子的具体配置内容也未给出，无法手工复刻到别的 agent。
+- maxagent 的共享经验包本质是“他人编写的、会被注入 agent 上下文的指令文本”，即便有 sha256 和内容扫描，也应先按不可信内容对待；`adopt` 会把共享 atom 提升为“可阻断命令”的本地条目，等于提升其权限。
+- maxagent 的共享包安全属性（下载即执行、改写 agent 规则、外发密钥、破坏性命令、隐藏字符的扫描）和浏览器桥安全属性（无开放端口、逐 agent 审批）都是设计声明，材料中没有第三方审计或复现记录。
+- maxagent 首次不要装共享经验包和浏览器桥；先只开工作区加规则钩子，用两周指标决定是否继续。`npx maxagent uninstall` 只从 agent 里移除块与钩子，工作区保留；改全局规则文件前先备份。
+- maxagent 的 `vectors` 约 270 MB，模型 revision 固定并做 sha256 校验；无 Python 时向导会提议安装，Windows 走 winget 需另行确认。没有它则只用词面搜索。
 
 ## 证据与来源
 
@@ -863,7 +885,9 @@ gates 会把模式写入 `~/.claude/state/tempo/<session_id>` 供 shell hooks �
 
 **work-mode**：安装命令、`/work-mode auto|out|wrap|off`、模式可组合、`out` 与 `wrap` 同时出现时 `wrap` 优先、模式文本送达时机、gates 安装与三个 gate 行为、`tempo-auto.sh`、`~/.claude/state/tempo/<session_id>`、配置字段与语言判断均来自 `danyuchn/claude-work-mode` README；材料只有仓库 README，没有源码、测试内容或 demo 的文字转写，README 提到 60 秒演示视频，但输入中没有视频内容。效果主张主要是作者陈述：模式文本不会每轮膨胀上下文、三种模式会改变行为、gates 能把“询问”转成“deny 并继续”。没有量化数据、对照实验或案例结果。work-mode 的最小试用与判定（隔离仓库、两类任务、记录基线、先主插件后 gates、看任务结果和安全事件）来自本次调研报告的“怎么试、怎么验证”，不是原文效果数据。
 
-**属于调研建议、非原文数据**：官方市场的最小试用路径（1–2 小时 + 一周观察、只挑一个、检查来源、低风险任务、记录完成时间/轮次/手工切换/失败比例/新任务，一周无改善则卸载）来自调研报告建议；职能插件与独立技能的自测指标来自调研报告建议；claude-skills 的“先只装一个域、安装前审计、与不装基线比返工轮数、没有改善就卸载”来自调研结论，不是原文效果数据；subagent-studio 的最小试用建议来自调研结论；superlite 的最小试用建议来自调研结论；block-ptc 的最小试用与判定规则来自调研报告的“怎么试、怎么验证”部分，不是原文效果数据；billion-context 的最小试用来自调研报告结论；收口层、观测层、交接层的最小试用与指标也来自各调研报告的“怎么试、怎么验证”部分；work-mode 的试用与判定同样来自调研报告建议。
+**maxagent**：MIT、48 stars、单作者、Node.js 18+、受支持 agent（Claude Code、Codex、Antigravity、OpenClaw）、`npx maxagent init` 安装向导、工作区 `~/maxagent` 的 `AGENTS.md` / `experience/` / `projects/` / `sync.md` / `inbox/`、规则块加钩子、按“你发消息时 / 执行命令前 / 报错后”浮现 atom、自己的经验优先且可阻断命令、共享经验包只作参考且永不阻断、`adopt` / `mute`、`npx maxagent bridge`、`npx maxagent vectors`、`npx maxagent setup|doctor|update|uninstall`、`updates: false` 关闭网络请求、共享包 sha256 与内容审查、浏览器桥 Chrome 扩展 Native Messaging 与手动加载、`experience/_spec.md` 定义 atom 格式，均来自 `vzroslieigry/maxagent` README（本次调研）。材料明确：全部来自 README 自述，没有基准测试、用户案例、故障率或前后对比数据；仓库 48 stars、单作者项目、README 自承翻译未经母语者校对；`experience/_spec.md` 未提供，atom 实际格式无法照抄；共享包扫描与 CI 同检查的有效性、隐私清单（“只发公开文件的 GET 请求”）的完备性、浏览器桥安全属性（无开放端口、逐 agent 审批）都是设计声明，没有第三方审计或复现记录；“两周最小试用、重复错误拦截次数、重新摸索成本、断点续做补充条数、经验库活性、卸载后 diff 为空”的试用与判定来自本次调研报告建议，不是原文效果数据。
+
+**属于调研建议、非原文数据**：官方市场的最小试用路径（1–2 小时 + 一周观察、只挑一个、检查来源、低风险任务、记录完成时间/轮次/手工切换/失败比例/新任务，一周无改善则卸载）来自调研报告建议；职能插件与独立技能的自测指标来自调研报告建议；claude-skills 的“先只装一个域、安装前审计、与不装基线比返工轮数、没有改善就卸载”来自调研结论，不是原文效果数据；subagent-studio 的最小试用建议来自调研结论；superlite 的最小试用建议来自调研结论；block-ptc 的最小试用与判定规则来自调研报告的“怎么试、怎么验证”部分，不是原文效果数据；billion-context 的最小试用来自调研报告结论；收口层、观测层、交接层的最小试用与指标也来自各调研报告的“怎么试、怎么验证”部分；work-mode 的试用与判定同样来自调研报告建议；maxagent 的两周试用与指标来自本次调研报告建议。
 
 ## 依据的调研
 
@@ -882,3 +906,4 @@ gates 会把模式写入 `~/.claude/state/tempo/<session_id>` 供 shell hooks �
 - [mengwEX/dsh-block-ptc](../research/radar/2026-10-21/5616-mengwex-dsh-block-ptc.md)：值得一试，如果团队正在使用 DeepSeek Harness 的 PTC 模式，可以按 README 的安装步骤和 block 使用流程先做小范围试用，把模型自己写的交接摘要当作可控的上下文边界；如果不用这套宿主，就只借鉴它的机制。理由：安装、配置、工具调用和收尾规范都能照着做，但它只是有 37 个 star 的社区插件，只在一个宿主版本上做过实测，节省 token、降低成本等收益连作者自己都声明尚未验证。
 - [ranxianglei/billion-context](../research/radar/2026-11-08/11533-ranxianglei-billion-context.md)：值得一试，值得在一个具体客户端上小范围试装（推荐先试 `bili plugin install opencode` 或 `bili claude` 启动器），用 `/acp`、`/acp-cache` 观察前缀缓存命中率与压缩收益，再决定是否推广；理由是安装、插件安装、启停和健康检查都给了可复制的命令和判定阈值，但省 token 与长会话效果主要是作者自测与自建基准，需自行复现。
 - [danyuchn/claude-work-mode](../research/radar/2026-11-08/11590-danyuchn-claude-work-mode.md)：值得一试，建议小范围试用：在 Claude Code 中安装 work-mode，先用 `auto` + `wrap` 约束可逆自主步骤和收尾决策，视需要再加 gates；理由是它给出了可安装的模式、闸门和配置，但效果目前只有 README/演示主张、缺少量化验证。
+- [vzroslieigry/maxagent](../research/radar/2026-11-10/12280-vzroslieigry-maxagent.md)：值得一试，先在一台非关键机器、只对一个 agent（如 Claude Code）跑 `npx maxagent init`，只启用工作区+规则钩子，暂不装共享经验包和浏览器桥，用两周观察“重复错误是否被拦住、断点续做是否更快”；它的安装与命令流程具体可照做，值得小范围试，但效果与安全全是作者自述、无任何数据或第三方验证。

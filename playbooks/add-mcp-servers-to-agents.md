@@ -1,25 +1,25 @@
-# 给代理接第三方工具前，先隔离、核对清单、做同任务对照
+# 让代理取数时把日期、时区、采样和过滤条件一起交出来
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：第三方 MCP、CLI、技能包、插件、扩展或真机桥接接入代理时，如何避免把「注册成功」当成「可用」，用隔离、清单核对、冒烟和对照试验决定 try / study / stop。
-> 先试这一步：先选一个低风险真实任务，在隔离环境里记录未接入基线，再接入一个工具做同任务对照；先看工具清单、回执和权限边界，不要从主力环境开始。
-> 最近修订：2026-11-07
+> 解决的问题：把第三方工具接给代理时，用同一套隔离、冒烟和对照流程判断它是否真的可用、可控、可核验。
+> 先试这一步：先挑一个只读、低风险的数据源类 MCP，在隔离环境里用示例数据跑一次冒烟，检查输出是否自带日期、时区、采样和过滤条件。
+> 最近修订：2026-11-10
 
 ## 解决什么问题
-把第三方工具以 MCP、CLI、技能包、插件、浏览器扩展加本地 bridge、本地数据集、真机操作桥接或现成组件目录接给代理时，常见错误是一句注册/安装命令就完事。能不能用、多出哪些工具、花多少钱、数据发到哪里、是否真的更好，要靠同一套流程：隔离环境 → 安装/注册 → 核对工具清单 → 冒烟 → 与未接入对照 → 决定 try / study / stop。高敏感路径先只读、最小权限、隔离：私人消息只读；安全扫描只读低风险域；vulnerator 只在隔离靶场和书面授权目标；TradingView 只验证接入；AWS 先只装 aws-core 并只读/沙箱；flashmind 先只启用 verify-before-done；mcode-stack 先只选 2–3 个技能；snapgent 只在非敏感可丢弃仓库；kensaku 只索引一个工作文件夹并保持只读；radar-cnpj-mcp 先只下一个州并用 CLI 校准；trustabl 先在一个受支持 SDK 仓库试点并人工审查 SKILL.md；poki 只用备用 iPhone 先跑只读/可逆操作并接受屏幕内容外发与 ToS 风险；iphone-control 只用专用 iPhone 和专用 Apple ID 并保留工具调用确认；remote-webview-debugger 先用测试账号和隔离测试页并先只开 observe；auto-ontology 先用 demo 库和只读账号，共享机器设 AUTO_ONTOLOGY_ALLOW_DATASOURCE_TOOLS=0；组件目录先预览每个组件会写入的文件并只装 1–2 个低风险组件。社交推荐里看到的单个插件也一样：只把可复现的安装命令当线索，规则正文、适用性和效果要自己核对，不能因为 star 数高就跳过流程。
+把第三方工具以 MCP、CLI、技能包、插件、浏览器扩展加本地 bridge、本地数据集、真机操作桥接或现成组件目录接给代理时，常见错误是一句注册/安装命令就完事。能不能用、多出哪些工具、花多少钱、数据发到哪里、是否真的更好，要靠同一套流程：隔离环境 → 安装/注册 → 核对工具清单 → 冒烟 → 与未接入对照 → 决定 try / study / stop。高敏感路径先只读、最小权限、隔离：私人消息只读；安全扫描只读低风险域；vulnerator 只在隔离靶场和书面授权目标；TradingView 只验证接入；AWS 先只装 aws-core 并只读/沙箱；flashmind 先只启用 verify-before-done；mcode-stack 先只选 2–3 个技能；snapgent 只在非敏感可丢弃仓库；kensaku 只索引一个工作文件夹并保持只读；radar-cnpj-mcp 先只下一个州并用 CLI 校准；trustabl 先在一个受支持 SDK 仓库试点并人工审查 SKILL.md；poki 只用备用 iPhone 先跑只读/可逆操作并接受屏幕内容外发与 ToS 风险；iphone-control 只用专用 iPhone 和专用 Apple ID 并保留工具调用确认；remote-webview-debugger 先用测试账号和隔离测试页并先只开 observe；auto-ontology 先用 demo 库和只读账号，共享机器设 AUTO_ONTOLOGY_ALLOW_DATASOURCE_TOOLS=0；组件目录先预览每个组件会写入的文件并只装 1–2 个低风险组件。社交推荐里看到的单个插件也一样：只把可复现的安装命令当线索，规则正文、适用性和效果要自己核对，不能因为 star 数高就跳过流程。数据源类工具还要多查一层：返回数字时，有没有把日期边界、时区、采样状态、过滤器和聚合口径一起返回；没有这些，数字再好看也不能直接拿去决策。
 
 ## 适用与不适用
-通用适用：本机有 MCP 客户端或支持 skills 的代理；愿意在容器、虚拟机、专用账号或备用设备里先跑第三方包；目标是让代理获得外部工具或一类新能力；愿意做「挂载 vs 未挂载」或「调用技能 vs 不调用技能」的对照；愿意先人工审查工具生成的文件再让代理读取使用。
+通用适用：本机有 MCP 客户端或支持 skills 的代理；愿意在容器、虚拟机、专用账号或备用设备里先跑第三方包；目标是让代理获得外部工具或一类新能力；愿意做“挂载 vs 未挂载”或“调用技能 vs 不调用技能”的对照；愿意先人工审查工具生成的文件再让代理读取使用。
 通用不适用：不能隔离、必须直接在主力工作目录或主力手机试；需要稳定生产接入；依赖被截断的完整工具清单来规划任务；只有作者自述没有效果数据却要做量化决策；生成物没有任何样例、规则正文或验证方式却要直接进代理上下文；原文只剩推荐语气和 star 数，却要据此确定规则内容或效果。
-各路径关键条件：A jevcrawl 适合站内多跳检索、不依赖 JS 渲染、允许页面文本外发 TypeSafe，不做登录/付费墙/CAPTCHA。B REA/Hermes 需已有 hermes CLI，原文只给一条命令且清单被截断，只适合试。C 不接入：注册失败、工具无法被实际调用、无法隔离，或需要完整清单和失败排查而原文没有时，只记录设计点。D CLI-Anything/CLI-Hub 要反复调用 GIMP、Blender、LibreOffice 等软件，愿意先装上游软件；Windows 需 Git for Windows 或 WSL。E arcmira 要在 YouTube 视频与直播转录里检索谁在什么时间说了什么、品牌赞助；接受远程 MCP、写程序调用、付费预算；不提供 monitor 删除。F reason network 团队都在用 Reason CLI 且同 workspace，需第二人配合。G idx 目标就是印尼股市，或照抄一份数据三种界面、mcp setup 绝对路径、统一 envelope 与退出码。H Blender 扩展需 Windows x64 + Blender 4.2+，想让 AI 在场景里做可回退操作，并要审批、取消、命名撤销与截图。I jevreel 有一段本地或 URL 视频要检索某个瞬间；底层 Jev 图像能力仍是实验性，验证只基于单测试视频。J WhatsApp MCP 个人 WhatsApp 只读检索、摘要、补看群聊；接受自部署 Cloudflare 付费 Workers、非官方协议与条款风险；一个部署一个账号一个 owner。K im-mcp 需 Windows x64 或 macOS、微信 4.x/钉钉 7.x 已登录；只读检索；接受本地数据库解密后明文落盘。L claude-security-scan 已装 Claude Code、git、bash、Python 3.11+，能访问 GitHub；做跨本机、本地 git 仓库、GitHub、云服务和 Gmail 的只读例行检查；缺工具/权限时标为未能确认。M vulnerator-ai 能在隔离环境接入单个 MCP 工具集，想在授权靶场验证 OODA 循环；默认无 scope-guard、consent、audit、授权闸门；目标已获书面授权且能隔离 kali 容器。N TradingView-Unified-MCP 已装 Claude Code 与 Node.js，只想验证只读行情/图表接入，不接真实资金。O agent-toolkit-for-aws 团队在 AWS 上开发、使用受支持编码智能体、本地已配置 AWS 凭据；先只装 aws-core 并在只读/沙箱权限下试用。P flashmind 支持 MCP 的客户端、Node ≥18；想给 agent 补记忆、防幻觉规则和宣布完成前验证；只选一个仓库、一个客户端、只启用 verify-before-done 做两周对照；原文没有规则和技能正文。Q mcode-stack 已装 MiniMax Code；若走 Claude Code 市场命令已装 Claude Code；想从长命令审计、干净上下文独立评审、小评估实验开始；本次只有 README，要打开 SKILL.md 核对；一次只装 2–3 个技能并保留对照。R snapgent-connector 需 Edge/Chrome MV3、VS Code、Windows/macOS/Linux；macOS/Linux 需 Python 3.9+；使用期间保持 bridge 运行；目标项目在 VS Code 打开；只在非敏感可丢弃仓库试用；接受 unpacked 扩展站点权限和 MCP 写权限风险。S expo/skills 已有 Expo/React Native 项目；使用受支持编码 agent；想按官方技能处理 Router、原生 UI、SDK 升级、EAS 构建/工作流/更新；部分 services 技能依赖付费 EAS；先只装技能验证路由再决定接 MCP。T kensaku 本机有工作相关文件、截图、PDF/DOCX/PPTX/XLSX/EPUB、代码或日志；想给 agent 补本地只读检索上下文；首次索引选择范围并排除敏感目录；只需只读检索。U radar-cnpj-mcp 工作涉及巴西企业注册数据、B2B 勘探或区域市场摸底；Node ≥20；只下载目标州；接受数据来自巴西联邦税务局公开 CNPJ、默认遮蔽 MEI 电话/邮箱、LGPD 责任在使用者。V trustabl/agent-reliability-skills 需 Node.js 22+；目标仓库有依赖清单且确实使用受支持 agent SDK；客户端支持 MCP；愿意先在一个仓库试点，生成 SKILL.md 后人工审查再让编码代理使用。W poki 需 Apple Silicon Mac、macOS 15+、完整 Xcode、Rust、Node.js 24+、ffmpeg，预构建包还需 Python 3；有一台可清空的备用 iPhone，真机已 USB 配对并开启开发者模式；目标任务只能走 App 界面；接受屏幕内容发送到模型服务、第三方 App 自动化可能违反 ToS、AGPL-3.0-only。X remote-webview-debugger 目标页面只在真实手机 WebView/H5 或微信类超级 App 复现，没有 USB 线、没有远程调试端口、本地无法复现；有 Docker 或可运行 Go 二进制；手机和 agent 都能访问网关；页面能注入 SDK；设备端用户在场并能批准；接受自托管部署、证书和运维；接受 SDK 0.3.0 早期版本可能变动。Y davila7/claude-code-templates 已安装 Claude Code，本机有 Node/npm，目标是在干净分支或临时仓库试用现成组件目录；只想先装 1–2 个组件，优先 loops、hooks、MCP；愿意在网页目录预览写入文件、用 --health-check 和 /stack 核对与回滚；接受组件质量与效果没有评测数据。Z iphone-control 有一台专用 iPhone（iOS 17+）和专用免费 Apple ID；主机是带 Docker 的 Linux 或 Apple Silicon Mac；用数据线连接；只想在自己拥有的设备和账号上让 agent 操作真实 App 界面；MCP 客户端能保留工具调用确认。AA auto-ontology-mcp 有 uv 和 MCP 客户端；想给数据库问答加语义层、减少 text-to-SQL 静默错误，或把收据/账单/论文/笔记沉淀成可查询知识库；先用内置 demo 库跑通建模—问数—拒答—导出；真实库用只读账号；远程 HTTP 需隧道和 token。不适用：没有 uv；需要内置调度或事件触发；不能接受数据源 URL 含密码明文存于 ~/.auto-ontology-mcp/ontology.db；需要独立效果证据。AB andrej-karpathy-skills 已安装并登录 Claude Code，能访问插件市场/对应 GitHub 仓库；只想把一条社交推荐当 try，先核对规则正文，再做启用/不启用对照；原文截断，只有第一项完整安装命令，不能据此补写其余 6 个仓库或「最少代码」提示词。
+各路径关键条件（压缩版）：A jevcrawl 适合站内多跳检索、不依赖 JS 渲染、允许页面文本外发 TypeSafe，不做登录/付费墙/CAPTCHA。B REA/Hermes 需已有 hermes CLI，原文只给一条命令且清单被截断，只适合试。C 不接入：注册失败、工具无法被实际调用、无法隔离，或需要完整清单和失败排查而原文没有时，只记录设计点。D CLI-Anything/CLI-Hub 要反复调用 GIMP、Blender、LibreOffice 等软件，愿意先装上游软件；Windows 需 Git for Windows 或 WSL。E arcmira 要在 YouTube 视频与直播转录里检索谁在什么时间说了什么、品牌赞助；接受远程 MCP、写程序调用、付费预算；不提供 monitor 删除。F reason network 团队都在用 Reason CLI 且同 workspace，需第二人配合。G idx 目标就是印尼股市，或照抄一份数据三种界面、mcp setup 绝对路径、统一 envelope 与退出码。H Blender 扩展需 Windows x64 + Blender 4.2+，想让 AI 在场景里做可回退操作，并要审批、取消、命名撤销与截图。I jevreel 有一段本地或 URL 视频要检索某个瞬间；底层 Jev 图像能力仍是实验性，验证只基于单测试视频。J WhatsApp MCP 个人 WhatsApp 只读检索、摘要、补看群聊；接受自部署 Cloudflare 付费 Workers、非官方协议与条款风险；一个部署一个账号一个 owner。K im-mcp 需 Windows x64 或 macOS、微信 4.x/钉钉 7.x 已登录；只读检索；接受本地数据库解密后明文落盘。L claude-security-scan 已装 Claude Code、git、bash、Python 3.11+，能访问 GitHub；做跨本机、本地 git 仓库、GitHub、云服务和 Gmail 的只读例行检查；缺工具/权限时标为未能确认。M vulnerator-ai 能在隔离环境接入单个 MCP 工具集，想在授权靶场验证 OODA 循环；默认无 scope-guard、consent、audit、授权闸门；目标已获书面授权且能隔离 kali 容器。N TradingView-Unified-MCP 已装 Claude Code 与 Node.js，只想验证只读行情/图表接入，不接真实资金。O agent-toolkit-for-aws 团队在 AWS 上开发、使用受支持编码智能体、本地已配置 AWS 凭据；先只装 aws-core 并在只读/沙箱权限下试用。P flashmind 支持 MCP 的客户端、Node ≥18；想给 agent 补记忆、防幻觉规则和宣布完成前验证；只选一个仓库、一个客户端、只启用 verify-before-done 做两周对照；原文没有规则和技能正文。Q mcode-stack 已装 MiniMax Code；若走 Claude Code 市场命令已装 Claude Code；想从长命令审计、干净上下文独立评审、小评估实验开始；本次只有 README，要打开 SKILL.md 核对；一次只装 2–3 个技能并保留对照。R snapgent-connector 需 Edge/Chrome MV3、VS Code、Windows/macOS/Linux；macOS/Linux 需 Python 3.9+；使用期间保持 bridge 运行；目标项目在 VS Code 打开；只在非敏感可丢弃仓库试用；接受 unpacked 扩展站点权限和 MCP 写权限风险。S expo/skills 已有 Expo/React Native 项目；使用受支持编码 agent；想按官方技能处理 Router、原生 UI、SDK 升级、EAS 构建/工作流/更新；部分 services 技能依赖付费 EAS；先只装技能验证路由再决定接 MCP。T kensaku 本机有工作相关文件、截图、PDF/DOCX/PPTX/XLSX/EPUB、代码或日志；想给 agent 补本地只读检索上下文；首次索引选择范围并排除敏感目录；只需只读检索。U radar-cnpj-mcp 工作涉及巴西企业注册数据、B2B 勘探或区域市场摸底；Node ≥20；只下载目标州；接受数据来自巴西联邦税务局公开 CNPJ、默认遮蔽 MEI 电话/邮箱、LGPD 责任在使用者。V trustabl/agent-reliability-skills 需 Node.js 22+；目标仓库有依赖清单且确实使用受支持 agent SDK；客户端支持 MCP；愿意先在一个仓库试点，生成 SKILL.md 后人工审查再让编码代理使用。W poki 需 Apple Silicon Mac、macOS 15+、完整 Xcode、Rust、Node.js 24+、ffmpeg，预构建包还需 Python 3；有一台可清空的备用 iPhone，真机已 USB 配对并开启开发者模式；目标任务只能走 App 界面；接受屏幕内容发送到模型服务、第三方 App 自动化可能违反 ToS、AGPL-3.0-only。X remote-webview-debugger 目标页面只在真实手机 WebView/H5 或微信类超级 App 复现，没有 USB 线、没有远程调试端口、本地无法复现；有 Docker 或可运行 Go 二进制；手机和 agent 都能访问网关；页面能注入 SDK；设备端用户在场并能批准；接受自托管部署、证书和运维；接受 SDK 0.3.0 早期版本可能变动。Y davila7/claude-code-templates 已安装 Claude Code，本机有 Node/npm，目标是在干净分支或临时仓库试用现成组件目录；只想先装 1–2 个组件，优先 loops、hooks、MCP；愿意在网页目录预览写入文件、用 --health-check 和 /stack 核对与回滚；接受组件质量与效果没有评测数据。Z iphone-control 有一台专用 iPhone（iOS 17+）和专用免费 Apple ID；主机是带 Docker 的 Linux 或 Apple Silicon Mac；用数据线连接；只想在自己拥有的设备和账号上让 agent 操作真实 App 界面；MCP 客户端能保留工具调用确认。AA auto-ontology-mcp 有 uv 和 MCP 客户端；想给数据库问答加语义层、减少 text-to-SQL 静默错误，或把收据/账单/论文/笔记沉淀成可查询知识库；先用内置 demo 库跑通建模—问数—拒答—导出；真实库用只读账号；远程 HTTP 需隧道和 token。不适用：没有 uv；需要内置调度或事件触发；不能接受数据源 URL 含密码明文存于 ~/.auto-ontology-mcp/ontology.db；需要独立效果证据。AB andrej-karpathy-skills 已安装并登录 Claude Code，能访问插件市场/对应 GitHub 仓库；只想把一条社交推荐当 try，先核对规则正文，再做启用/不启用对照；原文截断，只有第一项完整安装命令，不能据此补写其余 6 个仓库或“最少代码”提示词。AC Yandex Metrika MCP 工作涉及 Yandex Metrika 站点分析，有 MCP 客户端，Node.js 22.13+，想只读取数并让每次回答带日期、时区、采样状态和过滤器；接受数据发送给 AI 客户端及其模型提供方、token 不进对话。不适用：不用 Yandex Metrika；需要写操作；不能接受数据外发；需要跨平台已稳定验证（本次材料只说明在 macOS 上用真实 Yandex 登录跑过报表，其他平台未给结论）。不用 Yandex Metrika 时，只读 AC 的“输出自带口径”设计，不必安装。
 
 ## 前置条件
 通用：一个隔离环境；到包分发源和目标服务的网络出口；一个可回退的低风险真实任务，用来做冒烟测试和对照。
-各路径关键前置：A jevcrawl 需 TypeSafe Jev API key、uv、到 api.typesafe.ai 出口。B REA 需 hermes 命令、npx、npm registry。D CLI-Anything 需 Python 3.10+、上游软件、支持 SKILL 的 agent。E arcmira 需账号、支持的 MCP 宿主、付费计划与预算。F reason network 需 Reason CLI/workspace、daemon、MCP server 和三个工具权限。G idx 需 Node/npm 或 Rust，或 install.sh。H Blender 需 Windows x64、Blender 4.2+、支持 tool calling 的模型。I jevreel 需 Python 3.11+、FFmpeg、TypeSafe key。J WhatsApp MCP 需 Cloudflare 付费 Workers、Node 20+、OAUTH_KV、OWNER_PASSWORD。K im-mcp 需 Windows x64/macOS、微信 4.x/钉钉 7.x、uv、管理员终端或 64 位 hex passphrase。L claude-security-scan 需 Claude Code、git、bash、Python 3.11+、各域只读登录。M vulnerator-ai 需 docker、compose v2、openssl、OpenRouter key、隔离靶场、书面授权、两个 32 字节 hex token。N TradingView 需 Claude Code、Node.js、只读凭据。O agent-toolkit-for-aws 需 AWS 账号及本地凭据、支持的编码智能体、Kiro/fx 手动路径需 uv。P flashmind 需 Node ≥18、git、支持 MCP 的客户端、隔离分支/worktree。Q mcode-stack 需 MiniMax Code、可选 Claude Code、git、技能目录和 SKILL.md。R snapgent 需 Edge/Chrome MV3、VS Code、Python 3.9+、保持 bridge 运行。S expo/skills 需 Expo/RN 项目、受支持 agent、重启或刷新会话。T kensaku 需安装包或源码构建、选择索引范围和排除项、支持 stdio 的 MCP 客户端。U radar-cnpj-mcp 需 Node.js 20+、明确覆盖州、用于 B2B 勘探/市场摸底、准备 LGPD 合规做法。V trustabl 需 Node.js 22+、仓库依赖清单、受支持 agent SDK、支持 MCP 的客户端、可写仓库内 .claude/skills/ 的权限、首次联网下载 analyzer 与规则仓库。W poki 需 macOS 15+、Apple Silicon、完整 Xcode、Rust、Node.js 24+、ffmpeg、预构建包需 Python 3；备用 iPhone 已 USB 配对并开启开发者模式；MCP 客户端；接受屏幕内容外发、ToS 风险和 AGPL-3.0-only。X remote-webview-debugger 需 Docker 或 Go 二进制/源码构建环境；手机与 agent 都能访问的网关地址；控制台项目 app key；API key；能在页面或原生 document start 注入 SDK；设备端用户在场可批准；https 被调试页面需给网关配 HTTPS 与证书；测试账号和隔离测试页；可选 Postgres 连接串；自托管时准备域名、TLS 反代或 Compose 的 Caddy。Y davila7/claude-code-templates 需 Node/npm、npx、已安装 Claude Code；在目标项目目录执行；Mods 类要求 Claude Code 2.1.287+；干净分支或临时仓库；能访问 aitmpl.com 预览组件写入文件；能接受安装会写入项目 .claude 等配置、hook 是可执行脚本、MCP 组件会接外部服务凭证。Z iphone-control 需 iOS 17+ 真机、数据线、专用免费 Apple ID、主机为带 Docker 的 Linux 或 Apple Silicon Mac；MCP 客户端保留工具调用确认；macOS 上 Docker 不能透传 USB，必须直接跑二进制；WebDriverAgent 免费签名约 7 天需续签；准备 data/ 备份和可选 Telegram/Bark 通知渠道。AA auto-ontology-mcp 需 uv；建议先跑 demo 库；真实库用只读账号；MCP 客户端支持 stdio；远程 HTTP 需 serve --transport http 和隧道；PostgreSQL 需 psycopg[binary]，MySQL 需 pymysql，DuckDB 需 duckdb-engine，SQLite 内置；客户端 args 要与 --with 一致。AB 需 Claude Code 插件市场安装权限、网络/仓库访问；一个隔离分支或小仓库；能保存 diff、测试结果和人工 review 记录；能读到插件实际规则文本，读不到就停在 study。
+各路径关键前置（压缩版）：A jevcrawl 需 TypeSafe Jev API key、uv、到 api.typesafe.ai 出口。B REA 需 hermes 命令、npx、npm registry。D CLI-Anything 需 Python 3.10+、上游软件、支持 SKILL 的 agent。E arcmira 需账号、支持的 MCP 宿主、付费计划与预算。F reason network 需 Reason CLI/workspace、daemon、MCP server 和三个工具权限。G idx 需 Node/npm 或 Rust，或 install.sh。H Blender 需 Windows x64、Blender 4.2+、支持 tool calling 的模型。I jevreel 需 Python 3.11+、FFmpeg、TypeSafe key。J WhatsApp MCP 需 Cloudflare 付费 Workers、Node 20+、OAUTH_KV、OWNER_PASSWORD。K im-mcp 需 Windows x64/macOS、微信 4.x/钉钉 7.x、uv、管理员终端或 64 位 hex passphrase。L claude-security-scan 需 Claude Code、git、bash、Python 3.11+、各域只读登录。M vulnerator-ai 需 docker、compose v2、openssl、OpenRouter key、隔离靶场、书面授权、两个 32 字节 hex token。N TradingView 需 Claude Code、Node.js、只读凭据。O agent-toolkit-for-aws 需 AWS 账号及本地凭据、支持的编码智能体、Kiro/fx 手动路径需 uv。P flashmind 需 Node ≥18、git、支持 MCP 的客户端、隔离分支/worktree。Q mcode-stack 需 MiniMax Code、可选 Claude Code、git、技能目录和 SKILL.md。R snapgent 需 Edge/Chrome MV3、VS Code、Python 3.9+、保持 bridge 运行。S expo/skills 需 Expo/RN 项目、受支持 agent、重启或刷新会话。T kensaku 需安装包或源码构建、选择索引范围和排除项、支持 stdio 的 MCP 客户端。U radar-cnpj-mcp 需 Node.js 20+、明确覆盖州、用于 B2B 勘探/市场摸底、准备 LGPD 合规做法。V trustabl 需 Node.js 22+、仓库依赖清单、受支持 agent SDK、支持 MCP 的客户端、可写仓库内 .claude/skills/ 的权限、首次联网下载 analyzer 与规则仓库。W poki 需 macOS 15+、Apple Silicon、完整 Xcode、Rust、Node.js 24+、ffmpeg、预构建包需 Python 3；备用 iPhone 已 USB 配对并开启开发者模式；MCP 客户端；接受屏幕内容外发、ToS 风险和 AGPL-3.0-only。X remote-webview-debugger 需 Docker 或 Go 二进制/源码构建环境；手机与 agent 都能访问的网关地址；控制台项目 app key；API key；能在页面或原生 document start 注入 SDK；设备端用户在场可批准；https 被调试页面需给网关配 HTTPS 与证书；测试账号和隔离测试页；可选 Postgres 连接串；自托管时准备域名、TLS 反代或 Compose 的 Caddy。Y davila7/claude-code-templates 需 Node/npm、npx、已安装 Claude Code；在目标项目目录执行；Mods 类要求 Claude Code 2.1.287+；干净分支或临时仓库；能访问 aitmpl.com 预览组件写入文件；能接受安装会写入项目 .claude 等配置、hook 是可执行脚本、MCP 组件会接外部服务凭证。Z iphone-control 需 iOS 17+ 真机、数据线、专用免费 Apple ID、主机为带 Docker 的 Linux 或 Apple Silicon Mac；MCP 客户端保留工具调用确认；macOS 上 Docker 不能透传 USB，必须直接跑二进制；WebDriverAgent 免费签名约 7 天需续签；准备 data/ 备份和可选 Telegram/Bark 通知渠道。AA auto-ontology-mcp 需 uv；建议先跑 demo 库；真实库用只读账号；MCP 客户端支持 stdio；远程 HTTP 需 serve --transport http 和隧道；PostgreSQL 需 psycopg[binary]，MySQL 需 pymysql，DuckDB 需 duckdb-engine，SQLite 内置；客户端 args 要与 --with 一致。AB 需 Claude Code 插件市场安装权限、网络/仓库访问；一个隔离分支或小仓库；能保存 diff、测试结果和人工 review 记录；能读到插件实际规则文本，读不到就停在 study。AC 需 Node.js 22.13+；一个 MCP 客户端（Claude Desktop、Claude Code、Cursor、VS Code、Windsurf、Codex 等）；真实取数时需有对应计数器权限的 Yandex 账号（README 说明无需自建 API key、无需自建 OAuth 应用）；接受数据发送给 AI 客户端及其模型提供方；只读，无裸 HTTP 工具。
 
 ## 操作步骤
-先做 A 或 D1：它们能在半天内给出可观察结论，也顺带把隔离环境、基线记录这套流程跑通。若目标就是私人消息只读检索，再考虑 J 或 K；不要从发送、多人共享或媒体转写开始。若你已有支持远程 MCP 的宿主且目标就是口语内容检索，直接做 E；团队已在 Reason 且找得到第二个人，可做 F；只想用最小成本看清「CLI 与 MCP 共用一份输出」的结构，做 G 的第 1、3、4 步；手上就有 Windows x64 + Blender 4.2+，做 H 的第 1–4 步；有一段本地短视频要检索，做 I 的第 1–3 步；有个人 WhatsApp 且接受条款风险，做 J 的 1–8 步；要在本机补微信/钉钉沟通上下文，做 K 的 1–6 步；想做跨系统的例行只读安全检查，做 L 的 1–8 步，先 --demo，再只对一个低风险域 --skip repos；想验证「自主循环 + 工具供给」这套架构，做 M 的 1–4 步，先在 --with-juice-shop 靶场里跑；只想验证 Claude Code 接外部数据平台，做 N 的 1–6 步；团队在 AWS 上开发且使用支持的 agent，做 O 的 1–7 步；想给编码 agent 补记忆、防幻觉规则和宣布完成前先验证，做 P 的 1–6 步；想补可移植的工程习惯技能，做 Q 的 1–8 步；想让网页聊天 AI 经本地 bridge 操作 VS Code，做 R 的 1–8 步；在 Expo/React Native 项目里，做 S 的 1–9 步；想给 agent 补本地文件、截图、文档或日志的只读检索，做 T 的 1–8 步；工作涉及巴西企业注册数据/B2B 勘探/区域市场摸底，做 U 的 1–6 步；仓库使用受支持的 agent SDK、想让编码代理在写代码前读到仓库专属可靠性规则，做 V 的 1–10 步；要让代理操作没有开放 API 的 iPhone App，且有一台可清空的备用 iPhone 和完整 macOS 工具链，做 W 的 1–8 步，先只跑只读任务，再跑可逆写操作；bug 只在某台手机 WebView/H5 复现、没有 USB 和调试端口，做 X 的 1–7 步，先 observe；已装 Claude Code、只想从现成组件目录里挑 1–2 个组件小范围试用，做 Y 的 1–6 步，先在网页目录预览写入文件，再只装一个 hook、一个 loop 或一个只读 MCP；有专用 iPhone、专用 Apple ID，主机是 Linux Docker 或 Apple Silicon Mac，想在保留工具调用确认的前提下让 agent 操作真实 App，做 Z 的 1–6 步，先跑打开 Clock、打开 URL、等待文本三类低风险任务；想给数据库问答加语义层，或把收据/账单/论文/笔记沉淀成可查询知识库，做 AA 的 1–5 步，先 demo 再只读真实库；只是从推文里看到一个 Claude Code 规则插件，做 AB 的 1–4 步，只把它当 try。
+先做 A 或 D1：它们能在半天内给出可观察结论，也顺带把隔离环境、基线记录这套流程跑通。若目标就是私人消息只读检索，再考虑 J 或 K；不要从发送、多人共享或媒体转写开始。若你已有支持远程 MCP 的宿主且目标就是口语内容检索，直接做 E；团队已在 Reason 且找得到第二个人，可做 F；只想用最小成本看清“CLI 与 MCP 共用一份输出”的结构，做 G 的第 1、3、4 步；手上就有 Windows x64 + Blender 4.2+，做 H 的第 1–4 步；有一段本地短视频要检索，做 I 的第 1–3 步；有个人 WhatsApp 且接受条款风险，做 J 的 1–8 步；要在本机补微信/钉钉沟通上下文，做 K 的 1–6 步；想做跨系统的例行只读安全检查，做 L 的 1–8 步，先 --demo，再只对一个低风险域 --skip repos；想验证“自主循环 + 工具供给”这套架构，做 M 的 1–4 步，先在 --with-juice-shop 靶场里跑；只想验证 Claude Code 接外部数据平台，做 N 的 1–6 步；团队在 AWS 上开发且使用支持的 agent，做 O 的 1–7 步；想给编码 agent 补记忆、防幻觉规则和宣布完成前先验证，做 P 的 1–6 步；想补可移植的工程习惯技能，做 Q 的 1–8 步；想让网页聊天 AI 经本地 bridge 操作 VS Code，做 R 的 1–8 步；在 Expo/React Native 项目里，做 S 的 1–9 步；想给 agent 补本地文件、截图、文档或日志的只读检索，做 T 的 1–8 步；工作涉及巴西企业注册数据/B2B 勘探/区域市场摸底，做 U 的 1–6 步；仓库使用受支持的 agent SDK、想让编码代理在写代码前读到仓库专属可靠性规则，做 V 的 1–10 步；要让代理操作没有开放 API 的 iPhone App，且有一台可清空的备用 iPhone 和完整 macOS 工具链，做 W 的 1–8 步，先只跑只读任务，再跑可逆写操作；bug 只在某台手机 WebView/H5 复现、没有 USB 和调试端口，做 X 的 1–7 步，先 observe；已装 Claude Code、只想从现成组件目录里挑 1–2 个组件小范围试用，做 Y 的 1–6 步，先在网页目录预览写入文件，再只装一个 hook、一个 loop 或一个只读 MCP；有专用 iPhone、专用 Apple ID，主机是 Linux Docker 或 Apple Silicon Mac，想在保留工具调用确认的前提下让 agent 操作真实 App，做 Z 的 1–6 步，先跑打开 Clock、打开 URL、等待文本三类低风险任务；想给数据库问答加语义层，或把收据/账单/论文/笔记沉淀成可查询知识库，做 AA 的 1–5 步，先 demo 再只读真实库；只是从推文里看到一个 Claude Code 规则插件，做 AB 的 1–4 步，只把它当 try；工作涉及 Yandex Metrika 站点分析，做 AC 的 1–6 步，先用 conn_demo 验证输出是否自带日期、时区、采样状态和过滤器；不用 Yandex Metrika 就只读 AC 的验证指标，不必安装。
 
 ### 做法 A：接入有完整参数与回执的工具集（以 jevcrawl 为例）
 1. 申请 key，确认外发边界：页面文本会被发送到 TypeSafe 打分；列出哪些站点不能碰。
@@ -38,10 +38,8 @@ Use jevcrawl to find which Python version added the walrus operator, starting fr
 ```bash
 uv tool install jevcrawl
 jevcrawl crawl https://docs.python.org/3/ --goal 'What does the walrus operator do?' --json
-jevcrawl scrape https://example.com/help/returns --goal '...' --json
-jevcrawl map https://example.com --goal '...' --limit 20
 ```
-5. 用预算参数和回执字段核对每次调用：max_pages、max_seconds、max_decision_usd、return_tokens 限定每次调用；用 stopped_because、stats.degraded、stats.needs_js_urls、jev_cost_usd 判断是找到答案、撞上限还是降级。连续三次 Jev 请求失败后爬取转为广度优先，所有 block 以未打分形式放进 uncertain，不要把降级结果当打分结果。
+5. 用 max_pages、max_seconds、max_decision_usd、return_tokens 限定每次调用；用 stopped_because、stats.degraded、stats.needs_js_urls、jev_cost_usd 判断是找到答案、撞上限还是降级。连续三次 Jev 请求失败后爬取转为广度优先，所有 block 以未打分形式放进 uncertain，不要把降级结果当打分结果。
 
 ### 做法 B：接入只有一条命令、清单不完整的工具集（以 REA 接入 Hermes 为例）
 1. 在隔离环境确认 hermes 命令存在、npx 可用、能访问 npm registry。
@@ -52,11 +50,10 @@ hermes mcp add rea --command npx --args -y rea-agents@6.3.0 mcp
 3. 核对注册与工具清单；原文没有给出查看已注册 MCP 服务器或工具列表的命令，需查 Hermes 文档补上；记录 rea 是否存在、实际工具数量和名称。作者声称有 139 个工具，这个数量未验证。
 4. 做低风险冒烟测试，并与未挂载时做对照：同一任务，不挂载 rea 再跑一次，比较能否自主选用工具、人工干预、步骤数和耗时。
 
-### 做法 C：不实际接入，只当作「用 MCP 批量接工具」的思路参考
+### 做法 C：不实际接入，只当作“用 MCP 批量接工具”的思路参考
 当注册失败、注册后工具无法被代理实际调用、无法提供隔离环境、或需要完整工具清单和失败排查步骤而原文没有时，选做法 C。只记录设计点：MCP 批量供给、远程 MCP 只暴露少量工具让模型写程序、团队 agent 三工具接口、CLI 与 MCP 共用一份 JSON envelope 并把退出码带进工具错误、零嵌入视频检索的类型化回答 + contact sheet + 全分辨率复核、MCP server 与可视化工作区一起长在宿主软件内部并用审批与命名撤销兜底、前门只暴露 run 生命周期而不暴露原始执行工具。
 
 ### 做法 D：用 CLI-Anything / CLI-Hub 把软件包成 agent-native CLI
-选 D 当你要反复调用外部软件、需要可复现操作，而且目标软件有现成 harness 或愿意让编码 agent 生成。先做 D1。
 1. 直接用现成 CLI：
 ```bash
 pip install cli-anything-hub
@@ -71,9 +68,6 @@ cli-hub launch gimp
 ```bash
 npx skills add HKUDS/CLI-Anything --skill cli-hub-meta-skill -g -y
 ```
-```text
-Find appropriate CLI software in CLI-Hub and complete the task: ...
-```
 3. 用 Claude Code 生成新 CLI：
 ```bash
 /plugin marketplace add HKUDS/CLI-Anything
@@ -83,14 +77,14 @@ Find appropriate CLI software in CLI-Hub and complete the task: ...
 ```
 排错顺序：先 /reload-plugins；再 /help cli-anything；旧版不识别 /cli-anything 时改用 /cli-anything:cli-anything。
 
-### 做法 E：接入远程 MCP，用「写程序」的方式调用（以 arcmira 为例）
+### 做法 E：接入远程 MCP，用“写程序”的方式调用（以 arcmira 为例）
 1. 用宿主登录（OAuth）添加远程 MCP，无 key：
 ```bash
 claude mcp add --transport http --scope user arcmira https://mcp.arcmira.com/mcp
 codex mcp add arcmira --url https://mcp.arcmira.com/mcp
 ```
 2. 连上后先调用 arcmira_describe 拿参考手册，别猜方法签名。遵守 id 规则：先用 resolve 拿 id，再用 id 查询。过滤器只接受原样 id；把名字当 id 会抛 id_required。
-3. 需要整段转录时用 Premium 质量，并处理「还没转好」：未就绪时返回 202 + Retry-After，按它重读不重复计费；failed / refunded 除非传 retry: true 不会重开。
+3. 需要整段转录时用 Premium 质量，并处理“还没转好”：未就绪时返回 202 + Retry-After，按它重读不重复计费；failed / refunded 除非传 retry: true 不会重开。
 4. 先查价再跑贵操作：arcmira.quote(video) 返回整段 Premium 读取会用多少 credits，本身不计费。预算由 dashboard 控制，工具本身不接受金额参数。
 5. 用示例提示词快速验证接通：Which brands sponsor both TBPN and the All-In Podcast? / Find a moment on TBPN from the last 90 days where someone talks about stablecoins, and quote it.
 6. 要持续盯着就建 monitor（必须走 arcmira_execute_write）；它不提供删除，退出方式是 paused。
@@ -115,7 +109,7 @@ reason network send alice/api-claude 'heads up: main is red'
 5. MCP server 名为 reason-network，对 agent 暴露 list_team、send_message、check_inbox 三个工具。
 6. 最小试用：找 2 名已经在用 Reason 的同事，各自开 Claude Code session，分别跑 reason network who 互相确认；A 用 reason network <b的session> '...' 提一个只有 B 的 agent 凭会话上下文才能回答的问题。
 
-### 做法 G：接入「现成 CLI 自带 MCP server」的工具（以 idx / ihsg-cli 为例）
+### 做法 G：接入“现成 CLI 自带 MCP server”的工具（以 idx / ihsg-cli 为例）
 1. 零安装先跑通：
 ```sh
 npx github:fzn0x/idx stocks quote BBCA
@@ -238,7 +232,7 @@ python3 ~/.claude/skills/security-scan/scan.py --demo --open
 ```bash
 python3 ~/.claude/skills/security-scan/scan.py --skip repos
 ```
-预期结果：生成 reports/<日時>/report.html；失败或未登录的域进入「未能确认的项目」，而不是被当成「没有问题」；报告中没有明文秘密值。
+预期结果：生成 reports/<日時>/report.html；失败或未登录的域进入“未能确认的项目”，而不是被当成“没有问题”；报告中没有明文秘密值。
 5. 在 Claude Code 里用自然语言触发和追问：
 ```text
 セキュリティチェックして
@@ -246,7 +240,7 @@ python3 ~/.claude/skills/security-scan/scan.py --skip repos
 ```
 6. 确认只读边界成立后再逐域增加登录，最后才考虑全量扫描和每周定时。
 
-### 做法 M：把「自主循环 + 工具供给」整套接进来，但只当模板（以 vulnerator-ai 为例）
+### 做法 M：把“自主循环 + 工具供给”整套接进来，但只当模板（以 vulnerator-ai 为例）
 1. 确认前提：docker、docker compose v2、openssl；一个 OpenRouter API key；能把 kali 容器与宿主机/内网隔开的环境；目标已获书面授权。缺任何一条都不要往下做。
 2. 用安装器一键起栈：
 ```sh
@@ -291,7 +285,7 @@ npx skills add aws/agent-toolkit-for-aws/skills
 6. 先设权限和审计，再放开写操作。README 说明该工具链提供 IAM 条件键区分 agent 动作与人类动作、CloudWatch 指标和 CloudTrail 审计日志；可据此先配置只读或最小权限策略，再逐步放开。
 7. 最小试用：选一个 AWS 仓库和一个边界清晰的任务，只安装 aws-core，在沙箱账号或只读权限下运行；先跑未装基线，再跑装后同任务，记录完成、耗时、CloudWatch/CloudTrail 是否能看到动作、权限边界是否成立。
 
-### 做法 P：给编码 agent 接打包插件，先只启用「宣布完成前先验证」一个技能（以 flashmind 为例）
+### 做法 P：给编码 agent 接打包插件，先只启用“宣布完成前先验证”一个技能（以 flashmind 为例）
 1. 确认前提：Node ≥18；目标客户端支持 MCP；本机有 git；选一个真实仓库和隔离分支/worktree；记录试用前基线。
 2. 最轻路径：只接 MCP 服务。在客户端 MCP 配置中加入 flashmind，command 用 npx，args 用 -y、flashmind。
 3. 要记忆 + 技能 + 规则全套，跑自动安装器：
@@ -303,9 +297,9 @@ cd flashmind
 安装后必须打开实际文件核对；原文没有给出规则与技能正文。
 4. 只启用 verify-before-done 一个技能，暂不启用其余三个：plan-first、no-invented-code、systematic-debugging。
 5. 更新时只替换、不追加：一个服务一个条目；规则文件整体覆盖，共享文件用标记包裹后只替换标记之间内容；技能只留一份。
-6. 最小试用两周：选一个真实仓库、只选一个客户端，只装 MCP 记忆 + 规则文件 + verify-before-done 一个技能；记录「未跑测试就宣布已修复」「引入不存在的包/函数/CLI 参数」两类事件计数、返工时长、测试通过率，与试用前同仓库同类型任务对照。
+6. 最小试用两周：选一个真实仓库、只选一个客户端，只装 MCP 记忆 + 规则文件 + verify-before-done 一个技能；记录“未跑测试就宣布已修复”“引入不存在的包/函数/CLI 参数”两类事件计数、返工时长、测试通过率，与试用前同仓库同类型任务对照。
 
-### 做法 Q：先只装 2–3 个「工程习惯」技能，用真实任务对照（以 MiniMax-AI/mcode-stack 为例）
+### 做法 Q：先只装 2–3 个“工程习惯”技能，用真实任务对照（以 MiniMax-AI/mcode-stack 为例）
 注意证据等级：本次只有 README，没有各 SKILL.md、checklists/、WORKFLOW.md 正文，也没有使用前后对比、缺陷率、节省时间或采用率数据；能照抄的是安装/调用方式和技能清单，具体检查项要打开目标技能目录里的 SKILL.md 再决定是否照做。建议从 long-command-check、independent-review、harness-experiment 三个开始，不要一次装整套 15 个。
 1. 确认前提：已安装 MiniMax Code；若走 Claude Code 市场命令，已安装 Claude Code；本地有 git；选一个真实仓库或任务；记录不调用技能时的基线。
 2. 安装单个技能（所有项目可用）：
@@ -345,20 +339,18 @@ mcode plugin marketplace list
 bash Linux_Start.sh
 ```
 保持 bridge 窗口或终端开启。
-5. 可选连接 EffectCraft 或 Roblox Studio MCP：Windows 下 start.bat 会检测 EffectCraft 常见安装位置并启动其控制通道；macOS/Linux 需安装 EffectCraft CLI 并把 effectcraft-cli 放到 PATH。Roblox Studio MCP 在 macOS 默认检测 /Applications/RobloxStudio.app/Contents/MacOS/StudioMCP；安装在其他位置时，启动前设置 ZS_STUDIO_MCP_PATH。Linux 不自动检测 Roblox Studio MCP。
-6. 开始会话：打开支持的 AI 聊天站点并新建聊天；在 VS Code 打开项目文件夹后，在聊天栏点击 Start，然后用自然语言描述任务。README 示例提示词是：
+5. 开始会话：打开支持的 AI 聊天站点并新建聊天；在 VS Code 打开项目文件夹后，在聊天栏点击 Start，然后用自然语言描述任务。README 示例提示词是：
 ```text
 Inspect the files in my project and explain how the login flow works.
 Add a search bar to the books page and wire it to the existing API.
 ```
-7. 运行要点与排障：保持 bridge 窗口开启，关闭会断开 agent；保持目标项目在 VS Code 打开；Arena 使用 Direct 模式；Gemini 或 Kimi 在长会话中停止使用工具时，提醒它使用 snapgentV3 commands 或新建聊天。扩展栏缺失时检查扩展是否启用、当前聊天站点是否允许访问并刷新标签页；bridge offline 时重新启动对应 launcher。
-8. 最小对照：先不接 connector，用同一个 AI 聊天手动复制粘贴完成 2–3 个边界清楚的任务，记录耗时、人工复制粘贴和终端步骤数、返工次数。再接 connector 重复同类任务；每次接受修改前用 git status 和 git diff 检查改动范围。记录任务完成情况、从开始到首个有用结果的时间、总完成时间、人工步骤数、工具调用失败次数、bridge 断连次数、返工次数、非预期文件改动数；如果测试仓库有测试或构建命令，记录是否通过。若出现 bridge 不稳定、AI 不使用工具、权限过大或工作区意外改动，应停止扩大范围。
+6. 运行要点与排障：保持 bridge 窗口开启，关闭会断开 agent；保持目标项目在 VS Code 打开；Arena 使用 Direct 模式；Gemini 或 Kimi 在长会话中停止使用工具时，提醒它使用 snapgentV3 commands 或新建聊天。扩展栏缺失时检查扩展是否启用、当前聊天站点是否允许访问并刷新标签页；bridge offline 时重新启动对应 launcher。
+7. 最小对照：先不接 connector，用同一个 AI 聊天手动复制粘贴完成 2–3 个边界清楚的任务，记录耗时、人工复制粘贴和终端步骤数、返工次数。再接 connector 重复同类任务；每次接受修改前用 git status 和 git diff 检查改动范围。记录任务完成情况、从开始到首个有用结果的时间、总完成时间、人工步骤数、工具调用失败次数、bridge 断连次数、返工次数、非预期文件改动数；如果测试仓库有测试或构建命令，记录是否通过。若出现 bridge 不稳定、AI 不使用工具、权限过大或工作区意外改动，应停止扩大范围。
 
 ### 做法 S：在垂直技术栈里装官方技能包，先验证路由再接 MCP（以 expo/skills 为例）
-注意证据等级：原文是官方 README，给出了安装/更新命令、按 agent 分流的安装路径、技能分组和示例提示词；没有给出 SKILL.md 实际正文、误选率或「装了之后工作变好多少」的任何度量。能照抄的是安装方式和验证路由的方法。
+注意证据等级：原文是官方 README，给出了安装/更新命令、按 agent 分流的安装路径、技能分组和示例提示词；没有给出 SKILL.md 实际正文、误选率或“装了之后工作变好多少”的任何度量。能照抄的是安装方式和验证路由的方法。
 1. 确认前提：已有一个 Expo / React Native 项目；选定一个受支持的 AI 编码 agent；接受部分 services 技能依赖付费 EAS。
-2. 选择安装路径：Claude Code 或 Codex 走官方插件市场；Cursor、OpenCode、GitHub Copilot、Windsurf、Gemini、Cline、AMP、Factory Droid、Antigravity、Kiro CLI 等走 skills CLI。
-3. Claude Code：
+2. Claude Code：
 ```text
 claude plugin install expo@claude-plugins-official
 ```
@@ -366,18 +358,18 @@ claude plugin install expo@claude-plugins-official
 ```text
 /plugin install expo@claude-plugins-official
 ```
-4. Codex：
+3. Codex：
 ```text
 codex plugin add expo@openai-curated
 ```
 也可以在 Codex 内打开 /plugins，从 OpenAI-curated 市场安装 expo。
-5. 其他 agent 在项目根目录执行：
+4. 其他 agent 在项目根目录执行：
 ```text
 npx skills@latest add expo/skills --skill '*' --agent <你的 agent>
 ```
-说明：这条命令选的是「全部 Expo 技能」，不是「全部 agent」；不加 --agent 时 CLI 会询问装到哪里。
-6. 装完后重启或刷新 agent 会话，让它能发现已安装的 SKILL.md。
-7. 用示例提示词验证路由：
+说明：这条命令选的是“全部 Expo 技能”，不是“全部 agent”；不加 --agent 时 CLI 会询问装到哪里。
+5. 装完后重启或刷新 agent 会话，让它能发现已安装的 SKILL.md。
+6. 用示例提示词验证路由：
 ```text
 Build a native-feeling Expo Router screen with tabs, modals, and animations.
 ```
@@ -387,15 +379,11 @@ Create an EAS workflow that builds previews on pull requests.
 ```text
 Help me upgrade this app to the latest Expo SDK.
 ```
-```text
-Check whether this EAS Update rollout is healthy.
-```
 观察点：agent 是否根据任务上下文和各技能描述自动选中正确技能；请求含糊时是否先加载 expo-overview 再分发。
-8. 需要实时动作时再接 MCP。Claude Code 和 Codex 的 expo 插件已内置 MCP 配置；其他 agent 或单独接，按 Expo MCP setup guide（https://docs.expo.dev/eas/ai/mcp/）配置。
-9. 更新与反馈：
+7. 需要实时动作时再接 MCP。Claude Code 和 Codex 的 expo 插件已内置 MCP 配置；其他 agent 或单独接，按 Expo MCP setup guide 配置。
+8. 更新与反馈：
 ```text
 npx skills@latest update
-npx skills@latest update expo-router
 npx --yes @expo/agent-cli@latest feedback
 ```
 Claude Code / Codex 的插件安装通过各自官方插件市场更新。
@@ -415,85 +403,58 @@ bun run tauri build
 ```bash
 kensaku-cli search 'docker error'
 kensaku-cli search 'invoice' --ext pdf --since 30d
-kensaku-cli search 'resume' --json
 kensaku-cli state
 ```
 5. 把本地索引接入 MCP 客户端（只读）：command 填 kensaku-cli，args 填 mcp。
 6. 需要 HTTP 接入时再启动本地服务：kensaku-cli serve；README 说明它只监听 loopback，并要求配置目录中的 bearer token。
 7. 设定 agent 使用边界：保持默认只读，不把索引当可写工作区；README 说明 agent 工具不能改文件，reindex 默认关闭；响应有大小预算，文件内容作为数据返回、不作为指令。
-8. 最小对照 1–2 周：选一个包含文档、截图、代码或日志的项目文件夹建立索引；保持 agent 只读，接入一个 MCP 客户端。设计固定任务，例如「找出某次部署失败的日志行」「找出包含 CUDA 报错的截图」「按描述找出数据库索引相关 PDF」「在代码库中找某个函数/错误文本」。记录每次从开始到找到目标的时间、前 5 条结果是否命中、是否需要退回手动翻目录、agent 任务是否因缺少上下文而重试，以及 OCR 误识别和隐私暴露事件。
+8. 最小对照 1–2 周：选一个包含文档、截图、代码或日志的项目文件夹建立索引；保持 agent 只读，接入一个 MCP 客户端。用固定任务记录从开始到找到目标的时间、前 5 条结果是否命中、是否需要退回手动翻目录、agent 任务是否因缺少上下文而重试，以及 OCR 误识别和隐私暴露事件。
 
 ### 做法 U：把本地公开数据集做成窄工具 MCP（以 radar-cnpj-mcp 为例）
-注意证据等级：README 给出安装/接入命令、7 个工具、过滤器、示例问题、CLI、隐私默认、MIT、CI badge、36 stars；没有验证指标或基准测试。「毫秒级、7000 万+、几秒下载、导入几分钟」和示例数字均为作者陈述或示例，未独立验证。只覆盖巴西 CNPJ 数据。
-1. 前提：Node.js 20+；明确目标州；用于 B2B 勘探或市场摸底；先只下一个州。预期结果：你知道要覆盖哪个 UF，并接受数据只覆盖巴西企业注册信息。
+注意证据等级：README 给出安装/接入命令、7 个工具、过滤器、示例问题、CLI、隐私默认、MIT、CI badge、36 stars；没有验证指标或基准测试。“毫秒级、7000 万+、几秒下载、导入几分钟”和示例数字均为作者陈述或示例，未独立验证。只覆盖巴西 CNPJ 数据。
+1. 前提：Node.js 20+；明确目标州；用于 B2B 勘探或市场摸底；先只下一个州。
 2. 下载目标州的数据库：
 ```sh
 npx -y radar-cnpj-mcp baixar --ufs SP,MG
 ```
-把 SP,MG 换成你的目标州。预期结果：本地有目标州数据；随后用 status 确认参考月份和已导入 UF。
+把 SP,MG 换成你的目标州。随后用 status 确认参考月份和已导入 UF。
 3. 先走 CLI，不接 agent，做校准：
 ```sh
 npx radar-cnpj-mcp status
 npx radar-cnpj-mcp contar --cnae 4520-0/01 --uf SP --agrupar municipio
 npx radar-cnpj-mcp buscar --cnae 4520-0/01 --municipio Campinas --sem-mei --limite 20
 npx radar-cnpj-mcp buscar --cnae 4520 --municipio Campinas --csv oficinas.csv
-npx radar-cnpj-mcp --help
 ```
-预期结果：status 显示参考月份和已导入 UF；contar/buscar 能返回可核对数字和 CSV，便于后面判断 agent 是否答对。
-4. 接入 agent。Claude Code：
+4. 接入 Claude Code：
 ```sh
 claude mcp add radar-cnpj -- npx -y radar-cnpj-mcp
 ```
-Claude Desktop / Cursor / VS Code 等，在其 MCP 配置里加：command 填 npx，args 填 -y 和 radar-cnpj-mcp。可选全局安装：
-```sh
-npm install -g radar-cnpj-mcp
-radar-cnpj-mcp baixar --ufs SP,MG
-claude mcp add radar-cnpj -- radar-cnpj-mcp
-```
-更新工具：npm update -g radar-cnpj-mcp。预期结果：客户端列出 radar-cnpj 服务，工具名可枚举：buscar_empresas、contar_empresas、buscar_cnae、buscar_municipio、detalhar_empresa、exportar_csv、status_base。
-5. 按「先定位代码、再计数、再拉明细、最后导出」的顺序向 agent 提问。用 buscar_cnae 把口语化活动翻译成 CNAE 代码；用 contar_empresas 按 UF/市/区/CNAE/规模/MEI/年份聚合；用 buscar_empresas 取明细；用 exportar_csv 出 Excel 可读表格。可用 README 模板：
+其他客户端在 MCP 配置里 command 填 npx，args 填 -y 和 radar-cnpj-mcp。
+5. 按“先定位代码、再计数、再拉明细、最后导出”的顺序向 agent 提问。可用 README 模板：
 ```text
 Quantas oficinas mecânicas ativas existem em Campinas?
-Liste academias abertas desde 2025 em Santo André, sem MEI, com telefone.
 Em quais cidades de SP há mais clínicas odontológicas?
 Exporte para CSV os restaurantes do bairro Pinheiros.
 ```
-可用快捷 prompt：prospectar、dimensionar_mercado、empresas_novas；在 Claude Code 中变成 /radar-cnpj:prospectar 这类命令。预期结果：agent 自动选用窄工具，答案能回到 CLI 同参数核对。
-6. 用同一问题做 agent vs CLI 对照：记录 agent 计数是否与 CLI 一致、CNAE 映射是否需要纠正、导出字段是否完整、MEI 电话/邮箱被遮蔽比例、从提问到可用名单的时间。若 CNAE 映射频繁出错，或业务根本不需要巴西企业数据，停在 try，只把「本地数据 + MCP 窄工具 + 状态资源」当模式参考。
-7. 备选数据源：直接从 Receita Federal 导入尚未进入预构建数据集的月份。前提：去 arquivos.receitafederal.gov.br 的 Dados › Cadastros › CNPJ 下载该月目录（README 称约 7GB）。
-```sh
-npx -y radar-cnpj-mcp importar ~/Downloads/2026-10 --ufs SP,MG
-```
-README 提示：导入会读取税务局的全部文件，即使只处理一个州也要几分钟。预期结果：status 参考月份更新。
-8. 维持新鲜度和隐私：每月重跑一次 baixar 更新数据库；用 status_base 或 status 确认参考月份和已导入 UF 再信任任何数字；默认隐藏 MEI 电话与邮箱；B2B 接触遵守 LGPD，报价要与对方的活动相关，并提供「不再联系」渠道。
+6. 用同一问题做 agent vs CLI 对照：记录 agent 计数是否与 CLI 一致、CNAE 映射是否需要纠正、导出字段是否完整、MEI 电话/邮箱被遮蔽比例、从提问到可用名单的时间。若 CNAE 映射频繁出错，或业务根本不需要巴西企业数据，停在 try。
+7. 维持新鲜度和隐私：每月重跑一次 baixar 更新数据库；用 status_base 或 status 确认参考月份和已导入 UF 再信任任何数字；默认隐藏 MEI 电话与邮箱；B2B 接触遵守 LGPD，报价要与对方的活动相关，并提供“不再联系”渠道。
 
 ### 做法 V：让编码代理在写代码前读到仓库专属的可靠性规则（以 trustabl/agent-reliability-skills 为例）
 注意证据等级：本次只有 README，版本 v0.1.0-rc.1、42 stars；没有生成的 SKILL.md 样例、没有检测规则正文、没有案例或前后对比数据；README 中 Claude Code/Cursor/Claude Desktop 的 workspace 报告状态均为 pending。先在一个仓库试点，生成后人工审查再让代理使用。
-1. 确认前提：Node.js 22+；目标仓库有依赖清单（package.json、pyproject.toml、requirements.txt、go.mod 等）；仓库确实使用受支持的 agent SDK（Claude Agent SDK、OpenAI Agents SDK、Google ADK、MCP、LangChain/LangGraph、CrewAI、Pydantic AI、Vercel AI SDK、AutoGen）；客户端支持 MCP。先只选一个仓库试点，不要全量铺开。
+1. 确认前提：Node.js 22+；目标仓库有依赖清单；仓库确实使用受支持的 agent SDK；客户端支持 MCP。先只选一个仓库试点。
 2. Claude Code 安装 MCP server：
 ```bash
 claude mcp add agent-reliability-skills -- npx -y https://github.com/trustabl/agent-reliability-skills/releases/download/v0.1.0-rc.1/agent-reliability-skills-0.1.0-rc.1.tgz
 ```
 3. Cursor 安装：在项目内 .cursor/mcp.json 或 ~/.cursor/mcp.json 的 mcpServers 下加 agent-reliability-skills，command 为 npx，args 为 -y 和上面的 tgz URL。
-4. Claude Desktop 安装：打开 Settings → Developer → Edit Config，把同样的 mcpServers 条目加入 claude_desktop_config.json，重启 Claude Desktop。Claude Desktop 没有项目文件夹，因此提问时要给出仓库路径。
-5. 调用 trustabl_forge 工具生成 skill。参数：path（仓库绝对路径；README 说明只有客户端通过 MCP roots 报告 workspace 时才可省略，而 Claude Code/Cursor/Claude Desktop 的该项状态都标为 pending，因此试点时按必填处理）；output_path（通常设为 .claude/skills/trustabl-pre-coding/SKILL.md）；可选 policy（为尚未出现在清单中的 SDK 补充类别，如 openai_sdk）；可选 lang（python、typescript、go）。
-6. 如果使用 Claude Desktop，可直接用 README 给出的提示词：
-```text
-Generate the Trustabl pre-coding skill for /Users/me/code/my-agent and write it to .claude/skills/trustabl-pre-coding/SKILL.md.
-```
-7. 注意写入约束并人工审查：只有提供 output_path 才会写文件；路径必须留在仓库内；已有文件只有在是 Forge 生成时才会被替换，手写文件不会被覆盖。生成后先人工审查 SKILL.md：识别到的 SDK 是否正确、规则是否适用、有没有敏感信息；确认后再让编码代理读取使用。
-8. 首次调用会下载 analyzer 二进制和 Trustabl 规则仓库，之后从缓存离线工作。若 GitHub 匿名限流，可设置 GITHUB_TOKEN；也可用 TRUSTABL_BIN 指向本地 analyzer 构建：
-```bash
-export TRUSTABL_VERSION=v0.1.15
-export GITHUB_TOKEN=你的_token
-export TRUSTABL_BIN=/path/to/trustabl
-```
-9. 依赖或 Trustabl 规则变化后，重新生成并审查 skill；不要把它当成一次生成就永久有效的固定文件。
-10. 最小对照：先记录基线（现有测试通过率、lint/类型检查结果、团队已有的可靠性扫描 findings、人工 review 中与可靠性相关的意见）；生成并审查 SKILL.md 后，让编码代理完成 1–3 个同类小任务，再用同一套测试和检查比较。判断指标：生成文件是否准确覆盖仓库实际使用的 SDK；任务后测试、lint/类型检查是否不退化；可靠性相关 findings 或人工 review 意见是否减少；代理是否因为读取 skill 而提前避开规则问题；生成过程是否没有覆盖手写文件。若生成内容 SDK 识别错误、规则不适用或引入敏感信息，应停止试用并回到人工规则清单。README 未给出 analyzer 的扫描命令，验证时使用团队现有测试和扫描工具，不要虚构命令。
+4. 调用 trustabl_forge 工具生成 skill。参数：path（仓库绝对路径；试点时按必填处理）、output_path（通常设为 .claude/skills/trustabl-pre-coding/SKILL.md）、可选 policy、可选 lang。
+5. 生成后先人工审查 SKILL.md：识别到的 SDK 是否正确、规则是否适用、有没有敏感信息；确认后再让编码代理读取使用。只有提供 output_path 才会写文件；路径必须留在仓库内；已有文件只有在是 Forge 生成时才会被替换。
+6. 首次调用会下载 analyzer 二进制和 Trustabl 规则仓库，之后从缓存离线工作。若 GitHub 匿名限流，可设置 GITHUB_TOKEN；也可用 TRUSTABL_BIN 指向本地 analyzer 构建。
+7. 最小对照：先记录基线（现有测试通过率、lint/类型检查结果、团队已有的可靠性扫描 findings、人工 review 中与可靠性相关的意见）；生成并审查 SKILL.md 后，让编码代理完成 1–3 个同类小任务，再用同一套测试和检查比较。若 SDK 识别错误、规则不适用或引入敏感信息，停止试用并回到人工规则清单。
 
 ### 做法 W：把真实 iPhone 的界面操作接到 MCP，但只用备用机做只读/可逆试用（以 poki 为例）
-注意证据等级：README 给出安装/启动/注册命令、依赖清单、两种分发方式、示例任务和真机配对要求；项目 v0.1.0、126 stars、AGPL-3.0-only。只是作者主张、无数据支撑：「Gets faster with use」；真机只在中国区界面语言的 iPhone 上验证过；真机仅支持竖屏；App 容器导出、跳转 Settings 子页面直链不可用；屏幕内容会发送到模型服务；写操作会真实发生，第三方 App 自动化可能违反 ToS。先只跑只读任务，再跑可逆写操作。与做法 Z 的差异见适用与不适用。
-1. 核对硬性前提：macOS 15+；预构建包只提供 Apple Silicon arm64；完整版 Xcode（不是 Command Line Tools）、Rust、Node.js 24+、ffmpeg；预构建包还需 Python 3；一台可清空的备用 iPhone，真机先用 USB 与 Mac 配对并开启开发者模式。不满足就停在 study，只保留「MCP 接真机」思路。
+注意证据等级：README 给出安装/启动/注册命令、依赖清单、两种分发方式、示例任务和真机配对要求；项目 v0.1.0、126 stars、AGPL-3.0-only。只是作者主张、无数据支撑：“Gets faster with use”；真机只在中国区界面语言的 iPhone 上验证过；真机仅支持竖屏；屏幕内容会发送到模型服务；写操作会真实发生，第三方 App 自动化可能违反 ToS。先只跑只读任务，再跑可逆写操作。与做法 Z 的差异：poki 是 macOS 工具链 + 备用 iPhone，iphone-control 是 Linux Docker 或 Apple Silicon Mac + 专用 iPhone；两者都先低风险。
+1. 核对硬性前提：macOS 15+；预构建包只提供 Apple Silicon arm64；完整版 Xcode、Rust、Node.js 24+、ffmpeg；预构建包还需 Python 3；一台可清空的备用 iPhone，真机先用 USB 与 Mac 配对并开启开发者模式。不满足就停在 study，只保留“MCP 接真机”思路。
 2. 源码方式启动服务（终端 A 长期运行）：
 ```sh
 git clone https://github.com/JosssphZhou/poki.git
@@ -501,18 +462,16 @@ cd poki
 ./bin/setup
 npm start
 ```
-3. 或使用预构建 macOS arm64 包（可跳过 Rust 与 ./bin/setup）：
+3. 或使用预构建 macOS arm64 包：
 ```sh
 tar -xzf poki-v0.1.0-macos-arm64.tar.gz
 cd poki-v0.1.0
 npm ci --no-audit --no-fund
 npm start
 ```
-包内已含原生桥与 idevice 工具；仍需 Apple Silicon 的 macOS、完整 Xcode、Node.js 24+、Python 3 和 ffmpeg。
 4. 把 MCP 服务器注册到客户端（另开终端，在同一目录执行）：
 ```sh
 claude mcp add --scope user poki-mcp -- node $PWD/src/stdio.mjs
-codex mcp add poki-mcp -- node $PWD/src/stdio.mjs
 ```
 前提：终端 A 的 npm start 保持运行；$PWD 必须是仓库/包目录；路径含空格时给 $PWD/src/stdio.mjs 加引号。
 5. 找到设备并跑第一个只读任务：
@@ -521,20 +480,7 @@ node bin/call.mjs list_devices
 poki 'Search esp32 in Chrome and summarize the top result'
 ```
 只有一台已连接设备时会自动选中；多设备需加 --device '<device UUID>'。
-6. 可选：安装独立 Agent，用终端或消息通道下任务：
-```sh
-npm ci --prefix agent
-export PATH=$PWD/bin:$PATH
-poki login
-poki status
-```
-渠道配置完成后再启动 poki imessage 或 poki telegram；具体配置见 agent/README.md，原文未展开。
-7. 或让 agent 自己完成安装：把下面这段原样交给 agent：
-```text
-Install https://github.com/JosssphZhou/poki following its root AGENTS.md, including the MCP skill, and stop whenever you need me to act.
-```
-最后一句是人为介入点设计——安装过程中需要你操作时它会停下来。
-8. 先立安全边界再跑写操作：先用只读任务（搜索、读屏、总结）每类 3 次；再跑可逆写操作 3 次（例如给自己发一条消息、新建一条备忘），全程盯着屏幕；不要用主力机，不要从付款、群发、不可逆按钮开始。每类任务重复第二遍，检验「重复执行更快」是否真实存在。
+6. 先立安全边界再跑写操作：先用只读任务（搜索、读屏、总结）每类 3 次；再跑可逆写操作 3 次（例如给自己发一条消息、新建一条备忘），全程盯着屏幕；不要用主力机，不要从付款、群发、不可逆按钮开始。每类任务重复第二遍，检验“重复执行更快”是否真实存在。
 
 ### 做法 X：把真实手机 WebView/H5 的现场调试经自托管网关接给 agent（以 remote-webview-debugger 为例）
 注意证据等级：README 给出部署命令、SDK 接入片段、claude mcp add 命令、HTTP/HTTPS 对照表、三种部署方式和安全配置；项目 SDK 0.3.0、51 stars、MIT。隐私承诺、像人一样点击输入的能力、掩码效果都只有作者主张，没有第三方验证或成功率数据；没有定时/事件触发、后台监控或无人值守轮询，不要外推成通用移动端自动化平台。
@@ -542,38 +488,17 @@ Install https://github.com/JosssphZhou/poki following its root AGENTS.md, includ
 ```bash
 docker run -d --name rwd -p 8080:8080 -v rwd-data:/data -e RWD_ADMIN_PASSWORD='change-me' ghcr.io/zanel1u/remote-webview-debugger:latest
 ```
-打开 http://<your-host>:8080，用 admin + 该密码登录。不设 RWD_ADMIN_PASSWORD 则随机密码只在 docker logs rwd 打印一次。数据在 rwd-data 卷；升级是 pull 新 tag 后重建容器。常用设置：RWD_ADMIN_EMAIL 改所有者登录名；RWD_PUBLIC_URL 指定手机与 agent 使用的地址，如 https://rwd.example.com/v1；RWD_LANG=zh 让 MCP 工具描述与结果用中文；RWD_DATABASE_URL=postgres://… 改用 Postgres；仅在自建反代之后加 RWD_TRUST_PROXY=1。也可用二进制 ./rwd serve --addr :8080，或用 deploy/platform 的 Docker Compose（前面加 Caddy，RWD_DOMAIN=<host> 自动签 Let's Encrypt 证书），或源码 make -j16 后运行 gateway/bin/rwd-<os>-<arch> serve --addr :8080。预期结果：控制台可登录，项目可建。
-2. 让页面在线。前提：先在控制台建项目拿到 app key（形如 rwd_pk_…）。
-```html
-<script src='https://cdn.jsdelivr.net/npm/remote-webview-debugger@0.3.0/dist/sdk.js'></script>
-<script>RemoteWebviewDebugger.run('https://rwd.example.com/v1', 'rwd_pk_…')</script>
-```
-也可从 unpkg 加载，或 npm install remote-webview-debugger 后 import { run } from 'remote-webview-debugger'；网关自身也在 /v1/sdk.js 提供内嵌副本。App 内则由原生代码在 document start 注入同一脚本（iOS WKUserScript、Android addDocumentStartJavaScript，见 docs/native-integration.md）。预期结果：手机上出现带设备码的小胶囊，可点「请求协助」。
-3. 接入智能体。前提：在控制台建 API key；原文说一把钥匙可触达所有设备。
+打开 http://<your-host>:8080，用 admin + 该密码登录。数据在 rwd-data 卷；升级是 pull 新 tag 后重建容器。也可用二进制 ./rwd serve --addr :8080，或用 deploy/platform 的 Docker Compose。
+2. 让页面在线。前提：先在控制台建项目拿到 app key（形如 rwd_pk_…）。在页面中加载 SDK 并调用 run，或 npm install remote-webview-debugger 后 import。App 内则由原生代码在 document start 注入同一脚本。预期结果：手机上出现带设备码的小胶囊，可点“请求协助”。
+3. 接入智能体。前提：在控制台建 API key。
 ```bash
 claude mcp add --transport http rwd https://rwd.example.com/v1/mcp --header 'Authorization: Bearer rwd_sk_live_…'
 ```
 然后用自然语言下任务，带上设备码，例如：Connect to device K7Q2-9M4X and find out why the checkout total shows --. 预期结果：MCP 客户端列出 rwd 服务，工具可枚举，且设备端尚未批准前不能操作。
-4. 先定 HTTP 还是 HTTPS。前提：决定因素是被调试的页面，不是网关。https 页面不能加载 http 脚本、不能开 ws://（混合内容），即使 sdk.js 来自 HTTPS CDN。
-- 被调试页面是 http://（本地 dev server、内网测试环境）：网关纯 HTTP 可用。
-- 浏览器或 iOS WKWebView 里的 https://：会被混合内容拦截，必须给网关 HTTPS。
-- Android WebView 里的 https://：仅当 App 在 debug 构建里调用了 setMixedContentMode(MIXED_CONTENT_ALWAYS_ALLOW) 才可用纯 HTTP。
-纯 HTTP 下 API key 与控制台密码明文传输，只放在可信网络。要 HTTPS：用 Compose 加 RWD_DOMAIN=<host>，或容器挂在自己的 TLS 反代后并加 -e RWD_TRUST_PROXY=1。预期结果：测试页无混合内容报错，SDK 能连上网关。
-5. 设定授权与隐私边界。前提：从最低权限起步，确认行为正常再提级。
-- 设备端批准分级：observe / interact / advanced；可开自动批准，但试点先手动。
-- 敏感动作在元素上加 data-rwd-confirm，要求二次确认。
-- 智能体操作期间锁屏，页面显示发光边缘、agent 光标和带计划步骤的任务卡；用户可随时 take over / hand back / end。
-- 掩码：密码框、data-rwd-mask、可配置选择器/正则，在快照、截图、console、网络数据里统一生效。
-- 审计日志记录谁做了什么，不含页面内容。
-- API key 可设级别 / 有效期 / IP 白名单；另有成员与角色、设备 token、二维码邀请、配额、SSE 实时控制台、Prometheus 指标。预期结果：先用 observe 能读到快照/console/network，但点不动页面；升级后才可 interact。
-6. 最小试用。前提：全程用测试账号与隔离测试环境，先用内网 http:// 测试页。
-1）本机或内网起网关（纯 HTTP 即可），登录控制台建项目拿 app key、建 API key。
-2）准备一个内网测试页，人为植入一个已知缺陷（例如结算金额显示成 --），按第 2 步接入 SDK。
-3）在真机（先用内网测试环境，避开真实用户）打开该页，记住设备码。
-4）用 claude mcp add 接入，把授权级别设为 observe，先只让 agent 读快照/console/network 并说出它看到的现象。
-5）升到 interact，让它执行复现路径（点击、输入、滚动），观察任务卡步骤是否与预期一致，随时准备接管。
-6）在同一页面上加 data-rwd-mask 和一个密码框，检查快照、截图、console、network body 里是否出现明文。预期结果：掩码处应为 0 明文；用户接管可用；审计日志能还原操作者和动作。
-7. 做对照并决定去留。同一台测试设备、同一个测试页、同一个已知缺陷：先记录人工无 USB 场景下能否当天给出根因；再接 agent 做同样定位。记录定位耗时、首轮定位是否命中、需要几轮追问、用户 take over 次数与时机、设备端从发起到批准的耗时、误批准次数、agent 是否写入脏数据、会话中断率、SDK 是否拖慢页面加载、审计日志能否完整还原「谁在何时对哪台设备做了什么」。若 observe 阶段就拿不到有用的 console/network 证据，或掩码抽查出现明文，或只能靠自动批准才能用，停在 study；不要把它扩成自动巡检。
+4. 先定 HTTP 还是 HTTPS。前提：决定因素是被调试的页面，不是网关。https 页面不能加载 http 脚本、不能开 ws://；被调试页面是 http:// 时网关纯 HTTP 可用；浏览器或 iOS WKWebView 里的 https:// 必须给网关 HTTPS；Android WebView 里的 https:// 仅当 debug 构建放开混合内容才可用纯 HTTP。纯 HTTP 下 API key 与控制台密码明文传输，只放在可信网络。
+5. 设定授权与隐私边界。前提：从最低权限起步，确认行为正常再提级。设备端批准分级 observe / interact / advanced；可开自动批准，但试点先手动。敏感动作在元素上加 data-rwd-confirm，要求二次确认。智能体操作期间锁屏，页面显示发光边缘、agent 光标和带计划步骤的任务卡；用户可随时 take over / hand back / end。掩码在快照、截图、console、网络数据里统一生效。审计日志记录谁做了什么，不含页面内容。API key 可设级别 / 有效期 / IP 白名单。
+6. 最小试用。前提：全程用测试账号与隔离测试环境，先用内网 http:// 测试页。起网关、建项目拿 app key、建 API key；准备一个内网测试页，人为植入一个已知缺陷；真机打开该页，记住设备码；接入 MCP，把授权级别设为 observe，先只让 agent 读快照/console/network 并说出它看到的现象；升到 interact，让它执行复现路径；在同一页面上加 data-rwd-mask 和一个密码框，检查快照、截图、console、network body 里是否出现明文。预期结果：掩码处应为 0 明文；用户接管可用；审计日志能还原操作者和动作。
+7. 做对照并决定去留：同一台测试设备、同一个测试页、同一个已知缺陷，先记录人工无 USB 场景下能否当天给出根因；再接 agent 做同样定位。记录定位耗时、首轮定位是否命中、需要几轮追问、用户 take over 次数与时机、设备端从发起到批准的耗时、误批准次数、agent 是否写入脏数据、会话中断率、SDK 是否拖慢页面加载、审计日志能否完整还原。若 observe 阶段就拿不到有用的 console/network 证据，或掩码抽查出现明文，或只能靠自动批准才能用，停在 study。
 
 ### 做法 Y：从现成组件目录挑 1–2 个组件小范围试用（以 davila7/claude-code-templates 为例）
 注意证据等级：README 给出组件类型与数量、可复制安装命令、--health-check、Analytics、Conversation Browser、/stack 和 1.31.0 移除参数清单；仓库 33,155 stars 只是关注度。原文没有组件质量评测、成功率、安装后效果对比数据；安装会写入项目配置、hook 是可执行脚本、MCP 组件会接外部服务凭证。先预览、只装 1–2 个、保留回滚。
@@ -589,19 +514,7 @@ npx claude-code-templates@latest --hook git/conventional-commits --yes
 npx claude-code-templates@latest --loop engineering/docs-sweep-loop --yes
 npx claude-code-templates@latest --mcp database/postgresql-integration --yes
 ```
-其他类型示例：
-```bash
-npx claude-code-templates@latest --skill creative-design/frontend-design --yes
-npx claude-code-templates@latest --agent development-tools/code-reviewer --yes
-npx claude-code-templates@latest --command performance/optimize-bundle-size --yes
-npx claude-code-templates@latest --setting mcp/mcp-timeouts --yes
-npx claude-code-templates@latest --mod security/secret-redactor --yes
-```
-组合安装示例：
-```bash
-npx claude-code-templates@latest --agent development-team/frontend-developer --command testing/generate-tests --mcp integration/github-integration --yes
-```
-安装 loop 会自动补齐该 loop 依赖的组件，这是「主动推进」类能力最省事的切入点。
+其他类型示例：--skill、--agent、--command、--setting、--mod。安装 loop 会自动补齐该 loop 依赖的组件，这是“主动推进”类能力最省事的切入点。
 5. 装完先做安装健康检查：
 ```bash
 npx claude-code-templates@latest --health-check
@@ -619,16 +532,12 @@ npx claude-code-templates@latest --analytics
 ```bash
 npx claude-code-templates@latest --chats
 ```
-要从另一台设备访问，用 SSH 端口转发：
-```bash
-ssh -L 9876:localhost:9876 <host>
-```
 8. 最小对照：同一类任务在装前装后各做 3–5 次，保持任务同质。记录 loop 是否按间隔自动跑、停止条件是否触发、hook 拦截次数、MCP 接入后人工粘贴外部数据或手工建 PR 的次数、因权限/超时导致的会话中断次数；不要用 --analytics 的会话时长或工具调用数当成效指标，它只说明用得多。
-9. 版本漂移：1.31.0 移除了 --plugins、--skills-manager、--command-stats、--hook-stats、--mcp-stats、--agents、--chats-mobile、--teams、--2025、--studio、--sandbox、--tunnel、--create-agent、--list-agents、--update-agent、--remove-agent、--clone-session；照抄旧教程命令会失败，误用时会打印替代方式。
+9. 版本漂移：1.31.0 移除了 --plugins、--skills-manager、--command-stats、--hook-stats、--mcp-stats、--agents、--chats-mobile、--teams、--2025、--studio、--sandbox、--tunnel、--create-agent、--list-agents、--update-agent、--remove-agent、--clone-session；照抄旧教程命令会失败。
 10. 止损：若某个组件装后一周内没有产生可指认的行为改变（自动执行、拦截、减少手工步骤中的任一），或 hook 脚本引入了不愿接受的写权限/外部调用，直接卸载并记录到不适用清单。
 
 ### 做法 Z：用专用 iPhone 和专用 Apple ID 做真实 iPhone 操作（以 iphone-control 为例）
-注意证据等级：仅来自 GitHub README，有安装命令、工具表、日常命令和一个打开 Clock 并启动秒表的演示说明；没有基准测试、成功率、延迟对比、用户案例或第三方评测；仓库只有 31 stars。README 工具表列 15 个工具，Features 文案写 17 个，口径不一致，实际以安装版本为准。「减少往返」「可无人值守」「自动恢复/重签」是作者主张，未给量化数据。整机控制风险高，只在专用设备和专用账号上试。
+注意证据等级：仅来自 GitHub README，有安装命令、工具表、日常命令和一个打开 Clock 并启动秒表的演示说明；没有基准测试、成功率、延迟对比、用户案例或第三方评测；仓库只有 31 stars。README 工具表列 15 个工具，Features 文案写 17 个，口径不一致，实际以安装版本为准。“减少往返”“可无人值守”“自动恢复/重签”是作者主张，未给量化数据。整机控制风险高，只在专用设备和专用账号上试。
 1. 核对前提：iPhone iOS 17+，用数据线连接；准备专用免费 Apple ID；主机为带 Docker 的 Linux 或 Apple Silicon Mac；只在自己拥有的设备和账号上使用。全程在 MCP 客户端保留工具调用确认，避免 agent 误触支付、删除、发送。
 2. Linux + Docker 安装并启动：
 ```bash
@@ -637,12 +546,12 @@ cp .env.example .env
 docker compose up -d --build
 docker exec -it iphone-control iphone-control setup
 ```
-cp .env.example .env 是可选配置代理/通知；首次构建需几分钟。setup 是引导式配置，可重复运行，需按提示在手机上完成配对、开发者模式、Apple ID 登录和安装 WebDriverAgent。
+setup 是引导式配置，可重复运行，需按提示在手机上完成配对、开发者模式、Apple ID 登录和安装 WebDriverAgent。
 3. 把 MCP server 注册到 Claude Code：
 ```bash
 claude mcp add iphone -s user -- docker exec -i iphone-control iphone-control mcp
 ```
-前提是已安装并登录 Claude Code；注册后重开 Claude Code 会话。预期结果：客户端出现 iphone 服务，工具可枚举，实际数量以当前版本为准。
+注册后重开 Claude Code 会话。预期结果：客户端出现 iphone 服务，工具可枚举，实际数量以当前版本为准。
 4. macOS 直接跑二进制（Docker 不能透传 USB）：
 ```bash
 V=v0.1.3
@@ -651,25 +560,15 @@ mkdir -p ~/.local/bin && install -m 755 iphone-control-$V-macos-arm64/iphone-con
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zprofile && source ~/.zprofile
 iphone-control daemon
 ```
-另开终端：
-```bash
-iphone-control setup
-iphone-control mcp-config
-```
-daemon 终端需保持打开；mcp-config 会打印注册命令，照抄到 MCP 客户端。V=v0.1.3 是 README 示例版本，使用前可换最新 release。
-5. 用自然语言下发任务。README 示例：在 Claude Code 里说 Open Clock, switch to the stopwatch and start it. 工具会先启动 Clock、点击元素，再启动秒表。先做三类低风险任务：打开 Clock 并启动秒表、打开指定 URL、用 iphone_wait_for 等待某个文本出现；稳定后再用 iphone_batch 串 2–3 步。不要先用支付、删除、发送类操作试。
+另开终端：iphone-control setup；iphone-control mcp-config。daemon 终端需保持打开；mcp-config 会打印注册命令。
+5. 用自然语言下发任务。README 示例：在 Claude Code 里说 Open Clock, switch to the stopwatch and start it. 先做三类低风险任务：打开 Clock 并启动秒表、打开指定 URL、用 iphone_wait_for 等待某个文本出现；稳定后再用 iphone_batch 串 2–3 步。不要先用支付、删除、发送类操作试。
 6. 日常运维与排障：
 ```bash
 docker exec -it iphone-control iphone-control status
 docker exec -it iphone-control iphone-control doctor
 docker exec -it iphone-control iphone-control resign --force
-docker exec -it iphone-control iphone-control passcode set
-docker exec -it iphone-control iphone-control devices
-docker exec -it iphone-control iphone-control notify-test
 ```
-doctor 逐层检查 USB 到 WebDriverAgent 并给修复提示；resign 在签名快过期时重签；passcode set|clear 控制自动解锁；notify-test 测试 Telegram/Bark 通知。源码安装或 macOS 可直接用 iphone-control <command>。
-7. 按任务选工具：原生 App 优先用 iphone_list_elements + iphone_tap_element，可避开浮动栏和键盘遮挡；游戏、地图、视频播放器没有元素树，改用 iphone_screenshot + 坐标点击。动作工具可带 then 参数返回动作后的元素树或截图；多步操作可用 iphone_batch 一次跑最多 20 步，遇错停止；等待界面变化用 iphone_wait_for，不要反复截图轮询。
-8. 安全与数据：所有状态在 data/：配对记录、Apple ID 会话和签名密钥、自动解锁密码。要备份，绝不提交或分享。README 明确警告该工具可完全控制手机，agent 可能点到支付、删除或发送按钮；启用自动解锁前先读 SECURITY.md。免费签名约 7 天需续签；daemon 可长期持有连接并声称能从重插、重启、WebDriverAgent 崩溃中恢复，但没有时间/事件调度器，定时触发仍需外部 MCP 客户端或系统调度。
+doctor 逐层检查 USB 到 WebDriverAgent 并给修复提示；resign 在签名快过期时重签。data/ 含配对记录、Apple ID 会话和签名密钥、自动解锁密码，要备份，绝不提交或分享。
 
 ### 做法 AA：把数据库语义层与个人知识库接给代理（以 auto-ontology-mcp 为例）
 注意证据等级：原文给出可直接复制的安装命令、客户端配置、工具调用序列、demo 输出和验证示例；没有独立效果数据；text-to-SQL 静默错误减少、个人知识库比 markdown wiki 更可信等主要是作者主张。先用 demo 库跑通，再接只读真实库。
@@ -683,7 +582,7 @@ uvx --from git+https://github.com/gogoymh/auto-ontology-mcp auto-ontology-mcp de
 ```bash
 claude mcp add auto-ontology -- uvx --from git+https://github.com/gogoymh/auto-ontology-mcp auto-ontology-mcp
 ```
-Cursor 写入 ~/.cursor/mcp.json；VS Code 写入 .vscode/mcp.json 的 servers；Claude Desktop 写入 claude_desktop_config.json 并重启；Codex CLI 写入 ~/.codex/config.toml 的 mcp_servers.auto-ontology；OpenClaw 用 openclaw mcp set auto-ontology 注册后 openclaw mcp list；Hermes Agent 写入 ~/.hermes/config.yaml 后 /reload-mcp。各客户端 command 均为 uvx，args 均为 --from、git+https://github.com/gogoymh/auto-ontology-mcp、auto-ontology-mcp。
+其他客户端 command 均为 uvx，args 均为 --from、git+https://github.com/gogoymh/auto-ontology-mcp、auto-ontology-mcp。
 4. 按顺序发出提示词跑通 demo：
 ```text
 Use auto-ontology to build the ontology for the demo datasource: review the proposed joins, model every table, then save useful SQL attributes.
@@ -697,109 +596,105 @@ Export my knowledge base for Obsidian.
 ```bash
 uvx --from git+https://github.com/gogoymh/auto-ontology-mcp --with 'psycopg[binary]' auto-ontology-mcp add shop 'postgresql+psycopg://readonly_user:pass@host:5432/db' --schemas sales,geo
 ```
-原文提醒客户端配置的 args 里也要加同样的 --with，服务器才能加载驱动。任何 SQLAlchemy URL 都可以；SQLite 内置；PostgreSQL 用 psycopg[binary]；MySQL 用 pymysql；DuckDB 用 duckdb-engine。
-6. 个人知识库用法：第一次保存时自动创建 ~/.auto-ontology-mcp/knowledge.sqlite。让模型调用 define_entity、add_records、save_concept，每条记录带 source（标题、类型、locator、quote）。查询时模型先 check_answerable，再 run_sql，再 get_source 给出处。
+客户端配置的 args 里也要加同样的 --with，服务器才能加载驱动。
+6. 个人知识库用法：第一次保存时自动创建 ~/.auto-ontology-mcp/knowledge.sqlite。让模型调用 define_entity、add_records、save_concept，每条记录带 source。查询时模型先 check_answerable，再 run_sql，再 get_source 给出处。
 7. 导出 Obsidian：
 ```bash
 uvx --from git+https://github.com/gogoymh/auto-ontology-mcp auto-ontology-mcp export-wiki -o ~/vault/ontology
 ```
-或让模型调用 export_wiki。vault 是单向视图，Obsidian 里的编辑不会回读。
-8. 安全配置：使用只读数据库账号；共享机器上设 AUTO_ONTOLOGY_ALLOW_DATASOURCE_TOOLS=0，只允许 CLI 添加数据源；注意数据源 URL（含密码）以明文存在 ~/.auto-ontology-mcp/ontology.db。远程 HTTP 需 serve --transport http --port 8765 --token ... 加 cloudflared 或 ngrok，并把 https://<tunnel-host>/<token>/mcp 加为自定义 connector；ChatGPT 写工具需在开发者模式添加 connector。
+vault 是单向视图，Obsidian 里的编辑不会回读。
+8. 安全配置：使用只读数据库账号；共享机器上设 AUTO_ONTOLOGY_ALLOW_DATASOURCE_TOOLS=0，只允许 CLI 添加数据源；注意数据源 URL（含密码）以明文存在 ~/.auto-ontology-mcp/ontology.db。远程 HTTP 需 serve --transport http --port 8765 --token ... 加 cloudflared 或 ngrok。
 
 ### 做法 AB：从一条社交推荐里只安装一个规则插件，先做启用/不启用对照（以 andrej-karpathy-skills 为例）
-1. 前提：已安装并登录 Claude Code，能访问插件市场/对应 GitHub 仓库。只把这条推文当 try；原文严重截断，只有第一项有完整安装命令，第二项「Make Claude write the least code that」在采集文本中被截断，后续 5 项未出现。不要根据标题或推文语气补写其余仓库或提示词。
+1. 前提：已安装并登录 Claude Code，能访问插件市场/对应 GitHub 仓库。只把这条推文当 try；原文严重截断，只有第一项有完整安装命令，第二项被截断，后续 5 项未出现。不要根据标题或推文语气补写其余仓库或提示词。
 2. 安装可复现的第一项：
 ```bash
 /plugin marketplace add forrestchang/andrej-karpathy-skills
 ```
 预期结果：插件市场命令成功，Claude Code 中能看到该插件。若安装失败或看不到插件，停止，不要继续推测。
-3. 人工核对插件实际提供的 4 条编码规则文本：规则内容是什么、适用语言和项目类型是什么、和团队现有约定是否冲突。原文只说明规则「drawn from Karpathy's post」，没有给出规则正文；读不到正文就停在 study，只记录安装命令。
+3. 人工核对插件实际提供的 4 条编码规则文本：规则内容是什么、适用语言和项目类型是什么、和团队现有约定是否冲突。读不到正文就停在 study，只记录安装命令。
 4. 选一个小仓库或独立分支，准备 2–3 个代表性编码任务（小功能、缺陷修复、局部重构）。先在不启用插件时跑一遍，保存提示词、diff、测试结果和人工 review 记录；再启用插件，用同一提示词、同一环境重跑同样任务，保存同样材料。比较净增代码行数、测试通过率、人工 review 需修改行数、返工轮次、规则被违反的次数。
-5. 若规则与项目冲突、测试/检查退化，或没有可观察改善，禁用或卸载插件；不要因为 GitHub star 数高就把它写进团队默认配置。原文提到的「最少代码」方向只能作为待验证方向，不能当成已给出的提示词或配置。
+5. 若规则与项目冲突、测试/检查退化，或没有可观察改善，禁用或卸载插件；不要因为 GitHub star 数高就把它写进团队默认配置。
+
+### 做法 AC：接入只读分析数据源，强制输出取数口径（以 Yandex Metrika MCP 为例）
+选 AC 当你的工作涉及 Yandex Metrika 站点分析，想让 Claude/Cursor/Codex 直接取数，并且每次回答都带日期、时区、采样状态和过滤器。它的价值不只是“又一个连接器”，而是示范“把取数口径当作工具输出的一部分强制返回”。若你不用 Yandex Metrika，只需读它的输出可核验设计，不必安装。注意证据等级：README 给出安装命令、13 个工具、3 个提示词、凭据存储与隐私默认；版本 1.0.0、MIT、126 stars。可核对的是设计与命令；没有给出与 Yandex 后台人工核对的样例差异、没有性能数据、没有错误率；“numbers you can verify”“strict accuracy refuses sampled data”的实际效果没有对比数据。README 承认只在 macOS 上做过真实登录与报表验证，Windows/Linux 及其他客户端的情况未在本文档中给出结论；文档主体是俄语，本次材料只有英文 README，weekly_review 提示词内容、导出上限、采样拒绝的具体触发条件无法核实。数据会发送给 AI 客户端及其模型提供方，token 不会。
+1. 核对前提：Node.js 22.13+；一个 MCP 客户端；真实取数时需有对应计数器权限的 Yandex 账号（README 说明无需自建 API key、无需自建 OAuth 应用）；接受数据发送给 AI 客户端及其模型提供方；只读，无写接口、无裸 HTTP 工具。
+2. 安装（一条命令写入客户端配置并自动备份）。--client 可选 claude-desktop、claude-code、cursor、vscode、windsurf、codex：
+```bash
+npx -y @dev-crabs/yandex-metrika-mcp setup --client claude-desktop
+# 或 --client claude-code、cursor、vscode、windsurf、codex
+```
+Claude Code 也可单独装：
+```bash
+claude mcp add --scope user yandex-metrika -- npx -y @dev-crabs/yandex-metrika-mcp
+```
+Windows 上部分客户端无法直接启动 npx，setup 会写 cmd 加 /c npx 的形式；手写配置时按这个改。
+3. 重启客户端，先不接真实账号，用合成连接 conn_demo 试跑：
+```text
+Compare the last two complete weeks by traffic source.
+```
+预期结果：工具被正确调用，输出里确实带日期区间、时区、采样状态、过滤器。这是判断“可核验”是否落到实处的第一条硬标准；缺一项就不算通过。
+4. 接真实计数器：先让助手调 metrika_list_counters 和 metrika_describe_counter，拿到站点、时区、以及目标（goal）及其 ID；再调 metrika_catalog 拿预设、指标（含聚合规则）、维度、周期预设。这一步是把“口径”作为输入喂给模型，而不是让它自由发挥。
+5. 取数三件套：metrika_run_report 做单周期；metrika_compare_periods 在两个周期完全相同条件下对比，给绝对值、百分比、百分点变化；metrika_run_timeseries 按日/周/月分桶，按精确日历边界切。检查是否按计数器时区切日历周期、默认只取完整日、严格精度模式是否拒绝采样数据而不是标成精确、是否用 API 总计而非可见行求和。
+6. 大批量导出走：metrika_export_report 起后台任务 → metrika_get_job 轮询 → metrika_read_artifact 取产物（带校验和与 manifest，重启后可续跑）；要停就 metrika_cancel_job。核对 CSV 行数与 manifest/校验和是否自洽，以及中断后能否续跑。
+7. 安全默认值确认：token 存在操作系统凭据库（macOS Keychain / Windows Credential Manager / Linux Secret Service）；没有凭据库时服务器默认拒绝保存，除非你显式选择“仅本人可读的未加密文件”；标签中的 URL 查询串默认被剥离；无遥测。团队共享场景用多连接隔离，别共用一条连接。
+8. 最小试用约 15 分钟：用第 2 步装好，重启客户端；不接账号，用 conn_demo 问一句，确认输出带日期区间、时区、采样状态、过滤器；接真实计数器，记下时区与一个 goal ID；挑一个每周本来就要手做的报表，用 metrika_compare_periods 复现它；同一问题换成长周期，走导出三件套拿到 CSV。判断指标：口径零歧义率（抽查 5 次回答，5/5 都写明日期区间、时区、采样状态、过滤器，缺一项算不通过）；与 Yandex 后台手查值比对，重点看可见行求和 vs API 总计的差异；故意选会触发采样的区间，确认它拒绝而不是给一个看起来精确的数；同一问题从提问到可用结论的追问/纠错轮次；从提问到可贴进周报的对比表耗时；导出 CSV 行数与 manifest/校验和是否自洽、中断后能否续跑。若采样识别或日期/时区标注在实际使用中缺失，退回 study，只借设计思路，不纳入默认做法。
 
 ## 怎么判断变好了
-可观察指标分五类：通路、工具清单、任务效果、成本与停止原因、安全负向指标。
-- 通路：每条路径要看到注册成功之外的回执或冒烟结果。jevcrawl 看 doctor 是否报通路正常；rea 是否出现在 Hermes 服务器列表；CLI-Hub 的 info/install/launch 是否成功；arcmira_describe 是否返回方法表；reason network who 是否稳定列出对方 session；idx mcp setup 是否打印绝对路径；Blender 是否能打开 MCP Pro 面板并跑通检查场景→建对象→复制排列；jevreel 是否 index 打印 video id、ask 返回时间/概率/帧；WhatsApp MCP 的 /debug 是否为 phase: idle 且 paired: true；im-mcp 的初始化是否成功；claude-security-scan 的 --demo --open 是否打开示例报告、--skip repos 是否生成 reports/<日時>/report.html；vulnerator-ai 四容器是否健康、前门是否只暴露 6 个 run 生命周期工具；TradingView MCP 是否识别 server 与工具列表；AWS 是否装出 aws-core 插件、skills 和 MCP Server 是否可见；flashmind 是否出现 flashmind MCP 服务、规则文件是否落到对应路径、技能是否只有一份；mcode-stack 的 /skills 是否列出已装技能；snapgent 是否出现 snapgentV3 图标、bridge 是否保持开启、VS Code target 是否可用；expo/skills 是否装出 expo 插件、重启/刷新后是否发现技能；kensaku 是否能命中已知文件、MCP 客户端是否列出 kensaku 服务；radar-cnpj-mcp 是否列出 7 个工具、status 是否显示参考月份和已导入 UF；trustabl 是否在客户端出现 MCP 服务、trustabl_forge 是否可调用、SKILL.md 是否写到指定路径；poki 是否注册出 poki-mcp、list_devices 是否返回设备 UUID、只读示例任务是否完成；iphone-control 是否完成 setup/doctor、claude mcp add 后 iphone 服务是否出现、低风险示例任务是否完成；remote-webview-debugger 是否控制台可登录、SDK 在手机上出现设备码胶囊、claude mcp add 后 rwd 工具可枚举、observe 能读到快照/console/network；davila7/claude-code-templates 是否 --health-check 通过、/stack 是否能列出已装组件、装完的 hook/loop/MCP 是否真的被 Claude Code 识别；auto-ontology 是否能创建 demo 库、Claude Code 出现 auto-ontology 服务、工具可枚举、第 2 条示例返回营收、第 3 条示例被正确拒答；AB 是否插件市场命令成功、插件可见、4 条规则文本可读。
-- 工具清单：注册后必须去客户端确认工具真的出现、数量可枚举；不能把「注册成功」当「验证完成」。snapgent 默认 VS Code MCP server 标注有 24 个 workspace 工具，但原文只给标注，不是完整能力清单；expo/skills 的 README 技能清单也不是各 SKILL.md 正文；kensaku 要确认 agent 只调用检索工具；radar-cnpj-mcp 要确认 7 个工具名与参数可枚举；trustabl 要确认 trustabl_forge 的 path、output_path、policy、lang 参数可枚举；poki 要确认客户端实际列出桥接工具，而不是只看 npm start 成功；iphone-control 要以实际版本工具表为准，README 的 15 与 17 不一致，不能拿文案数量当验收；remote-webview-debugger 要确认读快照、find、click、fill、type、press、select、hover、scroll、drag、navigate、evaluate、console、network、storage、截图等工具是否按授权级别出现；davila7/claude-code-templates 要在 /stack 或客户端核对实际装了什么，组件数量、类型和写入文件要与 aitmpl.com 预览一致，不要只看 npm 命令退出成功；auto-ontology 要确认 define_entity、add_records、save_concept、check_answerable、run_sql、get_source、validate_sql、check_readiness、export_wiki 等工具按客户端实际版本出现；AB 要确认插件实际规则文本可读，读不到就不算验证完成。
-- 任务效果：同一组真实任务，挂载 vs 未挂载/人工，比较任务完成率、答案正确性、人工步骤数、耗时、工具报错次数。vulnerator-ai 另看发现数与人工 checklist 的比值、误报数、重复命令比例、steer_run 干预次数、stop_run 后是否真的停止；TradingView 只比只读问答；AWS 比较同一任务未装 vs 只装 aws-core 的完成情况、耗时、调用到的 AWS API、CloudTrail 是否可见、IAM 条件键是否区分 agent 与人类动作；flashmind 比较两类幻觉事件计数、返工时长、测试通过率；mcode-stack 比较调用技能 vs 不调用技能的长命令阻塞/人工中断/重试/后台任务失败或丢失/等待时间、同一 diff 的干净上下文评审发现的问题数、无效评论数、评审耗时、同一评估任务重复运行的通过率波动；snapgent 比较手动复制粘贴 vs 接 connector 的任务完成、首个有用结果时间、总完成时间、人工步骤、工具失败、bridge 断连、返工、非预期改动、测试/构建是否通过；expo/skills 比较是否选对技能、是否减少查文档/试错步骤、改动是否可审查、EAS 构建/工作流是否真的被触发；kensaku 比较找到目标的时间、前 5 条命中率、退回手动翻目录次数、agent 因缺上下文重试次数；radar-cnpj-mcp 比较 agent 计数与 CLI 是否一致、CNAE 映射命中率/需要纠正次数、导出 CSV 行数与字段完整度、MEI 电话/邮箱被遮蔽比例、从提问到可用名单的时间；trustabl 比较同一仓库同类任务在生成并审查 skill 前后的测试通过率、lint/类型检查结果、可靠性 findings 或人工 review 意见数量；poki 比较首次成功率、人工接管次数/任务、端到端耗时 vs 手工耗时、重复任务第二次耗时相对第一次的下降幅度、误操作次数；iphone-control 以 10 次为一组记录任务成功率、人工介入次数、单任务耗时、工具调用/往返次数、失败原因、误触或危险操作次数，另测一次重插/重启后的恢复情况和 doctor 报警是否准确；remote-webview-debugger 比较从拿到 bug 描述到 agent 指出根因的时间、首轮定位是否命中、需要几轮追问、用户 take over 次数、设备端批准耗时、误批准次数、agent 是否写入脏数据、会话中断率、SDK 是否拖慢页面加载；davila7/claude-code-templates 比较装前装后同一类任务 3–5 次：loop 是否按间隔自动跑、停止条件是否触发、无人值守完成的任务数；hook 拦截次数；MCP 接入后需要人工粘贴外部数据或手工建 PR 的次数是否下降；同一任务用 Command 触发 vs 手写提示词的输出质量与返工次数差异；auto-ontology 比较 validate_sql 拦截错误 join 次数、不可回答问题被正确拒答比例、回答是否带 source、check_readiness 的空概念/无来源记录统计、同一问题 agent 计数与只读 SQL 结果是否一致；demo 扫描结果可作形态参考：9 个未声明外键，7 个自动接受，1 个建议复核，1 个未链接；AB 比较同一小仓库、同一组 2–3 个任务在启用插件前后的净增代码行数、测试通过率、人工 review 需修改行数、返工轮次、规则被违反次数。
-- 成本与停止原因：jevcrawl 看 jev_cost_usd、stopped_because、degraded、needs_js_urls；arcmira 看 quote 预估与实际消耗、错误码是否可按 code 分支；jevreel 看 measure 与实际计费、重复 ask 是否 0 请求 0 成本；expo/skills 看 services 技能开头的成本/套餐限额；kensaku 看索引范围、首次索引耗时和内存占用；radar-cnpj-mcp 看下载体积、导入耗时、磁盘/内存、每月重跑 baixar 的成本，以及 status 的参考月份是否满足业务要求；trustabl 看首次下载 analyzer 与规则仓库是否成功、之后是否从缓存离线工作、限流时是否需要 GITHUB_TOKEN；poki 看安装编译耗时、首次任务耗时、重复任务是否真的变快；iphone-control 看 daemon 与签名剩余时间、resign 成本、首次 setup 和 WebDriverAgent 安装耗时、重插/重启后的恢复是否需要人工；remote-webview-debugger 看自托管部署与证书运维成本、SDK 加载开销、MCP 会话时长与 API key 有效期；davila7/claude-code-templates 看安装写入的文件数、hook 脚本的执行范围、MCP 涉及的凭证与写权限、Analytics/Conversation Browser 读取的会话历史敏感度；不要用 --analytics 的会话时长/工具调用数当成效指标；auto-ontology 看 uvx 首次拉取、HTTP 隧道与 token、真实库连接、demo 建库和知识库导出的耗时；没有内置调度，持续沉淀靠反复调用；AB 看安装与规则核对耗时、插件是否影响每次会话启动，不能把 GitHub star 数当效果指标。
-- 安全负向指标：是否出现越权访问、读取工作目录之外文件、执行非预期命令。Blender 看 execute_code 是否超出预期；jevreel 确认视频帧与问题允许外发到 TypeSafe；WhatsApp MCP 确认没有发送消息、没有多人共享；im-mcp 确认只读、明文数据库已按需清理；claude-security-scan 确认没有明文秘密、没有对测试仓库/账号产生写入或发送、报告权限 700；vulnerator-ai 确认没有越出靶场或授权范围、前门没有暴露原始 kali_run；TradingView 确认没有接真实账户、没有下单；AWS 确认先只读/最小权限、CloudTrail 能看到 agent 动作；flashmind 确认规则文件与技能只有一份、记忆库没有存进未经核实的结论；mcode-stack 确认技能只从可信仓库安装、没有把密钥写进技能目录或日志；snapgent 确认只在非敏感仓库、没有非预期文件改动、扩展站点权限和 MCP 写权限没有超出预期；expo/skills 确认没有把密钥写进技能目录、没有让 agent 直接对生产 EAS 做不可逆操作；kensaku 确认索引没有同步到共享位置、agent 没有写文件或重建索引权限、没有把敏感目录纳入索引；radar-cnpj-mcp 确认默认遮蔽 MEI 联系方式、没有把索引或导出数据同步到共享位置、B2B 接触遵守 LGPD 并提供不再联系渠道；trustabl 确认生成文件只写在仓库内、没有覆盖手写文件、SKILL.md 不含敏感信息、规则确实来自受控来源；poki 确认只用备用 iPhone、没有在主力机跑、没有未经确认的付款/群发/不可逆按钮、屏幕内容外发范围可接受、第三方 App 自动化没有违反 ToS；iphone-control 确认只用专用 iPhone 和专用 Apple ID、MCP 客户端保留工具调用确认、没有让 agent 碰支付/删除/发送、data/ 已备份且没有提交或分享、自动解锁密码按 SECURITY.md 处理、没有把游戏/地图/视频播放器的截图坐标方案当稳定；remote-webview-debugger 确认先 observe 后 interact、敏感动作有 data-rwd-confirm、密码框与 data-rwd-mask 在快照/截图/console/network body 中无明文、审计日志不含页面内容、API key 有级别/有效期/IP 白名单、没有自动批准；davila7/claude-code-templates 确认安装前已在 aitmpl.com 预览写入文件、hook 脚本没有引入不愿接受的写权限或外部调用、MCP 组件只接只读或最小权限、Analytics 与 Conversation Browser 只监听 127.0.0.1 且没有在共享机器常开、授权混杂的组件已逐项核对原始许可、1.31.0 移除的参数没有写进团队脚本；auto-ontology 确认真实库用只读账号、共享机器已设 AUTO_ONTOLOGY_ALLOW_DATASOURCE_TOOLS=0、没有把 ~/.auto-ontology-mcp/ontology.db 当可公开配置、数据源 URL 中的密码没有进日志或共享文档、Obsidian 导出是单向视图没有被当成回写；AB 确认只从可复现命令安装、规则正文已人工审查、没有把推文截断内容补写成团队规则、没有因 star 数高而跳过同任务对照。
-对照试验设计：所有系统从同一入口、同样预算、同一个问题出发，抓到的内容交给同一个回答 LLM，由同一个 judge 打分，只让被试工具这个变量变。没有对比性指标的工具，先用流程内建测试和真实重复任务做前后对照。vulnerator-ai 的对照要额外固定靶场和目标；TradingView 只比接入与只读查询；AWS 要固定账号/沙箱、区域和任务；flashmind 要固定仓库、客户端和任务类型；mcode-stack 要固定仓库、任务类型和技能组合，只比较调用技能与不调用技能；snapgent 要固定同一个聊天站点、同一个测试仓库和同类任务，只比较手动复制粘贴与接 connector；expo/skills 要固定同一个 Expo 项目、同一个 agent 和同类任务，只比较装技能与不装技能；kensaku 要固定同一组本地检索任务，只比较接索引与手动翻目录；radar-cnpj-mcp 要固定州、参考月份、CNAE/城市/筛选条件，只比较 CLI 与 agent，或接与不接；trustabl 要固定同一个仓库、同一类任务和同一套测试/检查，只比较生成并审查 skill 前后；poki 要固定同一台备用 iPhone、同一组只读任务和可逆写任务，只比较接 MCP 与手工操作，并重复第二遍看耗时是否下降；iphone-control 要固定同一台专用 iPhone、同一个专用 Apple ID、同一组低风险任务，只比较接 MCP 与手工操作，记录成功率、人工介入、耗时、往返次数、误触次数，先低风险任务再考虑可逆写；remote-webview-debugger 要固定同一台测试设备、同一个测试页、同一个已知缺陷，只比较人工无 USB 定位与 agent 经 MCP 定位，并记录 observe 与 interact 两阶段；davila7/claude-code-templates 要固定同一个仓库、同一类任务、同一个 Claude Code 版本，只比较装 1–2 个组件前后，装前用 /stack 或 git diff 记录基线，装后用 --health-check 和 /stack 核对，不要一次装整套模板；auto-ontology 要固定同一个 demo 库或同一个只读真实库、同一组问题、同一套只读 SQL 校验，只比较接语义层与直接让模型写 SQL，记录错误 join 拦截、不可回答拒答、回答带来源比例；AB 要固定同一个小仓库或分支、同一组 2–3 个任务、同一提示词和环境，只比较插件启用与不启用，保存 diff、测试和 review 记录。
-可参考的作者自测数据（非独立验证）：jevcrawl 50 个 WebWalkerQA 任务答对 40%、找到答案页 54%、$0.025/任务；与 Crawl4AI 0.9.4 的 20 任务对照答案页 10 vs 5；docs.python.org 示例 80,034 tokens 压到 1,873 tokens。CLI-Anything README 自报 2,461 个测试通过、pytest 100%；无第三方复现。reason network 没有效果数据、指标或案例，仓库 33 stars。idx 未见效果数据、性能数字或对比指标，正文在第 9 步后被截断。Blender 扩展 705 stars，没有用户案例、成功率、耗时对比或基准数据。jevreel 作者自测成本与暂停菜单对照；底层 Jev 图像能力仍是实验性，验证只基于单个测试视频。WhatsApp MCP 的 HN 35 points 只说明关注度；作者只在一个真实账号上跑过。im-mcp 只有兼容性验证表，没有效果指标或对照数据；毫秒级响应为作者声称。claude-security-scan 32 stars；没有检出率、误报率、真实用户案例或独立评测。vulnerator-ai 没有准确率、耗时、成本或对比基线；默认无 scope-guard、无 consent、无 audit、无授权闸门。TradingView 零效果证据，互动量只说明关注度，原文在启动命令后截断。agent-toolkit-for-aws 是官方 README，约 3196 stars 只是关注度；没有独立测评、客户案例或 skills 端到端指标。flashmind 31 stars；没有防幻觉规则正文、没有 4 个 SKILL.md 正文、没有基准或前后对比。mcode-stack 有 15 个技能徽章、validate 徽章和配套文章，但本次没有使用前后对比、缺陷率、节省时间、采用率等量化数据，也没有各 SKILL.md、checklists/、WORKFLOW.md 正文。snapgent-connector 53 stars、V3.3、GPL-3.0；没有独立安全审计、性能基准或用户案例；没有任务成功率、时间节省、错误率或基准数据。expo/skills 3658 stars、今日 +90 只是热度信号；没有误选率、成功率、耗时或装了之后工作变好多少的任何度量。kensaku 1.0.6、MIT；作者自测 Linux 8 vCPU、SSD、100,000 文件下文件名内存搜索平均 1.3 ms、首次索引 101,101 文件 184 s、峰值 183 MB、无变化重索引 0.56 s；案例是作者演示，不是独立效果研究。radar-cnpj-mcp 的 36 stars、CI badge 和示例数字 2.301 / 1.407 / 783 只是结果形态示例；毫秒级、7000 万+、几秒下载、导入几分钟均为作者陈述，未独立验证。trustabl 的 42 stars、v0.1.0-rc.1 只说明关注度和版本状态；没有生成的 SKILL.md 样例、没有检测规则正文、没有案例或前后对比数据。poki 的 126 stars、v0.1.0 只说明早期关注度；没有成功率、耗时或对照数据；「Gets faster with use」只是作者主张；真机只在中国区界面语言的 iPhone 上验证过，真机仅支持竖屏。iphone-control 的 31 stars 只说明早期关注度；README 有安装命令、工具表、日常命令和一个演示说明，但没有基准测试、成功率、延迟对比、用户案例或第三方评测；工具数量 15 与 17 口径不一致；「减少往返」「可无人值守」「自动恢复/重签」是作者主张。remote-webview-debugger 的 51 stars、SDK 0.3.0 只说明早期关注度；没有成功率、定位改善或对照数据；隐私承诺、掩码效果、像人一样点击输入都只是作者主张；没有用户案例与前后对比。davila7/claude-code-templates 的 33,155 stars、约 1,900 个组件只说明关注度与目录规模；没有组件质量评测、成功率、安装后效果对比数据。auto-ontology-mcp 原文给出 demo 库规模（11 张表、3200 条订单）、示例问数输出（营收 316.8、4 条订单行）、ROAS 被判断为 partially_answerable 且覆盖度 0.33、demo 扫描结果（9 个未声明外键，7 个自动接受，1 个建议复核，1 个未链接）和 tests/test_knowledge.py 的知识库会话示例；text-to-SQL 常见错误表、接入后明显减少静默错误、个人知识库比 markdown wiki 更可信等主要是作者主张，没有对比实验或独立评估。AB 的原文只给出 7 个仓库合计超过 1,000,000 GitHub stars、Karpathy 帖子 230K、第一项声称包含 4 条编码规则；这些都是流行度或作者陈述，不是效果数据；第二项在采集文本中被截断，后续 5 项未出现。
-最小试用方式与试多久：jevcrawl 半天内完成，准备一个答案埋在首页几跳之下、站点不依赖 JS 的真实问题，先跑现有方式再接 jevcrawl 跑同一个问题，交给同一个评审对照打分。REA 以完成一轮注册→枚举→冒烟→对照为准。CLI-Anything 以跑通一条真实重复任务并留下一组对照为准。arcmira 以示例提示词跑通 + resolve 路径走通 + quote 预估与实际对得上为一轮。reason network 以 2 人配合跑通一轮 who → 问答 → send → 离线补发为准。idx 以零安装跑通 → JSON 契约核对 → MCP 注册 → agent 一次调用 → 离线一次为一轮。Blender 以单助手四条提示词跑通 + 团队链把同一任务重做一次为一轮。jevreel 以 index → ask → zoom 跑通 + 一次插件/MCP 接入 + 一次 lens 过滤为一轮。WhatsApp MCP 以部署 → 链接个人账号 → 只读搜索/摘要/补名 → 与人工完成同一组任务对照为一轮。im-mcp 以初始化 → 客户端接入 → 3–5 个真实只读任务 → 与人工对照 → 清理为一轮。claude-security-scan 先 --demo，再只登录一个低风险域，用 --skip repos 跑一次；确认报告生成、失败项进入未能确认、没有明文秘密、没有写入/发送后，再逐域增加登录；连续两周记录 NEW 项和人工复核结果。vulnerator-ai 以 --with-juice-shop 起栈 → 四容器健康 → TUI 里跑一轮靶场 → 前门 6 个工具各走一次 → 与人工 checklist 对照为一轮；至少跑两轮再决定是否扩大。TradingView 半天内完成只读接入实验；连续启动/调用 10 次记录失败次数；不要用盈亏评估这一轮。AWS 先选一个 AWS 仓库和一个边界清晰任务，只装 aws-core，在沙箱账号或只读权限下做一轮；先跑未装基线，再跑装后同任务，记录完成、耗时、CloudTrail 审计、权限边界。flashmind 两周；只选一个真实仓库、一个客户端，只装 MCP 记忆 + 规则文件 + verify-before-done 一个技能；记录两类幻觉事件计数、返工时长、记忆库过期比例、测试通过率，与试用前对照。mcode-stack 建议 2–3 个技能，不要一次装整套；优先 long-command-check + independent-review + harness-experiment；装到 ~/.agents/skills/，新开会话用 /skills 确认可见，再在真实任务中调用；同时保留一个不调用技能的对照会话；没有可观察改善就停在 try。snapgent 原文未给时长；至少用 2–3 个边界清楚的任务做手动复制粘贴基线和接 connector 的前后对照；每次接受修改前看 git status 和 git diff；出现 bridge 不稳定、AI 不使用工具、权限过大或工作区意外改动就停止扩大。expo/skills 约半天；选一个真实 Expo 项目，装技能、重启/刷新会话，用四条示例提示词验证路由；至少一条任务产生可审查改动后，再决定是否接 MCP。kensaku 1–2 周；选一个包含文档、截图、代码或日志的项目文件夹建立索引；保持 agent 只读，接入一个 MCP 客户端；用固定任务集做前后对照，记录找到目标的时间、前 5 条命中率、退回手动翻目录次数、agent 重试次数、OCR 误识别和隐私暴露事件。radar-cnpj-mcp 半天内；只下一个州，先 CLI 校准，再接 agent，跑三类任务：纯计数（市场容量）、条件筛选 + 导出（名单）、口语活动 → CNAE 映射；与人工查税务局 CSV 或买第三方数据的同任务耗时对照。若 CNAE 映射频繁出错，或业务根本不需要巴西企业数据，就停在 try。trustabl 以一个仓库、1–3 个同类小任务为一轮；先记录测试通过率、lint/类型检查、已有可靠性 findings 和人工 review 意见作为基线；生成并人工审查 SKILL.md 后让代理做同类任务，再用同一套检查比较；若 SDK 识别错误、规则不适用或引入敏感信息，停止试用。poki 建议 1 天内完成最小试用：备用 iPhone USB 配对，按源码或预构建包启动，注册到 Claude Code；只读任务每类 3 次，再跑可逆写操作 3 次，全程盯着屏幕；每类重复第二遍。若只读任务成功率高、接管少，可收录为「无 API 移动端流程」执行方案；若接管频繁、需要反复人工纠偏，或出现未经确认的不可逆动作，降级为 study。iphone-control 以完成一轮 setup/doctor → MCP 注册 → 三类低风险任务（打开 Clock 并启动秒表、打开指定 URL、等待文本出现）各 10 次为一轮；稳定后再用 iphone_batch 串 2–3 步；不要先用支付、删除、发送类操作试。如果主要任务是游戏/地图/视频类自绘 UI，优先评估截图坐标方案的稳定性，不要直接推广。remote-webview-debugger 建议 1 天内跑完：内网 http 测试页植入已知缺陷，真机打开拿设备码，observe 读快照/console/network 并说出根因，再 interact 复现路径，最后用 data-rwd-mask 和密码框抽查快照/截图/console/network body 是否出现明文；若 observe 拿不到证据或掩码出现明文，停在 study。davila7/claude-code-templates 建议半天内：在一个非关键仓库的新分支上，只装 1 个 Hook、1 个 Loop、1 个只读 MCP；装前在 aitmpl.com 逐个预览写入文件，装后跑 --health-check，用 /stack 记录清单；一周内看 loop 是否自动跑、hook 是否拦截、MCP 是否减少手工粘贴；没有可指认行为改变就卸载。auto-ontology 建议半天内：先 uvx 跑 demo，接 Claude Code，按五条提示词跑通建模、营收问数、ROAS 拒答、收据记忆、Obsidian 导出；再选一个只读真实库，加驱动并限定 schema，比较接语义层与直接写 SQL 的错误 join 拦截、不可回答拒答、回答带来源比例；若 demo 跑不通或真实库只能给写账号，停在 study。AB 建议半天到一天：在一个小仓库或独立分支上，只安装 andrej-karpathy-skills，先人工读 4 条规则；选 2–3 个代表性编码任务，启用/不启用各跑一遍，保存 diff、测试和 review；若读不到规则正文或没有可观察改善，停在 study。
+可观察指标分五类：通路、工具清单、任务效果、成本与停止原因、安全负向指标。各做法的最小试用和判断指标已在对应步骤末尾写明；这里给通用判断和新增 AC 的检查点。
+- 通路：每条路径要看到注册成功之外的回执或冒烟结果。例如 jevcrawl 看 doctor；arcmira 看 arcmira_describe；reason network 看 who；Blender 看 MCP Pro 面板并跑通检查场景→建对象→复制排列；WhatsApp MCP 看 /debug 的 paired；claude-security-scan 先 --demo --open 再 --skip repos；vulnerator-ai 看四容器健康、前门只暴露 6 个 run 生命周期工具；AWS 看 aws-core 插件和 MCP Server 可见；flashmind 看 MCP 服务和规则文件路径；mcode-stack 看 /skills 是否列出；snapgent 看图标与 bridge；expo/skills 重启后看技能被发现；kensaku 用 kensaku-cli search 命中已知文件；radar-cnpj-mcp 看 7 个工具、status 参考月份和已导入 UF；trustabl 看 MCP 服务与 SKILL.md 写入；poki 看 list_devices 返回设备 UUID；iphone-control 看 setup/doctor 和 iphone 服务；remote-webview-debugger 看控制台登录、设备码胶囊、observe 能读快照/console/network；davila7/claude-code-templates 看 --health-check 和 /stack；auto-ontology 看 demo 库和五条示例；AB 看插件市场命令、插件可见、规则文本可读；AC 看 conn_demo 冒烟输出是否带日期区间、时区、采样状态、过滤器。
+- 工具清单：注册后必须去客户端确认工具真的出现、数量可枚举；不能把“注册成功”当“验证完成”。AC 要确认 13 个工具、3 个提示词按实际版本可枚举，且没有裸 HTTP 工具；其他路径同样以实际版本为准，不拿 README 文案数量当验收。
+- 任务效果：同一组真实任务，挂载 vs 未挂载/人工，比较任务完成率、答案正确性、人工步骤数、耗时、工具报错次数。AC 专项：同一周期、同一过滤器、同一 goal，把 metrika_compare_periods 的结果与 Yandex 后台手查值比对；抽查 5 次回答是否 5/5 带日期区间、时区、采样状态、过滤器；故意选会触发采样的区间，确认拒绝而不是冒充精确；看导出 CSV 行数与 manifest/校验和是否自洽。
+- 成本与停止原因：AC 看一次完整问答耗时、导出任务轮询次数、中断后续跑是否成功；其他路径按各自步骤末尾记录调用次数、人工步骤、费用和停止原因。所有工具都不要把 star 数、会话时长或工具调用数当成效指标。
+- 安全负向指标：AC 确认 token 存 OS 凭据库或按默认拒绝保存、标签 URL 查询串被剥离、无遥测、多账号连接隔离、数据外发范围可接受；其他路径按各自步骤末尾检查越权访问、读取工作目录之外文件、执行非预期命令、明文秘密、非预期写操作。
+- 对照试验设计：所有系统从同一入口、同样预算、同一个问题出发，抓到的内容交给同一个回答 LLM，由同一个 judge 打分，只让被试工具这个变量变。AC 的对照是：同一个 Yandex 计数器、同一个周期和过滤器、同一个 goal，比较 agent 经 MCP 取数与人工在后台手查/手做报表的耗时、返工次数、数字是否对得上、输出是否带口径。没有对比性指标的工具，先用流程内建测试和真实重复任务做前后对照。
+- 最小试用方式与试多久：AC 约 15 分钟到半天；先用 conn_demo，再接真实计数器，复现一个每周手做报表，再跑一次长周期导出。其他路径按其步骤末尾的时长执行；没有可观察改善就停在 try。
 
 ## 常见坑
-- 把「注册成功」当成「验证完成」。REA 原文没有 list/枚举命令，要查 Hermes 文档补上；jevcrawl 至少还有 uvx jevcrawl doctor；arcmira 至少还有 arcmira_describe；reason network 至少还有 reason network who；idx 至少还要去客户端确认 idx 出现、工具数可枚举；Blender 至少还要跑一遍检查场景→建对象→复制排列；jevreel 至少还要 ask 真问一次、zoom 真看一次；WhatsApp MCP 至少还要看 /debug 的 paired 与 last_pull；im-mcp 至少还要初始化成功、客户端真调一次检索工具；claude-security-scan 至少还要 --demo 打开报告、再只对一个低风险域 --skip repos 跑一次并人工复核；vulnerator-ai 至少还要四容器健康、前门 6 个工具各走一次、stop_run 真能停；TradingView MCP 至少还要看到 server 被识别、工具列表可枚举；AWS 至少还要看到 aws-core 插件、skills 和 MCP Server 在客户端出现；flashmind 至少还要看到 flashmind MCP 服务、规则文件落到正确路径、技能只有一份副本；mcode-stack 至少还要 /skills 列出技能、在真实任务中调用一次并保留对照；snapgent 至少还要看到 snapgentV3 图标、bridge 保持开启、VS Code target 可用、聊天 AI 实际调用工具；expo/skills 至少还要重启/刷新会话后看到技能被发现、示例提示词触发对应技能；kensaku 至少还要 kensaku-cli search 命中已知文件、MCP 客户端列出 kensaku 服务；radar-cnpj-mcp 至少还要看到 7 个工具可枚举、status 显示参考月份和已导入 UF、agent 计数与 CLI 同参数一致；trustabl 至少还要看到 MCP 服务出现、trustabl_forge 可调用、SKILL.md 写到指定路径且经过人工审查；poki 至少还要看到 poki-mcp 注册成功、list_devices 返回设备 UUID、只读示例任务真的完成；iphone-control 至少还要完成 setup/doctor、看到 iphone 服务出现、低风险示例任务真的完成，并以实际版本工具表核对 15/17 口径；remote-webview-debugger 至少还要看到设备码胶囊、observe 能读到快照/console/network、interact 前需设备端批准；davila7/claude-code-templates 至少还要 --health-check 通过、/stack 列出已装组件、hook/loop/MCP 真的被 Claude Code 识别；auto-ontology 至少还要 demo 库建成、客户端出现 auto-ontology 服务、工具可枚举、五条示例提示词按预期返回营收、拒答、记忆和导出；AB 至少还要插件市场命令成功、插件可见、4 条规则文本可读，否则只算安装线索。
-- 把作者自测当独立证据。jevcrawl、CLI-Anything、reason network、idx、Blender 扩展、jevreel、WhatsApp MCP、im-mcp、claude-security-scan、vulnerator-ai、TradingView、agent-toolkit-for-aws、flashmind、mcode-stack、snapgent、expo/skills、kensaku、radar-cnpj-mcp、trustabl、poki、iphone-control、remote-webview-debugger、davila7/claude-code-templates、auto-ontology-mcp、andrej-karpathy-skills 都只有 README、作者自测、推文推荐或关注度，不等于独立效果证据。
-- 在主力环境里直接跑第三方包。REA 依赖 npx、jevcrawl 依赖 uvx、CLI-Hub 依赖 pip，都会拉取并执行第三方包；arcmira 在厂商沙箱里执行；idx 是静态二进制直连公开数据源；Blender 扩展的 Python 工具验证不是安全沙箱；jevreel 的视频帧与问题会发到 TypeSafe；WhatsApp MCP 使用非官方协议；im-mcp 会把本地数据库解密后明文落盘；claude-security-scan 会读取多账户敏感信息；vulnerator-ai 默认没有 scope-guard、consent、audit；TradingView MCP 是本地 Node 进程；AWS 会访问 AWS API；flashmind 通过 npx 拉取 npm 包；mcode-stack 是技能文件，安装前要确认来源和目录权限；snapgent 是 unpacked 浏览器扩展加本地 bridge，可能读写 VS Code 工作区；expo/skills 通过官方插件市场或 skills CLI 装技能；kensaku 的索引包含文件名和抽取文本，应视为敏感数据；radar-cnpj-mcp 会下载公开企业数据到本地，导出名单也可能含联系方式；trustabl 通过 npx 拉取 tgz，首次会下载 analyzer 二进制和规则仓库，并把 SKILL.md 写进仓库；poki 控制真实 iPhone，屏幕内容会发送到模型服务，写操作会真实发生；iphone-control 可完全控制手机，agent 可能点到支付、删除或发送按钮，data/ 含配对记录、Apple ID 会话、签名密钥和自动解锁密码；remote-webview-debugger 自托管网关会读取页面快照、console、network body、storage 和截图，API key 与控制台密码在纯 HTTP 下明文传输；davila7/claude-code-templates 会写入项目配置、执行 hook 脚本、接 MCP 凭证，安装前必须在 aitmpl.com 预览写入文件；auto-ontology 会通过 uvx 拉取并运行第三方包，真实库连接串含密码且明文存于 ontology.db，知识库会沉淀收据/笔记等敏感资料；AB 通过插件市场从 GitHub 仓库加载规则，安装前要确认来源，读规则正文后再决定是否让代理使用。
-- 忽略版本写死。rea-agents@6.3.0、微信/钉钉版本、Node ≥20 的 radar-cnpj-mcp、v0.1.0-rc.1 的 trustabl、v0.1.0 的 poki、iphone-control 的 V=v0.1.3 示例版本、SDK 0.3.0 的 remote-webview-debugger、claude-code-templates 1.31.0 移除 17 个参数、auto-ontology 的客户端 args 与 --with 必须一致，都是写死或强依赖的；换版本要重新核对。
-- 以为 jevcrawl 能爬任何站点。它不执行 JavaScript、不读 robots.txt、不登录、不绕付费墙和 CAPTCHA。
-- 忽略内容外发。jevcrawl 会把页面文本发送到 TypeSafe；API key 只从环境变量读，不落盘、不写日志。
-- 把 401 当故障。arcmira 对无凭证请求返回 401 + OAuth 挑战，这是登录/开户路径。
-- 把名字当 id 传。arcmira 的过滤器只接受原样 id，传名字会在发网络请求前抛 id_required；必须先 resolve。
-- 连上就开始猜方法签名。先调 arcmira_describe，把 id 规则、参数与返回字段、计量规则、错误码一次读全。
-- 不看清计量规则就批量跑。arcmira 搜索按超出前 5 条的每条 passage 收 4 credits；Premium 转录每开始 15 分钟收 300 credits；贵操作前先 arcmira.quote。
-- 以为 arcmira 工具有预算参数。预算在 dashboard 设；被拦住时按返回的 code 分支处理。
-- 把「还在转」当失败。Premium 未就绪时返回 202 + Retry-After，按它重读不重复计费。
-- 建了 arcmira monitor 就以为能删。它不提供删除，只能 paused。
-- 把厂商自述当独立证据。arcmira 的数据覆盖与说话人/赞助识别准确性全是厂商自述。
-- 把「安装成功」当「任务有效」。CLI-Hub 装完 harness 后，要接进 agent 跑一条真实重复任务。
-- 忽略上游软件依赖。大量 CLI harness 包装真实桌面软件；不先装上游软件，cli-hub launch 不会产生有效结果。
-- Windows 上直接跑 Claude Code 生成路径。需先装 Git for Windows 或使用 WSL，否则会报 cygpath: command not found。
-- 给 GUI 客户端手写相对路径或 idx。GUI 应用通常不继承 shell 的 PATH；用 idx mcp setup <client> 生成绝对路径。
-- 从 stdout 以外的地方捞数据。idx 约定 stdout 只放一个 JSON 文档、其余全部走 stderr；把 null 当 0、或当成「该自己补一个」都错，来源未返回的字段就是 null；不看退出码也不行，idx 用 0/2/3/4/5/6 分语义。
-- 把 Blender 扩展的 Python 工具验证当安全沙箱。它用于拦截不允许操作，不是隔离机制；高影响操作是 execute_code、export_scene、import_asset。默认团队链不一定更好，先用单助手跑通同一任务，再换团队链对比。
-- 把 jevreel 的底层图像能力当成熟能力。README 明确它是实验性，验证只基于单个测试视频；query 过滤不产生请求；lens 随索引请求一起走几乎免费，事后再单独跑是每分钟视频一次请求。
-- 用 WhatsApp MCP 的免费 Cloudflare 计划，或以为首次导入失败会自动补。README 要求 Workers Paid，免费计划未验证；首次历史导入每个链接只发生一次，失败后要重新链接才能补；它不能发送、不能多人共享、不能转写媒体。
-- 在公共机器上跑完 im-mcp 不清理。先完全退出 AI 客户端；用 im-clean --dry-run 预览，再 im-clean；最后 uv tool uninstall im-mcp。
-- 把第三方安全技能当「只读就安全」。claude-security-scan 会读取 Mac 本体、本地全部 git 仓库、GitHub、Vercel、多个云和 Gmail；先在隔离或低风险环境只登录一个域试；先 --demo，再 --skip repos 只对一个低风险域跑；把「未能确认」当「没有问题」也是错的。
-- 把 vulnerator-ai 的「默认无护栏」当成「有默认护栏」。安装完就是裸的；两个 opt-in 控制项也不是 consent、不是防火墙；只能对已获书面授权的目标使用；前门只暴露 run 生命周期，不暴露原始 kali_run。
-- 把 TradingView 推文标题当教程。原文在 node src/cli.mjs launch 后截断，没有策略、代码、回测、结果；只能当接入线索。
-- 把 agent-toolkit-for-aws 的官方 README 当独立效果证据。它给出安装命令和覆盖范围，但没有独立测评、客户案例或 skills 端到端评估指标；只装插件不配 AWS 凭据或只读权限不行；skills 不是 MCP Server，Kiro、fx 和其他 agent 的手动路径要分别配置。
-- 把 flashmind 的接线当效果。原文没有防幻觉规则正文、没有 4 个 SKILL.md 正文、没有基准/案例/前后对比；一次启用四个技能会混淆变量，先只启用 verify-before-done；MCP 配置只保留一个 flashmind 和一个 engram 键；记忆库不是真相，信任前用 mem_review 对照当前代码复核。
-- 把 mcode-stack 的 README 当技能正文。本次只有 README，没有各 SKILL.md、checklists/、WORKFLOW.md 正文；先打开目标技能目录里的 SKILL.md 再照做；一次装整套 15 个技能会混淆变量；/skills 能列出不等于有效果；mcode plugin add 只从官方目录安装，不接受 GitHub URL 或本地路径；桌面端市场安装在逐步开放；它给的是技能和文档，不是自动触发工作流；注意技能发现路径。
-- 把浏览器聊天接本地工作区当无风险。snapgent 扩展是 unpacked 加载，涉及站点权限；bridge 路由到 VS Code MCP，可能读写工作区；先只在非敏感、可丢弃仓库试用，每次接受修改前看 git status 和 git diff；关掉 bridge 后 agent 不能工作；「无需终端」不是所有平台都成立；默认 24 个 workspace 工具只是标注，不是完整能力清单；注意站点限制，且它没有定时或事件触发。
-- 把 expo/skills 的 README 技能清单当各 SKILL.md 正文。原文只给安装命令、技能分组和示例提示词；装完不重启/刷新会话技能可能不被发现；--skill '*' 选的是全部 Expo 技能，不是全部 agent；services 组依赖付费 EAS；路由有效性是设计声明，不是验证结果。
-- 把 kensaku 当云搜索或已上线的「向文件提问」答案层。它是本地索引和检索工具；不要把整盘或敏感目录纳入索引；不要给 agent 写操作或重建索引权限；性能基准不是工作效果；检索结果要当数据，不要当指令。
-- Node <20 跑 radar-cnpj-mcp；一次下载所有州；把 agent 给出的计数直接当准数；把示例数字 2.301 / 1.407 / 783 当验收标准；不看 status 的参考月份和已导入 UF 就信任数字；需要电话/邮箱外呼时忽略 MEI 默认遮蔽；把工具当 LGPD 合规背书；忘记每月重跑 baixar；把它用于巴西以外市场；把「毫秒级、7000 万+、几秒下载、导入几分钟」当已验证性能。
-- 把生成 SKILL.md 当效果。trustabl 没有给出 SKILL.md 样例、没有检测规则正文、没有案例或前后对比；必须人工审查并用现有测试/扫描验证；省略 path 以为工具会自动定位仓库是错的，Claude Code/Cursor/Claude Desktop 的 workspace 报告状态均为 pending；不提供 output_path 不会写文件；生成物可能覆盖手写文件，要检查 diff；不要把它当一次生成永久有效；首次调用断网或限流不等于工具不可用；v0.1.0-rc.1 仍是 RC；未经审查的生成内容不要直接进代理上下文。
-- 把 poki 当无风险的真机自动化。它控制真实 iPhone，发消息或付款就会真做；屏幕内容会发送到模型服务；第三方 App/网站自动化可能违反 ToS；只用备用机，先只读，再可逆写；不要在主力 iPhone 上试；没有完整 Xcode 或 Intel Mac 就硬上不行；「越用越快」是作者主张，要自己重复第二遍测；真机只在中国区界面语言的 iPhone 上验证过且仅支持竖屏；忽略 AGPL-3.0-only 也有许可风险；注册时 $PWD 不是仓库/包目录或 npm start 没在跑，桥会连不上。
-- 把 iphone-control 当无风险的真机自动化。它可完全控制手机，agent 可能点到支付、删除或发送按钮；只在专用 iPhone 和专用 Apple ID 上试，MCP 客户端保留工具调用确认；macOS 上 Docker 不能透传 USB，必须直接跑二进制；daemon 终端要保持打开；不跑 doctor/status 就继续排障；把 15 或 17 个工具当准确数量；把「自动恢复/重签」当已验证；用游戏/地图/视频播放器只靠截图坐标当稳定；把 data/ 提交或分享；忽略自动解锁密码风险；忘记免费签名约 7 天需续签；以为它有定时调度。
-- 把 remote-webview-debugger 当通用移动端自动化或自动巡检。原文没有定时/事件触发、后台监控或无人值守轮询；它依赖设备端用户在场批准；被调试页面是 https 却给网关纯 HTTP 会被混合内容拦截；纯 HTTP 下传 API key 或控制台密码不安全；一开始就 advanced 或自动批准不行；不验掩码就相信隐私承诺不行；审计日志不含页面内容；SDK 0.3.0 不是稳定接口；不要用生产用户和生产数据试。
-- 把组件目录当质量认证。890+ skills、420+ agents、100+ MCPs 只是数量；README 没有组件质量评测、成功率或安装后效果对比；33,155 stars 只是关注度；不看写入文件就安装不行；hook 是可执行脚本；MCP 组件会接真实系统和凭证；一次装整套模板会混淆变量；--health-check 只诊断安装与项目配置，不是任务效果指标；--analytics 的会话时长/工具调用数只说明用得多；Analytics 与 Conversation Browser 读取完整对话历史，不要在共享机器常开；1.31.0 移除了 17 个参数，照抄旧教程会失败；项目本体 MIT 但收录组件保留各自原始许可；Mods 需要 Claude Code 2.1.287+；loop 不一定自动推进，要观察。
-- 把 auto-ontology 的 demo 当真实库。demo 是合成零售库；真实库要只读账号、限定 schema、客户端 args 加同样的 --with；把 check_answerable 的拒答当失败、把 validate_sql 的报错当工具坏了，都会误判；数据源 URL 含密码并以明文存在 ~/.auto-ontology-mcp/ontology.db，共享机器必须设 AUTO_ONTOLOGY_ALLOW_DATASOURCE_TOOLS=0；Obsidian 导出是单向视图，编辑不会回读；远程 HTTP 不加 token/隧道就暴露；把作者主张的「明显减少静默错误」当已证效果。
-- 把 GitHub star 数或推文推荐当效果证据。andrej-karpathy-skills 线索只有安装命令和 4 条规则的说法；原文截断，其余 6 个仓库和「最少代码」做法无法核验；不读规则正文就装、不跑同任务对照就推广，都是错的；插件安装成功不等于规则已生效。
+- 把“注册成功”当成“验证完成”。AC 至少还要用 conn_demo 跑一句，确认输出带日期区间、时区、采样状态、过滤器；其他路径至少还要看到工具清单、冒烟结果或真实任务被调用。
+- 把作者自测当独立证据。本手册涉及的工具大多只有 README、作者自测、推文推荐或关注度；AC 的“可核验”设计也没有给出与 Yandex 后台人工核对的样例差异、性能数据或错误率。
+- 在主力环境里直接跑第三方包。AC 通过 npx 拉取第三方包，数据会发送给 AI 客户端及其模型提供方；其他路径也各有外发、写权限、真机控制或明文落盘风险，先在隔离环境、只读/最小权限下试。
+- 忽略版本写死。AC 要求 Node.js 22.13+，版本 1.0.0；其他路径的版本和参数同样要按实际安装版本核对。
+- 把取数结果直接当决策依据。AC 的硬标准是输出带日期区间、时区、采样状态、过滤器；抽样数据必须被拒绝而不是标成精确；用 API 总计而非可见行求和。任何一项缺失，都退回 study。
+- 把 AC 当通用能力。它只对 Yandex Metrika 用户有用；不用 Yandex Metrika 的团队只借鉴“口径随输出返回”的设计，不要为了学模式而安装。
+- 忽略平台差异。AC 的 README 只说明在 macOS 上做过真实登录与报表验证；Windows/Linux 及其他客户端未给结论。其他路径也有平台限定，先核对。
+- 忽略凭据默认值。AC 的 token 存 OS 凭据库；没有凭据库时服务器默认拒绝保存，除非显式选择“仅本人可读的未加密文件”。不要为了方便改成明文共享。
+- 把组件目录、技能包或数据源当质量认证。star 数、组件数量、工具数量只说明关注度或目录规模，不等于安装后效果；先预览写入文件、只装 1–2 个、保留回滚。
+- 在共享机器上留下敏感数据。AC 的多账号连接要隔离；auto-ontology 的 ontology.db 含明文密码；iphone-control 的 data/ 含配对记录和签名密钥；kensaku 索引含文件名和抽取文本；radar-cnpj-mcp 导出名单可能含联系方式。都要按敏感数据处理。
+- 把“能列出工具”当“工具真的被用对”。AC 要检查是否先读 metrika_catalog 和 metrika_describe_counter 再算数；其他路径也要保留一个不挂载/不调用技能的对照会话。
+- 忽略采样和时区。AC 的常见失败是数字看起来精确但实际来自采样数据，或日期边界没按计数器时区切；这两项是判断是否可用的硬指标。
 
 ## 证据与来源
 本节说明每个做法依据哪类材料、有哪些数据、哪些只是作者主张。
-- 做法 A jevcrawl：可核查的是 README 的安装命令、参数默认值、输出字段与环境变量表。数据均为作者自测：50 个 WebWalkerQA 任务答对 40%、找到答案页 54%、$0.025/任务；与 Crawl4AI 0.9.4 的 20 任务对照答案页 10 vs 5、中位爬取时间 29s vs 43s；docs.python.org 示例 80,034 tokens → 1,873 tokens。作者主张无独立验证：比 LLM 驱动爬取快、天然抗 prompt injection、引文逐字可溯源。原文自陈局限：样本小；不执行 JavaScript；不读 robots.txt；页面文本会发送到 TypeSafe。
-- 做法 B REA/Hermes：可核查的是一条完整接入命令，以及 REA 设置菜单已支持 Claude Code 和 Codex 的事实陈述。只是作者主张、未经原文验证：接入后代理会多出 139 个工具；能力清单在列举处被截断。
+- 做法 A jevcrawl：README 的安装命令、参数默认值、输出字段与环境变量表可核查；数据均为作者自测（50 个 WebWalkerQA 任务答对 40%、找到答案页 54%、$0.025/任务；与 Crawl4AI 0.9.4 的 20 任务对照答案页 10 vs 5；docs.python.org 示例 80,034 tokens → 1,873 tokens），无独立验证；作者自陈局限：样本小、不执行 JavaScript、不读 robots.txt、页面文本会发送到 TypeSafe。
+- 做法 B REA/Hermes：可核查的是一条完整接入命令；139 个工具是作者声称，清单在列举处被截断。
 - 做法 C：不接入的降级做法，依据是各路径原文在工具清单、验证方式或效果数据上的缺口。
-- 做法 D CLI-Anything：可核查的是 README 的安装与使用命令、各宿主安装脚本。作者主张无第三方复现：CLI 是人和 agent 的通用接口；7 阶段流水线能生成 CLI、测试、文档并发布；README 自报 2,461 个测试通过、pytest 100%。原文明确：大量 harness 依赖上游桌面软件；Windows 需 Git for Windows 或 WSL；没有对比性指标。
-- 做法 E arcmira：可核查的是接入命令、arcmira_describe、id_required 与 resolve 语义、Premium 转录的 202 + Retry-After、credits 计量规则、错误码清单、monitor 方法集、沙箱出站白名单与永不 DELETE。厂商自述、无第三方复现：数据覆盖与说话人/赞助识别准确性。
-- 做法 F reason network：可核查的是安装方式、四条 CLI 命令、MCP server 名与三个工具名、按 agent 区分的投递时机、网络与安全模型、状态目录。只是作者主张、没有数据支撑：整套「团队协作因此变好」的说法；README 没有任何使用数据、性能数字、前后对比或用户案例；仓库 33 stars。
-- 做法 G idx：可核查的是安装方式、npm 启动器校验、idx -o json 的 envelope 字段、缺失字段为 null 不估算、退出码语义、idx mcp 的 stdio 与 HTTP 形态、idx mcp setup 打印绝对路径、各客户端注册命令、23 个工具名与筛选语法、仓库数据保鲜流水线。调研未给出效果数据、性能数字、前后对比；正文在第 9 步后被截断。
-- 做法 H Blender 扩展：可核查的是 README 的安装与使用信息、Windows x64 + Blender 4.2+、21 个工具清单、单助手与 Manager/Worker/Reviewer 团队链、四条提示词、OpenCode Portable 与其他兼容客户端、控制与安全说明。仅为作者主张、无数据支撑：更快迭代、自动化重复工作等价值描述；没有用户案例、成功率、耗时对比或基准数据。仓库 705 stars；Release 1.0.0、MIT。
-- 做法 I jevreel：可核查的是 README/调研给出的命令与机制、lens TOML、插件安装命令、手动 MCP 命令、环境变量表、四步工作流、MCP 工具与 CLI 对照。数据均为作者自测：10 分钟 1080p 视频单张 sheet 约 $0.00025、索引 $0.0033、一次 ask $0.004–0.005、重复 ask $0；暂停菜单仅 screening 得分 0.36 / 0.50 / 0.95，验证前漏掉两个、验证后全部捞回。底层 Jev 图像能力仍是实验性，验证只基于单个测试视频；原文在 Claude Code 插件部分被截断。
-- 做法 J WhatsApp MCP：可核查的是 README 的完整部署命令、配置项、工具表、架构和调试步骤。HN 的 35 points、23 comments 只能说明关注度。作者明确说只在一个真实账号上跑过；首次历史导入每个链接只发生一次，失败后要重新链接；免费计划未验证；媒体不下载、不转写；一个部署对应一个 WhatsApp 账号和一个 owner；非官方实现，作者承认违反 WhatsApp 条款。
-- 做法 K im-mcp：可核查的是 README 的安装命令、初始化命令、客户端配置、清理命令、工具表、兼容性验证表。原文只给了兼容性验证，没有任何效果指标、任务成功率或对照数据；「毫秒级响应」是作者声称。工具声明只读，但本地数据库会解密为 SQLite、明文落盘；没有 cron、webhook、守护进程说明。
-- 做法 L claude-security-scan：可核查的是 README 的检测项清单、安装命令、各域准备方式、报告路径、安全设计和限制；仓库 32 stars。没有检出率、误报率、真实用户案例或独立评测，也没有代码审计结果。原文自述限制：Google Workspace 整体管理设置不在范围；AWS 默认只查东京和弗吉尼亚；不做攻击性检查；检测结果需人工最终判断。这是会读取多账户敏感信息的第三方技能，只读与脱敏设计尚未在本次材料中经过代码级验证。
-- 做法 M vulnerator-ai：可核查的是四容器架构与端口、Kali 工具清单、install.sh 的行为、三个可选 flag、TUI 命令、stdio 模式的 MCP 配置、六个 MCP 工具名、两个 opt-in 控制项及其边界说明、MIT 许可、OWASP Juice Shop 练习靶场、docs/design.md 的 findings-store schema、docs/example-report.md 的脱敏样例。原文没有任何准确率、耗时、成本或对比基线数据，没有独立评测和用户案例；设计上刻意没有 core、没有 REST API、没有 UI、没有 gates；默认无 scope-guard、无 consent、无 audit、无授权闸门。
-- 做法 N TradingView-Unified-MCP：可核查的只有两步接入动作——安装 Claude Code、下载解压仓库并在根目录执行 node src/cli.mjs launch；原文在第二步命令后被截断。零效果证据：没有策略、代码、回测、收益、胜率、截图或日志；互动量约 50 赞、6 转发、3 回复，只说明关注度。作者主张「通过与 Claude 对话构建了一个交易机器人」未经验证；MCP 注册、账号/订阅、API 凭据、工具列表、进程是否常驻均需从仓库 README 补。
-- 做法 O agent-toolkit-for-aws：证据来自 AWS 官方 README，仓库状态为 GA，许可证 Apache-2.0，约 3196 stars。可核查：多 agent 安装命令、Kiro/fx 的 MCP JSON 配置、skills 安装命令、插件覆盖范围、项目级 rules 目录、IAM 条件键/CloudWatch 指标/CloudTrail 审计的陈述。局限：只有官方文档，没有独立测评或客户案例；没有 skills 端到端评估指标；没有 IAM/CloudWatch/CloudTrail 配置样例；没有 rules 文件内容；没有提示词模板。
-- 做法 P flashmind：可核查的是 npm 包名 flashmind、MIT、31 stars、Node ≥18、可直接复制的 MCP JSON、六种客户端配置映射表、技能触发条件表、更新与去重规则、Gemini CLI 斜杠命令、隐私承诺。属于作者主张、原文未提供支撑的：「消除幻觉」「让快模型记得住、会规划、会验证」；没有任何基准、案例、前后对比数据或用户反馈。关键缺失：防幻觉规则的实际正文和 4 个 SKILL.md 的正文都没有出现在抓取到的文本里。
-- 做法 Q mcode-stack：证据来自仓库 README，MIT（部分 stack 的 NOTICE.md 可能另有说明），有 15 个技能徽章、GitHub Actions validate 徽章、01–04 和即将发布的 06 篇配套文章；安装命令、目录发现规则、插件市场命令和技能清单是具体可执行的。六个 engineering-* 技能注明改编自 Google Engineering Practices，改编材料保持 CC-BY 3.0。只是作者主张：README 称这些是团队「每天实际使用」的工作流，并称真正拉开差距的是代理周围的工程习惯；本次材料没有使用前后对比、缺陷率、节省时间、采用率等量化数据，也没有真实案例细节。关键局限：只拿到 README，没有各 SKILL.md、checklists/、WORKFLOW.md 正文，无法验证每个技能的具体检查项是否足够可照做；部分安装方式依赖 MiniMax Code 版本（插件市场在逐步开放），mcode plugin add 也不支持 GitHub URL 或本地路径。结论强度：try，先选 2–3 个技能小范围试用，打开 SKILL.md 后再决定是否采用其具体流程。
-- 做法 R snapgent-connector：证据主要来自仓库 README：支持 provider 列表、系统要求、分平台安装步骤、启动方式、使用示例、架构说明、项目结构、排障表和测试文件；仓库 53 stars、release V3.3、GPL-3.0。可核查的接入动作是：加载 snapgent-extension 扩展、按系统启动 bridge、在 VS Code 打开项目、聊天栏点击 Start、用示例提示词发任务。作者主张包括：无需 API key、订阅或登录；无需终端、无需复制粘贴；Turn any AI chatbot browser to VS Code。但实际支持站点是有限列表，Linux 步骤需要在终端运行 launcher，各平台也要求保持 bridge 窗口或终端开启，因此「no terminal」不是完全无条件成立。README 还标注了 Gemini/Kimi 长会话可能停止使用工具、ChatGPT/Claude 禁用图片输入和截图、Grok 需要登录 xAI、Arena 要用 Direct 模式。局限：只有 README，没有独立安全审计、性能基准或用户案例；扩展以 unpacked 方式加载，涉及浏览器站点权限和本地 MCP 路由，VS Code MCP 可能读写工作区；README 对 provider 激活只给出文件位置，没有给出可直接复制的完整配置值；没有证据支持定时、事件触发或长期自主推进。结论强度：try，只在非敏感、可丢弃仓库小范围验证。
-- 做法 S expo/skills：证据来自 Expo 官方 README。可核查：三条安装命令（Claude Code 插件市场、Codex curated 市场、skills CLI）、更新与单技能更新命令、反馈命令、四类示例提示词、完整技能清单与用途、免费 vs 付费分组、实验性技能单独插件、MCP 能力范围。只是作者主张、无独立验证：技能能让 agent 正确应用 Expo API；agent 能根据任务上下文和技能描述选对技能（未给误选率）。局限：强绑定 Expo / React Native / EAS；部分能力依赖付费 EAS；原文只是 README，没有各 SKILL.md 正文，无法判断技能写得是否足够可照做；3658 stars 和今日 +90 只是热度信号。结论强度：try，先验证路由，再决定是否接 MCP。
-- 做法 T kensaku：证据来自仓库 README，MIT，版本 1.0.6。可核查：安装方式、源码构建前提、首次索引的排除项、CLI 检索命令、MCP stdio 配置、serve 的 loopback 与 bearer token 约束、agent 只读与 reindex 默认关闭、响应大小预算。数据为作者自测：Linux 8 vCPU、SSD、100,000 文件下文件名内存搜索平均 1.3 ms；首次索引 101,101 文件 184 s、峰值 183 MB；无变化重索引 0.56 s；10 万文件名与元数据约 12 MB；Windows 安装包 9 MB，加载 24,500 文件索引后托盘空闲约 20 MB 私有内存，活跃浏览约 150 MB。案例是作者演示，不是独立效果研究；没有推荐提示词模板，也没有证明能提升工作产出。局限：构建未代码签名、自动更新未接通；OCR 默认 Tesseract；视觉搜索 beta 且未进入搜索结果；Windows 获得最多真实测试，macOS/Linux 仍需更多验证；性能对比未测量 Spotlight、Everything、Listary，数字来自 Linux。结论强度：try，先限定一个文件夹、只读、1–2 周前后对照。
-- 做法 U radar-cnpj-mcp：证据来自仓库 README：完整安装与接入命令、7 个 MCP 工具及职责表、过滤器清单、4 条示例问题与 1 组示例答案、CLI 示例、开发脚本、隐私默认、MIT、CI badge、36 stars。可核查的接入动作是 baixar、claude mcp add/JSON 配置、CLI status/contar/buscar、importar 路径。仅为作者主张、未经独立验证：毫秒级查询即使全巴西、7000 万+ establishments、几秒下载、导入几分钟；示例数字 2.301 / 1.407 / 783 无参考月份、无口径说明，只能当结果形态。局限：只覆盖巴西 CNPJ，离开巴西 B2B 基本无用；需要 Node ≥20；本次只读到 README，未读源码与测试，导入耗时、磁盘占用、内存需求、数据更新延迟、与税务局原始数据一致性均未验证；默认隐藏 MEI 电话/邮箱，会限制按电话名单外呼；LGPD 合规责任在使用者。结论强度 try：半天内只下一个州，先 CLI 校准，再接 agent，跑纯计数、条件筛选+导出、口语活动→CNAE 映射三类任务，与现状对照。
-- 做法 V trustabl/agent-reliability-skills：证据来自仓库 README：Claude Code 安装命令、Cursor 的 mcp.json 配置、Claude Desktop 的配置路径、trustabl_forge 的 path/output_path/policy/lang 参数、写入保护（只有提供 output_path 才写、路径必须留在仓库内、只替换 Forge 生成的文件）、环境变量 TRUSTABL_VERSION/GITHUB_TOKEN/TRUSTABL_BIN、checksum 校验、支持 SDK 列表、首次下载 analyzer 与规则仓库后缓存离线。仓库显示 42 stars，版本 v0.1.0-rc.1。局限：没有给出实际生成的 SKILL.md 样例，没有展示具体检测规则，没有案例、前后对比数据或独立评测；README 中 Claude Code/Cursor/Claude Desktop 的 workspace 报告状态均为 pending；首次使用依赖联网下载二进制和规则；安全细节只指向未提供的 SECURITY.md；Cursor 在清单中仍是 watch。「编码时应用规则比事后扫描更好」目前只是作者主张，生成 skill 的质量取决于上游规则，且该工具仍是 RC 版本。结论强度：try，先在一个使用受支持 SDK 的仓库试点，生成后人工审查，再用团队现有测试和扫描做前后对照；不要虚构 analyzer 的扫描命令。
-- 做法 W poki：证据来自仓库 README：安装/启动/注册命令、依赖清单、源码与预构建 macOS arm64 两种分发方式、一个可直接执行的示例任务、真机 USB 配对与开发者模式要求、AGPL-3.0-only。可核查的接入动作是 git clone 后 ./bin/setup 与 npm start、或解压预构建包后 npm ci 与 npm start、claude mcp add 注册 poki-mcp、node bin/call.mjs list_devices、poki 示例任务。仅为作者主张、无数据支撑：「Gets faster with use: Poki Agent remembers past tasks and runs them faster on repeat.」没有成功率、耗时或对照数据。原文自陈限制：真机只在中国区界面语言的 iPhone 上验证过；真机仅支持竖屏；App 容器导出、跳转 Settings 子页面直链不可用；平台限定 macOS，预构建包仅 arm64，且需要完整 Xcode；屏幕内容会发送到模型服务；写操作会真实发生；第三方 App 自动化可能违反 ToS，账号受限后果自担。仓库 126 stars、v0.1.0 说明早期、社区验证有限。结论强度：try，只用备用 iPhone，先只读任务，再可逆写操作；若接管频繁或出现未经确认的不可逆动作，降级为 study，只保留「MCP 接真机」思路。
-- 做法 X remote-webview-debugger：证据来自仓库 README：完整可复制的部署命令与配置项表、SDK 接入片段、claude mcp add 命令、HTTP/HTTPS 混合内容对照表、三种部署方式、CI badge、npm 包 v0.3.0、MIT 许可、11 种语言、示例目录（多页 demo shop、托管 WKWebView 的 macOS App）、独立版本与 changelog（sdk-vX.Y.Z / gateway-vX.Y.Z）。可核查的接入动作是 docker run 起网关、控制台建项目拿 app key、页面注入 SDK、claude mcp add --transport http rwd、设备端批准后 observe/interact、用 data-rwd-mask 抽查掩码。只是作者主张、无数据支撑：隐私承诺（密码/手机号/卡号在离开手机前被掩码、审计日志不含页面内容）没有第三方验证或测试报告；「像人一样点击输入」没有成功率/准确率数据；没有用户案例与前后对比数据；51 stars 说明实际采用面还很窄。适用条件与硬约束：被调试页面必须运行在用户设备上且用户在场并能批准；https:// 页面必须给网关配 HTTPS（浏览器与 iOS WKWebView 无例外，Android 仅 debug 构建放开混合内容）；纯 HTTP 只适合可信网络；自托管意味着自己承担部署、证书与运维；SDK 与网关分别发版（SDK 0.3.0），接口可能变动。原文没有给出「修复后结果是否真的改善」的指标、对照或案例数据；有 Prometheus 指标、SSE 实时控制台、审计日志这类可观测性底座，但需要自己设计前后对照。结论强度：try，1 天内用测试账号和隔离测试页跑 observe→interact→掩码抽查；若 observe 拿不到有用证据或掩码出现明文，降级为 study，只保留「自托管网关 + MCP 接真机 WebView」思路，不要外推成通用移动端自动化平台。
-- 做法 Y davila7/claude-code-templates：证据来自仓库 README：组件类型与数量表（890+ skills、420+ agents、280+ commands、100+ MCPs、75+ settings、60+ hooks、45+ mods、18 loops、11 sandboxes、14 templates，并指向 dashboard/public/counts.json 作为权威计数）、可复制 CLI 命令与参数名、1.31.0 移除清单、三个本地工具及监听地址限制、来源与授权归属清单；仓库 33,155 stars 只是关注度。可核查的接入动作是 aitmpl.com 预览写入文件、npx claude-code-templates@latest 安装、--health-check、--mod ui/stack-viewer 后 /stack、--analytics、--chats、SSH 端口转发。只是作者主张：称之为 Ready-to-use 是自我描述，原文没有组件质量评测、成功率、安装后效果对比数据；组合成一条命令的顺畅度也无实测。适用条件与风险：安装即写入项目配置；Hooks 是可执行脚本；MCP 组件会接 GitHub、数据库、Stripe、Sentry 等真实系统，涉及凭证与写权限；项目本体 MIT 但收录组件保留各自原始许可；Analytics 与 Conversation Browser 读取完整对话历史，虽只监听 127.0.0.1 仍属敏感数据面；1.31.0 一次性移除 17 个参数，CLI 接口仍在快速变动；Mods 要求 Claude Code 2.1.287+。结论强度：try，先在一个非关键仓库的新分支上只装 1 个 Hook、1 个 Loop、1 个只读 MCP，装前预览，装后 --health-check，用 /stack 记录清单以便回滚；一周内没有可指认行为改变或引入不愿接受的权限就卸载。
-- 做法 Z iphone-control：证据仅来自 GitHub README：有 Linux Docker 安装命令、macOS arm64 二进制安装命令、claude mcp add 注册命令、setup/daemon/mcp-config、status/doctor/resign/passcode/devices/notify-test 日常命令、工具表、一个打开 Clock 并启动秒表的演示说明；仓库指标只有 31 stars，不能证明成熟度。可核查的接入动作是 docker compose up 后 setup、claude mcp add iphone、macOS 下载并运行 iphone-control daemon、iphone-control setup 与 mcp-config。仅为作者主张、README 未给量化数据：减少往返、可无人值守、自动恢复/重签；工具数量在徽章/Features/工具表之间不一致（15 与 17），需以实际版本为准。适用条件明确：iOS 17+、数据线、Linux Docker 或 Apple Silicon Mac、免费 Apple ID；macOS 上 Docker 不能透传 USB，必须直接跑二进制；WebDriverAgent 免费签名约 7 天需续签。元素树只适用于有可访问性元素的原生 UI；游戏、地图、视频播放器要退回截图坐标，稳定性更依赖视觉和坐标。安全风险高：可完全控制手机，可能误触支付/删除/发送；自动解锁会保存密码；data/ 含敏感凭据；README 建议保留工具调用确认，且只用于自有设备和账号。结论强度：try，只用专用 iPhone 和专用 Apple ID，先备份 data/、保留工具调用确认，跑通 setup/doctor 后先做三类低风险任务各 10 次；只有预先设定的成功率门槛达到且没有高危误触，才扩大范围。
-- 做法 AA auto-ontology-mcp：证据来自 gogoymh/auto-ontology-mcp README：uvx 安装/启动命令、Claude Code、Cursor、VS Code、Claude Desktop、Codex CLI、OpenClaw、Hermes 的客户端配置、demo 数据库规模（11 张表、3200 条订单）、五条示例提示词、示例问数输出（营收 316.8、4 条订单行；ROAS 被判断为 partially_answerable，覆盖度 0.33）、demo 扫描结果（9 个未声明外键，7 个自动接受，1 个建议复核，1 个未链接）、add 命令与 --with 驱动要求、knowledge.sqlite 与 source 结构、check_answerable/run_sql/get_source、export-wiki 与 Obsidian 单向视图、AUTO_ONTOLOGY_ALLOW_DATASOURCE_TOOLS=0、数据源 URL 明文存于 ontology.db、HTTP 传输与隧道 token。仅为作者主张、缺少独立评估：text-to-SQL 常见错误表、接入后能明显减少静默错误、个人知识库比 markdown wiki 更可信；没有对比实验。适用条件：uv、MCP 客户端、建议先 demo、真实库只读、远程 HTTP 需隧道与 token；没有内置调度，持续沉淀靠反复调用。结论强度：try，先 demo 跑通，再接只读真实库，比较错误 join 拦截、不可回答拒答、回答带来源比例。
-- 做法 AB andrej-karpathy-skills：证据来自一条推文的采集文本，严重截断。可核查的只有第一项完整安装命令：/plugin marketplace add forrestchang/andrej-karpathy-skills；以及第一项声称该插件从 Karpathy 的帖子提炼 4 条编码规则。原文给出的数据是 7 个仓库合计超过 1,000,000 GitHub stars、Karpathy 帖子标注 230K；这些是流行度，不是效果数据。第二项「Make Claude write the least code that」在采集文本中被截断，后续 5 项未出现；没有规则正文、没有仓库列表全貌、没有案例、没有前后对比、没有失败条件。作者主张是这些仓库值得装入 Claude Code，不装是 wild；这属于推荐性主张。结论强度：study/try，只能在一个小仓库或独立分支安装该插件，人工读规则正文，做 2–3 个同任务启用/不启用对照；读不到规则正文或没有可观察改善就停在 study，不要补写未出现的提示词或配置。
+- 做法 D CLI-Anything：README 的安装与使用命令可核查；2,461 个测试通过、pytest 100% 为作者自报，无第三方复现；大量 harness 依赖上游桌面软件，Windows 需 Git for Windows 或 WSL；没有对比性指标。
+- 做法 E arcmira：接入命令、arcmira_describe、id_required 与 resolve 语义、Premium 的 202 + Retry-After、credits 计量规则、错误码、monitor 方法集、沙箱出站白名单可核查；数据覆盖与说话人/赞助识别准确性是厂商自述。
+- 做法 F reason network：安装方式、四条 CLI 命令、MCP server 名与三个工具名、按 agent 区分的投递时机、网络与安全模型可核查；没有使用数据、性能数字、前后对比或用户案例，仓库 33 stars。
+- 做法 G idx：安装方式、JSON envelope、缺失字段为 null、退出码语义、MCP 注册命令、23 个工具名可核查；没有效果数据、性能数字或前后对比，正文在第 9 步后被截断。
+- 做法 H Blender 扩展：安装与使用信息、Windows x64 + Blender 4.2+、21 个工具、团队链、四条提示词可核查；更快迭代等价值描述为作者主张，无用户案例、成功率或耗时对比；705 stars。
+- 做法 I jevreel：命令与机制、lens TOML、插件安装、四步工作流可核查；成本数据为作者自测；底层 Jev 图像能力仍是实验性，验证只基于单个测试视频。
+- 做法 J WhatsApp MCP：完整部署命令、配置项、工具表、架构和调试步骤可核查；只在一个真实账号上跑过；非官方实现，作者承认可能违反 WhatsApp 条款；HN 35 points 只说明关注度。
+- 做法 K im-mcp：安装、初始化、客户端配置、清理命令、工具表、兼容性验证表可核查；没有效果指标、任务成功率或对照数据；“毫秒级响应”是作者声称；本地数据库会解密为 SQLite 明文落盘。
+- 做法 L claude-security-scan：检测项清单、安装命令、报告路径、安全设计和限制可核查；没有检出率、误报率、用户案例或独立评测；会读取多账户敏感信息，只读与脱敏设计未经代码级验证。
+- 做法 M vulnerator-ai：四容器架构、install.sh 行为、TUI、六个 MCP 工具名、两个 opt-in 控制项、MIT、design.md schema 可核查；没有准确率、耗时、成本或对比基线；默认无 scope-guard、consent、audit、授权闸门。
+- 做法 N TradingView-Unified-MCP：只有两步接入动作可核查，原文在启动命令后截断；零效果证据，互动量只说明关注度。
+- 做法 O agent-toolkit-for-aws：AWS 官方 README，GA、Apache-2.0、约 3196 stars；安装命令、插件覆盖、IAM 条件键/CloudWatch/CloudTrail 的陈述可核查；没有独立测评、客户案例或 skills 端到端指标。
+- 做法 P flashmind：npm 包名、MIT、31 stars、Node ≥18、MCP JSON、六种客户端配置映射、技能触发条件表、更新与去重规则可核查；防幻觉规则正文和 4 个 SKILL.md 正文没有出现在抓取到的文本里；没有基准、案例或前后对比。
+- 做法 Q mcode-stack：README、MIT（部分 stack 另有 NOTICE）、15 个技能徽章、validate 徽章、安装命令、目录发现规则可核查；没有使用前后对比、缺陷率、节省时间或采用率数据，也没有各 SKILL.md、checklists/、WORKFLOW.md 正文；部分安装方式依赖 MiniMax Code 版本。
+- 做法 R snapgent-connector：README 的支持 provider、系统要求、分平台安装、示例、架构、排障表可核查；53 stars、V3.3、GPL-3.0；没有独立安全审计、性能基准或用户案例；扩展是 unpacked 加载，涉及站点权限和本地 MCP 写权限。
+- 做法 S expo/skills：Expo 官方 README 的安装/更新命令、技能清单、示例提示词、MCP 范围可核查；没有各 SKILL.md 正文、误选率或效果度量；3658 stars 和今日 +90 只是热度信号。
+- 做法 T kensaku：README、MIT、1.0.6 的安装方式、排除项、CLI、MCP stdio、只读边界可核查；作者自测 Linux 8 vCPU、SSD、10 万文件下文件名内存搜索平均 1.3 ms、首次索引 101,101 文件 184 s、峰值 183 MB、无变化重索引 0.56 s；案例是作者演示，不是独立效果研究。
+- 做法 U radar-cnpj-mcp：README 的安装/接入命令、7 个工具、过滤器、示例问题、CLI、隐私默认、MIT、CI badge、36 stars 可核查；毫秒级、7000 万+、几秒下载、导入几分钟均为作者陈述；示例数字 2.301 / 1.407 / 783 只是结果形态；只覆盖巴西 CNPJ。
+- 做法 V trustabl/agent-reliability-skills：README 的安装命令、trustabl_forge 参数、写入保护、环境变量、支持 SDK 列表可核查；42 stars、v0.1.0-rc.1；没有生成的 SKILL.md 样例、检测规则正文、案例或前后对比；workspace 报告状态均为 pending。
+- 做法 W poki：README 的安装/启动/注册命令、依赖清单、两种分发方式、示例任务、真机配对要求可核查；126 stars、v0.1.0、AGPL-3.0-only；“Gets faster with use”只是作者主张；真机只在中国区界面语言的 iPhone 上验证过且仅支持竖屏。
+- 做法 X remote-webview-debugger：README 的部署命令、SDK 接入片段、claude mcp add 命令、HTTP/HTTPS 对照表、三种部署、安全配置可核查；SDK 0.3.0、51 stars、MIT；隐私承诺、掩码效果、像人一样点击输入都只是作者主张；没有成功率、定位改善或对照数据。
+- 做法 Y davila7/claude-code-templates：README 的组件类型与数量、CLI 命令、1.31.0 移除清单、三个本地工具及监听地址限制可核查；33,155 stars 只是关注度；没有组件质量评测、成功率或安装后效果对比；安装会写入项目配置、执行 hook 脚本、接 MCP 凭证。
+- 做法 Z iphone-control：仅来自 GitHub README 的安装命令、工具表、日常命令和一个演示说明；31 stars；没有基准测试、成功率、延迟对比、用户案例或第三方评测；工具数量 15 与 17 口径不一致；“减少往返”“可无人值守”“自动恢复/重签”是作者主张。
+- 做法 AA auto-ontology-mcp：README 的 uvx 命令、客户端配置、demo 规模（11 张表、3200 条订单）、五条示例提示词、示例问数输出（营收 316.8、4 条订单行；ROAS 被判断为 partially_answerable，覆盖度 0.33）、demo 扫描结果（9 个未声明外键，7 个自动接受，1 个建议复核，1 个未链接）可核查；text-to-SQL 静默错误减少、个人知识库比 markdown wiki 更可信等主要是作者主张，没有对比实验或独立评估。
+- 做法 AB andrej-karpathy-skills：证据来自一条推文的采集文本，严重截断。可核查的只有第一项完整安装命令，以及第一项声称从 Karpathy 帖子提炼 4 条编码规则；7 个仓库合计超过 1,000,000 GitHub stars、Karpathy 帖子 230K 是流行度，不是效果数据；第二项及后续 5 项未出现，没有规则正文、案例或前后对比。
+- 做法 AC Yandex Metrika MCP：证据来自 DevCrabs-Inc/yandex-metrika-mcp 的英文 README。可核查的是安装命令、13 个工具、3 个提示词、语义化版本 1.0.0、MIT、合成连接 conn_demo 始终可用、凭据存 OS 凭据库、无凭据库时默认拒绝保存、标签 URL 查询串默认剥离、无遥测、多账号连接隔离、导出带校验和与 manifest、README 说明无需自建 API key/OAuth 应用。作者主张、未给证据的是：“numbers you can verify”“strict accuracy refuses sampled data”的实际效果没有对比数据；准确性只有设计描述，没有与 Yandex 后台人工核对的样例差异；没有性能数据、错误率。局限：只对 Yandex Metrika 用户有用；README 承认只在 macOS 上做过真实登录与报表验证；文档主体为俄语，本次只有英文 README，weekly_review 提示词内容、导出上限、采样拒绝的具体触发条件无法核实；126 stars、1.0.0 首发版本，早期项目。不用 Yandex Metrika 时只借鉴“输出自带口径”的设计，不安装。
 
 ## 依据的调研
 
@@ -830,3 +725,4 @@ uvx --from git+https://github.com/gogoymh/auto-ontology-mcp auto-ontology-mcp ex
 - [Derrors/iphone-control](../research/radar/2026-11-07/11043-derrors-iphone-control.md)：值得一试，建议在专用 iPhone、专用 Apple ID、开启工具调用确认的隔离环境中小范围试用：按 README 用 Docker 或 macOS 二进制安装，跑 setup/doctor，再用 claude mcp add 接入 Claude Code 验证真实 App 操作；理由是它给出了可复制的安装、MCP 工具和运维命令，但整机控制风险高且缺少效果数据，不适合直接 adopt。
 - [gogoymh/auto-ontology-mcp](../research/radar/2026-11-07/11126-gogoymh-auto-ontology-mcp.md)：值得一试，建议小范围试用：把 auto-ontology-mcp 作为 MCP 服务器接入 Claude Code/Cursor 等客户端，先用内置 demo 库跑通“建模—问数—校验—拒答”流程，再决定是否接入真实只读库或个人知识库。理由是原文给出了可直接复制的安装命令、客户端配置、工具调用序列和验证示例，但缺少独立效果数据，且配置有一定环境要求。
 - [@plusxbt: It's pretty wild that people still run Claude Code bare when these 7 repos have over 1,000,000 GitHu](../research/radar/2026-11-07/11345-it-s-pretty-wild-that-people-still-run-claude-code.md)：值得一试，只建议小范围试用已给出的 Karpathy 规则插件安装命令，并把“最少代码”作为待验证目标；整条推文严重截断，无法核验其余 6 个仓库和完整流程，不能作为手册方案直接采用。
+- [DevCrabs-Inc/yandex-metrika-mcp](../research/radar/2026-11-10/12285-devcrabs-inc-yandex-metrika-mcp.md)：值得一试，如果你的工作涉及 Yandex Metrika（俄罗斯站点分析），按 README 的一条命令或 JSON 配置安装这个只读 MCP 服务器，让 Claude/Cursor/Codex 直接取数，并且每次回答都带日期、时区、采样状态和过滤器；它的价值不在于“又一个连接器”，而在于示范了“把取数口径（日期边界、时区、采样、聚合规则、API 总计）当作工具输出的一部分强制返回”，这套做法可以迁移到任何数据源。若你不用 Yandex Metrika，只需读它的输出可核验设计，不必安装。
