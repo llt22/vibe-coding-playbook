@@ -1,18 +1,17 @@
-# 让 AI 在真实项目里持续干活：从最小循环到可恢复、可评测的工作环境
+# 让跨天长流程的 agent 在崩溃、等待和重试后继续推进
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：这篇手册解决如何把只会聊天或只能跑 demo 的 AI，变成能看到项目状态、受权限约束、出问题可排查、结果可评测、崩溃后可恢复的 agent 工作环境。
-> 先试这一步：先跑一个不需要 key 的 demo（如 NamiAgent 的 python web/app.py --demo 或 hello-agent-system 的离线 demo），观察每一步工具调用和完整上下文，再按 harness 五件套补最缺的一项。
-> 最近修订：2026-10-31
+> 解决的问题：这篇手册解决：AI 只在聊天框里打转，或 agent 虽能跑但跨会话、跨天长流程一遇崩溃、等待人和外部系统、网络重试就重来或重复副作用，需要从 harness、生产分层、可观测到持久化执行逐层补齐。
+> 先试这一步：先选一个真实但低风险的长周期流程，把步骤分成决策、动作、等待三类，在 Temporal 或 Cloudflare 示例运行时上跑通，并在等待审批或收货时重启 worker，确认恢复后不重复下单、不丢审批状态。
+> 最近修订：2026-11-10
 
 ## 解决什么问题
-模型本身已有感知、推理、行动能力，但一个能用的 agent = 模型 + harness。这份手册解决：你只在聊天框里用 AI，它看不到代码库、跑不了命令、记不住跨会话目标、停没停全凭它自己说；或者自建 Agent 只能跑起来，但不可靠、不可控，出了问题只能靠回放提示词去猜；或者要把 coding agent 做成长期在线、可重连、可从崩溃恢复的应用；或者要把团队积累的经验变成每个 PR 的强制检查，让 agent 响应 PR、合规、事故等已有事件。
-做法包括：搭可操作环境，把工具、知识、观察、动作接口和权限补齐（harness engineering，以 Claude Code 为范本）；用生产级分层补齐可靠性、安全、可观测、评估、并发、成本和发布（hello-agent-system）；当它真的慢、卡住或反复报错时，用真实 telemetry 而不是提示词回放定位（blazo）；用 Pi Durable 验证持久化、断点恢复、submission 去重、工具重放边界和外部副作用幂等；用 Cursor Agent SDK 把事件触发的重复流程写成代码项目，先在本地 playground 跑 evals 和事件回放，再 deploy 或自托管；用 NamiAgent 从 100 行最小循环逐课加到权限、上下文、Skills、MCP、子 Agent、计划和记忆，并用网页端直接看每一步思考和本次发给模型的完整上下文。
-每个做法都有边界，不要把实验性原型直接放上生产关键路径；NamiAgent 明确是教学代码，不是生产级框架。
+模型本身已有感知、推理、行动能力，但一个能用的 agent = 模型 + harness。这份手册解决：你只在聊天框里用 AI，它看不到代码库、跑不了命令、记不住跨会话目标、停没停全凭它自己说；或者自建 Agent 只能跑起来，但不可靠、不可控，出了问题只能靠回放提示词去猜；或者要把 coding agent 做成长期在线、可重连、可从崩溃恢复的应用；或者要把团队积累的经验变成每个 PR 的强制检查，让 agent 响应 PR、合规、事故等已有事件；或者任务本身跨天、跨周，路径不可预测，要反复等待人和外部系统，进程一崩、网络一断就重来或重复副作用。
+做法包括：搭可操作环境，把工具、知识、观察、动作接口和权限补齐（harness engineering，以 Claude Code 为范本）；用生产级分层补齐可靠性、安全、可观测、评估、并发、成本和发布（hello-agent-system）；当它真的慢、卡住或反复报错时，用真实 telemetry 而不是提示词回放定位（blazo）；用 Pi Durable 验证持久化、断点恢复、submission 去重、工具重放边界和外部副作用幂等；用 Cursor Agent SDK 把事件触发的重复流程写成代码项目，先在本地 playground 跑 evals 和事件回放，再 deploy 或自托管；用 NamiAgent 从 100 行最小循环逐课加到权限、上下文、Skills、MCP、子 Agent、计划和记忆，并用网页端直接看每一步思考和本次发给模型的完整上下文；对跨天长流程，用持久化执行把决策、动作、等待分开，等待时挂起不占计算，外部写加业务幂等键并在执行前重校验约束。
+每个做法都有边界，不要把实验性原型直接放上生产关键路径；NamiAgent 明确是教学代码，不是生产级框架；长周期持久化执行的示例是演示/模拟，不是生产部署，原文也缺完整代码与量化结果。
 
 ## 适用与不适用
-
 适用：
 - 你想让 AI 在自己的项目里持续干活，愿意按机制逐项搭环境，有 Python 环境和 Anthropic API key，能跑代码、看输出、按章节对照。
 - 正在自建 Agent 的工程同学：想用离线 demo、练习和测试验证生产级分层是否补得上，有 Python 3.10+、git、make，以及任意支持 function calling 的 OpenAI 兼容接口（OpenAI / DeepSeek / 通义 / 本地 vLLM / 模型网关均可）；没有 key 也可跳过，因为 hello-agent-system 的所有 demo 都支持 --offline。
@@ -20,7 +19,7 @@
 - 你要把 coding agent 嵌入 Slack、GitHub bot、TUI 或服务端应用，希望进程因休眠、OOM、容器重启或部署中断后能从已提交 checkpoint 继续；需要一个 harness 同时运行多个 conversation，或从任意 transcript entry 分叉新 conversation；需要多个客户端可重连、观察 committed state，并在 agent 忙碌时排队或 steer；需要 transcript、todo、计划、工单等应用状态在一个 transaction 中原子提交；需要工具、扩展和提示词可按名称注册与替换；需要上下文接近上限时后台 compaction，但原始 entries 仍留在 storage。Pi Durable 适用，但官方 README 明确标为 Experimental，API 可能在 release 之间无通知变化。
 - 你是软件团队，有标准明确、每周至少发生数次的重复任务（例如让每个 PR 按团队知识库做一致性检查、执行合规流程、调查线上事故、做变更风险分级与批准），愿意用 Cursor 生态，有 Node 环境、Cursor 账号与 dashboard、GitHub/GitLab/Bitbucket 等事件源，想用代码化定义 + evals + 事件触发来小范围验证，选 Cursor Agent SDK。
 - 你想零基础理解 agent 的 while 循环，愿意按 NamiAgent 从 lesson-01 跑到 lesson-11，用网页端看每一步思考和完整上下文；有 Python 3.10+、git、pip，以及任意 OpenAI 兼容接口的 API key（默认 DeepSeek，换模型改环境变量）；愿意在专用工作区运行，不把工作区指向主目录。
-
+- 任务跨天或跨周、目标明确但路径不可预测、需要持续追踪依赖并频繁等待人和外部系统，例如客户 onboarding、销售/法务/采购之间的交易推进、患者转诊/预约/改期/文书、库存补货；有支持持久化执行的运行时（原文示例为 Temporal 和 Cloudflare）；外部写操作能用业务键做幂等；人或外部系统能把 approval、supplier-reply、goods-received 等事件作为信号送回工作流；团队能运维运行时。
 不适用：
 - 你只想找一个现成工具、不打算跑代码或没有 API key；你期待拖拽式工作流 / 无代码 AI Agent 平台 / prompt 链编排就能解决；你不能接受跑模型产生调用费用。
 - 你打算把 hello-agent-system 直接当生产组件——本次只拿到 README，没有讲义正文与数据，性能数字和组件可靠性均未核实，不要照抄模型名。learn-claude-code 同样每章实现细节未随 README 给出、效果主张缺数据，适合小范围试，不适合直接全量上生产。
@@ -28,6 +27,8 @@
 - 你要的是稳定 API、分布式工作流平台或 exactly-once 执行系统：不要用 Pi Durable。它当前没有跨进程锁，同一个 storage 同一时间只允许一个 owner 进程；requestId 去重的是 submission，不自动让 deploy、付款、写外部 API 等副作用只发生一次；工具只有显式声明 replay: 'safe' 才会在崩溃后自动重跑，声明错了会重复副作用。未做单实例选主、storage 文件备份、进程锁、认证授权、ExecutionEnv 隔离、秘密注入和版本迁移前，不要把它放到生产关键路径。
 - Cursor Agent SDK 不是无代码平台，也不是完整教程：原文没给安装命令、playground 启动命令、eval 具体写法、权限模型、成本与限额；它强绑定 Cursor 生态（模型 id、dashboard、部署基础设施），自托管只说明是单个 Node 进程可容器化，未给资源要求。非软件类工作只能借鉴其「代码化定义 + 评测 + 事件触发」的结构，不能照搬。
 - 你不要把 NamiAgent 当生产级框架，也不要拿它和 Claude Code、Codex 比功能；它明确是教学代码。你不能接受 agent 真的执行命令、读写文件，或不愿使用专用工作区，也不适用。第 3 课权限机制能挡误操作和低成本越界，但挡不住有意的攻击。
+- 可预测的流程不要套长周期 agent，仍应交给传统软件；任务不需要等待人和外部系统、没有可拆成可记录外部交互的步骤、外部系统不支持幂等键或发信号，也不适合做持久化执行。
+- 不要把长周期持久化执行的 demo 当生产部署；原文示例是演示/模拟，没有量化业务结果，提供文本在 Making the loop durable 之后只有目录标题、正文缺失，无法据此编造实体/工作流划分、重试、代码变更、记忆与提示词控制的具体配置。
 
 ## 前置条件
 - 能访问 GitHub 与 npm。
@@ -40,9 +41,10 @@
 - Pi Durable：有 JavaScript/TypeScript runtime，能访问 npm；安装 @earendil-works/pi-durable、@earendil-works/pi-ai、@earendil-works/chord。官方 README 明示 API 会无通知变化，原型也应把这三个包锁到精确版本，并把升级单独作为一次故障恢复回归测试，不要长期跟随浮动版本。需要 SQLite 文件。需要调用方能为一业务工作生成稳定 requestId；需要逐个工具分析「同样参数执行两次是否安全」；需要为有副作用调用准备外部系统幂等键或补偿；审批需要 durable memo。生产化前另需处理单实例选主、storage 备份、进程锁、认证授权、ExecutionEnv 隔离、秘密注入和版本迁移。
 - Cursor Agent SDK：Node 环境；能访问 Cursor 账号与 dashboard（用于管理 secrets 和集成）；有 GitHub/GitLab/Bitbucket 等事件源可用于触发。原文未给出 @cursor/agent-sdk 的安装命令，需查官方文档补齐。原文示例模型 id 为 composer-2.5、参数 effort high、fast true，这是示例，按自己的环境替换。
 - NamiAgent：Python 3.10+、git、pip；有 OpenAI 兼容接口的 API key，默认 DeepSeek，换其他模型改环境变量；专用工作区目录 NAMI_WORKSPACE；第 4 课起状态目录 NAMI_STATE_DIR 默认在 ~/.nami-agent，放在工作区之外。必须在专门的工作区目录运行，不要把工作区指向主目录。
+- 长周期持久化执行：任务确实跨天/周、路径不可预测，且需要等待人或外部系统；有一个支持持久化执行的运行时（原文示例为 Temporal 和 Cloudflare）；外部写操作能用业务键做幂等；人或外部系统能把事件送回工作流，运行时支持持久化定时器和信号；审批上限等约束要写成可检查的条件；团队能按运行时文档配置持久化存储、worker 和重试策略。原文只给示例时间线，没有完整代码与量化结果，生产部署需另行调研运行时文档。
 
 ## 操作步骤
-先选路线：想零基础从 while 循环开始、用网页端看每一步思考和完整上下文，选做法 H；想系统理解 harness 机制、有时间和 API 预算，选做法 A；已经有自己的 agent 骨架、只想把环境检查清单补齐，选做法 B；想验证生产级可靠性、安全、评估分层，选做法 C；已有 Agent 骨架想直接套生产级组装，选做法 D；agent 已经能跑、但你要回答「它为什么慢、卡住或失败」，选做法 E；要把 coding agent 做成长期在线、可重连、可从崩溃恢复的应用，先用做法 F 做受控原型；如果重复工作围绕 PR、合规、事故等事件，且愿意用 Cursor 生态，选做法 G。可组合：先用做法 H 的 demo 和网页端建立「上下文里有什么、工具怎么被调用」的直觉，再按做法 A 深入 harness 分章；用做法 B 补 harness 清单，再用做法 C 跑可靠性与评估两课，用做法 D 的骨架套自己项目，如果 agent 是 TypeScript 再按做法 E 接本地可观测性，用做法 F 验证持久恢复和工具重放边界，最后用做法 G 把事件触发的重复流程做成可评测的代码项目。注意 D 和 F 在持久化 / worker 上有差异：hello-agent-system 展示多 worker 从同一持久化队列领任务、kill -9 后租约过期由别的进程从检查点接手；Pi Durable 当前单 storage 只允许一个 owner 进程，没有跨进程锁。两者都写，按场景选：要分布式 worker 崩溃接手看 D；要单进程 owner、可恢复 conversation/task、submission 去重和 replay 边界看 F。不要把 F 当分布式工作流平台。G 的评测是 evals 与事件回放，E 的评测是本地 telemetry 可观测性，两者可以并用但解决的问题不同。H 是教学快照，不是生产框架；A 和 H 都从最小循环开始，但 A 偏机制分章，H 偏零基础网页端观察和权限确认，按你的背景选。
+先选路线：想零基础从 while 循环开始、用网页端看每一步思考和完整上下文，选做法 H；想系统理解 harness 机制、有时间和 API 预算，选做法 A；已经有自己的 agent 骨架、只想把环境检查清单补齐，选做法 B；想验证生产级可靠性、安全、评估分层，选做法 C；已有 Agent 骨架想直接套生产级组装，选做法 D；agent 已经能跑、但你要回答「它为什么慢、卡住或失败」，选做法 E；要把 coding agent 做成长期在线、可重连、可从崩溃恢复的应用，先用做法 F 做受控原型；如果重复工作围绕 PR、合规、事故等事件，且愿意用 Cursor 生态，选做法 G；如果任务跨天/周、频繁等待人和外部系统、需要崩溃恢复并防止重复副作用，选做法 I。可组合：先用做法 H 的 demo 和网页端建立「上下文里有什么、工具怎么被调用」的直觉，再按做法 A 深入 harness 分章；用做法 B 补 harness 清单，再用做法 C 跑可靠性与评估两课，用做法 D 的骨架套自己项目，如果 agent 是 TypeScript 再按做法 E 接本地可观测性，用做法 F 验证持久恢复和工具重放边界，最后用做法 G 把事件触发的重复流程做成可评测的代码项目；长流程用做法 I 做运行时可靠性层，用 F 验证单进程 conversation 恢复，用 D 做多 worker 任务队列，用 E 看本地执行，但它们不是同一个东西。注意 D 和 F 在持久化 / worker 上有差异：hello-agent-system 展示多 worker 从同一持久化队列领任务、kill -9 后租约过期由别的进程从检查点接手；Pi Durable 当前单 storage 只允许一个 owner 进程，没有跨进程锁。两者都写，按场景选：要分布式 worker 崩溃接手看 D；要单进程 owner、可恢复 conversation/task、submission 去重和 replay 边界看 F。不要把 F 当分布式工作流平台。G 的评测是 evals 与事件回放，E 的评测是本地 telemetry 可观测性，两者可以并用但解决的问题不同。H 是教学快照，不是生产框架；A 和 H 都从最小循环开始，但 A 偏机制分章，H 偏零基础网页端观察和权限确认，按你的背景选。I 是长周期流程的持久化执行，不等同于 F 的单进程 conversation 恢复，也不等同于 D 的多 worker 队列；原文没有提到 Claude Code、Cursor、OpenClaw 的集成，不要声称已经集成。
 
 ### 做法 A：按 learn-claude-code 教程从 s01 跑通到 s17，建立 harness 直觉
 1. 克隆并安装依赖。前提：能访问 GitHub，本机有 Python 与 pip。
@@ -483,6 +485,33 @@ cd lessons/lesson-11 && pytest -q
 
 8. 把课程中的控制点抽出来复用。按课程表，可复用的点包括：第 3 课权限的「硬规则 → 风险分级 → 人工确认」；第 4 课上下文的「截断 → 清理 → 摘要」和会话持久化；第 5 课 AGENTS.md 常驻、技能按需加载；第 7 课定时任务的无人值守预授权和心跳；第 8 课 stdio MCP 客户端；第 9 课子 Agent 用独立上下文、并行只读；第 10 课待办清单和由代码强制只读的计划模式；第 11 课长期记忆每条确认、会话检索。预期：你能把这些控制点对应到自己项目的权限、上下文、计划、记忆和子任务设计上；README 对第 7 课只给课程名和一句话，触发条件、状态机和失败处理需看课程正文或自己补。
 
+### 做法 I：用持久化执行做跨天长流程，把决策、动作、等待分开
+什么时候选：任务跨天/周、目标明确但路径不可预测、需要持续追踪依赖，并频繁等待人和外部系统；例如客户 onboarding、销售/法务/采购之间的交易推进、患者转诊/预约/改期/文书、库存补货。可预测的流程仍应交给传统软件。原文示例是演示/模拟，不是生产部署；提供文本在 Making the loop durable 之后只有目录标题、正文缺失，不要编造缺失配置。
+
+1. 先判断任务是否适合。适合的是「目标明确但路径不可预测、需要持续追踪依赖」的流程；可预测的流程仍应交给传统软件。前提：任务确实需要跨天/周等待，且路径不可完全预先编排。预期：你能说清为什么不用普通同步脚本或单次 agent 调用。
+
+2. 把流程拆成决策、动作、等待三类。以库存补货为例：库存检查（触发）→ 获取报价（动作）→ 选供应商（决策）→ 草拟采购订单（动作）→ 请求审批（动作）→ 等待审批（等待）→ 下单（动作）→ 等待供应商确认（等待）→ 读取回复（动作）→ 等待收货（等待）→ 关闭订单（动作）。决策只做选择，动作才产生外部副作用。预期：每个步骤都能归入三类之一，等待步骤不混进动作。
+
+3. 选一个持久化执行运行时，并先跑通原文示例。前提：有支持持久化执行的运行时；原文示例为 Temporal 和 Cloudflare。
+```
+# Temporal：在 python/ 目录启动 Temporal dev server 和一个 worker（见其 README），然后重新运行
+# Cloudflare：在 typescript/ 目录执行
+cd typescript/
+npm run dev
+# 或设置 CF_URL 指向 replenish.live，然后重新运行
+```
+预期：先理解示例时间线；这些是跑通交互示例的说明，不是生产部署步骤。生产环境要按运行时的文档配置持久化存储、worker 和重试策略。
+
+4. 让运行时记录每个动作的结果。示例中的动作包括 get_quotes、draft_purchase_order、request_approval、place_order、read_supplier_reply、close_purchase_order；每一步的结果进入记录，崩溃后重放时跳过已完成步骤并重建状态。前提：动作结果可序列化保存，且重放不会重复产生副作用。预期：进程崩溃后重新运行，已完成步骤被跳过，状态由记录重建。
+
+5. 把等待人工/外部系统改成挂起加信号恢复。示例用 wait_for_approval、wait_for_supplier_reply、wait_for_goods 三个等待步骤；时间线明确写 Compute used: None. The workflow is suspended.。恢复靠信号：approval（经理批准 $4.20，上限 $4.41）、supplier-reply（供应商确认 1000 件、24 October、$4.20）、goods-received（收货 1000 件）。前提：人或外部系统能把事件送回工作流，运行时支持持久化定时器和信号。预期：等待期间工作流挂起，不占计算；收到信号后继续推进。
+
+6. 对外部写操作加幂等键，并在执行前重新校验约束。示例下单时使用 Idempotency key: PO 4473，执行前做 Price re-checked: $4.20, within the approved $4.41，结果供应商侧 Orders at the supplier for PO 4473: 1。前提：外部系统接受幂等键，或你能用业务单号去重；审批上限等约束要写成可检查的条件。预期：重试或恢复后不重复下单，价格不超过审批上限。
+
+7. 用崩溃恢复验证持久化是否真的生效。原文示例包含 worker 进程 down/up 的崩溃区间，并说明崩溃后工作流继续推进。最小验证：在等待审批或等待收货时重启 worker，确认恢复后不重复下单、不丢审批状态；重复发送同一信号，验证幂等。前提：运行时和 worker 按生产方式配置，而不是只跑内存 demo。预期：恢复后状态一致，重复信号不产生重复外部写。
+
+8. 上线前补齐原文目录提到但正文未展开的四项：失败调用至少一次重试、持久化不等于业务正确、运行中代码变更、记忆与模型可见上下文。提供文本只有这些标题，没有具体步骤；不要在没有依据时编造配置，应另行调研或等原文完整内容。预期：这四项都有明确的负责人和验证方式，不以 demo 通过代替。
+
 ### 机制对照表（按需跳到 learn-claude-code 对应章节）
 - s01 Agent Loop：messages / while True / tool_use
 - s02 Tool Use：TOOL_HANDLERS 分发表
@@ -546,6 +575,12 @@ cd lessons/lesson-11 && pytest -q
 - 换模型时只改 BASE_URL / MODEL 并重跑同一任务，记录是否还能完成；README 未给模型与任务匹配的对比数据，这一项是建议记录，不是原文结论。
 - 建议对比加入权限、计划、上下文管理前后的完成情况、人工确认次数、越界尝试次数和每轮上下文长度；前三项是 README 能直接支持的功能性指标，后面几项是建议用于实际工作流对比的指标，不是原文给出的数据。
 
+可观察指标（长周期持久化执行）：
+- 完成率提升、端到端时长缩短、人工催办/干预次数下降；重复外部写操作和审批越界为 0；恢复后状态一致；等待期间不持续消耗模型/计算资源。
+- 原文示例的可核对输出：outcome=received；Orders at the supplier for PO 4473: 1；Price re-checked: $4.20, within the approved $4.41；等待步骤 Compute used: None. The workflow is suspended.。这些是示例时间线，不是生产业务指标。
+- 记录基线：传统流程的端到端时长、人工催办次数、重复操作数、审批越界数、等待期间计算成本。
+- 原文建议小范围跑 2-4 周，对比试点流程的完成率、平均端到端时长、人工干预次数、重复副作用数、崩溃恢复成功率、每次任务的计算成本；若这些指标没有改善或仍需大量人工兜底，说明流程还没达到可产品化的持久化执行条件。
+
 最小试用方式：
 - 做法 A：先跑通 learn-claude-code 的 s01，再挑一个与你当前痛点对应的章节（上下文爆了就 s08，目标总漂移就 s17，权限失控就 s03），把它抄进自己项目。
 - 做法 B：先把 harness 五件套清单填一遍，跑一个真实小任务。
@@ -555,6 +590,7 @@ cd lessons/lesson-11 && pytest -q
 - 做法 F：npm install 锁版本 → SQLite 最小 harness → 提交一个带稳定 requestId 的 job → 关闭 / 重启进程验证 resume → 再用一个假副作用工具验证 replay 边界和外部幂等键 → 最后加审批 memo。重点验证 submission 去重、工具重放边界、外部副作用幂等和故障恢复。不要直接生产；升级单独做故障恢复回归测试。
 - 做法 G：选一个标准写得出、每周至少发生数次的重复任务（例如 PR 是否符合团队约定 / 历史决策），把这份约定整理成可引用的条目；建项目、写提示词与一个工具（读 PR diff + 检索条目），本地 playground 跑通；先影子模式，只输出发现与引用出处，不自动批准、不自动路由；用 evals + 事件回放，把过去若干真实 PR 作为固定测试集，改一次提示词跑一次；只有当误报可接受、且人工复核成本明显低于自己从头看时，再 agent-sdk deploy 上线并逐步放开写操作权限。
 - 做法 H：第一，不配 API Key 跑 python web/app.py --demo，打开 http://localhost:8765，确认能看到每一步思考和完整上下文；第二，在专用工作区配置真实模型，跑 python web/app.py，让它写一个 hello.py 并运行，确认写文件和跑命令前会弹窗，且文件只落在 NAMI_WORKSPACE；第三，跑 cd lessons/lesson-11 && pytest -q，按 README 预期是 49 个测试通过，若实际数量不同以实际结果记录。进一步再逐课运行 lesson-01 到 lesson-11，对比相邻快照。
+- 做法 I：选一个真实但低风险的长周期流程（如采购审批或客户 onboarding 的某一段），限定 1 个流程、1-2 个外部系统、1 个审批人；用 Temporal 或 Cloudflare 搭最小工作流，步骤分成 decision/action/wait，等待审批和外部回复用挂起加信号，写操作加幂等键；可先跑通原文 demo 的命令理解时间线；人为在等待期间重启 worker/进程，验证恢复后不重复下单、不丢状态；重复发送同一信号，验证幂等。
 
 试多久：
 - learn-claude-code 按 README Quick Start 从 s01 逐章跑通到 s17 再定。
@@ -563,6 +599,7 @@ cd lessons/lesson-11 && pytest -q
 - Pi Durable 建议按一个真实小任务做到能复现一次崩溃恢复再决定是否扩大；官方标 Experimental，不要直接承担生产关键路径。
 - Cursor Agent SDK 建议 1–2 周、单人可做：选任务、整理条目、建项目、本地 playground、影子模式、evals 回放；误报可接受后再 deploy。原文是产品发布文，缺安装与评测的具体写法、权限模型、成本与限额，动手前需读官方文档补齐。
 - NamiAgent 建议按 lesson-01 到 lesson-11 逐课跑一遍再决定是否复用其控制点；先跑 demo 和专用工作区真实模型小任务，再跑第 11 课测试。只拿 README，没有各课正文和完整代码，先小范围验证，不要直接用于生产工作流。
+- 长周期持久化执行建议按原文示例先跑通一个低风险流程，再小范围跑 2-4 周；先验证崩溃恢复、重复信号、幂等和审批上限，不要用 demo 通过代替生产验证。
 - 注意：s05 有一句「先列步骤，完成率翻倍」，README 未给数据来源，不能当已验证指标。
 
 ## 常见坑
@@ -612,6 +649,14 @@ cd lessons/lesson-11 && pytest -q
 - NamiAgent：只拿 README 就认为已核实每课实现质量；目前没有各课正文和完整代码，无法核实每一课的实现质量和细节。
 - NamiAgent：把第 7 课定时任务当成完整方案；README 只给课程名和一句话，未展开具体触发条件、状态机和失败处理。
 - NamiAgent：忽略第 6 课 bot 需要 TG_BOT_TOKEN 和 TG_ALLOWED_USERS，第 8 课 MCP 配置在 ~/.nami-agent/mcp.json。
+- 长周期持久化执行：把可预测流程也交给长周期 agent；可预测流程仍应交给传统软件。
+- 长周期持久化执行：只跑 demo 就当生产部署；原文示例是演示/模拟，不是生产部署，缺完整代码与量化结果。
+- 长周期持久化执行：等待用轮询占算力，而不是挂起加信号；示例明确等待期间 Compute used: None. The workflow is suspended.。
+- 长周期持久化执行：外部写没有幂等键，重试重复下单/付款/发消息；用业务单号或业务键去重，并在执行前重校验审批上限等约束。
+- 长周期持久化执行：把「持久化」当「业务正确」；等待期间外部世界变化，恢复后要重新校验价格、库存、审批有效期等。
+- 长周期持久化执行：崩溃恢复只测进程内异常，不测等待期间重启 worker；要在等待审批或收货时重启验证，并重复发送同一信号验证幂等。
+- 长周期持久化执行：原文目录提到失败调用至少一次重试、持久化不等于业务正确、运行中代码变更、记忆与模型可见上下文，但正文未展开；不要编造配置，需另行调研。
+- 长周期持久化执行：以为 Temporal/Cloudflare 已与 Claude Code、Cursor、OpenClaw 集成；原文没有提到，不要声称已经集成。
 
 ## 证据与来源
 - learn-claude-code：本手册保留的 harness 公式、最小 agent loop、s01→s17 机制、旧 12 课、Kode CLI、姊妹仓库 claw0 / OpenClaw 的 Heartbeat 与 Cron、web 端命令，均来自 shareAI-lab/learn-claude-code 的 README 与目录结构（给定指标：77,855 stars，MIT 许可）。s05 的「先列步骤，完成率翻倍」README 未给数据来源，只是作者主张。仓库效果主张缺数据，建议小范围试。
@@ -620,6 +665,7 @@ cd lessons/lesson-11 && pytest -q
 - Pi Durable：安装命令、最小持久 harness 代码、稳定 requestId 示例、工具 replay safe 示例与禁用清单、durable memo 审批 hook、子 agent ownership 代码、compaction 配置，均来自调研报告《Pi Durable》及其核验的原文、官方 README、官方示例目录和 Context7 当前文档。结论建议：如果要把 coding agent 做成长期在线、可重连、可从崩溃恢复的应用，先用 SQLite + 单进程 owner 做一个受控原型，重点验证 submission 去重、工具重放边界、外部副作用幂等和故障恢复；不要把它直接当成稳定 API、分布式工作流平台或 exactly-once 执行系统。官方 README 标为 Experimental，API 可能无通知变化。审批权限与审计原文未提供完整方案；支付示例的 payment-${task.id} 幂等键与 abort 补偿退款是作者示例，不是已验证生产方案。需把三个包锁到精确版本，升级单独做故障恢复回归测试。
 - Cursor Agent SDK：defineAgent 示例、模型 id composer-2.5 与参数 effort high / fast true、agent-sdk deploy 命令、自托管为单个 Node 进程可容器化、事件触发（PR / 合规 / 事故）、子 agent 移交与并行、本地 playground、evals 与事件回放、kb-reviewer 案例，均来自调研报告《The Agent SDK》及其核验的 Cursor 发布文。数据：Cursor 内部一个团队「大约一天」做出 kb-reviewer，现跑在主库每个 PR 上，会标记与已记录经验冲突的改动并引用对应笔记；这是单点内部案例，没有准确率、误报率、节省工时等数字。PGA Tour 的 Michael Gyarmathy 推荐语称用该 SDK 构建其「软件工厂」全部组件、内置 evals 让其快速迭代；属客户证言，无数据。其余为作者主张：agent 应围绕团队工作流定制、策略应可检查可修改、代码化便于版本控制与评审；没有对照实验或基准支撑。适用条件是软件团队、以 PR / 合规 / 事故等事件为中心的重复流程；强绑定 Cursor 生态；原文缺安装与评测具体写法、权限模型、成本与限额。结论建议小范围试 1–2 周、单人可做：先影子模式，只输出发现与引用出处，用过去真实 PR 做 evals 回放，误报可接受且人工复核成本明显更低后，再 agent-sdk deploy 并逐步放开写操作权限。
 - NamiAgent：证据主要来自 aa1143/NamiAgent README：100 行最小循环、lessons/lesson-01 到 lesson-11 每课可运行快照、第 11 课 49 个测试、只依赖 openai 一个包、网页端只用 Python 标准库、demo 模式不需要 API Key、环境变量 API_KEY / BASE_URL / MODEL / NAMI_WORKSPACE / NAMI_STATE_DIR、第 3 课起限定工作区并做权限确认、第 6 课 TG_BOT_TOKEN 与 TG_ALLOWED_USERS、第 8 课 MCP 配置 ~/.nami-agent/mcp.json、第 3/4/5/7/8/9/10/11 课可复用控制点。仓库指标显示 37 stars，但这不是效果证据。局限：目前只拿到 README，没有各课正文和完整代码，无法核实每一课的实现质量和细节；作者自述是教学代码，不是生产级框架，也不打算和 Claude Code、Codex 比功能；权限机制挡不住有意攻击；必须使用专用工作区；界面里展示的思考只是模型写出来的文字，不等于模型内部真实计算过程；第三部分写的是截至 2026 年 10 月的情况，产品更新快，细节应以各自官方文档为准。结论建议小范围试：先跑 demo 看每一步思考和完整上下文，再在专用工作区用真实模型写一个 hello.py 并运行确认权限弹窗和工作区限制，最后跑第 11 课测试并逐课对比；不要直接用于生产工作流。
+- 长周期持久化执行：来自调研《Long-horizon agents and durable execution》及其核验的原文（Martin Fowler 源）。原文用库存补货示例展示：3 家供应商报价 A $4.20、5 天、98% 准时；B $4.05、12 天、91%；C $4.60、3 天、99%；选择 A 1000 件，PO 4473，总价 $4,200；审批上限 $4.41，经理 Priya 批准 $4.20；供应商确认 1000 件、24 October、$4.20；收货 1000 件；关闭订单；outcome=received；下单使用 Idempotency key: PO 4473，供应商侧 Orders at the supplier for PO 4473: 1；价格重校验 Price re-checked: $4.20, within the approved $4.41；等待步骤标注 Compute used: None. The workflow is suspended.；示例包含 worker 进程 down/up 崩溃区间。这些是演示/模拟时间线，不是生产部署，也没有量化业务结果。局限：提供文本在 Making the loop durable 之后只有目录标题、正文缺失，无法提炼实体/工作流划分、等待、重试、正确性、代码变更、记忆、提示词控制的具体做法；作者关于「改变经济性」的判断是主张；持久化只保证恢复，不保证业务正确，等待期间外部世界变化需要额外校验。原文没有提到 Claude Code、Cursor、OpenClaw 的集成，不能声称已集成。结论建议小范围试：选真实但低风险的长周期流程，限定 1 个流程、1-2 个外部系统、1 个审批人，用 Temporal 或 Cloudflare 跑通 decision/action/wait 与挂起加信号，在等待期间重启 worker 验证不重复下单、不丢状态，重复信号验证幂等，记录基线并小范围跑 2-4 周再决定是否扩大。
 
 ## 依据的调研
 
@@ -629,3 +675,4 @@ cd lessons/lesson-11 && pytest -q
 - [Pi Durable](../research/radar/2026-10-06/1606-pi-durable.md)：值得一试，如果要把 coding agent 做成长期在线、可重连、可从崩溃恢复的应用，先用 SQLite + 单进程 owner 做一个受控原型，重点验证 submission 去重、工具重放边界、外部副作用幂等和故障恢复；不要把它直接当成稳定 API、分布式工作流平台或 exactly-once 执行系统。
 - [The Agent SDK](../research/radar/2026-10-29/7961-the-agent-sdk.md)：值得一试，先用一个标准明确、高频重复的任务（比如让每个 PR 按团队知识库做一致性检查）小范围试：把提示词写成 Markdown、工具写成 TypeScript 函数、评测和事件回放一起放进代码仓库，在本地用 playground 跑通评测，再执行 `agent-sdk deploy` 上线为事件触发；理由是原文给出了从定义到部署的最小可操作流程和一个内部落地案例，但安装细节、评测配置和量化效果都缺失，只适合小范围验证。
 - [aa1143/NamiAgent](../research/radar/2026-10-31/8889-aa1143-namiagent.md)：值得一试，建议小范围试：按 README 从 lesson-01 到 lesson-11 逐课运行，并用网页端观察上下文与权限确认；它把工具、上下文、权限、计划、记忆等供给方式做成了可运行快照，但属于教学代码，需在专用工作区验证后再用于实际工作流。
+- [Long-horizon agents and durable execution](../research/radar/2026-11-10/12301-long-horizon-agents-and-durable-execution.md)：值得一试，对需要跨天或跨周、频繁等待人和外部系统的智能体任务，可按原文示例改成持久化执行：记录每一步外部交互结果，等待用挂起加信号恢复，外部写操作加幂等键并重校验约束；先用一个真实流程小范围试点。理由是原文用库存补货案例展示了崩溃恢复、审批/供应商/收货信号和重复下单防护，但只给了示例时间线，缺少完整代码与量化结果。
