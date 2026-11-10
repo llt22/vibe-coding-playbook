@@ -1,16 +1,18 @@
-# 让编码 agent 有一套会整理、会按需检索的长期记忆
+# 让新会话先核对事实，再把纠正沉淀成规则：跨会话记忆的落盘、召回与纠错
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：AI 跨会话重复交代、把旧笔记当事实、记忆越积越乱；需要一套小型索引、会话笔记、离线反思与按需搜索结合的记忆机制。
-> 先试这一步：先在一个非关键项目建持久 memory 目录，只把一页索引注入会话，其余让 agent 按需搜索；连续用一周后加一次离线反思。
-> 最近修订：2026-11-08
+> 解决的问题：AI 每次开新会话都要重新交代背景，而它读到的笔记、记忆、历史检索和项目地图又都只是“主张”，直接当事实施工就会把旧结论、未推送分支和已完成的待办带进新任务。
+> 先试这一步：先在一个真实项目里建最小记忆落点：建 `memory/` 目录，在 `CLAUDE.md` 写一条“开始任务前先读 memory、会话中确认的长期信息追加进去”的规则，连续跑 3–5 次会话，看重复交代有没有减少。
+> 最近修订：2026-11-11
 
 ## 解决什么问题
 
 AI 每次开新会话都要重新交代背景；跨会话、跨代理、跨机器的资料、结论和历史决策无法沉淀。更糟的是，上次的笔记、handoff、memory、历史检索结果或项目地图只是“主张”，直接当事实继续施工，会把已失败的后台任务、未推送的分支、已完成的待办带进新会话。第二大脑建好却没说清 agent 什么时候读、读到的旧结论和用户当下说法冲突时听谁的，也会让它要么没被用上，要么被原样沿用。同一批材料还可能按话题散落在 `MEMORY/`、`notes/`、`people/`、`projects/` 等多个目录；若没有 `CLAUDE.md` 规则，目录只是堆放，不会自动变成可召回的记忆。编码场景还有三类失真：模型训练截止之后依赖库改了 API，agent 不查 changelog 仍按旧 API 写代码；项目文档落后于代码，agent 按旧文档把本来正确的实现改坏；agent 在一堆没跑过的测试和坏掉的 hook 上宣布“完成”。团队里多个人、多个 agent 各记各的，或者记忆只存在某台机器、某份手写笔记里，重复交代和“把旧结论当事实”会同时发生。另一类常见缺口是：过去的决策、试过的死胡同、某日当时的状态、某个文件的变更历史，其实都散落在本机历史聊天和 git 里，但新会话不会自动去翻，于是同一个坑反复踩。
 
-这套做法分十五条路线：A/B/C 先让长期信息在本地 Markdown 落盘并变成可查询的库；D 在会话边界用脚本核对 git/GitHub/本机事实；E 用常驻指令让 agent 每次任务前先读知识库、冲突先问你；F 把捕获、汇总、召回、交接做成常驻管线；G 把依赖库在模型截止后的 API 变更注入给 agent；H 做自托管、按部门/团队/成员隔离的团队记忆；I 在文档与代码冲突时以代码为准并列出冲突点；J 用一条常驻提示词把 Markdown 库变成 Codex 的跨项目记忆；K 用 Mycel 维护一张本地“活的项目地图”；L 用 thenwise 把本机 Claude Code 历史聊天、git 提交、PR、`CLAUDE.md` 和笔记目录汇入本地 SQLite，按需检索并在会话边界按 token 预算自动注入；M 用 ECX 在会话开始加载共享记忆、跑 doctor 体检，并在代理宣布完成前先跑仓库测试命令；N 先按七条判据选一个记忆 MCP，再分开验证“能查”和“会记”；O 按 Anthropic 的记忆组件做持久目录、会话笔记、小型注入索引、按需搜索、dreaming 离线校正和 wiki 表示。A 有三个变体：A-1 用单一 `memory/` 目录加 `CLAUDE.md` 规则；A-2 用 `notes/` 与 `people/` 按材料类型分目录，但原文在 `people/` 处截断；A-3 用 `MEMORY/`、`notes/`、`people/`、`projects/` 按话题分目录，但原文在目录列表处截断，最关键的 `CLAUDE.md` 一行没有保存下来。F/H/J/K/L/M/N/O 都仍把记忆、地图、历史、`hot.md`、MCP 召回或注入索引当“主张”，不能替代 D 的事实核对；M 的测试闸门只证明“这条命令跑过了”，不证明测试覆盖足够；N 的 MCP 连接可能只负责检索，不负责记录，必须另验钩子或插件；O 的 wiki 和记忆笔记也可能过期或错误，必须靠 dreaming 校正、人工抽查和 D 的事实核对。
+还有一类最容易被忽略的失真：你对 agent 的纠正本身没有被沉淀。同一句“先别 push”“我问的是为什么，不是让你改”“这个数不是表里的”，下周还要再说一遍；纠正只存在于那一次对话里，既没变成规则，也没附上当时说这话的上下文。
+
+这套做法分十六条路线：A/B/C 先让长期信息在本地 Markdown 落盘并变成可查询的库；D 在会话边界用脚本核对 git/GitHub/本机事实；E 用常驻指令让 agent 每次任务前先读知识库、冲突先问你；F 把捕获、汇总、召回、交接做成常驻管线；G 把依赖库在模型截止后的 API 变更注入给 agent；H 做自托管、按部门/团队/成员隔离的团队记忆；I 在文档与代码冲突时以代码为准并列出冲突点；J 用一条常驻提示词把 Markdown 库变成 Codex 的跨项目记忆；K 用 Mycel 维护一张本地“活的项目地图”；L 用 thenwise 把本机 Claude Code 历史聊天、git 提交、PR、`CLAUDE.md` 和笔记目录汇入本地 SQLite，按需检索并在会话边界按 token 预算自动注入；M 用 ECX 在会话开始加载共享记忆、跑 doctor 体检，并在代理宣布完成前先跑仓库测试命令；N 先按七条判据选一个记忆 MCP，再分开验证“能查”和“会记”；O 按 Anthropic 的记忆组件做持久目录、会话笔记、小型注入索引、按需搜索、dreaming 离线校正和 wiki 表示；P 用 learn-from-lessons 从本机历史对话里挖出你纠正 agent 的时刻，转成带原文引用的 lesson，人工筛后注入 `CLAUDE.md`/`AGENTS.md`。A 有三个变体：A-1 用单一 `memory/` 目录加 `CLAUDE.md` 规则；A-2 用 `notes/` 与 `people/` 按材料类型分目录，但原文在 `people/` 处截断；A-3 用 `MEMORY/`、`notes/`、`people/`、`projects/` 按话题分目录，但原文在目录列表处截断，最关键的 `CLAUDE.md` 一行没有保存下来。F/H/J/K/L/M/N/O/P 都仍把记忆、地图、历史、`hot.md`、MCP 召回、注入索引或 lesson 当“主张”，不能替代 D 的事实核对；M 的测试闸门只证明“这条命令跑过了”，不证明测试覆盖足够；N 的 MCP 连接可能只负责检索，不负责记录，必须另验钩子或插件；O 的 wiki 和记忆笔记也可能过期或错误，必须靠 dreaming 校正、人工抽查和 D 的事实核对；P 的 lesson 是对过去某次对话的归纳，可能过窄、过度概括或当时就记错，必须回查原文引用并靠 D 核对当前事实。
 
 ## 适用与不适用
 
@@ -34,6 +36,7 @@ AI 每次开新会话都要重新交代背景；跨会话、跨代理、跨机�
 - 已在用 Claude Code，可能还同时用 Codex，希望会话一开始就加载共享记忆、每次会话开始自动体检，并且代理说“完成”前必须先跑仓库测试，走 M。
 - 已在用支持 MCP 的 Claude Code/Codex/Cursor 等客户端，想从托管/自托管、捕获模型、团队共享、文件可读性和许可成本之间选一个记忆工具，走 N。
 - 任务跨会话、长程、有可验证反馈或评分，需要 agent 自己积累经验、从错误中形成规则、离线整理笔记，走 O。O 适合多文档问答、重复数据库查询、游戏推进、法律 brief 等；强模型可给判断空间，弱模型需更明确的“先读记忆、检验理论”提示。
+- 本机已用 Claude Code / Codex / opencode 留下过较长历史，且你确实反复纠正过 agent；想把“每次纠正”变成可复用的规则，走 P。P 最值钱的场景是同一类纠正你已经说过不止一次。
 
 不适用：
 
@@ -41,8 +44,8 @@ AI 每次开新会话都要重新交代背景；跨会话、跨代理、跨机�
 - 不能接受把 Gmail、日历、云端硬盘的读取权限交给本地工具，或工作内容高度敏感且没有隔离账号。
 - 期待原文给出逐字可抄的命令、配置和规则全文：second-brain 原有第 4 步截断；A-2 在 `people/` 处截断；A-3 在目录列表处截断且 `CLAUDE.md` 关键一行缺失；D 本次材料只到 README；F 的 `ai-memory run --f` 处截断；H 的 `amem` 安装命令未在正文给出；J 只有一段提示词且在“这样你的 Codex”处截断；K 只有 README；O 原文没有给出可直接复制的命令、配置或逐字提示词。
 - 想用 C 全面替换现有做法：作者自评“early”，效果数据只有 n=2 的小样本。
-- 想用 D/F/H/K/L/M/N/O 完全替代人工判断：它们只推荐、提供记忆层、项目地图、历史检索、完成闸门、选型清单或记忆设计，每天做什么、每次 push/PR/merge 是否批准，由你决定。
-- 没有稳定的知识库，或知识库里本来就是不可信内容：E/F/H/J/M/N/O 都会把不可信内容引用、汇总、蒸馏、写回或注入得更正式。
+- 想用 D/F/H/K/L/M/N/O/P 完全替代人工判断：它们只推荐、提供记忆层、项目地图、历史检索、完成闸门、选型清单、记忆设计或教训注入，每天做什么、每次 push/PR/merge 是否批准，由你决定。
+- 没有稳定的知识库，或知识库里本来就是不可信内容：E/F/H/J/M/N/O/P 都会把不可信内容引用、汇总、蒸馏、写回、注入或以规则形式固化。
 - 工具不会稳定遵守常驻指令，或你不愿让 AI 提议改写知识库：先别把 E 当默认配置。
 - 非 JS/TS 项目；多 workspace/monorepo；无自带类型的包只能靠 release note：先别把 G 当默认配置。
 - 不能接受把包名与版本发往 npm registry、GitHub、models.dev，或 `--llm`/`--examples`/`--guides` 时把类型 diff、release note 片段、指南文本与导入的 API 名发往 Claude：先别把 G 当默认配置。
@@ -60,6 +63,9 @@ AI 每次开新会话都要重新交代背景；跨会话、跨代理、跨机�
 - 想靠厂商自报的 LoCoMo/LongMemEval 数字验收：不要用；这些数字几乎都是自报、模型栈和 judge 不同，不能横向比较。
 - 每轮都能从屏幕直接读到状态，或只需单文档文本检索：O 的记忆和 wiki 收益有限；单文档检索用搜索即可，不必强行建 wiki。
 - 没有持久记忆目录、没有保留 session transcript/log、没有文件搜索、没有评分反馈、也没有额外 compute 跑 dreaming：先别把 O 当默认配置。
+- 本机没有历史对话、历史里纠正很少、或主要用 Cursor/Cline/Gemini CLI：先别把 P 当默认做法。P 的读取器目前明确支持 Claude Code、Codex、opencode，Cursor/Cline 的读取器 README 说还在找人写。
+- 不愿让 `lessons dream` 调用你本机的 `claude`/`codex` CLI 并把对话内容送进模型：先别用 P 的自动提炼，最多手工整理 lesson。
+- 期待 P 自带定时触发或自动注入：README 只说 scan/dream/view/inject 这些手动命令，没有 cron、watch、hook。
 
 ## 前置条件
 
@@ -80,16 +86,17 @@ AI 每次开新会话都要重新交代背景；跨会话、跨代理、跨机�
 - M：Claude Code；README 标注 Python 3.9+，支持 macOS/Linux，未列 Windows。要双代理共享记忆还需 Codex；要手机接力需要一个私有 GitHub 仓库；要关系图检索需 Ollama。安装前先备份现有配置，尤其是 `~/.claude`。
 - N：一个支持 MCP 的客户端；先确认客户端能不能挂 hook 或装插件，否则只能选“模型主动调用写工具”的方案；Glen 需账号和 org；Mem0 走浏览器登录或把 API key 当 bearer token；Supermemory 连接时选允许访问的 space；Zep 企业向认证；Hindsight 要自己跑起自托管版本并建好 bank，需要 LLM key；mcp-memory-service 要本机 Python 环境；Basic Memory 用 `uv`；claude-mem 先想清楚推理跑在哪；agentmemory 要 Node 20+，无需 key；Cognee 要 Docker 和 `LLM_API_KEY`。
 - O：需要能跨会话读取的持久记忆目录；保留原始 session transcript/log；有文件搜索或按需读取能力；有正确答案、评分反馈或可验证的推进信号；愿意为 dreaming 留额外 compute；控制注入层大小，例如只注入 `MEMORY.md` 前 200 行或 25KB 作为索引。原文没有给出可直接复制的命令、配置或完整提示词。
-- 涉及隐私与凭据安全：先用非敏感账号或受限范围试，不要一上来就接真实收件箱或公司级知识库。F/H/J/K/L/M/N/O 会采集、写回、画图、检索历史、执行 hooks 或注入记忆，先用测试团队、测试 agent、测试库、测试仓库。
+- P：Python 3.9+，有 pipx；本机已留下 Claude Code / Codex / opencode 的对话记录；本机有可用的 `claude` 或 `codex` CLI 及其额度（`lessons dream` 要调用它）；对目标 `CLAUDE.md`/`AGENTS.md` 有写权限。全部命令在本地跑，但要先想清楚 `dream` 会把对话内容送进模型。
+- 涉及隐私与凭据安全：先用非敏感账号或受限范围试，不要一上来就接真实收件箱或公司级知识库。F/H/J/K/L/M/N/O/P 会采集、写回、画图、检索历史、执行 hooks、注入记忆或固化规则，先用测试团队、测试 agent、测试库、测试仓库、测试项目。
 
 ## 操作步骤
 
-先选路线，十五条路线可以叠加：
+先选路线，十六条路线可以叠加：
 
 - 只需要跨会话记住项目背景，先做 A。A-1 用单一 `memory/` 目录加 `CLAUDE.md` 规则；A-2 用 `notes/` 与 `people/` 按材料类型分目录；A-3 用 `MEMORY/`、`notes/`、`people/`、`projects/` 按话题分目录。目录本身不会自动生效，必须配读取/追加规则。
 - 还需要 AI 读取 Gmail、日历、云端硬盘，在 A 之上做 B。原文缺安装与授权细节，必须先查证再操作。
 - 想把材料变成可摄入、可提问、可引用、可清洗的库，或想找回叫不出名字的历史会话，做 C。
-- 如果新会话经常把上次笔记当事实、需要跨天跨机器接续长期项目，做 D。D 可以叠加在 A/B/C/F/H/J/K/L/M/N/O 上：记忆、vault、wiki/handoff、召回结果、知识库、地图、历史检索、`hot.md`、MCP 召回、O 的索引都只是“主张”来源，D 负责在会话边界拿 git/机器事实核对。
+- 如果新会话经常把上次笔记当事实、需要跨天跨机器接续长期项目，做 D。D 可以叠加在 A/B/C/F/H/J/K/L/M/N/O/P 上：记忆、vault、wiki/handoff、召回结果、知识库、地图、历史检索、`hot.md`、MCP 召回、O 的索引、P 的 lesson 都只是“主张”来源，D 负责在会话边界拿 git/机器事实核对。
 - 如果知识库已经存在、但 AI 不主动用、或你说的话和库里记录打架时它自作主张，做 E。E 管“你说的话 vs 知识库记录”，D 管“笔记/记忆/历史 vs git、GitHub、本机事实”，两者都要。
 - 如果主要痛点是跨 agent、跨项目、跨机器的长期记忆，并且能接受常驻服务和采集提示词与工具调用，试 F。F 不能替代 D；E 的冲突裁决指令可以和 F 叠加。
 - 如果是 JS/TS 单 `package.json` 项目、依赖有大版本跨越或紧贴发布节奏，加 G。G 的笔记仍来自 changelog/release note，是“主张”，编辑后 guard 和 CI check 才是编译层的事实核对。
@@ -101,6 +108,7 @@ AI 每次开新会话都要重新交代背景；跨会话、跨代理、跨机�
 - 如果每次会话开始都要自动加载共享记忆、自动体检 hooks/索引/任务/同步，并且代理说“完成”前必须先跑仓库测试，加 M。M 补“完成前证据”和“启动体检”，不替代 D/I/E。
 - 如果你正在选记忆 MCP，或已经装了 MCP 但只会查不会记，做 N。N 补“记忆工具选型 + 记录通路验证”，不替代 A/D/E/I/M。
 - 如果任务跨会话、长程、有反馈，且你愿意维护持久记忆目录、保留 transcript、跑离线反思，加 O。O 补“记忆分层设计”：会话笔记、小型注入索引、按需搜索、dreaming 校正、wiki 表示。O 不替代 A 的手工落盘、C 的 vault 摄入、D 的事实核对、E 的冲突裁决、L 的历史检索、M 的完成闸门。
+- 如果你已经在同一类问题上反复纠正 agent，想让纠正变成规则、又不想上常驻服务，加 P。P 补“从历史纠正里挖规则并附原文证据”，不替代 A 的手工落盘、D 的事实核对、E 的冲突裁决、I 的代码优先规则。
 
 ### 做法 A：只搭本地记忆骨架
 
@@ -777,6 +785,75 @@ If 3+ balls fail in a row, VARY the timing (insert extra wait presses between me
 11. 与现有做法的关系：O 是记忆设计层，可叠加 A（手工落盘骨架）、C（vault 摄入与查询）、E（冲突裁决）、D（事实核对）、L（历史检索）、M（完成闸门）。O 的会话笔记、注入索引和 wiki 仍是“主张”，不能替代 D；E 负责“你说的话 vs 记忆记录”的冲突；A 负责最小落盘；C 负责可摄入/可提问的库；L 负责本机历史检索；M 负责“完成前跑测试”。
 12. 最小试用：选一个跨会话、有标准答案/可评分的长程任务（如多文档问答或重复数据库查询），保留原始 transcript，挂载一个持久记忆目录。先跑无记忆基线；再只开 memory notes；再加一次 dreaming 校正；最后加 wiki+搜索。每一步用同一组任务和同一评分标准对比。指标见下节。
 
+### 做法 P：用 learn-from-lessons 把本机历史纠正提炼成 lesson，筛过再注入
+
+材料边界：README 很短，没有 lesson 的实际文本样例、没有 `dream` 用的提示词、没有注入后的样子、没有配置项字段、没有 lesson 存储路径；效果数据只有作者一人的自评（one person's data so far）。以下命令来自 README 原文，步骤与筛选标准是本手册按原文意图整理的。
+
+1. 先确认素材量。前提：Python 3.9+、有 pipx、本机已留下 Claude Code / Codex / opencode 的对话记录。选一个你确实反复纠正过 agent 的项目，只在这一个项目上试。先备份现有 `CLAUDE.md`（或 `AGENTS.md`）。
+
+```bash
+pipx install git+https://github.com/assassin808/learn-from-lessons
+```
+
+2. 盘点本机有多少可提炼的纠正：
+
+```bash
+lessons scan
+```
+
+预期：输出本机的 session 数与纠正数。这两个数是后面所有步骤的素材基线；纠正数很少就先停，不要往下推。
+
+3. 把纠正提炼成 lesson。前提：本机有可用的 `claude` 或 `codex` CLI 及其额度——README 明确说这一步用你自己的 CLI。注意这一步会把相关对话内容送进模型。
+
+```bash
+lessons dream
+```
+
+预期：产出 lesson；每条带来源对话与原文引用。
+
+4. 人工过一遍产出，这一步不能省：
+
+```bash
+lessons view
+```
+
+按列表、关系图、原文证据三种视角看。只保留同时满足三条的条目：附了原文引用；你认可它的表述；能写成“遇到 X 就做 Y”。泛泛而谈、过度概括、原文引用对不上的，删掉。README 没有给 lesson 样例，只能靠你自己判断。
+
+5. 不要一次全量注入。先按场景限定范围，再写入：
+
+```bash
+lessons index --scenario writing-paper
+lessons inject --target CLAUDE.md --apply
+```
+
+前提：确认目标文件路径；`--apply` 会写入，先备份。预期：`CLAUDE.md` 里出现一小段 lesson 索引，而不是全部 lesson 正文。若注入进的是 `AGENTS.md`，Claude Code 读的是 `CLAUDE.md`，要在 `CLAUDE.md` 里加 `@AGENTS.md`，或用对应机制引入。
+
+6. 按当前上下文检索相关 lesson（README 的例子：写论文时不该加载 git push 相关的教训）：
+
+```bash
+lessons search "about to launch the eval runs" --context "$(git log -1)"
+```
+
+预期：只召回与当前场景相关的条目，而不是把整个 lesson 库塞进上下文。
+
+7. 选择接入方式，按你用的 agent 挑一个：
+
+- Claude Code：用仓库自带的 `skill/SKILL.md`。
+- Codex / opencode：用仓库自带的 `integrations/AGENTS.md` 片段。
+- 任意支持 MCP 的客户端：
+
+```bash
+lessons mcp
+```
+
+8. 落地前读两份文档：`docs/GUIDE.md` 和 `docs/LESSON_FORMAT.md`。README 指向它们，但正文没有展开 lesson 格式与索引机制；不读就无法判断注入内容和存储位置是否符合预期。
+
+9. 与现有做法的关系：P 补的是“从历史纠正里挖规则并附原文证据”，不替代 A 的手工落盘、D 的事实核对、E 的冲突裁决、I 的代码优先规则。lesson 是对过去某次对话的归纳，是“主张”：涉及分支是否推送、PR 是否合并、接口是否真的改了，仍要用 D 或等价手段核对当前事实。
+
+10. 不要指望它自动跑。README 没有提供任何基于时间、事件或状态的自动触发机制（没有 cron、watch、hook 的说明）；scan / dream / view / inject 全是手动命令。要么你按节律手动跑，要么自己另做调度。
+
+11. 最小试用：只在一个历史较长的项目上，按第 1—5 步走一遍，保留注入前的 `CLAUDE.md` 作 A/B 对照；注入后取 10–20 个新任务，统计“同一类纠正”被你重复说了几次。
+
 ## 怎么判断变好了
 
 通用最小试用：选一个非敏感项目、一个 agent、一个记忆层，连续用一到两周；同时保留一个不装该记忆层的同类任务作对照。记录重复交代率、召回成功率、无关注入比例、错误记忆造成的返工、隐私开关是否有效、hook 错误数。出现越权读取或敏感内容被写入，立即停。
@@ -795,115 +872,67 @@ If 3+ balls fail in a row, VARY the timing (insert extra wait presses between me
 - M：先两周基础安装，只验证 `/boot` 唯一标记、测试闸门、doctor 静默/警告和双代理唯一标记；故意制造失败测试，统计被拦次数、失败输出是否回到代理、连续失败 3 次是否停止；两周后再决定是否加搜索和手机模式。
 - N：先只装一个候选，用一次检索测试和一次“关会话重开”的记录测试判断它是否真的会记；再连续用几次真实会话，记录重复交代率、召回相关性、无关注入比例、hook/插件错误、隐私开关是否按预期工作。不要用厂商自报的 LoCoMo/LongMemEval 数字做验收。
 - O：用同一组跨会话、有标准答案/可评分的任务做四段对照：无记忆基线 → 只开 memory notes → 加一次 dreaming → 加 wiki+搜索。记录任务得分或满足评分标准的比例、重复错误率、错误笔记被后续会话读取的次数、记忆文件数、注入层大小（若采用 Claude Code 式注入，是否控制在约 200 行/25KB 量级）、每问 token 消耗、需要人工纠错的次数、完成时间、wiki 是否比源文档还大、是否出现失效链接。原文报告：文档语料 25 题中，dreaming 从 2 到 128 sessions 使 graded criteria 从 13% 到 48%；搜索+wiki 从 54% 到 61%，搜索单独 53%，仅 wiki 最佳 48%，每问约省 20,000 tokens；Harvey LAB 多文档题 87% vs 73%；合同任务 41/57→57/57，brief 72%→100%。这些是原文数据，不是你的验收结论。判断改善：同一任务集上得分高于基线，且 token/时间不显著恶化；或达到同等得分但 token 明显下降；错误规则能被 dreaming 修正而不是被反复继承。若 wiki 在单文档检索任务没有增益，应保留搜索而不强行建 wiki。
+- P：先看第 2 步的素材量——`lessons scan` 扫出的 session 与纠正数太少，后面不会有好结果。注入前后各取 10–20 个新任务，统计同一类纠正被重复说了几次，这是最直接的指标，也对应该工具 47 个新情境实验的口径。再看：`lessons view` 里带原文引用、可直接执行的 lesson 占比（低于一半就不要往下推）；注入后 `CLAUDE.md` 增长了多少、每次会话多花多少 token；agent 是否开始频繁追问、拒绝本来可以做的事（原文特意声明“without becoming over-cautious elsewhere”，这正是要盯的反向指标）；注入的 lesson 有多少条在新会话里真的被触发过、触发后是否真的避免了纠正。淘汰条件：扫不出足够纠正、或 lesson 大多没有可追溯的原文引用、或注入后同类纠正次数没有下降，就停在研究阶段，只借鉴它“从历史纠正里挖规则并附证据”的思路。
 
-试多久：A-1/A-2/B 用 1～2 周；A-3 连续跑 3–5 次会话，两周止损；C 先小范围试；D 先小范围试再谈全面采用；E 一次 5 个任务；F 单机单仓库 1～2 周；G 先在一个 JS/TS 单 `package.json` 项目小范围试；H 先用 2—3 次真实会话验证接线和召回，再观察 1～2 周；I 至少 2—3 个同类任务；J 一到两周；K 约半天启动、观察一到两周；L 先跑完一轮历史问题，再在单仓库连续用一到两周；M 先两周基础安装；N 先一个候选、几次真实会话；O 先跑完一轮四段对照，再连续用一到两周。
+试多久：A-1/A-2/B 用 1～2 周；A-3 连续跑 3–5 次会话，两周止损；C 先小范围试；D 先小范围试再谈全面采用；E 一次 5 个任务；F 单机单仓库 1～2 周；G 先在一个 JS/TS 单 `package.json` 项目小范围试；H 先用 2—3 次真实会话验证接线和召回，再观察 1～2 周；I 至少 2—3 个同类任务；J 一到两周；K 约半天启动、观察一到两周；L 先跑完一轮历史问题，再在单仓库连续用一到两周；M 先两周基础安装；N 先一个候选、几次真实会话；O 先跑完一轮四段对照，再连续用一到两周；P 先在一个项目上走完 scan → dream → view → inject，再用 10–20 个新任务对比同类纠正次数，持续一到两周。
 
 ## 常见坑
 
 - second-brain 原有第 4 步截断，`CLAUDE.md` 规则全文未知，不能直接照抄“所有重要细节”；需要自己界定什么算长期有效信息。
 - A-2 原文在 `people/` 处截断，第三个文件夹和后续用法缺失；不能把“建 `notes/` 和 `people/`”当作完整 second-brain 设置。
-- A-3 原文在“创建MEMORY/、notes/、people/、projects/”处截断，最关键的 `CLAUDE.md` 那一行没有保存下来；本手册中的 A-3 规则是按原文意图自拟的占位，不是原文。
-- A-3 的完整目录清单可能不止四个；原文只列举到 `projects/` 即截断。
+- A-3 原文在“创建MEMORY/、notes/、people/、projects/”处截断，最关键的 `CLAUDE.md` 那一行没有保存下来；本手册中的 A-3 规则是按原文意图自拟的占位，不是原文。完整目录清单也可能不止四个。
 - A-3 用大写 `MEMORY/`，A-1 用小写 `memory/`；两者可并存，但要在 `CLAUDE.md` 里写清楚哪个目录放什么、何时读。
 - `notes/`、`people/`、`projects/` 只是目录结构，不会自动让 Claude Code 读取；必须配 A-1 的 `CLAUDE.md` 规则或常驻指令。
-- `people/` 有隐私问题；团队共享或同步到远端前先确认边界。
-- A-3 的写入归类靠模型判断，可能记错或记错位置；必须人工抽查。
-- A-3 的记忆文件会累积陈旧信息，需要定期清理；清理成本持续高于节省的上下文重建时间，就停用。
+- `people/` 有隐私问题；团队共享或同步到远端前先确认边界。A-3 的写入归类靠模型判断，可能记错或记错位置，必须人工抽查；记忆文件会累积陈旧信息，需要定期清理。
 - A-3 多人协作时同一文件易冲突；如果多人/多 agent 同时写，先约定分工或改用带并发写入控制的方案。
-- 原文没有 GWS CLI 的安装命令、包名来源和授权流程，不能凭想象执行。
-- “所有重要细节”没有界定范围，容易把噪声写进 `memory`，需要人工清理。
-- 做法 A 未说明记忆如何被召回：是每次会话自动读取，还是需要显式提示，原文未交代。
-- 未说明 GWS CLI 的授权范围、凭证存储方式与撤销方式，存在隐私与凭据风险。
-- C 作者自评项目“early”，效果数据只有 n=2 的小样本。
-- C 的一个具体失败机制：普通智能体追踪连接关系时会走 `index.md`——它链接到每一页，于是“找到”一条毫无意义的短路径，并据此把 `index` 列为 vault 最重要的页面之一；两次运行都犯同一个错。skill 查询的图排除了这类记账文件，所以正确答案才可达。
-- 安装 obsidian-wiki 时，原文明确说不要用 `uvx`；用 `uv tool install` 或 `pipx install`。
-- Claude Code 插件路线只带 skills，不带 session hook 和 CLI；要会话开始注入回顾、结束提醒捕获就得走 pip 安装路线。
-- D 本次材料只到 README，脚本实现与效果未经验证；不要把它当作已经证明能减少所有记忆失真。
-- D 的推进发生在会话边界，不是无人值守后台；README 没有描述自动调度。
+- 原文没有 GWS CLI 的安装命令、包名来源和授权流程，不能凭想象执行；也未说明授权范围、凭证存储方式与撤销方式。
+- “所有重要细节”没有界定范围，容易把噪声写进 `memory`，需要人工清理。做法 A 未说明记忆如何被召回：是每次会话自动读取，还是需要显式提示。
+- C 作者自评项目“early”，效果数据只有 n=2 的小样本。C 的一个具体失败机制：普通智能体追踪连接关系时会走 `index.md`——它链接到每一页，于是“找到”一条毫无意义的短路径，并据此把 `index` 列为 vault 最重要的页面之一；两次运行都犯同一个错。skill 查询的图排除了这类记账文件，所以正确答案才可达。
+- 安装 obsidian-wiki 时，原文明确说不要用 `uvx`；用 `uv tool install` 或 `pipx install`。Claude Code 插件路线只带 skills，不带 session hook 和 CLI；要会话开始注入回顾、结束提醒捕获就得走 pip 安装路线。
+- D 本次材料只到 README，脚本实现与效果未经验证；不要把它当作已经证明能减少所有记忆失真。D 的推进发生在会话边界，不是无人值守后台；README 没有描述自动调度。
 - D 的工作区形态要求根目录 remote 必须是 PRIVATE，首次提交前要检查 `git status --ignored`、扫密钥，且绝不追踪 datadir、密钥或二进制。
-- 主张和事实的优先级：A 的 memory、C 的 vault、F 的 wiki/handoff、H 的召回结果、J 的知识库、K 的地图、L 的历史检索结果、M 的 `hot.md`、N 的 MCP 召回、O 的索引都可读，但先跑 ground truth；否则可能把旧笔记、过期地图或旧聊天当事实继续施工。
-- E 最大的材料缺口：原文写“完整提示如下”，但采集到的正文里没有这段完整提示，本手册中的提示词是按三条要点重写的草稿。
-- E 的“不告诉 AI 怎么用第二大脑，它就毫无用处”“修复只要 90 秒”都只是作者主张；传播数据是传播指标，不是效果证据。
-- E 没提的成本与风险：每次任务前读库带来的 token/时间开销、冲突误报造成的打断、让 AI 直接改写知识库的出错风险。
-- F 的所有收益说法都只有项目自述、没有独立验证；F 要常驻服务并采集提示词与工具调用，先单机、单仓库、只接一个 agent。
-- F 的 Docker quick-start 没有认证——容器没跑 `init`，不带 token 启动；服务只绑 loopback，但本机进程和浏览器页面可以访问。不要把该端口暴露到外网。
-- F 的 Windows 原生支持被 README 标为 Experimental，更稳的路子是 WSL2 或 Docker Desktop。
-- F 的原文在 `ai-memory run --f` 处截断，不能补全。
-- F 不能替代做法 D：它的 handoff 仍是主张。
-- G 只支持 JavaScript / TypeScript 项目，且只支持一个 `package.json`，尚无 workspace 遍历。
-- G 对无自带类型的包只能靠 release note；`@types/*` 不做 diff。
-- G 的预注册盲测数据是作者自测，只测了两个 Claude 模型；报告正文在“通过率：”处截断。
-- G 的 Cursor / Codex / OpenCode `setup --agent` 原文明确说尚未在真实安装中验证过；Cursor 目前不把 `postToolUse` hook 的上下文传给模型。
-- G 的普通 `tsc` 钩子是 guard 的子集，二者不等价。
-- G 的 `npx stalemap check` 会在笔记块缺失或过期时 exit 1；不要忽略这个失败。
-- G 把笔记写在 `AGENTS.md` 时，Claude Code 读的是 `CLAUDE.md`；要在 `CLAUDE.md` 里加 `@AGENTS.md`，或用 `--target CLAUDE.md`。
-- G 的插件和 hook 走 `npx -y stalemap@latest`，因此始终用最新 npm 版本；要固定版本需自己另做控制。
-- G 的 `--budget` 默认 1800 tokens；不要为了塞全量 changelog 把预算撑爆。
-- G 的 `probe` 直接点名旧 API，测的是“被指到时知不知道”，比“主动发现”容易。
-- G 的 comment 模式需要 `permissions: pull-requests: write`。
+- 主张和事实的优先级：A 的 memory、C 的 vault、F 的 wiki/handoff、H 的召回结果、J 的知识库、K 的地图、L 的历史检索结果、M 的 `hot.md`、N 的 MCP 召回、O 的索引、P 的 lesson 都可读，但先跑 ground truth；否则可能把旧笔记、过期地图、旧聊天或过窄的教训当事实继续施工。
+- E 最大的材料缺口：原文写“完整提示如下”，但采集到的正文里没有这段完整提示，本手册中的提示词是按三条要点重写的草稿。E 的“不告诉 AI 怎么用第二大脑，它就毫无用处”“修复只要 90 秒”都只是作者主张；传播数据是传播指标，不是效果证据。E 没提的成本与风险：每次任务前读库带来的 token/时间开销、冲突误报造成的打断、让 AI 直接改写知识库的出错风险。
+- F 的所有收益说法都只有项目自述、没有独立验证；F 要常驻服务并采集提示词与工具调用，先单机、单仓库、只接一个 agent。F 的 Docker quick-start 没有认证——容器没跑 `init`，不带 token 启动；服务只绑 loopback，但本机进程和浏览器页面可以访问。不要把该端口暴露到外网。
+- F 的 Windows 原生支持被 README 标为 Experimental，更稳的路子是 WSL2 或 Docker Desktop。F 的原文在 `ai-memory run --f` 处截断，不能补全。F 不能替代做法 D：它的 handoff 仍是主张。
+- G 只支持 JavaScript / TypeScript 项目，且只支持一个 `package.json`，尚无 workspace 遍历。G 对无自带类型的包只能靠 release note；`@types/*` 不做 diff。G 的预注册盲测数据是作者自测，只测了两个 Claude 模型；报告正文在“通过率：”处截断。
+- G 的 Cursor / Codex / OpenCode `setup --agent` 原文明确说尚未在真实安装中验证过；Cursor 目前不把 `postToolUse` hook 的上下文传给模型。普通 `tsc` 钩子是 guard 的子集，二者不等价。
+- G 的 `npx stalemap check` 会在笔记块缺失或过期时 exit 1；不要忽略这个失败。笔记写在 `AGENTS.md` 时，Claude Code 读的是 `CLAUDE.md`；要在 `CLAUDE.md` 里加 `@AGENTS.md`，或用 `--target CLAUDE.md`。
+- G 的插件和 hook 走 `npx -y stalemap@latest`，因此始终用最新 npm 版本；要固定版本需自己另做控制。`--budget` 默认 1800 tokens；不要为了塞全量 changelog 把预算撑爆。`probe` 直接点名旧 API，测的是“被指到时知不知道”，比“主动发现”容易。comment 模式需要 `permissions: pull-requests: write`。
 - G 的数据边界：包名与版本会发往 npm registry、GitHub、models.dev；`--llm`/`--examples`/`--guides` 会把类型 diff、release note 片段、指南文本与导入的 API 名发往 Claude（不含代码）；`probe` 的提示词发给你选的 provider。
-- H 的许可证是硬约束：0.4.0 起服务端为 BUSL-1.1，免费范围只到评估、个人、非营利，以及最多 1 个部门、10 个成员的组织。
-- H 的 README 没有在正文给出 `amem` 安装命令，只指向 `docs/REMOTE-CLIENTS.md`；也没有给效果数据。
-- H 会捕获每次对话并蒸馏；先用非敏感内容试，并确认成员私有对话、agent 共享 scenes/persona 的隔离符合预期。
-- H 的 SQLite 是每部门一个文件，`sqlite-vec` 加载失败会退化为暴力比较；数据量上来后要评估 PostgreSQL/pgvector。
-- H 的多副本需要 Redis；队列是 at-least-once，节点崩溃会重投，任务要幂等；Redis 锁 TTL 10 分钟，且不支持 Redis Cluster。
-- H 的默认触发不是实时：L2 有 90 秒延迟且至少间隔 900 秒，L3 在冷启动、每 50 条新记忆或 scene 更新时触发；刚聊完立刻问“你还记得吗”可能还没蒸馏完。
-- H 的客户端只用 user key，不需要 `AGENT_MEMORY_API_KEY`；每次记忆调用要带 `team_id` 和 `agent_id`。不要把 admin 的 Gateway key 当客户端 key 用。
-- H 的 Panel 其他成员默认只读；创建用户、团队、agent 要用 admin user key，且 admin user key 只显示一次。
-- H 的手动部署要先 `cp .env.example .env` 并至少设 `AGENT_MEMORY_API_KEY`；数据库在宿主机时用 `host.docker.internal` 而不是 `localhost`。
-- H 的 `/health` 的 `stores.vectorIndex` 可能显示 `none`、`brute-force` 等；先确认它符合预期，再判断召回质量。
-- I 的原文只有一条规则和一句目的说明，且在“据说Claude”处截断。
-- I 的“以代码为准”是一个前提假设：代码本身可能有 bug 或正处于重构中；按代码改之前仍要人复核。
-- 规则写进 `AGENTS.md` 而 agent 只读 `CLAUDE.md` 时不会生效。
-- 冲突点全列进最终回复会增加噪声；误报频繁时先收紧“文档”的范围和“冲突”的判定。
-- J 的原文只有一段提示词，且在“这样你的 Codex”处截断；目录结构、读写权限接入、定时触发这三项最关键的信息都不在原文里。
-- J 没有规定知识库结构；直接用单文件堆砌，会让“按需读取”退化成全量加载或干脆读不到。
-- J 没有冲突处理规则：它默认把当日内容写回库，写错或过期的条目会在后续任务里被反复读取并放大。
-- J 的“每晚十点”“每周复盘”只是时间点，原文没说由谁触发；环境没有定时能力时，必须改成人工在固定时间发起。
-- J 的“当日项目沟通记录”来源未定义；不指定来源，这一步会变成让 Codex 凭空总结。
-- K 目前只有 README，未看到 `docs/reference.md`、`src/agent-guide.md` 正文，也没有实际跑过；项目 0.22 早期、约 30 stars、单一作者，无生产使用案例。
-- K 的安装段用 `node mycel.mjs open`，最小试用段原文写 `node mycel.mjs start`，两者不一致；先以 `node mycel.mjs --help` 和实际可用命令为准。
-- K 的地图质量取决于所用智能体能力与代码库规模；大仓库下 `context --brief` 的体量与 token 成本无数据。
-- K 默认只在 `127.0.0.1:4317` 监听；跨 VM 要 `remote on`、4 位码 Allow，每台机器一个可随时吊销的 key；经 API 写入需要 `.mycel/token`。不要把端口暴露到外网。
-- K 的本地模型 `mycel chat` 对项目文件只读；它具备全部 Mycel 工具，但不能替代你改代码。
-- K 没有聊天功能，对话始终在智能体自己的窗口里；不要把 Mycel 当聊天界面。
-- K 的地图过期会误导 agent：被 `watch` 标为过时的块要先修，再让 agent 依据它改代码。
-- L 目前只有 README 和作者自述的隐藏答案盲评数据；`docs/eval.md` 的题目、评分细则和原始数据不在材料里，93% vs 37%、88% vs 17%、14 秒 vs 26 秒等数字不能当定论。
-- L 有版本门槛：Node 22.16+；一行安装需要 Claude Code 2.1.275+；历史必须在 `~/.claude/projects`。非 Claude Code 工作流或没有历史数据的仓库，装了也检索不到东西。
-- L 默认每日一次 npm 版本检查；不想让它联网，用 `thenwise update-check off` 关闭。
-- L 的脱敏会漏掉跨两行折断的 key，`process.env.API_KEY` 这类代码仍可读；不要用真实密钥测试。`thenwise forget` 够不到 Claude Code 自有文件和 Time Machine 副本。
-- L 的自动注入有 token 预算：启动简报最多 200 token、压缩后 resume brief 最多 1,500 token、问过去最多 3 个线索约 300 token、打开文件最多 600 token。无关提示多时，用 `config.json` 关掉 `prompt_map`/`startup_brief`。
-- L 的 hook 错误不会让聊天失败，但会静默进日志；用 `thenwise logs --errors` 查。
-- L 的团队模式要自托管服务器、https 反向代理和 token 管理；客户端除 localhost 外拒绝 plain http；服务器宕机时共享排队。
-- L 的历史记录是“主张”，不是当前事实：旧记录可能已被较新记录覆盖，也可能当时就记错。涉及分支是否推送、PR 是否合并、后台任务是否还在跑，仍要用 D 的 `ground-truth.sh` 或等价手段核对。
-- L 不替代 `CLAUDE.md` 常驻规则；它读取 `CLAUDE.md`，但不会替你维护它。也不替代 E 的冲突裁决。
-- M 只有 README，未查看代码和安装脚本；“可重复运行、不覆盖已有文件、先保存 `.ecx-bak` 备份”是 README 声称，必须安装时验证。先备份 `~/.claude` 和笔记库副本。
-- M 的 hooks 在会话开始、第一条消息前、每次消息前、回复后和结束时执行；如果真实 Claude Code payload 与 hook 预期不匹配，可能静默失败。先用 `/boot` 和唯一标记验证。
-- M 的 `doctor` 称覆盖 16+ 项检查并给“精确修复”，但 README 没有给出单独运行命令，也没说明修复具体做什么。
-- M 的 `.ecx/test-command` 必须写仓库真实测试命令；原文没有给示例命令，自动发现 npm、pytest、unittest、cargo、go、make 的准确率也未给数据。
-- M 的测试闸门“连续失败 3 次后放弃”是作者说法；如果代理在失败后反复改错，先看失败输出是否真的回到代理，再看测试命令是否本身不稳定。
-- M 的双代理同步只对 Claude Code + Codex 成立；只用 Claude Code 时不要开 agent-sync。`agents/AGENT_CHAT.md` 会记录代理间聊天，注意其中是否含敏感内容。
-- M 的关系图检索默认可能把笔记文本发到 Ollama 云；用 `ECX_LLM_MODEL` 改本地模型，并确认实际端点。
-- M 的手机接力要求私有 GitHub 仓库；这条链路会把内容放到云端。先只用非敏感材料试。
-- M 的“每天使用 6 个月、支撑 37 个已交付项目、同步低于 0.1 秒、安装 30 秒、27 个测试、21 个 hooks、17 个 skills、16+ 项 doctor 检查”都是 README 自述。
-- M 的“测试通过才算完成”只证明你写下的那条命令跑过了；它不证明测试覆盖足够、不证明代码符合文档、不证明分支已推送。
-- N 的最大误解：装了一个 MCP 连接就以为会记录。原文反复说很多方案只负责检索；Glen 的 MCP 连接 search only，要记录得装插件钩子；claude-mem 的 MCP 侧只有搜索工具，捕获靠六个生命周期钩子；Supermemory 要另装插件。
-- `npm install -g claude-mem` 只装 SDK、不注册任何钩子；必须用安装器并验证记录通路。
-- Basic Memory 用 `uv` 安装时必须带 `--prerelease=allow`，否则会静默装到旧版本。
-- Cognee 需要 `LLM_API_KEY`；原文明确 Claude Code 不提供 MCP sampling，所以借不到宿主模型。
-- claude-mem 安装器会引导登录并默认起一个 30 天试用的托管 observer；试用到期后压缩会回落到你的 Anthropic 套餐，除非订阅。用 `--provider host` 可让推理留在本地。
-- mcp-memory-service 的 Codex 用户要另跑 `python3 codex/install_hooks.py`；只装 Python 包不等于 Codex 会自动记录。
-- Zep 自报 LoCoMo 94.7%，ByteRover 复跑得到 75.1%；原文把它作为“自报数字不可横向比较”的争议案例。
-- Glen 清单由 Glen 团队维护、Glen 排第一；star 数是弱信号，monorepo 的 star 会高估单个 server 的使用度。
-- 原文只详细写到前 11 名，第 12 名以后只有表格摘要，并在 Engram 处截断；不要把它当作完整 25 项评测。
+- H 的许可证是硬约束：0.4.0 起服务端为 BUSL-1.1，免费范围只到评估、个人、非营利，以及最多 1 个部门、10 个成员的组织。H 的 README 没有在正文给出 `amem` 安装命令，只指向 `docs/REMOTE-CLIENTS.md`；也没有给效果数据。
+- H 会捕获每次对话并蒸馏；先用非敏感内容试，并确认成员私有对话、agent 共享 scenes/persona 的隔离符合预期。SQLite 是每部门一个文件，`sqlite-vec` 加载失败会退化为暴力比较；数据量上来后要评估 PostgreSQL/pgvector。
+- H 的多副本需要 Redis；队列是 at-least-once，节点崩溃会重投，任务要幂等；Redis 锁 TTL 10 分钟，且不支持 Redis Cluster。默认触发不是实时：L2 有 90 秒延迟且至少间隔 900 秒，L3 在冷启动、每 50 条新记忆或 scene 更新时触发；刚聊完立刻问“你还记得吗”可能还没蒸馏完。
+- H 的客户端只用 user key，不需要 `AGENT_MEMORY_API_KEY`；每次记忆调用要带 `team_id` 和 `agent_id`。不要把 admin 的 Gateway key 当客户端 key 用。Panel 其他成员默认只读；admin user key 只显示一次。手动部署要先 `cp .env.example .env` 并至少设 `AGENT_MEMORY_API_KEY`；数据库在宿主机时用 `host.docker.internal` 而不是 `localhost`。`/health` 的 `stores.vectorIndex` 可能显示 `none`、`brute-force` 等；先确认它符合预期，再判断召回质量。
+- I 的原文只有一条规则和一句目的说明，且在“据说Claude”处截断。“以代码为准”是一个前提假设：代码本身可能有 bug 或正处于重构中；按代码改之前仍要人复核。规则写进 `AGENTS.md` 而 agent 只读 `CLAUDE.md` 时不会生效。冲突点全列进最终回复会增加噪声；误报频繁时先收紧“文档”的范围和“冲突”的判定。
+- J 的原文只有一段提示词，且在“这样你的 Codex”处截断；目录结构、读写权限接入、定时触发这三项最关键的信息都不在原文里。J 没有规定知识库结构；直接用单文件堆砌，会让“按需读取”退化成全量加载或干脆读不到。
+- J 没有冲突处理规则：它默认把当日内容写回库，写错或过期的条目会在后续任务里被反复读取并放大。“每晚十点”“每周复盘”只是时间点，原文没说由谁触发；环境没有定时能力时，必须改成人工在固定时间发起。“当日项目沟通记录”来源未定义；不指定来源，这一步会变成让 Codex 凭空总结。
+- K 目前只有 README，未看到 `docs/reference.md`、`src/agent-guide.md` 正文，也没有实际跑过；项目 0.22 早期、约 30 stars、单一作者，无生产使用案例。安装段用 `node mycel.mjs open`，最小试用段原文写 `node mycel.mjs start`，两者不一致；先以 `node mycel.mjs --help` 和实际可用命令为准。
+- K 的地图质量取决于所用智能体能力与代码库规模；大仓库下 `context --brief` 的体量与 token 成本无数据。K 默认只在 `127.0.0.1:4317` 监听；跨 VM 要 `remote on`、4 位码 Allow，每台机器一个可随时吊销的 key；经 API 写入需要 `.mycel/token`。不要把端口暴露到外网。
+- K 的本地模型 `mycel chat` 对项目文件只读；它具备全部 Mycel 工具，但不能替代你改代码。K 没有聊天功能，对话始终在智能体自己的窗口里；不要把 Mycel 当聊天界面。地图过期会误导 agent：被 `watch` 标为过时的块要先修，再让 agent 依据它改代码。
+- L 目前只有 README 和作者自述的隐藏答案盲评数据；`docs/eval.md` 的题目、评分细则和原始数据不在材料里，93% vs 37%、88% vs 17%、14 秒 vs 26 秒等数字不能当定论。L 有版本门槛：Node 22.16+；一行安装需要 Claude Code 2.1.275+；历史必须在 `~/.claude/projects`。非 Claude Code 工作流或没有历史数据的仓库，装了也检索不到东西。
+- L 默认每日一次 npm 版本检查；不想让它联网，用 `thenwise update-check off` 关闭。脱敏会漏掉跨两行折断的 key，`process.env.API_KEY` 这类代码仍可读；不要用真实密钥测试。`thenwise forget` 够不到 Claude Code 自有文件和 Time Machine 副本。
+- L 的自动注入有 token 预算：启动简报最多 200 token、压缩后 resume brief 最多 1,500 token、问过去最多 3 个线索约 300 token、打开文件最多 600 token。无关提示多时，用 `config.json` 关掉 `prompt_map`/`startup_brief`。hook 错误不会让聊天失败，但会静默进日志；用 `thenwise logs --errors` 查。团队模式要自托管服务器、https 反向代理和 token 管理；客户端除 localhost 外拒绝 plain http；服务器宕机时共享排队。
+- L 的历史记录是“主张”，不是当前事实：旧记录可能已被较新记录覆盖，也可能当时就记错。涉及分支是否推送、PR 是否合并、后台任务是否还在跑，仍要用 D 的 `ground-truth.sh` 或等价手段核对。L 不替代 `CLAUDE.md` 常驻规则；它读取 `CLAUDE.md`，但不会替你维护它。也不替代 E 的冲突裁决。
+- M 只有 README，未查看代码和安装脚本；“可重复运行、不覆盖已有文件、先保存 `.ecx-bak` 备份”是 README 声称，必须安装时验证。先备份 `~/.claude` 和笔记库副本。M 的 hooks 在会话开始、第一条消息前、每次消息前、回复后和结束时执行；如果真实 Claude Code payload 与 hook 预期不匹配，可能静默失败。先用 `/boot` 和唯一标记验证。
+- M 的 `doctor` 称覆盖 16+ 项检查并给“精确修复”，但 README 没有给出单独运行命令，也没说明修复具体做什么。`.ecx/test-command` 必须写仓库真实测试命令；原文没有给示例命令，自动发现 npm、pytest、unittest、cargo、go、make 的准确率也未给数据。
+- M 的测试闸门“连续失败 3 次后放弃”是作者说法；如果代理在失败后反复改错，先看失败输出是否真的回到代理，再看测试命令是否本身不稳定。双代理同步只对 Claude Code + Codex 成立；只用 Claude Code 时不要开 agent-sync。`agents/AGENT_CHAT.md` 会记录代理间聊天，注意其中是否含敏感内容。
+- M 的关系图检索默认可能把笔记文本发到 Ollama 云；用 `ECX_LLM_MODEL` 改本地模型，并确认实际端点。手机接力要求私有 GitHub 仓库；这条链路会把内容放到云端。先只用非敏感材料试。M 的“每天使用 6 个月、支撑 37 个已交付项目、同步低于 0.1 秒、安装 30 秒、27 个测试、21 个 hooks、17 个 skills、16+ 项 doctor 检查”都是 README 自述。它的“测试通过才算完成”只证明你写下的那条命令跑过了；不证明测试覆盖足够、不证明代码符合文档、不证明分支已推送。
+- N 的最大误解：装了一个 MCP 连接就以为会记录。原文反复说很多方案只负责检索；Glen 的 MCP 连接 search only，要记录得装插件钩子；claude-mem 的 MCP 侧只有搜索工具，捕获靠六个生命周期钩子；Supermemory 要另装插件。`npm install -g claude-mem` 只装 SDK、不注册任何钩子；必须用安装器并验证记录通路。
+- Basic Memory 用 `uv` 安装时必须带 `--prerelease=allow`，否则会静默装到旧版本。Cognee 需要 `LLM_API_KEY`；原文明确 Claude Code 不提供 MCP sampling，所以借不到宿主模型。claude-mem 安装器会引导登录并默认起一个 30 天试用的托管 observer；试用到期后压缩会回落到你的 Anthropic 套餐，除非订阅。用 `--provider host` 可让推理留在本地。mcp-memory-service 的 Codex 用户要另跑 `python3 codex/install_hooks.py`；只装 Python 包不等于 Codex 会自动记录。
+- Zep 自报 LoCoMo 94.7%，ByteRover 复跑得到 75.1%；原文把它作为“自报数字不可横向比较”的争议案例。Glen 清单由 Glen 团队维护、Glen 排第一；star 数是弱信号，monorepo 的 star 会高估单个 server 的使用度。原文只详细写到前 11 名，第 12 名以后只有表格摘要，并在 Engram 处截断；不要把它当作完整 25 项评测。
 - 记忆 MCP 的权限要逐个看：Glen 按每条 observation 在召回时校验；Zep 有 OAuth 2.1 + PKCE、ABAC、只读连接；Cognee 默认开 `ENABLE_BACKEND_ACCESS_CONTROL` 按用户隔离 dataset；Graphiti 的 group ID “无认证”被列为弱点。不要把“有 team 字段”当成有权限控制。
-- O 原文没有给出可直接复制的命令、配置或逐字提示词；本手册只能按设计描述整理步骤，落地要自己改写。
-- O 的注入层不能大：只加载 `MEMORY.md` 前 200 行或 25KB 作为索引；更长指令文件会降低遵循度，注入错误笔记会污染每个会话。
-- O 的 wiki 可能膨胀到比源文档还大；需要修剪、合并重复、检查失效链接。单文档检索任务里 wiki 没有明显增益，搜索即可。
-- O 的 dreaming 需要额外 compute，且原文把“何时创建记忆”“dreaming 频率”列为开放问题；不要假设跑一次就永久有效。
-- O 对强模型可给判断空间；固定规则（如只记录失败）可能削弱记忆带来的提升。弱模型需要更明确的“先读记忆、显式检验理论”提示。
-- O 的合同任务教训：多 agent 同时写共享条款表会丢条目；改为每份合同一个页面、单 agent 写、逐字引用条款。
-- O 的数据多来自 Anthropic 自家 Claude 模型与 Managed Agents 环境，部分对比是单次运行或特定任务，不能直接外推；需要在自己的任务上验证。
+- O 原文没有给出可直接复制的命令、配置或逐字提示词；本手册只能按设计描述整理步骤，落地要自己改写。注入层不能大：只加载 `MEMORY.md` 前 200 行或 25KB 作为索引；更长指令文件会降低遵循度，注入错误笔记会污染每个会话。
+- O 的 wiki 可能膨胀到比源文档还大；需要修剪、合并重复、检查失效链接。单文档检索任务里 wiki 没有明显增益，搜索即可。dreaming 需要额外 compute，且原文把“何时创建记忆”“dreaming 频率”列为开放问题；不要假设跑一次就永久有效。
+- O 对强模型可给判断空间；固定规则（如只记录失败）可能削弱记忆带来的提升。弱模型需要更明确的“先读记忆、显式检验理论”提示。合同任务教训：多 agent 同时写共享条款表会丢条目；改为每份合同一个页面、单 agent 写、逐字引用条款。O 的数据多来自 Anthropic 自家 Claude 模型与 Managed Agents 环境，部分对比是单次运行或特定任务，不能直接外推；需要在自己的任务上验证。
+- P 目前只有作者一人的数据、30 stars，属于早期个人项目；README 没有 lesson 文本样例、没有 `dream` 提示词、没有注入后样子、没有配置项字段、没有 lesson 存储路径。这些都要读 `docs/GUIDE.md` 和 `docs/LESSON_FORMAT.md` 才能落地。
+- P 的素材完全依赖你已有的历史对话质量与数量；新用户、新项目或很少纠正 agent 的人，`lessons scan` 可能扫不出足够的纠正，后面几步就无从谈起。
+- P 的“全本地运行”是 README 声明，没有给数据流向说明；`lessons dream` 会调用你本机的 `claude`/`codex` CLI，这部分内容实际上会进模型。是否算“纯本地”要自己确认，敏感仓库先别跑。
+- P 的 lesson 三层结构（principle / rules / cases）和“被观察到两次即 verified”是设计主张，原文只给了设计理由（引用 Anthropic 的 agent memory 文章），没有对照数据。不要因为标了 verified 就当事实。
+- P 没有自动触发：scan / dream / view / inject 全是手动命令，README 没有 cron、watch、hook 的说明。指望它自己“越用越懂你”会落空。
+- P 的 lesson 是对过去某次对话的归纳，可能过窄（只在那一个 repo 成立）、过度概括（把一次例外当通则）或当时就记错。注入前必须回查原文引用；注入后仍要用 D 核对当前事实。
+- P 的注入会增加 `CLAUDE.md` 体积与每次会话的 token 成本，也可能让 agent 变得过度谨慎、频繁追问。原文特意声明“without becoming over-cautious elsewhere”，这正说明它是需要盯的风险。
+- P 的读取器目前只明确支持 Claude Code、Codex、opencode；README 在 Contributing 里说正在找人写 Cursor、Aider、Gemini CLI、Cline 的读取器。用这几个工具的，先别指望 P。
 
 ## 证据与来源
 
@@ -923,10 +952,11 @@ If 3+ balls fail in a row, VARY the timing (insert extra wait presses between me
 - saksham10arora-dotcom/everything-claude-codex（ECX）侧：来源是该仓库 README。仓库 31 stars、MIT；README 声称 27 个测试覆盖 hooks/installer/doctor，测试于 macOS 和 Linux、Python 3.9 到 3.12；声称 21 个 hooks、17 个 skills、16+ 项 doctor 检查、3 种检索、2 个代理共享记忆；作者自称每天使用 6 个月、支撑 37 个已交付项目；双代理消息同步“低于 0.1 秒”；安装“30 秒”。这些均为 README 自述，未提供独立基准、测试日志、失败案例统计或代码审查结果。
 - Glen-Web-App/best-agent-memory-mcp 侧：来源是 Glen 团队维护的 25 个记忆 MCP 横向清单。清单把 25 个方案在存储形态、捕获模型、团队共享、许可和部署成本上摊在同一张表里；原文反复强调很多 MCP 连接只负责检索，记录要靠插件钩子或生命周期钩子；并给出七条判据、场景初选、安装命令、隐私开关和“分开验证能查/会记”的方法。局限：清单由 Glen 团队维护、Glen 排第一；star 数和效果数字多为厂商自报；几乎每个 LoCoMo/LongMemEval 数字都是自报，模型栈和 judge 不同，不能横向比较；Zep 自报 94.7%，ByteRover 复跑得到 75.1%。
 - Anthropic “The components of agent memory” 侧：来源是一篇 Anthropic 文章，调研结论建议小范围试：用持久记忆目录、会话日志、小型注入索引和按需搜索搭建基础，再用 dreaming 离线校正并逐步构建 wiki；原文给出了可操作的设计模式和评测数据，但缺少可直接复制的命令或提示词，需在自己的任务上验证。原文把智能体记忆定义为 Claude 从经验中获得、跨会话保留并可读取的上下文知识；不包括改权重、单次会话内学习、压缩摘要。组件包括：会话内写 memory notes；离线 dreaming 回看日志/transcript 来纠错、生成笔记、构建表示、把笔记提升到记忆层级顶部；用 wiki 等表示组织大量知识；用小型注入层（如 MEMORY.md 前 200 行/25KB）做索引，其余按需搜索。数据/案例：CL-Bench 数据库任务；Pokémon Red 中 Sonnet 3.7 写 413 个文件/225 个文件夹、得 1 枚徽章，Fable 5 写 9 个文件/2 个文件夹+global.md、得 4 枚徽章；Opus 5.5 用小型笔记通关。文档语料约 350,000 文件/420M token，25 题，dreaming 从 2 到 128 sessions 使 graded criteria 从 13% 到 48%；搜索+wiki 从 54% 到 61%，搜索单独 53%，仅 wiki 最佳 48%，每问约省 20,000 tokens；Harvey LAB 多文档题 87% vs 73%；合同任务 41/57→57/57，brief 72%→100%。作者主张：dreaming 有用；强模型给判断空间比固定规则好；注入层必须小；wiki 需要维护否则会膨胀/产生错误。局限：多为 Anthropic 自家 Claude 模型与 Managed Agents 环境；部分对比是单次运行或特定任务，不能直接外推；原文没有给出可直接复制的命令/配置/完整提示词，只指向 cookbooks；dreaming 需要额外 compute，频率和“何时创建记忆”仍未解决；wiki 在单文档检索任务无增益，且可能大于源文档；长指令降低遵循度。
-- 证据强度提示：A-1、B 只有步骤清单和传播数据；A-2 只有目录设置和传播数据，原文截断；A-3 只有一条推荐型推文，原文在目录列表处截断且关键规则缺失，无任何效果数据；C 有对照实验数据，但样本极小且作者自评 early；D 只有 README、样例输出和模板自身 CI；E 只有一条推文和三条指令要点；F 只有 README 和可复制命令；G 有预注册盲测设计，但只支持 JS/TS、只测两个 Claude 模型且为作者自测，报告正文在通过率处截断；H 只有 README，缺少效果数据，且许可证对团队规模有约束；I 只有一条规则和一句目的说明，原文截断；J 只有一段提示词和传播数据，缺三项关键实现信息；K 只有 README，项目早期、无量化证据；L 有可核对命令和隐私开关，但效果数字为作者自测；M 只有 README，安装脚本、hooks 真实 payload、doctor 修复内容、测试自动发现准确率均未验证；N 有可复制的安装入口、七条判据和隐私开关，但清单由厂商维护、排名有利益冲突、效果数字多为自报，且原文只详细写到前 11 名；O 有设计模式和评测数据，但无命令/提示词，且多为 Anthropic 自家环境。所有数据都不能当作“这套做法一定有效”的证明。
-- 作者主张（缺少支撑）：建独立文件夹、接入 GWS CLI、单开 `memory` 子目录、在 `CLAUDE.md` 写死记忆规则；second-brain 目录变体的“可直接复制的第二大脑设置”；A-3 的“加一行就能按话题自动沉淀决策”“准备约 5 分钟”；obsidian-wiki 的“知识是编译而非堆积”、manifest 增量摄入、每条主张打标、查询成本随规模基本不变；workflow 的五条判据；@coreyganim 的“不告诉 AI 怎么用第二大脑就毫无用处”“90 秒修复”；ai-memory 的跨 agent/项目/机器、团队共享、无 LLM 记忆老化、写入上限约 700/s；stalemap 的“训练截止后依赖 API 变化是 agent 默认不知道自己不知道的工作”“普通 tsc 钩子是 guard 的子集”“probe 比主动发现容易”；AgentMemory 的 L0-L3 分层、团队共享 scenes/persona、BM25 + 向量 + RRF、默认触发参数；@ai_database 的“以代码为准能减少按过时文档改代码”；@NIxinhai0 的“配置一个库就能形成跨项目永久记忆”“每晚整理、每周复盘能减少冗余读取”；Mycel 的“地图保持存活”“智能体边看你边画图”“四档层级足以表达一个项目”“不往任何地方发送数据”“不写入你的项目”；thenwise 的“100% 本地运行”“搜索毫秒级”“较新记录覆盖同一问题时会标注”“团队共享前预览和脱敏”；ECX 的“可重复运行、不覆盖已有文件”“测试失败会把代理打回并附失败输出”“doctor 给精确修复”“双代理同步低于 0.1 秒”“安装 30 秒”“每天使用 6 个月、支撑 37 个已交付项目”；Glen 清单的“前 11 名排序”“每个 LoCoMo/LongMemEval 数字可横向比较”“star 数能代表使用度”；Anthropic 文章的“dreaming 有用”“强模型给判断空间比固定规则好”“注入层必须小”“wiki 需要维护否则会膨胀/产生错误”。
-- 调研报告给出的建议（不是原文）：规则示例“把每次会话中确认的长期有效信息追加到 `memory` 下的文件中；开始新任务前先读取 `memory`”；A-3 的占位规则和 3–5 次会话、五项指标、两周止损线；先只开一项权限跑通；重复交代率、召回成功率、记忆文件质量、越权与泄漏、对照组等指标；C 用同一模型、同一 vault、同一批问题做对照；D 在长期项目上小范围试；E 的提示词草稿与 5 个已知答案任务的试用方式；F 先单机、单仓库、只接一个 agent 跑 1～2 周；G 先预览、再写入、CI 加 check、Claude Code 侧装插件；H 先单团队、SQLite、一个客户端，2—3 次真实会话验证；I 把规则原样加入 `CLAUDE.md`/`AGENTS.md` 并在有已知不一致的仓库中小范围试；J 选一个进行中的项目建最小 vault，按“任务前读取、每晚整理、周末复盘”跑一到两周；K 选一个 2 万至 10 万行、自己有测试命令的中型仓库，克隆到项目外，Claude Code 装插件，建 concept + mechanics 两档地图，给 3–5 个关键块配测试命令，正常开发一到两周；L 先在单个 Claude Code 仓库小范围试用，用隐藏答案的历史问题做前后对比；M 先复制笔记库、备份配置，只跑基础安装，在一个可回滚测试仓库启用 `.ecx/test-command`；N 先按七条判据给场景打分，只装一个候选，用一次检索测试和一次“关会话重开”的记录测试验证记录通路；O 选一个跨会话、有标准答案/可评分的长程任务，保留原始 transcript，挂持久记忆目录，按“无记忆基线 → memory notes → 一次 dreaming → wiki+搜索”四段对照，用任务得分、重复错误率、注入层大小、每问 token、人工纠错次数、完成时间、wiki 体积和失效链接判断。
-- 仅为推测的部分：second-brain 原有第 4 步规则的目标位置推测指向 `memory` 目录；原文未界定“重要细节”；未说明记忆召回机制、GWS CLI 授权范围与撤销方式；A-2 的第三个目录、`people/` 内容与更新规则、提示词和效果均缺失；A-3 的完整目录清单、`CLAUDE.md` 指令原文、内容分工、更新规则和效果均缺失；obsidian-wiki 的 Cursor / Hermes / OpenClaw 支持细节未证实；workflow 的脚本实现与效果未验证；E 中“具体在哪个入口写常驻指令”需按工具确认；F 的 `ai-memory run --f` 处原文截断，Docker quick-start 未包含认证步骤；G 的通过率表格截断；H 的 `amem` 安装命令、TLS 细节和客户端升级流程未在 README 正文展开；I 的“据说Claude”之后内容缺失；J 的目录结构、Codex 读写接入方式、定时触发实现、内容分工与效果数据均缺失；K 的 `open`/`start` 命令不一致、`.mycel/` 数据位置与 `init` 连接当前文件夹的关系、`context --brief` 在大仓库的 token 成本均未确认；L 的 `docs/eval.md` 评测细节、团队版 hub build 的获取方式、TLS 终止与备份策略未在材料中展开；M 的安装脚本是否真的不覆盖配置、hooks 是否在真实 Claude Code payload 下可靠、doctor 的“精确修复”具体是什么、`.ecx/test-command` 对多语言项目的识别准确率、`--with-cron` 的调度实现、手机模式 GitHub Action 的细节，均未在 README 中展开；N 的完整 25 项只详细写到前 11 名，第 12 名以后只有表格摘要并在 Engram 处截断；O 的原文没有给出可复制命令/配置/提示词，dreaming 频率和“何时创建记忆”仍是开放问题，wiki 维护成本与修剪策略需自行试验。
+- assassin808/learn-from-lessons 侧：来源是该仓库 README。可核对内容：`pipx install git+https://github.com/assassin808/learn-from-lessons`；`lessons scan` / `dream` / `view` / `inject --target CLAUDE.md --apply` / `index --scenario` / `search ... --context` / `mcp`；随仓库提供 Claude Code skill（`skill/SKILL.md`）和给 Codex/opencode 的 `integrations/AGENTS.md`；细节文档在 `docs/GUIDE.md`、`docs/LESSON_FORMAT.md`。README 自述：读取 Claude Code、Codex、opencode 的已有对话记录；把“你纠正 agent 的时刻”转成带原文引用的 lesson；lesson 分 principle / rules / cases 三层；每条标注来源对话，被观察到两次后标记 verified；默认只加载一个小索引。效果数据：47 个与 lesson 来源不同的“新情境”上，agent 遵循用户规则的比例无 lesson 时 85%、有 lesson 时 98–100%，且声称“在其他地方没有变得过度谨慎”；测试在仓库 `eval/` 目录，但材料没有给出 eval 内容。作者自陈是“one person's data so far”，30 stars，属于早期个人项目。作者主张（缺原文数据支撑）：“Every time you correct your coding agent, it should learn”；三层结构与“两次即 verified”的有效性只给了设计理由（引用 Anthropic 的 agent memory 文章），没有对照数据；「全本地运行」是 README 声明，未给出数据流向说明，而 `lessons dream` 会调用本机 claude / codex CLI，这部分内容实际上会进模型。README 在 Contributing 里明确说正在找人写 Cursor、Aider、Gemini CLI、Cline 的读取器，即当前尚不支持这几个。
+- 证据强度提示：A-1、B 只有步骤清单和传播数据；A-2 只有目录设置和传播数据，原文截断；A-3 只有一条推荐型推文，原文在目录列表处截断且关键规则缺失，无任何效果数据；C 有对照实验数据，但样本极小且作者自评 early；D 只有 README、样例输出和模板自身 CI；E 只有一条推文和三条指令要点；F 只有 README 和可复制命令；G 有预注册盲测设计，但只支持 JS/TS、只测两个 Claude 模型且为作者自测，报告正文在通过率处截断；H 只有 README，缺少效果数据，且许可证对团队规模有约束；I 只有一条规则和一句目的说明，原文截断；J 只有一段提示词和传播数据，缺三项关键实现信息；K 只有 README，项目早期、无量化证据；L 有可核对命令和隐私开关，但效果数字为作者自测；M 只有 README，安装脚本、hooks 真实 payload、doctor 修复内容、测试自动发现准确率均未验证；N 有可复制的安装入口、七条判据和隐私开关，但清单由厂商维护、排名有利益冲突、效果数字多为自报，且原文只详细写到前 11 名；O 有设计模式和评测数据，但无命令/提示词，且多为 Anthropic 自家环境；P 有可复制的命令链和一份 47 情境自评，但只有作者一人数据、README 极短、关键格式与提示词均未给出。所有数据都不能当作“这套做法一定有效”的证明。
+- 作者主张（缺少支撑）：建独立文件夹、接入 GWS CLI、单开 `memory` 子目录、在 `CLAUDE.md` 写死记忆规则；second-brain 目录变体的“可直接复制的第二大脑设置”；A-3 的“加一行就能按话题自动沉淀决策”“准备约 5 分钟”；obsidian-wiki 的“知识是编译而非堆积”、manifest 增量摄入、每条主张打标、查询成本随规模基本不变；workflow 的五条判据；@coreyganim 的“不告诉 AI 怎么用第二大脑就毫无用处”“90 秒修复”；ai-memory 的跨 agent/项目/机器、团队共享、无 LLM 记忆老化、写入上限约 700/s；stalemap 的“训练截止后依赖 API 变化是 agent 默认不知道自己不知道的工作”“普通 tsc 钩子是 guard 的子集”“probe 比主动发现容易”；AgentMemory 的 L0-L3 分层、团队共享 scenes/persona、BM25 + 向量 + RRF、默认触发参数；@ai_database 的“以代码为准能减少按过时文档改代码”；@NIxinhai0 的“配置一个库就能形成跨项目永久记忆”“每晚整理、每周复盘能减少冗余读取”；Mycel 的“地图保持存活”“智能体边看你边画图”“四档层级足以表达一个项目”“不往任何地方发送数据”“不写入你的项目”；thenwise 的“100% 本地运行”“搜索毫秒级”“较新记录覆盖同一问题时会标注”“团队共享前预览和脱敏”；ECX 的“可重复运行、不覆盖已有文件”“测试失败会把代理打回并附失败输出”“doctor 给精确修复”“双代理同步低于 0.1 秒”“安装 30 秒”“每天使用 6 个月、支撑 37 个已交付项目”；Glen 清单的“前 11 名排序”“每个 LoCoMo/LongMemEval 数字可横向比较”“star 数能代表使用度”；Anthropic 文章的“dreaming 有用”“强模型给判断空间比固定规则好”“注入层必须小”“wiki 需要维护否则会膨胀/产生错误”；learn-from-lessons 的“每次纠正都该让 agent 学会”、三层 lesson 结构、两次即 verified、全本地运行、注入后不会过度谨慎。
+- 调研报告给出的建议（不是原文）：规则示例“把每次会话中确认的长期有效信息追加到 `memory` 下的文件中；开始新任务前先读取 `memory`”；A-3 的占位规则和 3–5 次会话、五项指标、两周止损线；先只开一项权限跑通；重复交代率、召回成功率、记忆文件质量、越权与泄漏、对照组等指标；C 用同一模型、同一 vault、同一批问题做对照；D 在长期项目上小范围试；E 的提示词草稿与 5 个已知答案任务的试用方式；F 先单机、单仓库、只接一个 agent 跑 1～2 周；G 先预览、再写入、CI 加 check、Claude Code 侧装插件；H 先单团队、SQLite、一个客户端，2—3 次真实会话验证；I 把规则原样加入 `CLAUDE.md`/`AGENTS.md` 并在有已知不一致的仓库中小范围试；J 选一个进行中的项目建最小 vault，按“任务前读取、每晚整理、周末复盘”跑一到两周；K 选一个 2 万至 10 万行、自己有测试命令的中型仓库，克隆到项目外，Claude Code 装插件，建 concept + mechanics 两档地图，给 3–5 个关键块配测试命令，正常开发一到两周；L 先在单个 Claude Code 仓库小范围试用，用隐藏答案的历史问题做前后对比；M 先复制笔记库、备份配置，只跑基础安装，在一个可回滚测试仓库启用 `.ecx/test-command`；N 先按七条判据给场景打分，只装一个候选，用一次检索测试和一次“关会话重开”的记录测试验证记录通路；O 选一个跨会话、有标准答案/可评分的长程任务，保留原始 transcript，挂持久记忆目录，按“无记忆基线 → memory notes → 一次 dreaming → wiki+搜索”四段对照，用任务得分、重复错误率、注入层大小、每问 token、人工纠错次数、完成时间、wiki 体积和失效链接判断；P 先在一个反复纠正过 agent 的项目上跑 scan 看素材量，再 dream、逐条人工审核、按场景限定后 inject，保留注入前的 `CLAUDE.md` 做 A/B，用“同一类纠正次数、带引用的 lesson 占比、过度谨慎率、上下文成本”判断。
+- 仅为推测的部分：second-brain 原有第 4 步规则的目标位置推测指向 `memory` 目录；原文未界定“重要细节”；未说明记忆召回机制、GWS CLI 授权范围与撤销方式；A-2 的第三个目录、`people/` 内容与更新规则、提示词和效果均缺失；A-3 的完整目录清单、`CLAUDE.md` 指令原文、内容分工、更新规则和效果均缺失；obsidian-wiki 的 Cursor / Hermes / OpenClaw 支持细节未证实；workflow 的脚本实现与效果未验证；E 中“具体在哪个入口写常驻指令”需按工具确认；F 的 `ai-memory run --f` 处原文截断，Docker quick-start 未包含认证步骤；G 的通过率表格截断；H 的 `amem` 安装命令、TLS 细节和客户端升级流程未在 README 正文展开；I 的“据说Claude”之后内容缺失；J 的目录结构、Codex 读写接入方式、定时触发实现、内容分工与效果数据均缺失；K 的 `open`/`start` 命令不一致、`.mycel/` 数据位置与 `init` 连接当前文件夹的关系、`context --brief` 在大仓库的 token 成本均未确认；L 的 `docs/eval.md` 评测细节、团队版 hub build 的获取方式、TLS 终止与备份策略未在材料中展开；M 的安装脚本是否真的不覆盖配置、hooks 是否在真实 Claude Code payload 下可靠、doctor 的“精确修复”具体是什么、`.ecx/test-command` 对多语言项目的识别准确率、`--with-cron` 的调度实现、手机模式 GitHub Action 的细节，均未在 README 中展开；N 的完整 25 项只详细写到前 11 名，第 12 名以后只有表格摘要并在 Engram 处截断；O 的原文没有给出可复制命令/配置/提示词，dreaming 频率和“何时创建记忆”仍是开放问题，wiki 维护成本与修剪策略需自行试验；P 的 lesson 实际文本、`dream` 用的提示词、注入后 `CLAUDE.md` 的样子、lesson 存储路径与索引机制、`eval/` 的具体内容均未在 README 中给出，需读 `docs/GUIDE.md` 与 `docs/LESSON_FORMAT.md` 确认。
 
 ## 依据的调研
 
@@ -946,3 +976,4 @@ If 3+ balls fail in a row, VARY the timing (insert extra wait presses between me
 - [saksham10arora-dotcom/everything-claude-codex](../research/radar/2026-11-03/9849-saksham10arora-dotcom-everything-claude-codex.md)：值得一试，建议小范围试：在独立笔记库和一个可回滚的代码仓库中按 README 安装，先启用共享记忆、doctor 与“测试通过才算完成”，再判断是否值得长期采用；理由是 README 给出了安装命令和关键配置入口，但证据主要是作者自述，未提供可核验的完整实现与效果数据。
 - [Glen-Web-App/best-agent-memory-mcp](../research/radar/2026-11-05/10612-glen-web-app-best-agent-memory-mcp.md)：值得一试，先按清单给出的七条判据（尤其是“自动捕获还是等模型调用写工具”“记忆能否以文件形式读取和版本化”）为编码智能体选一个记忆 MCP，装完连接后务必再安装 hooks，否则只有检索没有记录；理由是该文把 25 个方案在存储形态、捕获模型、团队共享、许可和部署成本上摊在同一张表里，并给出可直接复制的安装命令和若干踩坑提示，足以支撑一次小范围试用，但清单由 Glen 团队维护、Glen 排第一，且效果数字多为厂商自报，不能当作验收依据。
 - [The components of agent memory](../research/radar/2026-11-08/11382-the-components-of-agent-memory.md)：值得一试，建议小范围试：用持久记忆目录、会话日志、小型注入索引和按需搜索搭建基础，再用 dreaming 离线校正并逐步构建 wiki；原文给出了可操作的设计模式和评测数据，但缺少可直接复制的命令或提示词，需在自己的任务上验证。
+- [assassin808/learn-from-lessons](../research/radar/2026-11-11/12347-assassin808-learn-from-lessons.md)：值得一试，先拿自己的历史对话跑一遍 lessons scan → dream → view，人工筛掉低质条目后再 inject 进 CLAUDE.md（或 AGENTS.md），因为这条命令链可直接照做、能把“每次纠正”沉淀成可复用的规则；但证据只有作者一人的自评、README 也没给出 lesson 格式样例和注入内容示例，所以只值得小范围试，不宜直接全面铺开。
