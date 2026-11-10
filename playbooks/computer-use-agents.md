@@ -1,18 +1,23 @@
-# 让 AI 操作界面前，先证明它看得见、做得对、退得回
+# 把界面交给 agent 前，先证明它拦得住
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：在把浏览器、桌面、终端、手机或电视交给 AI 操作前，用成本递增的小实验验证反馈回路、验收标准、安全边界和可回滚性，并用同批任务数字判断是否真的变好。
-> 先试这一步：先做做法 A：只跑 Cua Bench 评测回路，确认参考解 reward 为 1.0，再决定接哪种界面。
-> 最近修订：2026-11-09
+> 解决的问题：在把浏览器、桌面、终端或手机的界面操作权交给 AI 之前，用成本递增的步骤验证反馈回路、验收标准、安全边界和可回滚性，并把“只读”从提示词变成网络层可强制的边界。
+> 先试这一步：先建一个专用 Chrome profile，只装 OnlyRead 和你要试的那一个浏览器代理，只守护 Gmail 与 Google Calendar：让代理做 5 件写操作确认 5/5 被拒，再做 10 次读操作记录误拒，最后决定是否扩大守护站点。
+> 最近修订：2026-11-11
 
 ## 解决什么问题
 
-在把浏览器、桌面、终端、手机或电视界面交给 AI 操作之前，用成本递增的步骤先验证它的反馈回路、验收标准、安全边界和可回滚性，并把“高效”变成同批任务上的可比较数字，避免装完一堆组件却不知道能不能用。路线包括：A 评测回路；B dsh 文本快照；C Cua Driver；D 整套/沙箱/VM；E Android ADB 技能；F Chrome Relay；G AutoCua；H qz；I axuse；J Android TV 去臃肿；K agent-desktop；L Agent-VScreen Android 后台虚拟屏。
+在把浏览器、桌面、终端、手机或电视界面交给 AI 操作之前，用成本递增的步骤先验证四件事：反馈回路（它能不能看见）、验收标准（怎么算做完）、安全边界（哪些动作绝对不能发生）、可回滚性（坏了怎么退）。同时把“高效”变成同批任务上的可比较数字，避免装完一堆组件却不知道能不能用。
+
+“只读”是安全边界里最容易被高估的一条。浏览器代理拿着你的 cookie 在已登录会话里行动，没有 OAuth scope 可收窄；提示注入和你的指令藏在同一段网页或邮件正文里，可以说服模型放弃“小心一点”的叮嘱。所以本版新增一条路线：在模型之下、网络层拦截写请求，把“只读”变成可强制的边界。
+
+路线包括：A 评测回路；B dsh 文本快照；C Cua Driver；D 整套/沙箱/VM；E Android ADB 技能；F Chrome Relay；G AutoCua；H qz；I axuse；J Android TV 去臃肿；K agent-desktop；L Agent-VScreen Android 后台虚拟屏；M OnlyRead 网络层只读。
 
 ## 适用与不适用
 
 **适用：**
+- 你要把已登录的浏览器会话交给代理，任务以读为主（整理收件箱、总结长邮件线程、找发票、做调研），希望写操作在网络层被拦住，而不是只在提示词里叮嘱：做法 M。
 - 你希望 agent 真的去读和操作浏览器标签页：dsh 桌面端 + MV3 扩展的文本快照路线。
 - 你已有 Claude Code / Codex / Cursor / OpenClaw 等 agent，想通过 MCP 或 skill 接上界面操作能力。
 - 你在 macOS + Google Chrome + Node.js 20+，希望编码 agent 借用你已登录的 Chrome 后台标签页做网页操作，且不抢焦点、不弹对话框：Chrome Relay。
@@ -25,15 +30,21 @@
 - 你在 Android 11+ arm64 手机上能运行 Shizuku、不需要 root，希望 agent 在一块不可见的虚拟后台屏上操作其他应用、主屏保持自用，且 Agent 能执行终端命令或走 MCP/HTTP：Agent-VScreen（做法 L）。
 
 **不适用 / 先别用：**
+- 你的任务是“必须写”（发邮件、发帖、改日历、删除、支付），且需要逐站点、逐角色的细粒度授权：OnlyRead 当前对受守护站点是整站只读，逐站点角色权限还在路线图上；只能把那个站点整体关掉再让代理写。
+- 你用 Firefox 或 Safari：OnlyRead 只支持 Chrome 及能装 Chrome 扩展的 Chromium 浏览器。
+- 你希望按账号守护：还没做；同一 profile 里受守护站点的每个标签页都被守护，不管登录的是哪个账号。
+- 你需要 WebSocket 逐条消息判定：目前大多整体放行或整体拒绝。
+- 你在浏览器之外驱动屏幕的代理：只有 Always 模式能覆盖。
+- 你以为 OnlyRead 能防本机恶意软件或阻止人手动关扩展：不能；键盘前的人仍可在 `chrome://extensions` 里禁用，只有 Chrome 企业策略能阻止。
 - 团队不在用 dsh 桌面端：浏览器路线完全绑定 dsh 生态；手机或平板不支持 dsh 浏览器方案。
 - 你要的是成熟稳定的 1.0 产品：Cua Spaces 为 0.1.0，Pro/Teams 标注“即将推出”；CUA-S1 是早期源码研究版；dsh 扩展在 Chrome / Firefox 均标注 not yet listed；android-adb-control 作者自述尚未完成修订版真机端到端验收；agent-desktop 是 Vercel Labs 早期项目；Agent-VScreen 为 1.1.7、32 stars，且无独立测试数据。
 - 你的机器不满足硬性条件：Spaces 需 macOS 26+，Lume 需 Apple Silicon；dsh 需 Node ≥ 20、桌面版 Chrome/Chromium/Edge ≥ 116 或 Firefox ≥ 140.0；Chrome Relay 仅 macOS + Google Chrome + Node.js 20+；AutoCua 需 Python 3.10+；axuse 需 Node.js 22+ 且机器上装有 Chrome、Edge、Chromium 或 Chrome for Testing 之一；agent-desktop 需本机有 Node 环境，Linux 需图形会话和 at-spi2-core。
-- 你要做对外托管或商用集成：Cua 的许可不是单一的；dsh README 通篇没有给出基准实测结果；Chrome Relay 的 0.15s/命令、2 分钟 setup 也只是作者自述；axuse 是 PolyForm Noncommercial 1.0.0，商业使用需单独授权。
+- 你要做对外托管或商用集成：Cua 的许可不是单一的；dsh README 通篇没有给出基准实测结果；Chrome Relay 的 0.15s/命令、2 分钟 setup 也只是作者自述；axuse 是 PolyForm Noncommercial 1.0.0，商业使用需单独授权；OnlyRead 是 AGPL-3.0，商用前要按 AGPL 评估分发义务。
 - 你想用安卓路线绕过锁屏、验证码、支付验证或企业策略，或做无人值守监控、自动交易、无限重试：android-adb-control 明确排除这些用途；云端会话或远程容器不会自动获得本地 USB 设备。
 - 你打算把手里的主力机（承载凭据的设备）当试验田：ADBKeyboard 的部分实现允许其他本地应用发送控制广播，应优先用于可信测试设备，不用于凭据输入；Agent-VScreen 的 token 等同手机控制权，也不应先在主力机上试。
 - 你用 Firefox：qz 明确不支持。
 - 你需要 qz 做定时调度、事件监听或状态触发：README 没有给出这些机制。
-- 你需要独立评测或高采用度背书：qz 仓库仅 46 stars，README 没有准确率、耗时、成功率数据；axuse 47 stars、单一公司维护，基准为作者自建自评且统计口径有疑点；Agent-VScreen 32 stars，没有独立测试、成功率、延迟或长时稳定性数据。
+- 你需要独立评测或高采用度背书：qz 仓库仅 46 stars，README 没有准确率、耗时、成功率数据；axuse 47 stars、单一公司维护，基准为作者自建自评且统计口径有疑点；Agent-VScreen 32 stars，没有独立测试、成功率、延迟或长时稳定性数据；OnlyRead 53 stars，README 没有准确率或误判率数字。
 - 你要把 axuse 用于商业用途：PolyForm Noncommercial 1.0.0 免费仅限非商业，商业使用需向 CTOL Digital Solutions 单独授权。
 - 你主要在纯视觉判断（canvas、图表）或需要绕过反爬：axuse 不适用。
 - 你要的是像素/视觉匹配或 Computer Use 模型：agent-desktop 明确不做像素匹配，决策循环留在你的 agent 里。
@@ -42,7 +53,7 @@
 - 你不能给 macOS 辅助功能权限，或 Linux 不在图形会话、没装 at-spi2-core；Wayland 下要用剪贴板还需 wl-clipboard。
 - 你要把快照、剪贴板读取、截图、命令输出或调试产物直接进公共日志/上传：这些可能含私人桌面内容。
 - 你照旧教程去 brew tap 装 agent-desktop：Homebrew 与 Scoop 官方包还在提交、默认源里拿不到，旧 tap/bucket 已不再维护。
-- 你不接受手动 Load unpacked 扩展：Chrome Relay、axuse bridge 都需要这一步。
+- 你不接受手动 Load unpacked 扩展：Chrome Relay、axuse bridge、OnlyRead 离线安装都需要这一步。
 - 你要用 AutoCua 操作安卓手机：mobile use, android 尚不可用；iOS 模式仅 macOS 宿主。
 - 电视去臃肿路线不适用于：主力电视、不愿意恢复出厂设置兜底的设备、无法打开开发者选项的设备、你还没读 cleanyourtv 仓库说明就想执行命令的情况。原文只保留了流程前两步，后续连接方式、去臃肿清单和执行命令均缺失；不要凭猜测执行 adb 或 pm 命令。
 - Agent-VScreen 不适用于：Android 低于 11 或非 arm64；不能运行 Shizuku；希望应用自己调用模型（它不自带模型，由调用方 Agent 的模型判断屏幕含义）；需要公网直连（服务默认只监听 127.0.0.1:18765，只本机或自己的 Tailscale tailnet，不提供公网链接）；不能保护 token（token 等同手机控制权）；要求成熟稳定或独立评测背书。
@@ -51,6 +62,7 @@
 
 按路线分：
 
+- 做法 M（OnlyRead）：Chrome 或能装 Chrome 扩展的 Chromium 浏览器（Edge、Comet、Dia、Opera、BrowserOS 等）；一个专用浏览器 profile（不登其他账号）；一个在浏览器内行动的代理；一个 AI 裁判来源——OnlyRead Pro 账号（自带 1,000 次免费判定）或自己的 OpenRouter / Vercel AI Gateway key；一份准备守护的站点清单。
 - 做法 A（Cua Bench）：Python 3.12 或 3.13，并安装 uv；该任务不需要 VM、Docker 或模型 API key。
 - 做法 B（dsh）：dsh 桌面端；Node ≥ 20（开发构建用 Node 22 + pnpm 11）；桌面版 Chrome/Chromium/Edge ≥ 116 或 Firefox ≥ 140.0；手机与平板不支持。
 - 做法 C（Cua Driver）：已有 Claude Code / Codex / Cursor / OpenClaw 等 agent；按原文 Driver 教程走平台设置、权限和 agent 连接。
@@ -66,7 +78,9 @@
 
 ## 操作步骤
 
-下面按路线分组。建议先做做法 A；如果团队已在用 dsh 桌面端，做法 B 是最短的一条“模型真的读浏览器”的路；如果你已有 agent 和一台可信安卓测试机，做法 E 是最短的一条“agent 真的操作手机”的路；如果你有一台可弃用旧电视并愿意先读仓库，做法 J 是最小风险的去臃肿试用路线；如果你已有 agent、只需要补一层桌面 GUI 执行接口，做法 K 是最小的一条；如果你要一个 pip 包同时覆盖桌面、Chrome、终端和 iOS，选做法 G；如果你要 MCP 接入和浏览器 AX 树 + diff，选做法 I；如果你要在 Android 后台虚拟屏上让 agent 操作应用、主屏保持自用，选做法 L。
+先做一个判断，再选路线：**把你的任务拆成“只读就能完成”和“必须写”两类。** 只读类（整理收件箱、总结线程、找发票、做调研）优先走做法 M，再选一个浏览器操作层（B/F/H/I）；必须写的那一类不要用 M 硬扛，按平台走 A/C/D/E/G/K/L。M 不是浏览器操作层，它只负责“拦住写”，不负责“看见”和“点中”。
+
+下面按路线分组。建议先做做法 A；如果团队已在用 dsh 桌面端，做法 B 是最短的一条“模型真的读浏览器”的路；如果你已有 agent 和一台可信安卓测试机，做法 E 是最短的一条“agent 真的操作手机”的路；如果你有一台可弃用旧电视并愿意先读仓库，做法 J 是最小风险的去臃肿试用路线；如果你已有 agent、只需要补一层桌面 GUI 执行接口，做法 K 是最小的一条；如果你要一个 pip 包同时覆盖桌面、Chrome、终端和 iOS，选做法 G；如果你要 MCP 接入和浏览器 AX 树 + diff，选做法 I；如果你要在 Android 后台虚拟屏上让 agent 操作应用、主屏保持自用，选做法 L；如果你要把已登录浏览器的写能力先切掉，选做法 M。
 
 ### 做法 A：只跑评测回路，不碰界面（最便宜的入口）
 
@@ -611,6 +625,36 @@ Always use the vscreen tool to operate other apps; never touch the main screen.
 
 8. 安全边界：应用规则可完全阻止或只读；支付按钮需确认；浮窗可随时接管或停止；每步会校验，`until` 未达成、文本不在框内、焦点不在点击位置等“错步”会停止该段、跳过剩余步骤并描述当前屏幕。README 没有成功率或延迟基准，先用备用机小范围试用。
 
+### 做法 M：OnlyRead——把“只读”从提示词搬到网络层
+
+前提：Chromium 系浏览器；专用 profile；浏览器内代理；AI 裁判 key 或 OnlyRead Pro。预期结果：5 件明确的写操作全部被拒，10 次读操作误拒不超过 1 次且代理能自行继续。
+
+1. 安装扩展。商店安装：在 Chrome 应用商店装 OnlyRead（README 给出的链接为 `https://chromewebstore.google.com/detail/onlyread/foajfkjhcigaillohhdbfadobkhpddij`）。离线安装：从 latest release 下载 `onlyread-<version>.zip`，解压后在 `chrome://extensions` 开发者模式“加载已解压的扩展程序”，选其中的 `onlyread/` 文件夹。每个 release 都列出两个 zip 的 SHA-256，与商店版本同一构建。从源码构建：
+
+```bash
+npm install && npm run bundle
+```
+
+然后解压 `bundles/onlyread-<version>.zip`，在 `chrome://extensions` 开发者模式加载其中的 `onlyread/` 文件夹。注意：`npm run build` 是开发构建，会接受本地测试 harness 的命令，只能在专用 profile 里用。
+
+2. 配置 AI 裁判。打开窗口，二选一：登录 OnlyRead Pro（自带 1,000 次免费判定请求，不用自己管 key）；或粘贴自己的 OpenRouter / Vercel AI Gateway key（裁判逻辑相同，OnlyRead 不收费，你按网关用量付费）。不确定的请求会发往你选的网关或 OnlyRead Pro 服务。裁判只看到出问题的那个请求的地址和 body 简短预览（密码、token、卡号已剔除），看不到 cookie、header、响应和页面。判据是：不确定或裁判不可达 = 拒。
+
+3. 选择守护站点。设置里打开“代理可以使用的站点”。默认行为是只有 AI 代理在浏览器里干活时才守护，你自己用时不拦。要全天候拦截（包括手动操作），在设置 Security 下选 Always，并设一个 settings PIN 作为第二道锁。
+
+4. 临时加一个站点。设置页可以守护任意站点，弹窗里也有 Guard this site。README 声称不需要逐站点规则，未测试过的站点“很可能也能用”——这是作者主张，没有覆盖率或误判率数据。
+
+5. 先跑纯读任务标定。把这类任务交给代理，观察是否有请求被拒：整理收件箱、总结长邮件线程、找一封带发票的邮件、在 LinkedIn 上做调研。这些是 README 明确举的读任务例子，也是投毒邮件/网页最危险的场景。
+
+6. 再故意触发写操作。让代理做 5 件明确的写操作：发一封草稿邮件、删一封邮件、改一个日历事件时间、新建事件、改一个设置。逐条记录是否被拒。预期：5/5 全部被拒。出现一次漏放，就说明这个站点组合不适合用，缩小范围重来。
+
+7. 测误拒和恢复。让代理连做 10 次读操作：总结一个线程、找一个发件人、找一封带附件的邮件、读本周日程、统计未读数等。记录哪一次被误拒、代理能否自行继续。预期：误拒不超过 1 次，且代理能自行换路继续；每次都卡死则不可接受。重复第 6、7 步各一轮，观察判定缓存是否让第二轮更快/更稳（README 说重复请求通常只判一次）。
+
+8. 需要写的时候按站点放开。README 的建议不是全局关掉守护，而是当你想让代理写某个地方，就把那个站点关掉（switch that site off）。当前版本受守护站点对代理是全站只读，没有“允许评论、拒绝删除/支付/设置变更”这种逐角色权限。
+
+9. 处理误拒。被拒时页面会显示一条说明，代理可以继续完成任务的其他部分。如果某个站点上的读请求反复被拒，按 README 指引去提 false-block issue——标注它正是站点被深度测试的途径。
+
+10. 知道它拦不住什么。任何人都还能在 `chrome://extensions` 里手动禁用扩展，只有 Chrome 企业策略能阻止；守护期间 Chrome 会显示“started debugging this browser”横幅；Monitor 模式切换会重载受守护站点的已开标签页，且 Monitor 模式只存在于开发构建。
+
 ### 怎么选
 
 - 只想验证“这套东西在我这儿能不能用起来”：选做法 A，成本最低。
@@ -625,6 +669,10 @@ Always use the vscreen tool to operate other apps; never touch the main screen.
 - 你有一台可弃用旧安卓/Google TV，想试去臃肿但原文不完整：选做法 J，先记录基线、读仓库说明，只在一台设备上跑一轮。
 - 你已有 agent，想让它操作有 GUI 但没有 API/CLI 的桌面软件，且任务能靠结构化 ref 定位而不是像素匹配：选做法 K。
 - 你要在 Android 上用不可见的后台虚拟屏让 agent 操作其他 App、主屏保持自用，且能装 Shizuku、用终端/MCP/HTTP：选做法 L。
+- 你要把已登录浏览器的写能力先切掉、任务以读为主：选做法 M，再按平台选 B/F/H/I 作为操作层。
+- 做法 M 与做法 B/F/H/I 的差异：B/F/H/I 解决“怎么看见、怎么点中”；M 解决“哪些请求根本不许离开浏览器”。M 不替代它们，也不绑定具体代理；它靠 Chrome debugger API 在网络层判定，Claude in Chrome、ChatGPT in Chrome、Gemini in Chrome、Comet、Manus Browser Operator、BrowserOS、Browser Use、Playwright 等都被覆盖。
+- 做法 M 与“靠提示词要求模型只读”的差异：作者认为提示词无效，因为注入与指令同层；M 在模型之下强制执行。
+- 做法 M 与“用 OAuth scope 收窄权限”的差异：浏览器代理在已登录会话里带着 cookie 行动，没有 scope 可给；网络层是剩下唯一能强制只读的地方。
 - 做法 K 与做法 C 的差异：C 是 Cua Driver + MCP/skill，装 Driver 后让 agent 做计算器 6 × 7=42；K 是 agent-desktop CLI/C 库，用无障碍树 snapshot + ref + 再 snapshot 复验，默认 headless，不附带模型，决策留在 agent。需要 Cua 生态/MCP 选 C；只要桌面执行层选 K。
 - 做法 K 与做法 G 的差异：G 是 pip 包 `run_agent(...)`，覆盖桌面、自己的 Chrome、真实终端、iOS；K 只做桌面 GUI 执行层，不负责模型和跨端 mode。要一站式多端选 G；已有 agent 要轻量桌面层选 K。
 - 做法 K 与做法 I 的差异：I 是 MCP 浏览器/桌面 server，强调 AX 树 + diff、可接 Claude Code/Codex/OpenCode；K 是 CLI + C 库的桌面无障碍树接口，用 ref + 再快照复验。浏览器任务选 I；桌面 GUI 选 K。
@@ -639,6 +687,7 @@ Always use the vscreen tool to operate other apps; never touch the main screen.
 ## 怎么判断变好了
 
 可观察的指标：
+- 做法 M：写操作拦截率 5/5 全拒；读任务误拒率 10 次里不超过 1 次且代理能自行换路继续；误拒后代理是否仍能完成任务（能继续 → 可接受，每次都卡死 → 不可接受）；Chrome 调试横幅、标签页重载是否影响你同时手动用这个浏览器；完成任务过程中人工接管次数与不装 OnlyRead 时比不应显著上升。注意：README 没有给准确率数字；“几乎不拖慢浏览”只是作者主张。
 - 做法 A：Cua Bench 的 evaluator 对参考解返回 1.0；不需要 VM、Docker 或模型 API key 就能跑。
 - 做法 B：`browser_snapshot` 能给出带编号的可操作控件清单和表单字段（含 masked/checked/required），模型用同一个编号就能点；成对基准能分别跑出 playwright 与 extension 两个后端在同批任务上的数字。注意 dsh README 通篇没有给出基准实测结果，所以基准跑出来的数字才是你自己的证据。
 - 做法 C：计算器里 6 × 7 的结果被验证为显示 42。
@@ -653,6 +702,7 @@ Always use the vscreen tool to operate other apps; never touch the main screen.
 - 做法 L：`vscreen launch Settings` 能成功；`vscreen act` 的 `until` 条件能按预期命中；每步返回当前屏幕、可见文本、可点击元素和截图；`until` 未达成、文本不在框内、焦点不在点击位置等错步会被停止并描述当前屏幕；需要人工接管或点 “Stop AI” 的次数；用户主屏是否保持不被占用；token 是否只留在本机/可信 tailnet；应用规则和支付确认是否按预期拦截。README 没有成功率或延迟基准，指标自己定：同一任务手动做 vs agent 做，记录步骤数、接管次数、主屏被打断次数。
 
 最小试用方式：
+- 做法 M 的最小试用（半天内）：建一个专用 Chrome profile，只装 OnlyRead 和你要试的那一个代理，不登其他账号；只守护 Gmail + Google Calendar（README 说这两个被逐个读、逐个写深度测过，是最有把握的组合）；设 settings PIN；先测 5 件写操作 5/5 被拒，再测 10 次读操作误拒不超过 1 次；重复一轮看缓存效果。
 - 先只跑做法 A 的两条安装命令，建最小任务、跑参考解，确认 reward 为 1.0。
 - 若团队已在用 dsh 桌面端，做法 B 的最小试用是“装桥接插件 → 在 profile 里装一次扩展 → 让模型做一次快照与点击”。
 - 做法 E 的最小试用顺序：准备一台可信测试机，开启开发者选项与 USB 调试，解锁并确认 RSA 授权，`adb devices -l` 显示 device；装技能到对应宿主目录，重开会话或 `/reload`；先只跑只读任务“打开系统设置首页，确认页面，不修改设置”；再跑一条“停在动作前”的边界任务；最后跑一条有限列表任务。
@@ -664,11 +714,21 @@ Always use the vscreen tool to operate other apps; never touch the main screen.
 - 做法 K 的最小试用：`npm install -g agent-desktop` 并跑 `agent-desktop version`；macOS 跑 `permissions --guide`；跑 `skills get desktop` / `platform` 并把输出交给 agent；用 `list-apps` 找到 Finder；`snapshot --app Finder -i`，点一个 treeitem 的 ref，再 snapshot 一次确认变化；换一个 GUI-only、无风险的小任务，在隔离环境里重复一遍；密集应用先 `skeleton --compact` 再 `--root` 下钻；检查日志与上传路径，确认快照/剪贴板/截图没有外泄。
 - 做法 L 的最小试用：用一台备用/测试 Android 手机按上述 1–4 步安装授权，连接一个可执行命令或 MCP 的 Agent；先跑 `vscreen launch Settings` 和 `vscreen act ...` 冒烟，再让它走一次 Operit MCP 提示词；观察主屏是否保持不被占用、错步是否被停止并给出当前屏幕、需要人工接管或点 Stop AI 的次数、token 是否只在本机/可信 tailnet、应用规则和支付确认是否按预期拦截。稳定后再扩大任务范围。
 
-试多久：材料没有给出耗时或成功率的数字；以“参考解拿到 1.0”“快照能给出编号控件并且点得中”“只读任务不改动设置”“Chrome Relay 的 doctor 通过且四步流程一次跑通”“AutoCua 能驱动目标界面一次且模型只选编号元素”“qz 的 2–3 个真实任务来源核对通过且 Skill 一句话复用成功”“axuse 的 doctor 通过且 3–5 个真实任务与现有做法对照有结果”“电视去臃肿一台设备观察 1–2 周无核心功能回归”“agent-desktop 的 permissions 通过、Finder 快照 → ref 动作 → 再快照复验一次成功且错误码按 disposition 处理”“Agent-VScreen 的 Settings 冒烟与一次 MCP 提示词跑通、主屏未被占用”这类单点事实跑通为准，不要用 star 数或视频演示判定。
+试多久：材料没有给出耗时或成功率的数字；以“参考解拿到 1.0”“快照能给出编号控件并且点得中”“只读任务不改动设置”“Chrome Relay 的 doctor 通过且四步流程一次跑通”“AutoCua 能驱动目标界面一次且模型只选编号元素”“qz 的 2–3 个真实任务来源核对通过且 Skill 一句话复用成功”“axuse 的 doctor 通过且 3–5 个真实任务与现有做法对照有结果”“电视去臃肿一台设备观察 1–2 周无核心功能回归”“agent-desktop 的 permissions 通过、Finder 快照 → ref 动作 → 再快照复验一次成功且错误码按 disposition 处理”“Agent-VScreen 的 Settings 冒烟与一次 MCP 提示词跑通、主屏未被占用”“OnlyRead 两轮写/读标定跑通且误拒可接受”这类单点事实跑通为准，不要用 star 数或视频演示判定。
 
 ## 常见坑
 
-- 把关注度当可用性：28,641 stars、今日 +229 只说明有人看；dsh README 没有基准实测结果；android-adb-control 标称 40 stars，也没有效果数据；AutoCua 只有作者自述的演示时长；qz 仅 46 stars；axuse 47 stars、单一公司维护，基准为作者自建自评且统计口径有疑点；agent-desktop 是 Vercel Labs 早期项目，README 没有成功率、耗时或基准数据；Agent-VScreen 32 stars、1.1.7，没有独立测试、成功率、延迟或长时稳定性数据。
+- 把“只读”写进提示词就当有了边界：提示注入和你的指令在同一段正文里，模型可能被说服；要在网络层拦。
+- 在主力 profile 里装 OnlyRead 并登录一堆账号：先建专用 profile，只装 OnlyRead 和要试的那一个代理。
+- 以为 OnlyRead 能按账号守护：还没做；同一 profile 里受守护站点的每个标签页都被守护，不管登录的是哪个账号。
+- 以为 OnlyRead 能逐条判 WebSocket：目前大多整体放行或整体拒绝。
+- 以为受守护站点可以“允许评论但拒绝删除/支付”：当前是整站只读，逐站点角色权限还在路线图上。
+- 用 Firefox / Safari 装 OnlyRead：不支持，只支持 Chrome 及能装 Chrome 扩展的 Chromium 浏览器。
+- 以为装了就没人能关：键盘前的人仍可在 `chrome://extensions` 里禁用，只有 Chrome 企业策略能阻止。
+- 把 OnlyRead 当恶意软件安全边界：它拦的是代理发出的请求，不是本机已运行的恶意程序。
+- 在开发构建里接受本地测试 harness 的命令还日常用：`npm run build` 是开发构建，会接受本地测试 harness 的命令，只能在专用 profile 里用；日常用商店版或 `npm run bundle` 的包。
+- 忽略“started debugging this browser”横幅和标签页重载：守护期间 Chrome 会显示横幅；Monitor 模式切换会重载受守护站点的已开标签页，且 Monitor 模式只存在于开发构建。
+- 把关注度当可用性：28,641 stars、今日 +229 只说明有人看；dsh README 没有基准实测结果；android-adb-control 标称 40 stars，也没有效果数据；AutoCua 只有作者自述的演示时长；qz 仅 46 stars；axuse 47 stars、单一公司维护，基准为作者自建自评且统计口径有疑点；agent-desktop 是 Vercel Labs 早期项目，README 没有成功率、耗时或基准数据；Agent-VScreen 32 stars、1.1.7，没有独立测试、成功率、延迟或长时稳定性数据；OnlyRead 53 stars，README 没有准确率或误判率数字。
 - 把 Agent-VScreen 当自带模型：手机端不调用模型，由调用方 Agent 的模型判断屏幕含义。
 - 把 Agent-VScreen 的 token 贴到公开角色卡、共享配置或截图：token 等同手机控制权。
 - 以为 Agent-VScreen 有公网链接：服务默认只监听 `127.0.0.1:18765`，只本机或自己的 Tailscale tailnet，不提供公网链接；Operit 与 Agent-VScreen 不在同一台手机时，URL 要换成 Tailscale 地址。
@@ -687,8 +747,8 @@ Always use the vscreen tool to operate other apps; never touch the main screen.
 - 忽略成熟度：Cua Spaces 是 0.1.0；CUA-S1 是早期源码研究版；dsh 扩展在 Chrome / Firefox 均 not yet listed；agent-desktop 是早期项目；Agent-VScreen 是 1.1.7 且无独立测试。
 - 环境不满足硬装：Spaces 需 macOS 26+，Lume 需 Apple Silicon；dsh 需 Node ≥ 20；AutoCua 需 Python 3.10+；axuse 需 Node.js 22+ 且机器上有 Chromium 系浏览器；agent-desktop 需 Node 环境，Linux 需图形会话 + at-spi2-core；Agent-VScreen 需 Android 11+、arm64、Shizuku。
 - 跑错已废弃包：cuabot（npm）有已知安全问题，原文明确写 Do not run it；应停用并卸载。
-- 商用许可踩坑：Cua 的 SDK、CLI、Driver、Lume 是 MIT；Cua Spaces 是 FSL-1.1-MIT；cua-som 是 AGPL-3.0-or-later；android-adb-control 是 MIT；AutoCua 是 MIT，其 Windows Interception 驱动是 LGPL-3.0 非商业 / 付费商业双许可；axuse 是 PolyForm Noncommercial 1.0.0；agent-desktop 是 Apache-2.0。做商用集成前必须逐目录查 LICENSING.md。
-- 以为 README 就是全部：Cua 的权限授予、平台支持边界、任务编写格式在外链文档里；dsh 的安装确认要按 `docs/INSTALL.md`；android-adb-control 的具体命令在 references 和 `docs/testing.md` 里；agent-desktop 的命令契约在 `docs/json-output.md`，使用规则要用 `skills get` 取；Agent-VScreen 的更多 CLI、MCP、HTTP、watch、浮窗和远程访问细节在 `API.md`。
+- 商用许可踩坑：Cua 的 SDK、CLI、Driver、Lume 是 MIT；Cua Spaces 是 FSL-1.1-MIT；cua-som 是 AGPL-3.0-or-later；android-adb-control 是 MIT；AutoCua 是 MIT，其 Windows Interception 驱动是 LGPL-3.0 非商业 / 付费商业双许可；axuse 是 PolyForm Noncommercial 1.0.0；agent-desktop 是 Apache-2.0；OnlyRead 是 AGPL-3.0。做商用集成前必须逐目录查 LICENSING.md。
+- 以为 README 就是全部：Cua 的权限授予、平台支持边界、任务编写格式在外链文档里；dsh 的安装确认要按 `docs/INSTALL.md`；android-adb-control 的具体命令在 references 和 `docs/testing.md` 里；agent-desktop 的命令契约在 `docs/json-output.md`，使用规则要用 `skills get` 取；Agent-VScreen 的更多 CLI、MCP、HTTP、watch、浮窗和远程访问细节在 `API.md`；OnlyRead 的权限面与站点测试细节只在 README 里，没有独立评测。
 - 以为 Chrome Relay 能覆盖所有浏览器：仅 macOS + Google Chrome + Node.js 20+；只放行 Claude Code / Codex / Cursor / Paseo 四类 agent 应用。
 - 以为 setup 会自动装扩展：不会。每个希望 agent 使用的 Chrome profile 都要手动 Load unpacked。
 - 把 Chrome Relay 当恶意软件安全边界：作者明确说它不是对“已以你身份运行的恶意软件”的安全边界。
@@ -721,6 +781,7 @@ Always use the vscreen tool to operate other apps; never touch the main screen.
 
 ## 证据与来源
 
+- 做法 M 的安装路径、商店链接、`npm install && npm run bundle`、`npm run build` 开发构建警告、OnlyRead Pro 1,000 次免费判定、OpenRouter / Vercel AI Gateway key、默认只在代理工作时守护、Always + settings PIN、Guard this site、四层判定漏斗（规则 → 站点解码器 → 判定缓存 → AI 裁判双模型）、“不确定或裁判不可达 = 拒”、裁判只收地址与脱敏 body 摘要、100+ 站点与 Mind2Web 数据集录制、Gmail/Google Calendar/Linear/LinkedIn/Facebook/X/Telegram/WhatsApp/Reddit 逐个读逐个写深度测试、AGPL-3.0、53 stars、以及全部局限（WebSocket 整体放行/拒绝、无按账号守护、仅 Chromium、可被手动禁用、整站只读、Monitor 模式只在开发构建）：来自 onlyreadai/onlyread README（本次整理的调研材料）。README 没有准确率、延迟或误判率数字；“几乎不拖慢浏览”“未测试过的站点很可能也能用”只是作者主张。
 - 做法 A 的安装命令、做法 D 的 `cua sb` 命令、Driver 与 Lume 安装命令、Calculator 显示 42、Lume VM 能 SSH 连上、Cua Bench 参考解 reward=1.0：来自 trycua/cua README（本次整理的 Cua 调研材料）。
 - 做法 B 的安装/构建命令、17 个工具名、`cordis.patch.yml` 配置、基准命令与 6 任务 × 5 种子 × 2 后端 = 60 次的规模、文本快照覆盖范围、`MAX_IMAGE_BYTES` 4 MB、`unrestrictedBrowserAccess` 出厂为开：来自 youbaiyun/dsh-browser-crossplatform 仓库 README 与源码结构（本次整理的 dsh 调研材料）。dsh README 通篇没有给出基准实测结果，所以基准命令只能证明方法可跑，不能证明更快或更准。
 - 做法 E 的安装命令与目录、四宿主调用方式、三条示例提示词、默认预算（30 个设备状态变更动作 / 5 分钟）、安全与授权清单、静态检查命令、MIT 许可、40 stars：来自 robbin/android-adb-control README（本次整理的调研材料）。作者自述本版本已做文档审查和静态检查，尚未完成修订版真机端到端验收；“兼容四个宿主”只是格式与加载层面的兼容声明。
@@ -745,3 +806,4 @@ Always use the vscreen tool to operate other apps; never touch the main screen.
 - [@yyyole: 今日最佳！](../research/radar/2026-10-21/5447-item.md)：值得一试，建议小范围试：照 cleanyourtv 仓库的说明，在一台可弃用的旧安卓电视上，先用 Wi-Fi 调试和 Claude Code 完整执行一轮去臃肿，确认无损后再推广；原文只保留了流程的前两步，具体命令必须以仓库为准，并且要先记录基线以便验证与回滚。
 - [vercel-labs/agent-desktop](../research/radar/2026-11-03/9842-vercel-labs-agent-desktop.md)：值得一试，按 README 给出的“snapshot → 对 ref 执行动作 → 再 snapshot 复验”闭环，在非敏感桌面或隔离环境小范围试用 agent-desktop，并先把 `agent-desktop skills get desktop/platform` 的输出喂给智能体再让它上手。它能补上“只有 GUI、没有 API”的软件操作能力（能力发现与条件供给都有具体做法），但仍是 Vercel Labs 早期项目、需要系统辅助功能权限、快照中可能包含隐私内容，因此先试不直接上生产。
 - [kilolonion/agent-vscreen](../research/radar/2026-11-09/11812-kilolonion-agent-vscreen.md)：值得一试，建议先在备用 Android 手机上按 README 安装授权，用 `vscreen` CLI/MCP 小范围试用后台虚拟屏操作，并保留浮窗接管、应用规则和支付确认；因为原文给出了可照做的安装、命令与 MCP 配置，但项目较新、缺少独立验证，且 token 等同手机控制权，不宜直接全面采用。
+- [onlyreadai/onlyread](../research/radar/2026-11-11/12289-onlyreadai-onlyread.md)：值得一试，先在一个专用浏览器 profile 中安装 OnlyRead，并只对 Gmail、Calendar 这类以读为主的站点开启守护；再用「纯读取任务 + 故意触发的写操作」做最小验证，确认写操作确实被拦截、误拒在可接受范围内，再扩大守护站点。这样做的理由是：它把「只读」从提示词里的叮嘱变成网络层的强制拦截，正好补上给浏览器代理授权时最缺的权限边界；但 README 自述的 WebSocket 整体放行或拒绝、按账号守护缺失、仅限 Chromium 等缺口，决定了它现在只适合小范围试。
