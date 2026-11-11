@@ -1,16 +1,16 @@
-# 让 AI 编码助手的每次动作都有据可查
+# 把 AI 编码会话变成可复盘、可续接、可拦截的记录
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：AI 编码助手的会话、执行动作和决策理由散落在各自本地存储里，导致你既说不清它到底做了什么、也说不清为什么这么定，还难以及时发现密钥外发和高风险命令。
-> 先试这一步：先在一个仓库跑 `npx @stroq/cli` 做只读审计（不装 hooks），看清最近 30 天有哪些命令、密钥外发和可疑会话。
-> 最近修订：2026-11-06
+> 解决的问题：解决说不清 AI 到底干了什么、为什么这么定、哪些动作有风险的问题，给出六条互补的取证、导出、决策记录与风险拦截路线。
+> 先试这一步：先只读确认本机能取到哪些会话：跑 `uvx agentplay agents`，或 `python extract.py --list`，不要一上来就导出或装钩子。
+> 最近修订：2026-11-11
 
 ## 解决什么问题
 
 你同时用 Claude Code、Cursor、Cline、Aider 等 AI 编码助手，对话历史散落在各自的本地存储里，决策理由则常常只留在聊天记录里。由此带来三类做不成的事：一是说不清“这次 AI 到底干了什么”——它在改这个文件之前读了什么、有什么始终没打开、哪条命令失败了、同一条重试了几次、上下文窗口在哪里填满、这次会话产出了哪些 commit / PR；二是说不清“为什么这么定、后来怎么续接”——AI 提过哪些选项、理由和置信度、什么情况必须推翻、人最终怎么裁决；三是说不清“哪些动作有风险”——哪些命令来自智能体读过的不可信文本、哪些密钥离开过机器、哪些工具调用应该在执行前被拒绝或询问。
 
-这篇手册给五条互补的路线：用 agentplay 把本机已有的会话回放成“地图 + 时间线”做效果取证（做法 A）；用 `nachisama/ai-data-extractor` 把这些本地对话统一导出成规范化 JSONL 做备份、微调或个人使用分析（做法 B）；如果你在用 Claude Code，用内置的 `/export file_name` 把一段会话导成纯文本，交给下一个代理接力或提炼可复用技能（做法 C）；用 ADRs4AI 把 AI 提出的选项、理由、置信度、证伪条件和人的裁决写成可版本化的决策记录，放进 Git 仓库（做法 D）；用 Stroq 在本地做只读审计和前置拦截，回答“哪些命令来自智能体读过的文本、哪些密钥离开过机器、哪些工具调用应该被拒绝或询问”（做法 E）。前三条处理“会话与执行”，第四条处理“审议与决策”，第五条处理“动作风险与外部外发”。五条路线都强调先做安全预览 / 小范围试用、验证数据源确实能取到数据，再决定是否长期依赖。
+这篇手册给六条互补的路线：用 agentplay 把本机已有的会话回放成“地图 + 时间线”做效果取证（做法 A）；用 `nachisama/ai-data-extractor` 把这些本地对话统一导出成规范化 JSONL 做备份、微调或个人使用分析（做法 B）；如果你在用 Claude Code，用内置的 `/export file_name` 把一段会话导成纯文本，交给下一个代理接力或提炼可复用技能（做法 C）；用 ADRs4AI 把 AI 提出的选项、理由、置信度、证伪条件和人的裁决写成可版本化的决策记录，放进 Git 仓库（做法 D）；用 Stroq 在本地做只读审计和前置拦截，回答“哪些命令来自智能体读过的文本、哪些密钥离开过机器、哪些工具调用应该被拒绝或询问”（做法 E）；用 AgentBus 在编码智能体与模型厂商之间加一层本地网关，记录每次模型请求与回复、给每次调用计价、在文件夹副本中运行 turn，并支持 diff / apply 与同会话切换模型或 agent（做法 F）。前三条处理“会话与执行”，第四条处理“审议与决策”，第五条处理“动作风险与外部外发”，第六条处理“模型调用与产物落地”。六条路线都强调先做安全预览 / 小范围试用、验证数据源确实能取到数据，再决定是否长期依赖。
 
 ## 适用与不适用
 
@@ -18,24 +18,26 @@
 
 - 做法 A（agentplay 回放取证）：本机至少有一种受支持智能体留下过会话，你想核对 AI 的实际行为、失败点和产出，并且要求全本地、无账号、无 API key。
 - 做法 B（ai-data-extractor 导出 JSONL）：本机装过并用过支持来源之一，想把个人 AI 编码对话抽出来做微调、个人使用分析或备份；愿意先跑 `--list` 做安全预览再决定是否提取。
-- 做法 C（Claude Code `/export` 导纯文本）：你在用 Claude Code，且当前会话里已经有值得复用的实质内容（一次多轮调试、一次方案设计、一次排错），想把它原样交给另一个代理接着干，或从中提炼自定义技能。一条命令、零安装，是五条路线里最轻的一条。
+- 做法 C（Claude Code `/export` 导纯文本）：你在用 Claude Code，且当前会话里已经有值得复用的实质内容（一次多轮调试、一次方案设计、一次排错），想把它原样交给另一个代理接着干，或从中提炼自定义技能。一条命令、零安装，是六条路线里最轻的一条。
 - 做法 D（ADRs4AI 决策记录）：你有一个持续一段时间的真实项目，需要把 AI 给出的选项、建议、理由、置信度、证伪条件，以及人的 accept / override 固化成可版本化、可检索的 Markdown 记录；你愿意用 Git 仓库承载这些记录，并接受前期有记录开销。
 - 做法 E（Stroq 本地审计与前置拦截）：本机有 Claude Code、Codex CLI、Cursor 等受支持智能体的会话记录，已装 Node.js 22+，你想在不联网、无账号的前提下检查最近 30 天的命令来源、密钥外发和可疑会话；愿意先跑只读命令，再只在一个仓库、一个智能体上接 hooks。README 明示支持 Claude Code、Cursor、Codex、Copilot CLI、Windsurf、Antigravity，以及 OpenClaw 插件和 stdio MCP proxy；但 hooks 覆盖和文本匹配有明确局限，需先验证误报和覆盖率。
-- 五条可以组合：A 与 B 读同一批本地会话，C 只覆盖 Claude Code，D 记录决策而不是会话，E 在会话外层做审计与拦截。A 取不回对话原文，要原文走 B 或 C；D 不替代 A/B/C 的执行取证和原文导出；E 不替代 A/B/C/D，它是过滤器不是沙箱，也不提供会话原文导出。
+- 做法 F（AgentBus 本地网关）：你在 macOS 或 Linux 上，已安装并登录 `claude` 或 `codex`（或两者都有），想让每次模型请求和回复都落到本地、每次调用有价格、每个 turn 在文件夹副本中运行并能看 diff / apply，或者想在同一会话里切换模型 / agent、让另一个 agent 评审。它不替代 Claude Code / codex，而是作为中间层运行它们。
+- 六条可以组合：A 与 B 读同一批本地会话，C 只覆盖 Claude Code，D 记录决策而不是会话，E 在会话外层做审计与拦截，F 在模型调用外层做记录、计价、隔离副本与 diff / apply。A 取不回对话原文，要原文走 B、C 或 F（F 的 `events.db` 保存每次 turn 的模型请求和回复，但只覆盖经它转发的 Claude Code / codex 调用）；D 不替代 A / B / C / F 的执行取证和原文导出；E 不替代 A / B / C / D / F，它是过滤器不是沙箱，也不提供会话原文导出；F 不提供 D 式的人类裁决记录，也不做 E 式的通用风险拦截——`forbid` 会拒绝并记 `tool.refused`，但只检查命令文本，存在绕过边界。
 
 不适用：
 
-- 你期望有官方支持、稳定 schema 或完整字段。A、B、E 三个工具都是第三方工具，字段和覆盖随来源、版本而异；C 只是一条内置命令，材料里连产物细节都没说全；D 只有作者自述与单项目案例，尚无效果数据。
-- 你不想处理密钥或专有代码。五条路线的产物都可能含代码和内部信息；E 虽然只打印密钥名不打印值，但它仍会读取本机最近 30 天会话、密钥文件和智能体工作目录。
-- 你用的工具不在支持范围内：ai-data-extractor 覆盖 Claude Code、Codex CLI、Cursor、Windsurf、Trae、Continue、Gemini CLI、OpenCode、Cline / Roo Code、Aider；agentplay 覆盖 Claude Code、Codex（CLI/IDE）、Cursor（agent CLI 与 IDE composer）、GitHub Copilot CLI、VS Code 中的 Copilot、OpenCode、Kiro，**明确不支持 Cline**（README 在 Contributing 里把 Cline 和 Gemini CLI、Amp、Roo、Windsurf、Aider 一起列为最想要的第三方 parser）；做法 C 是 Claude Code 内置命令，其他工具没有；做法 D 依赖 GitHub CLI、特定 agent 命令、模板仓库、可选扩展 / iOS 客户端 / MCP；做法 E 的支持对象是 Claude Code、Cursor、Codex、Copilot CLI、Windsurf、Antigravity，以及 OpenClaw 插件和 stdio MCP proxy，材料未给出更细的版本矩阵，且 hook 只看到宿主传给它的内容、不同智能体和版本不同。
-- 你想要准确的成本数字：agentplay 对 Cursor 会话拿不到 token / cost（Cursor 不把计费用量写盘，工具也不去调 Cursor API），成本是估算。
-- 你想省掉自己补细节的功夫：做法 C 的材料只有一条推文，投喂方式和技能提炼流程原文都没给；做法 D 的 crew 自动化（步骤 7–9）只有名称，正文没有可照做的步骤；做法 E 的 README 命令可照做，但示例卡片和 `sent` 输出标注为虚构机器，`attack` 数字来自一次性沙箱，不是对你真实环境的完整证明。
+- 你期望有官方支持、稳定 schema 或完整字段。A、B、E、F 都是第三方工具，字段和覆盖随来源、版本而异；F 仓库仅约 30 stars，材料是 README 功能说明和作者主张，无第三方基准、用户案例或量化收益数据；C 只是一条内置命令，材料里连产物细节都没说全；D 只有作者自述与单项目案例，尚无效果数据。
+- 你不想处理密钥或专有代码。六条路线的产物都可能含代码和内部信息；E 虽然只打印密钥名不打印值，但它仍会读取本机最近 30 天会话、密钥文件和智能体工作目录；F 的 `events.db` 会保存每次模型请求和回复，同样可能含代码与内部信息。
+- 你用的工具不在支持范围内：ai-data-extractor 覆盖 Claude Code、Codex CLI、Cursor、Windsurf、Trae、Continue、Gemini CLI、OpenCode、Cline / Roo Code、Aider；agentplay 覆盖 Claude Code、Codex（CLI/IDE）、Cursor（agent CLI 与 IDE composer）、GitHub Copilot CLI、VS Code 中的 Copilot、OpenCode、Kiro，**明确不支持 Cline**（README 在 Contributing 里把 Cline 和 Gemini CLI、Amp、Roo、Windsurf、Aider 一起列为最想要的第三方 parser）；做法 C 是 Claude Code 内置命令，其他工具没有；做法 D 依赖 GitHub CLI、特定 agent 命令、模板仓库、可选扩展 / iOS 客户端 / MCP；做法 E 的支持对象是 Claude Code、Cursor、Codex、Copilot CLI、Windsurf、Antigravity，以及 OpenClaw 插件和 stdio MCP proxy，材料未给出更细的版本矩阵，且 hook 只看到宿主传给它的内容、不同智能体和版本不同；做法 F 当前只支持 Claude Code 与 codex，且要求 macOS 或 Linux，从源码构建才需要 Go 1.27.1+。
+- 你想要准确的成本数字：agentplay 对 Cursor 会话拿不到 token / cost（Cursor 不把计费用量写盘，工具也不去调 Cursor API），成本是估算；F 的 OpenRouter turn 当前成本显示为 `$0`，因为价格表还没有 OpenRouter 价格，不能拿它做成本对比。
+- 你想省掉自己补细节的功夫：做法 C 的材料只有一条推文，投喂方式和技能提炼流程原文都没给；做法 D 的 crew 自动化（步骤 7–9）只有名称，正文没有可照做的步骤；做法 E 的 README 命令可照做，但示例卡片和 `sent` 输出标注为虚构机器，`attack` 数字来自一次性沙箱，不是对你真实环境的完整证明；做法 F 的 README 给出可复制命令，但项目较新，网络跨机器时无 HTTPS、需要 SSH 隧道或私有网络，网络控制仅 Linux。
 - 你想把 Stroq 当完整安全沙箱或合规证明：不行。README 明确它是过滤器不是沙箱；hook 只看到宿主发送的内容；文本级匹配无法回溯模型从零写出的命令；旧、轮换或未知密钥可能漏掉；密钥可能通过脚本、文件、变量离开而不出现在命令中；本地 transcript 匹配本身不能证明已送达模型提供商。
-- 你想要量化效果或团队合规方案：D 原文没有量化指标、对照实验或第三方复现，默认私有仓库，团队 / 合规场景下记录的可访问性与敏感信息处理未讨论；A/B/C 的材料也未提供提取成功率、速度、字段完整率等实测数字；E 没有独立复现或第三方评测，HN 50 points、11 comments 只表示关注度，不是效果证据。
+- 你想跨机器安全访问：F 网络跨机器时无 HTTPS，需要 SSH 隧道或私有网络；网络控制仅 Linux、默认关闭，macOS 上 `contain="on"` 会拒绝每个 turn；会话不能跨 runner 迁移，远程 runner 上 codex 订阅登录暂不支持。
+- 你想要量化效果或团队合规方案：D 原文没有量化指标、对照实验或第三方复现，默认私有仓库，团队 / 合规场景下记录的可访问性与敏感信息处理未讨论；A / B / C 的材料也未提供提取成功率、速度、字段完整率等实测数字；E 没有独立复现或第三方评测，HN 50 points、11 comments 只表示关注度，不是效果证据；F 只有 README 功能说明与作者主张，仓库约 30 stars，无第三方基准或用户案例。
 
 ## 前置条件
 
-- Python 版本：做法 A 需要 Python 3.11 或更高；做法 B 需要 Python 3.9+（推荐 3.10+）。做法 C、D 不需要 Python；做法 E 需要 Node.js 22 或更新版本。
+- Python 版本：做法 A 需要 Python 3.11 或更高；做法 B 需要 Python 3.9+（推荐 3.10+）。做法 C、D 不需要 Python；做法 E 需要 Node.js 22 或更新版本；做法 F 用 Homebrew 或安装脚本安装，只有从源码构建才需要 Go 1.27.1 以上。
 - 本机至少有一种受支持智能体留下过会话（A、B、E）。agentplay 默认读取 `~/.claude`、`~/.codex`、`~/.cursor`、`~/.copilot`、`~/.kiro`、`~/.local/share/opencode/opencode.db` 等默认目录。
 - 做法 A 的工具本身除标准库外无运行时依赖，可以用 `uvx` / `pipx` 直接跑，不必先克隆仓库。
 - 做法 B 需要已把 `nachisama/ai-data-extractor` 仓库代码放到本地，并能进入项目根目录运行 `extract.py`。材料未给出克隆 / 安装命令，这一步需按仓库说明自行补上。
@@ -45,20 +47,22 @@
 - 做法 D 的检索前提：问题标题统一以 `### QST` 开头，否则 `grep -rn '^### QST' docs/adr/` 捞不全。
 - 做法 E 的前提：Node.js 22+；Stroq 在本地运行，README 称不联网、无账号、无遥测，只在 `~/.stroq` 下写小缓存。先确认接受它读取本机最近 30 天会话、密钥文件和智能体工作目录。实时防护还要求所用智能体支持对应 hooks；README 说明 hook 只能看到宿主传给它的内容，且不同智能体和版本不同。控制台添加 hooks 在 macOS 或 Linux 上可从控制台做；Windows 用 `stroq init`。
 - 做法 E 的只读审计前提：本地存在对应会话记录；`replay` 的 verdict 是“今天的策略”判断，不是当时实际发生的记录。
+- 做法 F 的前提：macOS 或 Linux；已安装并登录 `claude` 或 `codex`（或两者都有）；`agentbus up` 默认监听 `http://127.0.0.1:8787`，首次启动生成 `token` 文件；数据目录优先级为 `$AGENTBUS_HOME`、`$XDG_DATA_HOME/agentbus`、`~/.local/share/agentbus`。`folder` 必须是存在的绝对路径；要限制读写 / 命令 / 成本需编辑数据目录下的 `permissions.toml`；要统一附加指令需 `instructions.md`；接 OpenRouter 需要服务环境变量里有 `OPENROUTER_API_KEY`；多机还要 `enroll_token`、connector / runner 地址和网络 allow 列表。
 
 ## 操作步骤
 
-先决定走哪条路线。五条路线可以同时做，但产物形态、覆盖范围和隐私面都不一样。
+先决定走哪条路线。六条路线可以同时做，但产物形态、覆盖范围和隐私面都不一样。
 
 - 想回答“AI 这次到底干了什么、错在哪、产出是什么” → 走做法 A。全本地、无账号、无 API key。
 - 想把对话原文抽出来做微调、训练或个人备份 → 走做法 B。产物是规范化 JSONL，字段随来源而异。
 - 你在用 Claude Code，想把“这一段”会话原样交给另一个代理接着干、或从中沉淀可复用技能 → 走做法 C。产物是一份纯文本会话历史，最轻，但只覆盖 Claude Code，且原文没给投喂 / 提炼细节。
 - 想记录“为什么这么定”、让后来的人或 agent 能续接 → 走做法 D。产物是 Git 仓库里的 Markdown 决策记录，靠 `grep`、编辑器树视图或客户端检索，不适合当聊天全文检索。
 - 想知道“哪些命令来自智能体读过的文本、哪些密钥离开过机器、哪些工具调用该拒绝或询问” → 走做法 E。先只读审计，再在单仓库、单智能体上接 hooks；产物是本地卡片、`sent` 分类、replay 结果和 hooks 决策。
+- 想让每次模型调用都有请求 / 回复记录、成本、隔离副本、diff / apply，并在同一会话切换模型或 agent → 走做法 F。只支持 Claude Code 与 codex，macOS / Linux 本地或私有网络；产物是 `events.db`、`cost/`、turn / session 记录和 diff。
 
-关键差别：agentplay 的地图按设计不含 prompt 文本、助手文本或推理、工具输入输出、文件内容、命令参数（只记动词），所以取不回对话原文，要原文得走 B 或 C；B 给结构化 JSONL，字段口径要自己统一；C 给未结构化的纯文本，最快拿到手，但后续筛选全靠人看；D 记录的是决策的“为什么”，不是对话全文，也不是向量数据库式记忆或编排平台；E 审计的是命令与文本来源、密钥外发和工具调用风险，不导出会话原文，也不记录决策理由。E 与 A 都读本地会话，但 A 做回放取证，E 做风险检查与前置拦截；E 与 B 都可能接触密钥，B 导出的是数据，E 只打印密钥名不打印值。
+关键差别：agentplay 的地图按设计不含 prompt 文本、助手文本或推理、工具输入输出、文件内容、命令参数（只记动词），所以取不回对话原文，要原文得走 B、C 或 F（F 只覆盖经它转发的调用）；B 给结构化 JSONL，字段口径要自己统一；C 给未结构化的纯文本，最快拿到手，但后续筛选全靠人看；D 记录的是决策的“为什么”，不是对话全文，也不是向量数据库式记忆或编排平台；E 审计的是命令与文本来源、密钥外发和工具调用风险，不导出会话原文，也不记录决策理由；F 记录的是网关层的模型请求 / 回复、成本、turn / session 与 diff，不记录人的裁决，也不做 E 式的前置拦截（`forbid` 会拒绝并记 `tool.refused`，但只检查命令文本）。E 与 A 都读本地会话，但 A 做回放取证，E 做风险检查与前置拦截；E 与 B 都可能接触密钥，B 导出的是数据，E 只打印密钥名不打印值；F 与 A 都能看 turn 级记录，但 A 是对已有会话做脱敏回放，F 是在模型调用外层实时落库。
 
-- 想做工具 / 模型横向对比：做法 A 的格式里有可读的调用次数、token、延迟、花费字段，但原文没有给出任何跨模型对比的结论或推荐；做法 B 的 JSONL 只有 `messages`、`source`、`session_id` 三个字段可以始终依赖。两边都得自己设计字段口径。做法 C 材料里完全没有横向对比的依据；做法 D 不解决横向对比；做法 E 的 README 未比较不同模型优劣。
+- 想做工具 / 模型横向对比：做法 A 的格式里有可读的调用次数、token、延迟、花费字段，但原文没有给出任何跨模型对比的结论或推荐；做法 B 的 JSONL 只有 `messages`、`source`、`session_id` 三个字段可以始终依赖；做法 F 可以在同一会话按消息切换模型 / agent，但原文没有跨模型对比的结论，OpenRouter turn 成本还显示为 `$0`。两边都得自己设计字段口径。做法 C 材料里完全没有横向对比的依据；做法 D 不解决横向对比；做法 E 的 README 未比较不同模型优劣。
 
 ### 做法 A：把会话回放成地图与时间线（agentplay）
 
@@ -258,7 +262,7 @@ C5. 投喂前先划定可外发范围。前提：准备把导出文件交给另�
 
 C6. 小范围验证后再决定长期用。前提：第一次试做法 C。预期：按“怎么判断变好了”里做法 C 的最小试用四步走一遍，用对照任务比较投喂前后的差异，再决定是否纳入常规流程。
 
-做法 C 与 A / B / D / E 的关系：C 不引入新工具，只是给已采用的 Claude Code 补一条内置命令的用法——把“会话历史”本身当成一份可导出的资产，先导出再决定怎么用。C 与 B 都能拿到原文（C 是纯文本，B 是结构化 JSONL），A 拿不到原文；D 记录决策理由，不提供会话全文；E 做风险审计与拦截，也不提供会话原文导出。
+做法 C 与 A / B / D / E / F 的关系：C 不引入新工具，只是给已采用的 Claude Code 补一条内置命令的用法——把“会话历史”本身当成一份可导出的资产，先导出再决定怎么用。C 与 B 都能拿到原文（C 是纯文本，B 是结构化 JSONL），A 拿不到原文；D 记录决策理由，不提供会话全文；E 做风险审计与拦截，也不提供会话原文导出；F 能记录经它转发的请求与回复，但只覆盖 Claude Code 与 codex，且不是通用导出工具。
 
 ### 做法 D：把 AI 协作的“为什么”写进 Git（ADRs4AI）
 
@@ -401,6 +405,102 @@ pnpm platform:build
 pnpm platform --workspace /path/to/repo
 ```
 
+### 做法 F：把模型调用、成本和 diff 留在本地网关（AgentBus）
+
+F1. 安装并确认版本。前提：macOS 或 Linux；用 Homebrew 或安装脚本二选一，只有从源码构建才需要 Go 1.27.1 以上。预期：`agentbus version` 打印版本。
+
+```sh
+brew install staysup/tap/agentbus
+# 或
+curl -fsSL https://raw.githubusercontent.com/staysup/agentbus/main/install.sh | sh
+agentbus version
+```
+
+F2. 启动本地服务。前提：`claude` / `codex` 已在当前 shell 可运行并已登录。预期：服务监听 `http://127.0.0.1:8787`，打印数据目录，首次启动生成 `token` 文件。数据目录优先级为 `$AGENTBUS_HOME`、`$XDG_DATA_HOME/agentbus`、`~/.local/share/agentbus`。
+
+```sh
+agentbus up
+```
+
+F3. 检查 harness 是否被找到并已登录。前提：F2 已启动。预期：每个 harness 返回 `found`、`version`、`signed_in`；只有 `found` 且 `signed_in` 的 agent 才适合启动 turn。若数据目录不是默认位置，把 `cat` 路径换成实际 `token` 文件。
+
+```sh
+TOKEN=$(cat ~/.local/share/agentbus/token)
+curl -s -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8787/api/v0/harnesses
+```
+
+F4. 用 curl 起一个只读 hello turn。前提：`folder` 必须是存在的绝对路径；`read_only` 让 agent 只有读工具。预期：返回 turn 的 `id` 和状态；默认在数据目录下为本次会话做文件夹副本，原文件夹不被修改。要直接改原文件夹可传 `"isolate":false`；隔离方式由 `permissions.toml` 的 `isolation` 决定，默认 `auto`。
+
+```sh
+curl -s http://127.0.0.1:8787/api/v0/turns \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"agent":"claude","folder":"'"$PWD"'","prompt":"Say hello in five words.","model":"haiku","read_only":true}'
+```
+
+F5. 读回 turn 记录、回复、状态和成本。前提：F4 返回了 `id`。预期：列出该 session 的 turn 记录；把 `<id>` 换成 F4 返回的 `id`。`GET /api/v0/turns/<turn>` 可只读一个 turn。
+
+```sh
+curl -s "http://127.0.0.1:8787/api/v0/turns?session=<id>" -H "Authorization: Bearer $TOKEN"
+```
+
+F6. 在同一会话中续聊并切换模型。前提：已有 session id。预期：新 turn 沿用同一会话历史，可对同一会话做模型切换对比；每条消息可单独指定 `model`、`agent` 或两者，不指定则沿用上一次。
+
+```sh
+curl -s http://127.0.0.1:8787/api/v0/turns -H "Authorization: Bearer $TOKEN" \
+  -d '{"session":"<id>","prompt":"Now add a test for it.","model":"sonnet"}'
+```
+
+F7. 查看 diff，并一次性 apply 到自己的文件夹。前提：turn 已产生改动。预期：`diff` 打印改动；`apply` 先检查每个文件，如果原文件夹中的文件在会话之后被改过，会返回 409 并列出冲突文件，不写入。
+
+```sh
+curl -s http://127.0.0.1:8787/api/v0/turns/<turn>/diff -H "Authorization: Bearer $TOKEN"
+curl -s -X POST http://127.0.0.1:8787/api/v0/turns/<turn>/apply -H "Authorization: Bearer $TOKEN"
+```
+
+F8. 配置权限与限制。前提：编辑数据目录下的 `permissions.toml`；每个 turn 启动时读取，API 每个请求也读取。预期：`allow` 转成 Claude Code 的允许工具规则；`forbid` 由 gateway 检查模型回复中的 shell 命令文本并拒绝；`max_cost_usd_per_tree` 为 0 表示关闭成本上限。注意 `forbid` 看不到运行时拼接出来的命令，也看不到 agent 早先写入脚本后再执行的命令；强规则还要配合收回凭据。
+
+```toml
+read_folders = ["~/.agents"]
+allow = ["go test", "make test"]
+forbid = ["git push", "git checkout"]
+edit = "session"
+subagents = true
+
+[limits]
+max_depth = 2
+max_jobs_per_turn = 10
+max_jobs_per_tree = 30
+max_cost_usd_per_tree = 0.0
+
+[agent_api]
+scope = "tree"
+read = true
+list_agents = true
+start = true
+continue = true
+review = true
+cancel = true
+rename = true
+```
+
+F9.（可选）接 OpenRouter 上的其他模型。前提：服务环境变量中有 `OPENROUTER_API_KEY`。预期：新增一个 saved agent；之后可在 turn 中传 `"agent":"<新 agent id>"` 把会话交给它。原文明确：OpenRouter turn 当前成本显示为 `$0`，因为价格表还没有 OpenRouter 价格，不能拿它做成本对比。
+
+```sh
+curl -s http://127.0.0.1:8787/api/v0/agents -H "Authorization: Bearer $TOKEN" \
+  -d '{"name":"DeepSeek","harness":"claude","access":"openrouter","model":"deepseek/deepseek-v4.1-flash"}'
+```
+
+F10.（可选）停止正在运行的 turn。前提：turn 还在跑。预期：turn 被停止。
+
+```sh
+curl -s -X POST "http://127.0.0.1:8787/api/v0/turns/<turn>/stop" -H "Authorization: Bearer $TOKEN"
+```
+
+F11.（可选）浏览器 cockpit。前提：想用图形界面看。预期：cockpit 在独立仓库 `staysup/agentbus-cockpit`，按该仓库 README 启动，使用 `agentbus up` 的服务地址和 token 文件中的 token。
+
+F12. 先小范围试用。前提：第一次试 F。预期：只在一个仓库、一个已登录的 harness 上跑 F4–F8，不接 OpenRouter、不跨机器、不开 `isolate:false`；确认 diff / apply 与 allow / forbid 行为符合预期后再扩大。
+
 ## 怎么判断变好了
 
 最小试用（做法 A）：
@@ -435,6 +535,15 @@ pnpm platform --workspace /path/to/repo
 3. 然后只在该仓库执行 `npx @stroq/cli init`，正常使用智能体一段时间，用 `npx @stroq/cli console --workspace /path/to/repo` 看 Live 的 allowed/asked/denied/flagged，并用 `npx @stroq/cli why` 抽查每次拦截理由。
 4. 人工核对误报：拦截是否对应真实风险、是否减少未知外发和无法解释的 agent 动作；不要只看 denied 数量变多。README 链到 False positives 文档，但材料未给具体数据，需人工核对。
 
+最小试用（做法 F）：
+
+1. 按 F1–F3 安装、启动、确认至少一个 harness `found` 且 `signed_in`。
+2. 用 F4 起一个只读 hello turn，记下 `id`；用 F5 读回记录与成本，确认请求、回复、turn、session 都能在 `events.db` / API 中看到。
+3. 用 F6 在同一会话续聊并切换模型，确认历史保持。
+4. 用 F7 查看 diff，再 apply；故意在会话后改一次原文件夹中的文件，确认 apply 返回 409 且不写入。
+5. 用 F8 加 `allow=["go test"]` 和 `forbid=["git push"]`，观察允许和拒绝是否按预期记录为 `tool.refused`。
+6. 可选接一个 F9 的 OpenRouter agent 做同会话多模型对比，但不要用它的 `$0` 成本数字做结论。
+
 可观察指标：
 
 - 做法 A：`agents` 是否列出可读会话；viewer 地图是否出现文件与产出（commit / PR / ticket）；时间线是否出现 `err` / `retries` / `compactions`；`outcome` 字段是否落到 `pr_created` 之类的实际产物。
@@ -442,8 +551,9 @@ pnpm platform --workspace /path/to/repo
 - 做法 C（都比较容易手工记）：重建上下文所需的人工提示轮数：投喂文件后是否显著减少；重复解释次数：新会话里还需要你重复说明几次“之前做过什么、为什么这么做”；从“要开始下一步”到“模型真正在做正确的事”之间的时间；导出内容的可用率：文件里有多少内容是无关噪声、需要人工删减（噪声太高说明导出不适合直接投喂，适合先做筛选）；用途 B 的验证更弱一些：可统计从导出文件里提取出的可复用步骤，是否在下一次同类任务中真的被用上。
 - 做法 D（都可手工统计）：重复讨论率：同一决策在后续会话中被重新讨论的次数（试用期 vs 之前同类项目）；恢复上下文时间：新会话 / 新接手者从零到能复述“为什么这么定”所需时间与提问次数；问题闭环率与延迟：open → answered 的比例、平均从 stake 到裁决的时间；记录被引用率：后续 ADR 或提交中引用前序 QST 编号的次数（可 grep 统计）；单问题成本：作者回答一个问题平均耗时（若超过几分钟，说明选项 / 理由质量不足或问题过碎）。
 - 做法 E：`stroq` 卡片计数（命令数、来自智能体所读文本的命令数、离开机器的密钥数、打开即运行代码的仓库数）；`sent` 分类中“发给另一家公司”或“可能已发”的条目是否被及时发现并轮换；`replay --all` 标出的可疑会话；控制台 Live 的 allowed/asked/denied/flagged；`attack` 的通过数是否保持为 0；误报是否可接受（需人工核对）。不要只看 denied 数量变多，要看拦截是否对应真实风险、是否减少未知外发和无法解释的 agent 动作。
+- 做法 F：每次模型调用是否都能在 `events.db` / API 中看到请求、回复、turn 和 session；每个 turn 的成本是否可见（OpenRouter 当前为 `$0`，不能作为成本依据）；同一会话切换模型或 agent 后历史是否保持；原文件夹是否在 agent 运行期间不被污染；`apply` 是否只在无冲突时写入、冲突时正确返回 409；`forbid` 命令是否被拒绝并产生 `tool.refused` 事件；多 agent 评审是否给出 pass/fail/unknown 和 findings，P1 是否导致 fail。
 
-试多久：A/B/C/E 的材料未给出固定试用时长。做法 A 建议以一次 `agents`、一次回放、一次 error 面板核对作为最小试用；做法 B 建议以一次预览、一次单来源提取、一次密钥扫描作为最小试用；做法 C 建议以“一次导出 + 一次投喂接力 + 一次对照任务”作为最小试用——如果减少的轮数和时间都不明显，说明这次会话本身的上下文价值不高，或者对方代理需要的是结构化摘要而不是原始转录，那就把结论降回观察。做法 D 建议 2 周、单个真实项目。做法 E 建议以一个仓库、一个智能体的一次只读审计 + 一次 `attack` + 一段正常使用（用 Live 和 `why` 核对）作为最小试用；若拦截理由读不懂或误报不可接受，先退回只读审计，不要扩大 hooks 范围。判定 D“确有改善”的最低标准：重复讨论率下降、恢复上下文时间缩短，且记录确实被后续工作引用（不是写完就没人看）。若只增加了记录量而没有引用与复用，应退回 watch 或改用轻量替代（只在关键决策上写一条 ADR）。结果可用后再扩大规模（做法 A 到 `build --since` 或全量，做法 B 到 `--all` / `--merge`，做法 C 到常态化导出，做法 D 到更多项目或接入扩展 / 客户端，做法 E 到更多仓库或智能体），长期依赖前多跑几次验证稳定性。
+试多久：A / B / C / E / F 的材料未给出固定试用时长。做法 A 建议以一次 `agents`、一次回放、一次 error 面板核对作为最小试用；做法 B 建议以一次预览、一次单来源提取、一次密钥扫描作为最小试用；做法 C 建议以“一次导出 + 一次投喂接力 + 一次对照任务”作为最小试用——如果减少的轮数和时间都不明显，说明这次会话本身的上下文价值不高，或者对方代理需要的是结构化摘要而不是原始转录，那就把结论降回观察。做法 D 建议 2 周、单个真实项目。做法 E 建议以一个仓库、一个智能体的一次只读审计 + 一次 `attack` + 一段正常使用（用 Live 和 `why` 核对）作为最小试用；若拦截理由读不懂或误报不可接受，先退回只读审计，不要扩大 hooks 范围。做法 F 建议以一个仓库、一个 harness 的一次只读 turn + 一次续聊切模型 + 一次 diff / apply + 一次 allow / forbid 观察作为最小试用；若 `events.db` 里看不到请求 / 回复、apply 冲突处理不符合预期、或 `forbid` 拦不住你关心的命令，就不要扩大范围。判定 D“确有改善”的最低标准：重复讨论率下降、恢复上下文时间缩短，且记录确实被后续工作引用（不是写完就没人看）。若只增加了记录量而没有引用与复用，应退回 watch 或改用轻量替代（只在关键决策上写一条 ADR）。结果可用后再扩大规模（做法 A 到 `build --since` 或全量，做法 B 到 `--all` / `--merge`，做法 C 到常态化导出，做法 D 到更多项目或接入扩展 / 客户端，做法 E 到更多仓库或智能体，做法 F 到更多 turn 或接 OpenRouter / cockpit），长期依赖前多跑几次验证稳定性。
 
 ## 常见坑
 
@@ -452,7 +562,7 @@ pnpm platform --workspace /path/to/repo
 - README 在 Contributing 里把 Cline 和 Gemini CLI、Amp、Roo、Windsurf、Aider 一起列为“最想要的第三方 parser”，也就是说不支持——别指望用它复盘这些工具的会话。
 - Cursor 会话拿不到 token / cost，成本是估算，不能当准确账单看。
 - 分享 map 前要脱敏：路径模式里 `relative` / `dirs_only` / `hashed` 只影响路径，**任何模式下 repo 名和 remote 都会保留**；remote 敏感就手动删 `repos[].remote`。`hashed` 没设 `AGENTPLAY_HMAC_KEY` 会退回 `dirs_only`。
-- 按 README 的隐私契约，地图不含 prompt 文本、助手文本或推理、工具输入输出、文件内容、命令参数（只记动词如 `git log` / `pytest`）。这是它的隐私设计，但也意味着你不能靠它取回对话原文；要原文请走做法 B 或做法 C。
+- 按 README 的隐私契约，地图不含 prompt 文本、助手文本或推理、工具输入输出、文件内容、命令参数（只记动词如 `git log` / `pytest`）。这是它的隐私设计，但也意味着你不能靠它取回对话原文；要原文请走做法 B、C 或 F。
 - viewer 首次打开会邀请填 email，这是唯一的网络调用，用 `AGENTPLAY_NO_NETWORK=1` 或 `DO_NOT_TRACK=1` 关掉。
 - Windows 下从源码构建需要 Git Bash / MSYS2 / WSL，viewer 依赖 `viewer/package.json` 里钉的 pnpm 10.x。
 
@@ -483,7 +593,7 @@ pnpm platform --workspace /path/to/repo
 - 依赖工具链：GitHub CLI、特定 agent 命令、模板仓库名、VS Code / Open VSX 扩展、iOS 客户端；MCP 查询能力需自建或使用其扩展。
 - 原文默认私有仓库；团队 / 合规场景下记录的可访问性与敏感信息处理未讨论。
 - crew 自动化（步骤 7–9）只有名称，无步骤，不能据此实施。
-- 它不是对话存档、不是向量数据库式“记忆”、不是编排平台，也不主张 AI 有持久身份；不要拿它替代 A/B/C/E 的原文导出或执行取证。
+- 它不是对话存档、不是向量数据库式“记忆”、不是编排平台，也不主张 AI 有持久身份；不要拿它替代 A/B/C/E/F 的原文导出或执行取证。
 - 若只增加记录量而没有引用与复用，说明记录没有进入后续工作；应退回 watch 或只在关键决策上写一条 ADR。
 - 不要编造效果数据；“思考复利”“认知负荷下降”“新手也能用”等只是作者主张。
 
@@ -502,6 +612,18 @@ pnpm platform --workspace /path/to/repo
 - 作者主张：本地、无 telemetry、无账号、hook 能拒绝 `curl | sh` 和带已知密钥外发、能追踪文本来源、控制台修改前预览；材料未给独立复现或第三方评测。
 - 不要只看 denied 数量变多；要看拦截是否对应真实风险、是否减少未知外发和无法解释的 agent 动作。
 
+做法 F：
+
+- 项目较新（约 30 stars），材料是 README 功能说明和作者主张，无第三方基准、用户案例或量化收益数据；不要把它当成成熟稳定方案直接全面替代现有工作流。
+- 需要已安装并登录 `claude` / `codex`，且服务 `PATH` 能找到它们；只有 `found` 且 `signed_in` 的 harness 才适合启动 turn。
+- macOS / Linux 才支持；Ubuntu 24.04 尚未测试；从源码构建才需要 Go 1.27.1+。
+- 跨机器网络无 HTTPS，需要 SSH 隧道或私有网络；网络控制仅 Linux、默认关闭，macOS 上 `contain="on"` 会拒绝每个 turn；会话不能跨 runner 迁移，远程 runner 上 codex 订阅登录暂不支持。
+- `forbid` 只检查模型回复中的 shell 命令文本，看不到运行时拼接出来的命令，也看不到 agent 早先写入脚本后再执行的命令；强规则还要配合收回凭据。
+- 默认在数据目录下为本次会话做文件夹副本，原文件夹不被修改；要直接改原文件夹可传 `"isolate":false`，或用 `apply` 落盘。`apply` 冲突时返回 409 并列出冲突文件，不写入。
+- OpenRouter turn 当前成本显示为 `$0`，因为价格表还没有 OpenRouter 价格，不能拿它做成本对比。
+- 被询问的 agent 能读提问 turn 的 diff，但不能运行那些未应用的文件。
+- cockpit 在独立仓库 `staysup/agentbus-cockpit`，按该仓库 README 启动，使用 `agentbus up` 的服务地址和 token 文件中的 token。
+
 ## 证据与来源
 
 做法 A 的证据基础：调研报告给出 agentplay 的 Apache-2.0 许可、安装与使用方式（一条 `uvx agentplay`、CLI 子命令 `view/build/list/export/import/agents`、完整 flag 表、环境变量表）、`agentplay/v1` 的 JSON 示例与字段含义、JSON Schema 路径与 CI 校验、路径模式与 HMAC 说明、增量构建行为、Windows 构建步骤。报告认为该工具在“效果验证”这一研究问题上证据最强：README 明确把工具定位为回答“改文件前读了什么、哪些命令失败重试了几次、上下文在哪填满、产出了哪些 PR”四类问题，对应字段 `outcome`、`events[].kind`（`read` / `llm` / `verify` 等）、`err` / `errClass` / `exitCode`、`retries`、`delays`、`compactions`、`prs[]`、`totals`（calls / requests / errors / tokens / costUsd）。来源支持度差异（Claude Code 从 `~/.claude/projects/**/*.jsonl` 及 `…/subagents/agent-*.jsonl` 直读、最高保真；Cursor 只拆 main lane 且不记录 token / cost；OpenCode 读 `~/.local/share/opencode/opencode.db`、main lane only、per-turn token；Copilot 覆盖 CLI 与 VS Code 内的 Copilot、main lane only）来自 README。
@@ -514,17 +636,20 @@ pnpm platform --workspace /path/to/repo
 
 做法 E 的证据基础：调研报告来自 Show HN: Stroq – a local audit of what your coding agent did and why，材料来自仓库 README。报告给出 Node.js 22+、本地运行、`~/.stroq` 小缓存、读取最近 30 天会话、命令清单（`npx @stroq/cli`、`show`、`sent`、`replay --all`、`console --workspace`、`init`、`why`、`attack`、`uninstall`、源码构建命令）、支持对象（Claude Code、Cursor、Codex、Copilot CLI、Windsurf、Antigravity、OpenClaw 插件、stdio MCP proxy）、`sent` 的分类和“只打印名称不打印值”、`attack` 在 0.30.0 上 36 个攻击的 15 deny / 21 ask / 0 pass。局限也来自 README：hook 只看到宿主传给它的内容且不同智能体和版本不同；匹配是文本级；它是过滤器不是沙箱；旧、轮换或未知值可能漏掉；密钥可能通过脚本、文件、变量离开而不出现在命令中；本地 transcript 匹配不能证明已送达模型提供商；控制台从 macOS 或 Linux 添加 hooks，Windows 用 `init`；`replay` 的 verdict 是当前策略判断，不是历史记录。示例卡片和 `sent` 输出标注为虚构机器，不是实测用户数据；HN 50 points、11 comments 只表示关注度，不是效果证据；“本地、无 telemetry、无账号、hook 能拒绝 `curl | sh` 和带已知密钥外发、能追踪文本来源、控制台修改前预览”属于作者主张，材料未给独立复现或第三方评测。建议小范围试：先用只读命令审计最近 30 天会话，再在单一仓库接入钩子并核对每次拦截原因；这是调研结论，不是实测效果数据。
 
+做法 F 的证据基础：调研报告来自 StaysUp/agentbus 的 README，给出安装命令（Homebrew 与安装脚本）、`agentbus up` 默认监听 `http://127.0.0.1:8787`、数据目录优先级 `$AGENTBUS_HOME` / `$XDG_DATA_HOME/agentbus` / `~/.local/share/agentbus`、首次启动生成 `token` 文件、`/api/v0/harnesses` 返回 `found` / `version` / `signed_in`、curl 起只读 turn、读回 turn、同会话续聊切模型、diff / apply 与 409 冲突检查、`permissions.toml` 配置、`events.db` 保存请求和回复、`cost/` 计价、`forbid` 记 `tool.refused`、OpenRouter saved agent、停止 turn、cockpit 独立仓库，以及 `-max-runs` 默认 4、范围 1–64、runner `-capacity` 默认 4、跨机器首次传输 50,000 文件 / 414 MB 约 30 秒、后续约 4 秒、OpenRouter turn 成本显示 `$0`、网络控制仅 Linux且默认关闭、macOS 上 `contain="on"` 会拒绝每个 turn、Ubuntu 24.04 尚未测试、会话不能跨 runner 迁移、远程 runner 上 codex 订阅登录暂不支持等具体数据。局限：这些是项目 README 的功能说明和作者主张，没有第三方基准、用户案例或量化收益数据；仓库仅约 30 stars，成熟度有限；需要本地安装和已有 Claude Code / codex 登录，不是托管服务；网络跨机器时无 HTTPS，需要 SSH 隧道或私有网络；`forbid` 只检查命令文本，存在绕过边界。适用条件主要是个人或小团队在 macOS / Linux 本地或私有网络中使用，且接受先小范围验证。
+
 只算主张、不能当结论用的部分：
 
 - “任务匹配”只提供了字段（`agents[]` 区分 main / subagent、`llm` 事件带 `model` / `in` / `cw` / `cr` / `out` / `latency`），原文没有任何跨模型对比的结论或推荐。
 - “条件供给”只能发现问题（MCP server 失败、hook 失败、错误类别、退出码被记录），README 没有给出任何补齐供给的流程或配置模板。
-- “能力发现”是从回放里推断的，原文没有对应主张或流程；“主动推进”原文未涉及。做法 C 那条推文提到的“会话历史可导出为资产”属于能力发现，但同样只有主张、没有流程。
-- 成本数字：Cursor 会话缺 token / cost，agentplay 的成本为估算。
+- “能力发现”是从回放里推断的，原文没有对应主张或流程；“主动推进”原文未涉及。做法 C 那条推文提到的“会话历史可导出为资产”属于能力发现，但同样只有主张、没有流程。做法 F 的“让另一个 agent 评审 / 接手 / 并行处理”来自 README 功能说明，属于作者主张，材料没有给出第三方评测或量化收益。
+- 成本数字：Cursor 会话缺 token / cost，agentplay 的成本为估算；F 的 OpenRouter turn 成本显示 `$0`，不能当成本依据。
 - 调研材料在列举 agentplay 隐私契约清单时于“subagent 的 promp…”处截断，本手册只写入已给出的部分，未补造其余条目。
 - 做法 D 的“记录会复利”“认知负荷下降”等属于作者主张；Show HN 42 分、21 条评论、单日 75 题截图都不是效果证据。
 - 做法 E 的 `attack` 数字是 0.30.0 上一次性沙箱结果，不是对你真实环境的完整证明；示例卡片和 `sent` 输出是虚构机器；HN 50 points、11 comments 只表示关注度；Stroq 的本地、无 telemetry、无账号、hook 拦截和文本来源追踪均为作者主张，材料未给独立复现或第三方评测；README 也未比较不同模型优劣。
+- 做法 F 的“记录每次模型请求和回复、按调用计价、隔离副本、diff / apply、多 agent 评审、统一 API 启动 turn”均为 README 功能说明和作者主张；仓库约 30 stars，材料未给第三方基准、用户案例或量化收益数据，不能据此断定它比现有工作流更好。
 
-五个做法都缺量化改善证据：材料未提供提取成功率、速度、字段完整率等实测数字，agentplay 原文也只有示意性数据，做法 C 只有一条推文和互动量，做法 D 只有作者自述与单项目案例，做法 E 只有 README 命令、虚构示例和一次性沙箱的 `attack` 数字；本手册未补造这些数字。
+六个做法都缺量化改善证据：材料未提供提取成功率、速度、字段完整率等实测数字，agentplay 原文也只有示意性数据，做法 C 只有一条推文和互动量，做法 D 只有作者自述与单项目案例，做法 E 只有 README 命令、虚构示例和一次性沙箱的 `attack` 数字，做法 F 只有 README 功能说明与约 30 stars 的项目状态；本手册未补造这些数字。
 
 ## 依据的调研
 
@@ -533,3 +658,4 @@ pnpm platform --workspace /path/to/repo
 - [@dani_avila7: Claude Code 允许您使用 /export file_name 导出整个会话](../research/radar/2026-10-17/4189-claude-code-export-file-name.md)：值得一试，在完成一段有价值的多轮工作后，用 Claude Code 的 `/export file_name` 把会话历史导成纯文本，作为下一个代理的上下文或用于提炼可复用的技能；命令本身可直接照做，但原文只给了这一条命令和两个用途方向，投喂与提炼的具体方式需自行补足，建议先小范围试。
 - [Show HN: ADRs for AI – Deliberation records for human–AI work, versioned in Git](../research/radar/2026-10-26/7168-show-hn-adrs-for-ai-deliberation-records-for-human.md)：值得一试，以 Git 仓库为载体的“人机协作决策记录”值得在一个项目上小范围试点：把 AI 提出的选项、理由、置信度和证伪条件固化成 ADR，人只做接受或推翻，并用 grep 检索开放问题来保证可续接。理由是原文给出了可直接复制的建仓、种子、提问、裁决流程和记录格式，但目前只有作者自述与单项目案例，尚无效果数据。
 - [Show HN: Stroq – a local audit of what your coding agent did and why](../research/radar/2026-11-06/10734-show-hn-stroq-a-local-audit-of-what-your-coding-ag.md)：值得一试，建议小范围试：先用只读命令审计最近 30 天会话，再在单一仓库接入钩子并核对每次拦截原因；理由是命令和流程可直接执行，但钩子覆盖与文本匹配有明确局限，需先验证误报和覆盖率。
+- [StaysUp/agentbus](../research/radar/2026-11-11/12433-staysup-agentbus.md)：值得一试，建议小范围试用：按 README 启动 AgentBus 本地网关，用 curl 或 cockpit 记录编码智能体的模型调用、成本和完整会话，先验证隔离、diff/apply 与多模型切换；理由是原文给出了可复制命令和权限配置，但项目较新且有已知限制，不宜直接全面替代现有工作流。
