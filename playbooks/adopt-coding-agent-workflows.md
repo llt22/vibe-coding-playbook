@@ -1,10 +1,10 @@
-# 把编码 agent 关进生成、门禁和人工复核的笼子里
+# 在 vibe-coding 中保住质量：文档同步、先计划后编码、PR 前交叉审查
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：解决 agent 在重复流程、硬约束和复杂工程中跑偏、绕过检查、没有证据就宣布完成的问题。
-> 先试这一步：先选一个低风险小项目，把一条可判定的硬约束做成 pre-commit 门禁并让 agent 读到失败输出；要试硬件路线，先按 README Quick start 跑示例板，不要直接改真实板。
-> 最近修订：2026-11-05
+> 解决的问题：用编码 agent 长期维护代码时，如何把规则、计划、审查和门禁固化成可复跑的流程，避免复杂度失控、反复修补、测试造假和文档漂移。
+> 先试这一步：先在一个中等规模的维护仓库写一份只含三条硬规则的 CLAUDE.md：改代码必须同步 docs、大改先出计划并人工审、PR 前子代理自审加第二个模型交叉审查。
+> 最近修订：2026-11-11
 
 ## 解决什么问题
 
@@ -13,6 +13,8 @@
 roost 路线把产品想法塑形成 epic，按切片逐块构建，再走 review、close-out、release QA 和 rollout；agent 干活，但在命名检查点停下来让人做决定，发布命令由人自己执行。它补的是带人工检查点的端到端规格驱动流程，不替代提交门禁、测试真实性检查、项目契约 linter 和最小多角色模板。ai-config 路线把 Claude Code 与 Codex 的配置、技能、角色、工作流和 hooks 做成版本化配置层，安装后跑清单与单元测试校验，确认“装对了、没漂移”；但它 macOS-first，Codex 默认是高权限，必须先在隔离环境试装并复核权限与隐私。
 
 本次新增 hardware-in-the-loop 路线：它把硬件工程里“可由脚本生成、可用门禁验证”的产物关进笼子——板子是 Python 脚本声明的数据，经统一 pipeline 生成 KiCad 原理图、布线板、fab set 和 STEP；外壳/装配体用 CadQuery builder；固件同一份代码既编译到目标板，也编译到 PC 数字孪生。agent 在 git worktree 工作，所有 lane 落到 dev，main 只在该 commit 的 CI 报告全绿且零回归时提升；重任务拿 slot，长链 detached 运行，watcher 唤醒，未提交工作每 20 分钟快照，usage tripwire 触发时停止、push、写 resume document。README 明确说这不是 all-in-one 产品，而是起点，需要替换成自己的板子、模型、场景和门禁；green gates 只代表“存在的检查通过了”，不能替代工程师查看。
+
+本次新增 HN vibe-coding 质量讨论：提问者用 Claude 大量生成代码后出现复杂度失控——功能随意扩张、缺少统一行为定义、修 bug 变成反复修补、边界条件和 UI bug 越积越多，且 agent 每次只盯着当前会话附近的代码。评论给出的可用做法是：CLAUDE.md 强制文档同步、大改先出计划再动手、PR 前子代理自审加第二个模型交叉审查、静态分析/CI 门禁、定期技术债审计、demo 视频交接、变异测试兜底。这些全部是个人经验、无对照实验，且评论内部有分歧：pre-PMF 阶段别管质量先冲功能，与维护期代码库应早点还技术债相反；还有一派认为 LLM 代码只配当“电影布景”用完即弃。本手册只建议在需要长期维护的代码库小范围试。
 
 ## 适用与不适用
 
@@ -24,6 +26,8 @@ ai-config 适用于：macOS-first 环境，已装 Bash、Git、Python 3.11+，�
 
 hardware-in-the-loop 适用于：硬件/PCB-CAD-固件这类产物能由脚本生成、能被自动门禁验证的小项目；愿意用 Claude Code skill，接受 git worktree、dev/main、CI、slot、detached job、watcher 这套笼子；愿意在上 fab 前人工打开 CAD 和板子，让 agent 对每个 part 和每个数字解释“为什么”，并让一个“拿到文件、不拿结论”的新 agent 做 adversarial review。不适用于：没有可自动验证产物的知识工作；想把它当 all-in-one 产品；想跳过人工复核；或材料只有 README 却要照猜 docs/METHOD.md、docs/PCB.md、docs/LESSONS.md 里的细节。README 的 implemented vs roadmap 表明确列出未建部分：DESIGN_STANDARDS 的机器检查器、fine-pitch escape 的 in-house completion router、BGA fan-out、panelization、精确接触面积的干涉检查、register-level device models、lockstep RTOS shim、rendered sensor models、bench-versus-twin 对比工具、viewer 的铜层/线束间隙/弯折半径/测量/爆炸图/构建 diff；Isaac Sim harness 写明“written against API and not run here”。许可证是 HIL-ASA-1.0，非 OSI 开源，卖工具本身有限制，商用设计自己的产品可以但需保留 credit。
 
+HN vibe-coding 质量讨论适用于：需要长期维护、多人协作的代码库；agent 支持项目级规则文件（如 CLAUDE.md）、子代理与多模型调用；工具链能跑静态分析与 CI；愿意在 2 周内按单仓库/单子目录试用。不适用于：一次性脚本或原型、pre-PMF 冲刺期的主仓库、没有 CI 或静态分析器的项目、不能接受“审查意见回流给主代理迭代”的人。评论内部还有相反结论：有人认为 pre-PMF 阶段不应上这些流程；也有人认为 LLM 代码只配当“电影布景”，用完即弃。遇到这两种情况，不要硬套本手册的流程固化路线。
+
 ## 前置条件
 
 Claude Code：macOS/Linux/WSL，Windows 用官方 PowerShell/CMD；Anthropic 账号；项目可写 .claude/；提交门禁需 git 和 pre-commit；agent 能读 hook 输出。MyAgent：Python 3.11+、macOS/Linux、Git、模型接口 key/base URL/model；自进化写 skill 需写权限。测试规则：可运行测试命令、根目录 AGENTS.md、代理有读写权限。项目契约：git、Python 3.9+；SessionStart 需 Claude Code；CI 用仓库里的 agents-lint.yml，不能照 README 手写。claude-howto：Claude Code 2.1+、项目目录、MCP 凭据、hooks 可执行权限；已有 settings.json 手动合并。Tenex：多人 git 仓库、2–3 人 1 仓 4 周试点、能写一页纸流程、agent 有写权限、两个模型入口读同一仓库、有故事点或等价单位。Skill Recorder：先到仓库确认安装、停止录制、产物形态、支持代理和触发方式；录制可能含敏感信息，先确认落盘与清除。tstack：gh auth login、python3、仓库 push/PR/merge 权限；council/sol-loop 需要能调用其他厂商模型 subagent 的 harness。dev-quality-gates：从仓库根目录开始，代理能读 GitHub 原始文件、改仓库、跑命令；人工审阅计划后才改；用 mise/hk 时能安装；CI 跑全量检查，因为 hook 可被 --no-verify 绕过；材料只有 README，adopt.md/patterns.md 正文未包含。游戏工作室模板：Git、Claude Code、Python 3、Bash，推荐 jq；项目根目录含 CLAUDE.md 和 project.yaml；Windows 用 Git Bash；缺 Python 会静默回退到默认设置，提交暂存数据 JSON 时会被阻止；必须在根目录启动，否则跳过 hooks、deny 规则和 ask-first 权限模式；保留默认 hooks 和 settings.json 权限规则；游戏测试放 tests/，模板自检用 studio-tests。
@@ -33,6 +37,8 @@ roost 前置：Claude Code，每个 repo 一个 session；tracker 为 Jira（走
 ai-config 前置：README 说明这是 macOS-first，需要 Bash、Git、Python 3.11+；Node.js 18+ 用于 bundled writing tools 和 shadcn MCP；Claude Code、Codex 需另行安装，Bun 可选。安装前先读 docs/configuration.md#public-defaults-and-private-state 和 docs/privacy.md，确认能接受 README 明确写出的 Codex 默认值：danger-full-access 与 approval policy never。若不能接受，不要直接接入真实仓库、凭据或生产环境。先备份现有 ~/.claude 与 ~/.config/codex，在隔离的 macOS 用户或一次性环境中试装。第三方技能保留各自许可证，aside-browser 因上游无再分发许可只保留在本地、不在仓库中分发。材料只有 README，docs/skills.md、docs/configuration.md、docs/privacy.md 的具体内容未提供。
 
 hardware-in-the-loop 前置：已安装 Claude Code，目标仓库可用 git。手工路线需要 answers.json，并按 skills/hardware-in-the-loop/references/interview.md 的格式填好；下面命令是 README 原文，执行目录要能让 skills/... 路径可达。Windows/PowerShell 路径用 README 给的 pwsh 命令。工具上需要 KiCad 10、CadQuery 2.x、Freerouting、Claude Code，按需 CMake、编译器、Unreal >= 5.8.4、Isaac Sim、CUDA；setup_tools.ps1 负责固定版本工具链，check_twin_tools.ps1 查找工具。README 把工具、固定版本和 hash 放在 docs/TOOLS.md；docs/METHOD.md、docs/PCB.md、docs/LESSONS.md 等正文不在本次材料中，不能照猜。
+
+HN vibe-coding 质量讨论前置：使用支持项目级规则文件（如 CLAUDE.md）的编码 agent；支持子代理和第二模型调用；仓库有可跑的测试、构建、lint，最好有 CI；维护中的代码库，而不是一次性脚本或 pre-PMF 冲刺主仓库；愿意接受“先审计划再改代码”和“审查意见回流到主代理迭代”的协作方式。评论里出现的模型版本名（Opus 5.5、Codex Sol 6.1）可能有笔误或为作者内部叫法，落地时按自己可用的最强档位替换，不要照抄型号。
 
 ## 操作步骤
 
@@ -497,7 +503,7 @@ python3 scripts/skills-inventory.py --refresh
 
 做法 B（按需启用可选组件）：默认安装稳定后，再根据实际需要加 --with-browse 或 --with-launchagent；不要一上来全开。怎么选：第一次试 ai-config → 做法 A，隔离环境、默认安装、只跑安装层校验和一个小功能/一次 review-only；需要浏览器守护进程或每周 memory rotation → 做法 B 按需加；不能接受 Codex 高权限默认 → 不接入真实仓库，或先不采用；要效果数据 → 当前材料没有，先按基线对照试用。
 
-### 22. hardware-in-the-loop：生成器 + 门禁 + CI + 人工复核（本次新增，可选）
+### 22. hardware-in-the-loop：生成器 + 门禁 + CI + 人工复核（可选）
 
 来源背景：Kemerd/claude-hardware-in-the-loop 是面向硬件工程的 Claude Code skill、方法说明和可运行项目骨架。据 README，板子是 Python 脚本声明的数据，经统一 pipeline 生成 KiCad 原理图、布线板、fab set 和 STEP；外壳/装配体用 CadQuery builder 导出质量与重心；固件控制核心避开 vendor header，同一份代码既编译到目标板，也编译到 PC 上的数字孪生。它不是 all-in-one 产品，而是起点，需要替换成自己的板子、模型、场景和门禁。输入只有 README，关键细节在未提供的 docs 中，不能直接 adopt。
 
@@ -540,6 +546,61 @@ cd <your-repo> && pwsh -File windows/ci.ps1
 
 做法 B（最小试用：只跑示例和一个最小自建板）：选一个低风险、可丢弃的 2 层 breakout 或小项目（调研原文在“小外”处截断，具体范围未给出），先按 README 的 Quick start 跑 example，再替换成自己的小板。记录工具安装失败、pipeline 时间、ERC/DRC 结果、CI 回归、host suite、twin 场景、人工 review 发现、token 成本。通过后再扩大。怎么选：硬件工程且产物可由脚本生成、能被自动门禁验证 → 做法 A；只想借鉴“生成器 + 门禁 + CI + 人工复核”的结构 → 不要照搬 KiCad/CAD 细节；没有可自动验证产物 → 不采用，或只借鉴结构。
 
+### 23. HN vibe-coding 质量讨论：文档同步、先计划、交叉审查、定期审计（本次新增，可选）
+
+来源背景：Hacker News 一条求助帖及 27 条评论。提问者用 Claude 大量生成代码后出现复杂度失控：功能随意扩张、缺少统一行为定义、修 bug 变成反复修补、边界条件和 UI bug 越积越多，且 agent 每次只盯着当前会话附近的代码，不理解全局。评论给出若干可直接照做的个人工作流，但全部是个人经验、无对照实验，帖子仅 31 分、27 条评论，样本小，且发言者多为已有较强工程习惯的人，存在选择偏差。评论内部有分歧：pre-PMF 阶段别管质量先冲功能，与维护期代码库应早点还技术债相反；还有一派认为 LLM 代码只配当“电影布景”，用完即弃。本手册只建议在需要长期维护的代码库小范围试。
+
+做法 A（推荐起点：三条硬规则 + 计划审批 + 两级审查，2 周单仓库试用）
+
+1. 在仓库根放 CLAUDE.md，写入三条硬规则（据评论原意改写，非原文逐字）：
+
+```md
+# CLAUDE.md
+- 任何代码改动必须同时更新 docs/ 下对应文档。
+- docs 只写“有经验的工程师从零重建这套系统所需要的信息”，不写外观/呈现细节。
+- 跨多个 PR 的大改动，先在 docs/plan/ 下写计划文档；计划模板的最后一步固定为：
+  删除该计划，把其中仍有长期价值的内容并入 docs/。
+- 创建 PR 前：先由子代理审查代码，再由第二个（另一家/另一个）模型审查，
+  主代理按审查意见迭代修复，直到审查通过。
+```
+
+预期：agent 每次改代码时会先看 CLAUDE.md，改动后同步 docs。前提：agent 支持项目级规则文件；仓库有 docs/ 目录。注意：这是提示文件层的规则，不是 hook 门禁；agent 是否真的同步 docs 仍要靠抽查。
+
+2. 为计划文档准备固定模板，模板必须包含“计划完成后删除计划、把长期有效内容折叠进 docs”这一步，避免计划文档变成第二套腐烂的文档。让产品规格、历史决策也进入仓库：每个任务与决策写成 .md，并互相引用。预期：新会话的 agent 不必从相邻代码“猜”产品该怎样表现。
+
+3. 简单改动直接提；不简单的先要一份 brief / 计划，人工审完再决定“一次做完”还是“拆成多 PR 计划”。规则：在有计划说明它如何契合现有代码之前，不让 agent 改代码；并且要真的会反驳它。可参考 OpenSpec 三段式（planning → implementation → archiving）：规划阶段把“要做什么 + 业务原因”讲清楚并和技术方案争论，实施阶段换一个新上下文执行；规格可以走 PR 给同事先审。预期：计划阶段没有代码改动；你审计划的时间被记录下来。
+
+4. PR 前跑两级审查：子代理自审 + 第二个模型交叉审查（评论者举例 Opus 5.5 high 与 Codex Sol 6.1 high，型号以自己可用版本为准），让主代理迭代到审查通过。评论者强调“另一个供应商的模型”是为了避免同源盲区。预期：审查意见回流给主代理，直到通过才开 PR；不是只跑一次形式审查。
+
+5. 把团队规范变成构建期硬门禁，而不是提示词里的软要求。做法是把规则接进静态分析器管线，agent 构建失败后自己回来改；评论者举的例子是禁止表达式体 `=>` 语法：
+
+```ini
+# .editorconfig（示意：把不想要的写法设成 error，构建失败 → agent 被迫修正）
+# 原文只给了“禁止 => 表达式体”这个例子，未给具体 rule id，需按所用版本自行查。
+```
+
+预期：构建失败会阻断 agent，而不是被绕过；agent 看到错误后自行修正。前提：静态分析器能接进构建，规则能设成 error。
+
+6. 用一条“模式检查”提示词/技能文件压住重复造轮子。评论者 skill 文件里原样写着：
+
+```text
+inspect existing code under [subdir] for implementation patterns.
+```
+
+前提：代码量决定 token 成本；代码多时改为列出想要的模式清单，或在 skill 的 references 里放一小段样例代码。更硬的版本：做成独立 gate——新代码与已有工具函数重复、重命名了已有命名、该用列表推导却写 for 循环等，直接让提交失败。预期：agent 先看现有模式再写新实现，而不是每次重造。
+
+7. 把 `simplify`、`code-review` 这类技能固定在“验证”环节跑；CI 至少要有测试、构建、lint、SQL 破坏性变更与重迁移检查。预期：验证环节不是靠人记得跑，而是固定在流程里。
+
+8. 每隔一段时间（评论者举例每月一次）对所有代码库跑一次“技术债”审计技能，让 agent 出报告再修；问题多时走计划流程。检查维度为 DRY / YAGNI / KISS。清理顺序：先把已知坏代码枚举出来，逐个“修或删”，先清路再前进。理由：技术债越多，模型越容易照着坏样例继续写。预期：报告出来后只修前 3 条，避免一次改太多。
+
+9. 让 agent 交接时录一段 demo 视频。经验是它在录制过程中常自己发现并修掉问题，而且责任转移到 agent 一侧——要说服人，就得自己把活做出来，而不是让你当它的 QA。预期：视频里能看到真实运行，不只是测试绿灯。
+
+10. 质量兜底（评论者 mpd，风格与他人差异最大）：先固化架构再加功能；尽可能 TDD；代码写完后跑全量变异测试。他称自己 agent 写的代码库里约 70%+ 是测试、基准和实验代码。人做变异测试很痛苦，交给机器才现实，这一步能解决很多微妙 bug。预期：变异测试得分可记录；误报与耗时先观察再决定是否常规化。
+
+做法 B（轻量：只保留计划文档 + docs 同步）：如果团队处在 pre-PMF 冲刺期，或两周试用后反复修补次数没降、PR 审查时长反而明显上升，退回只保留“计划文档 + docs 同步”两条轻量做法。这两条成本最低，也最不容易把工作从写代码挪到审文档。
+
+怎么选：需要长期维护、多人协作的代码库 → 做法 A；一次性脚本、原型、pre-PMF 冲刺主仓库 → 做法 B 或不上全套；认为 LLM 代码只配当“电影布景”用完即弃 → 不适用本手册的流程固化路线；只想补硬门禁 → 用第 9 步提交门禁和第 18 步 dev-quality-gates，不必上全套 HN 工作流；要测试真实性 → 第 11 步空实现检查和本步第 10 条变异测试可以叠加，但先各试一次再决定。
+
 ## 怎么判断变好了
 
 流程固化：同一 prompt 重复 ≥3 次就建 skill；Plan 阶段没写代码，Explore 只读；TDD 测试在实现前真的红过一次；视觉迭代 2–3 轮对齐；用 /effort 在自己环境核对。提交门禁：违规提交率下降、首次提交即通过比例上升、每次触发后修复轮数减少、人工 review 同类问题减少、误报可控；对照 A 组只靠 AGENTS.md，B 组 hook 门禁 + 失败提示。文件大小门禁：只在暂存文件触发、忽略锁文件和生成文件、超限被阻止、错误信息能指导拆分、误报可接受。MyAgent：Plan Mode 获批前无写操作/Shell；SKILL.md 出现或更新；审计产物可查来源与版本；人工读生成的 skill。测试规则：改测试凑绿次数少、空实现检查通过比例高、返工少。项目契约：linter 零错误、--strict 无可接受警告、CLAUDE.md 只有 @AGENTS.md 无 W070、CI 三平台绿、会话开头有自检输出、W101 在 32 KiB 告警；linter 速度基线引用来源数据，A/B 5 次/条件不是统计显著。Tenex：人均周故事点/任务数趋势，前 4 周基线 vs 后 4 周；返工率防刷量；为什么这么改的解答耗时；评审实质问题数和采纳比例；token/人力支出。claude-howto：两周单项目，三件套跑 5 次，记录耗时、返工、有效问题/误报、测试通过率；三件套无明显收益先不要加 hooks/MCP。Skill Recorder：3 次复跑至少 2 次无需人工接管且含检查时间总耗时低于手工；记录完成率、接管次数、耗时比、失败集中点。tstack：1 周只启用 file-pr 和 babysit-pr，跑 2–3 个真实 PR；看首段是否先讲问题、CI 修复轮数、误报/噪声比例、评论可直接发、人工总耗时；再加 full-stop 看人工干预次数/PR，3 次以上不升级；full-send 仅在 CI 能拦住、可回滚、非关键仓库试 1–2 次，出现 revert 即回退。dev-quality-gates：选真实仓库，先只覆盖一个主语言加一个跨切面风险类别；记录推荐数、接入数、成功证明能失败数、误报数、CI 时长变化、修复一个违规所需时间；核心是违规能否被稳定阻断。游戏工作室模板：用 1–2 天小任务、独立仓库/分支，先跑 minimal 闭环；记录闭环是否完成、关闭故事是否有 production/qa/evidence/ 截图或观察记录、review_mode 人数是否符合需要、/skill-test audit 是否通过、是否出现子目录启动丢 hooks、git 规则误伤提交信息；minimal 与 standard 的 1 vs 30 份文档、0 vs 58 分钟、盲审排名只是作者自测，不要当统计结论。
@@ -550,11 +611,15 @@ ai-config：先在一个低风险仓库做一轮最小试用，不设固定时�
 
 hardware-in-the-loop：先看 Quick start 是否能跑通，示例板 12 步 pipeline 是否能跑（README 一处说 12 步 21 秒、另一处 skeleton 表说约 15 秒，存在不一致，不要当性能基线）。硬门槛看 ERC 是否 0/0、最终 DRC 是否在 KiCad 默认严重度下 0 violations / 0 unconnected / 0 parity items、每条采购行是否 live resolve 到 MPN、no-shortcut audit 是否对新 stub、canned success、admitted guesses 失败、CI matrix 是否带 regression compare、main 是否只接受 exact commit 全绿且零回归。测试退出 0 但没有 summary line 算失败，空 suite 算失败；host suite 有 165 个 host checks、20 次 scenario runs、determinism 和 Python 侧 ABI 测试；Unreal 5.8.4 headless 自动化测试通过且 trace hash 与 native runner 相等。这些是 README 数据，不是外部复现。最小试用：选一个低风险、可丢弃的 2 层 breakout 或小项目，先跑 example 再替换自己的小板，不设固定时长；通过后再扩大。记录人工 adversarial review 是否发现每个 part 和每个数字解释不了的问题；README 自述一次 swarm day 烧 4–5 million tokens、lane agents 各带 300–800k tokens 上下文，只能当成本警示。
 
+HN vibe-coding 质量讨论：建议 2 周、单仓库或单子目录最小试用。第 1 周只上三条：CLAUDE.md 强制文档同步、大改先 brief 人审、PR 前子代理自审加第二模型交叉审查；挑一个中等复杂度需求强制走“brief → 人审 → 实施”，记录人工审 brief 的时间。第 2 周加一条构建期门禁（重复实现/命名冲突/lint 任一），确认 agent 真的会因构建失败自己回头改，而不是绕过门禁；周末跑一次技术债审计（DRY/YAGNI/KISS 三问），只修前 3 条；若仓库已有测试，试跑一次变异测试，看误报与耗时是否可接受。可观察指标：同一模块内“修了又坏”的反复修补轮次（试用前后各统计一批 bug 的平均返工次数）、回归缺陷数/每千行新增代码的缺陷数、PR 人工审查时长与审查意见条数（防止工作只是从写代码挪到审计划）、docs 与代码的偏离程度（随机抽 5 处改动检查文档是否同步更新）、测试/基准代码占比、变异测试得分、agent 因门禁失败而自纠的比例。否证条件：两周后反复修补次数没降、PR 审查时长反而明显上升、或团队处在 pre-PMF 冲刺期，说明这套流程对当前阶段不划算，退回只保留“计划文档 + docs 同步”两条轻量做法。这些指标和 2 周试用是调研报告建议，不是评论者的对照实验数据。
+
 ## 常见坑
 
 1. 把 think/think hard/think harder 当开关；只识别 ultrathink。2. 以为 effort 越高越聪明；max 仅单会话且写不进 settings.json。3. cp -r 整个 .claude/；Skills/hooks/agents/workflows 是以你的权限运行的可执行指令，要逐文件读。4. 把版本时点数字当事实；用 /effort 自己核对。5. 命名冲突搞错；企业 > 个人 > 项目 > 插件 > 内置。6. 过度上扩展点；主会话放得下就别上子智能体。7. 拿半截资料硬做；材料截断处不补步骤。8. 拿不可判定约束上 hook；模式匹配会误报漏报。9. 规则写进 hook 就不管；变更时要同步 hook 与匹配模式。10. 反馈通道没打通；agent 读不到失败输出就只会提交失败。11. 把 ten out of ten 当数据。12. 以为开了自进化就不用管 skill；要人工抽查生成的 SKILL.md。13. Plan Mode 下等它改文件；它阻断写操作和 Shell。14. 用 --yolo 当默认；README 也不建议长期默认。15. 把 pytest 全绿当端到端有效；测试不调用模型。16. 把 README 示例 model 名当事实。17. 目标配错，skill 写错地方；project 写 .bear/skills/，user 写 ~/.bear/skills/。18. 把审计产物当效果证明。19. 把测试改绿当完成。20. 空实现检查搞错对象；只对新写测试做，恢复后确认变绿。21. 把 7 条规则当完整清单抄；原文只完整给第 1 条。22. 没有测试的项目硬套。23. 误把补写的 git 命令当原文。24. 以为写进 AGENTS.md 就等于必须发生。25. 把 linter 当语义检查；它只查结构、占位、路径、命令、密钥、大小。26. 覆盖已有 .claude/settings.json。27. 照 README 手写 CI workflow。28. 把 5 次 A/B 当统计显著。29. 同时维护 AGENTS.md 和 CLAUDE.md 两份规则。30. 把 Cursor/Copilot 当已验证。31. 把 Lessons 当自动沉淀。32. 把测试规则和契约 linter 混为一谈。33. 文件大小门禁跑全仓库。34. 忘排除锁文件和生成文件。35. 把 bytes/4 当精确 token。36. 超限只报错不给拆分说明。37. 把 5,000 当普适阈值。38. 把 W101 和文件大小门禁混为一谈。39. 把推文点赞当效果证据。40. 把 Ryugi 当已量化验证。41. 多 harness 只装一个。42. 没装 Node.js 却用 ryugi-artifacts。43. 干净会话没看到 brainstorming 就继续写代码。44. 忽略项目自有技能。45. 把 just code it 当常态。46. 把默认 squash、从不 merge commit 当团队规范。47. UI 验收只看代码不看证据。48. 默认开 worktree。49. 把 Ryugi 与第 5 步手工工作流同时跑。50. 在 Cursor/OpenCode 照猜完整命令。51. 把 claude-howto 当新工具或一次全装。52. 照 README 用 /plugin install 装 claude-howto 插件。53. 注册 hooks 覆盖已有 settings.json。54. 一次配 33 个 hook 事件。55. 把 /self-assessment 和 /lesson-quiz 当效果证明。56. 把仓库自身 pytest/ruff/bandit/mypy/coverage 当使用效果。57. MCP 命令硬编码 PAT 或提交凭据。58. 把 README 的 90% 能力没用上、10x productivity 当数据。59. 把 checkpoints 当版本控制替代。60. 自动化一个不存在的流程。61. 让评审模型改代码。62. 把第二个模型当形式。63. 只给 agent 人写摘要，不把原始记录落 repo。64. 把故事点当绝对真理。65. 只看人均故事点上涨不看返工率。66. 单人单项目小团队照搬重结构。67. 企业非工程场景没解决 RBAC 就上生产智能体。68. 照抄播客模型名。69. 把 2 倍产出当统计结论。70. 把文档签入当自动推进。71. 把 MetaHarness 和提交门禁、测试规则、项目契约混为一谈。72. 把 readouts 直接当客户交付物。73. 把 Skill Recorder 推文当完整文档。74. 录制前不确认敏感数据落盘位置。75. 拿一次性任务去录制。76. 录完不读一遍就交给代理。77. 只装 full-send 不装依赖。78. 一上来就用 full-send。79. 改技能本体来放个人配置。80. 以为 council/sol-loop 在任何 harness 都能用。81. 把每天在用当效果证据。82. 在非 GitHub、非 PR 式协作硬套 tstack。83. 把 full-send 用在生产关键路径。84. 只触发 file-pr 就以为 PR 描述合格。85. 把 dev-quality-gates 当通用技术栈全量安装。86. 跳过证明能失败。87. 材料未提供 adopt.md/patterns.md 时照猜配置。88. 让代理一次改太多。89. 把本地 hook 当 CI 替代。90. 把清单策展声明当效果证明。91. 在子目录启动游戏工作室模板；会跳过 hooks、deny 规则和 ask-first 权限模式。92. 缺 Python 3 硬跑；所有设置会静默回退。93. 把代理层级当计费方案；那是角色资历。94. 一上来把 modes.rigor 升到 full；先用 minimal 闭环。95. 只看测试绿灯关闭玩家可见故事；必须启动、观察、截图存 production/qa/evidence/。96. 把游戏工作室模板整仓照搬到非游戏业务；README 没有迁移步骤。97. 把作者自测的 1 vs 30 份文档、0 vs 58 分钟当外部复现；表格只展示两档。98. 忽略 git 规则误伤提交信息；提交信息出现 push +、clean -f、reset --hard 类似片段可能被拒绝。99. 把 /settings 写错层级；写 project.yaml 是团队级，--local 写个人级。100. 改模板后不跑 /skill-test 和 /skill-improve；框架本身会腐坏。101. 把 49/74/15/14/62 当已核对源码；材料只依据 README，未审阅源码。102. 缺工具硬装 roost；README 说会静默失败。103. 把 roost 当自动驾驶员；它不替你 merge、不替你 deploy，rollout 每条命令由人执行。104. 让 orchestrator 编辑 repo；它只分发和回收结果。105. 在 roost 配置里写密钥；配置只写密钥从哪里取。106. 不读 examples/config.example.yml 和 config-schema.md 就猜 key。107. 多团队不设 ROOST_CONFIG；orchestrator 在 repo 外运行，看不到 repo 内 .roost/config.yml。108. 在 Cursor 里用 run-slice、build-epic、run-bug、review-epic、retro；这些要么不能用，要么只能部分替代。109. 跳过计划审批或切片检查点；roost 的设计就是让人在命名检查点拍板。110. 让 release-qa 结论替代人工 runbook；发布命令仍由人执行并粘贴输出。111. 把 30 stars 和作者自述当 adopt 证据。112. 把 roadmap 里的 Linear、Graphite、GitLab、Codex 等当已支持。113. 把 roost 和提交门禁、测试空实现检查、项目契约混为一谈；它补流程，不补硬约束。114. 直接接入真实仓库、凭据或生产，没先读 ai-config 的配置与隐私文档、没确认 Codex 默认 danger-full-access 与 approval policy never。115. 把 ai-config 当跨平台通用配置；README 说它是 macOS-first。116. 缺 Python 3.11+、Node.js 18+ 或 Codex 硬跑；先补前置。117. 把私有状态提交进 Git；settings.local、config.local、USER、memory、sessions 等应留在本地。118. 把 ai-config 的四条校验命令当效果证明；它们只证明装对没漂移。119. 把 78 skills、8 roles、46/74 bindings 当已核对源码或效果数据。120. 一上来就启用 --with-browse 或 --with-launchagent；先默认安装，按需再开。121. 忽略第三方技能许可证；aside-browser 因上游无再分发许可只保留在本地。122. 改技能后不 refresh 清单、不重跑安装器；链接和清单会漂移。123. 把 Codex 默认高权限当团队规范；不能接受就不要接入。124. 把 --installed 当自动修复；它只报告差异，不替换本地 skills。
 
 hardware-in-the-loop 新增坑：125. 在 KiCad 里手改 .kicad_pcb；应改 Python 数据并重跑统一 pipeline，pipeline 在第一个错误处停止。126. 把 green gates 当工程师替代；README 明确说 green gates 只代表“存在的检查通过了”，上 fab 前仍要人工打开 CAD 和板子，让 agent 对每个 part 和每个数字解释“为什么”。127. 跳过“拿到文件、不拿结论”的新 agent adversarial review；它要独立审 schematic、layout、BOM、CAD、firmware。128. 把 roadmap 当 implemented；DESIGN_STANDARDS 机器检查器、fine-pitch escape 的 in-house completion router、BGA fan-out、panelization、精确接触面积干涉检查、register-level device models、lockstep RTOS shim、rendered sensor models、bench-versus-twin 对比工具、viewer 多项能力都未建；Isaac Sim harness 写明“written against API and not run here”。129. 把示例板 12 步 21 秒和约 15 秒当性能基线；README 两处不一致。130. 把 165 host checks、20 次 scenario runs、Unreal trace hash 与 native 相等当外部复现；这是 README 数据，且来自作者私有工作流自述。131. 把 4–5 million tokens 的 swarm day 当常规配置；README 建议默认 single session、不用 subagent，swarm 要“有意识地选”。132. 不按 references/interview.md 填 answers.json 就跑 scaffold.py；命令前提是 answers.json 格式正确。133. 在 Windows/PowerShell 路径漏掉 pwsh 命令或把 D:\hiltools 写错；README 原文用 pwsh -File 和 -ToolsRoot。134. 文件树有 setup_tools.sh 但 Quick start 没给命令，就自己补写；材料未提供对应命令。135. 不读 docs/TOOLS.md 就猜固定版本和 hash；README 说工具、固定版本和 hash 在那里。136. 把 docs/METHOD.md、docs/PCB.md、docs/LESSONS.md 的细节当已知；本次材料只有 README，正文未提供。137. 忽略许可证 HIL-ASA-1.0 非 OSI 开源；卖工具本身有限制，商用设计自己的产品可以但需保留 credit。138. 让 main 接受红门禁或非 exact commit；README 说 main 只在该 commit 的 CI 报告全绿且零回归时提升。139. 不设 usage tripwire；README 说触发时所有 agent 停止、push、写 resume document。140. 不做未提交工作每 20 分钟快照；长链 detached 运行和 watcher 唤醒会失去恢复点。141. 把硬件路线照搬到没有可自动验证产物的知识工作；只能借鉴“生成器 + 门禁 + CI + 人工复核”的结构，不能照搬 KiCad/CAD 细节。
+
+HN vibe-coding 质量讨论新增坑：142. 以为把规则写进 CLAUDE.md 就等于必须发生；文档同步和双模型审查仍是提示层规则，要靠抽查和门禁补硬。143. 把计划文档当第二套长期文档；模板最后一步必须是“删除计划、把长期价值并入 docs”，否则计划文档会腐烂。144. 计划文档不写“如何契合现有代码”就让 agent 开工；规则是计划里说明它如何契合现有代码，且人要真的会反驳。145. 把“PR 前审查”做成一次性形式；要子代理自审 + 第二模型交叉审查，并让主代理迭代到通过。146. 把第二个模型当同源复读；评论者的意图是换一家/另一个模型，避免同源盲区。147. 把团队规范只写在提示词里；能设成构建 error 的规则要接进静态分析器/CI，让 agent 构建失败后自己回头改。148. 静态分析器规则照抄原文却没有 rule id；原文只给“禁止 => 表达式体”这个例子，具体 rule id 要按所用版本自行查。149. 模式检查提示词在超大仓库直接跑；代码量决定 token 成本，代码多时改成模式清单或 references 里放样例。150. 技术债审计一次修太多；报告出来后只修前 3 条，问题多时走计划流程。151. 把 demo 视频当形式；它的价值是让 agent 在录制中自己发现并修问题，不是给人看的汇报片。152. 把变异测试当必选项；先试跑一次看误报与耗时，可接受再常规化。153. 把约 70%+ 测试/基准代码占比当普适目标；这是评论者个人经验，无数据无对照。154. 在 pre-PMF 冲刺主仓库硬上全套；评论内部明确反对，先用“计划文档 + docs 同步”两条轻量做法。155. 把 27 条评论当系统方法论；帖子仅 31 分、27 条评论，样本小且有选择偏差，只值得小范围试。156. 把模型版本名 Opus 5.5、Codex Sol 6.1 照抄；可能是笔误或内部叫法，按自己可用版本替换。157. 把“审查通过”当合并前置条件却不记录审查意见；意见要回流给主代理迭代，不是只留一个通过标记。158. 把 CI 全绿当质量改善；它只说明已有检查通过，反复修补轮次、回归缺陷数、PR 审查时长仍要单独看。
 
 ## 证据与来源
 
@@ -573,7 +638,8 @@ hardware-in-the-loop 新增坑：125. 在 KiCad 里手改 .kicad_pcb；应改 Py
 - 来源十三：Donchitos/Claude-Code-Game-Studios README，MIT 模板仓库。可核对：README 声称 49 个代理、74 个 skills、15 个 hooks、14 条路径规则、62 个文档模板；代理分导演层、部门主管层、专家层；协作协议先提问、给 2–4 个带优劣选项、用户决定、出草稿、用户批准才落盘；不是自动驾驶员；安装 git clone 后 cd my-game；必须在项目根目录启动，否则跳过项目 hooks、deny 规则和 ask-first 权限模式；/start、/settings、/settings modes.review_mode、/settings modes.rigor=full、/settings --local modes.review_mode=solo；modes.rigor 有 minimal/standard/full，默认 minimal，覆盖 workflow、docs.density、qa.level、story_granularity、review_mode、team.size；minimal 链路 /start→/setup-engine→/brainstorm→/create-stories→/dev-story↔/story-done；团队编排 skills /team-combat 等；hooks 列表与触发条件；权限规则自动允许测试、阻止 force push/rm -rf/读 .env；git 规则可能误伤提交信息；改变玩家可见内容的故事必须启动、观察、截图存 production/qa/evidence/；/skill-test static/category/spec/audit 和 /skill-improve；studio-tests 测框架，游戏测试放 tests/。作者自测：同一 brief 用 minimal 与 standard 构建，minimal 写第一行游戏代码前 1 份文档、0 分钟；standard 30 份文档、58 分钟；两者都产出可运行且测试过的游戏，但两名盲审和一次真人试玩把 standard 排最后；作者认为多出的 29 份文档买到可追溯性，不是更好的游戏；表格只展示两档，另外两档无法核对。属于作者主张/未验证：模板可定制、可迁移到非游戏项目但没有具体迁移步骤；49/74/15/14/62 计数未与源码核对；强游戏领域绑定；主开发环境 Windows 10 + Git Bash，hooks 也在 macOS/Linux 测试，notify.sh 在非 Windows 是 no-op；缺 Python 会静默回退。本手册只建议单个小型项目小范围试用，不整仓照搬到非游戏工作。
 - 来源十四：Beakpoint-Insights/roost README，MIT，Claude Code 插件式 skills 集合，不是独立 agent。可核对：/plugin marketplace add Beakpoint-Insights/roost 与 /plugin install roost@roost；/roost:setup；配置查找顺序、ROOST_CONFIG、~/.claude/roost/local/<team.name>.yml、团队共享配置私有 repo、配置不存密钥；可见配置 key；支持 Jira/GitHub Issues、Xray/repo eval cases、gh stack/普通 PR、GitHub；Linear/Graphite/GitLab/Gherkin/Cursor 完整支持/Codex/Copilot/Gemini CLI 在 roadmap；每 repo 一个 session 的会话拓扑与 orchestrator 不编辑 repo；shape-epic 七阶段；build-epic 计划审批、Rollout needed、kickoff comment、Release order、deploy ticket 与 runbook；run-slice、verify-slice-tests、/code-review、切片检查点、测试先行修复、真实浏览器验证、slice-handoff；review-epic、/security-review、close-out-epic、release-qa；pair-runbook 由人执行命令并粘贴输出；Cursor link-skills 与能力差异；团队自有 skill 和 adapter。数据：README 约 30 stars；作者自称每天用于自家产品；无第三方数据、无 merge 成功率、无缺陷泄漏率、无对照实验。限制：examples/config.example.yml 和 config-schema.md 不在本次材料正文；强绑定 Claude Code + Jira/Xray/gh stack；Cursor 只有部分 skill；README 对成熟度和可迁移性的说法属于作者主张。本手册第 20 步的试用顺序和判断指标是建议，不是 roost 原文效果证明。
 - 来源十五：salexandr0s/ai-config README，约 50 stars，macOS-first 的 Claude Code 与 Codex 版本化配置仓库。可核对：默认安装命令、--with-browse、--with-launchagent、--workspace "$HOME/Projects"；私有状态对应关系 claude/settings.json→~/.claude/settings.local.json、codex/config.base.toml→~/.config/codex/config.local.toml、claude/user/→~/.claude/USER/；Claude Code 的 /workflow-feature、/workflow-bugfix、/workflow-review-only；Codex 的 $config-editor 与 $HOME/.codex/workflows/feature.md 调用；四条安装后校验命令；--refresh 后重跑 ./install.sh；README 明确 Codex 默认 danger-full-access 与 approval policy never；第三方技能许可证与 aside-browser 不再分发；README 声称 78 个 bundled skills、2 个 assistant、46 个 Claude bindings、74 个 Codex bindings、8 个 agent 角色。作者主张/未验证：50 stars 只是外部信号；无案例、前后对比或效率指标；docs/skills.md、docs/configuration.md、docs/privacy.md 正文未提供；校验只证明安装与配置完整性，不证明工作结果改善；本手册第 21 步的隔离试装顺序、基线对照和判断门槛是建议，不是原文效果证明。
-- 来源十六（本次新增）：Kemerd/claude-hardware-in-the-loop README。可核对：skill 安装命令、onboarding 提示词 set up a hardware project with the hardware-in-the-loop method、手工 scaffold.py --answers answers.json --dest <your-repo> --with-examples、setup_tools.ps1 -ToolsRoot D:\hiltools -VerifyOnly、windows/ci.ps1、Python 脚本声明的板数据经 12 步 pipeline 生成 KiCad 原理图/布线板/fab set/STEP、CadQuery 外壳/装配体、固件目标板与 PC 数字孪生、git worktree 与 dev/main、slot、detached job、watcher、每 20 分钟 WIP 快照、usage tripwire、默认 single session 不用 subagent、ERC 0/0、最终 DRC 0 violations / 0 unconnected / 0 parity items、采购行 live resolve 到 MPN、no-shortcut audit、CI regression compare、host suite 165 host checks、20 次 scenario runs、determinism 和 Python 侧 ABI 测试、Unreal 5.8.4 headless 自动化测试 trace hash 与 native runner 相等、示例板一处 12 步 21 秒另一处约 15 秒、40 条 lessons、一次 swarm day 4-5 million tokens、lane agents 300-800k tokens 上下文、implemented vs roadmap 未建清单、许可证 HIL-ASA-1.0 非 OSI 开源、商用设计自己的产品可以但需保留 credit。作者主张/未验证：项目来自无法公开的私有工作流，证据主要是作者自述；docs/METHOD.md、docs/PCB.md、docs/LESSONS.md 等正文未提供，无法核验 pipeline 参数、interview schema、CI 实现和 40 条 lessons 的可操作性；README 反复说 green gates 不是工程师替代品；示例板时间数字不一致；Isaac Sim harness 写明“written against API and not run here”；ChaosTorque 的 acceptance run 还是项目第一步。本手册第 22 步的试用顺序和判断指标是建议，不是原文效果证明。
+- 来源十六：Kemerd/claude-hardware-in-the-loop README。可核对：skill 安装命令、onboarding 提示词 set up a hardware project with the hardware-in-the-loop method、手工 scaffold.py --answers answers.json --dest <your-repo> --with-examples、setup_tools.ps1 -ToolsRoot D:\hiltools -VerifyOnly、windows/ci.ps1、Python 脚本声明的板数据经 12 步 pipeline 生成 KiCad 原理图/布线板/fab set/STEP、CadQuery 外壳/装配体、固件目标板与 PC 数字孪生、git worktree 与 dev/main、slot、detached job、watcher、每 20 分钟 WIP 快照、usage tripwire、默认 single session 不用 subagent、ERC 0/0、最终 DRC 0 violations / 0 unconnected / 0 parity items、采购行 live resolve 到 MPN、no-shortcut audit、CI regression compare、host suite 165 host checks、20 次 scenario runs、determinism 和 Python 侧 ABI 测试、Unreal 5.8.4 headless 自动化测试 trace hash 与 native runner 相等、示例板一处 12 步 21 秒另一处约 15 秒、40 条 lessons、一次 swarm day 4-5 million tokens、lane agents 300-800k tokens 上下文、implemented vs roadmap 未建清单、许可证 HIL-ASA-1.0 非 OSI 开源、商用设计自己的产品可以但需保留 credit。作者主张/未验证：项目来自无法公开的私有工作流，证据主要是作者自述；docs/METHOD.md、docs/PCB.md、docs/LESSONS.md 等正文未提供，无法核验 pipeline 参数、interview schema、CI 实现和 40 条 lessons 的可操作性；README 反复说 green gates 不是工程师替代品；示例板时间数字不一致；Isaac Sim harness 写明“written against API and not run here”；ChaosTorque 的 acceptance run 还是项目第一步。本手册第 22 步的试用顺序和判断指标是建议，不是原文效果证明。
+- 来源十七（本次新增）：Hacker News 求助帖 How do you keep up quality when you vibe-code? 及 27 条评论。可核对：提问者描述的失败模式（功能扩张、无统一行为定义、修 bug 变反复修补、agent 只看会话周边代码）；评论者 sadilek 的 CLAUDE.md 三条硬规则、计划模板最后一步删除并并入 docs、PR 前子代理自审加第二模型交叉审查、每月技术债审计 DRY/YAGNI/KISS、demo 视频交接；评论者 bahung1221/gabe84700/alexjplant 的先 brief/计划再实施、OpenSpec 三段式 planning→implementation→archiving；评论者 llbknapik 的静态分析器 + editorconfig 让构建失败、agent 自纠；评论者 smallerize 的 `inspect existing code under [subdir] for implementation patterns.`；评论者 EduardoBautista 的 simplify/code-review 固定在验证环节、CI 至少测试/构建/lint/SQL 破坏性变更与重迁移检查；评论者 mpd 的先固化架构、TDD、全量变异测试、约 70%+ 测试/基准/实验代码。作者主张/未验证：sadilek 自己声明没做过系统消融实验，8 条里哪条真正起作用未知；变异测试能解决微妙 bug、测试占比 70%+ 是个人经验陈述，无数据无对照；demo 视频常让它自己发现问题属轶事；帖子仅 31 分、27 条评论，样本小，发言者多为已有较强工程习惯的人，存在选择偏差；评论内部有 pre-PMF 阶段别管质量与维护期应还技术债的分歧，还有 LLM 代码只配当“电影布景”用完即弃的相反结论；模型版本名 Opus 5.5、Codex Sol 6.1 可能有笔误或为内部叫法。本手册第 23 步的 2 周试用顺序、指标和否证条件是调研报告建议，不是评论者的对照实验数据。
 
 ## 依据的调研
 
@@ -593,3 +659,4 @@ hardware-in-the-loop 新增坑：125. 在 KiCad 里手改 .kicad_pcb；应改 Py
 - [Beakpoint-Insights/roost](../research/radar/2026-11-01/9205-beakpoint-insights-roost.md)：值得一试，建议在单个仓库、单个小型 epic 上安装 roost 跑一遍完整流程（shape-epic → 计划审批 → 逐切片构建 → 发布 QA → pair-runbook），以“人工介入次数、计划返工轮数、漏到 release-qa 的缺陷数”作为是否保留的判断依据；它给出了可直接照抄的安装命令、配置查找顺序、会话拓扑与人工检查点，但成熟度证据只有作者自述与 30 stars，且强绑定 Claude Code + Jira/Xray/gh stack，尚不足以直接 adopt。
 - [salexandr0s/ai-config](../research/radar/2026-11-04/10232-salexandr0s-ai-config.md)：值得一试，建议在隔离环境小范围试装，并先复核 Codex 的高权限默认值；它给出了可复制的安装、技能绑定、工作流和校验命令，但属于个人化 macOS 配置，且没有效果数据。
 - [Kemerd/claude-hardware-in-the-loop](../research/radar/2026-11-05/10281-kemerd-claude-hardware-in-the-loop.md)：值得一试，建议先在硬件/PCB-CAD-固件这类“可由脚本生成、可用门禁验证”的小项目上试用：按 README 的 Quick start 安装 Claude Code skill、跑 example，再替换成自己的小板；理由是把 Claude Code 放进生成、门禁、CI、人工复核的固定流程里，有具体命令和模板，但输入只有 README，关键细节在未提供的 docs 中，不能直接 adopt。
+- [How do you keep up quality when you vibe-code?](../research/radar/2026-11-11/12543-how-do-you-keep-up-quality-when-you-vibe-code.md)：值得一试，把帖子里几条被反复提到的做法（CLAUDE.md 强制文档同步、先出计划再动手、PR 前双模型审查、静态分析/CI 门禁、定期技术债审计、用 demo 视频交接）挑两三条放进一个小仓库试两周；这些做法给出了可照做的具体流程，但全部是个人经验、没有对照实验，只值得先小范围试而不是直接采用。
