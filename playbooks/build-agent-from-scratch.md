@@ -1,18 +1,20 @@
-# 让 AI 在真实项目里持续干活：选脚手架、补可靠性、用证据判断
+# 别急着上多 Agent：先把需求写成可评审的 Agent 设计
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：解决你把 AI 用在聊天框里、或自建 Agent 只能跑起来却不可靠、不可控、不可恢复，不知道从哪个可运行骨架开始、该补哪些可靠性机制、如何用证据判断是否变好的问题。
-> 先试这一步：先挑一个高频、边界清楚的真实任务，按工作类型从 Claude Quickstarts 选一个最接近的骨架，或从 learn-claude-code 的 s01 跑通最小循环，只做这一个任务并记录基线，再决定是否扩展。
-> 最近修订：2026-11-11
+> 解决的问题：这份手册解决：面对一个模糊的 AI/Agent 需求，如何先判断该不该用 Agent、该用哪一档架构，并把方案写成可评审、可交接、可验收的设计；设计定下来后，再按场景搭环境、跑受控原型并用可观察指标验收。
+> 先试这一步：拿一个真实但低风险的需求，按做法 K 的 7 步只产出设计文档，并在第 2 步强制写下为什么不上更高档架构；然后让同事用 21 维清单评审这份设计。
+> 最近修订：2026-11-12
 
 ## 解决什么问题
-模型本身已有感知、推理、行动能力，但一个能用的 agent = 模型 + harness。这份手册解决：你只在聊天框里用 AI，它看不到代码库、跑不了命令、记不住跨会话目标、停没停全凭它自己说；或者自建 Agent 只能跑起来，但不可靠、不可控，出了问题只能靠回放提示词去猜；或者要把 coding agent 做成长期在线、可重连、可从崩溃恢复的应用；或者要把团队积累的经验变成每个 PR 的强制检查，让 agent 响应 PR、合规、事故等已有事件；或者任务本身跨天、跨周，路径不可预测，要反复等待人和外部系统，进程一崩、网络一断就重来或重复副作用；或者你还没有自己的骨架，不知道从哪个可运行示例开始。
-做法包括：搭可操作环境，把工具、知识、观察、动作接口和权限补齐（harness engineering，以 Claude Code 为范本）；用生产级分层补齐可靠性、安全、可观测、评估、并发、成本和发布（hello-agent-system）；当它真的慢、卡住或反复报错时，用真实 telemetry 而不是提示词回放定位（blazo）；用 Pi Durable 验证持久化、断点恢复、submission 去重、工具重放边界和外部副作用幂等；用 Cursor Agent SDK 把事件触发的重复流程写成代码项目，先在本地 playground 跑 evals 和事件回放，再 deploy 或自托管；用 NamiAgent 从 100 行最小循环逐课加到权限、上下文、Skills、MCP、子 Agent、计划和记忆，并用网页端直接看每一步思考和本次发给模型的完整上下文；对跨天长流程，用持久化执行把决策、动作、等待分开，等待时挂起不占计算，外部写加业务幂等键并在执行前重校验约束；按工作类型从 Claude Quickstarts 选一个官方可运行脚手架，先跑通最小路径，再把凭证放 vault、去重账本、按来源书签、单会话花费上限、人工审核 PR 等可靠性模式抄进自己的实现。
-每个做法都有边界，不要把实验性原型直接放上生产关键路径；NamiAgent 明确是教学代码，不是生产级框架；长周期持久化执行的示例是演示/模拟，不是生产部署，原文也缺完整代码与量化结果；Claude Quickstarts 的根 README 只是索引，子项目命令、配置和提示词要读各自 README，且没有效果数据。
+模型本身已有感知、推理、行动能力，但一个能用的 agent = 模型 + harness。这份手册解决：你只在聊天框里用 AI，它看不到代码库、跑不了命令、记不住跨会话目标、停没停全凭它自己说；或者自建 Agent 只能跑起来，但不可靠、不可控，出了问题只能靠回放提示词去猜；或者要把 coding agent 做成长期在线、可重连、可从崩溃恢复的应用；或者要把团队积累的经验变成每个 PR 的强制检查，让 agent 响应 PR、合规、事故等已有事件；或者任务本身跨天、跨周，路径不可预测，要反复等待人和外部系统，进程一崩、网络一断就重来或重复副作用；或者你还没有自己的骨架，不知道从哪个可运行示例开始；或者你手里有一个模糊的 Agent 需求，不确定该不该上 Agent、该用提示词/工作流/单 Agent/多 Agent 哪一档，方案写出来无法评审、交接和验收，团队里有人一上来就堆多 Agent，却说不清隔离理由。
+做法包括：先用 Agent 系统设计 Skill 在需求阶段做 7 步设计、四档裁剪、交接契约和 21 维自检，把方案写成可评审文档，再进入实现；搭可操作环境，把工具、知识、观察、动作接口和权限补齐（harness engineering，以 Claude Code 为范本）；用生产级分层补齐可靠性、安全、可观测、评估、并发、成本和发布（hello-agent-system）；当它真的慢、卡住或反复报错时，用真实 telemetry 而不是提示词回放定位（blazo）；用 Pi Durable 验证持久化、断点恢复、submission 去重、工具重放边界和外部副作用幂等；用 Cursor Agent SDK 把事件触发的重复流程写成代码项目，先在本地 playground 跑 evals 和事件回放，再 deploy 或自托管；用 NamiAgent 从 100 行最小循环逐课加到权限、上下文、Skills、MCP、子 Agent、计划和记忆，并用网页端直接看每一步思考和本次发给模型的完整上下文；对跨天长流程，用持久化执行把决策、动作、等待分开，等待时挂起不占计算，外部写加业务幂等键并在执行前重校验约束；按工作类型从 Claude Quickstarts 选一个官方可运行脚手架，先跑通最小路径，再把凭证放 vault、去重账本、按来源书签、单会话花费上限、人工审核 PR 等可靠性模式抄进自己的实现。
+每个做法都有边界，不要把实验性原型直接放上生产关键路径；NamiAgent 明确是教学代码，不是生产级框架；长周期持久化执行的示例是演示/模拟，不是生产部署，原文也缺完整代码与量化结果；Claude Quickstarts 的根 README 只是索引，子项目命令、配置和提示词要读各自 README，且没有效果数据；agent-system-design-cn 当前只拿到 README 及目录说明，参考文件、模板正文、示例全文未提供，安装未验证，21 维自检分数只评设计文档，不是任务成功率或发布许可。
 
 ## 适用与不适用
 适用：
+- 你有一个模糊的 Agent 需求，需要先判断需不需要多 Agent、该用哪一档架构，并把方案写成可评审设计；团队愿意用支持加载「一个目录 + 带 YAML frontmatter 的 SKILL.md」的宿主，且能拿到完整 skills/agent-system-design-cn/ 目录（含 references/ 和 assets/）。适合需要设计评审、交接契约、停止条件、失败与预算讨论的场景。
+- 普通代码够用时，你愿意在第 2 步停止，不为了用 Agent 而用 Agent。
 - 你想让 AI 在自己的项目里持续干活，愿意按机制逐项搭环境，有 Python 环境和 Anthropic API key，能跑代码、看输出、按章节对照。
 - 正在自建 Agent 的工程同学：想用离线 demo、练习和测试验证生产级分层是否补得上，有 Python 3.10+、git、make，以及任意支持 function calling 的 OpenAI 兼容接口（OpenAI / DeepSeek / 通义 / 本地 vLLM / 模型网关均可）；没有 key 也可跳过，因为 hello-agent-system 的所有 demo 都支持 --offline。
 - 你的 agent 是 TypeScript 写的、有多个工具调用和 LLM 调用，痛点在慢 / 卡 / 失败的现场排查，本机可以装 Bun（或 Node 20+），选 blazo。
@@ -22,6 +24,9 @@
 - 任务跨天或跨周、目标明确但路径不可预测、需要持续追踪依赖并频繁等待人和外部系统，例如客户 onboarding、销售/法务/采购之间的交易推进、患者转诊/预约/改期/文书、库存补货；有支持持久化执行的运行时（原文示例为 Temporal 和 Cloudflare）；外部写操作能用业务键做幂等；人或外部系统能把 approval、supplier-reply、goods-received 等事件作为信号送回工作流；团队能运维运行时。
 - 你想先找官方可运行示例，按工作类型选一个最接近的骨架：客服问答接知识库、财报数据分析、桌面操作、浏览器导航与填表、跨会话自主编码、每工作日定时摘要、文档语料蒸馏成知识 wiki、IM/工单内应答、MCP Server、Sentry 错误 triage 与自动提 PR。有 Claude API key 和对应运行环境，愿意只跑通最小路径再改造，选 Claude Quickstarts。
 不适用：
+- 你期待 agent-system-design-cn 开箱运行、自动编排或直接给出业务效果证明；它只是设计/评审 Skill，不运行 Agent。
+- 你拿不到参考文件与模板正文，或宿主无法加载 Skill；这时只能降级为按 7 步和七字段手工评审，不能宣称已采用。
+- 你把 21 维自检分数当任务成功率或发布许可；原文明确不是。
 - 你只想找一个现成工具、不打算跑代码或没有 API key；你期待拖拽式工作流 / 无代码 AI Agent 平台 / prompt 链编排就能解决；你不能接受跑模型产生调用费用。
 - 你打算把 hello-agent-system 直接当生产组件——本次只拿到 README，没有讲义正文与数据，性能数字和组件可靠性均未核实，不要照抄模型名。learn-claude-code 同样每章实现细节未随 README 给出、效果主张缺数据，适合小范围试，不适合直接全量上生产。
 - 你要的是评测、playground、提示词管理、数据集、agent 市场，或 SaaS / 云端可观测性——blazo 明确不做这些；你只想用 gRPC OTLP，或需要 TypeScript 之外的 SDK，也要自己另接。blazo 项目自标 MVP、dashboard 配图明确标注为目标设计而非当前 UI，不适合直接当稳定生产依赖。
@@ -33,6 +38,7 @@
 - 你期待 Claude Quickstarts 的根 README 直接给完整命令、配置或提示词：它只是索引页，具体内容在各子项目 README；你需要效果数据、基准或对比实验时也不适用，所有“demonstrates”都是官方主张。Computer Use Best Practices 明确要求放在 VM 里跑；Browser Toolset 与 Computer Toolset 自述“展示接口、非生产代码”，工具集名称带版本日期，接口可能变化。Managed Agents 系列依赖 ant apply、session metadata、vault、cron deployment 等特定平台能力，迁移到别的平台需要重写这部分管道。
 
 ## 前置条件
+- agent-system-design-cn：宿主支持加载「一个目录 + 带 YAML frontmatter 的 SKILL.md」；安装整个 skills/agent-system-design-cn/ 目录，确保 references/ 和 assets/ 同时存在；具体放置路径按宿主文档，README 未给出具体产品路径，也未做加载测试。能拿到参考文件、模板正文和示例全文；否则只能手工评审。准备一个真实但低风险的需求，以及一名只按清单评审的同事。材料只有 README 及目录说明；原始 Skill 共 14 个文件、298664 字节，有哈希校验脚本，但本次未验证。
 - 能访问 GitHub 与 npm。
 - 本机有 Python 环境和 pip；hello-agent-system 需要 Python 3.10+、git、make。
 - learn-claude-code：有一个 Anthropic API key；课程跑起来需要配 ANTHROPIC_API_KEY。跑模型会产生调用费用。
@@ -47,7 +53,22 @@
 - Claude Quickstarts：本机有 git；有 Claude API key（README 指向 console.anthropic.com 注册）；各子项目依赖与运行命令在各自 README 里，本材料未包含，需打开对应目录补齐；Computer Use Best Practices 要求放在 VM 里跑；Browser Toolset 与 Computer Toolset 自述“展示接口、非生产代码”；工具集名称带版本日期（computer_toolset_20260801、browser_toolset_20260801），接口可能随版本变化；Managed Agents 系列依赖 ant apply、session metadata、vault、cron deployment 等特定平台能力。
 
 ## 操作步骤
-先选路线：想零基础从 while 循环开始、用网页端看每一步思考和完整上下文，选做法 H；想系统理解 harness 机制、有时间和 API 预算，选做法 A；已经有自己的 agent 骨架、只想把环境检查清单补齐，选做法 B；想验证生产级可靠性、安全、评估分层，选做法 C；已有 Agent 骨架想直接套生产级组装，选做法 D；agent 已经能跑、但你要回答「它为什么慢、卡住或失败」，选做法 E；要把 coding agent 做成长期在线、可重连、可从崩溃恢复的应用，先用做法 F 做受控原型；如果重复工作围绕 PR、合规、事故等事件，且愿意用 Cursor 生态，选做法 G；如果任务跨天/周、频繁等待人和外部系统、需要崩溃恢复并防止重复副作用，选做法 I；如果你还没有自己的骨架，想先从官方可运行示例里挑一个最接近的，选做法 J。可组合：先用做法 H 的 demo 和网页端建立「上下文里有什么、工具怎么被调用」的直觉，再按做法 A 深入 harness 分章；用做法 B 补 harness 清单，再用做法 C 跑可靠性与评估两课，用做法 D 的骨架套自己项目，如果 agent 是 TypeScript 再按做法 E 接本地可观测性，用做法 F 验证持久恢复和工具重放边界，最后用做法 G 把事件触发的重复流程做成可评测的代码项目；长流程用做法 I 做运行时可靠性层，用 F 验证单进程 conversation 恢复，用 D 做多 worker 任务队列，用 E 看本地执行，但它们不是同一个东西。注意 D 和 F 在持久化 / worker 上有差异：hello-agent-system 展示多 worker 从同一持久化队列领任务、kill -9 后租约过期由别的进程从检查点接手；Pi Durable 当前单 storage 只允许一个 owner 进程，没有跨进程锁。两者都写，按场景选：要分布式 worker 崩溃接手看 D；要单进程 owner、可恢复 conversation/task、submission 去重和 replay 边界看 F。不要把 F 当分布式工作流平台。G 的评测是 evals 与事件回放，E 的评测是本地 telemetry 可观测性，两者可以并用但解决的问题不同。H 是教学快照，不是生产框架；A 和 H 都从最小循环开始，但 A 偏机制分章，H 偏零基础网页端观察和权限确认，按你的背景选。I 是长周期流程的持久化执行，不等同于 F 的单进程 conversation 恢复，也不等同于 D 的多 worker 队列；原文没有提到 Claude Code、Cursor、OpenClaw 的集成，不要声称已经集成。J 是选型目录，不是完整教程：先跑通一个子项目的最小路径，再把可靠性模式抄进自己的实现，不要直接当生产组件。
+先选路线：需求还模糊、要先判断该不该上 Agent、该用哪一档架构，选做法 K，先产出设计文档；想零基础从 while 循环开始、用网页端看每一步思考和完整上下文，选做法 H；想系统理解 harness 机制、有时间和 API 预算，选做法 A；已经有自己的 agent 骨架、只想把环境检查清单补齐，选做法 B；想验证生产级可靠性、安全、评估分层，选做法 C；已有 Agent 骨架想直接套生产级组装，选做法 D；agent 已经能跑、但你要回答「它为什么慢、卡住或失败」，选做法 E；要把 coding agent 做成长期在线、可重连、可从崩溃恢复的应用，先用做法 F 做受控原型；如果重复工作围绕 PR、合规、事故等事件，且愿意用 Cursor 生态，选做法 G；如果任务跨天/周、频繁等待人和外部系统、需要崩溃恢复并防止重复副作用，选做法 I；如果你还没有自己的骨架，想先从官方可运行示例里挑一个最接近的，选做法 J。可组合：K 产出的设计文档是上游，再按设计里缺的能力进入 A–J；先用做法 H 的 demo 和网页端建立「上下文里有什么、工具怎么被调用」的直觉，再按做法 A 深入 harness 分章；用做法 B 补 harness 清单，再用做法 C 跑可靠性与评估两课，用做法 D 的骨架套自己项目，如果 agent 是 TypeScript 再按做法 E 接本地可观测性，用做法 F 验证持久恢复和工具重放边界，最后用做法 G 把事件触发的重复流程做成可评测的代码项目；长流程用做法 I 做运行时可靠性层，用 F 验证单进程 conversation 恢复，用 D 做多 worker 任务队列，用 E 看本地执行，但它们不是同一个东西。注意 D 和 F 在持久化 / worker 上有差异：hello-agent-system 展示多 worker 从同一持久化队列领任务、kill -9 后租约过期由别的进程从检查点接手；Pi Durable 当前单 storage 只允许一个 owner 进程，没有跨进程锁。两者都写，按场景选：要分布式 worker 崩溃接手看 D；要单进程 owner、可恢复 conversation/task、submission 去重和 replay 边界看 F。不要把 F 当分布式工作流平台。G 的评测是 evals 与事件回放，E 的评测是本地 telemetry 可观测性，两者可以并用但解决的问题不同。H 是教学快照，不是生产框架；A 和 H 都从最小循环开始，但 A 偏机制分章，H 偏零基础网页端观察和权限确认，按你的背景选。I 是长周期流程的持久化执行，不等同于 F 的单进程 conversation 恢复，也不等同于 D 的多 worker 队列；原文没有提到 Claude Code、Cursor、OpenClaw 的集成，不要声称已经集成。J 是选型目录，不是完整教程：先跑通一个子项目的最小路径，再把可靠性模式抄进自己的实现，不要直接当生产组件。
+
+### 做法 K：先用 Agent 系统设计 Skill 把需求写成可评审方案，再决定要不要多 Agent
+什么时候选：你有一个真实但还模糊的 Agent 需求，需要先判断需不需要多 Agent、该用提示词/工作流/单 Agent/多 Agent 哪一档，并把方案写成可评审、可交接、可验收的设计；团队愿意用支持加载 SKILL.md 的宿主，且能拿到完整 Skill 目录。不要把它当编排框架或运行时；它只产出设计、契约和检查清单。
+1. 安装并确认目录完整。前提：宿主支持加载「一个目录 + 带 YAML frontmatter 的 SKILL.md」。安装整个 skills/agent-system-design-cn/ 目录，确保 references/ 和 assets/ 同时存在；具体放置路径按宿主文档。预期：能加载 Skill，且参考文件和模板可打开。README 未给出具体产品路径，也未做加载测试；如果加载不了，降级为手工按 7 步和七字段评审，不宣称已采用。
+2. 用示例提示词启动设计任务，明确只交付设计、不部署。
+```text
+请按 Agent 系统设计 Skill 处理这个需求。先判断需不需要多 Agent，再设计它们如何协作。信息不够时最多问 3 个问题。只交付设计，不要部署。
+```
+预期：模型先澄清需求，不直接写代码或部署。
+3. 按 7 步推进：需求澄清→架构选型→单 Agent 设计→编排与协作→介入与加固→评测→交付与自检。每步只打开当前需要的参考文件。预期：产出可评审设计文档，而不是直接写实现。
+4. 在第 2 步做档位裁剪：在提示词、工作流、单 Agent、多 Agent 四档中选最低可行档；普通代码够用时在第 2 步停止；上多 Agent 必须写出上下文、工具或权限上的隔离理由。预期：设计文档里能看到档位选择理由和被否决的更高档。
+5. 需要多 Agent 协作时，用 assets/交接契约模板.json 填写 dispatch 七要素：identity、objective、scope、constraints、context、output_format、stop_condition；同时按原文定义 handoff 和 gate。注意这些是字段和校验责任，由宿主执行，文件本身不会运行。预期：每个交接点都有七字段，停止条件可检查。
+6. 用 assets/设计文档模板.md 产出方案；用 assets/设计自检清单.md 做 21 维审查。先按方案类型选择适用维度，不适用的不打分；分数只评设计文档，不是任务成功率或发布许可。预期：评审能指出档位过高、职责不清、停止条件缺失、交接字段缺失等问题。
+7. 若走工作流档，可参考 examples/word-counts-workflow.md 的固定「代码生成→审查→修复」：步骤事先写明，由宿主按顺序调用和校验；因没有必须分开的上下文、工具或权限，不使用多 Agent。该示例是手写推演，分数留空。预期：能用它对照自己的工作流档设计。
+8. 框架映射参考 references/09-框架落地映射.md 时，只能当作原资料笔记；README 明确包版本未安装测试、未重新调查上游，不能当兼容性认证。预期：不把映射表当兼容性承诺。
 
 ### 做法 A：按 learn-claude-code 教程从 s01 跑通到 s17，建立 harness 直觉
 1. 克隆并安装依赖。前提：能访问 GitHub，本机有 Python 与 pip。
@@ -593,6 +614,12 @@ export ANTHROPIC_API_KEY=<your-key>
 - s17 Goal Loop：目标闭环
 
 ## 怎么判断变好了
+可观察指标（设计评审）：
+- 设计评审一次通过率、返工轮次、评审耗时、遗漏的必填交接契约字段数、被拦下的过度多 Agent 方案数。
+- 第 2 步能被清楚说明：为什么选这个最低可行档，为什么不上更高档；普通代码够用时是否真的停在第 2 步。
+- 涉及多 Agent 时，每个交接点是否填齐 identity、objective、scope、constraints、context、output_format、stop_condition，尤其是 stop_condition 是否可检查。
+- 21 维自检先选适用维度再打分；分数只评设计文档，不是任务成功率或发布许可。业务效果要另设任务成功率、时延、成本、人工介入率等指标，不能用 21 维分数替代。
+
 可观察指标（harness 与生产分层）：
 - AI 能在你的项目里调用工具、读写文件，并看到 git diff、错误日志、浏览器状态等观察再继续。
 - 知识是按需加载（s07），不是把全部文档塞进上下文。
@@ -651,6 +678,7 @@ export ANTHROPIC_API_KEY=<your-key>
 - 判断「有改善」的最低门槛：同一任务上，产出被采用率不低于人工基线，单次耗时明显下降，且连续两周无静默失败（即失败都能被看见）。达不到就退回 study，只借它的架构模式，不搬它的具体实现。
 
 最小试用方式：
+- 做法 K：选一个真实但低风险的需求，只按 7 步产出设计文档；第 2 步强制做四档裁剪并记录为什么不上更高档；若涉及多 Agent，只对一个交接点填写七字段契约。再让另一名同事只用 21 维清单评审同一份设计文档，先选适用维度再打分，对比评审前能否发现档位过高、职责不清、停止条件缺失、交接字段缺失等问题。若宿主无法加载 Skill，或团队拿不到参考文件与模板正文，就降级为按 7 步和七字段手工评审，不宣称已采用该 Skill。
 - 做法 A：先跑通 learn-claude-code 的 s01，再挑一个与你当前痛点对应的章节（上下文爆了就 s08，目标总漂移就 s17，权限失控就 s03），把它抄进自己项目。
 - 做法 B：先把 harness 五件套清单填一遍，跑一个真实小任务。
 - 做法 C：先 make check-env 和 00 demo，然后优先跑 08 与 11 两课。
@@ -663,6 +691,7 @@ export ANTHROPIC_API_KEY=<your-key>
 - 做法 J：建议 1-2 天，只选一个任务和一个最接近的 quickstart：从自己工作里挑一个高频、边界清楚、有现成输入的任务（例如每工作日汇总 Slack 与 PR，或对一批文档反复回答同类问题）；选对应脚手架（定时摘要 → Daily Brief；文档问答 → Knowledge Wiki；IM 内应答 → Slack 或 Linear）；先只跑通「读取 + 输出」的最小闭环，不做写操作、不发真实频道；再按可靠性模式逐项补：凭证进 vault、去重 ledger、失败显式报错、花费上限；同一任务先用人工方式做一周，记录基线，再切到 agent，用同样指标对比。
 
 试多久：
+- agent-system-design-cn 建议用一个真实低风险需求做一次设计和一次独立评审；若有效再纳入需求评审流程。当前只有 README，先小范围验证，不直接当发布许可。
 - learn-claude-code 按 README Quick Start 从 s01 逐章跑通到 s17 再定。
 - hello-agent-system 主线约 6 小时、第三部分约 3.5 小时、第四部分约 3 小时，赶时间走 4 小时速通路线；本次只拿到 README，建议先跑 08 与 11 验证可靠性 / 评估再决定是否纳入工作流。
 - blazo 建议在一个真实调试场景里小范围试（自标 MVP），先用它回答一次「为什么这次 run 慢 / 卡住」，再决定是否长期挂着。
@@ -674,6 +703,14 @@ export ANTHROPIC_API_KEY=<your-key>
 - 注意：s05 有一句「先列步骤，完成率翻倍」，README 未给数据来源，不能当已验证指标。
 
 ## 常见坑
+- 把 agent-system-design-cn 当编排框架或运行时；它不运行 Agent，只产出设计、契约和检查清单。
+- 只读 README 就宣称已采用；参考文件、模板正文、示例全文未提供，安装未验证。
+- 一上来就选多 Agent，不写上下文、工具或权限隔离理由；普通代码够用应在第 2 步停止。
+- 交接契约只填了 identity/objective，漏掉 scope、constraints、context、output_format、stop_condition；没有 stop_condition 的交接无法验收。
+- 把 21 维分数当任务成功率或发布许可；它只评设计文档。
+- 把框架映射表当兼容性认证；README 明确包版本未安装测试、未重新调查上游。
+- 宿主加载不了 Skill 还硬说用了；应降级为手工 7 步和七字段评审。
+- 信息不够时不设问题上限，或一次问太多；原文提示最多问 3 个问题。
 - 混用新旧两条线章节号：旧 12 课保留在 docs/ 和 agents/，新 17 课是主线，README 有映射表。
 - 只读 README 不跑 code.py：每章 code.py 才是独立可运行实现。
 - 把 harness 当成拖拽式工作流 / 无代码 AI Agent 平台 / prompt 链编排库：仓库明确说这类只是「塞了一个 LLM 的 Rube Goldberg 机器」。
@@ -739,6 +776,7 @@ export ANTHROPIC_API_KEY=<your-key>
 - Claude Quickstarts：忽略工具集版本日期。computer_toolset_20260801、browser_toolset_20260801 接口可能随版本变化。
 
 ## 证据与来源
+- agent-system-design-cn：来自调研《geniusjia666/agent-system-design-cn》及其核验的 README 与目录说明。可照做内容：7 步设计流程（需求澄清→架构选型→单 Agent 设计→编排与协作→介入与加固→评测→交付与自检）、4 档架构（提示词、工作流、单 Agent、多 Agent）、21 种设计模式、21 维设计文档自检、交接契约模板的 dispatch 七字段（identity、objective、scope、constraints、context、output_format、stop_condition）及 handoff/gate 定义、设计文档模板、word-counts-workflow 示例、09-框架落地映射。数据：README 称原始 Skill 共 14 个文件、298664 字节，并有哈希校验脚本。局限：本次材料只有 README 及目录说明，参考文件、模板正文、示例全文未提供，无法核对 21 维具体条目和 21 种模式细节；README 自述未核对各宿主安装文档、未做加载测试；框架映射中的包版本未安装和测试；word_counts 示例是手写推演，分数留空，不代表质量、时延或费用；21 种模式是沿用的检索分类，不是官方统一标准；21 维分数只评设计文档，不是任务成功率，也不是发布许可。结论：把它作为 Agent 与多 Agent 方案的设计和评审清单，小范围试用：先用一个真实需求走 7 步，并在第 2 步明确选择最低可行的架构档位，再用交接契约和 21 维清单评审；不要直接采用，因为当前材料只有 README，安装未验证，自检分数也不等于任务成功率。适用条件：适合需要把模糊需求变成可评审 Agent 方案，或评审已有方案的团队；不适合期待开箱运行、自动编排或直接给出业务效果证明的场景。
 - learn-claude-code：本手册保留的 harness 公式、最小 agent loop、s01→s17 机制、旧 12 课、Kode CLI、姊妹仓库 claw0 / OpenClaw 的 Heartbeat 与 Cron、web 端命令，均来自 shareAI-lab/learn-claude-code 的 README 与目录结构（给定指标：77,855 stars，MIT 许可）。s05 的「先列步骤，完成率翻倍」README 未给数据来源，只是作者主张。仓库效果主张缺数据，建议小范围试。
 - hello-agent-system：32 节课、不依赖 Agent 框架、课程结构（讲义 + demo.py + exercise.py + solution.py + test_exercise.py，测试离线、确定性、零成本）、工具书文档（79 种失败模式、199 条设计评审清单、76 道面试题、框架对照表、一页纸速查、术语表、生产就绪指南、135 条延伸阅读）、综合实战 ITBuddy、生产组件替换（Postgres / Redis / Temporal / OpenTelemetry / LiteLLM / Cedar）、组装骨架与分布式 worker 代码，均来自 heaven999b/hello-agent-system 的 README（MIT、约 32 星、中英双语）。本次只拿到 README，没有讲义正文与数据，性能数字和组件可靠性均未核实；模型名 gpt-5.6-luna 来自作者环境，必须替换。结论建议小范围试：先跑 08 可靠性、11 评估两课，并把失败模式图鉴、设计评审清单、Agent 构造骨架套到自己项目；因为原文给出了可照抄的配置、代码和全离线测试，能低成本验证生产级分层是否补得上。
 - blazo：可照做内容来自 agentblazo/blazo README：安装与启动命令、SDK 三段 API（observe / span / log）示例与语义、blazo.config.json 的全部默认值与字段名、collector 的 11 个 HTTP 端点与 SSE 事件名、五条检测规则的触发条件与默认阈值、六个 dashboard 页面的路由与内容、五类数据实体（Run / Span / Log / Error / Finding）的字段、端口 4318 与 3000、SQLite（WAL）、OTLP/HTTP JSON、默认每 5 秒周期扫描、仓库目录结构与测试命令。只是作者主张、未经第三方验证的部分：「install Blazo, run an agent, and immediately see its execution live」「run appears in the dashboard within ~2s」等；项目自标 MVP，dashboard 配图标注为目标设计而非当前 UI；原文只给规则定义，没有「用 findings 发现新任务」的案例，手册里那一层推断已标注。结论仍建议小范围试：先在一个真实 TypeScript agent 的调试环节接入，用 runs / inspect 定位一次慢、卡死或重复错误，再决定是否长期使用。
@@ -758,3 +796,4 @@ export ANTHROPIC_API_KEY=<your-key>
 - [aa1143/NamiAgent](../research/radar/2026-10-31/8889-aa1143-namiagent.md)：值得一试，建议小范围试：按 README 从 lesson-01 到 lesson-11 逐课运行，并用网页端观察上下文与权限确认；它把工具、上下文、权限、计划、记忆等供给方式做成了可运行快照，但属于教学代码，需在专用工作区验证后再用于实际工作流。
 - [Long-horizon agents and durable execution](../research/radar/2026-11-10/12301-long-horizon-agents-and-durable-execution.md)：值得一试，对需要跨天或跨周、频繁等待人和外部系统的智能体任务，可按原文示例改成持久化执行：记录每一步外部交互结果，等待用挂起加信号恢复，外部写操作加幂等键并重校验约束；先用一个真实流程小范围试点。理由是原文用库存补货案例展示了崩溃恢复、审批/供应商/收货信号和重复下单防护，但只给了示例时间线，缺少完整代码与量化结果。
 - [anthropics/claude-quickstarts](../research/radar/2026-11-11/12468-anthropics-claude-quickstarts.md)：值得一试，把这份仓库当作“任务→脚手架”的选型目录：先按你的实际工作类型挑一个 quickstart（如定时简报、知识库问答、IM/工单触发、跨会话编码），照通用五步跑通，再抽取其中的可靠性模式（书签/去重账本、凭证放 vault、沙箱无外网、单会话花费上限、人工审核 PR）。理由是官方给了可运行、可改造的骨架和明确的通用起手流程，但 README 只是索引，具体命令、配置和提示词都在各子项目 README 里，本材料无法直接照抄，因此只到“小范围试”。
+- [geniusjia666/agent-system-design-cn](../research/radar/2026-11-12/12630-geniusjia666-agent-system-design-cn.md)：值得一试，建议把它作为 Agent 与多 Agent 方案的设计和评审清单，小范围试用：先用一个真实需求走 7 步，并在第 2 步明确选择最低可行的架构档位，再用交接契约和 21 维清单评审；不要直接采用，因为当前材料只有 README，安装未验证，自检分数也不等于任务成功率。
