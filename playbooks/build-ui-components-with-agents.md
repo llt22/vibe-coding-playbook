@@ -1,20 +1,20 @@
-# 让编码 agent 在宣布完成前拿出证据
+# 让编码 agent 在宣布完成前拿出可看的证据
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：编码 agent 很容易说“做完了”，但图表、组件、架构图、前端界面、游戏特效这些要渲染才成立的东西，往往没人真正看过。
-> 先试这一步：挑一个你能在浏览器里渲染的前端项目，用 `npx flawless-ui-ux context` 和 `inspect` 保存修改前基线，让 agent 做一次有边界的修改，再用 `verify` 对比前后——先体验一次“检查留下证据”的闭环。
-> 最近修订：2026-11-07
+> 解决的问题：编码 agent 常用“代码通过”冒充“交付合格”，而图表、组件、架构图、网页、界面文案、实时特效、UI/UX 这些渲染后才成立的东西没人看，界面还容易带模型默认的 AI 味；手册给出可落地的检查、展示与验收做法。
+> 先试这一步：先在你最常交付的那类产物上装一个对应技能，让它在交付前自动跑一次真实渲染/检查，并把前后对比交给你看。
+> 最近修订：2026-11-12
 
 ## 解决什么问题
 
-编码 agent 交出来的东西常常“看着完成了”：图表用了没说清的对数轴、把 EU 总量和成员国排在一起、来源行靠猜或直接写文件名、图上还留着 TODO；组件会发明路由、引入第二套设计系统、漏掉加载/取消/无效输入/结果恢复这类状态；架构图会脱离真实系统、与部署漂移、无法增量维护，或者从仓库/文章生成后布局重叠、文字溢出、连线穿过方框、标签被遮挡；前端界面容易落入模型默认套路——Inter 字体、紫到蓝渐变、卡片套卡片、彩色背景上的灰字、每个标题上方一个圆角方块图标；界面文案里塞满中点“·”和重复标题含义的解释性描述；游戏实时特效“代码编译通过、linter 通过”，但没有任何人在真实引擎里看过它长什么样；网页页面容易落入模型默认套路——每个标题上方的 eyebrow、字距拉开的大写标签、标题里一个彩色词、整页空框或全是照片、hero 撑不满一屏、每页结尾都塞订阅框、表单点“谢谢”却没真提交；B 端后台页面则直接把组件堆上去——不先选页面骨架、一个操作区出现多个 Primary 按钮、金额列没有右对齐、查看详情误用模态而不是抽屉、高危删除弹窗点遮罩就静默关闭、加载不足 1 秒也弹骨架屏、关键报错藏在 Tooltip 里、内外容器圆角不满足同心公式。照着参考图或录屏重建 UI 时，agent 还会“瞄一眼截图，写点看着像的东西，然后说做完了”，字号差 8px、错峰动画不对、缓动写成 linear，却说不出差多少。
+编码 agent 交出来的东西常常“看着完成了”：图表用了没说清的对数轴、把 EU 总量和成员国排在一起、来源行靠猜或直接写文件名、图上还留着 TODO；组件会发明路由、引入第二套设计系统、漏掉加载/取消/无效输入/结果恢复这类状态；架构图会脱离真实系统、与部署漂移、无法增量维护，或者从仓库/文章生成后布局重叠、文字溢出、连线穿过方框、标签被遮挡；前端界面容易落入模型默认套路——Inter 字体、紫到蓝渐变、卡片套卡片、彩色背景上的灰字、每个标题上方一个圆角方块图标，或者所有块视觉权重相同、用文字解释图、重复动作、把渐变/玻璃/发光当装饰，每个元素说不出用户能感知的存在理由；界面文案里塞满中点“·”和重复标题含义的解释性描述；游戏实时特效“代码编译通过、linter 通过”，但没有任何人在真实引擎里看过它长什么样；网页页面容易落入模型默认套路——每个标题上方的 eyebrow、字距拉开的大写标签、标题里一个彩色词、整页空框或全是照片、hero 撑不满一屏、每页结尾都塞订阅框、表单点“谢谢”却没真提交；B 端后台页面则直接把组件堆上去——不先选页面骨架、一个操作区出现多个 Primary 按钮、金额列没有右对齐、查看详情误用模态而不是抽屉、高危删除弹窗点遮罩就静默关闭、加载不足 1 秒也弹骨架屏、关键报错藏在 Tooltip 里、内外容器圆角不满足同心公式。照着参考图或录屏重建 UI 时，agent 还会“瞄一眼截图，写点看着像的东西，然后说做完了”，字号差 8px、错峰动画不对、缓动写成 linear，却说不出差多少。
 
 更底下还有一层：这些产物都是“渲染出来才成立”的东西，而渲染结果往往没人看。TypeScript、ESLint、单元测试、axe、Lighthouse 都只能证明代码合法，证明不了像素——文字溢出卡片或被 `overflow:hidden` 截断、灰底灰字对比度不足、图表标签重叠、只在 1024px 才坏的布局、`$undefined`/`NaN%`/`Invalid Date` 占位文本、emoji 当图标、图片变形、下拉箭头压在边框上、复选框离标签太远、缺焦点环、tap target 太小、`href="#"` 死链、hydration 报错、404、被登录页挡住的页面。改完前端 UI 或特效后，你往往还要自己开浏览器、起 localhost、开 Godot 窗口、手动点一遍才能确认。更麻烦的是，改完 UI 后你手上没有一份可重复的前后对比：不知道哪些错误被修掉了、哪些是新增加的、哪些因为条件变了仍然没被验证。
 
-这份手册给十六条可落地的做法，把“检查”和“展示”从你手里挪到 agent 交付之前：图表过三道检查、组件写代码前先签契约、架构图从真实来源生成并在合并前校验（drawio-skill）或从仓库/文章生成并做布局自检（arch-diagram-skill）、前端 UI 先固定持久事实再用确定性规则当门禁、让 Claude Code 在终端里直接展示截图/录屏/前后对比 QA、让游戏特效在真实 Godot 视口里渲染成胶片条再交给另一个 agent 独立评审、把两条界面文案规则变成“先检索列清单 → 人工确认 → 再改 → 前后截图对照”的流程、用 Hallmark 的三层门禁 + sloplint + 冷上下文复审 + before/kept 快照验收网页设计与重设计、用 unparalleled-skillset 的设计技能 + 代表性 specimen + Playwright 多宽度截图审查闭环验收 UI/网页改版、用 b-end-design-system-skill 的 B 端页面骨架和硬门禁约束后台页面生成、用 visant-killer 的 killer-scan 把界面 AI 味审计拆成脚本硬门禁 + 模型判断、用 renderlint 在无头 Chromium 里按手机/平板/桌面多视口真实渲染页面并用 37 条确定性规则抓像素级缺陷、用 replica 把“照着参考重建 UI”变成 layout/style/pixels/motion 四轴可复现分数与按收益排序的修复清单、用 flawless-ui-ux 的技能 + context/inspect/verify 给 UI/UX 修正留下前后对比证据，以及用 cook 把视觉构建任务压成一条“参考图定标 → 每维门槛 → 零上下文评审 → 每轮对比图 → 人工只把最终渲染关”的长跑循环。
+这份手册给十七条可落地的做法，把“检查”和“展示”从你手里挪到 agent 交付之前：图表过三道检查、组件写代码前先签契约、架构图从真实来源生成并在合并前校验（drawio-skill）或从仓库/文章生成并做布局自检（arch-diagram-skill）、前端 UI 先固定持久事实再用确定性规则当门禁、让 Claude Code 在终端里直接展示截图/录屏/前后对比 QA、让游戏特效在真实 Godot 视口里渲染成胶片条再交给另一个 agent 独立评审、把两条界面文案规则变成“先检索列清单 → 人工确认 → 再改 → 前后截图对照”的流程、用 Hallmark 的三层门禁 + sloplint + 冷上下文复审 + before/kept 快照验收网页设计与重设计、用 unparalleled-skillset 的设计技能 + 代表性 specimen + Playwright 多宽度截图审查闭环验收 UI/网页改版、用 b-end-design-system-skill 的 B 端页面骨架和硬门禁约束后台页面生成、用 visant-killer 的 killer-scan 把界面 AI 味审计拆成脚本硬门禁 + 模型判断、用 renderlint 在无头 Chromium 里按手机/平板/桌面多视口真实渲染页面并用 37 条确定性规则抓像素级缺陷、用 replica 把“照着参考重建 UI”变成 layout/style/pixels/motion 四轴可复现分数与按收益排序的修复清单、用 flawless-ui-ux 的技能 + context/inspect/verify 给 UI/UX 修正留下前后对比证据、用 cook 把视觉构建任务压成一条“参考图定标 → 每维门槛 → 零上下文评审 → 每轮对比图 → 人工只把最终渲染关”的长跑循环，以及用 antislop-ui-ux-skill 的 gosto.md/receitas.md + 先问后做 + 灰度线框 + outside look 给界面去 AI 味。
 
-几条骨架值得单独记住：特效那条——生成 → 真实渲染验证 → 独立评审 → 防篡改证据绑定到具体构建——不限于特效，可以直接搬到别的交付物；文案那条是反面补充：规则本身主观，必须留人工确认这一环；Hallmark 补的是网页页面级的“可判定检查 + 冷上下文终审 + 不丢功能”；unparalleled-skillset 补的是“先 specimen 再全量、按轮次重拍截图并记录修复账本”；B 端设计系统补的是后台页面的“先选骨架 → 按否定判据选组件 → 用硬门禁和检查清单复核”；arch-diagram-skill 补的是架构图的另一条路线（仓库/文章 → `<slug>.spec.json` → `check` → 多格式导出），和 drawio-skill 是按交付物选择而不是互相替代；visant 补的是“技能先探测目标仓库已有的 gates、primitives、tokens，再决定动作”；renderlint 补的是最硬的一层——不靠模型看图猜，靠确定性规则在真实浏览器里按像素和几何量，退出码 1 就能同时挂住构建、CI 和 Claude Code 的回合；replica 补的是“有明确参考的 UI 还原”这一窄层——四轴分数、级别门禁、`compare` 退出码和按收益排序的 findings，但它只覆盖 Web，且证据主要来自作者自测；cook 补的是“有参考图的视觉构建可以长时间自己迭代”，但必须用人工估分校准 critic 自评，并给成本设硬上限。flawless-ui-ux 补的是“技能指导 + 可重复检查/验证 CLI”这一层：`context` 收集项目语境，`inspect` 保存修改前基线，`verify` 对比 persistent / new / no-longer-observed；但 CLI 自述不覆盖完整 WCAG、完整键盘旅程、业务正确性和视觉质量，采样之外的东西仍需人工看。
+几条骨架值得单独记住：特效那条——生成 → 真实渲染验证 → 独立评审 → 防篡改证据绑定到具体构建——不限于特效，可以直接搬到别的交付物；文案那条是反面补充：规则本身主观，必须留人工确认这一环；Hallmark 补的是网页页面级的“可判定检查 + 冷上下文终审 + 不丢功能”；unparalleled-skillset 补的是“先 specimen 再全量、按轮次重拍截图并记录修复账本”；B 端设计系统补的是后台页面的“先选骨架 → 按否定判据选组件 → 用硬门禁和检查清单复核”；arch-diagram-skill 补的是架构图的另一条路线（仓库/文章 → `<slug>.spec.json` → `check` → 多格式导出），和 drawio-skill 是按交付物选择而不是互相替代；visant 补的是“技能先探测目标仓库已有的 gates、primitives、tokens，再决定动作”；renderlint 补的是最硬的一层——不靠模型看图猜，靠确定性规则在真实浏览器里按像素和几何量，退出码 1 就能同时挂住构建、CI 和 Claude Code 的回合；replica 补的是“有明确参考的 UI 还原”这一窄层——四轴分数、级别门禁、`compare` 退出码和按收益排序的 findings，但它只覆盖 Web，且证据主要来自作者自测；cook 补的是“有参考图的视觉构建可以长时间自己迭代”，但必须用人工估分校准 critic 自评，并给成本设硬上限。flawless-ui-ux 补的是“技能指导 + 可重复检查/验证 CLI”这一层：`context` 收集项目语境，`inspect` 保存修改前基线，`verify` 对比 persistent / new / no-longer-observed；但 CLI 自述不覆盖完整 WCAG、完整键盘旅程、业务正确性和视觉质量，采样之外的东西仍需人工看。antislop 补的是“项目品味文件 + 先问后做”这一层：先读 `gosto.md`/`receitas.md`，指出 slop 信号，提问并给出灰度线框，之后才实现，最后做 outside look 和 second pass；参考只取概念，不复制调色板/字体/字面布局。
 
 ## 适用与不适用
 
@@ -37,6 +37,7 @@
 - 你有一个 Web UI 参考（在线站点、本地 HTML、截图或录屏），想在已有代码库里按参考重建单个组件、hero 或菜单开合，并接受 `structure` / `faithful` / `exact` 的分数门禁。
 - 你有可对照的参考图/视频，想把代码实现的 3D 世界、影片、发布视频、游戏或 UI 交给 agent 长时间迭代，并且愿意每轮看静帧、用人工估分校准评分、给成本设上限。
 - 你想让 agent 按创建、重设计、精修、评审流程做 UI/UX，并用 `context` / `inspect` / `verify` 留下修改前后的检查记录；你的前端项目能启动 dev server，且你接受“CLI 只覆盖可判定的采样问题，不证明完整 WCAG、键盘流程、业务正确性和视觉质量”。
+- 用 Claude Code/Codex/OpenCode 做 UI 原型或界面评审，想让 agent 先问清屏幕角色、视觉和优先级，给出灰度线框，再实现，并做 outside look 和 second pass；项目愿意填写 `gosto.md` / `receitas.md`。
 
 **不适用：**
 
@@ -56,6 +57,7 @@
 - replica 仅覆盖 Web UI，不覆盖原生移动端；静图最高 8000px；`<video>` 元素冻结在第一帧，Canvas 与 WebGL 只按像素与动效帧判断；YouTube、Loom 这类流媒体链接抓不到，必须自己录屏；参考站点的字体、图片、图标、文案版权归原主，skill 会要求改用你自己的资产或 placeholder，除非你有授权；8 轮上限内不收敛要如实交代剩余差异。
 - cook 不适用于纯文本或没有参考图/视频的工作；目标场景是视觉构建（3D 世界、影片、发布视频、游戏、UI）。README 只到 README 层面，critic 的具体提示词、rubric、intake 问题清单在 `references/` 下未展开；门槛分数由 critic 给出、由人校准，主观性强。成本量级高，小任务必须自己设硬上限。
 - flawless-ui-ux 的 CLI 自述不覆盖完整 WCAG 合规、完整键盘旅程、业务流正确或视觉质量；采样不能代替真实设备与浏览器矩阵；检查不编辑文件、不启动服务器、不下载浏览器、不提交表单；缺失的已确认目标和变化过的条件仍属未验证。README 只到 README 层面，没有效果数据、案例研究或基准结果。
+- antislop-ui-ux-skill 的材料只有 README，未包含 `SKILL.md`、`estetica-ia.md`、`gosto.md`、`receitas.md` 的实际内容；安装命令写的 `skills/deslop` 与目录树里的 `deslop/` 不一致，执行前先确认仓库实际路径。它只面向 UI/UX 屏幕；没有量化前后对比、用户研究或失败案例；不适合无人工评审的全自动批量改写。
 - 想要现成的量化改善数据：这些材料都没有给出效果数字，只能自己跑基线对照；replica 的 demo 分数是作者自述，不是第三方评测。
 
 ## 前置条件
@@ -77,6 +79,7 @@
 - UI 还原度做法（做法 O）：Node 20+；有 Playwright 的 Chromium，或退回使用本机已装的 Google Chrome；只有视频/GIF 参考才需要 `ffmpeg`；不需要 API key；一个已有代码库/已有技术栈；参考源（URL、本地 HTML、截图或录屏）、落点文件、级别、触发动作、视口和合法可用的字体/图片/图标/文案。
 - 视觉构建长跑做法（做法 N）：Node 18+；`ffmpeg` 在 PATH 上；手上有一组参考图，给了运动参考时还要能逐帧分析；能接受长时间自主运行；能打开仓库 `references/` 下的 intake、critic、rules、ship 文件；小任务要自己设硬上限。
 - UI/UX 检查与验证做法（做法 P）：Node 22.12+，在项目目录中运行；一个受支持的宿主（Codex、OpenCode、Antigravity、Kiro、Cursor、Kilo Code、GitHub Copilot CLI、Claude Code、Pi、Grok Build、Devin CLI、DeepSeek Harness）；项目已有可启动的前端页面和入口源码文件；要检查运行中的界面时，需要兼容 Chromium 和 Playwright Chromium；输出目录的父目录必须存在；如果只是评审而不改文件，需要给 agent 明确的“只报告不改文件”约束。
+- 界面去 AI 味做法（做法 Q）：已有 Claude Code/Codex/OpenCode 项目；确认项目的技能目录；能填写项目级 `gosto.md` 和 `receitas.md`；有浏览/截图能力（用于参考和 outside look）；愿意保留人工评审。
 
 ## 操作步骤
 
@@ -560,7 +563,7 @@
    ```bash
    npx skills add albertirgi/replica
    ```
-   或手工把仓库里的 `skills/replica` 复制进 agent 的 skills 目录（Claude Code 是 `~/.claude/skills/replica`，或项目内 `.claude/skills/replica`）。
+   或手工把仓库里的 `skills/replica` 复制进 agent 的 Skills 目录（Claude Code 是 `~/.claude/skills/replica`，或项目内 `.claude/skills/replica`）。
 2. 手工安装路径下，装依赖并自检：
    ```bash
    npm install --prefix ~/.claude/skills/replica/scripts
@@ -649,21 +652,38 @@
 10. 读退出码判断覆盖状态：`0` 表示完成覆盖且无确认错误；`1` 表示完成覆盖但有确认错误；`2` 表示输入无效或请求的覆盖不完整；安装器在用户拒绝确认时返回 `0`，提示中断时返回 `130`。
 11. 按 CLI 的实际覆盖解读结果：它采集选定 axe 对比度和可访问名称规则、采样宽度下的计算字号与水平溢出、可见破图与未捕获 JS 错误、重复短语和箭头提示、源码中的字面像素字号等；采样不能证明完整 WCAG 合规、完整键盘旅程、业务流正确或视觉质量，小字号和重复内容需要结合语境判断。
 
-### 怎么选 A / B / C / D / E / F / G / H / I / J / K / L / M / N / O / P
+### 做法 Q：用项目品味文件、先问后做和 outside look 给界面去 AI 味
 
-按交付物分：数据图表走 A；命名组件或有界组合走 B；架构图/系统图/架构文档维护走 C，尤其是需要可编辑 `.drawio`、真实来源导入、漂移 diff、CI 规则校验、增量同步时；把 GitHub 仓库、技术文章、PDF 或本地项目转成深色“终端蓝图”风格架构图，或需要导出 HTML/PNG/MP4/GIF/Mermaid 时走 K；前端界面的设计与实现走 D；在终端里直接看截图/录屏/前后对比 QA 走 E；在真实 Godot 里可运行的实时特效，或想把“生成 → 真实渲染验证 → 独立评审 → 证据绑定具体构建”的闭环搬到别的领域，走 F；界面文案层的清理走 G；网页页面级的设计、重设计、去 AI 味并防止改版丢功能走 H；应用型 UI 或公开网站的设计与实现，想让 agent 先出 brief/设计契约/代表性 specimen、再做多宽度截图审查和修复账本走 I；B 端企业后台页面的生成与复核走 J；界面 AI 味、动效参数、文案 AI 腔的脚本硬门禁 + 模型判断走 L；项目能在浏览器里渲染、你想让“UI 改动后 0 error”成为机器门禁时走 M；有明确 Web 参考、想把“像不像”变成可复现四轴分数和退出码时走 O；有参考图/视频的视觉构建任务，想让 agent 对着参考图长时间迭代、每轮静帧交人工关卡时走 N；想让 agent 按创建/重设计/精修/评审流程做 UI/UX，并用 `context` / `inspect` / `verify` 留下修改前后对比记录时走 P。
+用 gustavo-henriq/antislop-ui-ux-skill。它面向 Claude Code、Codex、OpenCode，把“去 AI 味”做成一套项目级流程：先读项目品味与配方，指出 slop 信号，先提问并给灰度线框，之后才实现，最后做 outside look 和 second pass。材料只有 README，下面步骤里凡是原文没给出的，都按“先确认仓库”处理。
+
+1. 前提：已有 Claude Code/Codex/OpenCode 项目，并确认项目的技能目录。把仓库中的 skill 文件夹复制到项目里。README 给出的 Claude Code 命令是：
+   ```bash
+   cp -r skills/deslop my-app/.claude/skills/deslop
+   ```
+   注意：README 的目录树显示根目录有 `deslop/`，但安装命令写的是 `skills/deslop`，执行前先确认仓库实际路径。
+2. 前提：skill 已复制到项目。按 README 要求填写项目级的两个文件：`gosto.md`（项目品味：选择和拒绝）与 `receitas.md`（调色板、表面和组件）。原文说它们是模板，但材料里没有给出模板正文，需要从仓库中取得后填写。
+3. 前提：选定一个已有屏幕或新屏幕。使用 skill 的两种模式：对已有屏幕做 de-slop（app、Figma 或刚做出的原型），或从零构建新屏幕。原文没有给出具体调用提示词，调用时使用宿主 agent 的技能调用方式，不要照抄不存在的提示词。
+4. 前提：已确定屏幕和项目模板。按 README 描述的循环执行：先读 `gosto.md` 和 `receitas.md`；就地指出 slop 信号；先提问并给出灰度线框，之后才实现；产出 self-contained HTML 原型（base64 图片、真实状态）；最后做 double check、outside look、second pass，并报告发现了什么。
+5. 前提：需要外部参考且有浏览/截图权限。可用便宜的子代理搜索 curated sources、截图，只返回大纲；主 agent 负责决定和应用。README 把这称为 anti-token protocol。
+6. 前提：使用参考时。遵守 README 的 golden rule：参考只取概念（层级、节奏、隐喻），不复制调色板、字体或字面布局。
+7. 保留人工评审：README 列出 20 组正反例画廊，可作为人工对照；但材料没有给出指标定义或量化结果。把 signal audit 标记出的 slop 信号、冗余区块、装饰性渐变/玻璃/发光逐条交给人确认。
+8. 如果仓库实际没有 README 所说的检查清单、模板或技能内容，或安装后无法按循环执行，把结论降为 study，不要写入手册作为可复制流程。
+
+### 怎么选 A / B / C / D / E / F / G / H / I / J / K / L / M / N / O / P / Q
+
+按交付物分：数据图表走 A；命名组件或有界组合走 B；架构图/系统图/架构文档维护走 C，尤其是需要可编辑 `.drawio`、真实来源导入、漂移 diff、CI 规则校验、增量同步时；把 GitHub 仓库、技术文章、PDF 或本地项目转成深色“终端蓝图”风格架构图，或需要导出 HTML/PNG/MP4/GIF/Mermaid 时走 K；前端界面的设计与实现走 D；在终端里直接看截图/录屏/前后对比 QA 走 E；在真实 Godot 里可运行的实时特效，或想把“生成 → 真实渲染验证 → 独立评审 → 证据绑定具体构建”的闭环搬到别的领域，走 F；界面文案层的清理走 G；网页页面级的设计、重设计、去 AI 味并防止改版丢功能走 H；应用型 UI 或公开网站的设计与实现，想让 agent 先出 brief/设计契约/代表性 specimen、再做多宽度截图审查和修复账本走 I；B 端企业后台页面的生成与复核走 J；界面 AI 味、动效参数、文案 AI 腔的脚本硬门禁 + 模型判断走 L；项目能在浏览器里渲染、你想让“UI 改动后 0 error”成为机器门禁时走 M；有明确 Web 参考、想把“像不像”变成可复现四轴分数和退出码时走 O；有参考图/视频的视觉构建任务，想让 agent 对着参考图长时间迭代、每轮静帧交人工关卡时走 N；想让 agent 按创建/重设计/精修/评审流程做 UI/UX，并用 `context` / `inspect` / `verify` 留下修改前后对比记录时走 P；用 Claude Code/Codex/OpenCode 做 UI 原型或界面评审，想让 agent 先读 `gosto.md`/`receitas.md`、指出 slop 信号、提问并给灰度线框，再实现并做 outside look 时走 Q。
 
 C 和 K 的差异：C 的核心产物是可编辑 `.drawio`，强在真实来源导入、漂移 diff、规则校验、CI 和增量同步；K 的核心产物是深色终端蓝图风格架构图，强在读仓库/文章/PDF/本地项目、以 `<slug>.spec.json` 修正、`check` 做布局自检、导出 HTML/PNG/MP4/GIF/Mermaid。K 的 `check` 只查布局，不查语义。要把架构图纳入 CI 门禁，优先 C；要快速把仓库或文章变成可展示的图/视频，优先 K。
 
-D、H、I、L、M、O、P 都碰界面，但层次不同：D 用持久事实 + 61 条确定性规则做持续守门；H 用 Floor/Reflex/Finish 三层门禁 + `sloplint` 八宽度渲染 + 冷上下文复审 + before/kept 快照做页面级设计与重设计验收；I 用设计技能 + 代表性 specimen + Playwright 多宽度截图审查账本；L 补界面 AI 味审计和动效/文案 lint 的落地样例；M 补“真实浏览器里的像素事实”这一层——37 条规则、按几何算溢出与遮挡、按真实像素算对比度、退出码可直接挂构建和 Claude Code 回合；O 补“对着明确参考的还原度”这一层——四轴分数、级别阈值、`compare` 退出码、按收益排序的 findings；P 补“技能指导 + 可重复检查/验证 CLI”这一层——`context` 收集项目语境、`inspect` 保存 before、`verify` 对比 persistent / new / no-longer-observed，但 CLI 自述只覆盖可判定的采样问题。M 不替代 D/H/I/L/O/P：M 管“渲染出来有没有坏”，D/H/I/L 管“该不该这么设计、有没有 AI 味、改版有没有丢功能”，O 管“和参考差多少”，P 管“这次修正前后，可判定的检查项有没有减少、有没有新增回归、哪些仍然没被验证”。O 也不替代视觉设计判断，它只证明还原度分数，不证明设计本身好。P 也不证明设计本身好，它只留下检查证据。
+D、H、I、L、M、O、P、Q 都碰界面，但层次不同：D 用持久事实 + 61 条确定性规则做持续守门；H 用 Floor/Reflex/Finish 三层门禁 + `sloplint` 八宽度渲染 + 冷上下文复审 + before/kept 快照做页面级设计与重设计验收；I 用设计技能 + 代表性 specimen + Playwright 多宽度截图审查账本；L 补界面 AI 味审计和动效/文案 lint 的落地样例；M 补“真实浏览器里的像素事实”这一层——37 条规则、按几何算溢出与遮挡、按真实像素算对比度、退出码可直接挂构建和 Claude Code 回合；O 补“对着明确参考的还原度”这一层——四轴分数、级别阈值、`compare` 退出码、按收益排序的 findings；P 补“技能指导 + 可重复检查/验证 CLI”这一层——`context` 收集项目语境、`inspect` 保存 before、`verify` 对比 persistent / new / no-longer-observed，但 CLI 自述只覆盖可判定的采样问题；Q 补“项目品味文件 + 先问后做”这一层——读 `gosto.md`/`receitas.md`，指出 slop 信号，提问并给灰度线框，之后才实现，最后做 outside look 和 second pass，参考只取概念。M 不替代 D/H/I/L/O/P/Q：M 管“渲染出来有没有坏”，D/H/I/L 管“该不该这么设计、有没有 AI 味、改版有没有丢功能”，O 管“和参考差多少”，P 管“这次修正前后，可判定的检查项有没有减少、有没有新增回归、哪些仍然没被验证”，Q 管“每个元素有没有用户能感知的存在理由、参考有没有被抄成另一种套路”。O 也不替代视觉设计判断，它只证明还原度分数，不证明设计本身好。P 和 Q 也不证明设计本身好，它们只留下检查证据或流程约束。
 
 N 和 F 都靠“真实渲染 + 独立评审”，但 N 是对着参考图做长跑视觉迭代，适用 3D 世界、影片、发布视频、游戏、UI；F 是实时特效在 Godot 里渲染成胶片条再交给 `vfx-review`。N 与 A/H/I/O/P 共享“独立评审/前后证据”结构：A 是只看 PNG 的新审阅者，F 是另一个 agent、另一个技能，H 是 fresh-context 子代理终审，I 是让 agent 打开每张截图按严重度/证据/修复/复测记录，O 是 `compare` 四轴分数和报告，P 是 `inspect` 存基线、`verify` 分 persistent / new / no-longer-observed。N 的成本量级高，先用小任务、2–3 张参考图、2–3 轮试，不要一上来复制作者的高成本 demo。
 
-A、B、D、E、H、I、J、K、L、M、N、O、P 都是事件触发，不是常驻巡检；D 的确定性检测、H 的 `sloplint`、I 的 `capture.mjs`/`report.json`、L 的 `killer-scan`、M 的 `npx renderlint`、O 的 `capture`/`compare`、P 的 `context`/`inspect`/`verify` 都能独立于 LLM 跑，适合直接接 CI。N 的运行状态落在 `cook/`，上下文重置或换 agent 后可续跑。
+A、B、D、E、H、I、J、K、L、M、N、O、P、Q 都是事件触发，不是常驻巡检；D 的确定性检测、H 的 `sloplint`、I 的 `capture.mjs`/`report.json`、L 的 `killer-scan`、M 的 `npx renderlint`、O 的 `capture`/`compare`、P 的 `context`/`inspect`/`verify` 都能独立于 LLM 跑，适合直接接 CI。N 的运行状态落在 `cook/`，上下文重置或换 agent 后可续跑。Q 是任务内循环，不是定时巡检；它依赖 agent 先问、先画灰度线框、再实现，所以要有一次人工确认或明确约束，不能让 agent 跳过提问直接改。
 
 ## 怎么判断变好了
 
-最小试用：在单个代理上装一次，用一个已有图表脚本、一个已有类似实现的组件任务、一两个真实架构来源、一个公开仓库 + 一篇公开技术文章、一个现有前端页面、一个 Godot 4 游戏项目、一个真实页面文案清理、一个已有页面 audit、一个低风险内部仪表盘或落地页、一个 B 端列表页 + 一个表单页、一个自有前端仓库的 `killer-scan`、一个前端项目从 `renderlint init` 到 0 error、一个带参考的 UI 组件以 `faithful` 跑 3–4 轮、一个视觉构建小任务（2–3 张参考图跑 2–3 轮）、以及一个前端页面用 flawless-ui-ux 从 `context`/`inspect` 到 `verify` 跑一轮，分别试。全程做基线对照——让同一 agent 在不装技能、不给规则的情况下做同样任务，再比一次。
+最小试用：在单个代理上装一次，用一个已有图表脚本、一个已有类似实现的组件任务、一两个真实架构来源、一个公开仓库 + 一篇公开技术文章、一个现有前端页面、一个 Godot 4 游戏项目、一个真实页面文案清理、一个已有页面 audit、一个低风险内部仪表盘或落地页、一个 B 端列表页 + 一个表单页、一个自有前端仓库的 `killer-scan`、一个前端项目从 `renderlint init` 到 0 error、一个带参考的 UI 组件以 `faithful` 跑 3–4 轮、一个视觉构建小任务（2–3 张参考图跑 2–3 轮）、一个前端页面用 flawless-ui-ux 从 `context`/`inspect` 到 `verify` 跑一轮，以及一个低风险 UI 页面或原型用 antislop-ui-ux-skill 从填写 `gosto.md`/`receitas.md` 到跑一轮 de-slop 或新建屏幕，分别试。全程做基线对照——让同一 agent 在不装技能、不给规则的情况下做同样任务，再比一次。
 
 图表侧：lint 报出的可判定问题数量和类型（零基线、双 y 轴、文字重叠/裁切、色盲配色、低对比度）；图像复审能抓出多少“标注数字与数据不符”“来源行靠猜或写成文件名”“图上残留 TODO/confirm”；修正前后让不看上下文的同事只看 PNG 复述“这张图说明了什么”；三轮复审的实际收敛情况。
 
@@ -697,7 +717,9 @@ UI 还原度侧（做法 O，指标需自建）：每轮四轴分与总分是否
 
 UI/UX 检查与验证侧（做法 P，指标需自建）：`context` 和 `inspect` 是否能稳定产出 before；`verify` 后 persistent、new、no-longer-observed 各有多少条；确认错误数是否下降、有没有新增回归；退出码是 `0`、`1` 还是 `2`，`2` 出现在哪一步、是输入无效还是覆盖不完整；采样视口之外的问题是否仍然存在；人工抽检键盘操作、业务流程、视觉质量，记录 CLI 没覆盖到的缺陷数；完成同一界面任务的时间、返工轮次；内容或行为是否被意外改变。只有在小样本里看到可重复的确认错误减少且无新增回归，才考虑扩大适用范围。
 
-这些指标是验证方法建议，这些材料都没有给出对应的量化结果。试多久按任务数量定：若干张历史图表、一个边界清晰的组件任务、一两个真实架构来源导入并接入一次 PR、一个公开仓库 + 一篇公开文章、一个现有前端页面的检测基线、一次 show-your-work 的官方 demo 和 3–5 个真实前端修复任务、一次 effekseer-vfx 的 fire 示例和一条真实特效需求、一个真实页面的文案清理 PR、一个已有页面 audit + 一个新建小页面 build + 一次 redesign 快照比对、一个低风险内部仪表盘或一个落地页的 specimen + 截图审查闭环、一个 B 端列表页 + 一个表单页的基线对照、一个自有前端仓库的 `killer-scan` + 人工复核 FAIL、一个前端项目从 `renderlint init` 到 0 error 再连跑几个 UI 改动、一个带参考的 hero 或卡片以 `faithful` 跑 3–4 轮、一个视觉构建小任务的 2–3 轮迭代、一个前端页面用 flawless-ui-ux 的 `context`/`inspect`/`verify` 跑一轮并人工抽检 CLI 未覆盖项。
+界面去 AI 味侧（做法 Q，指标需自建）：先做基线——同一 agent 不装 skill 生成/改造一版，再装 skill、填写 `gosto.md`/`receitas.md` 生成/改造第二版；统计 signal audit 标记出的 slop 信号数量是否下降；重复动作和冗余区块是否减少；装饰性渐变/玻璃/发光是否减少；每个元素能否说出用户可感知的存在理由；请 1–2 名评审者在不知道版本来源的情况下选择更可用的一版；记录 outside look 之后的返工次数和耗时。材料没有给出指标定义或量化结果，这些是验证方法建议。
+
+这些指标是验证方法建议，这些材料都没有给出对应的量化结果。试多久按任务数量定：若干张历史图表、一个边界清晰的组件任务、一两个真实架构来源导入并接入一次 PR、一个公开仓库 + 一篇公开文章、一个现有前端页面的检测基线、一次 show-your-work 的官方 demo 和 3–5 个真实前端修复任务、一次 effekseer-vfx 的 fire 示例和一条真实特效需求、一个真实页面的文案清理 PR、一个已有页面 audit + 一个新建小页面 build + 一次 redesign 快照比对、一个低风险内部仪表盘或一个落地页的 specimen + 截图审查闭环、一个 B 端列表页 + 一个表单页的基线对照、一个自有前端仓库的 `killer-scan` + 人工复核 FAIL、一个前端项目从 `renderlint init` 到 0 error 再连跑几个 UI 改动、一个带参考的 hero 或卡片以 `faithful` 跑 3–4 轮、一个视觉构建小任务的 2–3 轮迭代、一个前端页面用 flawless-ui-ux 的 `context`/`inspect`/`verify` 跑一轮并人工抽检 CLI 未覆盖项、一个低风险 UI 页面或原型用 antislop-ui-ux-skill 跑一轮 de-slop 或新建屏幕并做人工盲选。
 
 ## 常见坑
 
@@ -720,6 +742,7 @@ UI/UX 检查与验证侧（做法 P，指标需自建）：`context` 和 `inspec
 - replica 只覆盖 Web UI；静图最高 8000px；`<video>` 只冻结在第一帧，Canvas/WebGL 只按像素与动效帧判断；YouTube、Loom 流媒体抓不到，要自己录屏。参考站点的字体、图片、图标、文案版权归原主，先换成自己的资产或 placeholder。`data-replica="placeholder"` 只跳过像素分，不跳过盒模型。`compare` 退出码 `1` 是未通过，不是出错；`2` 才是出错。8 轮上限内不收敛要如实交代剩余差异，不要把它当成“已经 100%”。它的 demo 和自测来自作者，33 stars，没有第三方评测；先人工抽检 findings 的假阳性和假阴性，再决定是否把分数当门禁。
 - cook 的证据只有作者自述一次高成本 demo（约 $1.8k–$2.3k、约 45h、约 11M 输出 token），没有第三方复现、没有与“不用 cook”的对照基线，也没有“成品是否被外部认可”的客观指标。门槛分数（99.9%、9/10）由 critic 给出、由人校准，主观性强，“达到 99.9%”不等于客观质量。README 只到 README 层面，critic 提示词、rubric、intake 问题清单在 `references/` 下未展开。纯文本或没有参考物的工作不适用；小任务必须自己设硬上限，不要复制 demo 的 8h 下限。模型给自己打分偏高，每次评分要用你自己的估计去校准。
 - flawless-ui-ux 的 README 只有安装、调用、CLI 和退出码，没有效果数据、案例研究或基准结果；64 stars。CLI 自述的检查范围有限：采样不能证明完整 WCAG 合规、完整键盘旅程、业务流正确或视觉质量；小字号和重复内容要结合语境判断；检查不编辑文件、不启动服务器、不下载浏览器、不提交表单；缺失的已确认目标和变化过的条件仍属未验证。`verify` 的 persistent / new / no-longer-observed 只说明可判定项的变化，不等于设计变好了。不要因为退出码 `0` 就认为页面没问题；退出码 `1` 是“有确认错误”，不是“检查失败”；退出码 `2` 是输入无效或覆盖不完整，先修覆盖再谈结果。
+- antislop-ui-ux-skill 的材料只有 README，未包含 `SKILL.md`、`estetica-ia.md`、`gosto.md`、`receitas.md` 的实际内容；安装命令写的 `skills/deslop` 与目录树里的 `deslop/` 不一致，执行前先确认仓库实际路径。原文没有给出具体调用提示词，不要照抄不存在的提示词；调用时用宿主 agent 的技能调用方式。它只面向 UI/UX 屏幕；20 组正反例画廊和 12 信号清单是人工对照材料，不是量化效果证据；34 stars 只是仓库指标。没有量化前后对比、用户研究或失败案例；先只做小范围试用，跳过“先问后做 + 灰度线框 + 人工确认”直接让 agent 改，是最容易把屏幕改成另一种套路的一步。如果仓库实际没有 README 所说的检查清单、模板或技能内容，或安装后无法按循环执行，应把结论降为 study，不要写入手册作为可复制流程。
 
 ## 证据与来源
 
@@ -755,6 +778,8 @@ UI/UX 检查与验证侧（做法 P，指标需自建）：`context` 和 `inspec
 
 **UI/UX 检查与验证做法（flawless-ui-ux）：** 依据 smokeeaasd/flawless-ui-ux 的 README。可操作材料是安装命令（npx/pnpm/bun）、显式宿主参数（`--codex`、`--devin`、`--claude-code --global`、`--project ./app`、`--yes`）、skills.sh 与 Bash 脚本安装、触发方式（`$flawless-ui-ux`、`/flawless-ui-ux`、`/skill:flawless-ui-ux`）、CLI 的 `context` / `inspect` / `verify` 命令、`--source` 与 `--selector`、`--viewport` 默认 1440×900 与 390×844、`npx playwright@1.64.1 install chromium`、输出 before/after 目录与 `run.json`、退出码 `0`/`1`/`2` 与安装器 `0`/`130`。原文给出的具体事实：Node 22.12+；MIT 许可；12 个受支持宿主；检查采集选定 axe 对比度和可访问名称规则、采样宽度下的计算字号与水平溢出、可见破图与未捕获 JS 错误、重复短语和箭头提示、源码中的字面像素字号等。作者主张包括“技能引导设计与实现”“精修发展预期特征”；README 没有效果数据、案例研究或基准结果。CLI 自述不覆盖完整 WCAG 合规、完整键盘旅程、业务流正确或视觉质量。64 stars，未读取 docs、evals 和实际代码，不能确认安装后在各宿主上的真实可用性和跨版本稳定性。
 
+**界面去 AI 味做法（antislop-ui-ux-skill）：** 依据 gustavo-henriq/antislop-ui-ux-skill 的 README。可操作材料是安装命令 `cp -r skills/deslop my-app/.claude/skills/deslop`、项目级 `gosto.md`/`receitas.md`、两种模式（de-slop 已有屏幕 / 从零建屏）、先问后做 + 灰度线框 + self-contained HTML 原型 + double check / outside look / second pass 的循环、anti-token protocol、golden rule、20 组正反例画廊、10 类 80+ 模式、12 信号清单、curated sources。原文没有给出检查清单/模板正文、具体调用提示词、量化前后对比、用户研究或失败案例；34 stars 只是仓库指标。作者主张包括：ask before deciding 是主要差异化；便宜子代理和 anti-token protocol 能省 token；分层检查能提升质量。安装路径在 README 中不完全一致。
+
 ## 依据的调研
 
 - [rhiever/evident-charts](../research/radar/2026-10-01/21-rhiever-evident-charts.md)：值得一试，按 README 给出的安装命令在 Claude Code（或 Cursor/Codex/Gemini CLI）里装上 evident-charts，然后照常提图表需求、让它在出图前自查，是最小可试的用法；理由是它把“数据核对 + 代码级 lint + 渲染图复审”做成了自动加载的 Agent Skill，步骤和检查项都写得很具体，但改善幅度只有作者自述和一张对比图，需要自己跑一遍验证。
@@ -773,3 +798,4 @@ UI/UX 检查与验证侧（做法 P，指标需自建）：`context` 和 `inspec
 - [Leonxlnx/cook](../research/radar/2026-11-03/9673-leonxlnx-cook.md)：值得一试，先按 README 把 cook 安装为 Claude Code / Codex 的 skill，再用一个只有 2–3 张参考图的小型视觉任务跑 2–3 轮，验证“参考图定标 + 每维分数门槛 + 零上下文评审打分 + 每轮对比图 + 人工只把最终渲染关”这条循环是否真的减少返工。值得试的理由是它给出了可直接复制的安装命令、调用方式、8 步循环、状态目录和对比脚本；不能直接 adopt 的理由是证据只有作者自述的一次高成本 demo（约 $1.8k–2.3k），且场景限于视觉构建。
 - [albertirgi/replica](../research/radar/2026-11-03/9853-albertirgi-replica.md)：值得一试，建议小范围试用：按 README 的安装命令装好 skill，挑一个页面里的单个组件（如 hero 或卡片）以 faithful 级别跑 3–4 轮 capture/compare，用分数曲线和人工抽检判断闭环是否真能收敛。理由是它把“UI 还原得像不像”从口头判断变成 layout/style/pixels/motion 四轴可复现分数与按收益排序的修复清单，步骤、命令和阈值都可照做；但只覆盖 Web、证据基本来自作者自测，所以先小范围试而非直接采用。
 - [smokeeaasd/flawless-ui-ux](../research/radar/2026-11-07/11125-smokeeaasd-flawless-ui-ux.md)：值得一试，建议小范围试用：在现有前端项目中安装该技能，让编程智能体按创建、重设计、精修、评审流程工作，并用 context、inspect、verify 做前后对比。理由是安装、调用和检查命令具体可照做，但 README 没有给出效果数据，CLI 也不覆盖完整可访问性、键盘流程、业务正确性和视觉质量。
+- [gustavo-henriq/antislop-ui-ux-skill](../research/radar/2026-11-12/12725-gustavo-henriq-antislop-ui-ux-skill.md)：值得一试，建议在一个小型 UI 页面或原型上小范围试用：按 README 安装 skill，先填写项目的 gosto.md 和 receitas.md，再走“定位 slop 信号→提问并给灰度线框→实现→多层检查”的循环；理由是安装命令和流程较明确，但原文未提供检查清单/模板正文和效果数据，暂不宜直接 adopt。
