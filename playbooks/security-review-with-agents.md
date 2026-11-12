@@ -1,10 +1,10 @@
-# 让 AI 在大型代码库里做可复核的安全评审与日志补齐
+# 让 AI 安全评审每一步都留下可复核证据
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：大型代码库的安全评审和日志补齐常常缺少范围、证据与闭环：威胁建模可能变成伪缺陷清单，攻击面看不清，补丁回归没人验，日志埋点既漏覆盖又可能泄露敏感数据；这篇手册用五套可人工复核的流程把结论落到证据上。
-> 先试这一步：先在一个非核心、可只读暴露的仓库上跑一次威胁建模 quick 评审，人工核对报告里的文件与行号引用是否真实支持结论，再决定是否进入攻击面、回归猎取、证据账本和日志改造。
-> 最近修订：2026-10-31
+> 解决的问题：大型代码库的 AI 安全评审容易停在候选清单、自动扫描结果或厂商声明上，无法证明可达性、修复有效性和回归风险。
+> 先试这一步：先在一个非核心仓库用只读方式跑一次范围明确的威胁建模或代码安全扫描，并要求每条结论带文件行号、排除项或 coverage limits。
+> 最近修订：2026-11-12
 
 ## 解决什么问题
 
@@ -14,12 +14,11 @@
 2. **攻击面本身。** 某些代码在发布默认配置下就能被未认证的人走到，却没有任何默认功能真正使用它；某些敏感逻辑运行在认证、点击或协议状态转换之前；还有些配置单独看都合理，组合起来却静默关闭了安全控制。
 3. **修复副作用。** AI 或工程师修一个已报告 bug 时，可能引入回归、不完整修复，或只修了症状。
 4. **安全日志覆盖与隐私。** 存量系统补安全日志常靠人逐段扫代码，覆盖缺口说不清；补日志本身又可能泄露凭证、令牌或个人敏感字段，可能被注入记录，也可能耗尽资源。
+5. **自动扫描结果不可核验。** 商业或厂商工具能给出报告、SARIF、威胁模型草稿和修复建议，但报告里通常有 exclusions 与 coverage limits；如果不核对源码证据、排除项和访问限制，就会把“跑过工具”当成“系统已安全”。
 
-此外，扫描结果、修复状态和日志改造账本如果只留在会话里，无法复测、无法审计，也会让前面的工作失去闭环。
+这篇手册把六套流程接起来：先用威胁建模划清范围、列出威胁与已有控制，得到一份待人工核验的候选清单；再用攻击面三遍法找并收窄可达路径；用“三步证明 + 回归猎取”验证补丁没有引入新缺陷；用 PandaWard 这类本地证据账本把被动扫描、人工 triage、修复复测和 CI 门禁串起来；用 Dread Ledger 这类分波次提示词流程给存量系统补安全日志；最后把 Codex Security 这类带 CLI、插件和 CI 入口的代码安全审计工具作为候选发现与报告自动化的补充。贯穿始终的纪律只有一条：**每一步的结论都要落到可核验的证据上**——威胁要带文件和行号，默认行为变没变要看测试差异是否为 0，回归要带 live PoC，产不出 live PoC 的步骤一律记为 `inconclusive`，finding 要有账本和复测记录，日志改造要有清单核对、未执行检查说明和回滚计划，扫描报告要读 exclusions 与 coverage limits。
 
-这篇手册把五套流程接起来：先用威胁建模划清范围、列出威胁与已有控制，得到一份待人工核验的候选清单；再用攻击面三遍法找并收窄可达路径；用“三步证明 + 回归猎取”验证补丁没有引入新缺陷；用 PandaWard 这类本地证据账本把被动扫描、人工 triage、修复复测和 CI 门禁串起来；最后用 Dread Ledger 这类分波次提示词流程给存量系统补安全日志，每一波验证通过才开下一波，并保留 ledger 作为跨会话证据。贯穿始终的纪律只有一条：**每一步的结论都要落到可核验的证据上**——威胁要带文件和行号，默认行为变没变要看测试差异是否为 0，回归要带 live PoC，产不出 live PoC 的步骤一律记为 `inconclusive`，finding 要有账本和复测记录，日志改造要有清单核对、未执行检查说明和回滚计划。
-
-五份材料的可复制程度不一样：威胁建模有公开的安装命令、调用语法、产物约定和审阅清单，但作者自述提示词仍是草稿，且没有任何效果数据；攻击面与回归猎取两份调研都明确没有公开完整 skill、提示词、安装命令和 schema；PandaWard 有公开插件和 CLI 命令，但项目仍是 alpha，适配器未验证，内置规则对 Java 注入基准为 0.00，且没有独立评测；Dread Ledger 这次只拿到 README，提示词正文和 90 项清单内容都没有抓到，没有任何效果数据，只能照流程骨架试，不能照抄提示词或审查项。所以整体上这是一套需要人工复核的流程，不是一键工具，也不能把任何一份报告当成安全结论。
+六份材料的可复制程度不一样：威胁建模有公开的安装命令、调用语法、产物约定和审阅清单，但作者自述提示词仍是草稿，且没有任何效果数据；攻击面与回归猎取两份调研都明确没有公开完整 skill、提示词、安装命令和 schema；PandaWard 有公开插件和 CLI 命令，但项目仍是 alpha，适配器未验证，内置规则对 Java 注入基准为 0.00，且没有独立评测；Dread Ledger 这次只拿到 README，提示词正文和 90 项清单内容都没有抓到，没有任何效果数据，只能照流程骨架试，不能照抄提示词或审查项；Codex Security 有公开的 CLI、插件、SDK 和 GitHub Action 步骤，但效果只有厂商自述，没有 benchmark、真实漏洞检出案例、误报率或漏报率统计，部分能力还受 Trusted Access for Cyber、Daybreak 等访问条件限制。所以整体上这是一套需要人工复核的流程，不是一键工具，也不能把任何一份报告当成安全结论。
 
 ## 适用与不适用
 
@@ -33,17 +32,19 @@
 - 手上有一个非核心、可只读暴露的仓库，用来试跑和对比基线。
 - 做法 D 额外适用：已安装 Claude Code；想先建立本地 finding 账本、人工 triage、修复复测和 CI new-only 门禁；有可选 scanner（gitleaks、semgrep、osv-scanner、trivy、apktool、MobSF、ZAP 等）；如要做网络测试，有书面许可和能在交互终端批准 scope 的人；移动端检查有 emulator 或已启动 simulator。
 - 做法 E 额外适用：已有日志设施（logger）的存量应用；有能读写应用代码的编码智能体；有代码评审和独立部署流程；有安全人员能复核日志隐私、schema 和波次结论；有一个非生产的中小服务可以先只跑 Assess 和 Wave 0 验证清单可信度。
+- 做法 F 额外适用：有仓库读取权限；能安装 Node.js 与 Python；能完成 `cs login` 或在 CI 设置 API key；想在 Codex 会话、终端 CLI 或 GitHub Actions 中跑代码安全审计；能接受报告带 exclusions 与 coverage limits，并安排人工复核；部分网络安全请求与受保护 findings 需要 Trusted Access for Cyber，有 Daybreak 权限的账号还需按文档选择 program。
 
 **不适用：**
 
 - 代码库无法构建、无法动态 trace，或无法提供 live 接口（威胁建模本身可以在只读仓库上跑，但它只能给候选清单，无法替代后两步的验证）。
 - 没有稳定测试基线，改完无法判断默认行为是否变化。
 - 没有人能做安全复核和最终裁决，只能让 agent 自动改代码、自动报回归、自动批准修复。
-- 期望直接复制现成 skill、安装命令、提示词或 schema。**注意差别**：做法 A 的安装命令与调用语法在 README 里是公开的，可以照抄；做法 B、C 没有公开命令和 schema，只能手工照流程做，不要臆造；做法 D 有公开插件和 CLI 命令，但仍是 alpha，适配器未验证，不能把自动结果当安全结论；做法 E 本次只有 README 的流程与文件路径，提示词正文和 90 项清单内容未抓到，必须回仓库取文件，不能凭标题补写。
-- 深度依赖 Codex 生态；做法 D 依赖 Claude Code，其他 agent 环境需要自行复刻流程。
-- 想把威胁模型的结论当合规依据或“系统已安全”的证明——原文明确写了威胁模型不构成系统安全的证明。
+- 期望直接复制现成 skill、安装命令、提示词或 schema。**注意差别**：做法 A 的安装命令与调用语法在 README 里是公开的，可以照抄；做法 B、C 没有公开命令和 schema，只能手工照流程做，不要臆造；做法 D 有公开插件和 CLI 命令，但仍是 alpha，适配器未验证，不能把自动结果当安全结论；做法 E 本次只有 README 的流程与文件路径，提示词正文和 90 项清单内容未抓到，必须回仓库取文件，不能凭标题补写；做法 F 有公开命令，但效果只有厂商自述，且部分能力有访问限制。
+- 深度依赖 Codex 生态；做法 D 依赖 Claude Code，其他 agent 环境需要自行复刻流程；做法 F 与 OpenAI/Codex 生态绑定更紧。
+- 想把威胁模型的结论当合规依据或“系统已安全”的证明——原文明确写了威胁模型不构成系统安全的证明；Codex Security 的扫描报告同样不能当安全结论。
 - 做法 D 不适用：想把内置规则结果当完整安全评估；内置规则对 Java 注入基准为 0.00，注入类问题应交给 Semgrep 等数据流工具；没有书面许可就想发网络流量；想在真实设备上做移动端运行时检查；Windows 与 macOS/Linux 插件装错。
 - 做法 E 不适用：应用没有 logger 或不允许改日志；没有代码评审和独立部署通道；没有回滚与 canary 能力；想直接把单作者、低 star、无第三方使用记录的项目用于生产；想跳过 Wave 0 直接补覆盖面；想在没有验证的情况下连开多波；期望原文有定时或事件触发的自动编排——README 没有给出。
+- 做法 F 不适用：没有 API 额度或无法完成登录；CI 不能设置 `OPENAI_API_KEY` 或 `CODEX_API_KEY`；需要全部能力但账号没有 Trusted Access for Cyber 或未选择 Daybreak program；期待扫描没有排除项、没有覆盖限制；把厂商自述当成已证明的效果；把 `cs scan` 或 weekly Action 当成 A/B/C 的动态验证与 live PoC。
 
 ## 前置条件
 
@@ -56,7 +57,8 @@
 - 做回归猎取额外需要：`THREAT_MODEL.md`、`PATCHING_GUIDELINES.md`（或 `AGENTS.md`）、固定 I/O schema、明确的“回归”定义与裁决门槛，以及可编排的 agent 环境（Codex 或等价环境）。
 - 做 PandaWard 额外需要：Claude Code；项目读权限和 `.pandaward/` 配置写入；本地 SQLite ledger；可选 scanner（gitleaks、semgrep、osv-scanner、trivy、apktool、MobSF、ZAP 等）；Go 安装方式需要 Go 1.26+，release 二进制无运行时依赖；网络测试需要填好的 `scope.yaml` 和交互终端批准，`staging-active` 还需要 ZAP 和 Java 17+；授权检查需要测试身份的环境变量；CI 需要 pinned action 和 `contents: read`、`security-events: write`；移动端需要 emulator/simulator 与 adb/simctl。
 - 做日志改造额外需要：已有 logger 的应用；能读写应用代码的编码智能体；应用 checkout 路径；要审查的服务名；共享指令与选定提示词；剪贴板方式还要附 `reference/security-events.md`；event contract（隐私、可信字段、兼容性、投递语义）；verification 参考；canary 与回滚计划；跨会话保留的 ledger。
-- 如果暂不装任何插件，把做法 B、C 的步骤当作 agent 提示词/流程手工执行；做法 D 也可以只用 CLI 的 `assess`、`findings`、`fix-plan` 起步，但网络测试仍必须走 scope 人工批准；做法 E 即使没有文件访问能力，也要按剪贴板方式把共享约束和清单附全。
+- 做 Codex Security 额外需要：Node.js 22.13.0+（限 22.x）或 Node.js 24.x/26.x；Python 3.10+，Python 3.10 还需安装 `tomli`；仓库读取权限；CI 场景在扫描进程环境中设置 `OPENAI_API_KEY` 或 `CODEX_API_KEY`；无头机器走 device 或 SSH 登录；GitHub Actions 场景把 OpenAI API key 加为仓库 secret `CODEX_SECURITY_API_KEY`，并把 Action 的 `REPLACE_WITH_REVIEWED_COMMIT` 换成发布中经过审查的分发 commit SHA；需要共享扫描历史时保持 `CODEX_SECURITY_STATE_DIR` 稳定；部分能力需要 Trusted Access for Cyber，有 Daybreak 权限的账号需按文档选择 program。
+- 如果暂不装任何插件，把做法 B、C 的步骤当作 agent 提示词/流程手工执行；做法 D 也可以只用 CLI 的 `assess`、`findings`、`fix-plan` 起步，但网络测试仍必须走 scope 人工批准；做法 E 即使没有文件访问能力，也要按剪贴板方式把共享约束和清单附全；做法 F 可以只用 `npx @openai/codex-security` 避免全局安装冲突。
 
 ## 操作步骤
 
@@ -67,15 +69,17 @@
 - **做法 C：修复 bug 并猎取回归。** 适合已有可复现 bug 报告或待审查 PR diff，目标是让补丁有证据，并检查这次改动还弄坏了什么。
 - **做法 D：PandaWard 本地证据化安全评估。** 适合先建立 finding 账本、人工 triage、修复复测和 CI 门禁，再决定是否启用人工批准的运行时测试。它默认只读仓库，不运行安装脚本、Makefile 或构建，不跟随符号链接，也不向目标发流量；需要联网的测试必须有人工填写并在交互终端批准的 scope manifest，AI agent 不能批准。项目仍是 alpha，适配器未验证，内置规则对 Java 注入基准为 0.00，不能把结果当安全结论。
 - **做法 E：安全日志分波次补齐。** 适合已有 logger、需要给存量系统补安全日志覆盖面的项目。按 Assess、Wave 0 基础、Wave 1 关键、Wave 2 高、Wave 3 中、Wave 4 低优先、每波验证与上线、定向修复、持续变更复核推进。本次只有 README 的流程与文件路径，没有提示词正文和 90 项清单内容，必须先回仓库取文件。
+- **做法 F：Codex Security 代码安全审计流水线。** 适合想用现成 CLI、Codex 插件、SDK 或 GitHub Action 得到带源码证据、排除项和覆盖限制的报告，并愿意人工复核的人。它能扫描仓库、路径或 Git 变更，验证候选发现、生成补丁、验证已有修复，起草 `SECURITY.md`，导出威胁模型，导出 SARIF/JSON/CSV。但它没有 benchmark 和独立评测，部分能力受访问条件限制，不能替代 A/B/C/D/E 的动态验证与人工裁决。
 
 **组合用法与边界：**
 
-- 做法 A 的产物（`SYSTEM_UNDER_REVIEW.md` 里的范围、信任边界、关键资产）可以作为做法 B 清点入口与安全相关配置时的上下文；做变更评审时，A 的 `change` 模式可以先用一轮，再用 C 的回归猎取对具体补丁要 live PoC。*（这条衔接是本手册的整合建议，原文没有验证过它带来的增益，试点时请自行对照。）*
-- 做法 D 的 finding 账本和复测记录可以作为 A/B/C 的候选清单与修复状态底账；A 的范围声明可以帮 D 判断哪些目录和服务优先；C 修完补丁后，D 的 `retest` 可以确认“不再看到该问题”，但它不等于 C 的回归猎取，也不替代 live PoC。*（D 与 A/B/C 的拼接同样是本手册的整合建议，PandaWard 原文没有验证这种组合的增益。）*
-- 做法 E 的 Assess 可以用 A 的范围、信任边界和关键资产作为输入，避免日志清单脱离真实资产；E 的 ledger 是日志改造的跨会话记忆，不是 D 的 finding 账本，两者不要混用。*（E 与 A/D 的拼接是整合建议，Dread Ledger 原文没有验证这种组合的增益。）*
-- 做法 A 与 B、C 不能互相替代：A 说“这里可能有问题”，仍要 B 的动态 trace 或 C 的 live PoC 才算确认。D 也不能替代 B 的动态 trace 或 C 的 live PoC；它擅长的是账本、复核编排、复测和门禁。E 补的是安全日志覆盖，不替代漏洞确认、补丁回归或运行时安全测试。
+- 做法 A 的产物（`SYSTEM_UNDER_REVIEW.md` 里的范围、信任边界、关键资产）可以作为做法 B 清点入口与安全相关配置时的上下文；做变更评审时，A 的 `change` 模式可以先用一轮，再用 C 的回归猎取对具体补丁要 live PoC。这条衔接是本手册的整合建议，原文没有验证过它带来的增益，试点时请自行对照。
+- 做法 D 的 finding 账本和复测记录可以作为 A/B/C 的候选清单与修复状态底账；A 的范围声明可以帮 D 判断哪些目录和服务优先；C 修完补丁后，D 的 `retest` 可以确认“不再看到该问题”，但它不等于 C 的回归猎取，也不替代 live PoC。D 与 A/B/C 的拼接同样是本手册的整合建议，PandaWard 原文没有验证这种组合的增益。
+- 做法 E 的 Assess 可以用 A 的范围、信任边界和关键资产作为输入，避免日志清单脱离真实资产；E 的 ledger 是日志改造的跨会话记忆，不是 D 的 finding 账本，两者不要混用。E 与 A/D 的拼接是整合建议，Dread Ledger 原文没有验证这种组合的增益。
+- 做法 F 可以作为 A 的补充：用 `cs policy` 起草 `SECURITY.md`，用 `cs export` 导出威胁模型草稿，再交人工审阅；但 `cs policy` 的草稿保存在仓库之外，只把 `SECURITY.md` 复制到命令显示的 Policy target，架构与威胁模型文档留在仓库外。F 可以作为 D 的补充：两者都能产生 finding，但 D 的 ledger 是本地 SQLite 记录，F 的报告与 SARIF 是另一套产物，不要混用账本。F 也可以作为 C 的预检：F 内置验证候选发现、生成补丁、验证已有修复；但这不是 C 的三步证明、live PoC、fresh-context 重放和裁决。
+- 做法 A 与 B、C 不能互相替代：A 说“这里可能有问题”，仍要 B 的动态 trace 或 C 的 live PoC 才算确认。D 也不能替代 B 的动态 trace 或 C 的 live PoC；它擅长的是账本、复核编排、复测和门禁。E 补的是安全日志覆盖，不替代漏洞确认、补丁回归或运行时安全测试。F 擅长报告自动化和候选发现验证，但不替代动态 trace、live PoC、人工 triage 或安全结论。
 - 当 B 产出 gate 补丁，用 C 的回归猎取复核；当 C 修完一个 bug，用 B 的配置组合/早期可达性做横向搜索。两者冲突时：B 要求默认配置测试差异为 0；C 要求每条回归有 live PoC。测试全绿不等于无回归，仍需枚举调用者并在 live deployment 上复现候选回归。
-- 无论选哪种，三遍法每遍让 agent 从空上下文开始，只带上一遍的短上下文，避免上下文污染；回归猎取的重放步骤也要用全新上下文的 agent；日志改造按波次推进，不要一次让 agent 改完所有波次。
+- 无论选哪种，三遍法每遍让 agent 从空上下文开始，只带上一遍的短上下文，避免上下文污染；回归猎取的重放步骤也要用全新上下文的 agent；日志改造按波次推进，不要一次让 agent 改完所有波次；Codex Security 的扫描报告和 weekly Action 结果也要人工读 exclusions 与 coverage limits。
 
 ### 做法 A：威胁建模
 
@@ -597,6 +601,135 @@ reference/security-events.md
 
 预期结果：波次顺序有业务风险依据；智能体不把“没跑的检查”藏起来。
 
+### 做法 F：Codex Security 代码安全审计流水线
+
+#### F1. 确认环境前提
+
+- Node.js 22.13.0+（限 22.x）或 Node.js 24.x/26.x；Python 3.10+；Python 3.10 还需安装 `tomli`。
+- 需要有仓库的读取权限；CI 场景需在扫描进程环境中设置 `OPENAI_API_KEY` 或 `CODEX_API_KEY`；无头机器要走 device 或 SSH 登录。
+- 部分网络安全请求与受保护的 findings 需要 Trusted Access for Cyber；有 Daybreak 权限的账号需按文档选择 program。
+
+预期结果：环境满足安装与登录条件，知道哪些能力受访问限制。
+
+#### F2. 安装 CLI 并登录
+
+```bash
+npm install --global @openai/codex-security
+cs login
+```
+
+如果 `cs` 与已有命令冲突，改用 `codex-security`；不想全局安装或 npm 报 `EEXIST` 冲突时，把命令中的 `cs` 换成：
+
+```bash
+npx @openai/codex-security
+```
+
+预期结果：CLI 可用并完成登录；后续扫描能保存报告和 findings。
+
+#### F3. 跑第一次扫描
+
+在仓库目录下执行：
+
+```bash
+cs scan .
+```
+
+扫描完成后打开终端中 **REPORT** 路径指向的 Markdown 文件；在同一仓库执行 `cs scans show` 可再次找到最近一次完成的扫描。读报告时重点看源码证据与 exclusions（排除项）以及覆盖范围限制。
+
+预期结果：拿到一份带源码证据、排除项和 coverage limits 的报告，而不是只看摘要。
+
+#### F4. 按需选择扫描范围与模式
+
+```bash
+# Scan selected paths.
+cs scan . --path src --path tests
+
+# Scan committed changes from a base revision to HEAD.
+cs scan . --diff origin/main
+
+# Run a deep scan of the repository.
+cs scan . --mode deep
+```
+
+给标准扫描加一个建议性时间上限（原文为 advisory 15 分钟）：
+
+```bash
+cs scan . --max-time 15
+```
+
+`cs --help` 看全部命令，`cs scan --help` 看扫描选项、成本上限和扫描后打补丁。跨仓库的系统审查和可断点续跑的批量扫描见文档对应小节。
+
+预期结果：能用路径、diff、deep 和 max-time 控制扫描范围与预算；知道成本与覆盖仍有限制。
+
+#### F5. 在 Codex 会话里用插件
+
+前提：启用 Codex Security 插件并打开仓库。
+
+```text
+Run a Codex Security scan on this repository, focusing on authentication and
+authorization. Return the saved report, source evidence, and coverage limits.
+```
+
+扫描会保存报告与 findings；读报告中的源码证据与排除项后，再请求补丁，或让 Codex 验证一个已有修复。
+
+预期结果：插件能按指定关注点扫描，并返回保存的报告、源码证据与覆盖限制；补丁和修复验证仍需人工复核。
+
+#### F6. 生成或更新 SECURITY.md
+
+```bash
+cs policy .
+cs policy . --path services/api --knowledge-base architecture.md
+```
+
+前提与注意：草稿保存在仓库之外，不改动现有文件；先看 diff 与说明、编辑草稿，然后只把 `SECURITY.md` 复制到命令显示的 **Policy target**；架构与威胁模型文档留在仓库外。若命令提示策略已是最新，则无需复制。若 `.github/SECURITY.md` 或 `docs/SECURITY.md` 里有漏洞上报说明，改写策略时要保留——这些位置不会自动成为全仓库扫描依据。
+
+预期结果：得到经过人工编辑的 `SECURITY.md` 草稿；只把策略文件放进仓库，不把架构与威胁模型文档误提交。
+
+#### F7. 导出威胁模型
+
+```bash
+cs export --scan SCAN_ID --artifact threat-model --output threatmodel.md
+```
+
+省略 `--scan` 则使用当前仓库最近一次完成的扫描。
+
+预期结果：导出威胁模型草稿，供人工审阅；它不是已验证的威胁模型，也不替代做法 A 的五步审阅。
+
+#### F8. 接入 GitHub Actions 做每周扫描
+
+前提：GitHub 托管 Ubuntu。
+
+1. 把 OpenAI API key 加为仓库 secret `CODEX_SECURITY_API_KEY`。
+2. 把 weekly workflow 示例（`github-action/examples/repository.yml`）复制到 `.github/workflows/codex-security.yml`，并把其中的 `REPLACE_WITH_REVIEWED_COMMIT` 换成 Action 发布中经过审查的分发 commit SHA。
+3. 想在下个定时点前试跑：打开 **Actions → Codex Security repository → Run workflow**。
+
+该示例的估算限额是每次扫描 5 美元，只报告 findings 而不让 job 失败；进行中的请求可能超出限额。
+
+预期结果：每周定时扫描能运行并保存 findings；知道成本上限只是估算，不是硬保证。
+
+#### F9. 用 TypeScript SDK 做自动化（可选）
+
+```bash
+npm install @openai/codex-security
+```
+
+用 SDK 的 `CodexSecurity` 对象调用 `run` 并读取 `reportPath`，结束时调用 `close()`；深度扫描配置、验证、严重性分级、owner 建议与结果处理见 SDK 文档。
+
+预期结果：能把扫描接入自己的自动化；仍需读报告中的 exclusions 与 coverage limits。
+
+#### F10. 需要共享扫描历史时固定状态目录
+
+关联的 Git worktree 在使用同一个 Codex Security 状态目录时共享扫描历史与已保存 findings；保持 `CODEX_SECURITY_STATE_DIR` 稳定，以保留共享历史和登录范围。
+
+预期结果：同一状态目录下的 worktree 能复用历史；换目录前知道会丢失共享历史。
+
+#### F11. 可选：容器化批量扫描与多 provider
+
+- 用仓库自带的 Docker Compose 配置扫描一组仓库，跨运行保留结果和认证；workflow runner 可在容器中分阶段跑 CLI，并可连接单独部署的 findings 服务。
+- 扫描支持 OpenAI、Amazon Bedrock、OpenRouter、Fireworks AI、Cheaper Inference；Bedrock 用 AWS 凭证，不需要单独 OpenAI 登录；其余需设置对应 provider 的 API key 并选择受支持的模型。
+
+预期结果：能在大规模场景批量扫描；知道不同 provider 的凭证与模型限制不同。
+
 ## 怎么判断变好了
 
 ### 最小试用方式
@@ -611,6 +744,14 @@ reference/security-events.md
 
 **日志改造（建议 1–2 天）：** 选一个非生产的中小服务（有 logger、有测试）；只跑 E2（shared instruction + 01 Assess），产出 gap 清单，**先不改代码**；人工按 90 条清单抽查其中 10 条判定，记录对/错；通过抽查后，只做 Wave 0（安全 schema + 接入已有 logger + 隐私 + 有界投递），部署到测试环境，不碰生产；保留 ledger，再跑一次 `09 · Change review` 做自检。
 
+**Codex Security（半天到一天）：** 选 1 个有真实业务代码、且已知若干历史安全问题（或有内部安全 backlog）的仓库，记录已知问题清单作为基线；按 F1–F3 装 CLI、`cs login`、`cs scan .`，先跑一次默认 Standard 扫描；再对核心模块跑一次限定范围扫描：
+
+```bash
+cs scan . --path src --max-time 15
+```
+
+逐条读报告中的源码证据、exclusions 和 coverage limits；再挑一个历史问题看它是否命中或给出可核验的候选；如果条件允许，再跑一次 `--diff origin/main` 看增量，并用 GitHub Actions 的 weekly workflow 试跑一次。原文没有 benchmark，不要用一次扫描结果证明工具更好。
+
 ### 试用周期
 
 - 威胁建模：一次 `quick` + 一次单方法对照 + 一次 `change` 增量，约半天。
@@ -618,6 +759,7 @@ reference/security-events.md
 - 回归猎取：最小试用 1–2 天。
 - PandaWard：以一个仓库、一次被动扫描加一轮复测为一个周期；原文没有给出耗时数据，不要按固定天数承诺。
 - 日志改造：建议 1–2 天；先 Assess 再 Wave 0，不直接推进全量波次。
+- Codex Security：以“一个仓库、一次默认扫描、一次限定范围扫描、一次人工核对已知问题”为一个周期；原文没有耗时数据，不要按固定天数承诺。
 
 ### 可观察指标
 
@@ -658,6 +800,16 @@ reference/security-events.md
 - *成本*：全程 token 与时长，对比人工补同类埋点的工时。
 - *对照实验（可选）*：同一服务，用流程与不用流程各补一次同类埋点，按 90 条清单人工核对漏项数与返工次数。
 
+**Codex Security：**
+
+- 源码证据可核验率：抽 20 条 finding，检查报告里的源码证据是否真实存在、是否支持结论。
+- 排除项与覆盖限制是否被读懂：报告中的 exclusions 与 coverage limits 是否被逐条记录，是否知道哪些目录、文件或能力没覆盖。
+- 已知问题命中率：用试用仓库的已知历史安全问题做基线，看报告是否命中或给出可人工验证的候选；不要只看 finding 总数。
+- 人工复核成本：每个 finding 平均需要多少人工时间；被人工判为有效、误报、无法判定的比例。
+- 验证与补丁：工具生成的补丁或修复验证是否可复现；是否仍需 C 的 live PoC 和 regression-hunt。
+- CI 可用性：weekly workflow 是否按计划运行；secret 是否配置正确；pinned commit 是否经过审查；每次扫描是否接近或超过估算成本上限。
+- 产物可用性：SARIF/JSON/CSV 是否能被现有流程消费；`cs export` 的威胁模型草稿是否经过人工审阅；`SECURITY.md` 是否只复制策略文件、没有误提交架构与威胁模型文档。
+
 ### 判断改善的最低标准
 
 - **威胁建模**：若“真实且此前未知”的数量不高于人工基线，或证据可核验率偏低（引用不存在、不支持结论），则把 verdict 降为 study，只借鉴它的流程骨架（六阶段 + 证据引用 + 五步审阅 + 只读权限约束），不直接使用这套提示词。
@@ -665,7 +817,8 @@ reference/security-events.md
 - **回归猎取**：若在 5–10 个 PR 上假阳性率明显低于基线、已知回归无一静默漏过、且人工筛检量可接受，则纳入标准步骤；若 borderline 比例过高或 live deployment 成本压不住，则退回 study，只保留“三步证明”“强制 live PoC”“威胁模型全局注入”这三条可迁移原则。
 - **PandaWard**：若只能得到内置规则结果、没有人工 triage 和复测，或内置规则在 Java 注入基准为 0.00 却仍被当作覆盖证明，则只把 D 当账本/门禁试用，不纳入安全结论。至少一条 finding 经人工确认并完成修复后复测状态变化；CI `new-only` 能只对新增指纹计数；网络测试有书面许可和终端批准记录。
 - **日志改造**：抽查准确率低，或 Wave 0 反复引入隐私问题，则降为 study，只借“分波次 + 每波验证 + 持久化账本”这个流程骨架，不再用其提示词；若 Wave 0 通过，再按风险逐波推进。
-- **整体**：若无法动态 trace 或测试基线不稳定，则整体降级为人工辅助审查，不采用自动 gate，也不把威胁模型报告当评审结论。
+- **Codex Security**：若报告没有可核验的源码证据、无法说清 exclusions 与 coverage limits、或只给出厂商自述而没有人工验证的有效发现，则只把 F 当报告自动化和候选发现入口，不纳入安全结论；至少在试用仓库上有人工确认的有效候选，且 CI 运行、secret、pinned commit 和成本上限都清楚。
+- **整体**：若无法动态 trace 或测试基线不稳定，则整体降级为人工辅助审查，不采用自动 gate，也不把威胁模型报告、PandaWard 结果或 Codex Security 报告当评审结论。
 
 ## 常见坑
 
@@ -679,9 +832,9 @@ reference/security-events.md
 - **没有 trace 和测试基线就上自动 gate。** 这会导致无法验证可达性，也可能改坏默认行为。原文的效果验证完全依赖动态 trace 与测试套件。
 - **自动采用会改变非默认配置的 gate。** 原文明确要求这类变更交给人类决定。
 - **把配置组合直接当成可利用漏洞。** 部分问题本身不立即可利用，配置组合可能非标准或低频，需要人工判断。
-- **以为几套做法都有现成 skill、命令或 schema 可复制。** 只有威胁建模这一套有公开的安装命令和调用语法；攻击面与回归猎取的完整内容未公开，必须自行编写并人工复核，不要臆造命令行；PandaWard 虽有公开命令，但仍是 alpha，适配器未验证；Dread Ledger 本次只有 README，提示词正文和 90 项清单内容未抓到。
+- **以为几套做法都有现成 skill、命令或 schema 可复制。** 只有威胁建模这一套有公开的安装命令和调用语法；攻击面与回归猎取的完整内容未公开，必须自行编写并人工复核，不要臆造命令行；PandaWard 虽有公开命令，但仍是 alpha，适配器未验证；Dread Ledger 本次只有 README，提示词正文和 90 项清单内容未抓到；Codex Security 有公开命令，但只有厂商自述，没有 benchmark。
 - **只跑一遍就想覆盖三类攻击面问题。** 默认配置可达性、早期可达性、配置交互是三类不同问题，应分开跑，每遍用空上下文。
-- **外推自动触发机制。** 原文只说明 skill 会自动跑三遍；威胁建模这边也只是 `change` 以 diff 为触发、六阶段靠文件交接串联，没有任何按时间或状态自动运行的机制，不要自行假设；Dread Ledger 也没有给出定时或事件触发的自动编排，`09 · Change review` 仍需人主动发起。
+- **外推自动触发机制。** 原文只说明 skill 会自动跑三遍；威胁建模这边也只是 `change` 以 diff 为触发、六阶段靠文件交接串联，没有任何按时间或状态自动运行的机制，不要自行假设；Dread Ledger 也没有给出定时或事件触发的自动编排，`09 · Change review` 仍需人主动发起；Codex Security 的 weekly Action 是定时扫描，不等于自动裁决或自动修复。
 - **只修一个点，不做横向搜索。** 一个 hostname/wildcard 规则在反向 DNS 关闭时与 IP 比较导致 deny 规则 fail open 的模式，在 4 个无关项目中出现；修完一个点后应在同类项目中横向搜。
 - **忽略“被接受但无错误、无警告、无文档”的配置组合。** 这是原文重点关注的类型，最容易在常规审查中漏掉。
 - **把候选回归当确认回归。** 原文单次运行 58 个候选里确认 21 个，约 36% 精确率，作者自评“review was noisy”；人工仍需筛掉约三分之二的候选。
@@ -711,6 +864,12 @@ reference/security-events.md
 - **把 Dread Ledger 的 ledger 和 PandaWard 的 SQLite ledger 混用。** 前者是日志改造的跨会话记忆，后者是安全 finding 账本，不要互相替代。
 - **直接上生产、没有回滚。** README 把 canary 与回滚计划放进每波验证；没有回滚步骤就不要上线。
 - **把单作者、低 star、无第三方使用记录的项目当成熟成品。** Dread Ledger 本次只有 README，提示词正文和 90 项清单内容未抓到，也没有案例、基准或前后覆盖率对比；只能当流程模板试。
+- **把 Codex Security 的扫描报告当安全结论。** 原文没有 benchmark、真实漏洞检出案例、误报率或漏报率统计；报告还有 exclusions 与 coverage limits，必须人工读源码证据和排除项。
+- **忽略 Codex Security 的访问限制。** 部分网络安全请求与受保护的 findings 需要 Trusted Access for Cyber；有 Daybreak 权限的账号还需按文档选择 program；没有权限时不要假设全部能力可用。
+- **把 `cs policy` 草稿直接提交。** 草稿保存在仓库之外；先看 diff 与说明、编辑草稿，然后只把 `SECURITY.md` 复制到命令显示的 Policy target；架构与威胁模型文档留在仓库外，并保留 `.github/SECURITY.md` 或 `docs/SECURITY.md` 里的漏洞上报说明。
+- **把 weekly Action 的估算成本当硬上限。** 示例给的是每次扫描 5 美元估算限额，进行中的请求可能超出限额；仍要人工看 findings。
+- **不固定 `CODEX_SECURITY_STATE_DIR` 却期待共享历史。** 关联 worktree 共享扫描历史与已保存 findings 的前提是使用同一个状态目录；换目录会丢失共享历史和登录范围。
+- **把 F 的 validate 和 patch 当成 C 的三步证明。** F 内置验证候选发现、生成补丁、验证已有修复；C 仍要求原始失败、补丁通过、完整回退后再次失败的 live PoC，以及 regression-hunt。
 
 ## 证据与来源
 
@@ -724,11 +883,13 @@ reference/security-events.md
 
 **Dread Ledger** 来自本次调研《jmanico/dread-ledger》。原文给出的具体事实：MIT 许可、30 stars；9 个提示词覆盖“评估 → 基础 → 关键 → 高 → 中 → 上下文 → 每波验证与上线 → 定向修复 → 持续变更复核”；一份 90 条安全事件审查清单 `reference/security-events.md`；配套 Runbook、Coverage、Event contract、Verification；完整的波次划分表、两种使用形态（文件式与剪贴板式）、调用顺序、排序原则、MIT 许可。仅为作者主张、无数据支撑：整套流程能提升日志覆盖率、减少安全返工、节省 token 与时间；没有案例、基准测试、前后覆盖率对比、智能体误报/漏报实测数字。本次材料的硬限制：只依据 README，提示词正文与 90 条清单内容均未抓到，因此只能照抄“流程与顺序”，无法照抄“提示词写法与审查项内容”。成熟度风险：单作者项目、star 数很少、版权标注为 2026，缺少第三方使用记录；安全日志属于高风险改动，智能体生成的埋点本身可能引入隐私泄露（这正是 Wave 0 的隐私与 `08 · Repair` 要解决的问题），不宜直接用于生产。
 
-**只是作者主张、无数据支撑的部分**：减少攻击面能一次性降低所有未知漏洞的风险；OpenSSH 这种高强度审计代码仍有问题说明方法有普遍价值；四原则（极简指导、模块化步骤、严格 schema、每条断言都要 live PoC）的有效性；“不变量引导修复能泛化到同类变体”；“文件越具体输出越好”；grim-prompter 那套六阶段骨架和五步审阅清单的实际收益；PandaWard 作为证据账本/流程编排的可用性、适配器效果和门禁收益；Dread Ledger 提升覆盖率、减少返工、节省 token 与时间。
+**Codex Security** 来自本次调研《openai/codex-security》。原文给出的具体事实：OpenAI 提供的代码安全审计工具，有 Codex 会话 Security 插件、终端 `@openai/codex-security` CLI（命令名 `cs`，别名 `codex-security`）、TypeScript SDK、GitHub Action、Docker Compose 等入口；环境要求 Node.js 22.13.0+（限 22.x）或 24.x/26.x、Python 3.10+、Python 3.10 需 `tomli`；安装命令、`cs login`、`cs scan .`、`--path`、`--diff origin/main`、`--mode deep`、`--max-time 15`、`cs scans show`、`cs policy`、`cs export`、GitHub Actions secret `CODEX_SECURITY_API_KEY`、`REPLACE_WITH_REVIEWED_COMMIT`、`CODEX_SECURITY_STATE_DIR`、支持 OpenAI/Amazon Bedrock/OpenRouter/Fireworks AI/Cheaper Inference 等 provider 均有原文依据。仓库热度指标为 11923 stars、当日新增 52。仅为厂商主张、无数据支撑的部分：没有任何 benchmark、真实漏洞检出案例、误报率/漏报率、平均成本或耗时统计；唯一带数字的成本项是 GitHub Action 示例的每次 5 美元估算限额，原文同时说明进行中的请求可能超出限额。适用条件与限制：需要付费 API 额度与登录；CI 需要 secret；部分网络安全请求和受保护 findings 需要 Trusted Access for Cyber，有 Daybreak 权限的账号还需显式选择 program；覆盖范围天然有限，原文反复要求读报告中的 exclusions 与 coverage limits；报告、威胁模型、策略草稿等产物需要人工复核后才落库；大量细节在 docs 链接里，本次材料只覆盖 README 层面。调研结论是建议先在一个真实仓库上按 README 跑通 `cs login` + `cs scan .`，再用 GitHub Actions 定时扫描和修复后复扫来验证收益，尚不足以直接 adopt。
 
-**本手册的整合主张（原文未验证）**：把威胁模型的 `SYSTEM_UNDER_REVIEW.md` 当作攻击面清点和日志 Assess 的上下文；用 `change` 模式先扫 diff、再用 regression-hunt 做 live 验证；把 PandaWard 的 finding 账本作为 A/B/C 的候选清单与修复状态底账；用 PandaWard 的 `new-only` CI 门禁作为 B 的补充；用 PandaWard 的 `retest` 作为 C 的预检；用 A 的范围与资产帮 E 判断日志清单的优先级。这些都属于流程拼接假设，试点时请留出对照。
+**只是作者主张、无数据支撑的部分**：减少攻击面能一次性降低所有未知漏洞的风险；OpenSSH 这种高强度审计代码仍有问题说明方法有普遍价值；四原则（极简指导、模块化步骤、严格 schema、每条断言都要 live PoC）的有效性；“不变量引导修复能泛化到同类变体”；“文件越具体输出越好”；grim-prompter 那套六阶段骨架和五步审阅清单的实际收益；PandaWard 作为证据账本/流程编排的可用性、适配器效果和门禁收益；Dread Ledger 提升覆盖率、减少返工、节省 token 与时间；Codex Security 能改善安全审计结果、能命中真实漏洞、能降低人工成本。
 
-**局限**：五份材料都是初始研究总结或 README，不是完整论文；攻击面与回归猎取的 skill/插件安装命令/schema 定义未公开；威胁建模的提示词自述为草稿且无任何效果数据；PandaWard 仍是 alpha，适配器未验证，内置规则对 Java 注入基准为 0.00，且没有独立评测；Dread Ledger 只有 README，提示词正文和 90 项清单内容未抓到，也没有效果数据；结果依赖动态 trace、live deployment 和测试套件；原文未给误报率、成本、耗时（回归猎取给了假阳性对比但样本有限）；部分问题本身不立即可利用，配置组合可能非标准或低频；非默认配置变更需要人类判断；回归猎取的严格证据要求会带来召回下降（borderline 比例上升）；深度绑定 Codex 生态，PandaWard 绑定 Claude Code，Dread Ledger 依赖编码智能体与已有 logger，其他环境需自行复刻流程。
+**本手册的整合主张（原文未验证）**：把威胁模型的 `SYSTEM_UNDER_REVIEW.md` 当作攻击面清点和日志 Assess 的上下文；用 `change` 模式先扫 diff、再用 regression-hunt 做 live 验证；把 PandaWard 的 finding 账本作为 A/B/C 的候选清单与修复状态底账；用 PandaWard 的 `new-only` CI 门禁作为 B 的补充；用 PandaWard 的 `retest` 作为 C 的预检；用 A 的范围与资产帮 E 判断日志清单的优先级；用 Codex Security 的 `cs policy` 和 `cs export` 给 A 提供草稿，用 F 的报告作为 A/B/C/D 的候选发现与报告自动化补充。这些都属于流程拼接假设，试点时请留出对照。
+
+**局限**：六份材料都是初始研究总结或 README，不是完整论文；攻击面与回归猎取的 skill/插件安装命令/schema 定义未公开；威胁建模的提示词自述为草稿且无任何效果数据；PandaWard 仍是 alpha，适配器未验证，内置规则对 Java 注入基准为 0.00，且没有独立评测；Dread Ledger 只有 README，提示词正文和 90 项清单内容未抓到，也没有效果数据；Codex Security 只有厂商 README，没有 benchmark、真实漏洞检出案例、误报率/漏报率、平均成本或耗时统计，且部分能力受 Trusted Access for Cyber、Daybreak 等访问条件限制；结果依赖动态 trace、live deployment 和测试套件；原文未给误报率、成本、耗时（回归猎取给了假阳性对比但样本有限）；部分问题本身不立即可利用，配置组合可能非标准或低频；非默认配置变更需要人类判断；回归猎取的严格证据要求会带来召回下降（borderline 比例上升）；深度绑定 Codex 生态，PandaWard 绑定 Claude Code，Dread Ledger 依赖编码智能体与已有 logger，Codex Security 依赖 OpenAI/Codex 生态与 API 额度，其他环境需自行复刻流程。
 
 ## 依据的调研
 
@@ -737,3 +898,4 @@ reference/security-events.md
 - [jmanico/grim-prompter](../research/radar/2026-10-29/8075-jmanico-grim-prompter.md)：值得一试，按 README 把 threat-model skill 链接进 Claude Code 或 Codex，先在一个非核心仓库上用 quick 或单一方法跑一次威胁建模，产出只当作待人工核验的候选清单使用；因为原文给出了可照做的安装命令、调用语法、产物约定和审阅清单，但作者自述提示词仍是草稿，而且没有给出任何效果数据。
 - [ratomirjovanovic/pandaward](../research/radar/2026-10-30/8580-ratomirjovanovic-pandaward.md)：值得一试，建议在代码安全评估这一垂直场景小范围试用：用 Claude Code 安装 PandaWard 插件，先跑被动扫描、证据账本和修复复测，再决定是否启用人工批准的运行时测试。理由是有完整的安装、运行、复核、回归和证据校验步骤，但项目仍是 alpha、适配器未验证、内置规则对 Java 注入基准为 0.00，不能把结果当成安全结论。
 - [jmanico/dread-ledger](../research/radar/2026-10-31/8967-jmanico-dread-ledger.md)：值得一试，可以照搬它的“分波次 + 每波验证 + 保留账本”的智能体改造流程，先在一个非生产服务上只跑 Assess 和 Wave 0 验证清单可信度；理由是 README 给出了可执行的调用顺序、波次划分和验证关卡，但提示词正文、90 项清单内容与任何效果数据都不在本次材料内，只能当流程模板试，不能当成品方案采用。
+- [openai/codex-security](../research/radar/2026-11-12/12760-openai-codex-security.md)：值得一试，建议先在一个真实仓库上按 README 的命令跑通 `cs login` + `cs scan .`，再用 GitHub Actions 定时扫描和修复后复扫来验证收益；原文给出了可直接照做的 CLI、SDK 和 Action 步骤，但效果只有厂商自述，且部分能力受 Trusted Access/Daybreak 等访问条件限制，尚不足以直接 adopt。
