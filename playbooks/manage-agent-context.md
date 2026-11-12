@@ -1,14 +1,14 @@
-# 让编码代理写出现代 Web 代码，并给出轻量降级方案
+# 让编码代理在长任务里少烧上下文、少跑偏、少写旧前端
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：编码代理训练数据里的前端写法偏旧，容易堆 polyfill、旧库和过时 API；本手册给出一套可照做的检索、旧模式扫描、指南注入与验证流程，同时保留原有上下文膨胀、规则文件治理和多项目隔离等做法。
-> 先试这一步：先在一个小前端任务上用 npx modern-web-guidance@latest search 和 retrieve 取到相关指南，再让代理重做同一任务，对比是否改用原生 API 并给出轻量降级方案。
-> 最近修订：2026-11-11
+> 解决的问题：编码代理在长任务里会被工具输出、过时规则、丢状态、越界改动和旧前端写法拖垮，本手册给出一组可逐项试用的做法，并用任务侧指标判断是否真的变好。
+> 先试这一步：先挑一个真实的长任务，按做法 A 只加 Context Mode 的 MCP-only 入口，记录前后 token、纠正次数和交付结果，再决定是否继续加 hook。
+> 最近修订：2026-11-12
 
 ## 解决什么问题
 
-编码代理在长任务里会读大量工具输出、反复加载规则、重复读同一个文件、调用后台摘要，上下文窗口被塞满，压缩时状态丢失，配额被看不见的开销吃掉。规则文件本身也会浪费：CLAUDE.md / AGENTS.md 过长、过时、堆资料；同一纠正反复说却不沉淀；规则不分目录；注释复述代码；知识和能力堆在一起；新仓库没有这份文件，或每换一个工具就重写一套。另一类问题是改动范围失控：代理为几乎不会发生的竞态、边界问题臆测性加防御，或修改任务范围外的文件；还有一类更隐蔽：指令文件写了一种风格，仓库代码实际是另一种风格，代理擅自按指令改写代码。第三类是规则文件需要体检：CLAUDE.md、AGENTS.md、.claude 与 ~/.claude 里的规则、技能和命令可能重复、冲突、过时，且“必须永远遵守”的硬规则常常只写在散文里。第四类问题出现在多客户/多项目场景：会话记录混在一起、项目规则互相污染、新会话不知道上次决策、每个项目都要重新解释背景。第五类问题是前端代码现代化：代理训练数据里充满 2019 年前后的写法，容易写 polyfill、旧库和过时 API；做法 AN 用现代 Web 指南做检索、旧模式扫描和降级方案。本手册把做法 A–AN 合在一起：把工具输出挡在上下文外、把略读判断外包、用持久记忆保状态、把计划写磁盘、把 trace 固化成技能、用录屏口述、共享 AGENTS.md、审查旧指令、审计上下文预算、自动交接、重组和限长 AGENTS.md、调压缩阈值、验证子代理缓存、专用文件夹、增量规则、回看历史会话、目录分层、nomore 规则包、注释准入、关闭后台摘要、skills/docs 条件路由、用 Claude Code 读笔记库生成 CLAUDE.md 初稿、把“不重复读文件”“五步以上先落计划”写进 AGENTS.md、用 devilop 的产品地图和界面草稿供上下文、用 /init 从零生成 AGENTS.md、用一条规则约束防御性代码和改动范围、用 /doctor prompt-audit 给规则文件做体检、用“先 grep 再局部读取”减少整文件读取、用“冲突裁决规则”和“指令文件巡检提示词”处理指令与代码不一致和规则过时，以及本次新增的“用 modern-web-guidance 把现代 Web 指南注入前端编码代理”。核心是任务侧指标验证，不只看节省比例。
+编码代理在长任务里会读大量工具输出、反复加载规则、重复读同一个文件、调用后台摘要，上下文窗口被塞满，压缩时状态丢失，配额被看不见的开销吃掉。规则文件本身也会浪费：CLAUDE.md / AGENTS.md 过长、过时、堆资料；同一纠正反复说却不沉淀；规则不分目录；注释复述代码；知识和能力堆在一起；新仓库没有这份文件，或每换一个工具就重写一套。另一类问题是改动范围失控：代理为几乎不会发生的竞态、边界问题臆测性加防御，或修改任务范围外的文件；还有一类更隐蔽：指令文件写了一种风格，仓库代码实际是另一种风格，代理擅自按指令改写代码。第三类是规则文件需要体检：CLAUDE.md、AGENTS.md、.claude 与 ~/.claude 里的规则、技能和命令可能重复、冲突、过时，且“必须永远遵守”的硬规则常常只写在散文里。第四类问题出现在多客户/多项目场景：会话记录混在一起、项目规则互相污染、新会话不知道上次决策、每个项目都要重新解释背景。第五类问题是前端代码现代化：代理训练数据里充满 2019 年前后的写法，容易写 polyfill、旧库和过时 API；做法 AN 用 modern-web-guidance 做检索、旧模式扫描、现代化命令和降级方案。本手册把做法 A–AN 合在一起：把工具输出挡在上下文外、把略读判断外包、用持久记忆保状态、把计划写磁盘、把 trace 固化成技能、用录屏口述、共享 AGENTS.md、审查旧指令、审计上下文预算、自动交接、重组和限长 AGENTS.md、调压缩阈值、验证子代理缓存、专用文件夹、增量规则、回看历史会话、目录分层、nomore 规则包、注释准入、关闭后台摘要、skills/docs 条件路由、用 Claude Code 读笔记库生成 CLAUDE.md 初稿、把“不重复读文件”“五步以上先落计划”写进 AGENTS.md、用 devilop 的产品地图和界面草稿供上下文、用 /init 从零生成 AGENTS.md、用一条规则约束防御性代码和改动范围、用 /doctor prompt-audit 给规则文件做体检、用“先 grep 再局部读取”减少整文件读取、用“冲突裁决规则”和“指令文件巡检提示词”处理指令与代码不一致和规则过时，以及用 modern-web-guidance 把现代 Web 指南和现代化流程注入前端编码代理。核心是任务侧指标验证，不只看节省比例。
 
 ## 适用与不适用
 
@@ -18,7 +18,7 @@
 - 产品与界面上下文：G（录屏口述）、AF（产品地图 + 界面草稿 + 检查状态）。
 - 注释与后台开销：AA（注释准入）、AB（关闭 agent_summary）、AC（skills/docs 条件路由）、AD（读笔记库生成 CLAUDE.md 初稿）。
 - 多客户/多项目：AK（独立目录 + AGENTS.md 入口 + rules/docs + 读-做-写决策记录）。
-- 前端代码现代化：AN（用 modern-web-guidance 检索现代 Web 指南、扫描旧模式、要求轻量降级方案）。
+- 前端代码现代化：AN（用 modern-web-guidance 做现代 Web 指南检索、旧模式扫描、现代化命令和轻量降级方案）。
 
 **不适用（关键边界）**
 - 对商用许可敏感：Context Mode 是 ELv2；cognee 单 Postgres 图存储和本地 GLiNER 抽取器是 demo，生产版是授权产品。不能把内容发给第三方：Quicksilver、mem0 默认依赖 LLM/embedding 供应商、cognee 配 LLM 后会发起 provider 调用、hivemind 默认把会话写进团队共享 workspace；nomore 与 devilop 的本地性部分只是作者声称。
@@ -49,7 +49,7 @@
 - 做法 AK：只做一个项目、没有跨客户/跨项目切换需求；不愿为每个项目建独立目录或独立用户；无法让代理读写项目目录；要求这套工作流有对照实验数据；团队已经用统一的知识库和交接流程解决了上下文串味问题。
 - 做法 AL：某些仓库的指令文件恰恰是用来纠正代码坏味道的（例如“新代码一律用类型标注”），此时“跟随代码”会产生反效果；不能接受用户级配置对所有仓库生效；需要规则有现成实验数据。
 - 做法 AM：没有 agent 指令文件；没有人愿意逐条审核；无法把 agent 设为只读或要求修改前批准；需要原文给出完整扫描范围、输出格式和修改流程（原文在 .claude/rules, 处截断）。
-- 做法 AN：任务不是 Web 前端，或只是后端、数据处理、文档写作；本机没有 Node.js / npx；无法联网安装或运行 CLI；需要离线/私有环境可用性已被验证；要求这份材料证明支持哪些编码智能体、Node 版本要求、指南更新频率或 legacy-scan 的误报率；要求现成的量化效果对比（产物体积、Lighthouse/INP、扫描误报率）；项目目标浏览器矩阵很旧，现代 API 不能直接使用且团队不愿做降级；原文特性列表在 Password credentials 处截断，需要完整特性覆盖才能决策。
+- 做法 AN：任务不是 Web 前端，或只是后端、数据处理、文档写作；本机没有 Node.js / npx；无法联网安装或运行 CLI；需要离线/私有环境可用性已被验证；要求这份材料证明支持哪些编码智能体、Node 版本要求、指南更新频率或 legacy-scan 的误报率；要求现成的量化效果对比（产物体积、Lighthouse/INP、扫描误报率）；项目目标浏览器矩阵很旧，现代 API 不能直接使用且团队不愿做降级；原文特性列表在 Password credentials 处截断，需要完整特性覆盖才能决策；把厂商或客户自报指标当独立验证结果。
 
 ## 前置条件
 
@@ -76,7 +76,7 @@
 - AJ：已使用 Claude Code；项目里有 AGENTS.md（没有就新建）；选一个含较大文件的仓库；准备 3–5 个典型任务（查函数调用、改错误处理、解释模块入口等）；能查看 token 用量或至少记录工具调用次数；用新会话避免上下文污染；先备份 AGENTS.md。
 - AK：已使用 Claude Code、Codex 或其他支持 AGENTS.md/CLAUDE.md 的代理框架；有读写项目目录的权限；同时服务多个客户或维护多个项目；愿意为每个项目建独立目录；愿意在任务结束时让代理写决策记录；先选一个项目试 1–2 周。
 - AL：已安装 Claude Code 或 Codex，并使用其用户级或项目级指令文件；~/.claude 或 ~/.codex 目录可创建；能对一个小改动做前后对比；接受这条规则的原文被截断、后半句需要自行补全。AM：目标仓库有 agent 指令文件（CLAUDE.md 的本地与导入版本、.claude/rules 等）；使用能读取仓库文件的 coding agent；能把 agent 设为只读或要求任何修改前人工批准；先备份；愿意逐条审核输出。
-- AN：本机有可用的 Node.js / npx；有一个前端代码库；有一个能接受外部文本上下文的编码智能体；能联网运行 npx modern-web-guidance@latest；愿意先零安装试跑 search、retrieve、legacy-scan，再决定是否 install；原文未给出 Node 版本要求，也未说明支持哪些编码智能体、私有环境或离线可用性、指南更新频率、legacy-scan 的判定规则来源和误报情况；原文特性列表在 Password credentials 处截断，全貌未知。
+- AN：本机有可用的 Node.js / npx；有一个前端代码库；有一个能接受外部文本上下文的编码智能体；能联网运行 npx modern-web-guidance@latest；愿意先零安装试跑 search、retrieve、legacy-scan，或先建分支再跑 install/update；原文未给出 Node 版本要求，也未说明支持哪些编码智能体、私有环境或离线可用性、指南更新频率、legacy-scan 的判定规则来源和误报情况；原文特性列表在 Password credentials 处截断，全貌未知。官方 1.0 公告提到 Claude Code、Codex、Cursor、Antigravity、Copilot、WebStorm、Kimi Code、Grok Build 等插件市场，但材料未展开每个市场的安装细节。
 
 ## 操作步骤
 
@@ -98,11 +98,11 @@
 - “规则文件本身可能重复、冲突、过时，想先做一次全局体检” → 做法 AI（先确认 /doctor prompt-audit 在你版本里存在；不存在就降级为定期人工审查规则）。与 M 的差异：M 用 /claude-api prompt-audit 审旧提示习惯，AI 用 /doctor prompt-audit 做全局规则体检；两条命令都未被材料完整验证，不要同时改。
 - “代理读大文件时整文件读入，token 消耗大，但很多内容根本不需要” → 做法 AJ。与 AE 的差异：AE 管“不重复读”和“五步以上先落计划”，AJ 管“读之前先检索定位”；两者都写进 AGENTS.md，可以分开试。与 AA 的差异：AA 管注释准入，AJ 管读取方式。
 - “多个客户/项目之间会话记录串味、规则互相污染、新会话不知道上次决策” → 做法 AK。与 L 的差异：L 解决同一份规则文件如何软链给多个 agent；AK 解决多个项目之间如何隔离与恢复上下文。与 Y 的差异：Y 是同一知识库内的目录分层规则；AK 是跨项目/客户的目录隔离与入口文件。
-- “指令文件写了一種风格、代码实际是另一种风格，代理擅自按指令改写” → 做法 AL。与 AH 的差异：AH 管防御性代码和改动范围，AL 管指令文件与既有代码冲突时的裁决顺序和报告义务。与 AG 的差异：AG 建文件骨架，AL 是其中一条裁决规则。
+- “指令文件写了一种风格、代码实际是另一种风格，代理擅自按指令改写” → 做法 AL。与 AH 的差异：AH 管防御性代码和改动范围，AL 管指令文件与既有代码冲突时的裁决顺序和报告义务。与 AG 的差异：AG 建文件骨架，AL 是其中一条裁决规则。
 - “规则文件很久没体检，想知道哪些行过时、哪些硬规则只写在散文里” → 做法 AM。与 AI 的差异：AI 用 /doctor prompt-audit 做命令式体检；AM 是人工发起、只读扫描、逐条批准的巡检提示词。与 M 的差异：M 审旧提示习惯，AM 找过时行和“只写在散文里的硬规则”。三者不互相替代。
-- “编码代理总写 2019 年前后的前端写法，堆 polyfill 和旧库，不知道现代 Web 原语怎么写” → 做法 AN。先零安装用 search/retrieve 验证指南质量，再用 legacy-scan 扫旧模式，确认有用才 install；与 AG/AH/AL 的差异：AN 补的是 Web 领域知识与版本信息，不替代规则文件骨架、改动范围约束或冲突裁决。
+- “编码代理总写 2019 年前后的前端写法，堆 polyfill 和旧库，不知道现代 Web 原语怎么写” → 做法 AN。先零安装用 search/retrieve 验证指南质量，或按官方 1.0 在分支上 install/update 后跑 /modern-web-guidance Modernize the code in this directory；确认有用才扩大。与 AG/AH/AL 的差异：AN 补的是 Web 领域知识与版本信息，不替代规则文件骨架、改动范围约束或冲突裁决。
 
-这些做法可以叠加，但一次只加一个，否则分不清是哪个起了作用。AGENTS.md 相关维护建议顺序：先在空白仓库用 /init 生成初稿并按四类补全、提交入库（AG），再量长度（S），再回看历史会话找返工证据（X），再集中规则（L），再重组结构（R），再逐条审内容（M），再用增量规则控制新增（W），再用一条零成本常驻规则兜住重复读取与计划丢失（AE）；如果主要问题是读取大文件太费 token，再加 AJ 的 grep-first 规则；如果主要问题是防御性过度设计，再加 AH 的审批规则；如果主要问题是指令文件与代码风格冲突，再加 AL 的裁决规则；如果规则文件很久没巡检，用 AM 做一次只读盘点。如果知识文档很多，再用 AC 把知识移出 AGENTS.md 到 docs/ 并做条件路由。若想先给现有规则做体检，可在 AG 之后、S/R/M/W/X 之前加一次 AI；AI 只找问题，不替代 S 量长度、N 看 token 占比、W 控制新增、X 用历史会话验证。这是本手册建议的顺序，不是原文实验结论。CLAUDE.md 目录分层（Y）与 AGENTS.md 维护是两条线；Y 不替代 S/M/W/X。做法 Z 产出的是候选规则，仍要逐条人工确认，不替代 W/S/M/X。做法 AB 只动 Claude Code 的后台摘要 side-query，不替代上下文压缩、规则长度和子代理缓存的做法。做法 AC 只动上下文供给结构。做法 AD 产出的是 CLAUDE.md 初稿，仍需人工校正。做法 AF 产出的是地图、界面草稿和检查状态，不替代交接、权限配置或代码评审。做法 AH 产出的是改动范围约束，不替代测试、评审或安全审计。做法 AI 产出的是候选问题清单，仍需人工逐条裁决。做法 AJ 产出的是读取策略，不替代 AA 的注释准入，也不替代 AE 的计划落盘。做法 AK 产出的是项目隔离与上下文恢复流程，不替代自动交接（O/P/Q）、持久记忆（E/H/I）或规则长度控制（S）。做法 AL 产出的是冲突裁决顺序，不替代 AH 的改动范围约束，也不替代测试。做法 AM 产出的是待审批的巡检清单，不替代 AI 的规则体检，也不替代人工逐条修改。做法 AN 产出的是现代 Web 指南和旧模式清单，仍需人工判断目标浏览器矩阵与降级方案，不替代测试、评审、可访问性验收或浏览器兼容性验收。
+这些做法可以叠加，但一次只加一个，否则分不清是哪个起了作用。AGENTS.md 相关维护建议顺序：先在空白仓库用 /init 生成初稿并按四类补全、提交入库（AG），再量长度（S），再回看历史会话找返工证据（X），再集中规则（L），再重组结构（R），再逐条审内容（M），再用增量规则控制新增（W），再用一条零成本常驻规则兜住重复读取与计划丢失（AE）；如果主要问题是读取大文件太费 token，再加 AJ 的 grep-first 规则；如果主要问题是防御性过度设计，再加 AH 的审批规则；如果主要问题是指令文件与代码风格冲突，再加 AL 的裁决规则；如果规则文件很久没巡检，用 AM 做一次只读盘点。如果知识文档很多，再用 AC 把知识移出 AGENTS.md 到 docs/ 并做条件路由。若想先给现有规则做体检，可在 AG 之后、S/R/M/W/X 之前加一次 AI；AI 只找问题，不替代 S 量长度、N 看 token 占比、W 控制新增、X 用历史会话验证。这是本手册建议的顺序，不是原文实验结论。CLAUDE.md 目录分层（Y）与 AGENTS.md 维护是两条线；Y 不替代 S/M/W/X。做法 Z 产出的是候选规则，仍要逐条人工确认，不替代 W/S/M/X。做法 AB 只动 Claude Code 的后台摘要 side-query，不替代上下文压缩、规则长度和子代理缓存的做法。做法 AC 只动上下文供给结构。做法 AD 产出的是 CLAUDE.md 初稿，仍需人工校正。做法 AF 产出的是地图、界面草稿和检查状态，不替代交接、权限配置或代码评审。做法 AH 产出的是改动范围约束，不替代测试、评审或安全审计。做法 AI 产出的是候选问题清单，仍需人工逐条裁决。做法 AJ 产出的是读取策略，不替代 AA 的注释准入，也不替代 AE 的计划落盘。做法 AK 产出的是项目隔离与上下文恢复流程，不替代自动交接（O/P/Q）、持久记忆（E/H/I）或规则长度控制（S）。做法 AL 产出的是冲突裁决顺序，不替代 AH 的改动范围约束，也不替代测试。做法 AM 产出的是待审批的巡检清单，不替代 AI 的规则体检，也不替代人工逐条修改。做法 AN 产出的是现代 Web 指南、现代化清单和旧模式清单，仍需人工判断目标浏览器矩阵与降级方案，不替代测试、评审、可访问性验收或浏览器兼容性验收。
 
 ### 做法 A：MCP-only 轻量试用（推荐先做）
 
@@ -556,7 +556,7 @@ On any task over five steps, write the plan to a file first and update it after 
 
 适用形态：你同时服务多个客户或维护多个项目，会话记录混在一起、项目规则互相污染、新会话不知道上次决策。HN 讨论给出可复制的组合工作流：独立目录/身份隔离 → AGENTS.md 只做入口 → rules/ 和 docs/ 承载细节 → 读-做-写循环把决策落盘 → 索引文件加速冷启动 → Git 提交纪律保持上下文精简。这些做法来自多位实践者的轶事，没有对照实验；先小范围试。
 
-1. 为每个客户/项目建立独立工作目录和身份。为每个客户创建独立的系统用户或至少独立的项目根目录。评论者 mceachen 建议：“If you have separate clients, I would use a different username/login for each client so session transcripts (like in ~/.claude/...) are segregated.” 在每个项目根目录放置 `AGENTS.md`（或 `CLAUDE.md`）作为入口文件。该文件只放最小必要信息和到详细文件的链接，避免臃肿。如果使用 Claude Code，可以在项目目录下通过 `claude` 启动，会话记录会自然按目录隔离。
+1. 为每个客户/项目建立独立工作目录和身份。为每个客户创建独立的系统用户或至少独立的项目根目录。评论者 mceachen 建议：“If you have separate clients, I would use a different username/login for each client so session transcripts (like in ~/.claude/...) are segregated.” 在每个项目根目录放置 AGENTS.md（或 CLAUDE.md）作为入口文件。该文件只放最小必要信息和到详细文件的链接，避免臃肿。如果使用 Claude Code，可以在项目目录下通过 claude 启动，会话记录会自然按目录隔离。
 2. 用规则文件夹和文档文件夹组织项目特定上下文。参考结构：
 ```
 project/
@@ -569,24 +569,24 @@ project/
     plan/
     review/
 ```
-在 `AGENTS.md` 中写入：
+在 AGENTS.md 中写入：
 ```
-在做任何任务前，先阅读 `rules/` 下与任务相关的文件。
-新功能或修复的文档写入 `docs/idea/`、`docs/plan/` 或 `docs/review/`。
+在做任何任务前，先阅读 rules/ 下与任务相关的文件。
+新功能或修复的文档写入 docs/idea/、docs/plan/ 或 docs/review/。
 ```
 代理在新功能或 bug 修复中持续更新 rules/；docs/ 分为 idea/、plan/、review/，在实现新功能时创建对应文档。
-3. 实施“读-做-写”循环与决策记录。每轮任务开始时，提示代理：“Read the relevant previous notes in `knowledge/` before starting.” 任务结束时，提示代理：
+3. 实施“读-做-写”循环与决策记录。每轮任务开始时，提示代理：“Read the relevant previous notes in knowledge/ before starting.” 任务结束时，提示代理：
 ```
-请回顾本轮工作，总结关键发现和决策。将每个决策写成 `knowledge/decisions/<date>-<slug>.md`，包含：
+请回顾本轮工作，总结关键发现和决策。将每个决策写成 knowledge/decisions/<date>-<slug>.md，包含：
 - 标题
 - 状态：approved / rejected / failed
 - 背景
 - 决策内容
 - 后果
-然后更新 `knowledge/summary.md` 的索引。
+然后更新 knowledge/summary.md 的索引。
 ```
 下一轮任务开始时，让代理先读这些决策记录，避免重复被拒绝的方法。评论者 ksajadi 使用该循环 14 个月，维护通用知识和项目特定知识；每个决策有元数据 approved、rejected、failed。
-4. 维护主索引文件以加速冷启动。在项目根目录创建 `INDEX.md`，列出关键文件和一句话说明，例如：
+4. 维护主索引文件以加速冷启动。在项目根目录创建 INDEX.md，列出关键文件和一句话说明，例如：
 ```
 | 文件 | 说明 |
 |------|------|
@@ -594,11 +594,11 @@ project/
 | rules/roles.md | 用户角色规则 |
 | docs/plan.md | 当前实现计划 |
 ```
-在 `AGENTS.md` 中指示：“开始新会话时，先读 `INDEX.md`。” 评论者 lp92 维护 master index document listing every file along with a brief overview，能显著减少新会话扫描时间。
-5. 用 Git 提交纪律保持上下文精简。要求代理在每个实现回合结束时提交（可以是一个或多个 commit），并保持工作树干净。在 `AGENTS.md` 中明确：“每个实现回合必须以 git commit 结束，且 `git status` 干净。” 评论者 synapsomorphy 建议：“The minimal delta is a commit. Every implementation turn must end with one or multiple, and a clean worktree.” 这使上下文可以随时从提交历史恢复，减少对长篇聊天记录的依赖。
-6. 可选：使用 ADR 目录记录架构决策。创建 `adr/` 目录并加入 `.gitignore`（如果不想提交）。提示代理：“在做出重大架构决策前，先写一个 ADR 到 `adr/`，格式：标题、状态、背景、决策、后果。” 同时维护 `STATUS.md` 记录当前工作状态，新会话先读它。评论者 charlesabarnes 在所有仓库中使用 gitignored 的 ADR 目录，并维护一个 status doc 用于恢复。
-7. 可选：用编号系统（如 Johnny.Decimal）统一组织和快速定位。设计一套编号方案（如领域.项目编号），为每个客户/项目分配唯一 ID；在 Obsidian 中为每个 ID 创建笔记，作为该项目的索引和共享记忆；磁盘上创建同名文件夹，放置 AGENTS.md 和项目文件；安装 `jd` CLI（或自己写一个简单脚本），运行 `jd <ID>` 切换目录并启动代理。评论者 jen729w 说整个设置大约需要半小时，且免费（MCP 服务付费）。
-8. 可选：用外部工具管理会话记录和搜索。评论者 cmrx64 使用 `cv`（https://github.com/emberian/cv）来切割和搜索代理记录，在最近一次评估中节省了 40% 的 token。评论者 hyldmo 使用 farero.ai 将所有聊天存入 SQLite 数据库，并注入 MCP 工具让代理搜索历史决策。这些工具适合需要保留大量历史记录并跨会话搜索的场景；先评估 `cv` 等开源工具。
+在 AGENTS.md 中指示：“开始新会话时，先读 INDEX.md。” 评论者 lp92 维护 master index document listing every file along with a brief overview，能显著减少新会话扫描时间。
+5. 用 Git 提交纪律保持上下文精简。要求代理在每个实现回合结束时提交（可以是一个或多个 commit），并保持工作树干净。在 AGENTS.md 中明确：“每个实现回合必须以 git commit 结束，且 git status 干净。” 评论者 synapsomorphy 建议：“The minimal delta is a commit. Every implementation turn must end with one or multiple, and a clean worktree.” 这使上下文可以随时从提交历史恢复，减少对长篇聊天记录的依赖。
+6. 可选：使用 ADR 目录记录架构决策。创建 adr/ 目录并加入 .gitignore（如果不想提交）。提示代理：“在做出重大架构决策前，先写一个 ADR 到 adr/，格式：标题、状态、背景、决策、后果。” 同时维护 STATUS.md 记录当前工作状态，新会话先读它。评论者 charlesabarnes 在所有仓库中使用 gitignored 的 ADR 目录，并维护一个 status doc 用于恢复。
+7. 可选：用编号系统（如 Johnny.Decimal）统一组织和快速定位。设计一套编号方案（如领域.项目编号），为每个客户/项目分配唯一 ID；在 Obsidian 中为每个 ID 创建笔记，作为该项目的索引和共享记忆；磁盘上创建同名文件夹，放置 AGENTS.md 和项目文件；安装 jd CLI（或自己写一个简单脚本），运行 jd <ID> 切换目录并启动代理。评论者 jen729w 说整个设置大约需要半小时，且免费（MCP 服务付费）。
+8. 可选：用外部工具管理会话记录和搜索。评论者 cmrx64 使用 cv（https://github.com/emberian/cv）来切割和搜索代理记录，在最近一次评估中节省了 40% 的 token。评论者 hyldmo 使用 farero.ai 将所有聊天存入 SQLite 数据库，并注入 MCP 工具让代理搜索历史决策。这些工具适合需要保留大量历史记录并跨会话搜索的场景；先评估 cv 等开源工具。
 
 最小试用：先选一个最常用的项目，建独立目录和 AGENTS.md 入口；把项目特定规则拆到 rules/，把 idea/plan/review 拆到 docs/；让代理在结束任务时写一条决策记录并在下一轮先读；加一个 INDEX.md；要求每个实现回合 commit 并保持工作树干净。跑 1–2 周，观察重复解释次数、新会话冷启动时间、决策复用次数、上下文串味次数。
 
@@ -645,41 +645,58 @@ List every instruction file: every CLAUDE.md, including the local and imported o
 5. 批准后再让 agent 执行修改，并复查改动是否严格对应清单；原文只说了“approve”，未展开修改流程。先只改一条，复跑同一提示词，看同类问题是否减少。
 6. 与做法 AI、M 的关系：AI 用 /doctor prompt-audit 做命令式体检；M 用 /claude-api prompt-audit 审旧提示习惯；AM 是人工发起、只读扫描、逐条批准的巡检提示词。三者不互相替代，也不要同时改。
 
-### 做法 AN：用 modern-web-guidance 把现代 Web 指南送进编码代理上下文（小范围试）
+### 做法 AN：用 modern-web-guidance 把现代 Web 指南和现代化流程送进前端编码代理（小范围试）
 
-适用形态：你在做 Web 前端，编码代理总按 2019 年前后的写法生成代码，堆 polyfill、旧库和过时 API；你想先零安装验证指南质量，再扫描现有代码库的旧模式，最后决定是否 install 并接入日常编码智能体。原文把做法写成技能（skills）加 CLI：覆盖 250 项特性，分为 CSS 与布局（140）、HTML 与 DOM（36）、JavaScript 与 API（74，原文在此处被截断）；内容按用户体验、CSS 布局、性能、表单与 UI、无障碍、内置 AI 六个方向组织。效果证据只有作者主张，必须自己用前后对比验证。
+适用形态：你在做 Web 前端，编码代理总按 2019 年前后的写法生成代码，堆 polyfill、旧库和过时 API；你想先验证指南质量或直接跑官方 1.0 的现代化流程，再决定是否长期接入日常编码智能体。原文把做法写成技能（skills）加 CLI：内容按用户体验、CSS 布局、性能、表单与 UI、无障碍、内置 AI 六个方向组织。效果证据主要来自厂商案例、客户自报和推文，必须自己用前后对比验证。
 
-1. 前提：本机有可用的 Node.js / npx；有一个前端代码库；有一个能接受外部文本上下文的编码智能体；能联网运行 CLI。原文未给出 Node 版本要求。先不 install，只做零安装检索。
-2. 零安装试跑检索，确认指南库里有你要的东西：
+**两条路线怎么选**
+- 路线 A（官方 1.0 推荐，适合已在项目里装技能/插件、想做现有代码库现代化）：先 install 或 update，再让智能体执行 /modern-web-guidance Modernize the code in this directory；需要运行时验证时再配 Chrome DevTools for agents。
+- 路线 B（零安装验证，适合先不装东西、用自有任务判断指南质量）：先跑 search、retrieve、legacy-scan，确认有用再 install。
+- 如果只想先试一条最轻的命令，推文给的是 npx modern-web-guidance；但材料未说明它安装什么、写到哪里，执行前先建分支并审查 git diff。不要把推文的 56%→88% 当已验证。
+
+1. 前提：本机有可用的 Node.js / npx；有一个前端代码库；有一个能接受外部文本上下文的编码智能体；能联网运行 npx modern-web-guidance@latest。先建独立分支或复制仓库，记录构建、测试、lint 基线，并选 3–5 个代表性任务或 PR。
+2. 路线 A 安装：在项目根目录执行：
+```bash
+npx modern-web-guidance@latest install
+```
+预期把指南安装到你的智能体或项目配置中。原文没有给出支持哪些编码智能体、Node 版本要求、私有环境或离线可用性、指南更新频率；安装后先验证 agent 是否真的读到，并检查 git diff 有没有覆盖现有配置。
+3. 已装旧版则更新：
+```bash
+npx modern-web-guidance@latest update
+```
+预期更新已有安装。原文没有说明更新是否会覆盖自定义规则；更新前先备份项目配置。
+4. 让智能体做现有代码库现代化：在智能体会话中执行：
+```text
+/modern-web-guidance Modernize the code in this directory
+```
+预期流程会分析 HTML、CSS、JavaScript 和 package.json，寻找安全的现代化机会并引导智能体修改；1.0 先用静态分析覆盖有限模式，结果较可预测。只处理小范围目录或文件，人工审查 diff，运行构建和测试。
+5. 可选运行时验证：与 Chrome DevTools for agents 配合。MWG 负责给出写法建议，DevTools for agents 负责运行、调试、性能追踪、动画录屏、减少动态偏好检查和内存检查。原文给出的搭配场景包括：低端 CPU 模拟性能追踪，迭代到长任务不超过 50ms；录制并检查弹窗/对话框动画及 prefers-reduced-motion；检查 SPA 视图缓存是否导致内存无界增长。
+6. 路线 B 零安装检索：先不 install，确认指南库里有你要的东西：
 ```shell
 npx modern-web-guidance@latest search "animate a dialog modal backdrop"
 ```
 预期返回相关指南的 ID 或列表。记录命中条数、是否覆盖你的任务。
-3. 按上一步返回的 ID 取完整指南正文：
+7. 按上一步返回的 ID 取完整指南正文：
 ```shell
 npx modern-web-guidance@latest retrieve "animate-to-from-top-layer"
 ```
 预期输出一份针对性指南，包含现代 Web 原语、浏览器兼容性数据和降级建议。把输出原样保存，作为后面注入 agent 上下文的材料。
-4. 扫描现有代码库里的旧模式，得到可改造清单：
+8. 扫描现有代码库里的旧模式，得到可改造清单：
 ```shell
 npx modern-web-guidance@latest legacy-scan .
 ```
 预期输出一份“哪些地方可以现代化”的清单。记录命中点、命中类型；原文未说明判定规则来源和误报情况，先人工抽查。
-5. 确认有价值后再正式安装（交互式向导，按提示选择你的智能体/项目）：
-```shell
-npx modern-web-guidance@latest install
-```
-预期把指南安装到你的智能体或项目配置中。原文没有给出支持哪些编码智能体、Node 版本要求、私有环境或离线可用性、指南更新频率；安装后先验证 agent 是否真的读到。
-6. 把指南送进智能体上下文。原文的机制描述是“CLI 把针对性指南直接返回进 agent 的 context window”，但没有给出具体的提示词模板或配置文件格式；一种直接做法是把 retrieve 的输出贴进会话上下文或规则文件，再让 agent 动手（此步为操作推断，非原文步骤）。给 agent 的指令可以是：
+9. 把指南送进智能体上下文。原文的机制描述是“CLI 把针对性指南直接返回进 agent 的 context window”，但没有给出具体的提示词模板或配置文件格式；一种直接做法是把 retrieve 的输出贴进会话上下文或规则文件，再让 agent 动手（此步为操作推断，非原文步骤）。给 agent 的指令可以是：
 ```text
 先阅读下面这份 modern-web-guidance 指南，再按它实现；如果目标浏览器不支持指南里的现代 API，给出轻量 fallback，不要直接上重 polyfill 或旧库。
 
-<把 retrieve 的输出粘贴在这里>
+<把 retrieve 的输出或现代 Web 建议粘贴在这里>
 ```
-7. 让 agent 按指南实现时，同时要求它给出降级方案——原文明确把“Responsible Fallbacks”列为指南的三个重点之一：用轻量 fallback，而不是重 polyfill 或旧库。要求 agent 在回复里写清：用了哪个现代 API、哪些目标浏览器支持、降级路径是什么。
-8. 参考示例指南的写法，判断一份指南是否够具体。原文给出 navigation-drawer 指南作为样例，在仓库 skills/modern-web-guidance/guides/ui-components/navigation-drawer.md。读一遍，建立“好指南长什么样”的判断标准；如果 retrieve 出来的内容太泛，不要硬用。
-9. 最小试用：挑一个小的前端任务（例如一个带动画的 dialog / popover），做两步对照——先让智能体裸做，再用 search + retrieve 取到相关指南后重做；同时对代码库的一个子目录跑 legacy-scan，记下命中点。全程不装东西也能完成，install 放到确认有用之后。
-10. 判断是否继续用：见“怎么判断变好了”中 AN 一节。如果 legacy-scan 命中数下降、同一任务产物更少 polyfill/旧库、更多原生 API、键盘与屏幕阅读器可用性不降，且 agent 确实按指南实现，才考虑把 retrieve 注入常规化；如果出现“指南里写了但 agent 没用”，先改注入方式，不要先怪指南。
+10. 让 agent 按指南实现时，同时要求它给出降级方案——原文明确把 Responsible Fallbacks 列为指南的三个重点之一：用轻量 fallback，而不是重 polyfill 或旧库。要求 agent 在回复里写清：用了哪个现代 API、哪些目标浏览器支持、降级路径是什么。
+11. 团队 PR 评审场景：原文称 MetaMask 把 MWG 作为每个 PR 的自动评审机器人，配置为三行指令，但原文没有给出这三行指令原文；因此只能照做自动 PR 评审的思路，不能照抄其提示词。
+12. 特性数量说法不一：当前材料一处为 250 项（CSS 140 / HTML 36 / JS 74），推文说 212 项；官方 1.0 公告未在材料中给出数量。不要用数量当验收标准，以实际 search/retrieve 命中与任务结果为准。
+13. 最小试用：选一个小的前端任务（例如带动画的 dialog / popover），先让智能体裸做一次并留底；再用 search + retrieve 取到相关指南后重做，或在独立分支上 install 后执行 /modern-web-guidance Modernize the code in this directory；同时对代码库的一个子目录跑 legacy-scan，记下命中点。全程不装东西也能完成，install 放到确认有用之后。
+14. 若可用 Chrome DevTools for agents，按第 5 步验证：低端 CPU 性能追踪看长任务是否不超过 50ms；录屏检查动画和 prefers-reduced-motion；检查 SPA 视图缓存内存是否无界增长；检查键盘焦点、表单可访问性等。只有相对基线有改善且无回归，才扩大范围。
 
 ## 怎么判断变好了
 
@@ -708,7 +725,7 @@ npx modern-web-guidance@latest install
 - 做法 AK：新会话冷启动时间；重复解释背景的次数；决策记录被后续会话引用的次数；同一决策被重复讨论的次数；跨项目规则串味次数；INDEX.md 覆盖的关键文件比例；每个实现回合以 commit 结束的比例；工作树干净的比例。HN 讨论中的可验证指标包括节省 token（cmrx64 报告 40%）、减少重复解释时间、减少因上下文丢失导致的返工、代理是否能正确引用规则和决策（marvstazar 说“The agent so far has not failed to reference the above files”），是否能复现项目任一阶段（mapontosevenths 说“I could reproduce any stage of my project”），但这些都是轶事，缺乏对照实验。
 - 做法 AL：未经要求的风格改动 diff 行数（格式化、重排、改命名约定）——期望为 0 或显著下降；回复中出现“不一致报告”的任务比例——期望上升，且报告内容可核对（不是泛泛而谈）；正确性回归：测试通过率、任务一次成型率——不应下降；人工纠正轮次：每个任务需要你追加“别改风格”的次数——期望下降。淘汰判据：若第 1 项无变化，或第 3 项下降（智能体为了“跟随代码”而沿用了错误写法、该改的没改），说明规则需要加例外条件或退回项目级使用。
 - 做法 AM：人工确认有效的过时条目数；误报数/误报率；抽查后发现的漏报数；形成可审批清单所需时间；批准后实际修改是否都来自清单、是否出现未经批准的改动。可与人工直接巡检同一小仓库做对比。
-- 做法 AN：legacy-scan 在同一目录、同参数下的命中数，改造前后的变化；同一任务两次产出的可比项：JS 行数 / 产物体积、是否引入了 polyfill 或旧库、是否改用原生 API、键盘操作与屏幕阅读器可用性；出现“指南里写了但 agent 没用”的次数——这反映的是上下文注入方式的问题（条件供给没做到位），不是指南本身的问题，值得单独记；回归风险：现代 API 的浏览器支持范围是否满足你的目标浏览器矩阵（指南带兼容性数据，应以产品要求核对，不能默认可用）；由于材料未提供自动评分方法，建议把“是否按指南实现”做成人工评审 checklist，逐条勾。
+- 做法 AN：legacy-scan 在同一目录、同参数下的命中数，改造前后的变化；同一任务两次产出的可比项：JS 行数 / 产物体积、是否引入了 polyfill 或旧库、是否改用原生 API、键盘操作与屏幕阅读器可用性；出现“指南里写了但 agent 没用”的次数——这反映的是上下文注入方式的问题（条件供给没做到位），不是指南本身的问题，值得单独记；回归风险：现代 API 的浏览器支持范围是否满足你的目标浏览器矩阵（指南带兼容性数据，应以产品要求核对，不能默认可用）；由于材料未提供自动评分方法，建议把“是否按指南实现”做成人工评审 checklist，逐条勾。官方 1.0 案例指标可作为乐观参照，但都是厂商或客户自报：Pensionbazaar 交付从约 4 天降到几小时、UI 错误降 90% 以上；Policybazaar 手动审计工作量降 92%；WeTV 90% 的失败性能检查可自动诊断解决、调试时间降 87%；note 现代 Web 检查通过率从 61% 到 94%、LCP 图片优先级提升 28%；MetaMask 5 周约 480 个 PR、64 条评论、43 个修复、中位 15 分钟修复。推文的 56%→88% 没有任务集、样本量和评分标准，只能当假设。
 
 任务侧指标：
 - 正确率：任务结果是否正确。Quicksilver 基准里出现过省 85% token 但 F1 从 54% 掉到 23% 的情况。人工纠正次数、交付时间、会话连续性：压缩后 agent 是否还能检索到之前的状态和决策；/clear 或 compaction 后重新定位需要多少轮。
@@ -727,7 +744,7 @@ npx modern-web-guidance@latest install
 - 做法 AI：接下来各 5 个任务中，因 AI 未遵守偏好而返工/重复解释的次数（审计前 vs 审计后）；新会话里需要人工补一句“注意 XX”的频率。弃用条件：命令不被识别，或输出只有笼统套话、无法定位到具体规则条目。
 - 做法 AJ：单任务 token、工具调用次数、任务一次做对比例、人工追加“你没看到某文件”纠正次数、往返轮次与耗时；判定：token 明显下降且正确率持平或上升才保留；漏读错误增加则收窄规则。
 - 做法 AK：重复解释背景的次数（应下降）；新会话从打开到能开始干活的时间（应下降）；决策记录被引用次数（应上升）；因忘记上次决策导致的返工次数（应下降）；跨项目规则互相污染的次数（应下降）；代理是否能正确引用 rules/ 和 knowledge/ 中的文件（按 marvstazar 的说法“The agent so far has not failed to reference the above files”，但这是轶事）；每个实现回合是否以 commit 结束且 git status 干净。
-- 做法 AN：同一前端任务裸做 vs 用 search + retrieve 后重做的可比项：JS 行数 / 产物体积、是否引入 polyfill 或旧库、是否改用原生 API、键盘操作与屏幕阅读器可用性；legacy-scan 命中数改造前后变化；agent 是否在回复里写清所用现代 API、目标浏览器支持和降级路径；是否出现“指南里写了但 agent 没用”；回归风险：现代 API 的浏览器支持范围是否满足你的目标浏览器矩阵。人工评审 checklist 逐条勾“是否按指南实现”。
+- 做法 AN：同一前端任务裸做 vs 用 search + retrieve 后重做、或 install 后跑 /modern-web-guidance Modernize the code in this directory 的可比项：JS 行数 / 产物体积、是否引入 polyfill 或旧库、是否改用原生 API、键盘操作与屏幕阅读器可用性；legacy-scan 命中数改造前后变化；agent 是否在回复里写清所用现代 API、目标浏览器支持和降级路径；是否出现“指南里写了但 agent 没用”；回归风险：现代 API 的浏览器支持范围是否满足你的目标浏览器矩阵。人工评审 checklist 逐条勾“是否按指南实现”。若用 Chrome DevTools for agents，记录长任务是否不超过 50ms、动画与 prefers-reduced-motion 检查结果、SPA 视图缓存内存是否无界增长。
 
 最小试用方式：
 1. 按做法 A，在 Claude Code 上用 MCP-only 跑一个真实编码任务；前后用 ctx stats 记录；同时记录任务侧指标。Quicksilver：用少量已标注样本核对后再扩大；先跑一条 qs filter，读回执，再抽查被标 ? 的边界项。
@@ -759,7 +776,7 @@ npx modern-web-guidance@latest install
 27. 做法 AK：选一个最常用的项目，建独立目录；写一份只放链接的 AGENTS.md；把项目规则拆到 rules/，把 idea/plan/review 拆到 docs/；加一个 INDEX.md；让代理在任务结束时写 knowledge/decisions/<date>-<slug>.md，并在下一轮先读；要求每个实现回合 commit 并保持工作树干净。跑 1–2 周，记录重复解释次数、冷启动时间、决策引用次数、跨项目串味次数。
 28. 做法 AL：选 1 个已知“指令文件与代码风格不一致”的仓库，把补全后的规则写入项目级（或用户级）指令文件；先不加规则跑 5 个有代表性的改代码任务（新增函数、修 bug、重构一小段）留底，再加规则跑同样 5 个任务；记录未经要求的风格改动 diff 行数、不一致报告出现比例、测试通过率、人工“别改风格”纠正次数。
 29. 做法 AM：选一个小仓库或一个目录，复制上述提示并补全 <find> 的扫描范围；把 agent 设为只读或禁止写入，要求它只输出两类清单：疑似过时条目（文件、位置、原因）和仅存在于散文中的硬规则（文件、位置、原文、为何属于硬规则）；人工逐条判断；只批准一条修改，复跑看同类问题是否减少。
-30. 做法 AN：选一个小的前端任务（例如带动画的 dialog / popover），先让智能体裸做一次并留底；再用 npx modern-web-guidance@latest search 取相关指南，用 retrieve 取正文，把输出贴进会话上下文或规则文件，让智能体重做同一任务；同时对代码库一个子目录跑 legacy-scan .，记录命中点。全程不 install 也能完成；确认有用后再跑 install。对比两次产出的 JS 行数/体积、polyfill/旧库使用、原生 API 使用、键盘与屏幕阅读器可用性，以及 legacy-scan 命中数。
+30. 做法 AN：选一个已有 Web 前端仓库，建分支，记录构建、测试、lint 基线，并选 3–5 个代表性任务或 PR。先按路线 B 零安装试跑 search + retrieve，或按路线 A 执行 npx modern-web-guidance@latest install 后跑 /modern-web-guidance Modernize the code in this directory。只处理小范围目录或文件，人工审查 diff，运行构建和测试。若可用 Chrome DevTools for agents，按第 5 步验证长任务、动画和 SPA 内存。对比安装/注入前后同一批任务的修改轮次、人工 review 意见、返工次数、现代 Web 检查通过率、polyfill/旧库使用、原生 API 使用、键盘与屏幕阅读器可用性。全程先不 install 也能完成最小验证；确认有用后再扩大。
 
 试多久：
 - 调研没有给出统一固定时长。建议先做小范围试用，跑一个真实任务，对照工具侧节省与实际任务结果。要验证会话连续性，至少覆盖一次会话压缩和一次跨会话继续；claude-mem 建议 1–2 天、3–5 次会话。
@@ -776,7 +793,7 @@ npx modern-web-guidance@latest install
 - 做法 AI 先做一次约 15 分钟的体检；若要判断任务侧是否改善，再观察接下来 5 个任务。样本很小，只能作为是否继续投入的依据。做法 AJ 用 3–5 个典型任务、新会话做加规则前后对照；这只是一次小范围试用，不足以证明长期效果。
 - 做法 AK 建议先在一个常用项目跑 1–2 周，至少覆盖 3 个新会话和一次任务交接；看重复解释次数、冷启动时间、决策复用次数是否改善；HN 讨论没有给统一试用时长，1–2 周是本手册建议。
 - 做法 AL 建议用 5 个有代表性的改代码任务做有/无规则对照，至少覆盖一次“指令文件与代码风格不一致”的场景；样本小，只能判断是否继续。做法 AM 先在一个小仓库或一个目录做一次只读巡检，人工核对误报与漏报；若清单质量可接受，再扩大到主仓库，每次只批准一条修改。
-- 做法 AN 原文没有给试用时长；建议先做一次最小试用（一个前端小任务裸做 vs 用指南重做 + 对子目录跑 legacy-scan），若可比项有改善再考虑 install 并在 1 个前端项目上跑 1–2 周；不要在没有对照的情况下直接全仓库 install。
+- 做法 AN 原文没有给试用时长；建议先做一次最小试用（一个前端小任务裸做 vs 用指南重做 + 对子目录跑 legacy-scan），或按官方 1.0 流程在分支上 install 后跑一次现代化命令；若可比项有改善再考虑在 1 个前端项目上跑 1–2 周。不要在没有对照的情况下直接全仓库 install，也不要把厂商自报指标当结论。
 
 ## 常见坑
 
@@ -813,7 +830,7 @@ npx modern-web-guidance@latest install
 - 做法 AK：HN 讨论中的做法来自多位实践者的轶事，没有对照实验；独立目录和独立用户能隔离会话记录，但不会自动共享知识；AGENTS.md 只放链接，细节放 rules/ 和 docs/，否则入口文件重新变臃肿；决策记录需要代理可靠地写文件，否则会漏记；INDEX.md 需要随文件变化更新，否则会过期；Git 提交纪律依赖代理能执行 git commit 且不把未完成工作提交；ADR 目录如果 gitignore 可能不被团队共享；编号系统需要额外维护，项目少时收益有限；外部工具（cv、farero.ai）需要评估隐私和成本；不要把 AK 当成自动交接或持久记忆的替代品，它只是项目级上下文组织方式。
 - 做法 AL：素材是单条推文（87 赞、0 转发、1 回复），只有规则要点，没有数据、案例或前后对比；原文在 follow the conventions 处被截断，补全句是推断，不是原文；用户级配置对所有仓库生效，某些仓库的指令文件恰恰是用来纠正代码坏味道的，此时“跟随代码”会产生反效果；Claude Code 与 Codex 对指令文件的加载范围、优先级未必一致，原文未讨论；规则可能让代理在该改的地方不敢改，必须同时看正确性回归；提及的 paper's fix 没有论文出处，无法核对原始论证。
 - 做法 AM：素材是单条推文（99 赞、3 转发、1 回复），点赞只是传播数据，不是效果证据；原文在 .claude/rules, 处截断，缺少完整文件清单、输出格式、过时条目的判定标准、硬规则提取标准、批准后的修改流程和验证方法；没有案例或数据证明能减少错误；必须把 agent 设为只读或修改前批准，否则可能未经批准改文件；需要人逐条审核，不能把清单直接当结论；不要直接 adopt，先在一个小仓库试。
-- 做法 AN：Modern Web Guidance 的 README 本质是宣传材料；“编码智能体常默认老写法，因为训练数据里充满旧代码”“指南 token-efficient，已用 eval 剪掉模型已知内容”“避免臃肿 JS、性能与无障碍更优”都是作者主张，材料未给任何量化对比（生成代码体积、Lighthouse/INP 改善、扫描误报率等）；只适用于 Web 前端，对后端、数据处理、文档写作无依据；依赖 Node/npx，安装需联网；原文未说明支持哪些智能体、Node 版本、私有环境或离线可用性、指南更新频率；legacy-scan 的判定规则来源和误报情况未知；原文特性列表在 Password credentials 处被截断，全貌未知；Eval Dashboard 链接存在，但材料正文没有给出任何评测数字，不要引用；install 前先确认它不会覆盖你现有的规则或技能配置。
+- 做法 AN：Modern Web Guidance 的 README 和官方 1.0 公告本质是产品与宣传材料；“编码智能体常默认老写法，因为训练数据里充满旧代码”“指南 token-efficient，已用 eval 剪掉模型已知内容”“避免臃肿 JS、性能与无障碍更优”都是作者主张，材料未给独立复现实验；官方 1.0 的案例指标（Pensionbazaar、Policybazaar、WeTV、note、MetaMask）均为厂商或客户自报，需自行复测；推文的 56%→88% 没有任务集、样本量、评分标准、基线配置，只能当假设；只适用于 Web 前端，对后端、数据处理、文档写作无依据；依赖 Node/npx，安装需联网；原文未说明支持哪些智能体、Node 版本、私有环境或离线可用性、指南更新频率；legacy-scan 的判定规则来源和误报情况未知；现代化工作流首版只做有限模式的静态分析，结果较可预测不等于覆盖全面；MetaMask 的三行指令未给出原文，不能照抄；特性数量说法不一（250 项 vs 212 项），不要用数量当验收标准；install 或 update 前先确认它不会覆盖你现有的规则或技能配置。
 
 ## 证据与来源
 
@@ -849,7 +866,7 @@ npx modern-web-guidance@latest install
 - 多项目上下文管理（做法 AK，来自 Hacker News Ask HN 讨论帖）：有依据的是 40 条评论中多位实践者分享的具体做法：mceachen 建议为每个客户用不同用户名/登录隔离会话记录；marvstazar 的项目 CLAUDE.md/AGENTS.md 只做查找，详细规则放 rules/，docs/ 分 idea/plan/review；ksajadi 使用读-做-写循环 14 个月，决策记录带 approved/rejected/failed 状态；lp92 维护 master index 文档减少新会话扫描时间；synapsomorphy 要求每个实现回合以 commit 结束并保持工作树干净；charlesabarnes 使用 gitignored ADR 目录和 status doc；jen729w 用 Johnny.Decimal 编号和 jd CLI；cmrx64 用 cv 节省 40% token；hyldmo 用 farero.ai 把聊天存 SQLite 并注入 MCP 搜索。这些是轶事，没有对照实验；提问者主要痛点是重复解释和上下文丢失。本手册补的最小试用、观察指标和常见坑，是基于该讨论推导出的试用方式，不是原文实验结论。
 - 指令文件与代码冲突裁决（做法 AL，来自 @LimestoneHQ 推文）：有依据的只有规则的两个要点和可照做的用户级路径——当指令文件与现有代码不一致时，以现有代码的约定为准；把每一处不一致报告出来，而不是默默按指令改写代码；Claude Code 写入 ~/.claude/CLAUDE.md，Codex 写入 ~/.codex/AGENTS.md。原文在 follow the conventions 处被截断，完整措辞与是否还有附加条件无法确认；本手册给出的补全句是推断，不是原文。原文称这是对某篇论文中 fix 的改写，但没有给出论文名称、链接或实验数据；互动量为 87 赞、0 转发、1 回复，只是传播信号；没有任何数据、案例或前后对比。“减少智能体擅自改风格”是作者及初筛理由的判断，原文未提供验证。用户级配置对所有仓库生效、某些仓库的指令文件恰恰用于纠正坏味道、两个工具加载范围与优先级未必一致，这些是本手册补的风险提示。
 - 指令文件巡检提示词（做法 AM，来自 @LimestoneHQ 推文）：有依据的是一段可直接复用的任务提示和初始扫描对象——Find the stale lines in this repo's agent instruction files, and the rules that must never break but only live in prose. Change nothing until I approve.；扫描对象列出 every CLAUDE.md, including the local and imported ones, .claude/rules, 后原文截断。推文有 99 个点赞、3 次转发、1 条回复，但这些只是传播数据，不构成效果证据。原文缺少完整文件清单、输出格式、过时条目的判定标准、硬规则提取标准、批准后的修改流程和验证方法；没有案例或数据证明能减少错误。本手册补的两类清单输出格式、人工逐条裁决、只批准一条、复跑对比，是基于原文推导的试用方式，不是原文实验结论。
-- Modern Web Guidance（做法 AN，来自 Show HN 调研报告）：有依据的是 CLI 的四类动作与命令——npx modern-web-guidance@latest search、retrieve、legacy-scan、install；覆盖 250 项特性，分为 CSS 与布局（140）、HTML 与 DOM（36）、JavaScript 与 API（74，原文在此处被截断）；内容按用户体验、CSS 布局、性能、表单与 UI、无障碍、内置 AI 六个方向组织；维护方名单为 Chrome / Edge / Firefox / MDN 团队与社区；提供示例指南 skills/modern-web-guidance/guides/ui-components/navigation-drawer.md 和 Eval Dashboard 链接；原文明确把 Responsible Fallbacks 列为指南的三个重点之一。HN 108 分、33 条评论说明有社区关注。原文没有给出任何评测数字，材料正文里没有量化对比；作者主张“编码智能体常默认老写法”“指南 token-efficient，已用 eval 剪掉模型已知内容”“避免臃肿 JS、性能与无障碍更优”均未经验证；未说明支持哪些智能体、Node 版本、私有环境或离线可用性、指南更新频率；legacy-scan 的判定规则来源和误报情况未知；特性列表在 Password credentials 处截断。本手册补的零安装试用顺序、前后对照、人工评审 checklist、指标与试用时长，是基于调研报告推导的试用方式。
+- Modern Web Guidance（做法 AN，来自 Chrome 官方 1.0 公告与 @don_tech1 推文）：有依据的是官方公告给出的 1.0 功能清单、安装与更新命令、现代化斜杠命令、与 Chrome DevTools for agents 的具体搭配场景，以及多个公司案例和量化指标：安装 npx modern-web-guidance@latest install；更新 npx modern-web-guidance@latest update；现代化 /modern-web-guidance Modernize the code in this directory；分析 HTML、CSS、JavaScript 和 package.json；首版静态分析覆盖有限模式；DevTools 搭配包括低端 CPU 性能追踪、弹窗/对话框动画与 prefers-reduced-motion 检查、SPA 视图缓存内存检查；Pensionbazaar 交付从约 4 天降到几小时、UI 错误降 90% 以上；Policybazaar 手动审计工作量降 92%；WeTV 90% 的失败性能检查可自动诊断解决、调试时间降 87%；note 现代 Web 检查通过率从 61% 到 94%、LCP 图片优先级提升 28%；MetaMask 5 周约 480 个 PR、64 条评论、43 个修复、中位 15 分钟修复。官方公告还点名 Claude Code、Codex、Cursor、Antigravity、Copilot、WebStorm、Kimi Code、Grok Build 等插件市场，但材料未展开每个市场的安装细节；MetaMask 的三行指令未给出原文。推文给出的可执行物是 npx modern-web-guidance、212 个现代 Web 特性、56%→88% 通过率，并声称支持 Claude Code、Codex、Copilot、Antigravity；推文没有任务集、样本量、评分标准、基线配置和复现实验，56%→88% 只能当待验证假设。当前材料对特性数量说法不一：一处为 250 项（CSS 140 / HTML 36 / JS 74），推文说 212 项；官方 1.0 公告未在材料中给出数量。Chrome 官方公告与推文均未提供独立复现实验；案例指标为厂商或客户自报；公共评估面板和 GitHub 仓库未在材料中展开；数百个知识缺口、完整评估覆盖等属于作者主张。本手册补的零安装试用顺序、路线 A/路线 B 选择、前后对照、人工评审 checklist、指标与试用时长，是基于官方公告和推文推导的试用方式，不是原文实验结论。
 
 ## 依据的调研
 
@@ -891,3 +908,5 @@ npx modern-web-guidance@latest install
 - [@LimestoneHQ: Our version of the paper's fix keeps its two parts: follow the code, and report every mismatch. It g](../research/radar/2026-11-10/12237-our-version-of-the-paper-s-fix-keeps-its-two-parts.md)：值得一试，把“指令文件与现有代码冲突时按代码约定执行、并逐条报告不一致”写进用户级指令文件（~/.claude/CLAUDE.md 或 ~/.codex/AGENTS.md），成本极低，值得先在小范围试行；理由是它能直接约束智能体擅自改风格这一常见失败模式，但原文被截断、规则措辞不完整，且没有任何数据支撑，所以只能小范围试用，不能直接写进手册当标准做法。
 - [@LimestoneHQ: <task>](../research/radar/2026-11-10/12238-task.md)：值得一试，建议小范围试：把它作为 agent 指令文件的巡检提示，在只读或审批模式下先列出过时条目和只写在散文里的硬规则，再人工决定是否修改；原文在扫描范围处截断，需补全后再复用。
 - [Show HN: Get your coding agent off ~2019 JavaScript, onto modern web primitives](../research/radar/2026-11-11/12363-show-hn-get-your-coding-agent-off-2019-javascript-.md)：值得一试，在前端代码库上小范围试：先用 npx 跑 search/retrieve/legacy-scan 验证指南质量和旧模式命中情况，再决定是否 install 并接入日常编码智能体。理由是指令与流程都现成可照抄，但效果证据只有作者主张，需自行用前后对比验证。
+- [Modern Web Guidance 1.0: The web platform expertise your coding agent is missing](../research/radar/2026-11-12/12806-modern-web-guidance-1-0-the-web-platform-expertise.md)：值得一试，建议在 Web 前端项目中小范围试用：按原文命令安装 Modern Web Guidance，并让编码智能体在现有代码库上执行现代化检查，同时用 Chrome DevTools for agents 做运行时验证。理由是原文给出了可复制的安装/更新命令和 agent 工作流，但效果数据主要来自厂商案例，且只适用于 Web 前端任务。
+- [@don_tech1: 牛逼！谷歌官方：AI 写前端，默认停在 2019 年水平。](../research/radar/2026-11-12/12852-ai-2019.md)：值得一试，可在一个前端仓库小范围试装 modern-web-guidance，用同一批任务做前后对比；推文只给出一行安装命令和 56%→88% 的二手数字，缺少评测与注入细节，暂不宜直接采纳。
