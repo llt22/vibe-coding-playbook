@@ -1,9 +1,9 @@
-# 把编码 agent 配成有顾问、审查和检索的分工团队
+# 把编码任务拆给对的模型：写、审、探路各用其长
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：在不盲目照抄模型名和命令的前提下，用网关回退、模型分层和证据验收，减少编码中断、贵模型浪费和“假完成”。
-> 先试这一步：先备份 ~/.claude/settings.json、CLAUDE.md 和 agents 目录，再用 claude --help 与官方文档核对 advisor、subagents、子代理文件字段是否真实存在。
+> 解决的问题：在多模型、多工具环境下，如何把写代码、评审、探索、验收分给合适的模型与角色，减少配额浪费、审批等待和返工，并用可观察证据判断分工是否真的变好。
+> 先试这一步：先挑一个中等规模任务，让另一个厂商的模型只做一轮评审、不代写代码，同时把代码探索交给廉价子代理，记录返工与等待时间。
 > 最近修订：2026-11-13
 
 ## 解决什么问题
@@ -11,6 +11,8 @@
 编码中常见的浪费与中断有：订阅配额到期没用完、编码到一半被限流、某个 key 死掉导致整条流程卡住、工具输出烧 token；另一类浪费是模型分工：要么所有任务都用最重最贵的模型，要么靠手动切换。贵模型把大量 token 花在样板代码、写测试、跨文件改代码上，而这些活本可以交给廉价模型，只要贵模型先把任务写清楚，并用测试当裁判。
 
 在 Claude Code 内，除了“Sonnet 主跑、Opus 做顾问”这类单条命令，还可以把分工落到用户级配置文件：主会话负责写代码和跑测试，advisor 只出主意，checker 子代理只测试和挑错，Explore 子代理负责检索与查文档。目标不是堆模型，而是让每类工作由合适角色承担，并用可观察证据判断是否真的变好。
+
+新增的一类分工是跨厂商协作：主力模型写代码，另一个厂商的模型只做评审，廉价快速子 Agent 先探索代码，只读命令走白名单减少云端审批等待。原文来自 Antigravity + Gemini 的重度使用经验，工具绑定较强，做法要小范围试，不能直接当团队默认流程。
 
 ## 适用与不适用
 
@@ -26,6 +28,8 @@
 - 日常用 Claude Code，任务中等规模、项目有可运行测试，想让 Opus 只做规划和决策、廉价模型写码。
 - 你同时推进多个互不干扰的任务，愿意按“改动是否涉及架构”给任务打标签，并在长上下文换模型前先 `/compact`。
 - 你想在 Claude Code 里把分工落到用户级配置：`~/.claude/settings.json`、`~/.claude/agents/*.md`、`~/.claude/CLAUDE.md`，并接受先备份、看 diff、再应用。
+- 你使用 Antigravity 搭配 Gemini，能同时用到 Gemini、GPT、Claude 等多个模型，想按任务类型分配模型、用另一家模型交叉评审、用廉价子 Agent 探索代码、用只读白名单减少审批等待。
+- 你愿意先打开 agy-fast-io 与 oil-dev-skills 仓库核对白名单和规则正文，并接受非官方插件。
 
 不适用或需要谨慎：
 
@@ -39,6 +43,11 @@
 - 想把 F1–F4 混着抄或与网关自动叠加：材料未说明可集成，先分开试。
 - 想把 K 当成单条启动命令：K 是用户级配置，会影响你所有项目；不想改全局配置就退回单会话/单命令做法。
 - 不能接受 `/compact` 丢失上下文细节：压缩前把关键约束写到文件或消息里。
+- 没有多模型条件，或只能用一个模型：做法 L 的“跨厂商评审、按任务分模型”无法完整执行。
+- 不能接受非官方插件、或仓库内容无法访问/与当前版本不兼容：不要照做白名单和 swarm 规则。
+- 想把 Orchestrator 计划模式直接当稳定方案：作者自认测试不够，只简单项目试过；纯读文件、问问题不会加速。
+- 想配好白名单前就用 Turbo 模式跑复杂任务：原文称会反复触发 1–3 秒云端审核，复杂任务几十次。
+- 想把只读白名单扩大到写操作：先只放列目录、读文件、搜索，写操作保留人工审批，观察是否误放行。
 
 ## 前置条件
 
@@ -53,6 +62,7 @@
 - cedr：Linux 需要 glibc 2.34+ 或使用对应平台发布包；写 `~/.config/cedr/routes.toml`；使用 Claude Code 时要挂 statusLine；cedr 处于 preview，1.0 前命令与文件格式仍可能变。
 - Cheap Agent：已安装 Claude Code；Node.js 20+；一个充值了几美元的 API key；项目里有能跑、能覆盖改动的测试套件；每个项目执行一次 `/cheapag:allow` 授权。
 - 做法 K：已安装并可正常登录 Claude Code；能修改 `~/.claude/settings.json`、`~/.claude/agents/`、`~/.claude/CLAUDE.md`；先备份这些文件；先读三页官方文档确认字段与模型标识符：advisor、sub-agents、model-config；原文称顾问模型需要 v2.1.321 或更高，实际门槛以文档为准；某些套餐下 advisor 需要一次性 `/model fable` 接受额度后再 `/model sonnet` 切回。
+- 做法 L：有 Antigravity 使用权限；能同时使用 Gemini、GPT、Claude 等多个模型（作者用 200 美元档订阅，额度条件按你的套餐核对）；能修改项目级规则文件；能打开并核对 agy-fast-io（https://github.com/oil-oil/agy-fast-io）与 oil-dev-skills（https://github.com/oil-oil/oil-dev-skills）仓库；接受非官方插件；至少一个中等规模仓库和两个真实任务（一个 bug 修复、一个小功能）。原文没有给出白名单正文、提示词正文和 swarm 规则正文，执行前必须打开仓库补齐。
 
 ## 操作步骤
 
@@ -287,7 +297,7 @@ Set up Cheap Agent (npm: cheap-agent) for me.
 4. 中途换模型：上下文已经很长 → 先 `/compact` 再 `/model`；上下文还短 → 直接 `/model`。
 5. 做 1–2 周最小试用，记录中途换模型次数、换模型后重新交代背景次数、单任务墙钟时间、返工轮次、架构类改动的事后返工率。
 
-**做法 K：把 Claude Code 配成四模型团队，落到三个用户级文件（本次新增）**
+**做法 K：把 Claude Code 配成四模型团队，落到三个用户级文件**
 
 目标：主会话写代码、跑测试；advisor 只出主意；checker 子代理只测试和挑错、不编辑；Explore 子代理负责检索与查文档，并顶替内置 Explore。价值在于把分工落到 `~/.claude/settings.json`、`~/.claude/agents/*.md`、`~/.claude/CLAUDE.md` 三个文件，并给出重启后的验收判据。注意：这是用户级改动，会影响你所有项目。
 
@@ -355,7 +365,28 @@ End with three headings: Changed, Needs me, How to check it works. Under the las
 
 9. 重启并验收：Claude Code 以 Sonnet 启动；`/advisor` 显示 fable；`/agents` 列出 checker（opus）与 Explore（haiku）。运行时观察：顾问被调用时出现 `Advising` 行；`Ctrl+O` 能看到顾问建议；`/usage` 能看到成本。若字段或显示项不存在，按第 0 步文档修正，不要硬套。
 
-**做法 A–K 怎么选（短表）**
+**做法 L：跨厂商交叉评审、廉价子代理探路、只读白名单减少审批等待（Antigravity/Gemini）**
+
+前提：有 Antigravity 使用权限，能同时用到 Gemini、GPT、Claude 等多个模型；至少一个中等规模仓库和两个真实任务；能修改项目级规则文件；能打开并核对作者的两个仓库。原文只给仓库链接，白名单内容、提示词正文和 swarm 规则正文未出现在材料里，执行前必须打开仓库确认与当前版本兼容。
+
+1. 按任务类型分配模型（原文判断，不是自动配置）：
+   - 复杂仓库的分支管理和版本管理、希望模型主动告诉你当前存在什么问题 → Claude；
+   - 主力开发 → Gemini 4 Carbon（作者称效果优于 Argon、消耗相近；未独立核实）；
+   - 写课程、视频脚本、需要交流感和文案 → Gemini；
+   - 方案与代码 → 让 GPT 做一轮交叉评审，只指出问题，不代写代码。作者理由是 Gemini 系列比较自信，方案和代码经常缺胳膊少腿却自认为不错。
+   预期：每个角色只做自己那一段，不让一个模型既写又审。
+
+2. 减少云端审核等待。安装作者的非官方插件 agy-fast-io（https://github.com/oil-oil/agy-fast-io），按仓库说明把纯只读命令（列目录、读文件、搜索）加入免审白名单；写操作保留人工审批。材料没有给出白名单正文和提示词正文，必须打开仓库后照做。在配好白名单之前，不要用 Turbo 模式跑复杂任务；原文称单次云端审核约 1–3 秒，复杂任务会触发几十次，累计几分钟。
+
+3. 加速代码探索。原文称 Antigravity 原生子 Agent 只支持 inherit / flash_lite / flash / pro 四档，不含 Gemini 4 系列；但内部有一个 swarm Skill，相当于多 Agent 协作系统，可派发任意模型（包括 Antigravity 内的 Claude）的子 Agent。做法是把一条项目规则配进去：需要探索代码时走 swarm + Gemini 4 Hydrogen (Low)。作者把这条规则做进了 oil-dev-skills 套件的 oil-explore（https://github.com/oil-oil/oil-dev-skills）；新项目开新话题时靠这条规则加速代码探索。材料没有给出规则正文，需打开仓库后照做。
+
+4. Orchestrator（计划模式）只作为待验证项。机制是用能力强的模型先探索代码、写方案，再让较便宜的模型（如 Gemini 4 Hydrogen）按方案执行。作者只简单项目试过、自认测试不够，不下结论；原文还指出它对单纯读文件、问问题没有加速，因为读代码全在第一阶段、跑的还是最慢的规划模型。不要直接写进团队默认流程。
+
+5. 最小试用。挑一个中等规模仓库，选两个真实任务（一个 bug 修复、一个小功能）。A 组：单模型 Gemini 直接做；B 组：Gemini 写 + GPT 只做一轮评审（只指出问题、不代写代码）+ 探索阶段先用廉价子 Agent 跑一遍。各跑 2–3 次。记录任务总耗时、人工或云端审批次数与累计等待秒数、评审指出的问题数与被采纳数、返工轮次、每任务额度消耗、一周额度是否够用。
+
+选择提示：如果你同时有 Gemini、GPT、Claude 多模型，且痛点是主力模型又写又审、读文件慢、审批等待多，先试 L；只读白名单从小开始，Orchestrator 先别上。L 与 A–K 不假设能自动叠加，先分开试。
+
+**做法 A–L 怎么选（短表）**
 
 - 跨供应商配额、限流、死 key、工具输出烧 token：先 A。预算红线用 `auto/subscription`；想先榨套餐再降最便宜付费用 `auto/thrifty`；`auto/chaos` 会成倍消耗上游调用。
 - 已在用 Codex、想让常规任务别总调最重模型，并用确定性 grader 验收：先 B。
@@ -371,6 +402,7 @@ End with three headings: Changed, Needs me, How to check it works. Under the las
 - 任务中等规模、项目有可运行测试，想让 Opus 只做规划和决策、廉价模型写码：先做 I。
 - 同时推进多个互不干扰任务，想按是否动架构选模型并管理换模型上下文：试 J。
 - 你已经在 Claude Code 里，愿意改用户级配置，并接受先备份、看 diff、再应用：先试 K。K 与 F1–F4 不同：K 不是单条启动命令，而是三个文件的用户级配置；材料未说明它能与 F1–F4 或 A–J 自动叠加，先分开试。
+- 同时有 Gemini、GPT、Claude 多模型，想按任务类型分模型、用另一家模型交叉评审、用廉价子 Agent 探路、用只读白名单减少审批等待：先试 L。白名单只放只读命令，Turbo 模式先别跑复杂任务；Orchestrator 只当待验证项。
 - A 和 C 默认都用 20128，先选一个跑通；E 默认 4000，model-relay 默认 8950，不撞端口不代表能自动叠加。
 
 ## 怎么判断变好了
@@ -388,6 +420,7 @@ End with three headings: Changed, Needs me, How to check it works. Under the las
 - Cheap Agent：选一个中等规模真实任务（新功能或真实 bug，跨几个文件），先记录纯 Claude Code 基线：Opus token、轮数、最终测试通过数；再执行 `/cheapag:allow`，保持默认 `takeover="sonnet"`、`limits.max_turns=25`，用同一提示词重跑；记录 `/cheapag:status` 里的廉价模型花费；再开 `/cheapag:hook on` 跑一轮。若测试跑不起来、质量下降、Opus token 不降、廉价模型花费反而更高、或合规不允许代码外发，就停用。
 - J：选 5–8 个真实编码任务，动手前各打 `动架构`/`不动架构` 标签；记录中途换模型次数、换模型后重新交代背景次数、单任务墙钟时间、返工轮次、架构类改动事后返工率。1–2 周后没有改善，或 `/compact` 导致的重复解释代价大于收益，就降级为只保留“按架构相关性选模型”的思路。
 - K：先只做验收，不做效果承诺：重启后确认 Claude Code 以 Sonnet 启动、`/advisor` 显示 fable、`/agents` 列出 checker（opus）与 Explore（haiku）；跑一个日常任务，确认顾问被调用时出现 `Advising` 行、`Ctrl+O` 能看到建议、`/usage` 能读到成本。然后选 3–5 个真实任务，默认单模型 vs K 各跑一次，记录返工次数、总 token/费用、端到端耗时、顾问实际介入次数、checker 是否发现真实问题、Explore 是否减少主模型检索 token。只有质量不降且成本下降，或返工明显减少且成本可接受，才保留；若字段/显示项不存在、顾问几乎不介入、checker 只复述构建结果、或成本上升而返工未减少，就回滚。
+- L：先只读白名单从小开始，只放列目录、读文件、搜索；写操作保留人工审批，观察是否误放行。用两个真实任务各跑 2–3 次：A 组单模型 Gemini 直接做；B 组 Gemini 写 + GPT 只做一轮评审 + 探索阶段先用廉价子 Agent。记录任务总耗时、审批次数与累计等待秒数、评审指出的问题数与被采纳数、返工轮次、每任务额度消耗、一周额度是否够用。判断：审批等待明显下降且返工轮次不上升，才算通过；若 GPT 评审采纳率很低、问题重复已知，就降级为仅思路参考；Orchestrator 先在玩具项目上对比同一任务的耗时与失败率，再决定是否进入正式流程。
 
 ## 常见坑
 
@@ -425,6 +458,12 @@ End with three headings: Changed, Needs me, How to check it works. Under the las
 - 忽略 effort 与顾问咨询的耦合。原文说法是“effort 更低时，主模型咨询顾问的次数会少得多”；把主模型 effort 调低可能让顾问形同虚设。
 - 以为用户级 Explore 一定生效。原文给出的机制是：用户级同名 `Explore` 子代理会顶替内置 Explore；否则内置 Explore 跑在主模型上、且忽略 `CLAUDE_CODE_SUBAGENT_MODEL`。需要写代码的子代理要给 sonnet、绝不给 haiku；小任务不用子代理。
 - 不验收就宣布完成。K 的验收要看重启后 `/advisor`、`/agents`、`Advising`、`Ctrl+O`、`/usage` 是否真实存在；不存在就按文档修正，不要硬套。
+- 把 Antigravity 的 Turbo 模式当默认加速。原文称工具调用要走 1–3 秒云端审核，复杂任务会触发几十次；白名单没配好前不要用 Turbo 跑复杂任务。
+- 把只读白名单配成“什么都免审”。先只放列目录、读文件、搜索，写操作保留人工审批，观察是否误放行。
+- 以为原生子 Agent 能用 Gemini 4。原文称只有 inherit / flash_lite / flash / pro 四档，不含 Gemini 4 系列；要用 swarm Skill 派发，规则正文在仓库里，材料未给出。
+- 照抄 Orchestrator 计划模式。作者自认测试不够，只简单项目试过；纯读文件、问问题不会加速，因为读代码全在第一阶段、跑的还是最慢的规划模型。
+- 把跨厂商评审当自动质量保证。原文没有量化数据；GPT 评审若采纳率低、问题重复已知，就降级为仅思路参考，不要当强制门禁。
+- 忽略订阅条件。作者用 200 美元档订阅，重度开发 + Codex review 下周额度最后一两天仍需额外做点重活才用得完；你的套餐额度不同，不能照搬。
 
 ## 证据与来源
 
@@ -444,8 +483,9 @@ End with three headings: Changed, Needs me, How to check it works. Under the las
 - model-relay：可照做的有安装插件、`/provider setup`、`/provider init`、`node tools/setup.mjs add`、`/provider doctor --ping`、alias 命令、429 failover.chain 与默认值、statusline、proxy enable/disable、0.6 升级迁移。定位是单人本地守护进程；provider 必须能接 Anthropic `/v1/messages`；给定调研正文在“对应研究问题”处截断，没有成本、质量、稳定性或用户案例数据。
 - cedr：可核对的操作性内容有安装命令与平台矩阵、routes.toml 样例、statusLine JSON、`cedr route pick/verdict`、`cedr route stats/pools/list`、`cedr council plan/merge`、`cedr lint/lock/verify` 与 `--introspect` 警告。只是作者主张、没有证据的是：路由“挑得对”、Council 能提高评审质量、锁文件能防住真实风险；原文没有效果数据、案例研究或对比实验，仓库仅 42 stars、单一组织维护、preview 阶段，示例输出里的百分比是演示样例。
 - J：可照做的有把编码收敛到 Claude Code 一个入口、用 Herdr 管多个 session（原文未给 Herdr 命令）、按“动架构/不动架构”打标签、动架构用 Fable、不动架构用 Opus、长途换模型前先 `/compact` 再 `/model`。原文在“- 不用”处截断，第 5 条缺失；Fable/Opus 的名称、版本、可用性无法核实；只有作者个人几个月的工作习惯陈述，推文 69 赞、8 回复，没有指标、对比或结果数据。
-- K（本次新增 @0xCodila）：可照做的是一条完整配置 prompt，要求把 Claude Code 配成用户级四模型团队，并落到 `~/.claude/settings.json`（主模型 sonnet、`advisorModel` fable、env `CLAUDE_CODE_SUBAGENT_MODEL` haiku）、`~/.claude/agents/checker.md`（model opus，只测试/挑错、不编辑）、`~/.claude/agents/Explore.md`（name Explore、model haiku、只读工具、顶替内置 Explore）、`~/.claude/CLAUDE.md`（顾问/检查/检索/写代码子代理/小任务的行为规则）。原文还给出验收方式：重启后 Claude Code 以 Sonnet 启动、`/advisor` 显示 fable、`/agents` 列出 checker 与 Explore；顾问被调用时出现 `Advising` 行、`Ctrl+O` 看建议、`/usage` 看成本。材料边界：它引用的 Sonnet 5.5 / Fable 5.2 / Opus 5.5 / Haiku 5.5 与版本号 v2.1.321 无法核实；作者没有给出任何效果数据；字段、文件格式、模型标识符必须以官方 advisor / sub-agents / model-config 三页为准；这是用户级改动，会影响所有项目，必须备份、合成 diff、确认后应用。
-- 材料边界：这些项目、F3 推文、J 推文、@0xVeyyro 推文、@wanerfu 推文、@0xCodila 推文以及各 Claude Code 扩展的材料都未说明可以互相集成；同时安装或叠加配置时不要假设请求一定经过你以为的那一层。
+- K（@0xCodila）：可照做的是一条完整配置 prompt，要求把 Claude Code 配成用户级四模型团队，并落到 `~/.claude/settings.json`（主模型 sonnet、`advisorModel` fable、env `CLAUDE_CODE_SUBAGENT_MODEL` haiku）、`~/.claude/agents/checker.md`（model opus，只测试/挑错、不编辑）、`~/.claude/agents/Explore.md`（name Explore、model haiku、只读工具、顶替内置 Explore）、`~/.claude/CLAUDE.md`（顾问/检查/检索/写代码子代理/小任务的行为规则）。原文还给出验收方式：重启后 Claude Code 以 Sonnet 启动、`/advisor` 显示 fable、`/agents` 列出 checker 与 Explore；顾问被调用时出现 `Advising` 行、`Ctrl+O` 看建议、`/usage` 看成本。材料边界：它引用的 Sonnet 5.5 / Fable 5.2 / Opus 5.5 / Haiku 5.5 与版本号 v2.1.321 无法核实；作者没有给出任何效果数据；字段、文件格式、模型标识符必须以官方 advisor / sub-agents / model-config 三页为准；这是用户级改动，会影响所有项目，必须备份、合成 diff、确认后应用。
+- L（@I_am_oil_oil）：可照做的有按任务类型分配模型（Gemini 写、GPT 评审、Claude 管复杂分支和版本）、安装 agy-fast-io 并整理只读白名单、用 swarm + Gemini 4 Hydrogen (Low) 做代码探索、oil-explore 规则；原文给出的等待数据是单次云端审核约 1–3 秒、复杂任务可能几十次、累计几分钟；原生子 Agent 只有 inherit / flash_lite / flash / pro 四档且不含 Gemini 4 系列；作者用 200 美元档订阅，重度开发 + Codex review 下周额度最后一两天仍需额外做点重活才用得完。仅为作者主张、无验证的是 Carbon 优于 Argon 且消耗相近、Claude 更缜密、Hydrogen 能解决读文件慢、GPT 评审搭配效果好。材料边界：强绑定 Antigravity 和特定订阅；模型名按作者叫法（Gemini 4 Argon/Carbon/Hydrogen、Claude Opus 5.5）无法独立核对；两个仓库的白名单、提示词和 swarm 规则正文未出现在材料中；Orchestrator 作者自认测试不足；没有量化指标，需自行设计验证。
+- 材料边界：这些项目、F3 推文、J 推文、@0xVeyyro 推文、@wanerfu 推文、@0xCodila 推文、@I_am_oil_oil 推文以及各 Claude Code 扩展的材料都未说明可以互相集成；同时安装或叠加配置时不要假设请求一定经过你以为的那一层。
 
 ## 依据的调研
 
@@ -467,3 +507,4 @@ End with three headings: Changed, Needs me, How to check it works. Under the las
 - [@0xVeyyro: THIS IS AN ACTUAL F*CKING GOLDMINE](../research/radar/2026-11-06/10741-this-is-an-actual-f-cking-goldmine.md)：值得一试，建议小范围试：在 Claude Code 中用 Sonnet 主跑、Opus 顾问的命令做对照，记录成本与返工；原因是原文只给出一条具体命令且正文截断，不足以直接采纳为完整流程。
 - [@wanerfu: Anthropic 刚分享了 Claude Code 的一个超好用技巧。](../research/radar/2026-11-09/11772-anthropic-claude-code.md)：值得一试，先把 `claude --advisor opus --subagents haiku` 作为实验组，与只用单个模型的会话做同任务对照，记录 token 消耗和返工次数，再决定是否把它定为固定启动方式。因为原文只提供了一条启动命令和“输出更好、更省 token”的主张，正文被截断，量化数据、成本边界和适用条件都缺失，不足以直接采用。
 - [@0xCodila: Antrhopic's cheat code:](../research/radar/2026-11-13/12937-antrhopic-s-cheat-code.md)：值得一试，把这条 prompt 当作模板，而不是逐字照抄的脚本：先到 Anthropic 官方 advisor / sub-agents / model-config 三页核对字段与当前可用模型名，把四个角色（构建、顾问、检查、检索）替换成你账号里真实存在的模型，再在一个非关键项目里按同一条 prompt 的流程装配一遍。理由是它给出了可直接复制的三件套（settings.json 字段、~/.claude/agents/*.md、CLAUDE.md 触发规则）和验收方式，但模型名与版本号无法从材料核实，且作者没有给出任何效果数据。
+- [@I_am_oil_oil: 最近非常高强度地使用了 Antigravity 和 Gemini 模型，说说自己的感受和一些实用技巧：](../research/radar/2026-11-13/13154-antigravity-gemini.md)：值得一试，可以把“用不同厂商的模型交叉评审、用便宜快速的子 Agent 先探索代码、把只读命令加入白名单、减少审批等待”这组做法小范围试起来；但插件与提示词的具体内容只在链接里，原文没有给出，所以只能按粗流程试，细则需要打开仓库后再补。
