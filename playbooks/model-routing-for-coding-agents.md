@@ -1,35 +1,39 @@
-# 把编码任务拆给对的模型：写、审、探路各用其长
+# 别让配额和模型选错拖慢编码：给编码 agent 配路由、分工与验收
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：在多模型、多工具环境下，如何把写代码、评审、探索、验收分给合适的模型与角色，减少配额浪费、审批等待和返工，并用可观察证据判断分工是否真的变好。
-> 先试这一步：先挑一个中等规模任务，让另一个厂商的模型只做一轮评审、不代写代码，同时把代码探索交给廉价子代理，记录返工与等待时间。
-> 最近修订：2026-11-13
+> 解决的问题：一句话：当你有多个模型订阅、多把 key 或多个编码 agent 时，怎么分工、怎么在限流或 key 失效时自动回退，并用可观察证据判断是否真的省了时间和钱。
+> 先试这一步：先用 community-claude-code 的 `ccc-claude` 把 Claude Code 接到一个已有 key 的 provider，在同一小任务上跑通，再配 Fallback Models 做对照。
+> 最近修订：2026-11-14
 
 ## 解决什么问题
 
-编码中常见的浪费与中断有：订阅配额到期没用完、编码到一半被限流、某个 key 死掉导致整条流程卡住、工具输出烧 token；另一类浪费是模型分工：要么所有任务都用最重最贵的模型，要么靠手动切换。贵模型把大量 token 花在样板代码、写测试、跨文件改代码上，而这些活本可以交给廉价模型，只要贵模型先把任务写清楚，并用测试当裁判。
+编码中常见的浪费与中断有：订阅配额到期没用完、编码到一半被限流、某个 key 死掉导致整条流程卡住、工具输出消耗大量 token；另一类浪费来自模型分工：要么所有任务都用最重的模型，要么靠手动切换。贵模型把大量 token 花在样板代码、写测试、跨文件改代码上，而这些活本可交给廉价模型，只要贵模型先把任务写清楚，并用测试当裁判。
 
 在 Claude Code 内，除了“Sonnet 主跑、Opus 做顾问”这类单条命令，还可以把分工落到用户级配置文件：主会话负责写代码和跑测试，advisor 只出主意，checker 子代理只测试和挑错，Explore 子代理负责检索与查文档。目标不是堆模型，而是让每类工作由合适角色承担，并用可观察证据判断是否真的变好。
 
-新增的一类分工是跨厂商协作：主力模型写代码，另一个厂商的模型只做评审，廉价快速子 Agent 先探索代码，只读命令走白名单减少云端审批等待。原文来自 Antigravity + Gemini 的重度使用经验，工具绑定较强，做法要小范围试，不能直接当团队默认流程。
+另一类分工是跨厂商协作：主力模型写代码，另一个厂商的模型只做评审，廉价快速子 Agent 先探索代码，只读命令走白名单以减少云端审批等待。原文来自 Antigravity + Gemini 的重度使用经验，工具绑定较强，做法要小范围试，不能直接当团队默认流程。
+
+最新加入的一层是“代理层”：Community Claude Code（CCC）在本机跑一个代理/路由服务，把 Claude Code、Codex、Pi、OpenCode 2、Cline 等编码 agent 接到任意受支持的模型提供方，宣称保留原生流式、工具调用与 interleaved thinking，并提供自动重试、可配置限流、并发控制、模型/提供方回退、多 API key 回退、思考强度分级与 Claude Code 档位路由。它解决的是“同一个 agent 换模型、换 provider、出故障回退”这类编排问题，并不引入新模型。
 
 ## 适用与不适用
 
 适用：
 
-- 你手上有多个供应商或多把订阅/API key，经常因配额耗尽、限流或失败中断工作；愿意在本机跑一个本地服务，且工具支持自定义 OpenAI 兼容 base URL。
+- 你手上有多个供应商账号或多把订阅/API key，经常因配额耗尽、限流或失败中断工作；愿意在本机跑一个本地服务，且工具支持自定义 OpenAI 兼容 base URL。例如，OmniRoute 或 CCC 都可用来承接这类需求。
 - 你使用 Codex，愿意在 Codex 内装本地插件，用 `$adaptive-route` 跑日常任务。
 - 你想用一个面板集中管“哪个工具接哪个模型”，或想在同一终端框架里并排开多个 coding agent 会话，为每次会话选 harness/model/effort。
 - 你想先在 Python 代码里用同一个函数调不同供应商，再决定要不要上网关。
 - 你使用 Claude Code，版本支持 `/advisor` 或 `--advisor`，或账号允许在 Sonnet、Opus、Haiku 等模型之间切换，想对成本敏感的代码编辑任务做 A/B。
-- 你想在 Claude Code 内按窗口/别名路由，遇到 Anthropic 429 用量上限时自动转到备用 provider 并钉住会话。
+- 你想在 Claude Code 内按窗口/别名路由，遇到 Anthropic 429 用量上限时自动转到备用 provider 并固定该会话。
 - 你已在 Claude Code、Codex、Cursor 或 Gemini 之间分配工作，想把“哪类工作交给哪个 agent/模型/effort”写成规则，并先只做 pick + verdict。
 - 日常用 Claude Code，任务中等规模、项目有可运行测试，想让 Opus 只做规划和决策、廉价模型写码。
 - 你同时推进多个互不干扰的任务，愿意按“改动是否涉及架构”给任务打标签，并在长上下文换模型前先 `/compact`。
 - 你想在 Claude Code 里把分工落到用户级配置：`~/.claude/settings.json`、`~/.claude/agents/*.md`、`~/.claude/CLAUDE.md`，并接受先备份、看 diff、再应用。
 - 你使用 Antigravity 搭配 Gemini，能同时用到 Gemini、GPT、Claude 等多个模型，想按任务类型分配模型、用另一家模型交叉评审、用廉价子 Agent 探索代码、用只读白名单减少审批等待。
 - 你愿意先打开 agy-fast-io 与 oil-dev-skills 仓库核对白名单和规则正文，并接受非官方插件。
+- 你已在本地跑 Claude Code 或其他编码 agent，想在不改 agent 本身的前提下，换 provider、按档位换模型、配回退链，并接受一个独立项目（CCC）作为中间层：它有安装脚本、`ccc-*` 启动命令、Admin UI、`ccc-doctor`，但项目仅 42 star，部分模型 id 与“Claude Code 全部模型免费用”的主张可疑，必须小范围自测。
+- 你想用 Discord/Telegram（含语音笔记）在碎片时间把编码任务交给已在跑的环境，或把本地 LM Studio / llama.cpp / Ollama 接进同一个入口。
 
 不适用或需要谨慎：
 
@@ -37,8 +41,8 @@
 - 极小任务（几行代码、从零写一个小应用）：材料称没有收益；最难一档 bug 作者自报可能略差。
 - 合规或数据敏感：廉价模型方案会把代码发给第三方 provider；网关接入前也要看清请求是否会经过第三方免费层。
 - 期望工具自动 commit/push：Cheap Agent 从不 commit 或 push，改动以未提交形式落地，必须人工审 diff。
-- 想把网关当无单点风险的生产网关：网关是单点，它挂了所有客户端一起挂。
-- 想把 README 的效果数字直接当结论：多数项目数字没有可复现测量方法或第三方复核。
+- 想把网关当无单点风险的生产网关：网关是单点，它挂了所有客户端一起挂；CCC 也是本机代理，同样是单点。
+- 想把 README 的效果数字直接当结论：多数项目数字没有可复现测量方法或第三方复核；CCC 的“省 90% token”只有主张，没有评测方法。
 - 想照抄未确认的 Claude Code 命令、参数、环境变量或模型名：`/advisor`、`--advisor`、`--subagents`、`CLAUDE_CODE_SUBAGENT_MODEL` 及 Sonnet/Fable/Opus/Haiku 版本名在材料里无法核实，执行前必须用 `claude --help`、`/help` 或官方文档确认。
 - 想把 F1–F4 混着抄或与网关自动叠加：材料未说明可集成，先分开试。
 - 想把 K 当成单条启动命令：K 是用户级配置，会影响你所有项目；不想改全局配置就退回单会话/单命令做法。
@@ -48,6 +52,8 @@
 - 想把 Orchestrator 计划模式直接当稳定方案：作者自认测试不够，只简单项目试过；纯读文件、问问题不会加速。
 - 想配好白名单前就用 Turbo 模式跑复杂任务：原文称会反复触发 1–3 秒云端审核，复杂任务几十次。
 - 想把只读白名单扩大到写操作：先只放列目录、读文件、搜索，写操作保留人工审批，观察是否误放行。
+- 想在生产或多租户环境直接部署 CCC：材料只说明它能跑在本机、接消息入口时要求绝对路径的 Allowed Directory，未给出安全审计、权限模型或多人共用方案；共享场景必须先开 Proxy Authentication 并分发 token。
+- 想用一个 provider 的失败请求同时“试遍”多个 provider 而不承担成本：Fallback Models 明确警告失败请求可能先后触达并消耗多个 provider 的额度。
 
 ## 前置条件
 
@@ -63,6 +69,7 @@
 - Cheap Agent：已安装 Claude Code；Node.js 20+；一个充值了几美元的 API key；项目里有能跑、能覆盖改动的测试套件；每个项目执行一次 `/cheapag:allow` 授权。
 - 做法 K：已安装并可正常登录 Claude Code；能修改 `~/.claude/settings.json`、`~/.claude/agents/`、`~/.claude/CLAUDE.md`；先备份这些文件；先读三页官方文档确认字段与模型标识符：advisor、sub-agents、model-config；原文称顾问模型需要 v2.1.321 或更高，实际门槛以文档为准；某些套餐下 advisor 需要一次性 `/model fable` 接受额度后再 `/model sonnet` 切回。
 - 做法 L：有 Antigravity 使用权限；能同时使用 Gemini、GPT、Claude 等多个模型（作者用 200 美元档订阅，额度条件按你的套餐核对）；能修改项目级规则文件；能打开并核对 agy-fast-io（https://github.com/oil-oil/agy-fast-io）与 oil-dev-skills（https://github.com/oil-oil/oil-dev-skills）仓库；接受非官方插件；至少一个中等规模仓库和两个真实任务（一个 bug 修复、一个小功能）。原文没有给出白名单正文、提示词正文和 swarm 规则正文，执行前必须打开仓库补齐。
+- 做法 M（CCC）：macOS/Linux/Windows 开发机；Python 3.14；uv；至少一个模型提供方的 API key 或 OAuth 账号；本地已能正常运行 Claude Code 等任一编码 agent；默认代理端口 8082 可用。provider 侧还需按类型补条件：OpenAI/ChatGPT、GitHub Copilot 走 OAuth，连接后要重启已运行的 agent；Azure 需 `AZURE_OPENAI_BASE_URL` 完整 v1 endpoint；Vertex 用 ADC（本地执行 `gcloud auth application-default login`）；Bedrock 需与 key 同区域的 `BEDROCK_BASE_URL`；Alibaba 需 key 与 endpoint 同区域；Cloudflare 需 token + account ID。消息入口需 Allowed Channels / User ID 与绝对路径的 Allowed Directory；跨机或共享场景需开启 Proxy Authentication 并分发 token。
 
 ## 操作步骤
 
@@ -195,7 +202,7 @@ litellm --model gpt-4o
 
 **做法 F：在 Claude Code 里做多模型分层——先确认命令，再小范围 A/B**
 
-五个变体都只动会话、启动参数或环境变量，不碰网关；模型名与命令语法在材料里无法核实。执行前先确认你的版本确实存在相应命令、参数或环境变量，否则不要照抄。
+五个变体都只改会话、启动参数或环境变量，不碰网关；模型名与命令语法无法从材料核实。执行前先确认你的版本确实存在相应命令、参数或环境变量，否则不要照抄。
 
 - F1：会话内先 `/model fable`（某些计划下接受计费确认），再 `/advisor fable`，主模型继续工作；做同任务开/不开顾问的 A/B。
 - F2a：会话内尝试 `/model sonnet`、`/advisor opus`；原文是箭头写法 `claude -> model sonnet -> advisor opus`，不要当 shell 命令抄。
@@ -205,7 +212,7 @@ litellm --model gpt-4o
 
 F1–F4 怎么选：目标是别浪费闲置配额，先 F1；目标是让贵模型只出现在判断点，先试 F2b，`--advisor` 不存在再试 F2a；只想让子任务用更轻模型，试 F3；想让 Opus 做顾问、Haiku 做子代理，试 F4。不要混着抄，也不要假设它们能自动叠加。
 
-**做法 G：在 Claude Code 内按窗口/别名路由，并把 429 故障转移钉住（model-relay）**
+**做法 G：在 Claude Code 内按窗口/别名路由，并把 429 故障转移固定（model-relay）**
 
 1. 先把 API key 设成永久环境变量并开新终端：
 
@@ -233,7 +240,7 @@ node tools/setup.mjs set failover.chain backup,local
 node tools/setup.mjs set providers.local.fallback none
 ```
 
-429 时只把请求转给 `failover.chain` 第一个 provider，并把这个会话钉住；默认 cooldown 600000 毫秒、retry.attempts 3。不要把 proxy 模式当无感隧道：Claude Code 跑的命令也会走 relay，router 挂了 git/curl/gh 会失败。
+429 时只把请求转给 `failover.chain` 第一个 provider，并把这个会话固定住；默认 cooldown 600000 毫秒、retry.attempts 3。不要把 proxy 模式当无感隧道：Claude Code 跑的命令也会走 relay，router 挂了 git/curl/gh 会失败。
 
 **做法 H：按工作类型路由并固定 skill/MCP 版本，先用 verdict 记录结果（cedr）**
 
@@ -376,9 +383,9 @@ End with three headings: Changed, Needs me, How to check it works. Under the las
    - 方案与代码 → 让 GPT 做一轮交叉评审，只指出问题，不代写代码。作者理由是 Gemini 系列比较自信，方案和代码经常缺胳膊少腿却自认为不错。
    预期：每个角色只做自己那一段，不让一个模型既写又审。
 
-2. 减少云端审核等待。安装作者的非官方插件 agy-fast-io（https://github.com/oil-oil/agy-fast-io），按仓库说明把纯只读命令（列目录、读文件、搜索）加入免审白名单；写操作保留人工审批。材料没有给出白名单正文和提示词正文，必须打开仓库后照做。在配好白名单之前，不要用 Turbo 模式跑复杂任务；原文称单次云端审核约 1–3 秒，复杂任务会触发几十次，累计几分钟。
+2. 减少云端审核等待。安装作者的非官方插件 agy-fast-io（https://github.com/oil-oil/agy-fast-io），按仓库说明把纯只读命令（列目录、读文件、搜索）加入免审白名单；写操作保留人工审批。材料没有给出白名单正文和提示词正文，必须打开仓库后照着做。在配好白名单之前，不要用 Turbo 模式跑复杂任务；原文称单次云端审核约 1–3 秒，复杂任务会触发几十次，累计几分钟。
 
-3. 加速代码探索。原文称 Antigravity 原生子 Agent 只支持 inherit / flash_lite / flash / pro 四档，不含 Gemini 4 系列；但内部有一个 swarm Skill，相当于多 Agent 协作系统，可派发任意模型（包括 Antigravity 内的 Claude）的子 Agent。做法是把一条项目规则配进去：需要探索代码时走 swarm + Gemini 4 Hydrogen (Low)。作者把这条规则做进了 oil-dev-skills 套件的 oil-explore（https://github.com/oil-oil/oil-dev-skills）；新项目开新话题时靠这条规则加速代码探索。材料没有给出规则正文，需打开仓库后照做。
+3. 加速代码探索。原文称 Antigravity 原生子 Agent 只支持 inherit / flash_lite / flash / pro 四档，不含 Gemini 4 系列；但内部有一个 swarm Skill，相当于多 Agent 协作系统，可派发任意模型（包括 Antigravity 内的 Claude）的子 Agent。做法是把一条项目规则配进去：需要探索代码时走 swarm + Gemini 4 Hydrogen (Low)。作者把这条规则做进了 oil-dev-skills 套件的 oil-explore（https://github.com/oil-oil/oil-dev-skills）；新项目开新话题时靠这条规则加速代码探索。材料没有给出规则正文，需打开仓库后照着做。
 
 4. Orchestrator（计划模式）只作为待验证项。机制是用能力强的模型先探索代码、写方案，再让较便宜的模型（如 Gemini 4 Hydrogen）按方案执行。作者只简单项目试过、自认测试不够，不下结论；原文还指出它对单纯读文件、问问题没有加速，因为读代码全在第一阶段、跑的还是最慢的规划模型。不要直接写进团队默认流程。
 
@@ -386,13 +393,99 @@ End with three headings: Changed, Needs me, How to check it works. Under the las
 
 选择提示：如果你同时有 Gemini、GPT、Claude 多模型，且痛点是主力模型又写又审、读文件慢、审批等待多，先试 L；只读白名单从小开始，Orchestrator 先别上。L 与 A–K 不假设能自动叠加，先分开试。
 
-**做法 A–L 怎么选（短表）**
+**做法 M：本机代理层，把编码 agent 接到任意 provider 并配档位路由与回退（CCC）**
 
-- 跨供应商配额、限流、死 key、工具输出烧 token：先 A。预算红线用 `auto/subscription`；想先榨套餐再降最便宜付费用 `auto/thrifty`；`auto/chaos` 会成倍消耗上游调用。
+定位：CCC 是一个本地运行的代理/路由层（Python 3.14、uv、AGPL-3.0-only，独立项目，与 Anthropic 无隶属关系）。它不改 agent 本身，而是用 `ccc-*` 命令作为客户端适配层。先只做“接一个 provider + 跑通 `ccc-claude`”，不要一上来就配消息入口和本地模型。
+
+1. 安装。前提：Python 3.14、uv、至少一个 provider key 或 OAuth、本地已能跑一个编码 agent。安装器会提示至少选一个编码 agent，可选启用 RTK + Headroom token 优化。预期：安装完成，终端里出现 `ccc-server` 与各 `ccc-*` 命令。
+
+```bash
+curl -fsSL "https://raw.githubusercontent.com/theRizwan/community-claude-code/main/scripts/install.sh" | sh
+```
+
+```powershell
+irm "https://raw.githubusercontent.com/theRizwan/community-claude-code/main/scripts/install.ps1" | iex
+```
+
+2. 启动 CCC。预期：自动打开 Admin UI；Windows/macOS 可从托盘/菜单栏图标打开 Admin、重启、退出。用 `ccc-server` 时终端不能关，关了就停。
+
+```bash
+ccc-server
+```
+
+3. 配置第一个 provider（README 以 NVIDIA NIM 为例）。前提：已在 build.nvidia.com/settings/api-keys 建好 key。步骤：打开服务器日志里的 Admin UI 地址 → Providers → NVIDIA NIM → Add key → 粘贴 → Save → `MODEL` 保持默认 `nvidia_nim/nvidia/nemotron-3-ultra-550b-a55b`，或在下拉里搜索换模型 → 点 Apply 保存模型选择。预期：provider 卡片显示探测到的 endpoint 与响应时间。
+
+4. 打开 Proxy Authentication（Admin → 鉴权设置），之后客户端用该 token 作为 API key。前提：你要跨机、共享，或不想让本机端口裸奔。预期：不带 token 的请求被拒。
+
+5. 用对应命令启动 agent，命令即客户端适配层，无需改 agent 本身：
+
+```bash
+ccc-claude
+ccc-codex
+ccc-pi
+ccc-opencode
+ccc-cline
+ccc-hermes
+ccc-dsh
+ccc-grok
+ccc-muse
+ccc-aider
+ccc-agy   # 需先在 Integrations 页面连接
+```
+
+预期：agent 正常启动，请求经 CCC 转发；`ccc-claude` 里 `/model` 选择器仍可用，但映射到 CCC 侧的模型。
+
+6. 其他 OpenAI 兼容客户端：把 base URL 指向 `http://127.0.0.1:8082/v1`（默认），模型名选 CCC 侧的名字（如 `gemini/models/gemini-3.5-flash-lite`）；若已开 Proxy Authentication，用其 token 当 API key。预期：流式与 JSON 回复均支持。
+
+7. 配回退。位置：Model Config → Fallback Models，按顺序尝试，对所有已连接客户端生效。每条 fallback 可选自己的 reasoning effort（Inherit / Off / From client / Low / Medium / High / X-High / Max）与 API key 序号（Key 1、Key 2…对应 provider 设置里的编号 key，可拖动排序、就地编辑、红色垃圾桶删除）。原文明确警告：失败的请求可能先后触达并消耗多个 provider 的额度。预期：主 provider 失败时请求按顺序落到下一个，同时账单可能落在多个 provider 上。
+
+8. 配 Claude Code 档位路由。`MODEL` 是所有请求的兜底；为 `MODEL_FABLE`、`MODEL_OPUS`、`MODEL_SONNET`、`MODEL_HAIKU` 各选一个模型即可覆盖单个档位，选 None 则回落到 `MODEL`。前提：你已在 Claude Code 里用过 `/model` 并知道四个档位分别对应什么任务。预期：`/model` 切档时实际打到不同上游模型。
+
+9. 配思考强度。位置：Admin UI → Model Config → Model Routing，每个模型旁选 effort。Default Effort 初始为 From client；Fable/Opus/Sonnet/Haiku 初始为 Inherit。语义：From client = 用 agent 发来的 effort，没发就用 provider 默认；Off = 请求关闭推理；Low…Max = 覆盖客户端；Inherit = 档位覆盖用 Default Effort，fallback 保留原请求已解析的 effort。预期：同一模型在“写代码”和“查文档”两类任务上可以给不同 effort。
+
+10. 接自定义/自建端点。位置：Providers → Custom providers → Add provider，填 API base URL、可选 keys、API 格式；Model IDs 留空则自动发现，或每行填一个上游模型 id；保存后在 Model Config 选模型。前提：端点兼容 CCC 支持的 API 格式。预期：模型出现在 Model Config 下拉里。
+
+11. 接本地模型。CCC 启动时自动发现正在跑的本地服务；后启动的点 Admin 里 Refresh models；卡片会显示探测到的 endpoint、响应时间与不可用提示，可点 Test 重刷。选择准则：优先选 tool-capable 模型；本地模型上下文要够装下 agent 的 system prompt 和工具定义。
+    - LM Studio：启动本地 server、加载 tool-capable 模型，用 `lmstudio/` 前缀，默认 `http://localhost:1234/v1`；
+    - llama.cpp：启动带 OpenAI 兼容 Chat Completions 且上下文足够的 llama-server，用 `llamacpp/` 前缀，`LLAMACPP_BASE_URL` 默认 `http://localhost:8080/v1`；
+    - Ollama：`ollama pull llama3.1 && ollama serve`，用 `ollama list` 显示的 tag 加 `ollama/` 前缀，`OLLAMA_BASE_URL` 默认 `http://localhost:11434`。
+    预期：本地模型出现在 provider 卡片里，Test 通过后可被选为 `MODEL` 或 fallback。
+
+12. 接消息入口（可选，位置：Admin UI → Messaging → Apply）。前提：你接受从手机/聊天软件触发本机编码任务，并已设绝对路径的 Allowed Directory。
+    - Discord：Developer Portal 建 bot，开启 Message Content Intent，邀请时给读/发/历史/Manage Messages 权限（供 `/clear` 删用户消息），填 Bot Token、Allowed Discord Channels、绝对路径的 Allowed Directory；
+    - Telegram：@BotFather 建 bot，@userinfobot 取数字 user ID，群里给删消息权限，填 Bot Token、Allowed Telegram User ID、绝对路径 Allowed Directory；
+    - 语音笔记：默认含 NVIDIA NIM 转写（在 Providers 配 key）；本地 Whisper 需重跑安装器加参数：
+
+```bash
+curl -fsSL "https://raw.githubusercontent.com/theRizwan/community-claude-code/main/scripts/install.sh" | sh -s -- --voice-local
+curl -fsSL "https://raw.githubusercontent.com/theRizwan/community-claude-code/main/scripts/install.sh" | sh -s -- --voice-local --torch-backend cu130
+```
+
+```powershell
+& ([scriptblock]::Create((irm "https://raw.githubusercontent.com/theRizwan/community-claude-code/main/scripts/install.ps1"))) -VoiceLocal
+& ([scriptblock]::Create((irm "https://raw.githubusercontent.com/theRizwan/community-claude-code/main/scripts/install.ps1"))) -VoiceLocal -TorchBackend cu130
+```
+
+装完重启 `ccc-server`，在 Messaging → Voice 选 cpu/cuda 与 Whisper 模型；受 gate 的模型需 `HUGGINGFACE_API_KEY`。预期：发一条语音笔记能转成文字并进入会话。
+
+13. 会话控制命令（Discord/Telegram）：`/stats` 查看会话状态；单独 `/stop` 取消全部工作，回复某条消息用 `/stop` 只取消该请求；单独 `/clear` 清空该聊天全部会话与消息，回复式 `/clear` 只删该消息及其回复链。
+
+14. 运维：`ccc-server --version` 只查版本不启动；更新需先停掉所有 CCC 命令再 `ccc-update`（失败则重跑安装命令）；出问题运行 `ccc-doctor` 并把输出贴进 issue。
+
+```bash
+ccc-update
+ccc-doctor
+```
+
+15. 小范围对照。前提：同一小任务、同一提示词、同一代码快照。A 组直接用平时的 Claude Code 直连；B 组 `ccc-claude` 走 CCC，并只配一个 fallback。各跑 2–3 次，记录是否跑通、工具调用是否正常、流式是否正常、失败后是否真的回退、以及消耗了哪些 provider 的额度。不要在没跑通第 5 步前就配第 7 步的回退链。
+
+**做法 A–M 怎么选（短表）**
+
+- 跨供应商配额、限流、死 key、工具输出消耗大量 token：先 A。预算红线用 `auto/subscription`；想先耗尽套餐额度再降到最便宜付费用 `auto/thrifty`；`auto/chaos` 会成倍消耗上游调用。
 - 已在用 Codex、想让常规任务别总调最重模型，并用确定性 grader 验收：先 B。
 - 想让多个工具从一个面板统一改配置、先拿免注册免费模型打通：做 C。
 - 痛点是不知任务该交给哪个 harness/模型/effort，或想按会话看成本与上下文：先 D。
-- 想先在 Python 代码里收敛多 provider 调用，或需要按项目/用户成本追踪：做 E；E1 只动代码，E2 起网关后才碰端口和密钥。
+- 想先在 Python 代码里统一多 provider 调用，或需要按项目/用户成本追踪：做 E；E1 只动代码，E2 起网关后才碰端口和密钥。
 - 日常用 Claude Code、另有闲置模型配额：先 F1。
 - 日常用 Claude Code、对成本敏感、想让贵模型只出现在判断点：先 F2b，`--advisor` 不存在再试 F2a。
 - 只想让子任务用更轻模型：先 F3。
@@ -403,7 +496,8 @@ End with three headings: Changed, Needs me, How to check it works. Under the las
 - 同时推进多个互不干扰任务，想按是否动架构选模型并管理换模型上下文：试 J。
 - 你已经在 Claude Code 里，愿意改用户级配置，并接受先备份、看 diff、再应用：先试 K。K 与 F1–F4 不同：K 不是单条启动命令，而是三个文件的用户级配置；材料未说明它能与 F1–F4 或 A–J 自动叠加，先分开试。
 - 同时有 Gemini、GPT、Claude 多模型，想按任务类型分模型、用另一家模型交叉评审、用廉价子 Agent 探路、用只读白名单减少审批等待：先试 L。白名单只放只读命令，Turbo 模式先别跑复杂任务；Orchestrator 只当待验证项。
-- A 和 C 默认都用 20128，先选一个跑通；E 默认 4000，model-relay 默认 8950，不撞端口不代表能自动叠加。
+- 你不想改 agent 本身、只想换 provider / 按档位换模型 / 配回退链，且能接受一个 42 star 的独立项目做本机代理：先试 M 的第 1–5 步，跑通再配第 7–9 步。想要消息入口或本地模型再走第 11–12 步。M 与 A/C 都可能占本机端口，但 M 默认 8082，与 20128 不冲突；材料未说明 M 能与 A–L 自动叠加，先分开试。
+- A 和 C 默认都用 20128，先选一个跑通；E 默认 4000，model-relay 默认 8950，M 默认 8082。不撞端口不代表能自动叠加。
 
 ## 怎么判断变好了
 
@@ -421,6 +515,7 @@ End with three headings: Changed, Needs me, How to check it works. Under the las
 - J：选 5–8 个真实编码任务，动手前各打 `动架构`/`不动架构` 标签；记录中途换模型次数、换模型后重新交代背景次数、单任务墙钟时间、返工轮次、架构类改动事后返工率。1–2 周后没有改善，或 `/compact` 导致的重复解释代价大于收益，就降级为只保留“按架构相关性选模型”的思路。
 - K：先只做验收，不做效果承诺：重启后确认 Claude Code 以 Sonnet 启动、`/advisor` 显示 fable、`/agents` 列出 checker（opus）与 Explore（haiku）；跑一个日常任务，确认顾问被调用时出现 `Advising` 行、`Ctrl+O` 能看到建议、`/usage` 能读到成本。然后选 3–5 个真实任务，默认单模型 vs K 各跑一次，记录返工次数、总 token/费用、端到端耗时、顾问实际介入次数、checker 是否发现真实问题、Explore 是否减少主模型检索 token。只有质量不降且成本下降，或返工明显减少且成本可接受，才保留；若字段/显示项不存在、顾问几乎不介入、checker 只复述构建结果、或成本上升而返工未减少，就回滚。
 - L：先只读白名单从小开始，只放列目录、读文件、搜索；写操作保留人工审批，观察是否误放行。用两个真实任务各跑 2–3 次：A 组单模型 Gemini 直接做；B 组 Gemini 写 + GPT 只做一轮评审 + 探索阶段先用廉价子 Agent。记录任务总耗时、审批次数与累计等待秒数、评审指出的问题数与被采纳数、返工轮次、每任务额度消耗、一周额度是否够用。判断：审批等待明显下降且返工轮次不上升，才算通过；若 GPT 评审采纳率很低、问题重复已知，就降级为仅思路参考；Orchestrator 先在玩具项目上对比同一任务的耗时与失败率，再决定是否进入正式流程。
+- M：分三层验收，不要一次全上。第一层（半天）：装好、`ccc-server` 起得来、Admin UI 打得开、`ccc-claude` 用默认 `MODEL` 跑通一个小任务，工具调用与流式都正常。第二层（2–3 天）：配一条 fallback，人为制造一次失败（用错的 key 或不可达端点），确认请求按顺序落到下一个 provider；同时记录到底消耗了哪几家额度。第三层（1–2 周）：同一批 5–10 个真实任务，A 组直连、B 组 `ccc-claude` 走 CCC 并配档位路由（`MODEL_*`）与 effort，记录是否跑通、中断次数、人工切模型次数、总 token/费用、端到端耗时、返工次数、`/stats` 里看到的会话状态。判断：中断或人工切换次数下降，且质量不降，才继续；若 `ccc-doctor` 频繁报错、fallback 把账单推到多家 provider、或 `MODEL_*` 映射后 `/model` 档位行为与预期不符，就退回只接一个 provider 的用法。材料没有给出 CCC 的试用时长与量化数据，以上时长为本文建议，按你的额度调整。
 
 ## 常见坑
 
@@ -429,14 +524,14 @@ End with three headings: Changed, Needs me, How to check it works. Under the las
 - 把 F4 的 `claude --advisor opus --subagents haiku` 当成完整三模型方案。原文只给一条启动命令，Haiku 职责在“Haiku 5.5 …”处截断，advisor 触发时机与子代理派发规则都没有。
 - 把 F4 与 F2b 混同。F4 没有显式 `--model sonnet`，多了 `--subagents haiku`；F2b 显式设主模型并只挂 advisor。先分开试。
 - 在未确认 `--subagents` 存在时照抄 F4。先 `claude --help` 或 `/help` 确认参数；不存在就停。
-- 把 Cheat Agent 当“装上就省钱”。它依赖可运行测试和书面短任务；无测试、极小任务、最难 bug 可能无收益或略差。
+- 把 Cheap Agent 当“装上就省钱”。它依赖可运行测试和书面短任务；无测试、极小任务、最难 bug 可能无收益或略差。
 - 未执行 `/cheapag:allow` 就以为代码已外发，或反过来没注意已经授权。不要把 API key 粘到聊天里；用 `npx cheap-agent login` 在终端输入。
 - 以为 Cheap Agent 会 commit/push。它从不 commit 或 push，改动未提交，必须人工审 diff。
 - 把 OmniRoute 当零凭证必然可通。新调研的 README 要 Authorization 头，且全新安装可能没有可用 keyless 目标。安装/首次运行章节被截断，执行前回 README Quick Start 补齐。
 - 照抄 OmniRoute 的 combo 策略表。本次原文在策略表第 3 条处被截断，round-robin 及后续策略语义不完整。
 - 把 `auto/subscription` 和 `auto/thrifty` 混用；有预算红线就用 subscription。把 `auto/chaos` 当故障注入也不对，它是并行 fan-out，会成倍消耗配额。
 - 忘记 OmniRoute 是单点：它挂了所有客户端一起挂；保留直连回退路径。只信 dashboard 也不行，savings 卡片不等于你自己的 p95 和账单。
-- 端口撞车：OmniRoute 与 FlagshipRouter 默认都监听 localhost:20128；LiteLLM 默认 4000，model-relay 默认 8950。
+- 端口撞车：OmniRoute 与 FlagshipRouter 默认都监听 localhost:20128；LiteLLM 默认 4000，model-relay 默认 8950，CCC 默认 8082。
 - FlagshipRouter 默认面板密码是 123456；建议先用 `--host 127.0.0.1` 只本地监听，并先改密码。README 自陈测试套件带已知失败，不要当自己装坏了。
 - 拿 README 的示例模型名当真实模型：FlagshipRouter 的 `gpt-6-astra` 只是示例。CLI Tools 页面会代替你写工具配置，可能覆盖原配置，先记录原配置。
 - 照抄 Gluon 的路由配置；给定材料只是 README landing page，细节在 docs。Gluon 安装方式是用管道执行远端脚本，材料没有给出校验步骤；先在非关键、已纳入版本控制的仓库里试。
@@ -448,7 +543,7 @@ End with three headings: Changed, Needs me, How to check it works. Under the las
 - 以为装了 model-relay 就自动把请求导出去。不加 alias，haiku 及所有请求默认留在 Claude；在已经跑着 Claude Code 的 shell 里 export key 也不一定生效，要写成永久变量并开新终端。
 - 在任意目录直接跑 `node tools/setup.mjs`。手动路径要在插件安装目录里跑。
 - 拿只会 OpenAI Chat Completions 的端点直接接 model-relay；它要求 provider 能接 Anthropic `/v1/messages`。
-- 把 429 故障转移理解成“全局切换”。429 时只把请求转给 `failover.chain` 第一个 provider，并把这个会话钉住。
+- 把 429 故障转移理解成“全局切换”。429 时只把请求转给 `failover.chain` 第一个 provider，并把这个会话固定住。
 - 把 proxy 模式当无感隧道。Claude Code 跑的命令也会走 relay 当盲隧道，router 挂了它们就失败。
 - 从 0.6 及更早版本升级只更新插件。0.7+ 只读 `"format": 2`，要迁移。
 - 把 cedr 当稳定标准。它处于 preview；用量接入只具体说明 claude-statusline 与 codex 两种 kind；Council 的报告格式、quorum 默认值、merge 输入形态需读 docs；`cedr route sync` 会外发数据，默认不要开；`cedr lock` 只有传 `--introspect` 时才真正运行 MCP server。示例输出里的百分比是演示样例，不是实测结论。
@@ -462,14 +557,24 @@ End with three headings: Changed, Needs me, How to check it works. Under the las
 - 把只读白名单配成“什么都免审”。先只放列目录、读文件、搜索，写操作保留人工审批，观察是否误放行。
 - 以为原生子 Agent 能用 Gemini 4。原文称只有 inherit / flash_lite / flash / pro 四档，不含 Gemini 4 系列；要用 swarm Skill 派发，规则正文在仓库里，材料未给出。
 - 照抄 Orchestrator 计划模式。作者自认测试不够，只简单项目试过；纯读文件、问问题不会加速，因为读代码全在第一阶段、跑的还是最慢的规划模型。
-- 把跨厂商评审当自动质量保证。原文没有量化数据；GPT 评审若采纳率低、问题重复已知，就降级为仅思路参考，不要当强制门禁。
+- 把跨厂商评审当自动质量保证。原文没有量化数据；GPT 评审若采纳率低、问题重复已知，就降级为仅思路参考，不要当强制校验门槛。
 - 忽略订阅条件。作者用 200 美元档订阅，重度开发 + Codex review 下周额度最后一两天仍需额外做点重活才用得完；你的套餐额度不同，不能照搬。
+- 把 CCC 当“Claude Code 全部模型免费用”。材料里这个主张可疑；可核实的只有安装脚本、`ccc-*` 命令、Admin UI 配置项与运维命令。先用你自己的 key 跑通，再谈省钱。
+- 照抄 CCC README 里的模型 id。示例 `nvidia_nim/nvidia/nemotron-3-ultra-550b-a55b`、`gemini/models/gemini-3.5-flash-lite` 等在材料中无法独立核对；先在下拉里确认存在再选。
+- 以为配了 Fallback Models 就是免费重试。失败请求可能先后触达并消耗多个 provider 的额度；回退链越长，单次失败的成本可能越高。
+- 把 CCC 的 `MODEL_*` 档位路由当 Claude Code 官方行为。它是 CCC 侧的映射；`/model` 能否真的切到对应上游，取决于 CCC 版本与配置是否正确。
+- 没开 Proxy Authentication 就把端口暴露给局域网。默认 `127.0.0.1:8082` 是本机；跨机或共享场景先开鉴权，再分发 token。
+- 用不满足上下文要求的本地模型。本地模型上下文要够装下 agent 的 system prompt 和工具定义，否则工具调用会莫名其妙失败；优先选 tool-capable 模型。
+- 在 `ccc-server` 的终端里按 Ctrl+C 之后以为服务还在。用 `ccc-server` 启动时要保持终端不关；Windows/macOS 可用托盘/菜单栏图标管理。
+- 不停旧进程就 `ccc-update`。更新前先停掉所有 CCC 命令；更新失败就重跑安装命令，别在半更新状态下继续用。
+- 消息入口填相对路径。Allowed Directory 必须是绝对路径；Discord 还要开 Message Content Intent 和删消息权限，否则 `/clear` 不工作。
+- 把 CCC 的 42 star 当成成熟度证明或反证。它只是元信息；先小范围自测，再决定是否进团队默认流程。
 
 ## 证据与来源
 
 本节区分可照做的操作、项目自述数据和材料边界。所有效果数字都需要自测；本手册只把可复制的命令、配置和提示词当作操作依据，把项目自述数字和作者主张当作待验证信息。
 
-- Cheap Agent：可照做的有 npm 包 cheap-agent、`npx cheap-agent`、Claude Code 代为安装的提示词、`/cheapag:allow`、`/cheapag:status`、`/cheapag:hook on`、`cheapag.json` 的 takeover/limits.max_turns/models、更新与卸载命令。作者自报但无第三方复核的数据：demo 同一提示下纯 Claude Code 233k Opus token，加 Cheap Agent 132k，廉价模型花费 $0.007；同一功能纯 Claude Code 154k / 5 轮，加 Cheap Agent 57k / 2 轮，均通过全部测试；SWE-bench Verified 日常 7 个 bug 1.6M→655k，双方 7/7；最难 9 个 3.0M→1.3M，6/9 对 7/9。作者承认最难一档略逊、极小任务没有收益、Windows 为 beta、所有数字都是单方单次运行，没有样本量/重复次数/随机性控制；本次材料只有 README，未查看源码。
+- Cheap Agent：可照做的有 npm 包 cheap-agent、`npx cheap-agent`、Claude Code 代为安装的提示词、`/cheapag:allow`、`/cheapag:status`、`/cheapag:hook on`、`cheapag.json` 的 takeover/limits.max_turns/models、更新与卸载命令。作者自报但无第三方复核的数据：demo 同一提示下纯 Claude Code 233k Opus token，加 Cheap Agent 132k，廉价模型花费 $0.007；同一功能纯 Claude Code 154k / 5 轮，加 Cheap Agent 57k / 2 轮，均通过全部测试；SWE-bench Verified 日常 7 个 bug 1.6M→655k，双方 7/7；最难 9 个 3.0M→1.3M，6/9 对 7/9。作者承认最难一档略逊、极小任务没有收益、Windows 为 beta、所有数字都是单方单次运行，没有样本量、重复次数、随机性控制；本次材料只有 README，未查看源码。
 - OmniRoute：可照做的有 npm 包 omniroute、Docker 镜像、默认端点 `http://localhost:20128/v1`、Dashboard → Endpoints 取 key、auto 别名表、`/dashboard/free-tiers`、`tos: avoid` 默认排除。项目自述但未验证的有 375 个 provider、1475 个 chat 模型 ID、MCP 110 工具、压缩省 15–95% 等；材料在策略表第 3 条处截断，安装/首次运行、combo 完整策略和压缩配置不完整。
 - agent-smith：可照做的有 `codex plugin marketplace add .`、`codex plugin add adaptive-router@agent-smith`、`Use $adaptive-route for this task: …`、离线 benchmark demo/report、unittest 命令、Float 构建。原文给出 6 个公开合成任务 × 三种策略 × 单次尝试的表：Fixed Astra 102,162 token / $1.237460；Fixed 6.1 Sol 105,285 / $0.1921092；Local router 101,392 / $0.1621807。作者称相对 Fixed Astra 参考成本少 86.89%、实际 token 少 0.75%，但这是单次选择器实验，USD 是冻结参考价，不是 Codex 订阅账单。
 - FlagshipRouter：可照做的有 `git clone`、`npm run launch`、`--host 127.0.0.1`、Endpoint & Key、Models、CLI Tools、providers 策略 JSON、测试命令。只有仓库元信息，没有性能、成本、质量或用户案例数据；测试套件带已知失败，示例模型名不是真实可用模型。
@@ -484,8 +589,9 @@ End with three headings: Changed, Needs me, How to check it works. Under the las
 - cedr：可核对的操作性内容有安装命令与平台矩阵、routes.toml 样例、statusLine JSON、`cedr route pick/verdict`、`cedr route stats/pools/list`、`cedr council plan/merge`、`cedr lint/lock/verify` 与 `--introspect` 警告。只是作者主张、没有证据的是：路由“挑得对”、Council 能提高评审质量、锁文件能防住真实风险；原文没有效果数据、案例研究或对比实验，仓库仅 42 stars、单一组织维护、preview 阶段，示例输出里的百分比是演示样例。
 - J：可照做的有把编码收敛到 Claude Code 一个入口、用 Herdr 管多个 session（原文未给 Herdr 命令）、按“动架构/不动架构”打标签、动架构用 Fable、不动架构用 Opus、长途换模型前先 `/compact` 再 `/model`。原文在“- 不用”处截断，第 5 条缺失；Fable/Opus 的名称、版本、可用性无法核实；只有作者个人几个月的工作习惯陈述，推文 69 赞、8 回复，没有指标、对比或结果数据。
 - K（@0xCodila）：可照做的是一条完整配置 prompt，要求把 Claude Code 配成用户级四模型团队，并落到 `~/.claude/settings.json`（主模型 sonnet、`advisorModel` fable、env `CLAUDE_CODE_SUBAGENT_MODEL` haiku）、`~/.claude/agents/checker.md`（model opus，只测试/挑错、不编辑）、`~/.claude/agents/Explore.md`（name Explore、model haiku、只读工具、顶替内置 Explore）、`~/.claude/CLAUDE.md`（顾问/检查/检索/写代码子代理/小任务的行为规则）。原文还给出验收方式：重启后 Claude Code 以 Sonnet 启动、`/advisor` 显示 fable、`/agents` 列出 checker 与 Explore；顾问被调用时出现 `Advising` 行、`Ctrl+O` 看建议、`/usage` 看成本。材料边界：它引用的 Sonnet 5.5 / Fable 5.2 / Opus 5.5 / Haiku 5.5 与版本号 v2.1.321 无法核实；作者没有给出任何效果数据；字段、文件格式、模型标识符必须以官方 advisor / sub-agents / model-config 三页为准；这是用户级改动，会影响所有项目，必须备份、合成 diff、确认后应用。
-- L（@I_am_oil_oil）：可照做的有按任务类型分配模型（Gemini 写、GPT 评审、Claude 管复杂分支和版本）、安装 agy-fast-io 并整理只读白名单、用 swarm + Gemini 4 Hydrogen (Low) 做代码探索、oil-explore 规则；原文给出的等待数据是单次云端审核约 1–3 秒、复杂任务可能几十次、累计几分钟；原生子 Agent 只有 inherit / flash_lite / flash / pro 四档且不含 Gemini 4 系列；作者用 200 美元档订阅，重度开发 + Codex review 下周额度最后一两天仍需额外做点重活才用得完。仅为作者主张、无验证的是 Carbon 优于 Argon 且消耗相近、Claude 更缜密、Hydrogen 能解决读文件慢、GPT 评审搭配效果好。材料边界：强绑定 Antigravity 和特定订阅；模型名按作者叫法（Gemini 4 Argon/Carbon/Hydrogen、Claude Opus 5.5）无法独立核对；两个仓库的白名单、提示词和 swarm 规则正文未出现在材料中；Orchestrator 作者自认测试不足；没有量化指标，需自行设计验证。
-- 材料边界：这些项目、F3 推文、J 推文、@0xVeyyro 推文、@wanerfu 推文、@0xCodila 推文、@I_am_oil_oil 推文以及各 Claude Code 扩展的材料都未说明可以互相集成；同时安装或叠加配置时不要假设请求一定经过你以为的那一层。
+- L（@I_am_oil_oil）：可照做的有按任务类型分配模型（Gemini 写、GPT 评审、Claude 管复杂分支和版本）、安装 agy-fast-io 并整理只读白名单、用 swarm + Gemini 4 Hydrogen (Low) 做代码探索、oil-explore 规则；原文给出的等待数据是单次云端审核约 1–3 秒、复杂任务可能几十次、累计几分钟；原生子 Agent 只有 inherit / flash_lite / flash / pro 四档且不含 Gemini 4 系列；作者用 200 美元档订阅，重度开发 + Codex review 下周额度最后一两天仍需额外做点重活才用得完。仅为作者主张、无验证的是：Carbon 优于 Argon 且消耗相近、Claude 更缜密、Hydrogen 能解决读文件慢、GPT 评审搭配效果好。材料边界：强绑定 Antigravity 和特定订阅；模型名按作者叫法无法独立核对；两个仓库的白名单、提示词和 swarm 规则正文未出现在材料中；Orchestrator 作者自认测试不足；没有量化指标，需自行设计验证。
+- M（theRizwan/community-claude-code）：可照做的有 Linux/macOS 的 install.sh 与 Windows 的 install.ps1、`ccc-server`、Admin UI 的 Providers/Model Config/Messaging 配置路径、`ccc-claude`/`ccc-codex`/`ccc-pi`/`ccc-opencode`/`ccc-cline`/`ccc-hermes`/`ccc-dsh`/`ccc-grok`/`ccc-muse`/`ccc-aider`/`ccc-agy` 启动命令、OpenAI 兼容 base URL `http://127.0.0.1:8082/v1`、Fallback Models 的 effort 与 key 序号选项、`MODEL_FABLE/OPUS/SONNET/HAIKU` 档位覆盖、Default Effort 与 From client/Off/Low…Max/Inherit 的语义、Custom providers 的 Model IDs 自动发现、LM Studio/llama.cpp/Ollama 的默认 base URL 与前缀、Discord/Telegram 的权限与绝对路径要求、本地 Whisper 的安装参数、`/stats`/`/stop`/`/clear`、`ccc-server --version`/`ccc-update`/`ccc-doctor`。材料给出的条件清单属于可核对的配置前提：OAuth 连接后需重启 agent、Azure 需完整 v1 endpoint、Vertex 用 ADC、Bedrock 与 key 同区域、Alibaba key 与 endpoint 同区域、Cloudflare 需 token + account ID。材料边界与待验证项：项目仅 42 star，独立项目、与 Anthropic 无隶属关系；Python 3.14 + uv + AGPL-3.0-only；“Claude Code 全部模型免费用”与示例模型 id 可疑，材料未给独立核对；token 节省“up to 90%”没有评测方法与数据；没有性能、质量、稳定性对比或用户案例；Fallback 的额度消耗警告是原文明确写出，但没有给量化数据；消息入口的权限模型、多人共用、安全审计未说明。本文的试用分层与时长是建议，不是材料数据。
+- 材料边界：这些项目、F3 推文、J 推文、@0xVeyyro 推文、@wanerfu 推文、@0xCodila 推文、@I_am_oil_oil 推文、CCC README 以及各 Claude Code 扩展的材料都未说明可以互相集成；同时安装或叠加配置时不要假设请求一定经过你以为的那一层。
 
 ## 依据的调研
 
@@ -508,3 +614,4 @@ End with three headings: Changed, Needs me, How to check it works. Under the las
 - [@wanerfu: Anthropic 刚分享了 Claude Code 的一个超好用技巧。](../research/radar/2026-11-09/11772-anthropic-claude-code.md)：值得一试，先把 `claude --advisor opus --subagents haiku` 作为实验组，与只用单个模型的会话做同任务对照，记录 token 消耗和返工次数，再决定是否把它定为固定启动方式。因为原文只提供了一条启动命令和“输出更好、更省 token”的主张，正文被截断，量化数据、成本边界和适用条件都缺失，不足以直接采用。
 - [@0xCodila: Antrhopic's cheat code:](../research/radar/2026-11-13/12937-antrhopic-s-cheat-code.md)：值得一试，把这条 prompt 当作模板，而不是逐字照抄的脚本：先到 Anthropic 官方 advisor / sub-agents / model-config 三页核对字段与当前可用模型名，把四个角色（构建、顾问、检查、检索）替换成你账号里真实存在的模型，再在一个非关键项目里按同一条 prompt 的流程装配一遍。理由是它给出了可直接复制的三件套（settings.json 字段、~/.claude/agents/*.md、CLAUDE.md 触发规则）和验收方式，但模型名与版本号无法从材料核实，且作者没有给出任何效果数据。
 - [@I_am_oil_oil: 最近非常高强度地使用了 Antigravity 和 Gemini 模型，说说自己的感受和一些实用技巧：](../research/radar/2026-11-13/13154-antigravity-gemini.md)：值得一试，可以把“用不同厂商的模型交叉评审、用便宜快速的子 Agent 先探索代码、把只读命令加入白名单、减少审批等待”这组做法小范围试起来；但插件与提示词的具体内容只在链接里，原文没有给出，所以只能按粗流程试，细则需要打开仓库后再补。
+- [theRizwan/community-claude-code](../research/radar/2026-11-14/13241-therizwan-community-claude-code.md)：值得一试，按 Quick Start 装好 CCC，先用 ccc-claude 接一个已有 key 的 provider 在同一小任务上跑通，再配 Fallback Models 与 Proxy Authentication 做对比测试；这是材料中唯一给出“把 Claude Code 这类编码智能体接到任意 OpenAI 兼容模型、同时保留流式/工具调用/思考”的完整可照做步骤的方案，但项目仅 42 star、部分模型 id 与“Claude Code 全部模型免费用”的主张可疑，需先小范围自测再决定是否进手册。
