@@ -1,14 +1,14 @@
-# 离开工位后继续推进本地编码会话：手机接管、审批与核查
+# 离开工位后接管、监督并解锁本地编码 agent 会话
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：解决离开工位或切换设备时，如何让手机接管本地正在运行的编码 agent 会话，并仍能审批命令、核对改动，而不是在云端重开一个没有上下文的白板会话。
-> 先试这一步：先做一次最小验证：在本地会话里植入只有该会话知道的信息，用 `/rc` 扫码接管后追问它，确认上下文是否真的连续；若 `/rc` 不可用，再考虑用自托管 CodeRail 做受控试点。
-> 最近修订：2026-10-31
+> 解决的问题：在不丢失本地上下文的前提下，从手机或另一台机器接管、监督并解锁正在运行的编码 agent 会话，并区分轻量接管、受控远程操作与跨机器看板三种做法。
+> 先试这一步：先做最轻的验证：在本地 Claude Code 会话中植入一条只有该会话知道的信息，输入 `/rc` 后用手机扫码追问；若当前版本没有 `/rc`，再改用受信任局域网内的 SITREP 模拟器验证看板。
+> 最近修订：2026-11-13
 
 ## 解决什么问题
 
-离开工位、开会或通勤时，不想在云端重开一个没有上下文的白板会话，而是让手机接管本地正在运行的编码 agent 会话，并继续推进任务。这里有两类做法：做法 A 用 Claude Code 的 `/rc` 扫码接管同一段本地会话，重点是“本地进程不杀”和上下文连续；做法 B 用自托管的 CodeRail 把本地 `claude`/`codex` 接到自己的服务器，在浏览器或手机上查看会话、批准/拒绝命令、开终端、读写文件、做 git 操作，重点是远程控制、权限与审计。两者都不改变“本地电脑上跑 agent”这一点，区别是 A 更轻、只验证接管连续性；B 更重、补上跨机器、多角色和审批留痕。
+离开工位、开会或通勤时，不想在云端重开一个没有上下文的白板会话，而是让手机或另一台机器接管、监督并解锁本地正在运行的编码 agent 会话。做法 A 用 Claude Code 的 `/rc` 扫码接管同一段本地会话，重点是“本地进程不杀”和上下文连续；做法 B 用自托管 CodeRail 把本地 `claude`/`codex` 接到自己的服务器，在浏览器或手机上查看会话、批准/拒绝命令、开终端、读写文件、做 git 操作，重点是远程控制、权限与审计；做法 C 用自托管 SITREP 把多台机器上的 Claude Code/Codex 会话汇总成一个实时看板，重点是从“待人/卡住/失败”视图里发现并解锁会话，而不是控制终端。三者都不改变“本地电脑上跑 agent”这一点：A 最轻，只验证接管连续性；B 是控制与审批层；C 是跨机器监督与解锁层。
 
 ## 适用与不适用
 
@@ -19,12 +19,14 @@
 - 本地终端里的 agent 会话能持续存活、不被杀掉。
 - 做法 A：当前 Claude Code 版本支持 `/rc`，终端出现可扫码入口；愿意先做一次最小验证。
 - 做法 B：有自控服务器和域名，能把 HTTPS 反代到 8080；工作机是 macOS/Linux，且已各自登录 `claude`/`codex`；团队规模小、能强制最小权限；能接受“服务器保存全部会话历史”（非端到端加密）。
+- 做法 C：有受信任局域网和一台常开 macOS/Linux 服务器；在 1–2 台 macOS/Linux 开发机上运行 Claude Code 2.1.287+ 或 Codex 0.162+；只需要单人监督与解锁，不需要看板直接控制终端；能接受 7487 端口是明文 HTTP。
 
 不适用或暂不适用：
 
 - 本地进程无法长期存活，例如终端关闭、笔记本休眠或进程被杀。
 - 做法 A：当前版本没有 `/rc`，或终端没有出现扫码入口；原文在“手机扫码接管 →”处截断，扫码后的流程、版本前提、账号/网络条件都未给出，不能把未验证部分写成团队标准。
 - 做法 B：无法自托管、需要端到端加密、或需要 Windows 工作机；不能接受服务器持有全部历史；不愿意承担 0.0.1 early 的成熟度风险。
+- 做法 C：需要把看板暴露到公网、使用不可信网络、需要多人协作权限模型，或需要从看板启动/停止/重启会话、控制终端；这些都不适合直接用 SITREP。Windows 未支持/未验证；Hermes 会话只展示、不能回答；回答 Codex 会话还依赖该机器上的 Codex managed daemon。
 - 还没有做过最小试用，就想把任一做法写进团队标准操作。
 
 ## 前置条件
@@ -45,13 +47,24 @@
 - 上线前阅读安全模型：`docs.coderail.codes/reference/security`；README 明确写了“不是端到端加密，历史存在你的服务器上”，服务器本身的安全等级就是全部工作内容的安全等级。
 - 版本状态：`0.0.1 early`，49 stars，Apache 2.0，macOS + Linux（Windows 只在 `docs/windows.md` 提到 handoff），仓库明确不接受 PR。这些是成熟度与维护模式的风险提示，不是效果证据。
 
+做法 C：
+
+- macOS 或 Linux，安装 git；README 说明未在 Windows 上运行过。
+- 服务器需要 Node 24；其他机器需要 Node 22.15 或更高。
+- Claude Code 2.1.287 或更高；Codex 0.162 或更高；回答 Codex 会话还需要该机器上的 Codex managed daemon。
+- Hermes 需要 Docker，其 reporter 是 sidecar 容器。
+- 面向受信任局域网中的单人使用；端口 7487 是明文 HTTP，能访问该端口的人可读取所有会话；回答需要 admin secret 登录。
+- 服务器要常开、各机器网络可达；安装脚本接入 Claude/Codex 报告；如果使用主机名访问，主机名必须先列入 `SITREP_ALLOWED_HOSTS`。
+- 版本状态：项目仅 45 stars，较新；仅支持 macOS/Linux；原文是 GitHub README，不是完整文档，更细操作在 TUTORIAL、HOW-IT-WORKS、OPERATIONS 等链接中但未提供正文。
+
 ## 操作步骤
 
 怎么选：
 
 - 只想验证“手机能不能接管同一段本地会话”，且当前版本有 `/rc`：先做做法 A。
-- 需要跨机器、多角色、手机审批、审计留痕，且有自控服务器：做做法 B。
-- 两者不互斥：A 是轻量验证，B 是叠加在 Claude Code / Codex 外面的远程控制与权限层；B 不替代本地用 Claude Code 的方式。先做 A 的最小验证，再决定是否上 B。
+- 需要跨机器、多角色、手机审批、审计留痕，且要能开终端、读写文件、做 git 操作：做做法 B。
+- 需要一个人同时盯着多台机器上的多个 Claude Code/Codex 会话，先看哪些在等人、哪些卡住或失败，并在看板上回答权限请求、问题、计划，或发消息、`/compact`、`/clear`：做做法 C。
+- 做法 C 不控制终端、不启动/停止/重启会话、不存储 transcript；如果你需要的是“远程操作终端和文件”，选 B 而不是 C。三者可以叠加：A 做轻量接管验证，C 做跨机器监督与解锁，B 做控制、审批与审计。先做 A 的最小验证，再决定是否上 B 或 C。
 
 ### 做法 A：用 `/rc` 让手机接管本地 Claude Code 会话
 
@@ -124,6 +137,53 @@ cd bridge && bun src/main.ts link http://localhost:8787 --no-service
 
 9. 上线前必读：`docs.coderail.codes/reference/security` 的安全模型。README 明确写了“不是端到端加密，历史存在你的服务器上”，所以服务器本身的安全等级就是全部工作内容的安全等级。预期结果：你能明确回答“服务器被入侵会泄露什么”；如果答案不可接受，就不要上生产。
 
+### 做法 C：用自托管 SITREP 做跨机器会话看板
+
+最小试用顺序：先在单机跑模拟器，确认卡片/列表/图、Needs you、Problems、回答和成本展示符合预期；再在一台常开服务器和 1–2 台真实运行 Claude Code（如有 Codex 则一并）的开发机上安装。只在受信任局域网试用，不暴露到公网。
+
+1. 先用两分钟模拟器跑通。前提：已安装 git 和 Node 24。模拟器代替真实 agent。预期结果：本地起服务端和看板，模拟器生成多机器、多会话和混乱状态，用来检查看板是否可读。命令：
+
+```sh
+git clone https://github.com/IluvatarLabs/sitrep ~/sitrep && cd ~/sitrep
+npm ci
+npm run dev        # the server on :7487, the dashboard on http://localhost:5173
+```
+
+在第二个终端：
+
+```sh
+cd ~/sitrep
+npx tsx scripts/sim.ts --sessions 8 --codex 0.4 --machines 3 --chaos
+```
+
+2. 安装服务器。前提：选一台常开的 macOS/Linux 机器，安装 git、Node 24。先 dry run，确认打印出的文件和命令，再加 `--apply`。预期结果：安装后它以用户服务运行，并把 admin secret 写到 `~/.sitrep/server.env`；打开 `http://<server IP>:7487`。README 提醒用 IP 地址，主机名必须先列入 `SITREP_ALLOWED_HOSTS`。命令：
+
+```sh
+git clone https://github.com/IluvatarLabs/sitrep ~/sitrep && cd ~/sitrep
+npm ci && npm run build
+npx tsx scripts/install.ts --server --bind 0.0.0.0            # dry run: prints every file and command
+npx tsx scripts/install.ts --server --bind 0.0.0.0 --apply
+```
+
+3. 添加运行会话的机器。前提：在每台运行会话的机器上安装 git、Node 22.15 或更高；只在运行 Codex 的机器上构建 codex-reporter。仪表盘的 Machines → Add a machine 会给出填好服务器地址的命令。预期结果：机器接入，会话出现在看板；安装不会改动你自己的 hooks。命令：
+
+```sh
+git clone https://github.com/IluvatarLabs/sitrep ~/sitrep && cd ~/sitrep && npm ci
+npm run build -w codex-reporter                               # only where Codex runs
+npx tsx scripts/install.ts --claude --codex --url http://<server IP>:7487 --token-stdin --apply
+```
+
+粘贴 admin secret，然后按 Ctrl-D。未安装 Claude Code 或 Codex 时，省略 `--claude` 或 `--codex`。
+
+4. 自检与卸载。前提：安装后先自检；卸载前先看默认清单。预期结果：`doctor.ts` 能定位常见安装问题；`uninstall.ts` 默认列出将移除的内容，加 `--apply` 才真正移除。命令：
+
+```sh
+npx tsx scripts/doctor.ts
+npx tsx scripts/uninstall.ts --claude --codex --server
+```
+
+5. 日常使用。前提：只在受信任局域网内使用，回答需要 admin secret 登录。预期结果：先看 Needs you 和 Problems；待人项按等待时间从长到短排列；卡住、失败或文件冲突在 Problems 中。在仪表盘回答权限、问题和计划，或发消息、`/compact`、`/clear`；终端和仪表盘谁先回答谁生效。用卡片、列表或图视图，按机器、项目、状态或 harness 过滤；可开墙视图，并开启会话需要你、卡住、失败或计划窗口到 90% 时的浏览器通知。Hermes 会话只展示、不能回答；回答 Codex 会话还需要该机器上的 Codex managed daemon。SITREP 不控制终端，不启动、停止或重启会话，不存储 transcript。
+
 ## 怎么判断变好了
 
 做法 A 的最小试用方式：
@@ -154,6 +214,13 @@ cd bridge && bun src/main.ts link http://localhost:8787 --no-service
 - 暴露面自检：公网只开 443、`SETUP_TOKEN` 已轮换、账号全为邀请制、`./data` 有备份且磁盘加密。任一项不达标不上生产。
 - 升级到多机器/多人的门槛：连续两周误批为 0、审批时延明显下降、且至少一个任务在完全离场的情况下被推进到可合并状态；否则维持单人单机，或降级为只读观察（Viewer）。
 
+做法 C 的最小试用与指标：
+
+- 试用方式：先在单机跑模拟器，确认卡片/列表/图、Needs you、Problems、回答和成本展示符合预期；再在一台常开服务器和一台真实运行 Claude Code（如有 Codex 则一并）的开发机上安装，先 dry run 再用 `--apply`，运行 `doctor.ts` 排错。只在受信任局域网试用，不暴露到公网。
+- 以试用前一周为基线，记录：会话从进入等待到被回答的时间；卡住/失败会话是由通知发现还是事后才发现；为找某个会话切换终端或机器的次数；能看到成本和计划窗口余量的会话比例；安装与排错耗时；是否出现未授权访问或误操作。
+- 判断：若等待时间、漏掉的卡住会话和终端切换次数下降，且没有新增安全问题、运维负担可接受，再考虑扩大范围；否则停留在 study 或放弃。
+- 额外检查：看板上的“回答”是否真的减少了回到终端的次数；是否因为看板信息不全而误判；明文 HTTP 的访问范围是否始终限定在受信任局域网。
+
 ## 常见坑
 
 - 做法 A 的原文被截断，扫码之后的流程缺失，不能假设手机端一定能做哪些操作。
@@ -170,6 +237,15 @@ cd bridge && bun src/main.ts link http://localhost:8787 --no-service
 - 做法 B 的 README 未提供审批策略、密钥轮换、备份恢复、多用户冲突处理的具体做法；“background tasks”与浏览器共享只提及功能名，无操作细节。
 - 不要给 Operator 直接写主分支的权限；试点阶段只给自己 Owner，先不邀请他人。
 - 不要把做法 A 和做法 B 混为一谈：A 是同一会话的手机接管入口，依赖 `/rc`；B 是远程控制与权限层，补的是跨机器、多角色、审批与审计，不改变模型能力。
+- 做法 C 的 7487 端口是明文 HTTP，能访问该端口的人可读取所有会话；不要暴露到公网，也不要在不可信网络使用。
+- 做法 C 面向受信任局域网中的单人使用，不是多人协作权限模型；需要多角色和审计时用 B，不要硬套 C。
+- 做法 C 不控制终端，不启动、停止或重启会话，不存储 transcript；需要这些能力时不要用它替代 B 或本地终端。
+- 做法 C 回答 Codex 会话依赖该机器上的 Codex managed daemon；未装 daemon 时只能看到部分信息，不能回答。
+- 做法 C 的 Hermes 会话只展示、不能回答；接入还需要 Docker sidecar。
+- 做法 C 用主机名访问时，主机名未列入 `SITREP_ALLOWED_HOSTS` 会访问失败；README 建议先用 IP。
+- 做法 C 安装脚本应先 dry run 再加 `--apply`；`uninstall.ts` 默认只列出将移除的内容，加 `--apply` 才真正移除。
+- 做法 C 只有 45 stars、较新，且原文是 README 而非完整文档；“最清晰”“最快”“最安全”等是作者主张，不是实测结论。
+- 不要把“能部署”当成“已验证有效”；三种做法都要先做最小试用，再决定是否写进团队标准。
 
 ## 证据与来源
 
@@ -184,8 +260,14 @@ cd bridge && bun src/main.ts link http://localhost:8787 --no-service
 - 做法 B 的材料局限：没有任何使用案例、用户数、性能数据或对照实验；49 stars、`0.0.1 early`、不接受 PR，说明成熟度与维护模式都不确定（商业公司 Wiva, Inc. 主导）；README 未提供审批策略、密钥轮换、备份恢复、多用户冲突处理的具体做法；`background tasks` 与浏览器共享只提及功能名，无操作细节。
 - 做法 B 的适用条件：有自控服务器与域名、能自己做 HTTPS 与备份；工作机是 macOS/Linux；团队规模小、可强制最小权限；能接受“服务器持有全部历史”这一风险。不适合：无法自托管、需要端到端加密、或需要 Windows 工作机的场景。
 - 做法 B 的额外风险（推论，非原文）：手机一键审批把“看上下文”这一步压缩掉了，误批概率上升；README 未提供任何防护设计。
+- 做法 C 依据 `IluvatarLabs/sitrep` 的调研。可核对内容：安装脚本、dry run、`doctor.ts`、`uninstall.ts`、模拟器命令、端口 7487、Node 24/Node 22.15+、Claude Code 2.1.287+、Codex 0.162+、Codex managed daemon、Hermes Docker sidecar、admin secret 写到 `~/.sitrep/server.env`、`SITREP_ALLOWED_HOSTS`、45 stars、macOS/Linux。
+- 做法 C 只是作者主张、无法从材料核实：“最清晰”“最快”“最安全”等表述；材料没有给出用户研究、基准数据或案例效果。
+- 做法 C 明确的自承局限：明文 HTTP，能访问 7487 的人可读所有会话；面向单人；仅支持 macOS/Linux；Windows 未支持/未验证；Hermes 只读；Codex 回答依赖 managed daemon；不控制终端、不启动/停止/重启会话、不存储 transcript。
+- 做法 C 的材料局限：原文是 GitHub README，不是完整文档；更细操作在 TUTORIAL、HOW-IT-WORKS、OPERATIONS 等链接中，但未提供正文；没有任何使用案例、用户数、性能数据或对照实验；45 stars，项目较新。
+- 三种做法的共同证据边界：安装命令可复制不代表效果已被验证；作者主张、互动数据、star 数都不能替代最小试用中的上下文连续性、审批时延、误批率、等待时间和切换次数等可观察指标。
 
 ## 依据的调研
 
 - [@AYi_AInotes: 强烈推荐所有用 Claude Code 的人，把这个功能打开，这才是真正能无缝衔接上下文的开发流，把手机当成终端的遥控器，而不是在云端重开一个白板会话，只要掌握了本地进程不杀的底层逻辑，你走到哪，本地](../research/radar/2026-10-12/2751-claude-code.md)：值得一试，可以在自己的 Claude Code 会话里小范围试一次：终端保持会话运行，敲 /rc，用手机扫码尝试接管同一会话，看上下文是否连续。原文只给出这条核心路径、且在“手机扫码接管 →”处被截断，无版本前提与后续步骤，因此先试再决定是否写入手册。
 - [wiva-hq/CodeRail](../research/radar/2026-10-31/8966-wiva-hq-coderail.md)：值得一试，可小范围试点：在自己服务器上用 Docker 起一个实例，只接一台机器和一个非关键仓库，先跑通“手机审批→终端/文件/git 核查”闭环再决定是否扩大；理由是 README 给了可直接复制的部署与加机器步骤，但版本仅 0.0.1、没有任何效果数据，且服务端保存全部会话历史（非端到端加密）。
+- [IluvatarLabs/sitrep](../research/radar/2026-11-13/13027-iluvatarlabs-sitrep.md)：值得一试，建议在受信任局域网内小范围试用：先用内置模拟器跑通，再在一台常开服务器和 1–2 台开发机上安装，重点验证跨机器“待人/卡住”会话的发现与解锁效率。它给出了可复制的安装、自检和卸载命令，但项目较新、仅支持 macOS/Linux、使用明文 HTTP 且面向单人，暂不宜直接全面采用。

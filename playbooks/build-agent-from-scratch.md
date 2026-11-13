@@ -1,15 +1,15 @@
-# 别急着上多 Agent：先把需求写成可评审的 Agent 设计
+# 把 AI 从聊天框搬到可监督、可恢复的工作流水线
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：这份手册解决：面对一个模糊的 AI/Agent 需求，如何先判断该不该用 Agent、该用哪一档架构，并把方案写成可评审、可交接、可验收的设计；设计定下来后，再按场景搭环境、跑受控原型并用可观察指标验收。
-> 先试这一步：拿一个真实但低风险的需求，按做法 K 的 7 步只产出设计文档，并在第 2 步强制写下为什么不上更高档架构；然后让同事用 21 维清单评审这份设计。
-> 最近修订：2026-11-12
+> 解决的问题：这份手册解决：如何把 AI 从聊天框里的问答，变成在真实项目里能调工具、可监督、可恢复、可验收的工作流水线。
+> 先试这一步：先用 harness 五件套清单（Tools / Knowledge / Observation / Action / Permissions）检查当前任务缺哪一项，先补最缺的，再决定是否上持久化执行或受监督流水线。
+> 最近修订：2026-11-13
 
 ## 解决什么问题
-模型本身已有感知、推理、行动能力，但一个能用的 agent = 模型 + harness。这份手册解决：你只在聊天框里用 AI，它看不到代码库、跑不了命令、记不住跨会话目标、停没停全凭它自己说；或者自建 Agent 只能跑起来，但不可靠、不可控，出了问题只能靠回放提示词去猜；或者要把 coding agent 做成长期在线、可重连、可从崩溃恢复的应用；或者要把团队积累的经验变成每个 PR 的强制检查，让 agent 响应 PR、合规、事故等已有事件；或者任务本身跨天、跨周，路径不可预测，要反复等待人和外部系统，进程一崩、网络一断就重来或重复副作用；或者你还没有自己的骨架，不知道从哪个可运行示例开始；或者你手里有一个模糊的 Agent 需求，不确定该不该上 Agent、该用提示词/工作流/单 Agent/多 Agent 哪一档，方案写出来无法评审、交接和验收，团队里有人一上来就堆多 Agent，却说不清隔离理由。
-做法包括：先用 Agent 系统设计 Skill 在需求阶段做 7 步设计、四档裁剪、交接契约和 21 维自检，把方案写成可评审文档，再进入实现；搭可操作环境，把工具、知识、观察、动作接口和权限补齐（harness engineering，以 Claude Code 为范本）；用生产级分层补齐可靠性、安全、可观测、评估、并发、成本和发布（hello-agent-system）；当它真的慢、卡住或反复报错时，用真实 telemetry 而不是提示词回放定位（blazo）；用 Pi Durable 验证持久化、断点恢复、submission 去重、工具重放边界和外部副作用幂等；用 Cursor Agent SDK 把事件触发的重复流程写成代码项目，先在本地 playground 跑 evals 和事件回放，再 deploy 或自托管；用 NamiAgent 从 100 行最小循环逐课加到权限、上下文、Skills、MCP、子 Agent、计划和记忆，并用网页端直接看每一步思考和本次发给模型的完整上下文；对跨天长流程，用持久化执行把决策、动作、等待分开，等待时挂起不占计算，外部写加业务幂等键并在执行前重校验约束；按工作类型从 Claude Quickstarts 选一个官方可运行脚手架，先跑通最小路径，再把凭证放 vault、去重账本、按来源书签、单会话花费上限、人工审核 PR 等可靠性模式抄进自己的实现。
-每个做法都有边界，不要把实验性原型直接放上生产关键路径；NamiAgent 明确是教学代码，不是生产级框架；长周期持久化执行的示例是演示/模拟，不是生产部署，原文也缺完整代码与量化结果；Claude Quickstarts 的根 README 只是索引，子项目命令、配置和提示词要读各自 README，且没有效果数据；agent-system-design-cn 当前只拿到 README 及目录说明，参考文件、模板正文、示例全文未提供，安装未验证，21 维自检分数只评设计文档，不是任务成功率或发布许可。
+模型本身已有感知、推理、行动能力，但一个能用的 agent = 模型 + harness。这份手册解决：你只在聊天框里用 AI，它看不到代码库、跑不了命令、记不住跨会话目标、停没停全凭它自己说；或者自建 Agent 只能跑起来，但不可靠、不可控，出了问题只能靠回放提示词去猜；或者要把 coding agent 做成长期在线、可重连、可从崩溃恢复的应用；或者要把团队积累的经验变成每个 PR 的强制检查，让 agent 响应 PR、合规、事故等已有事件；或者任务本身跨天、跨周，路径不可预测，要反复等待人和外部系统，进程一崩、网络一断就重来或重复副作用；或者你是 Rust/Tokio 工程团队，要把多步流水线做成可取消、可隔离 panic、可重试、有预算、可崩溃续跑、可人工暂停的受监督运行时；或者你还没有自己的骨架，不知道从哪个可运行示例开始；或者你手里有一个模糊的 Agent 需求，不确定该不该上 Agent、该用提示词/工作流/单 Agent/多 Agent 哪一档，方案写出来无法评审、交接和验收，团队里有人一上来就堆多 Agent，却说不清隔离理由。
+做法包括：先用 Agent 系统设计 Skill 在需求阶段做 7 步设计、四档裁剪、交接契约和 21 维自检，把方案写成可评审文档，再进入实现；搭可操作环境，把工具、知识、观察、动作接口和权限补齐（harness engineering，以 Claude Code 为范本）；用生产级分层补齐可靠性、安全、可观测、评估、并发、成本和发布（hello-agent-system）；当它真的慢、卡住或反复报错时，用真实 telemetry 而不是提示词回放定位（blazo）；用 Pi Durable 验证持久化、断点恢复、submission 去重、工具重放边界和外部副作用幂等；用 Cursor Agent SDK 把事件触发的重复流程写成代码项目，先在本地 playground 跑 evals 和事件回放，再 deploy 或自托管；用 NamiAgent 从 100 行最小循环逐课加到权限、上下文、Skills、MCP、子 Agent、计划和记忆，并用网页端直接看每一步思考和本次发给模型的完整上下文；对跨天长流程，用持久化执行把决策、动作、等待分开，等待时挂起不占计算，外部写加业务幂等键并在执行前重校验约束；按工作类型从 Claude Quickstarts 选一个官方可运行脚手架，先跑通最小路径，再把凭证放 vault、去重账本、按来源书签、单会话花费上限、人工审核 PR 等可靠性模式抄进自己的实现；用 borg 在 Rust/Tokio 里把 LLM 调用组合成受监督流水线，先跑 FakeLlmClient 示例，再接真实 AgentLlmClient，加检查点、预算和人工暂停。
+每个做法都有边界，不要把实验性原型直接放上生产关键路径；NamiAgent 明确是教学代码，不是生产级框架；长周期持久化执行的示例是演示/模拟，不是生产部署，原文也缺完整代码与量化结果；Claude Quickstarts 的根 README 只是索引，子项目命令、配置和提示词要读各自 README，且没有效果数据；agent-system-design-cn 当前只拿到 README 及目录说明，参考文件、模板正文、示例全文未提供，安装未验证，21 维自检分数只评设计文档，不是任务成功率或发布许可；borg 目前只有 README 和 42 stars，不内置 provider 客户端，示例默认 FakeLlmClient，没有 benchmark、生产案例或第三方评测，sandboxing 由使用者负责，不在 crates.io，必须从 GitHub 固定 tag 安装，不要直接 adopt。
 
 ## 适用与不适用
 适用：
@@ -23,6 +23,7 @@
 - 你想零基础理解 agent 的 while 循环，愿意按 NamiAgent 从 lesson-01 跑到 lesson-11，用网页端看每一步思考和完整上下文；有 Python 3.10+、git、pip，以及任意 OpenAI 兼容接口的 API key（默认 DeepSeek，换模型改环境变量）；愿意在专用工作区运行，不把工作区指向主目录。
 - 任务跨天或跨周、目标明确但路径不可预测、需要持续追踪依赖并频繁等待人和外部系统，例如客户 onboarding、销售/法务/采购之间的交易推进、患者转诊/预约/改期/文书、库存补货；有支持持久化执行的运行时（原文示例为 Temporal 和 Cloudflare）；外部写操作能用业务键做幂等；人或外部系统能把 approval、supplier-reply、goods-received 等事件作为信号送回工作流；团队能运维运行时。
 - 你想先找官方可运行示例，按工作类型选一个最接近的骨架：客服问答接知识库、财报数据分析、桌面操作、浏览器导航与填表、跨会话自主编码、每工作日定时摘要、文档语料蒸馏成知识 wiki、IM/工单内应答、MCP Server、Sentry 错误 triage 与自动提 PR。有 Claude API key 和对应运行环境，愿意只跑通最小路径再改造，选 Claude Quickstarts。
+- 你是 Rust/Tokio 工程团队，要把长时、多步、可恢复的智能体流水线做成受监督运行时；需要取消、panic 隔离、重试、预算、检查点续跑、人工暂停；愿意实现 AgentLlmClient 和 CheckpointStore；能接受从 GitHub 固定 tag 安装，Rust 1.88+。
 不适用：
 - 你期待 agent-system-design-cn 开箱运行、自动编排或直接给出业务效果证明；它只是设计/评审 Skill，不运行 Agent。
 - 你拿不到参考文件与模板正文，或宿主无法加载 Skill；这时只能降级为按 7 步和七字段手工评审，不能宣称已采用。
@@ -36,6 +37,7 @@
 - 可预测的流程不要套长周期 agent，仍应交给传统软件；任务不需要等待人和外部系统、没有可拆成可记录外部交互的步骤、外部系统不支持幂等键或发信号，也不适合做持久化执行。
 - 不要把长周期持久化执行的 demo 当生产部署；原文示例是演示/模拟，没有量化业务结果，提供文本在 Making the loop durable 之后只有目录标题、正文缺失，无法据此编造实体/工作流划分、重试、代码变更、记忆与提示词控制的具体配置。
 - 你期待 Claude Quickstarts 的根 README 直接给完整命令、配置或提示词：它只是索引页，具体内容在各子项目 README；你需要效果数据、基准或对比实验时也不适用，所有“demonstrates”都是官方主张。Computer Use Best Practices 明确要求放在 VM 里跑；Browser Toolset 与 Computer Toolset 自述“展示接口、非生产代码”，工具集名称带版本日期，接口可能变化。Managed Agents 系列依赖 ant apply、session metadata、vault、cron deployment 等特定平台能力，迁移到别的平台需要重写这部分管道。
+- 你不是 Rust/Tokio 团队，或期待 borg 内置模型供应商客户端、开箱即用的 sandbox、crates.io 直接安装、完整配置文档或效果数据；borg 目前只有 README、42 stars，示例默认 FakeLlmClient，sandboxing 由使用者负责，不在 crates.io，README 未展开 execute_resumable、预算和 guardrails 的完整 API。
 
 ## 前置条件
 - agent-system-design-cn：宿主支持加载「一个目录 + 带 YAML frontmatter 的 SKILL.md」；安装整个 skills/agent-system-design-cn/ 目录，确保 references/ 和 assets/ 同时存在；具体放置路径按宿主文档，README 未给出具体产品路径，也未做加载测试。能拿到参考文件、模板正文和示例全文；否则只能手工评审。准备一个真实但低风险的需求，以及一名只按清单评审的同事。材料只有 README 及目录说明；原始 Skill 共 14 个文件、298664 字节，有哈希校验脚本，但本次未验证。
@@ -51,9 +53,10 @@
 - NamiAgent：Python 3.10+、git、pip；有 OpenAI 兼容接口的 API key，默认 DeepSeek，换其他模型改环境变量；专用工作区目录 NAMI_WORKSPACE；第 4 课起状态目录 NAMI_STATE_DIR 默认在 ~/.nami-agent，放在工作区之外。必须在专门的工作区目录运行，不要把工作区指向主目录。
 - 长周期持久化执行：任务确实跨天/周、路径不可预测，且需要等待人或外部系统；有一个支持持久化执行的运行时（原文示例为 Temporal 和 Cloudflare）；外部写操作能用业务键做幂等；人或外部系统能把事件送回工作流，运行时支持持久化定时器和信号；审批上限等约束要写成可检查的条件；团队能按运行时文档配置持久化存储、worker 和重试策略。原文只给示例时间线，没有完整代码与量化结果，生产部署需另行调研运行时文档。
 - Claude Quickstarts：本机有 git；有 Claude API key（README 指向 console.anthropic.com 注册）；各子项目依赖与运行命令在各自 README 里，本材料未包含，需打开对应目录补齐；Computer Use Best Practices 要求放在 VM 里跑；Browser Toolset 与 Computer Toolset 自述“展示接口、非生产代码”；工具集名称带版本日期（computer_toolset_20260801、browser_toolset_20260801），接口可能随版本变化；Managed Agents 系列依赖 ant apply、session metadata、vault、cron deployment 等特定平台能力。
+- borg：Rust 1.88+、Tokio 项目；从 GitHub 固定 release tag 安装（crates.io 上的 borg 是无关 crate）：`borg = { git = "https://github.com/joydle/borg.git", tag = "v1.0.0" }`，并加 `async-trait = "0.1"`；需要实现 `AgentLlmClient` 才能接真实模型，示例默认 `FakeLlmClient`；需要 `CheckpointStore`（三个方法）可接数据库；需要人工 `Decision` 通道；sandboxing 由使用者负责，涉及子进程/文件操作时结合 `borg-sandbox`、`borg-tools` 的 sandbox/approval 机制；README 未给具体供应商配置、`execute_resumable`、预算和 guardrails 的完整 API，需查项目文档。
 
 ## 操作步骤
-先选路线：需求还模糊、要先判断该不该上 Agent、该用哪一档架构，选做法 K，先产出设计文档；想零基础从 while 循环开始、用网页端看每一步思考和完整上下文，选做法 H；想系统理解 harness 机制、有时间和 API 预算，选做法 A；已经有自己的 agent 骨架、只想把环境检查清单补齐，选做法 B；想验证生产级可靠性、安全、评估分层，选做法 C；已有 Agent 骨架想直接套生产级组装，选做法 D；agent 已经能跑、但你要回答「它为什么慢、卡住或失败」，选做法 E；要把 coding agent 做成长期在线、可重连、可从崩溃恢复的应用，先用做法 F 做受控原型；如果重复工作围绕 PR、合规、事故等事件，且愿意用 Cursor 生态，选做法 G；如果任务跨天/周、频繁等待人和外部系统、需要崩溃恢复并防止重复副作用，选做法 I；如果你还没有自己的骨架，想先从官方可运行示例里挑一个最接近的，选做法 J。可组合：K 产出的设计文档是上游，再按设计里缺的能力进入 A–J；先用做法 H 的 demo 和网页端建立「上下文里有什么、工具怎么被调用」的直觉，再按做法 A 深入 harness 分章；用做法 B 补 harness 清单，再用做法 C 跑可靠性与评估两课，用做法 D 的骨架套自己项目，如果 agent 是 TypeScript 再按做法 E 接本地可观测性，用做法 F 验证持久恢复和工具重放边界，最后用做法 G 把事件触发的重复流程做成可评测的代码项目；长流程用做法 I 做运行时可靠性层，用 F 验证单进程 conversation 恢复，用 D 做多 worker 任务队列，用 E 看本地执行，但它们不是同一个东西。注意 D 和 F 在持久化 / worker 上有差异：hello-agent-system 展示多 worker 从同一持久化队列领任务、kill -9 后租约过期由别的进程从检查点接手；Pi Durable 当前单 storage 只允许一个 owner 进程，没有跨进程锁。两者都写，按场景选：要分布式 worker 崩溃接手看 D；要单进程 owner、可恢复 conversation/task、submission 去重和 replay 边界看 F。不要把 F 当分布式工作流平台。G 的评测是 evals 与事件回放，E 的评测是本地 telemetry 可观测性，两者可以并用但解决的问题不同。H 是教学快照，不是生产框架；A 和 H 都从最小循环开始，但 A 偏机制分章，H 偏零基础网页端观察和权限确认，按你的背景选。I 是长周期流程的持久化执行，不等同于 F 的单进程 conversation 恢复，也不等同于 D 的多 worker 队列；原文没有提到 Claude Code、Cursor、OpenClaw 的集成，不要声称已经集成。J 是选型目录，不是完整教程：先跑通一个子项目的最小路径，再把可靠性模式抄进自己的实现，不要直接当生产组件。
+先选路线：需求还模糊、要先判断该不该上 Agent、该用哪一档架构，选做法 K，先产出设计文档；想零基础从 while 循环开始、用网页端看每一步思考和完整上下文，选做法 H；想系统理解 harness 机制、有时间和 API 预算，选做法 A；已经有自己的 agent 骨架、只想把环境检查清单补齐，选做法 B；想验证生产级可靠性、安全、评估分层，选做法 C；已有 Agent 骨架想直接套生产级组装，选做法 D；agent 已经能跑、但你要回答「它为什么慢、卡住或失败」，选做法 E；要把 coding agent 做成长期在线、可重连、可从崩溃恢复的应用，先用做法 F 做受控原型；如果重复工作围绕 PR、合规、事故等事件，且愿意用 Cursor 生态，选做法 G；如果任务跨天/周、频繁等待人和外部系统、需要崩溃恢复并防止重复副作用，选做法 I；如果你还没有自己的骨架，想先从官方可运行示例里挑一个最接近的，选做法 J；如果是 Rust/Tokio 工程团队，要把长时、多步、可恢复的智能体流水线做成受监督运行时，选做法 L；非 Rust 团队不要为了用 borg 换语言。可组合：K 产出的设计文档是上游，再按设计里缺的能力进入 A–J；先用做法 H 的 demo 和网页端建立「上下文里有什么、工具怎么被调用」的直觉，再按做法 A 深入 harness 分章；用做法 B 补 harness 清单，再用做法 C 跑可靠性与评估两课，用做法 D 的骨架套自己项目，如果 agent 是 TypeScript 再按做法 E 接本地可观测性，用做法 F 验证持久恢复和工具重放边界，最后用做法 G 把事件触发的重复流程做成可评测的代码项目；长流程用做法 I 做运行时可靠性层，用 F 验证单进程 conversation 恢复，用 D 做多 worker 任务队列，用 E 看本地执行，但它们不是同一个东西。注意 D 和 F 在持久化 / worker 上有差异：hello-agent-system 展示多 worker 从同一持久化队列领任务、kill -9 后租约过期由别的进程从检查点接手；Pi Durable 当前单 storage 只允许一个 owner 进程，没有跨进程锁。两者都写，按场景选：要分布式 worker 崩溃接手看 D；要单进程 owner、可恢复 conversation/task、submission 去重和 replay 边界看 F。不要把 F 当分布式工作流平台。G 的评测是 evals 与事件回放，E 的评测是本地 telemetry 可观测性，两者可以并用但解决的问题不同。H 是教学快照，不是生产框架；A 和 H 都从最小循环开始，但 A 偏机制分章，H 偏零基础网页端观察和权限确认，按你的背景选。I 是长周期流程的持久化执行，不等同于 F 的单进程 conversation 恢复，也不等同于 D 的多 worker 队列；原文没有提到 Claude Code、Cursor、OpenClaw 的集成，不要声称已经集成。J 是选型目录，不是完整教程：先跑通一个子项目的最小路径，再把可靠性模式抄进自己的实现，不要直接当生产组件。L 与 I 都涉及长流程恢复，但 I 是跨天等待人和外部系统的持久化执行，L 是 Rust 进程内受监督流水线，有取消、panic 隔离、预算、检查点和人工暂停；L 与 F 都涉及恢复，但 F 是 TypeScript 单进程 owner conversation，L 是 Rust 流水线 DSL；L 与 D 都涉及 worker/恢复，但 D 是多 worker 从持久化队列领任务，L 不是分布式工作流平台，sandboxing 由使用者负责。
 
 ### 做法 K：先用 Agent 系统设计 Skill 把需求写成可评审方案，再决定要不要多 Agent
 什么时候选：你有一个真实但还模糊的 Agent 需求，需要先判断需不需要多 Agent、该用提示词/工作流/单 Agent/多 Agent 哪一档，并把方案写成可评审、可交接、可验收的设计；团队愿意用支持加载 SKILL.md 的宿主，且能拿到完整 Skill 目录。不要把它当编排框架或运行时；它只产出设计、契约和检查清单。
@@ -594,6 +597,78 @@ export ANTHROPIC_API_KEY=<your-key>
 
 8. 同一任务先用人工方式做一周，记录基线，再切到 agent，用同样指标对比。预期：有基线，能判断是否改善；不要只看 demo 是否能跑。
 
+### 做法 L：用 borg 在 Rust/Tokio 里搭受监督的长时智能体流水线
+什么时候选：你是 Rust/Tokio 工程团队，要把 LLM 调用组合成多步、并行、可重试、可取消、可崩溃续跑、可人工暂停的受监督流水线；需要 panic 隔离、预算、检查点和跨模型 fallback；愿意自己实现 `AgentLlmClient` 和 `CheckpointStore`。不要把它当内置 provider 客户端、开箱即用的 sandbox 或分布式工作流平台；它不在 crates.io，crates.io 上的 borg 是无关 crate。
+
+1. 安装依赖。前提：Rust 1.88+、Tokio 项目。必须从 GitHub 固定 release tag 安装，并加 `async-trait`，因为 derive 宏会展开为 `#[async_trait]`。
+```toml
+[dependencies]
+borg = { git = "https://github.com/joydle/borg.git", tag = "v1.0.0" }
+async-trait = "0.1"  # derive 宏会展开为 #[async_trait]
+```
+预期：依赖从 GitHub 拉取，版本固定。
+
+2. 先跑无 API key 示例。前提：已取得仓库代码；示例使用 `FakeLlmClient`，不需要真实模型 key。
+```bash
+cargo run -p borg --example dogfood --features testing
+cargo run -p borg-loop --example streaming_session
+```
+预期：运行时和 DSL 能工作，能看到示例流程。
+
+3. 接入真实模型。为所用 API 实现一次 `AgentLlmClient`。README 明确说 borg 不附带 provider client，因此这是接入真实 LLM 的必要工程步骤；原文没有给出具体供应商配置，需结合 API 文档实现。预期：真实模型调用能走通；没有实现前只能跑 `FakeLlmClient`。
+
+4. 定义单个 agent。前提：已实现 `AgentLlmClient`，或先用 `FakeLlmClient` 做本地测试。
+```rust
+use borg::prelude::*;
+
+#[derive(BorgAgentDerive)]
+#[borg(id = "reviewer", model = "anthropic/claude-haiku-5-5",
+       max_tokens = 800, system = "Review code quality.")]
+struct Reviewer;
+
+impl Reviewer {
+    fn user_prompt(&self, ctx: &AgentContext) -> Option<String> {
+        ctx.handoff.get_as("code")
+    }
+}
+
+let suggestions: Vec<Suggestion> =
+    run_one_typed("review", Reviewer, ctx, handoff).await?;
+```
+预期：得到一个可从上下文取用户提示的 agent。
+
+5. 组合流水线。用 `seq`、`par`、`repeat` 等原语编排“计划→并行工作→构建修复循环→评审”。
+```rust
+use borg::prelude::*;
+
+let pipeline = seq([
+    step(Planner),
+    par([step(Coder), step(TestWriter), step(DocWriter)]),
+    repeat(8, |v: &Verdict| v.token == "PASS", || seq([
+        step(Builder),
+        step(BuildFixer),
+    ])),
+    step(Reviewer),
+]);
+```
+该例表示：先规划，再并行三个 worker，然后最多 8 轮执行 build→fix 直到 `PASS`，最后评审。README 说明取消会停止所有嵌套 agent 和进行中的 LLM 调用；某个子任务 panic 不会拖垮兄弟任务。预期：流水线能按 DSL 执行；取消和 panic 隔离需要自己注入故障验证。
+
+6. 加可靠性控制。按 README 在 agent 循环边界配置 guardrails（`Warn` / `Throttle` / `Halt`），在每次 dispatch 前做预算准入并设子预算；使用 restart backoff/jitter、restart-storm meltdown、滑动窗口 circuit breaker 和跨模型 fallback ladder。具体 API 需查项目文档，README 只列能力，没有完整配置代码。预期：能配置预算和降级策略；不要照抄不存在的配置。
+
+7. 加断点续跑与人工暂停。用 `execute_resumable` 把运行快照写入 `CheckpointStore`；默认每个循环迭代或每步快照。崩溃后同一调用会跳过已完成工作，并拒绝形状不同的流水线快照。store 只需实现三个方法，可接任意数据库。需要人工决策时，agent 请求决策，运行挂起并持久化，之后带 `Decision`（approve、reject、edit）恢复；参考 `human_in_the_loop` 示例。长生命周期会话用 `borg-loop`，`run_session_loop` 让会话持续到 park，并支持 checkpoint/resume；参考 `streaming_session` 示例。预期：模拟重启后跳过已完成步骤；人工暂停后能带 Decision 恢复。
+
+8. 安全边界。README 明确说 borg 让模型获得子进程和文件访问很容易，但 sandboxing 由使用者负责。涉及子进程/文件操作时，应结合 `borg-sandbox`、`borg-tools` 的 sandbox/approval 机制，不要直接暴露高权限工具。预期：高风险工具不裸奔；权限和审批有明确入口。
+
+9. 观测与测试。启用 `testing` feature 可使用 `FakeLlmClient`、`ScriptedAgent` 和 eval harness；运行时提供 `tracing` span 树（session → composition → step → turn → tool）和 JSONL 事件记录。提交前可按 README 跑检查：
+```bash
+cargo fmt --all
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo test --workspace --all-features
+```
+预期：格式、lint、测试通过；用 `ScriptedAgent` 或 eval harness 对比输出质量。
+
+10. 最小试用。先跑 `dogfood` 和 `streaming_session` 示例；再用 `FakeLlmClient` 搭一个“规划→并行 worker→评审”的小流水线，注入一次子任务 panic 和一次取消，观察是否隔离与干净停止；然后加 `execute_resumable` 和简单 `CheckpointStore`，在中间步骤后模拟重启，看是否跳过已完成步骤；最后接真实 `AgentLlmClient`，加预算和 guardrails 跑一个低风险任务。预期：先验证运行时行为，再接真实模型和预算。
+
 ### 机制对照表（按需跳到 learn-claude-code 对应章节）
 - s01 Agent Loop：messages / while True / tool_use
 - s02 Tool Use：TOOL_HANDLERS 分发表
@@ -677,6 +752,12 @@ export ANTHROPIC_API_KEY=<your-key>
 - 风险：写操作是否都经过人工确认（如 Sentry Autofix 式的「agent 只推分支、人开 PR」）；凭证是否始终在沙箱外；是否有硬性花费上限。
 - 判断「有改善」的最低门槛：同一任务上，产出被采用率不低于人工基线，单次耗时明显下降，且连续两周无静默失败（即失败都能被看见）。达不到就退回 study，只借它的架构模式，不搬它的具体实现。
 
+可观察指标（borg）：
+- 取消后嵌套 agent 和进行中调用是否全部停止；panic 是否不拖垮兄弟任务。
+- 重启后已完成步骤是否被跳过、重复执行次数是否下降；可重试错误的重试成功率与重试次数。
+- 是否出现预算超支；人工介入次数；端到端时延和成本；用 ScriptedAgent 或 eval harness 对比输出质量。
+- 注意：原文没有基准测试或生产效果数据，以上是可验证行为，不是已验证生产指标。
+
 最小试用方式：
 - 做法 K：选一个真实但低风险的需求，只按 7 步产出设计文档；第 2 步强制做四档裁剪并记录为什么不上更高档；若涉及多 Agent，只对一个交接点填写七字段契约。再让另一名同事只用 21 维清单评审同一份设计文档，先选适用维度再打分，对比评审前能否发现档位过高、职责不清、停止条件缺失、交接字段缺失等问题。若宿主无法加载 Skill，或团队拿不到参考文件与模板正文，就降级为按 7 步和七字段手工评审，不宣称已采用该 Skill。
 - 做法 A：先跑通 learn-claude-code 的 s01，再挑一个与你当前痛点对应的章节（上下文爆了就 s08，目标总漂移就 s17，权限失控就 s03），把它抄进自己项目。
@@ -689,6 +770,7 @@ export ANTHROPIC_API_KEY=<your-key>
 - 做法 H：第一，不配 API Key 跑 python web/app.py --demo，打开 http://localhost:8765，确认能看到每一步思考和完整上下文；第二，在专用工作区配置真实模型，跑 python web/app.py，让它写一个 hello.py 并运行，确认写文件和跑命令前会弹窗，且文件只落在 NAMI_WORKSPACE；第三，跑 cd lessons/lesson-11 && pytest -q，按 README 预期是 49 个测试通过，若实际数量不同以实际结果记录。进一步再逐课运行 lesson-01 到 lesson-11，对比相邻快照。
 - 做法 I：选一个真实但低风险的长周期流程（如采购审批或客户 onboarding 的某一段），限定 1 个流程、1-2 个外部系统、1 个审批人；用 Temporal 或 Cloudflare 搭最小工作流，步骤分成 decision/action/wait，等待审批和外部回复用挂起加信号，写操作加幂等键；可先跑通原文 demo 的命令理解时间线；人为在等待期间重启 worker/进程，验证恢复后不重复下单、不丢状态；重复发送同一信号，验证幂等。
 - 做法 J：建议 1-2 天，只选一个任务和一个最接近的 quickstart：从自己工作里挑一个高频、边界清楚、有现成输入的任务（例如每工作日汇总 Slack 与 PR，或对一批文档反复回答同类问题）；选对应脚手架（定时摘要 → Daily Brief；文档问答 → Knowledge Wiki；IM 内应答 → Slack 或 Linear）；先只跑通「读取 + 输出」的最小闭环，不做写操作、不发真实频道；再按可靠性模式逐项补：凭证进 vault、去重 ledger、失败显式报错、花费上限；同一任务先用人工方式做一周，记录基线，再切到 agent，用同样指标对比。
+- 做法 L：先跑 `dogfood` 和 `streaming_session` 示例；再用 `FakeLlmClient` 搭“规划→并行 worker→评审”小流水线，注入一次子任务 panic 和一次取消，观察隔离与干净停止；加 `execute_resumable` 和简单 `CheckpointStore`，在中间步骤后模拟重启，看是否跳过已完成步骤；最后接真实 `AgentLlmClient`，加预算和 guardrails 跑一个低风险任务。
 
 试多久：
 - agent-system-design-cn 建议用一个真实低风险需求做一次设计和一次独立评审；若有效再纳入需求评审流程。当前只有 README，先小范围验证，不直接当发布许可。
@@ -700,6 +782,7 @@ export ANTHROPIC_API_KEY=<your-key>
 - NamiAgent 建议按 lesson-01 到 lesson-11 逐课跑一遍再决定是否复用其控制点；先跑 demo 和专用工作区真实模型小任务，再跑第 11 课测试。只拿 README，没有各课正文和完整代码，先小范围验证，不要直接用于生产工作流。
 - 长周期持久化执行建议按原文示例先跑通一个低风险流程，再小范围跑 2-4 周；先验证崩溃恢复、重复信号、幂等和审批上限，不要用 demo 通过代替生产验证。
 - Claude Quickstarts 建议 1-2 天只选一个任务/脚手架，先跑通最小闭环，再补可靠性模式；同一任务人工基线一周，对比产出采用率、单次耗时和静默失败。
+- borg 建议先跑示例，再用 FakeLlmClient 做小流水线和故障注入，接真实 client 跑一个低风险任务；原文无时间建议，先小范围验证，不要直接 adopt。
 - 注意：s05 有一句「先列步骤，完成率翻倍」，README 未给数据来源，不能当已验证指标。
 
 ## 常见坑
@@ -774,6 +857,17 @@ export ANTHROPIC_API_KEY=<your-key>
 - Claude Quickstarts：无人值守摘要不做按来源 bookmark 和去重 ledger，源读不到时静默当成「今天没事发生」；Daily Brief 明确要求失败得体面，报「不可读」。
 - Claude Quickstarts：凭证放在沙箱内；Sentry Autofix 要求凭证在沙箱外 vault、沙箱无外网路由、单 session 硬性花费上限、agent 只推分支、PR 由人开。
 - Claude Quickstarts：忽略工具集版本日期。computer_toolset_20260801、browser_toolset_20260801 接口可能随版本变化。
+- borg：把 crates.io 上的 borg 当成本项目；它是无关 crate，必须从 GitHub 固定 tag 安装。
+- borg：以为内置 provider client；需要自己实现 `AgentLlmClient`，示例默认 `FakeLlmClient`。
+- borg：非 Rust/Tokio 团队硬上；它要求 Rust 1.88+、Tokio，且要写 Rust 代码。
+- borg：忘了 sandboxing 由使用者负责；直接暴露子进程和文件高权限工具。
+- borg：把 README 的作者主张当已验证效果；只有 42 stars，没有 benchmark、生产案例或第三方评测。
+- borg：没实现 `CheckpointStore` 就指望崩溃续跑；store 需三个方法，可接数据库。
+- borg：流水线形状变了还用旧快照；`execute_resumable` 会拒绝形状不同的快照。
+- borg：以为 borg 自带定时触发/调度器；README 没有明确给出时间/事件触发器，不能据此声称它自带定时触发。
+- borg：没验证取消语义；README 说取消会停止嵌套 agent 和进行中 LLM 调用，但需要自己注入取消验证。
+- borg：人工暂停不持久化 Decision 通道；需要参考 `human_in_the_loop` 示例。
+- borg：README 未展开 `execute_resumable`、预算和 guardrails 的完整 API，不要编造配置。
 
 ## 证据与来源
 - agent-system-design-cn：来自调研《geniusjia666/agent-system-design-cn》及其核验的 README 与目录说明。可照做内容：7 步设计流程（需求澄清→架构选型→单 Agent 设计→编排与协作→介入与加固→评测→交付与自检）、4 档架构（提示词、工作流、单 Agent、多 Agent）、21 种设计模式、21 维设计文档自检、交接契约模板的 dispatch 七字段（identity、objective、scope、constraints、context、output_format、stop_condition）及 handoff/gate 定义、设计文档模板、word-counts-workflow 示例、09-框架落地映射。数据：README 称原始 Skill 共 14 个文件、298664 字节，并有哈希校验脚本。局限：本次材料只有 README 及目录说明，参考文件、模板正文、示例全文未提供，无法核对 21 维具体条目和 21 种模式细节；README 自述未核对各宿主安装文档、未做加载测试；框架映射中的包版本未安装和测试；word_counts 示例是手写推演，分数留空，不代表质量、时延或费用；21 种模式是沿用的检索分类，不是官方统一标准；21 维分数只评设计文档，不是任务成功率，也不是发布许可。结论：把它作为 Agent 与多 Agent 方案的设计和评审清单，小范围试用：先用一个真实需求走 7 步，并在第 2 步明确选择最低可行的架构档位，再用交接契约和 21 维清单评审；不要直接采用，因为当前材料只有 README，安装未验证，自检分数也不等于任务成功率。适用条件：适合需要把模糊需求变成可评审 Agent 方案，或评审已有方案的团队；不适合期待开箱运行、自动编排或直接给出业务效果证明的场景。
@@ -785,6 +879,7 @@ export ANTHROPIC_API_KEY=<your-key>
 - NamiAgent：证据主要来自 aa1143/NamiAgent README：100 行最小循环、lessons/lesson-01 到 lesson-11 每课可运行快照、第 11 课 49 个测试、只依赖 openai 一个包、网页端只用 Python 标准库、demo 模式不需要 API Key、环境变量 API_KEY / BASE_URL / MODEL / NAMI_WORKSPACE / NAMI_STATE_DIR、第 3 课起限定工作区并做权限确认、第 6 课 TG_BOT_TOKEN 与 TG_ALLOWED_USERS、第 8 课 MCP 配置 ~/.nami-agent/mcp.json、第 3/4/5/7/8/9/10/11 课可复用控制点。仓库指标显示 37 stars，但这不是效果证据。局限：目前只拿到 README，没有各课正文和完整代码，无法核实每一课的实现质量和细节；作者自述是教学代码，不是生产级框架，也不打算和 Claude Code、Codex 比功能；权限机制挡不住有意攻击；必须使用专用工作区；界面里展示的思考只是模型写出来的文字，不等于模型内部真实计算过程；第三部分写的是截至 2026 年 10 月的情况，产品更新快，细节应以各自官方文档为准。结论建议小范围试：先跑 demo 看每一步思考和完整上下文，再在专用工作区用真实模型写一个 hello.py 并运行确认权限弹窗和工作区限制，最后跑第 11 课测试并逐课对比；不要直接用于生产工作流。
 - 长周期持久化执行：来自调研《Long-horizon agents and durable execution》及其核验的原文（Martin Fowler 源）。原文用库存补货示例展示：3 家供应商报价 A $4.20、5 天、98% 准时；B $4.05、12 天、91%；C $4.60、3 天、99%；选择 A 1000 件，PO 4473，总价 $4,200；审批上限 $4.41，经理 Priya 批准 $4.20；供应商确认 1000 件、24 October、$4.20；收货 1000 件；关闭订单；outcome=received；下单使用 Idempotency key: PO 4473，供应商侧 Orders at the supplier for PO 4473: 1；价格重校验 Price re-checked: $4.20, within the approved $4.41；等待步骤标注 Compute used: None. The workflow is suspended.；示例包含 worker 进程 down/up 崩溃区间。这些是演示/模拟时间线，不是生产部署，也没有量化业务结果。局限：提供文本在 Making the loop durable 之后只有目录标题、正文缺失，无法提炼实体/工作流划分、等待、重试、正确性、代码变更、记忆、提示词控制的具体做法；作者关于「改变经济性」的判断是主张；持久化只保证恢复，不保证业务正确，等待期间外部世界变化需要额外校验。原文没有提到 Claude Code、Cursor、OpenClaw 的集成，不能声称已集成。结论建议小范围试：选真实但低风险的长周期流程，限定 1 个流程、1-2 个外部系统、1 个审批人，用 Temporal 或 Cloudflare 跑通 decision/action/wait 与挂起加信号，在等待期间重启 worker 验证不重复下单、不丢状态，重复信号验证幂等，记录基线并小范围跑 2-4 周再决定是否扩大。
 - Claude Quickstarts：证据来自 anthropics/claude-quickstarts 的仓库根 README，本质是索引页：列出约 18 个项目；通用五步为 clone → 进目录 → 装依赖 → 设 ANTHROPIC_API_KEY → 运行，但第 3-5 步的实际命令被推到各子项目 README；可靠性模式包括 Daily Brief 的 ant apply、按来源 bookmark、去重 ledger、只读偏好库与读写状态库分开、源不可读要显式报错；Knowledge Wiki 的一次性蒸馏、版本化 memory-store、每个事实带 provenance；Slack / Linear 的无状态 webhook 桥接、session metadata、session.status_idled 回写、Linear OAuth actor=app；Sentry Autofix 的 webhook 一 issue 一 session、凭证在沙箱外 vault、沙箱无外网路由、单 session 硬性花费上限、agent 只推分支、PR 由宿主打开；MCP Server 的 wait_for_idle 和 agent allowlist；Computer Use Best Practices 的显式工具定义、正确图像尺寸与裁剪、prompt caching、服务端压缩、批量工具调用、沙箱 shell、轨迹记录；Autonomous Coding Agent 的双 agent（initializer + coding agent）、用 git 和功能清单持久化进度。数据：仓库指标 stars 20623、stars_today 531，只是关注度，不是效果证据。局限：根 README 没有代码、具体命令、提示词、配置样例；所有「demonstrates」都是官方主张，没有数字、基准或对比实验；Computer Use Best Practices 要求放在 VM 里跑；Browser Toolset 与 Computer Toolset 自述「展示接口、非生产代码」；工具集名称带版本日期，接口可能随版本变化；Managed Agents 系列依赖 ant apply、session metadata、vault、cron deployment 等特定平台能力，迁移到别的平台需要重写这部分管道。结论：把它当作「任务→脚手架」选型目录，小范围试 1-2 天，只选一个任务和一个最接近的 quickstart，先跑通「读取 + 输出」最小闭环，再补凭证 vault、去重 ledger、失败显式报错、花费上限和人工审核。
+- borg：来自调研《joydle/borg》及其核验的 GitHub README。可照做内容：Cargo 依赖片段（从 GitHub 固定 tag `v1.0.0` 安装，`async-trait = "0.1"`）、`dogfood` 和 `streaming_session` 示例命令、`BorgAgentDerive` agent 定义、`seq`/`par`/`repeat` 流水线 DSL、`execute_resumable` 与 `CheckpointStore`、人工 `Decision`（approve/reject/edit）、`human_in_the_loop` 示例、`borg-loop` 的 `run_session_loop`、`testing` feature 的 `FakeLlmClient`/`ScriptedAgent`/eval harness、`tracing` span 树和 JSONL 事件、`cargo fmt/clippy/test` 检查命令。数据：42 stars、MIT OR Apache-2.0、MSRV Rust 1.88+、release tag `v1.0.0`。局限：原文是 GitHub README，没有 benchmark、生产案例或第三方评测；取消、panic 隔离、重试、预算、断点续跑、guardrails、MCP、视觉、长会话等均为作者主张，本报告未独立验证；不内置 provider client，真实接入需自行实现 `AgentLlmClient`；示例默认 `FakeLlmClient`；不在 crates.io；sandboxing 由使用者负责；README 未展开 `execute_resumable`、预算和 guardrails 的完整 API。结论：适合 Rust/Tokio 工程团队小范围试，先跑示例和 FakeLlmClient 故障注入，再接真实 client 和预算；不要直接 adopt。
 
 ## 依据的调研
 
@@ -797,3 +892,4 @@ export ANTHROPIC_API_KEY=<your-key>
 - [Long-horizon agents and durable execution](../research/radar/2026-11-10/12301-long-horizon-agents-and-durable-execution.md)：值得一试，对需要跨天或跨周、频繁等待人和外部系统的智能体任务，可按原文示例改成持久化执行：记录每一步外部交互结果，等待用挂起加信号恢复，外部写操作加幂等键并重校验约束；先用一个真实流程小范围试点。理由是原文用库存补货案例展示了崩溃恢复、审批/供应商/收货信号和重复下单防护，但只给了示例时间线，缺少完整代码与量化结果。
 - [anthropics/claude-quickstarts](../research/radar/2026-11-11/12468-anthropics-claude-quickstarts.md)：值得一试，把这份仓库当作“任务→脚手架”的选型目录：先按你的实际工作类型挑一个 quickstart（如定时简报、知识库问答、IM/工单触发、跨会话编码），照通用五步跑通，再抽取其中的可靠性模式（书签/去重账本、凭证放 vault、沙箱无外网、单会话花费上限、人工审核 PR）。理由是官方给了可运行、可改造的骨架和明确的通用起手流程，但 README 只是索引，具体命令、配置和提示词都在各子项目 README 里，本材料无法直接照抄，因此只到“小范围试”。
 - [geniusjia666/agent-system-design-cn](../research/radar/2026-11-12/12630-geniusjia666-agent-system-design-cn.md)：值得一试，建议把它作为 Agent 与多 Agent 方案的设计和评审清单，小范围试用：先用一个真实需求走 7 步，并在第 2 步明确选择最低可行的架构档位，再用交接契约和 21 维清单评审；不要直接采用，因为当前材料只有 README，安装未验证，自检分数也不等于任务成功率。
+- [joydle/borg](../research/radar/2026-11-13/13035-joydle-borg.md)：值得一试，如果你用 Rust 构建长时、多步、可恢复的智能体流水线，建议小范围试：照 README 的依赖和 DSL 示例搭一个带预算、检查点和人工暂停的最小流水线，再验证崩溃恢复与取消隔离。理由是其取消、隔离、重试、预算和恢复机制写得很具体，但目前只有 README、42 stars，且没有真实 provider 客户端与效果数据，不适合直接 adopt。
