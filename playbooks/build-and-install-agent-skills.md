@@ -1,18 +1,20 @@
-# 让 AI 技能真正减少返工：先小范围对照，再写进工作流
+# 把 agent 的重复工作做成可试用、可验收的技能包
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：当你已经在用编码、写作或通用 agent 时，怎么把重复规范、排障经验和领域知识变成可安装、可触发、可验收的技能，而不是装完就以为变好了。
-> 先试这一步：先在一个非关键项目上只装一个技能包，用同一任务做有/无技能各 3 次对照，记录人工修改、返工和耗时。
+> 解决的问题：这篇手册解决：如何不被安装成功和工具热度误导，把重复的 agent 工作封装成技能，并用小范围对照、阶段工件和完成证据判断它是否真的减少返工。
+> 先试这一步：先在一个非关键项目上只装一个技能包，用同一任务做有/无技能各 3 次对照，并记录人工返工和完成证据。
 > 最近修订：2026-11-13
 
 ## 解决什么问题
 
-你已经在用编码 agent、写作 agent 或通用 agent，但经常遇到这些问题：每次都要重复描述同一套规范；装了一个技能包也不确定是否真的减少返工；同类排障反复出现，踩过的坑没有变成下一次可直接调用的经验；让 agent 复刻动效视频或 UI 录屏时，它只能凭想象写节拍、缓动、颜色和文字；读过的技术书或内部文档无法按需变成 agent 能调用的知识；编码 agent 过度工程，重复造轮子、写占位符或注释代码、自测失败却不回去修；要把线上内容站迁成静态 Astro 站，却担心 URL、内容、SEO、重定向、媒体路径和三档视觉不一致；要让 agent 先出设计图、人工审图，再照图建站；要把某个领域的团队约定、公开权威来源和交付前检查清单打包成可安装、可自动触发的技能；要在做一人公司的 AI 产品时按阶段路由到对应子技能；要让编码 agent 在后端默认处理鉴权作用域、幂等键和 schema 迁移；你一个人总控多个长期 AI 助手，活派出去没人收、说做好了其实没核过。
+你已经在用编码 agent、写作 agent 或通用 agent，但经常遇到：每次重复描述同一套规范；装了技能包不确定是否真减少返工；同类排障反复出现，踩过的坑没变成可调用经验；让 agent 复刻动效视频或 UI 录屏时只能凭想象写节拍、缓动、颜色和文字；读过的技术书或内部文档无法按需变成 agent 知识；编码 agent 过度工程、重复造轮子、写占位符或注释代码、自测失败却不回去修；要把内容站迁成静态 Astro 站，却担心 URL、内容、SEO、重定向、媒体路径和三档视觉不一致；要让 agent 先出设计图、人工审图，再照图建站；要把领域约定、权威来源和交付前检查清单打包成可安装、可自动触发的技能；要做一人公司 AI 产品时按阶段路由；要让后端 agent 默认处理鉴权作用域、幂等键和 schema 迁移；一个人总控多个长期 AI 助手，活派出去没人收、说做好了其实没核过。
 
-本版新增一个 Web 场景：你希望编码 agent 写前端时默认采用现代、可访问、Baseline 支持的 Web 基元，并先扫出现有代码里的遗留写法。Modern Web Guidance 1.0 目前只有推文、两条命令和 Chrome 自己的 215-task evals 汇总数字；推文称 Claude Code 从 57% 提升到 88%、Codex 从 54% 提升到 82%，但没有给出任务集、评分标准、运行次数和统计方法，只能先在非关键 Web 项目做小范围对照。
+本版新增两个场景。一个是 Web 场景：你希望编码 agent 写前端时默认采用现代、可访问、Baseline 支持的 Web 基元，并先扫出现有代码里的遗留写法。Modern Web Guidance 1.0 目前只有推文、两条命令和 Chrome 自己的 215-task evals 汇总数字；推文称 Claude Code 从 57% 提升到 88%、Codex 从 54% 提升到 82%，但没有给出任务集、评分标准、运行次数和统计方法，只能先在非关键 Web 项目做小范围对照。
 
-这篇手册的主线是：先用做法 A 在一个非关键项目上试装一个现成技能包，用同一任务做有/无技能对照；确认有效后，再用做法 B 把自己的重复工作写成 SKILL.md，并按 Agent Skills 的 scripts/references/assets 结构和渐进披露机制自检；需要领域权威规范时用做法 BE；重复排障用做法 AX 写成按现象触发的经验卡；动效复刻用做法 BA 先看片、再按页面契约写代码、逐帧打分；技术书或内部文档转技能用做法 M 先做小范围试用，要求更高时用做法 BI 的编译流水线和忠实度指标；站点静态迁移用做法 BC 跑到 PR + noindex staging 再验收；先出图再建站用做法 BD；一人公司 AI 产品按阶段路由用做法 BF；后端安全默认值用做法 BG；一个人带多个 AI 助手派活收不回来，用做法 BH 先装两支技能、用一行登记跑完一件小活；Web 前端现代化用做法 BJ，先跑 install 和 legacy-scan，再做同一小型任务的装/不装对照。专门场景保留为索引，统一要求先小范围对照再采用。
+另一个是阶段流程场景：DevFlow Kit v0.9.0 把 11 个技能打成一个 capsule，用 Python 安装器装进 Codex、Claude Code、DeepSeek Harness、Trae 或通用 Agent Skills 宿主，通过单一入口 $devflow 按阶段加载需求澄清、参考系统调研、规格与验收标准、架构图、可点击 mock、有界 diff 评审、安全审查、TDD/调试/验证等指导，并用规格、图、mock、实现、验证证据在阶段之间传递已批准决策。安装、调用提示词、验证与打包命令都可直接复制，但效果证据只有仓库自述，没有独立数据；先在一个真实小项目上跑一条新功能全流程和一条小改动，重点验证它是否如实报告未执行的检查。
+
+主线是：先用做法 A 在一个非关键项目上试装一个现成技能包，用同一任务做有/无技能对照；确认有效后，再用做法 B 把自己的重复工作写成 SKILL.md，并按 Agent Skills 的 scripts/references/assets 结构和渐进披露机制自检；需要领域权威规范时用做法 BE；重复排障用做法 AX 写成按现象触发的经验卡；动效复刻用做法 BA 先看片、再按页面契约写代码、逐帧打分；技术书或内部文档转技能用做法 M 先做小范围试用，要求更高时用做法 BI 的编译流水线和忠实度指标；站点静态迁移用做法 BC 跑到 PR + noindex staging 再验收；先出图再建站用做法 BD；一人公司 AI 产品按阶段路由用做法 BF；后端安全默认值用做法 BG；一个人带多个 AI 助手派活收不回来，用做法 BH 先装两支技能、用一行登记跑完一件小活；Web 前端现代化用做法 BJ，先跑 install 和 legacy-scan，再做同一小型任务的装/不装对照；要把需求→规格→原型→实现→验证串成阶段流程，用做法 BK，先跑一条新功能全流程和一条小改动。专门场景保留为索引，统一要求先小范围对照再采用。
 
 ## 适用与不适用
 
@@ -25,7 +27,7 @@
 - 你需要给 agent 补一块领域知识：UI/UX 设计、Postgres、Google 产品与技术、中国金融市场数据、移动端模拟器观测、中英文学术写作、SwiftUI、工作写作、AI 研究、Go 终端 UI、Elixir/Phoenix、Android 开发、Rust 等。
 - 你需要把文档站点、仓库、PDF、技术书或内部 docs 变成按需加载的技能；轻量试用用做法 M，要求可校验、可验收时用做法 BI。
 - 你需要给多步、有明确交付物的复杂任务分阶段推进，或在编码 agent 里立行为约束、做路由、做审查回路。
-- 你需要安装或分发以 SKILL.md 为载体的技能到多个编码代理，或把团队规范同步给多人。
+- 你要安装或分发以 SKILL.md 为载体的技能到多个编码代理，或把团队规范同步给多人。
 - 你要把扁平矢量动效、排版动画或 UI 动效录屏复刻成内联 SVG + GSAP 时间线，并希望用逐帧对照而不是口头判断验收（做法 BA）。
 - 你要把一个 HTTP 可访问的内容站迁移成静态 Astro 站，且站点没有站内搜索、评论、购物车、登录、UGC 等静态站做不到的功能（做法 BC）。
 - 你要让 agent 先产出落地页分区视觉稿、App 屏幕与流程或品牌规范板，人工审图后再建站（做法 BD）。
@@ -34,6 +36,8 @@
 - 你在维护后端仓库，使用 Claude Code、读取 AGENTS.md 的 agent 或 Cursor，希望 agent 默认处理鉴权作用域、幂等键和 schema 迁移（做法 BG）。
 - 你一个人总控多个长期 AI 助手，活派出去经常没人收、说做好了其实没核过、同一个坑踩两遍，愿意用一行登记把状态分开记，并且能接受定时靠宿主或人补（做法 BH）。
 - 你在维护 Web 代码库，想让 Claude Code 或 Codex 写前端时采用现代、可访问、Baseline 支持的基元，并愿意先在非关键分支跑 install 和 legacy-scan，再用表单、动画、弹窗菜单、passkey 登录、清理旧项目等小型任务做装/不装对照（做法 BJ）。
+- 你要把需求澄清、参考系统调研、规格与验收标准、架构图、可点击 mock、有界 diff 评审、安全审查、TDD/调试/验证串成阶段流程，并接受用项目工件在阶段间传递已批准决策（做法 BK）。
+- 你使用 Codex、Claude Code、DeepSeek Harness、Trae 或通用 Agent Skills 宿主，愿意整目录安装 capsule 并检查宿主是否真的能执行（做法 BK）。
 
 不适用：
 
@@ -55,106 +59,51 @@
 - 做法 BG 只覆盖电商/支付域常见的鉴权、并发、迁移三类风险；不覆盖批处理、搜索、缓存一致性；每任务仅 5 次运行，样本小；Cursor 通过 rules 适配不等价于原生 skill；Haiku 在乱序 webhook 上仍失败，payment-webhook 一栏出现 1/5→2/5 的反向波动。
 - 做法 BH 不适合指望开箱即自动组队或自动催办的场景：它 hooks: {}，不带定时、叫醒和自动回执；也不适合不愿维护一份共享记录、没人按点查的团队。文档自标 v0.9-draft，没有对照实验；Claude Code 侧原文明确结构已备、走通待补，不能当已支持。
 - 做法 BJ 只适合先小范围试用：原文只有推文、两条命令和 215-task evals 的汇总数字，缺配置、输出格式、退出码、扫描范围、支持矩阵、前置条件、任务集、评分标准和统计方法；非 Web 项目、不能运行 npx 或不能接受安装外部 skill 的环境不适用；不要把 48 小时 trending 第一、521 likes、40 reposts、17 replies 或 57%→88%、54%→82% 当本地效果证据。
+- 做法 BK 目前只有仓库 README 与作者自述，没有独立效果数据；没有 shell/浏览器工具的宿主只能读指导，不能声称跑过这些检查；明确要求完整安全审计时需要独立验证与隔离，安装技能本身不提供这些能力；不适合不愿做人工验收、只想要一键全自动的人。
 
 ## 前置条件
 
-通用：
+通用：Node.js ≥ 18，npm 或 npx 可用；Git 可用；一个可回滚的非关键项目；对目标技能目录有写权限；MCP 配置写绝对路径；安装第三方技能前先通读 SKILL.md 并跑 doctor 或 audit。
 
-- Node.js ≥ 18，npm 或 npx 可用；Git 可用。
-- 一个可回滚的非关键项目，不要在主仓库或用户主目录下做项目级安装。
-- 对目标技能目录有写权限，如 ~/.claude/skills/、~/.agents/skills/、~/.cursor/skills/。
-- 走 MCP 时，配置文件里写绝对路径。
-- 安装第三方技能前，先通读它的 SKILL.md，并跑运行时的 doctor 或 audit 工具。
+做法 A/B：A 需要一个非关键项目和一类重复任务，只选一个技能包。B 需要一件每周重复、有明文规范或多步流程的工作，能建自包含技能文件夹并写入宿主技能目录；能写清 name 和 description；能把代码放 scripts/、参考文档放 references/、模板放 assets/；接受先在一个真实流程上试；自行审查脚本权限、敏感数据和外部资源访问范围。
 
-做法 A 和 B 额外前置：
+做法 BE：Claude Code CLI；一个真实但范围小的 Rust 任务及基线输出；一个领域至少 3–5 份可引用权威来源或团队明文规范；能运行 claude plugin eval . --allow-tools Write,Edit,Bash --scaffold，评测会真实调用模型并产生费用；已确认来源许可。
 
-- A：一个非关键项目和一类重复任务；只选一个技能包。
-- B：一件每周重复、有明文规范或多步流程的工作；能建一个自包含技能文件夹并写入目标 host 的技能目录；如果用 Agent Skills 格式，确认所用 agent 客户端支持该格式，但 README 没有列出客户端名单，需要自行确认。
-- B 还要能写清 name 和 description；description 要说明该技能什么时候适用；能把可执行代码放进 scripts/、参考文档放进 references/、模板资源放进 assets/；接受先在一个真实流程上试；自行审查脚本权限、敏感数据和外部资源访问范围。
+做法 M：一本结构清晰的技术书、PDF 或内部文档，本地路径可读；已安装 Claude Code 并按仓库说明获取 book-to-skill，原文没有安装命令；先准备覆盖不同章节的基线问题并保存不用技能时的回答；只处理自有或已获书面授权的文档。
 
-做法 BE 额外前置：
+做法 BI：Python ≥ 3.9、git，核心零第三方依赖；一本有权使用的书，建议 10 万字内，格式为 PDF/EPUB/DOCX/MD/HTML/RTF/MOBI 且是可解析文本；启动时能声明 --user-rights owned|licensed|public_domain|unknown；接受产物默认私有，公开分发必须 --public --confirm-public PUBLISH；准备至少 1 个负例问题和 5 条随机引文。
 
-- Claude Code CLI；本次样例只处理 Rust 相关任务；在 claude.ai 上使用需先开启 code execution。
-- 一个真实但范围小的 Rust 任务，以及不装技能时的基线输出。
-- 一个领域至少有 3–5 份可引用的权威来源或团队明文规范。
-- 能运行 claude plugin eval . --allow-tools Write,Edit,Bash --scaffold；评测会真实调用模型并产生费用。
-- 已确认来源许可。
+做法 AX：一个 agent 会读 AGENTS.md、CLAUDE.md 或等价指令文件的工作区；一类有明确失败现象、会复发的排障任务；对工作区 procedures/ 和全局指令文件有写权限。
 
-做法 M 额外前置：
+做法 BA：Python 3.9+ 与 ffmpeg；会开浏览器的脚本还要 Playwright + chromium；一段要复刻的扁平动效视频或 UI 录屏及填好的 brief；允许脚本启动无头浏览器、发起网络请求、读写本地帧图与视频文件。
 
-- 一本结构清晰、章节明确的技术书、PDF 或内部文档，且本地路径可被工具读取。
-- 已安装并使用 Claude Code，并按仓库说明获取或安装 book-to-skill；原文没有给出安装命令。
-- 先准备一组覆盖不同章节的基线问题，并保存不用技能时的回答。
-- 只处理自有或已获书面授权的文档；不要把第三方版权书生成的 skill 再分发。
+做法 BC：Node 22.23.4+ 或 24.22.1+；git；若自动建 repo 与 PR 需要 GitHub 账号且 gh 已登录；Vercel 或 Cloudflare 账号；Playwright Chromium；macOS 或 Linux；一个低流量站点或 20–50 页的子目录/子站；对目标站只需只读访问；明确不许碰 DNS，表单先指向测试 endpoint，只跑到 PR + noindex staging。
 
-做法 BI 额外前置：
+做法 BG：一个后端仓库；使用 Claude Code，或会读 AGENTS.md 的 agent，或 Cursor；能执行 npx skills add globalmpc/backendskills，或手动追加 dist/AGENTS.md、复制 dist/cursor/；能填每个技能末尾的 Make it yours；能写 agent 看不到的隐藏检查；若要复现评测，能按 bench/ 产出 runs.jsonl。
 
-- Python ≥ 3.9、git；核心零第三方依赖。
-- 一本你有权使用的书（建议 10 万字内），格式为 PDF / EPUB / DOCX / MD / HTML / RTF / MOBI，且是可解析的文本型文件，不是扫描件或只有封面。
-- 启动时能声明 --user-rights owned|licensed|public_domain|unknown。
-- 接受产物默认私有；公开分发必须显式 --public --confirm-public PUBLISH，且第三方书籍生成的技能不得分发。
-- 准备至少 1 个负例问题（书里明确没讲的框架）和 5 条随机引文，用于拒答测试和逐字溯源。
+做法 BH：你一个人总控多个长期 AI 助手，至少一个宿主已装好并能正常登录；对目标技能目录有写权限，手动拷贝必须整目录拷；一份共享记录和一个会按点查看的人；能接受先只装两支技能、只跑一件两周内能收的小活。
 
-做法 AX 额外前置：
+做法 BJ：一个可回滚的非关键 Web 项目分支或副本；能运行 npx；已安装并可运行 Claude Code 或 Codex；能检查 install 写入了哪些文件、是否生成可用 skill、是否需要额外权限；能记录 legacy-scan 的实际输出格式、退出码和扫描范围；能对同一小型 Web 修改任务做未安装/安装对照；愿意先补读仓库 README、支持矩阵和安装说明。
 
-- 一个 agent 会读 AGENTS.md、CLAUDE.md 或等价指令文件的工作区。
-- 一类有明确失败现象、会复发的排障任务。
-- 对工作区 procedures/ 目录和全局指令文件有写权限。
-
-做法 BA 额外前置：
-
-- Python 3.9+ 与 ffmpeg；会开浏览器的脚本还需要 Playwright + chromium。
-- 一段要复刻的扁平动效视频或 UI 录屏，以及填好的 brief；明确只能用这个源片。
-- 允许脚本启动无头浏览器、发起网络请求、读写本地帧图与视频文件。
-
-做法 BC 额外前置：
-
-- Node 22.23.4+ 或 24.22.1+；Node 20 已 EOL，工具会拒绝运行。
-- git；若想让它自动建 repo 与 PR，需要 GitHub 账号且 gh 已登录。
-- Vercel 或 Cloudflare 账号；Playwright 的 Chromium；macOS 或 Linux。
-- 一个低流量站点或 20–50 页的子目录/子站；对目标站只需只读访问。
-- 明确不许碰 DNS；表单先指向测试 endpoint；只跑到 PR + noindex staging。
-
-做法 BG 额外前置：
-
-- 一个后端仓库；使用 Claude Code，或会读 AGENTS.md 的 agent，或 Cursor。
-- 能执行 npx skills add globalmpc/backendskills；或能手动把 dist/AGENTS.md 追加到项目 AGENTS.md，或把 dist/cursor/ 复制到项目 .cursor/rules/。
-- 能填每个技能末尾的 Make it yours，至少写清错误格式和 API 文档约定；不填时 agent 跟随仓库已有做法。
-- 能写 agent 看不到的隐藏检查；若要复现评测，能按 bench/ 产出 runs.jsonl。
-
-做法 BH 额外前置：
-
-- 你一个人总控多个长期 AI 助手，至少有一个宿主已装好并能正常登录。
-- 对目标技能目录有写权限；手动拷贝时必须整目录拷，不能只拷 SKILL.md。
-- 一份共享记录（表、记事本或表格都行），以及一个会按点查看的人；宿主自带定时能力就用，没有就人工查。
-- 能接受先只装两支技能、只跑一件两周内能收的小活；不指望它自动派工或自动催办。
-
-做法 BJ 额外前置：
-
-- 一个可回滚的非关键 Web 项目分支或副本；能运行 npx。原文未说明 Node.js 版本等前置条件，这里仅按命令形式推断需要 Node.js/npx，执行前先确认。
-- 已安装并可运行 Claude Code 或 Codex；原文没有说明具体版本要求，试用前自行确认兼容性。
-- 能检查 install 写入了哪些文件、是否生成可用的 skill 配置、是否需要额外权限；原文未说明。
-- 能记录 legacy-scan 的实际输出格式、退出码和扫描范围；原文未说明。
-- 能对同一小型 Web 修改任务做未安装/安装对照，并记录 diff、测试、构建、lint、人工评审返工和耗时。
-- 愿意先补读仓库 README、支持矩阵和安装说明；推文里的链接不完整，需自行确认。
+做法 BK：Python 3.12+ 与 Git；一个已存在的目标项目目录。完整验证另需 Node.js 22+、Bash、Playwright/Chromium，依赖放在技能安装之外。宿主需提供模型、文件访问、执行工具，缺一项则相应检查不能被声称完成。能提供项目工件作为跨阶段载体：规格、架构图、mock 接口、实现、验证证据。能接受先跑真实小项目的新功能全流程和小改动两条流程，并检查它是否如实报告未执行的检查。
 
 ## 操作步骤
 
-怎么选：先做做法 A；A 里某个技能确实有效、且你有一件每周重复且规范明确的工作，再做做法 B。做法 B 优先按 Agent Skills 的轻量格式组织：一个技能文件夹，至少一个 SKILL.md；需要执行代码就放 scripts/，需要参考资料就放 references/，需要模板资源就放 assets/。建好后用渐进披露自检：启动时是否只暴露名称和描述；任务匹配时是否读取完整 SKILL.md；执行时是否只加载所需脚本或引用文件。如果你有一批领域权威来源和交付前检查清单，做做法 BE；如果你有一类重复排障任务，做做法 AX；如果你要约束编码 agent 过度工程，做做法 BB；如果你要把技术书、PDF 或内部文档变成按需加载技能，先做做法 M 的最小试用，要求可校验和忠实度指标时做做法 BI；如果你要把内容站迁成静态 Astro 站，先做 BC 的低流量站点或 20–50 页子站试用；如果你要先出设计图再建站，先做 BD 的一个真实落地页需求对照；如果你在做一人公司的 AI 产品，先做 BF 的一次总入口 + 一次直接点名对照；如果你要给后端 agent 补鉴权、幂等和迁移安全默认值，先做 BG 的 2–3 个任务、每个任务 5 次有/无对照；如果你一个人带多个 AI 助手、派出去的活收不回来，先做 BH 的一次单宿主、单件小活闭环；如果你要让 Claude Code 或 Codex 写 Web 时采用现代、可访问、Baseline 基元，先做 BJ 的非关键分支 install + legacy-scan + 同一小型任务装/不装对照。以上都套用 A 的对照方法，其余按场景从专门做法索引里选。
+怎么选：先做做法 A；A 里某个技能确实有效、且你有一件每周重复且规范明确的工作，再做做法 B。做法 B 优先按 Agent Skills 的轻量格式组织：一个技能文件夹，至少一个 SKILL.md；需要执行代码就放 scripts/，需要参考资料就放 references/，需要模板资源就放 assets/。建好后用渐进披露自检：启动时是否只暴露名称和描述；任务匹配时是否读取完整 SKILL.md；执行时是否只加载所需脚本或引用文件。如果你有一批领域权威来源和交付前检查清单，做做法 BE；如果你有一类重复排障任务，做做法 AX；如果你要约束编码 agent 过度工程，做做法 BB；如果你要把技术书、PDF 或内部文档变成按需加载技能，先做做法 M 的最小试用，要求可校验和忠实度指标时做做法 BI；如果你要把内容站迁成静态 Astro 站，先做 BC 的低流量站点或 20–50 页子站试用；如果你要先出设计图再建站，先做 BD 的一个真实落地页需求对照；如果你在做一人公司的 AI 产品，先做 BF 的一次总入口 + 一次直接点名对照；如果你要给后端 agent 补鉴权、幂等和迁移安全默认值，先做 BG 的 2–3 个任务、每个任务 5 次有/无对照；如果你一个人带多个 AI 助手、派出去的活收不回来，先做 BH 的一次单宿主、单件小活闭环；如果你要让 Claude Code 或 Codex 写 Web 时采用现代、可访问、Baseline 基元，先做 BJ 的非关键分支 install + legacy-scan + 同一小型任务装/不装对照；如果你要把需求→规格→原型→实现→验证串起来，先做 BK 的真实小项目新功能全流程 + 小改动，重点看它是否如实报告未执行的检查。以上都套用 A 的对照方法，其余按场景从专门做法索引里选。
 
 ### 做法 A：先用现成技能包做小范围试装（推荐先做）
 
-1. 选定一个非关键项目和一类重复任务。前提是失败可回滚，不碰生产关键路径。预期结果是你能拿到一组基线输出。
+1. 选定一个非关键项目和一类重复任务，失败可回滚。预期拿到基线输出。
 2. 只选一个技能包、只装一个。可选来源包括官方示例技能、jnMetaCode/superpowers-zh、rohitg00/pro-workflow、feiskyer/claude-code-settings、leter/zh-tech-writing、google/skills、clawyi-com/china-market-data、android/skills 等；不要一次装多个来源。
-3. 验证安装。新开一个会话，运行 /plugin list，并问 What skills do you have access to?。预期结果是能看到该技能，而不是只在安装日志里看到成功。
-4. 跑通一个最小动作，只选你当前最痛的任务。预期结果是产出一份可评审的结果，而不是只证明命令能执行。
-5. 做对照。同一任务、同一输入，分别在没有技能和有技能的条件下各跑 3 次，记录差异。试一周，或至少覆盖 5 个同类任务。
+3. 验证安装。新开会话，运行 /plugin list，并问 What skills do you have access to?。预期能看到该技能，而不是只在安装日志里看到成功。
+4. 跑通一个最小动作，只选当前最痛的任务。预期产出可评审结果，而不是只证明命令能执行。
+5. 做对照。同一任务、同一输入，分别在没有技能和有技能条件下各跑 3 次，记录差异。试一周，或至少覆盖 5 个同类任务。
 6. 可选：只照抄一个工作流形态，别整套搬。
 
 ### 做法 B：把自己的重复工作写成 SKILL.md，并按 Agent Skills 格式自检
 
-1. 选一件你每周都在重复、且有明文规范或多步流程的工作。前提是它有相对稳定的输入输出。预期结果是你能定义技能边界，而不是把所有事情塞进一个技能。
-2. 建一个自包含文件夹，至少放 SKILL.md。按 Agent Skills README，可选增加 scripts/、references/、assets/。结构如下：
+1. 选一件每周重复、有明文规范或多步流程的工作，输入输出相对稳定。预期能定义技能边界。
+2. 建一个自包含文件夹，至少放 SKILL.md，可选 scripts/、references/、assets/：
 
 ```text
 my-skill/
@@ -165,9 +114,9 @@ my-skill/
 └── ...               # Any additional files or directories
 ```
 
-3. 在 SKILL.md 中写 metadata（至少有 name 和 description）以及 instructions。description 必须同时写清做什么和什么时候用，因为 agent 启动时只加载 name 和 description 做发现。主 SKILL.md 只放流程与核心规则，细粒度规范拆到 references/ 按需加载。
-4. 把可执行代码放进 scripts/，把参考文档放进 references/，把模板和资源放进 assets/；在 instructions 中写清何时执行代码、何时读取引用。预期结果是执行时只加载所需脚本或引用文件，而不是把全部材料塞进上下文。
-5. 用渐进披露机制自检三件事：启动时是否只暴露名称和描述；任务匹配时是否读取完整 SKILL.md；执行时是否只加载所需脚本或引用文件。若 agent 不加载，先改 description、instructions 和资源组织，不要先堆更多内容。
+3. 在 SKILL.md 写 metadata（至少 name 和 description）以及 instructions。description 必须同时写清做什么和什么时候用，因为 agent 启动时只加载 name 和 description 做发现。主 SKILL.md 只放流程与核心规则，细粒度规范拆到 references/ 按需加载。
+4. 把可执行代码放 scripts/，参考文档放 references/，模板和资源放 assets/；在 instructions 写清何时执行代码、何时读取引用。预期执行时只加载所需文件，而不是把全部材料塞进上下文。
+5. 用渐进披露自检三件事：启动时是否只暴露名称和描述；任务匹配时是否读取完整 SKILL.md；执行时是否只加载所需脚本或引用文件。若 agent 不加载，先改 description、instructions 和资源组织。
 6. 校验技能：
 
 ```bash
@@ -182,89 +131,48 @@ npx genspark-claw install all --target claude
 
 或直接把技能目录放到 ~/.claude/skills/。
 
-8. 换一个新会话，或让一位不了解背景的同事只凭 description 触发该技能。预期结果是它能被自动发现，而不是每次都要手动点名。
+8. 换一个新会话，或让不了解背景的同事只凭 description 触发该技能。预期它能被自动发现，而不是每次手动点名。
 9. 没有自动触发时逐项排查路径、重启、嵌套目录、手动调用标记，先改 description 和触发条件，不要急着加内容。
-10. 做最小试用与判定。选一个当前反复人工处理的多步流程，只写一个 SKILL.md 和必要脚本或模板；在支持 skills 的 agent 中跑若干真实任务。同一批任务比较不用技能和用技能的结果；记录任务完成率、人工修改次数、完成时间、步骤一致性、是否在正确时机触发、是否只加载所需资源。若触发准确、执行步骤更一致、人工返工减少，再扩大；若 agent 不加载、加载后不遵循或脚本无法执行，先修 description、instructions 和资源组织。
+10. 做最小试用与判定。选一个反复人工处理的多步流程，只写一个 SKILL.md 和必要脚本或模板；在支持 skills 的 agent 中跑若干真实任务。同一批任务比较不用技能和用技能的结果；记录任务完成率、人工修改次数、完成时间、步骤一致性、是否在正确时机触发、是否只加载所需资源。
 
 ### 做法 BE：把领域权威规范打包成可安装技能，并用断言式评测对照
 
-1. 选一个真实但范围小的领域任务，先记录基线。预期结果是拿到不装技能时的输出和可比较的断言通过数。
-2. 安装样例技能。个人级安装：
+1. 选一个真实但范围小的领域任务，先记录基线。预期拿到不装技能时的输出和可比较的断言通过数。
+2. 安装样例技能。个人级：
 
 ```bash
 claude plugin install beautiful-rust --marketplace morganlinton/BeautifulRust
 ```
 
-若想让当前仓库所有协作者都用上，加 --scope project；每位协作者仍需各自执行一次安装：
-
-```bash
-claude plugin install beautiful-rust --marketplace morganlinton/BeautifulRust --scope project
-```
-
-或在 Claude Code 会话内安装：
+项目级加 --scope project；会话内：
 
 ```text
 /plugin marketplace add morganlinton/BeautifulRust
 /plugin install beautiful-rust@beautiful-rust
 ```
 
-不想安装、只想单次会话试用时：
+单次会话试用：
 
 ```bash
 git clone https://github.com/morganlinton/BeautifulRust
 claude --plugin-dir ./BeautifulRust
 ```
 
-需要显式调用时：
+显式调用：
 
 ```text
 /beautiful-rust:rust-best-practices
 ```
 
-3. 在 claude.ai 上使用：把 skill 目录打成 zip（zip 根目录就是该文件夹），再到 Customize > Skills 上传：
+3. 在 claude.ai 上使用：把 skill 目录打成 zip，再到 Customize > Skills 上传：
 
 ```bash
 cd skills && zip -r ../rust-best-practices.zip rust-best-practices -x '*.DS_Store'
 ```
 
-4. 如果要替换成自己团队的规范，按原文结构改写 SKILL.md：把约 500 行的规范组织成 13 节，每份来源在 references/ 下放一份摘要；来源冲突时明确选择一方并给出理由。13 节顺序如下：
-
-```text
-1. Mindset: Rust-shaped code, invalid states unrepresentable, application vs library
-2. Pre-handback checklist: fmt, clippy with -D warnings, test, doc; lint policy
-3. Ownership and borrowing
-4. Types and API design
-5. Errors and panics
-6. Everyday idioms
-7. Concurrency and async
-8. Unsafe and FFI
-9. Crates, modules, dependencies
-10. Documentation and comments
-11. Tests
-12. Performance, in order
-13. Final checklist
-```
-
-5. 插件自身的目录布局如下；plugin.json 是清单，marketplace.json 让仓库可以充当自己的 marketplace：
-
-```text
-BeautifulRust/
-├── .claude-plugin/
-│   ├── plugin.json
-│   └── marketplace.json
-├── skills/
-│   └── rust-best-practices/
-│       ├── SKILL.md
-│       └── references/
-│           ├── google-rust-style-guide.md
-│           ├── rust-api-guidelines.md
-│           ├── effective-rust.md
-│           ├── rust-design-patterns.md
-│           └── microsoft-rust-guidelines.md
-└── README.md
-```
-
-6. 建评测用例：skills/rust-best-practices/evals/ 下放三个用例（库 API 设计、应用 CLI、带输入文件的重构模块），每个用例包含 prompt、一段好结果应是什么样的描述，以及 graders/ 下每个文件一条断言。
+4. 替换成自己团队规范时，按原文结构改写 SKILL.md：约 500 行规范组织成 13 节，每份来源在 references/ 下放一份摘要；来源冲突时明确选择一方并给理由。13 节顺序：Mindset；Pre-handback checklist；Ownership and borrowing；Types and API design；Errors and panics；Everyday idioms；Concurrency and async；Unsafe and FFI；Crates, modules, dependencies；Documentation and comments；Tests；Performance, in order；Final checklist。
+5. 插件目录布局：.claude-plugin/plugin.json、marketplace.json；skills/rust-best-practices/SKILL.md 与 references/ 下 5 份摘要；README.md。
+6. 建评测用例：skills/rust-best-practices/evals/ 下放三个用例（库 API 设计、应用 CLI、带输入文件的重构模块），每个用例包含 prompt、好结果描述，以及 graders/ 下每个文件一条断言。
 7. 在 skill 目录下运行评测（会真实调用模型并产生费用）：
 
 ```bash
@@ -272,45 +180,33 @@ claude plugin eval . --allow-tools Write,Edit,Bash --scaffold
 ```
 
 分别在装有 skill 和未装 skill 时各跑一次，对比断言通过数。
-
-8. 更新分发：修改 skill → 修改 .claude-plugin/plugin.json 里的 version → 提交推送；已安装用户执行：
-
-```bash
-claude plugin update beautiful-rust
-```
-
-推送前先校验：
-
-```bash
-claude plugin validate .
-```
-
-9. 做最小试用与判定：用 --plugin-dir 单会话试用，避免影响他人；选 3 个真实任务（一个库 API、一个 CLI/脚本、一个重构），每个任务在装 skill 和不装 skill 下各跑一次，共 6 次，尽量固定 prompt。参照原文 eval 结构给每个任务写 graders；没有 eval 工具时改人工盲评。可观察指标：断言通过率、cargo fmt --check / cargo clippy -- -D warnings / cargo test / cargo doc 四个命令的一次通过率、token 成本增量、人工 review 的返工轮次和评论条数。原文量级是有 skill 时 29/30、无 skill 时 24/30，token 约多三分之一；这是作者自述且样本很小，提升不到 2 条断言可视为噪声，通过率提升低于 10% 就不值得长期维护。
+8. 更新分发：修改 skill → 修改 .claude-plugin/plugin.json 里的 version → 提交推送；已安装用户执行 claude plugin update beautiful-rust；推送前先 claude plugin validate .。
+9. 做最小试用与判定：用 --plugin-dir 单会话试用；选 3 个真实任务（库 API、CLI/脚本、重构），每个任务在装/不装下各跑一次，共 6 次，尽量固定 prompt。指标：断言通过率、cargo fmt --check / cargo clippy -- -D warnings / cargo test / cargo doc 一次通过率、token 成本增量、人工 review 返工轮次和评论条数。原文量级是有 skill 时 29/30、无 skill 时 24/30，token 约多三分之一；这是作者自述且样本很小，提升不到 2 条断言可视为噪声，通过率提升低于 10% 就不值得长期维护。
 
 ### 做法 M：把技术书或内部文档变成按需加载的技能（先做小范围试用）
 
 1. 选一本结构清晰、章节明确的技术书或内部 PDF，先记录基线。建议准备 10 到 20 个覆盖不同章节的问题，其中包含需要定位具体章节、步骤和条件的问题。
-2. 按仓库说明获取或安装 book-to-skill。原文只给出 GitHub 仓库链接卡片，没有给出安装命令；若使用既有索引里的 virgiliojr94/book-to-skill 路线，可先按旧材料保留的安装与自检命令准备：
+2. 按仓库说明获取或安装 book-to-skill。原文只给 GitHub 仓库链接卡片，没有安装命令；若使用既有索引里的 virgiliojr94/book-to-skill 路线，可先按旧材料保留的安装与自检命令准备：
 
 ```bash
 npx skills add virgiliojr94/book-to-skill
 python3 scripts/extract.py --check
 ```
 
-3. 指向一个文件并运行原文给出的示例命令：
+3. 指向一个文件并运行原文示例命令：
 
 ```bash
 /book-to-skill ./my-book.pdf
 ```
 
-原文称执行后会把文档转化为 AI 代理工作时可用的技能；需要在 Claude Code 中按该技能实际暴露方式调用，并检查它能否针对书内内容作答。原文未给出生成后的具体文件结构或调用命令。
-4. 用同一组问题分别问基线会话和生成技能后的会话。预期结果不是转换成功，而是回答在事实、定位和完整性上有可比较差异。
-5. 处理版权与分发边界。只处理自有或已获书面授权的文档；不得再分发第三方版权书生成的 skill。
-6. 做判定。只有在一本真实文档上跑通，并且事实准确率、定位能力、完整性、稳定性、人工查找时间或失败率相对基线有改善，才值得把该流程写入手册或纳入常规；否则保留为待验证候选。
+原文称会把文档转化为 AI 代理可用的技能；需在 Claude Code 中按该技能实际暴露方式调用，并检查能否针对书内内容作答。原文未给生成后的具体文件结构或调用命令。
+4. 用同一组问题分别问基线会话和生成技能后的会话。预期不是转换成功，而是回答在事实、定位和完整性上有可比较差异。
+5. 只处理自有或已获书面授权的文档；不得再分发第三方版权书生成的 skill。
+6. 只有在一本真实文档上跑通，并且事实准确率、定位能力、完整性、稳定性、人工查找时间或失败率相对基线有改善，才值得纳入常规；否则保留为待验证候选。
 
 ### 做法 BI：把书编译成可校验的技能，并用忠实度和负例拒答验收（先做小范围试用）
 
-1. 拉取并确认可运行。前提是 Python ≥ 3.9、git；核心零第三方依赖。预期结果是能看到版本号。
+1. 拉取并确认可运行：
 
 ```bash
 git clone https://github.com/bookleme/bookleme.git
@@ -318,47 +214,42 @@ cd bookleme
 python3 -m bookleme --version
 ```
 
-2. 用仓库自带样例做一次端到端编译，先确认书 → Skill 能跑通。预期结果是生成一个可校验的产物目录。
+2. 用仓库自带样例做一次端到端编译：
 
 ```bash
 python3 -m bookleme run --input evals/cases/synthetic/coach_book.md --title 我的第一本书
 ```
 
-3. 校验产物。官方校验器 + 自有 lint + 版权硬门三重；不要只看 run 成功。
+3. 校验产物，官方校验器 + 自有 lint + 版权硬门三重；不要只看 run 成功：
 
 ```bash
 python3 -m bookleme validate examples/coach
 ```
 
-4. 跑回归测试，确认环境与抽取器行为一致。
+4. 跑回归测试：
 
 ```bash
 python3 -m unittest discover -s tests -v
 ```
 
-5. 用自己的书时，按需指定引擎、体裁与使用权。默认 auto 按 12 个确定性体裁特征自动路由；不满意再用 --genre 强制。
+5. 用自己的书时按需指定引擎、体裁与使用权：
 
 ```bash
---engine auto|knowledge_pack|behavior_skill|both   # 引擎选择
---genre <plugin_id>                                # 强制指定体裁
---no-router                                        # 关闭路由，双引擎全出
---install                                          # 写入技能真源（默认关闭）
---user-rights owned|licensed|public_domain|unknown # 使用权声明
+--engine auto|knowledge_pack|behavior_skill|both
+--genre <plugin_id>
+--no-router
+--install
+--user-rights owned|licensed|public_domain|unknown
 ```
 
-6. 公开分发必须显式裸词确认。产物默认私有；第三方书籍生成的 Skill 不得分发。
+6. 公开分发必须显式裸词确认；产物默认私有，第三方书籍生成的 Skill 不得分发：
 
 ```bash
 --public --confirm-public PUBLISH
 ```
 
-7. 新增体裁 = 写一个插件文件，零改核心。插件必须声明以下字段，缺一即拒绝加载：state_machine、output_contract、hard_constraints、anti_patterns、voice_calibration、copyright_profile、trigger_words（3–5 个中文触发词）、eval_prompts（必须含至少 1 个负例）。
-
-```text
-bookleme/plugins/user/<genre_id>.py
-```
-
-8. 提交或扩展前跑规范校验，这是作者写进 CONTRIBUTING 的红线检查。
+7. 新增体裁 = 写一个插件文件，零改核心。插件必须声明 state_machine、output_contract、hard_constraints、anti_patterns、voice_calibration、copyright_profile、trigger_words（3–5 个中文触发词）、eval_prompts（至少 1 个负例），缺一即拒绝加载。
+8. 提交或扩展前跑规范校验：
 
 ```bash
 python3 -m unittest discover -s tests -v
@@ -366,14 +257,14 @@ python3 -m bookleme schema --state
 python3 -m bookleme plugin validate bookleme/plugins/builtin/coach_dialogue.py
 ```
 
-9. 落地前先读四份规范：docs/ARCHITECTURE.md、docs/PLUGIN_SPEC.md、docs/FIDELITY.md、docs/EVALS.md。README 只是入口，真正的可照做细节在这些文档里。
-10. 把 6 条版权硬门当作自己产物的验收清单，任一失败即不安装、不发布：单条引文 ≤150 字且逐字可追溯；总引文比 ≤0.03；连续复制 ≤150 字；13 字 shingle 重叠 ≤0.10；产物不含全文/切片；contains_original_text = false。
-11. 做最小试用与判定。选一本你熟悉、且有权使用的书（10 万字内），转成 md/epub/pdf；跑 run --input <你的书> --title 书名 --user-rights owned，观察是否自动路由到合理体裁；跑 validate <产物目录>，记录 7 个指标的实测值；人工做三组对抗测试：负例拒答、逐字溯源 5 条、触发词各触发一次；再把产物装进日常 Agent，用 3 个真实工作任务比较不用 Skill 与用 Skill 的差异。
+9. 落地前先读 docs/ARCHITECTURE.md、docs/PLUGIN_SPEC.md、docs/FIDELITY.md、docs/EVALS.md。
+10. 把 6 条版权硬门当验收清单，任一失败即不安装、不发布：单条引文 ≤150 字且逐字可追溯；总引文比 ≤0.03；连续复制 ≤150 字；13 字 shingle 重叠 ≤0.10；产物不含全文/切片；contains_original_text = false。
+11. 做最小试用与判定：选一本你熟悉且有权使用的书（10 万字内），转成 md/epub/pdf；跑 run --input <你的书> --title 书名 --user-rights owned，观察是否自动路由到合理体裁；跑 validate <产物目录>，记录 7 个指标实测值；人工做负例拒答、逐字溯源 5 条、触发词各触发一次；再把产物装进日常 Agent，用 3 个真实工作任务比较不用 Skill 与用 Skill 的差异。
 
 ### 做法 AX：把重复踩坑写成按现象触发的经验卡
 
-1. 在工作区建 procedures/ 目录。放入 INDEX.md（只做易混现象消歧）、_模板.md，建议再加 _inbox.md。
-2. 写卡片骨架。每张卡控制在 2 KB 以内，保留命令、参数、路径、报错原文、判据和证据，删掉叙述。模板如下：
+1. 在工作区建 procedures/ 目录，放入 INDEX.md（只做易混现象消歧）、_模板.md，建议再加 _inbox.md。
+2. 写卡片骨架。每张卡控制在 2 KB 以内，保留命令、参数、路径、报错原文、判据和证据，删掉叙述。模板：
 
 ```markdown
 # 分类-现象
@@ -399,7 +290,7 @@ python3 -m bookleme plugin validate bookleme/plugins/builtin/coach_dialogue.py
 证据：<会话 id / commit / 文件路径>
 ```
 
-3. 挂钩子。把下面 4 条约定写进全局指令文件，让所有工作区共享机制；钩子约 0.6 KB，是整套机制唯一常驻内容。
+3. 挂钩子。把下面 4 条约定写进全局指令文件；钩子约 0.6 KB，是整套机制唯一常驻内容。
 
 ```markdown
 ## 经验流程（procedures）
@@ -419,9 +310,9 @@ node tools/scan-sessions.mjs calls <workspace> '<关键词正则>'
 ```
 
 按复发筛选：同一现象在多个会话出现过才优先成卡。
-5. 写第一批卡。从最近 2–3 个坑开始，不要一次写十几张；每张不超过 2 KB，六段结构，删叙述，保留命令、参数、路径、报错原文、判据、证据。
+5. 写第一批卡。从最近 2–3 个坑开始，不要一次写十几张；每张不超过 2 KB，六段结构，删叙述。
 6. 踩坑当下记 inbox，收尾只检查。入库和出库都建议人审，不把写卡权限完全交给 agent。
-7. 验证钩子是否生效。能用 tools/procedures-probe.mjs 监控，或人工观察；问 3–5 个分属不同卡片的现象，看是否出现 <<< HIT 或是否去读 procedures/。没有触发时先改钩子位置、措辞和触发词。
+7. 验证钩子是否生效。可用 tools/procedures-probe.mjs 监控，或人工观察；问 3–5 个分属不同卡片的现象，看是否出现 <<< HIT 或是否去读 procedures/。没有触发时先改钩子位置、措辞和触发词。
 8. 定期体检。攒到十几张卡以后运行：
 
 ```bash
@@ -433,7 +324,7 @@ node tools/procedures-audit.mjs
 
 ### 做法 BA：先让 agent 看片，再用逐帧对照交证明
 
-1. 准备运行环境。前提：本机已有 Python 3.9+ 与 ffmpeg；会开浏览器的脚本还需要 Playwright + chromium。
+1. 准备运行环境：Python 3.9+ 与 ffmpeg；会开浏览器的脚本还需要 Playwright + chromium。
 
 ```bash
 pip install playwright && python -m playwright install chromium
@@ -446,7 +337,7 @@ claude plugin marketplace add lovisdotio/motion2code
 claude plugin install motion2code@motion2code
 ```
 
-或者直接拷技能目录：
+或直接拷技能目录：
 
 ```bash
 cp -R skills/motion2code ~/.claude/skills/
@@ -458,7 +349,7 @@ cp -R skills/motion2code ~/.claude/skills/
 npx skills add lovisdotio/motion2code
 ```
 
-3. 准备源片与任务说明。用自然语言下指令，例如：
+3. 准备源片与任务说明，用自然语言下指令，例如：
 
 ```text
 Rebuild clip.mp4 as an SVG + GSAP animation that loops
@@ -472,13 +363,13 @@ python3 scripts/study_video.py clip.mp4 -o study/
 ```
 
 输出：每 0.25 s 一帧、硬切前后帧、contact sheet、扁平调色板、源片是否循环的评分，汇总在 study.json。
-5. 写页面：必须满足页面契约：
+5. 写页面，必须满足页面契约：
 
 ```js
 window.anim = { tl, duration, seek(t), play(from), pause() }
 ```
 
-硬规则：只用给定的源视频，绝不重新生成、绝不内嵌视频、绝不描帧；文字严格按源提示词里的写法；扁平形状用 SVG，颜色从源片采样；GSAP 时间线是唯一时钟；循环在代码里完成：frame(duration) 等于 frame(0)；每个时刻都要和源片并排对照过。
+硬规则：只用给定源视频，绝不重新生成、绝不内嵌视频、绝不描帧；文字严格按源提示词写法；扁平形状用 SVG，颜色从源片采样；GSAP 时间线是唯一时钟；循环在代码里完成：frame(duration) 等于 frame(0)；每个时刻都要和源片并排对照过。
 6. 逐帧对照打分：
 
 ```bash
@@ -531,7 +422,7 @@ npx playwright install chromium
 node skills/convert-site/scripts/preflight.mjs
 ```
 
-3. 用一句话发起整件事：
+3. 用一句话发起：
 
 ```text
 Convert https://example.com to Astro with https://github.com/ethanplusai/astro-conversion-kit
@@ -539,8 +430,8 @@ Convert https://example.com to Astro with https://github.com/ethanplusai/astro-c
 
 4. 让它按八个阶段跑：Intake、Capture、Plan、Scaffold + baseline、Build、Gates、Visual review、Launch checks。每个阶段都有产出物和门禁证据。
 5. 停在 PR + noindex staging，不碰 DNS。看 PR 里附的门禁输出、各项计数、每一条例外与提案，以及 contact sheet 与 docs/suggestions.md。
-6. 明确它拒绝做的事：在 EOL 的 Node 上跑；在线上站提交表单或登录；碰 DNS；往 main 提交除脚手架以外的任何东西；放宽任何一道门禁；一次只做一个站。
-7. 按可观察指标验收。门禁通过率、重定向覆盖、SEO 保真、媒体保真、三宽度视觉、人工成本。
+6. 明确它拒绝做的事：在 EOL Node 上跑；在线上站提交表单或登录；碰 DNS；往 main 提交除脚手架以外的任何东西；放宽门禁；一次只做一个站。
+7. 按可观察指标验收：门禁通过率、重定向覆盖、SEO 保真、媒体保真、三宽度视觉、人工成本。
 
 ### 做法 BD：先出设计图、人工审图，再让编码 agent 照图建站
 
@@ -568,7 +459,7 @@ codex plugin add imagegen-skills@imagegen-skills
 装完必须新开一个 Codex 会话。
 4. 按目标选型。只要设计图，选 imagegen-frontend-web、imagegen-frontend-mobile 或 brandkit 之一，配一个能出图的智能体；要图到代码闭环，选 image-to-code，配一个既能出图又能写代码的智能体。
 5. 跑流水线：先逐张生成设计图，人工看过图之后，再让编程智能体照图实现。
-6. 做对照与判定。可观察指标：审图通过率、从图到可运行页面的返工轮次、分区之间的风格一致性、文字可读性硬问题数、端到端总耗时。
+6. 做对照与判定。指标：审图通过率、从图到可运行页面的返工轮次、分区之间的风格一致性、文字可读性硬问题数、端到端总耗时。
 
 ### 做法 BF：用总入口按创业阶段路由，并把上一步产出交给下一步
 
@@ -628,37 +519,27 @@ python3 scripts/validate.py
 
 ### 做法 BG：用后端安全默认技能，并用隐藏检查验收
 
-1. 选一个后端仓库，挑 2–3 个任务，尽量覆盖三类风险：一个登录或高成本接口（是否限流）；一个按 id 读取资源的接口（是否按调用者作用域过滤）；一次列重命名迁移（是否 expand-contract、是否带 down migration）。为每个任务写一份 agent 看不到的隐藏检查。
+1. 选一个后端仓库，挑 2–3 个任务，尽量覆盖：登录或高成本接口是否限流；按 id 读取资源是否按调用者作用域过滤；列重命名迁移是否 expand-contract、是否带 down migration。为每个任务写一份 agent 看不到的隐藏检查。
 2. 安装到 Claude Code，在项目里执行：
 
 ```sh
 npx skills add globalmpc/backendskills
 ```
 
-3. 安装到 Codex 及其他读取 AGENTS.md 的 agent：把仓库的 dist/AGENTS.md 追加到项目的 AGENTS.md。追加而非覆盖。
-4. 安装到 Cursor：把 dist/cursor/ 下的内容复制到项目 .cursor/rules/。这是 rules 适配，不是原生 skill 机制；原文未说明两者行为是否完全等价。
+3. 安装到 Codex 及其他读取 AGENTS.md 的 agent：把 dist/AGENTS.md 追加到项目 AGENTS.md。追加而非覆盖。
+4. 安装到 Cursor：把 dist/cursor/ 下的内容复制到项目 .cursor/rules/。这是 rules 适配，不是原生 skill 机制。
 5. 填团队约定：打开每个技能末尾的 Make it yours，写明错误格式、API 文档要求。不填时 agent 跟随仓库已有做法。
 6. 按三条清单做代码验收：api-endpoint 检查查询是否带调用者作用域、非法输入是否返回 4xx、登录和高成本路由是否限流；data-integrity 检查 read-then-write 是否用锁或条件更新、是否加 UNIQUE 约束、扣费或发送类操作是否有幂等键；db-migration 检查是否 expand-then-contract、是否并发建索引并设 lock timeout、回填是否分批、是否有 down migration。
-7. 做有/无对照。同一 prompt 各跑 5 次：一次不装技能做基线，一次按上面步骤装好技能并填完 Make it yours 做试验组。逐次记录是否触发 critical mistake、是否漏 down migration 或 API 文档；检查放在 agent 上下文之外，只在跑完后执行。
-8. 复现或自建评测。仓库 bench/ 下有任务集、每次运行的原始记录和重跑方法；结果表由脚本生成：
-
-```sh
-node bench/summarize.mjs bench/results/<date>/runs.jsonl
-```
-
-9. 改技能后重建分发产物：编辑 skills/ 下的文件，然后运行：
-
-```sh
-node scripts/build-dist.mjs
-```
-
+7. 做有/无对照。同一 prompt 各跑 5 次：一次不装技能做基线，一次装好技能并填完 Make it yours 做试验组。逐次记录是否触发 critical mistake、是否漏 down migration 或 API 文档；检查放在 agent 上下文之外，只在跑完后执行。
+8. 复现或自建评测：node bench/summarize.mjs bench/results/<date>/runs.jsonl。
+9. 改技能后重建分发产物：编辑 skills/ 下的文件，然后 node scripts/build-dist.mjs。
 10. 技能仍失效时反馈：开 issue，附上原始 prompt 和 agent 产生的 diff。
 11. 做最小试用与判定：3 个任务、每个任务各 5 次；主指标是 critical mistake 的运行占比，按任务分别看；次指标是团队约定遗漏数；成本侧记录轮数、token 或耗时、人工 review 问题数、回滚和返工次数。若 3 个任务上 critical mistake 至少减半、约定遗漏下降、成本无明显恶化，再扩大；出现 payment-webhook 那样的负向变化，或 agent 为满足规则写出过度复杂代码时，记录并回退对应技能条款。
 
 ### 做法 BH：用一行登记把派给 agent 的活收到已验收（先做单宿主、单件小活）
 
 1. 先只启用两支：dispatch-accept-verify（分工＋交接）和 evidence-before-done（交活前取证）。dispatch-accept-verify 的已验收一步依赖 evidence-before-done，两支一起装；beginner-ops-writing、ops-case-notes 是可选搭配。
-2. 取得技能目录。手动拷贝时整目录拷，不要只拷 SKILL.md；dispatch-accept-verify 必须连它的 templates/ 一起拷，否则登记行模板会丢。
+2. 取得技能目录。手动拷贝时整目录拷，不要只拷 SKILL.md；dispatch-accept-verify 必须连 templates/ 一起拷，否则登记行模板会丢。
 3. Codex 安装。以本机目录作源，正式建仓前不要填 GitHub URL：
 
 ```bash
@@ -667,7 +548,7 @@ codex plugin marketplace add "$(pwd)"
 codex plugin add solo-to-team-skills@solo-to-team-skills
 ```
 
-非 0 退出就停，检查是否指到含 .agents/plugins/marketplace.json 的包根；装完新开一次会话。撤回命令：
+非 0 退出就停，检查是否指到含 .agents/plugins/marketplace.json 的包根；装完新开一次会话。撤回：
 
 ```bash
 codex plugin remove solo-to-team-skills@solo-to-team-skills
@@ -693,14 +574,14 @@ Cursor 的 CLI 形态如 cursor agent --print；对自己新建的工作区做�
 
 定位：Modern Web Guidance 1.0 是 Chrome 团队的免费 skill pack，推文称可通过一条命令装入 Claude Code/Codex，让模型在实现现代 Web 功能时少写旧式代码，覆盖表单、动画、弹窗和菜单、passkey 登录、清理旧项目等场景；原文称不需要改提示词、不写规则、不额外写前端 skill。另一条推文称在 Chrome 自己的 215-task evals 上，Claude Code 从 57% 提升到 88%，Codex 从 54% 提升到 82%，但没有给出任务集、评分标准、运行次数和统计方法。旧材料还给过 legacy-scan 命令，本版保留但注明来源不同。
 
-1. 准备一个可回滚的 Web 项目分支或副本，确认环境能运行 npx，并已安装可运行 Claude Code 或 Codex。原文未说明 Node.js 版本、目录、权限、网络与安全审查等前提；执行前先确认。预期结果是 install 和 scan 的改动都能回滚。
+1. 准备一个可回滚的 Web 项目分支或副本，确认环境能运行 npx，并已安装可运行 Claude Code 或 Codex。原文未说明 Node.js 版本、目录、权限、网络与安全审查等前提；执行前先确认。预期 install 和 scan 的改动都能回滚。
 2. 安装 agent skills：
 
 ```bash
 npx modern-web-guidance@latest install
 ```
 
-原文未说明安装会写入哪些文件、是否需要额外权限；建议先在非关键环境执行并检查变更。预期结果是你能说清它改了哪些文件、是否在预期的 Claude Code/Codex 环境中生成了可用 skill，而不是只看到安装成功。
+原文未说明安装会写入哪些文件、是否需要额外权限；建议先在非关键环境执行并检查变更。预期你能说清它改了哪些文件、是否在预期的 Claude Code/Codex 环境中生成了可用 skill，而不是只看到安装成功。
 3. 如果沿用旧材料里的遗留扫描，在待审计项目根目录运行：
 
 ```bash
@@ -708,19 +589,115 @@ npx modern-web-guidance@latest legacy-scan .
 ```
 
 原文未说明输出格式、退出码和扫描范围，需以实际输出为准。记录扫描输出，不要补造字段。
-4. 选 3–5 个现代 Web 小任务，覆盖表单、动画、弹窗和菜单、passkey 登录、清理旧项目等场景；同一编码智能体、尽量同一 prompt，分别在不装 skill 和装 skill 的条件下各跑至少 3 次。原文没有给出提示词模板或配置示例，不能补造；只按你平常的任务描述发起。预期结果是能比较 diff，而不是只比较它自己的说明。
+4. 选 3–5 个现代 Web 小任务，覆盖表单、动画、弹窗和菜单、passkey 登录、清理旧项目等场景；同一编码智能体、尽量同一 prompt，分别在不装 skill 和装 skill 的条件下各跑至少 3 次。原文没有给出提示词模板或配置示例，不能补造；只按你平常的任务描述发起。预期能比较 diff，而不是只比较它自己的说明。
 5. 观察智能体是否按项目目标采用现代、可访问、Baseline 支持的 Web 基元；同时检查生成代码是否更短、是否减少旧式写法、是否正确使用现代 Web API、功能是否按预期工作，现有测试、构建、lint 是否通过，人工修改行数、返工次数和完成时间是否下降。
 6. 若只有安装成功但没有可解释的 legacy-scan 输出或代码质量改善，不应升级为采用。把 57%→88%、54%→82% 只当试用假设，不能替代本地对照结果。
 7. 打开推文给出的 GitHub 仓库链接，补读 README、支持矩阵和安装说明后再扩大试用范围；原文文本中的链接不完整，需自行确认。
 
-### 专门做法索引（C–BJ）
+### 做法 BK：用阶段路由技能把需求→规格→原型→实现→验证串起来（先做真实小项目）
+
+定位：DevFlow Kit v0.9.0 是可移植 Agent Skills 技能包，把 11 个互补技能打成一个 capsule，用 Python 安装器装进宿主 skills 目录，通过单一入口 $devflow 做任务路由，按当前阶段加载所需指导，并用规格、架构图、mock、实现、验证证据在阶段之间传递已批准决策。安装、调用提示词、验证与打包命令可直接复制，但效果证据只有仓库自述，没有独立数据；先在一个真实小项目上跑一条新功能全流程和一条小改动，重点验证它是否如实报告未执行的检查。
+
+1. 准备。前提：Python 3.12+ 与 Git；一个已存在的目标项目目录。完整验证另需 Node.js 22+、Bash、Playwright/Chromium，依赖放在技能安装之外。预期先确认宿主是否提供模型、文件访问、执行工具；缺一项则相应检查不能被声称完成。
+2. 克隆并安装到项目。前提：目标项目目录已存在。
+
+```bash
+git clone https://github.com/chinhkrb113/devflow-kit.git
+cd devflow-kit
+python plugin/install.py --target codex --project "/path/to/project"
+```
+
+Windows 路径如 D:/my-project 可用。可先用 --dry-run 预览安装目标；--scope user 替代 --project 可做用户级安装。原文说明：安装器保留已有内容，遇到被修改过的安装会拒绝覆盖，升级/回滚见 plugin/INSTALL.md。预期在 <skills-root>/devflow 下创建含全部 11 个组件与支撑资源的目录。
+3. 安装后自检：
+
+```bash
+python plugin/install.py --target codex --project "/path/to/project" --check
+```
+
+预期确认安装结构。注意：复制文件、宿主能发现技能、能实际执行技能是三件不同的事；自检不等于执行能力。
+4. 新会话走完整流程。前提：开一个全新的 agent 会话（Codex 里用 $devflow，其他宿主用其暴露的名字/命令）。
+
+```text
+$devflow Build a task management tool for a small team.
+Clarify requirements, compare reference systems, write the specification
+and acceptance criteria, draw the architecture, then create an interactive
+mock to agree on behavior before implementation.
+```
+
+预期得到需求澄清、参考系统比较、规格与验收标准、架构图、可点击 mock，再进入实现。
+5. 已有项目上的小改动（不重启全流程）。前提：项目已有既定品牌与技术栈。
+
+```text
+$devflow Fix keyboard focus in the existing modal. Preserve the approved
+brand and stack. Check initial focus, Tab order, closing behavior and
+focus return. Report the checks that actually ran.
+```
+
+预期保留已批准决策，聚焦的 UI 修复不重启整个设计流程；“Report the checks that actually ran”是刻意要求区分跑过与没跑。
+6. 通过路由要一张架构图：
+
+```text
+$devflow Inspect the current system and draw its architecture.
+Show components, data flows and external dependencies. Separate observed
+behavior from proposals. Reuse the project's visual style, deliver editable
+HTML/SVG, and validate the diagram before reporting it complete.
+```
+
+预期得到可编辑 HTML/SVG，区分观察到的行为与提议，自检图。边界：架构图只描述现有证据支持的系统，架构正确性仍取决于源证据与人工评审。
+7. 有界代码评审：
+
+```text
+$devflow Review the changes between main and this branch. Use Open Code
+Review in host-model delegation mode when available. Account for every
+selected file, verify findings against source and report coverage gaps.
+Do not modify the code.
+```
+
+预期对每个被选中的文件都有交代，报告覆盖率缺口，不修改代码。
+8. 聚焦的安全审查：
+
+```text
+$devflow Use Security Audit guidance to inspect authorization in this API.
+Trace the relevant trust boundary and distinguish confirmed source evidence
+from facts that still need validation. Keep this a focused source review.
+```
+
+预期源码优先、区分确认证据与待验证事实。边界：明确要求全面审计时才走完整六阶段流程，它需要独立验证与适当隔离才能跑目标方控制的代码；安装这个技能本身不提供这些能力，缺失能力要留在结果里可见，不能拿成功顶替。
+9. 验证与打包：
+
+```bash
+python plugin/verify_bundle.py --with-example --report .local/verification.json
+python scripts/package_skill.py --output dist/devflow-kit-v0.9.0.zip
+python scripts/package_skill.py --format plugin --output dist/devflow-kit-plugin-v0.9.0.zip
+```
+
+运行环境在默认路径之外时用 --node / --playwright-module 或 NODE_BINARY / PLAYWRIGHT_MODULE 环境变量。打包拒绝覆盖已有归档，并写 SHA-256 sidecar。注意：验证器通过 ≠ 视觉检查 ≠ 内容评审；技术结果与人工验收要分开。
+10. 换宿主或通用宿主：
+
+| Harness | 安装目标 | 项目技能根目录 |
+|---|---|---|
+| Codex | codex | .agents/skills |
+| Claude Code | claude-code | .claude/skills |
+| DeepSeek Harness | dsh | .dsh/skills |
+| Trae / Trae CN | trae / trae-cn | .trae/skills |
+| 其他 Agent Skills 宿主 | generic | 显式 --skills-root |
+
+```bash
+python plugin/install.py --target generic --skills-root "/exact/skills/root"
+```
+
+把快速开始里的 codex 换成对应目标即可。某些宿主把它暴露为 devflow-kit:<component>，要用宿主返回的确切名字与路径，并保持整个 capsule 完整，否则同级策略与资源会丢失。
+11. 按需进入某一阶段。原文明确支持不从头跑：新产线走完整流程，已有项目从相关阶段进入；devflow 负责选工作流并加载支撑技能。
+12. 做最小试用与判定。选一个真实小项目，跑一条新功能全流程和一条小改动；记录是否如实报告未执行的检查、是否区分确认证据与待验证事实、评审覆盖率缺口、验证器报告、人工验收、返工轮次和耗时。没有独立效果数据，只有仓库自述；不要用安装成功或 verify_bundle 通过当效果证据。
+
+### 专门做法索引（C–BK）
 
 下表保留各专门做法的用途和入口；完整边界以对应仓库 README 和本手册的判断原则为准。所有条目都先套用做法 A 的对照方法。
 
 | 做法 | 什么时候用 | 入口与关键动作 |
 | --- | --- | --- |
-| C | 多来源知识打包 | pip install skill-seekers；skill-seekers create https://docs.djangoproject.com/；skill-seekers package output/django --target claude；质量门禁可试但不等于效果证明 |
-| D | 自建网关或想用已有订阅走非官方 API | 手动设置 settings.json；把 ANTHROPIC_BASE_URL 和 ANTHROPIC_API_KEY 指向你的端点；非官方 API 环境用 MCP 补网页搜索 |
+| C | 多来源知识打包 | pip install skill-seekers；skill-seekers create；skill-seekers package；质量门禁不等于效果证明 |
+| D | 自建网关或已有订阅走非官方 API | 设置 settings.json；ANTHROPIC_BASE_URL 和 ANTHROPIC_API_KEY 指向端点；非官方 API 用 MCP 补网页搜索 |
 | E | 中文技术文档写作与审稿 | npx skills add leter/zh-tech-writing -g；第一次只审不改；再改一版逐条 diff |
 | F | 单篇生物医学论文精读 | clone Gaoyuan-0423/biomedical-paper-reader；指定其 SKILL.md 阅读 PDF；检查判定纪律 |
 | G | 写一个 Claude Code mod | Claude Code 2.1.287 或更高；hooks/hooks.json 只指一个模块；读 session.usage 的真实数字 |
@@ -778,38 +755,41 @@ npx modern-web-guidance@latest legacy-scan .
 | BH | 一个人带多个 AI 助手，派活要能收回、核过再算完成 | 安装 dabingfy-dot/solo-to-team-skills 的 dispatch-accept-verify + evidence-before-done 两支；整目录拷并带上 templates/；派前写待收登记，按待收→已接单→已收到成果→已验收推进；用说完成但核不过的比例、超期到被发现的天数验收 |
 | BI | 把一本有权使用的书编译成可校验的知识包或行为技能，并要拒答书外问题 | 见做法 BI；git clone bookleme/bookleme；python3 -m bookleme run --input <书> --user-rights owned；python3 -m bookleme validate <产物目录>；看 7 个指标、负例拒答和 6 条版权硬门；coverage_score 未达标前只小范围试 |
 | BJ | 让 Claude Code/Codex 写 Web 前端时采用现代、可访问、Baseline 基元，并扫出遗留写法 | npx modern-web-guidance@latest install；npx modern-web-guidance@latest legacy-scan .；先检查 install 改动和是否生成可用 skill；同一批现代 Web 小任务做装/不装对照；原文缺输出格式、支持矩阵、任务集和统计方法 |
+| BK | 把需求→规格→原型→实现→验证串成阶段流程，并用项目工件传递已批准决策 | 安装 chinhkrb113/devflow-kit 到项目 .agents/skills 或 .claude/skills 等；python plugin/install.py --target <host> --project ...；新会话用 $devflow 跑全流程和小改动；python plugin/verify_bundle.py --with-example --report ...；重点看是否如实报告未执行的检查 |
 
 ## 怎么判断变好了
 
-做法 A 的最小试用方式：同一任务、同一输入，有技能和无技能各跑 3 次；至少覆盖 5 个同类任务，或持续一周。可观察指标是人工修改次数、返工轮数、首稿可用率、背景重述次数、输出一致性、单次任务耗时、规则类返工次数。不要拿安装成功或 doctor 通过当效果证据。
+做法 A 的最小试用：同一任务、同一输入，有技能和无技能各跑 3 次；至少覆盖 5 个同类任务，或持续一周。指标是人工修改次数、返工轮数、首稿可用率、背景重述次数、输出一致性、单次任务耗时、规则类返工次数。不要拿安装成功或 doctor 通过当效果证据。
 
-做法 B 的最小试用方式：换一个新会话，让不了解背景的人只凭 description 触发；或让同事只读 description 判断什么时候会用。指标是该技能被正确触发的次数、触发后返工轮数、你手动补充规范的次数。按 Agent Skills 的渐进披露再增加三项：启动时是否只暴露名称和描述；任务匹配时是否读取完整 SKILL.md；执行时是否只加载所需脚本或引用文件。若 agent 不加载、加载后不遵循或脚本无法执行，先修 description、instructions 和资源组织。
+做法 B 的最小试用：换一个新会话，让不了解背景的人只凭 description 触发；或让同事只读 description 判断什么时候会用。指标是该技能被正确触发的次数、触发后返工轮数、你手动补充规范的次数。按渐进披露再增加三项：启动时是否只暴露名称和描述；任务匹配时是否读取完整 SKILL.md；执行时是否只加载所需脚本或引用文件。若 agent 不加载、加载后不遵循或脚本无法执行，先修 description、instructions 和资源组织。
 
-做法 BE 的最小试用方式：用 --plugin-dir 单会话试用，避免影响他人；选 3 个真实任务，每个任务在装 skill 和不装 skill 下各跑一次，共 6 次，尽量固定 prompt。可观察指标：断言通过率；cargo fmt --check、cargo clippy -- -D warnings、cargo test、cargo doc 四个命令的一次通过率；token 成本增量；人工 review 的返工轮次和评论条数。原文量级是有 skill 时 29/30、无 skill 时 24/30，token 约多三分之一；这是作者自述且样本很小，提升不到 2 条断言可视为噪声，通过率提升低于 10% 就不值得长期维护。
+做法 BE 的最小试用：用 --plugin-dir 单会话试用；选 3 个真实任务，每个任务在装 skill 和不装 skill 下各跑一次，共 6 次，尽量固定 prompt。指标：断言通过率；cargo fmt --check、cargo clippy -- -D warnings、cargo test、cargo doc 四个命令的一次通过率；token 成本增量；人工 review 的返工轮次和评论条数。原文量级是有 skill 时 29/30、无 skill 时 24/30，token 约多三分之一；这是作者自述且样本很小，提升不到 2 条断言可视为噪声，通过率提升低于 10% 就不值得长期维护。
 
-做法 M 的最小试用方式：选一本结构清晰、章节明确的技术书或内部 PDF，先记录不用技能时 Claude Code 回答书中问题的基线；再运行 /book-to-skill 生成技能，在相同问题上对比。建议准备 10 到 20 个覆盖不同章节的问题，其中包含需要定位具体章节、步骤和条件的问题。可观察指标是：事实准确率、定位能力、完整性、稳定性、人工查找时间、失败率。只有在一本真实文档上跑通，并且上述指标相对基线有改善，才值得把该流程写入手册；否则保留为待验证候选。
+做法 M 的最小试用：选一本结构清晰、章节明确的技术书或内部 PDF，先记录不用技能时 Claude Code 回答书中问题的基线；再运行 /book-to-skill 生成技能，在相同问题上对比。建议准备 10 到 20 个覆盖不同章节的问题，其中包含需要定位具体章节、步骤和条件的问题。指标是事实准确率、定位能力、完整性、稳定性、人工查找时间、失败率。只有在一本真实文档上跑通，并且上述指标相对基线有改善，才值得纳入常规；否则保留为待验证候选。
 
-做法 BI 的最小试用方式：半天内选一本你熟悉、且有权使用的书（10 万字内），转成 md/epub/pdf；跑 run --input <你的书> --title 书名 --user-rights owned，观察是否自动路由到合理体裁；跑 validate <产物目录>，记录 7 个指标的实测值；人工做三组对抗测试：负例拒答、逐字溯源 5 条、触发词各触发一次；再把产物装进日常 Agent，用 3 个真实工作任务比较不用 Skill 与用 Skill 的差异。硬指标：negative_refusal_rate = 1.00、verbatim_violation_rate = 0.00、citation_resolution_rate = 1.00，任一不达标即说明忠实链路有洞。及格线指标：trigger_hit_rate ≥ 0.90、shingle_overlap_max ≤ 0.10、artifact_compliance_rate = 1.00。需自行观察：coverage_score 作者自测仅 0.667，目标 ≥0.85，低于 0.85 应降低信任或换体裁插件重跑。groundedness 等 judge 类指标未接入，恒为 null，不建议现在依赖。
+做法 BI 的最小试用：半天内选一本你熟悉且有权使用的书（10 万字内），转成 md/epub/pdf；跑 run --input <你的书> --title 书名 --user-rights owned，观察是否自动路由到合理体裁；跑 validate <产物目录>，记录 7 个指标实测值；人工做负例拒答、逐字溯源 5 条、触发词各触发一次；再把产物装进日常 Agent，用 3 个真实工作任务比较不用 Skill 与用 Skill 的差异。硬指标：negative_refusal_rate = 1.00、verbatim_violation_rate = 0.00、citation_resolution_rate = 1.00，任一不达标即说明忠实链路有洞。及格线指标：trigger_hit_rate ≥ 0.90、shingle_overlap_max ≤ 0.10、artifact_compliance_rate = 1.00。需自行观察：coverage_score 作者自测仅 0.667，目标 ≥0.85，低于 0.85 应降低信任或换体裁插件重跑。groundedness 等 judge 类指标未接入，恒为 null，不建议现在依赖。
 
-做法 AX 的最小试用方式：选 1 个重复排障多的仓库，建 procedures/，写全局钩子，只写 2–3 张复发卡；用 3–5 个现象问题新开会话验证是否读卡。试运行一段时间，记录重复试错轮次是否下降、同类坑复发次数是否下降、读卡命中率、无关读卡或乱翻次数、每张卡体积和维护耗时。可用 tools/procedures-probe.mjs 观察是否出现 <<< HIT，或用 tools/procedures-audit.mjs 检查结构缺段、断链、体积、触发词覆盖、对象失效和结论偏旧。判定门槛是同一现象第二次出现时能直接命中首选或别再来，且没有把大量未使用卡塞进上下文。
+做法 AX 的最小试用：选 1 个重复排障多的仓库，建 procedures/，写全局钩子，只写 2–3 张复发卡；用 3–5 个现象问题新开会话验证是否读卡。记录重复试错轮次是否下降、同类坑复发次数是否下降、读卡命中率、无关读卡或乱翻次数、每张卡体积和维护耗时。可用 tools/procedures-probe.mjs 观察是否出现 <<< HIT，或用 tools/procedures-audit.mjs 检查结构缺段、断链、体积、触发词覆盖、对象失效和结论偏旧。判定门槛是同一现象第二次出现时能直接命中首选或别再来，且没有把大量未使用卡塞进上下文。
 
-做法 BA 的最小试用方式：选一段 10 秒左右的扁平动效视频或 UI 动效录屏，先跑 study_video 生成 study.json、调色板和硬切前后帧；按页面契约写 index.html，再依次跑 frame_diff、check_anim --runtime、render_anim、side_by_side，保存 diff/ 的最差五处、运行时体检结果和对照视频。可观察指标是：frame_diff 的每时刻分数与最差五处是否下降；check_anim --runtime 是否还有控制台报错、意外网络请求、循环接缝不闭合、seek 不确定；页面是否混入内嵌位图或视频；render_anim 是否因走 anim.seek 而没有丢帧或重复帧。
+做法 BA 的最小试用：选一段 10 秒左右的扁平动效视频或 UI 动效录屏，先跑 study_video 生成 study.json、调色板和硬切前后帧；按页面契约写 index.html，再依次跑 frame_diff、check_anim --runtime、render_anim、side_by_side，保存 diff/ 的最差五处、运行时体检结果和对照视频。指标：frame_diff 的每时刻分数与最差五处是否下降；check_anim --runtime 是否还有控制台报错、意外网络请求、循环接缝不闭合、seek 不确定；页面是否混入内嵌位图或视频；render_anim 是否因走 anim.seek 而没有丢帧或重复帧。
 
-做法 BC 的最小试用方式：选一个低流量站点或 20–50 页子目录/子站，先把 preflight.mjs 跑通；用发起提示词跑到 PR + noindex staging 就停，不上线。判断指标：门禁通过率、重定向覆盖、SEO 保真、媒体保真、三宽度视觉、人工成本。
+做法 BC 的最小试用：选一个低流量站点或 20–50 页子目录/子站，先把 preflight.mjs 跑通；用发起提示词跑到 PR + noindex staging 就停，不上线。指标：门禁通过率、重定向覆盖、SEO 保真、媒体保真、三宽度视觉、人工成本。
 
-做法 BD 的最小试用方式：装 imagegen-frontend-web，拿一个真实落地页需求让智能体逐区出图；装 image-to-code，对同一需求跑完整流水线；设基线：同一需求、同一编程智能体，不用任何设计图直接建站。判断指标：审图通过率、图到页面返工轮次、风格一致性、文字可读性硬问题数、端到端总耗时。
+做法 BD 的最小试用：装 imagegen-frontend-web，拿一个真实落地页需求让智能体逐区出图；装 image-to-code，对同一需求跑完整流水线；设基线：同一需求、同一编程智能体，不用任何设计图直接建站。指标：审图通过率、图到页面返工轮次、风格一致性、文字可读性硬问题数、端到端总耗时。
 
-做法 BF 的最小试用方式：只装到 Codex 或 Claude Code 中的一个工具；选一个真实 AI 产品想法或一个真实任务；先用总入口跑一次，记录阶段判断、追问的问题数、调用的子 skill；再用直接点名同一子 skill 的方式跑一次作为对照；把每一步产出保存下来，下一步调用时附上。可观察指标：路由准确性、产出可用性、交接完整性、引用可靠性、结构校验、效率对比。若连续几次都出现路由错误、产出无法进入下一步或引用不可靠，就降级为 study。
+做法 BF 的最小试用：只装到 Codex 或 Claude Code 中的一个工具；选一个真实 AI 产品想法或一个真实任务；先用总入口跑一次，记录阶段判断、追问的问题数、调用的子 skill；再用直接点名同一子 skill 的方式跑一次作为对照；把每一步产出保存下来，下一步调用时附上。指标：路由准确性、产出可用性、交接完整性、引用可靠性、结构校验、效率对比。若连续几次都出现路由错误、产出无法进入下一步或引用不可靠，就降级为 study。
 
-做法 BG 的最小试用方式：选 3 个后端任务，尽量覆盖登录/高成本接口、按 id 读取资源、列重命名迁移；每个任务写一份 agent 看不到的隐藏检查；同一 prompt 不装技能和装好技能各跑 5 次。主指标是 critical mistake 的运行占比，按任务分别看；次指标是团队约定遗漏数；成本侧记录轮数、token 或耗时、人工 review 问题数、回滚/返工次数。原文量级：15 个后端任务，Sonnet 5.5 与 Haiku 5.5 各跑 5 次/任务；critical mistake 无技能 25/150、有技能 2/150；Haiku 12/75→2/75，Sonnet 13/75→0/75；约定遗漏 30→4；login-rate-limit 和 rename-column 两模型均 5/5→0/5；多数任务本来 0/5→0/5，对总量贡献为零。Haiku 在乱序 webhook 上仍失败，payment-webhook 一栏 1/5→2/5 反向波动。这些是作者自测，样本小，需自行复验。
+做法 BG 的最小试用：选 3 个后端任务，尽量覆盖登录/高成本接口、按 id 读取资源、列重命名迁移；每个任务写一份 agent 看不到的隐藏检查；同一 prompt 不装技能和装好技能各跑 5 次。主指标是 critical mistake 的运行占比，按任务分别看；次指标是团队约定遗漏数；成本侧记录轮数、token 或耗时、人工 review 问题数、回滚/返工次数。原文量级：15 个后端任务，Sonnet 5.5 与 Haiku 5.5 各跑 5 次/任务；critical mistake 无技能 25/150、有技能 2/150；Haiku 12/75→2/75，Sonnet 13/75→0/75；约定遗漏 30→4；login-rate-limit 和 rename-column 两模型均 5/5→0/5；多数任务本来 0/5→0/5，对总量贡献为零。Haiku 在乱序 webhook 上仍失败，payment-webhook 一栏 1/5→2/5 反向波动。这些是作者自测，样本小，需自行复验。
 
-做法 BH 的最小试用方式：一人、一宿主、一件两周内能收的小活。只装 dispatch-accept-verify 和 evidence-before-done 两支，连 templates/ 整目录拷；建一张表当共享记录，用登记行模板；派前写待收，到点人工去查；走完待收 → 已接单 → 已收到成果（写明结果在哪）→ 取证 → 已验收，过程中人为触发一次退回，看退回后状态是否还看得见。跑满两周，期间不加新字段。可观察指标：说完成了但核不过的比例；超期未接单/未收的活数量，以及从超期到被发现的天数；同一类错误重复出现的次数；每件活的返工轮次与从派到验收的总时长；登记行里已验收占比与待收积压量。若核不过比例和超期发现延迟两项都没有下降，说明多出来的只是记账，应停用或砍字段。原文数据是 Cursor CLI 约 29.6 秒打出登记行（不含装宿主、注册、手动打字时间），八家宿主各有能装能调记录和一份有限任务验收，队内日更主链跑了约两周余、复盘 3 次；没有对照实验，不表示每家四个技能都逐一被调用。
+做法 BH 的最小试用：一人、一宿主、一件两周内能收的小活。只装 dispatch-accept-verify 和 evidence-before-done 两支，连 templates/ 整目录拷；建一张表当共享记录，用登记行模板；派前写待收，到点人工去查；走完待收 → 已接单 → 已收到成果（写明结果在哪）→ 取证 → 已验收，过程中人为触发一次退回，看退回后状态是否还看得见。跑满两周，期间不加新字段。指标：说完成了但核不过的比例；超期未接单/未收的活数量，以及从超期到被发现的天数；同一类错误重复出现的次数；每件活的返工轮次与从派到验收的总时长；登记行里已验收占比与待收积压量。若核不过比例和超期发现延迟两项都没有下降，说明多出来的只是记账，应停用或砍字段。原文数据是 Cursor CLI 约 29.6 秒打出登记行（不含装宿主、注册、手动打字时间），八家宿主各有能装能调记录和一份有限任务验收，队内日更主链跑了约两周余、复盘 3 次；没有对照实验，不表示每家四个技能都逐一被调用。
 
-做法 BJ 的最小试用方式：在一个非关键 Web 项目分支上执行 install 和 legacy-scan，记录安装改动的文件、是否生成可用 skill、扫描输出是否可解释；选 3–5 个现代 Web 小任务（如表单、动画、弹窗/菜单、passkey 登录、清理旧项目），让同一 Claude Code 或 Codex 在未安装和安装 skill 的条件下各跑至少 3 次，保持任务描述和项目上下文一致，比较 diff、生成代码行数、旧式写法数量、现代 Web API 使用、测试、构建、lint、人工评审返工和完成时间。判断指标：命令是否成功且可回滚；scan 是否给出可解释的遗留问题；智能体改动是否更多使用现代/可访问/Baseline 支持基元；现有测试、构建、lint 是否通过；人工评审的返工次数和完成时间是否下降。原文的 215-task evals 汇总数字（Claude Code 57%→88%，Codex 54%→82%）只能作为试用假设，不能替代本地对照结果；若只有安装成功但没有可解释输出或代码质量改善，不应升级为 adopt。
+做法 BJ 的最小试用：在一个非关键 Web 项目分支上执行 install 和 legacy-scan，记录安装改动的文件、是否生成可用 skill、扫描输出是否可解释；选 3–5 个现代 Web 小任务（如表单、动画、弹窗/菜单、passkey 登录、清理旧项目），让同一 Claude Code 或 Codex 在未安装和安装 skill 的条件下各跑至少 3 次，保持任务描述和项目上下文一致，比较 diff、生成代码行数、旧式写法数量、现代 Web API 使用、测试、构建、lint、人工评审返工和完成时间。指标：命令是否成功且可回滚；scan 是否给出可解释的遗留问题；智能体改动是否更多使用现代/可访问/Baseline 支持基元；现有测试、构建、lint 是否通过；人工评审的返工次数和完成时间是否下降。原文的 215-task evals 汇总数字只能作为试用假设，不能替代本地对照结果；若只有安装成功但没有可解释输出或代码质量改善，不应升级为 adopt。
 
-专门做法 C–BJ 的统一试用方式：选一个与所装技能对应的真实小任务，先在不装该技能的会话里做一次并保存输出，再装上做一次；同一任务至少跑 3 次，或换 2–3 个任务再下结论。通用指标是首稿可用率、人工修改次数、返工轮数、查文档时间、命令或配置正确率、权限申请次数、耗时和成本。各条目的特别指标按索引执行。
+做法 BK 的最小试用：选一个真实小项目，跑一条新功能全流程和一条小改动，最好覆盖 3–5 个任务并持续一周。指标：是否如实报告未执行的检查；缺 shell/浏览器时是否仍声称跑过；规格与验收标准是否可评审；架构图是否区分观察与提议；mock 是否帮助先定行为；评审是否对每个选中文件有交代并报覆盖率缺口；安全审查是否区分确认证据与待验证事实；verify_bundle 的 JSON 报告、打包产物与 SHA-256 sidecar 是否可追溯；人工验收通过率、返工轮次、从需求到可验收的耗时。没有独立效果数据，只有仓库自述；不要用安装成功或 verify_bundle 通过当效果证据。
 
-反向指标：加了技能后仍要口头纠正同一件事，先改 SKILL.md 或 description；文档改完只是删空话没补事实，先把代码、配置和真实报错给它读；agent 只凭自己的声明就宣布完成，而 git status 和测试报告不支持，作废重跑；同一断言连续失败 3 次还在本地重试，升级到强模型；出图技能每次失败都盲重试，说明没用上 diagnostics；plugin-eval 分数不错但真实任务没改善，说明把筛子当成了结论；AX 跑几个会话后 observation-log 或读卡行为仍不存在，先补钩子、触发词或探针，不要先加卡；M 只跑通 /book-to-skill 但同组问题的事实准确率、定位能力和完整性没有改善，就保留为待验证候选；BI 只看 run 成功、不看 coverage_score、负例拒答和逐字溯源，或把 coverage_score 0.667 当达标，就降级为 study；BA 的 frame_diff 只给出整体分数却定位不到最差时刻，或 agent 仍在偷偷内嵌视频、描帧、改文字，先修契约和硬规则；BC 只看转换成功或像素一致，不检查重定向、SEO、媒体和 staging 功能，就降级为 study；BD 只看生成的图好看，不看审图通过率、图到页面的返工轮次和文字可读性硬问题，就降级为 study；BE 只看技能装上了、断言通过数比基线多 1–2 条，就宣布有效，或忽略 token 多三分之一和 grader 自评偏差，就降级为待验证候选；BF 只看装上、validate.py 通过或总入口说得头头是道，不看路由是否正确、产出能否交给下一步、政策引用是否可点开官方原文，就降级为 study；BG 只看 32 stars 或 25/150→2/150 的总和，不看按任务分布、约定遗漏、负向波动和过度复杂代码，就降级为 study；BH 只看装上了、能调用或一篇教学 walkthrough，不看核不过比例、超期发现天数和退回后状态是否还看得见，就降级为 study；BJ 只看 install 成功、legacy-scan 有输出、215-task evals 的 57%→88%/54%→82% 或 48 小时 trending 第一，不看 scan 是否可解释、代码是否更多使用现代/可访问/Baseline 基元、测试构建 lint 是否通过，就降级为 study。
+专门做法 C–BK 的统一试用方式：选一个与所装技能对应的真实小任务，先在不装该技能的会话里做一次并保存输出，再装上做一次；同一任务至少跑 3 次，或换 2–3 个任务再下结论。通用指标是首稿可用率、人工修改次数、返工轮数、查文档时间、命令或配置正确率、权限申请次数、耗时和成本。各条目的特别指标按索引执行。
+
+反向指标：加了技能后仍要口头纠正同一件事，先改 SKILL.md 或 description；文档改完只是删空话没补事实，先把代码、配置和真实报错给它读；agent 只凭自己的声明就宣布完成，而 git status 和测试报告不支持，作废重跑；同一断言连续失败 3 次还在本地重试，升级到强模型；出图技能每次失败都盲重试，说明没用上 diagnostics；plugin-eval 分数不错但真实任务没改善，说明把筛子当成了结论；AX 跑几个会话后 observation-log 或读卡行为仍不存在，先补钩子、触发词或探针；M 只跑通 /book-to-skill 但同组问题的事实准确率、定位能力和完整性没有改善，就保留为待验证候选；BI 只看 run 成功、不看 coverage_score、负例拒答和逐字溯源，或把 coverage_score 0.667 当达标，就降级为 study；BA 的 frame_diff 只给出整体分数却定位不到最差时刻，或 agent 仍在偷偷内嵌视频、描帧、改文字，先修契约和硬规则；BC 只看转换成功或像素一致，不检查重定向、SEO、媒体和 staging 功能，就降级为 study；BD 只看生成的图好看，不看审图通过率、图到页面的返工轮次和文字可读性硬问题，就降级为 study；BE 只看技能装上了、断言通过数比基线多 1–2 条，就宣布有效，或忽略 token 多三分之一和 grader 自评偏差，就降级为待验证候选；BF 只看装上、validate.py 通过或总入口说得头头是道，不看路由是否正确、产出能否交给下一步、政策引用是否可点开官方原文，就降级为 study；BG 只看 32 stars 或 25/150→2/150 的总和，不看按任务分布、约定遗漏、负向波动和过度复杂代码，就降级为 study；BH 只看装上了、能调用或一篇教学 walkthrough，不看核不过比例、超期发现天数和退回后状态是否还看得见，就降级为 study；BJ 只看 install 成功、legacy-scan 有输出、215-task evals 的 57%→88%/54%→82% 或 48 小时 trending 第一，不看 scan 是否可解释、代码是否更多使用现代/可访问/Baseline 基元、测试构建 lint 是否通过，就降级为 study；BK 只看安装成功、--check 通过或 verify_bundle 有报告，不看它是否如实报告未执行的检查、是否区分确认证据与待验证事实、评审是否报覆盖率缺口、人工验收是否通过，就降级为 study。
 
 ## 常见坑
 
@@ -880,6 +860,14 @@ npx modern-web-guidance@latest legacy-scan .
 - 做法 BJ：在非 Web 项目或不能运行 npx 的环境硬装；原文没有说明前置条件和支持范围，先确认再试。
 - 做法 BJ：不看 install 写入了哪些文件、是否需要额外权限；先在非关键分支检查变更并保留回滚。
 - 做法 BJ：原文链接不完整却直接扩大试用；先补读仓库 README、支持矩阵和安装说明。
+- 做法 BK：把复制文件、宿主能发现技能、能实际执行技能当成一件事；安装后 --check 通过不等于宿主具备 shell/浏览器能力，缺能力时不能声称跑过检查。
+- 做法 BK：只装不改，拿安装成功或 verify_bundle 通过当效果证据；必须跑一条新功能全流程和一条小改动，检查它是否如实报告未执行的检查。
+- 做法 BK：明确要求全面安全审计时，把安装技能当成已提供独立验证与隔离；原文明确这些能力不随包提供，缺失要留在结果里可见。
+- 做法 BK：把架构图自检通过当成架构正确；图只描述现有证据支持的系统，提议要标注，正确性仍靠源证据与人工评审。
+- 做法 BK：手拷时只拷部分组件，破坏 capsule 完整性；换宿主时同级策略与资源会丢失，要用宿主返回的确切名字与路径。
+- 做法 BK：指望它按时间、事件或状态自动推进；原文没有 cron、hook、watch、CI 集成说明，只有可重复执行的状态检查。
+- 做法 BK：打包时覆盖已有归档；打包拒绝覆盖，并写 SHA-256 sidecar。
+- 做法 BK：在已有项目的小改动上重启整个设计流程；原文支持从相关阶段进入，保留已批准决策。
 - 其他专门做法的坑按索引条目和对应 README 执行。
 
 ## 证据与来源
@@ -892,7 +880,7 @@ Agent Skills 格式来自调研《agentskills/agentskills》README：技能是�
 
 做法 M 来自调研《@RoundtableSpace: 你曾经读过一本很棒的书。三个月后，你甚至记不起第7章的存在。》。可核查信息只有：项目名 book-to-skill、GitHub 仓库链接卡片、示例命令 /book-to-skill ./my-book.pdf、原文称可把技术书 PDF 转成 Claude Code skill、也支持文档文件夹但没有文件夹用法示例、互动数据 265 点赞 / 26 转发 / 8 回复，以及 35.7K 星标的作者主张。原文没有给出安装命令、生成后的具体文件结构或调用命令、实际转换案例、准确率、耗时、失败场景或验证方法。本版同时保留既有索引 M 中的 npx skills add virgiliojr94/book-to-skill 和 python3 scripts/extract.py --check，那来自旧材料，不是本次新调研新增的证据。
 
-做法 BI 来自调研《bookleme/bookleme》。可核查信息包括：MIT、核心零第三方依赖、Python ≥ 3.9、输入支持 PDF / EPUB / DOCX / MD / HTML / RTF / MOBI；两类产物 knowledge_pack 与 behavior_skill；S0–S9 流水线；git clone、--version、run --input 样例、validate examples/coach、unittest、schema --state、plugin validate、--engine、--genre、--no-router、--install、--user-rights、--public --confirm-public PUBLISH 等命令与参数；插件必填字段清单；6 条版权硬门；7 个忠实度指标与 22 条硬验收清单；四份 docs 规范。原文给出的本批评测数据：citation_resolution_rate 1.00、verbatim_violation_rate 0.00、negative_refusal_rate 1.00、trigger_hit_rate 1.00、artifact_compliance_rate 1.00、shingle_overlap_max 0.084、coverage_score 0.667 未达标、groundedness 为 null。仓库有 CI badge、37 stars、MIT。作者自陈的边界：S4 当前为确定性抽取器，LLM 抽取器只是接口占位；LLM judge 未接入；coverage_score 未达标；professional_analysis、decision_checklist 两个插件尚在 M4；evals/baseline.json 实测数要到 M5 才出。三条设计原理被作者自己标为 UNVERIFIED。适用条件：单机 Python 环境；输入需为可解析的文本型书籍文件；只处理自有/授权/公版材料；第三方书籍产物默认私有、不可分发；MIT 只覆盖转换器代码，不覆盖任何书籍。
+做法 BI 来自调研《bookleme/bookleme》。可核查信息包括：MIT、核心零第三方依赖、Python ≥ 3.9、输入支持 PDF/EPUB/DOCX/MD/HTML/RTF/MOBI；两类产物 knowledge_pack 与 behavior_skill；S0–S9 流水线；git clone、--version、run --input 样例、validate examples/coach、unittest、schema --state、plugin validate、--engine、--genre、--no-router、--install、--user-rights、--public --confirm-public PUBLISH 等命令与参数；插件必填字段清单；6 条版权硬门；7 个忠实度指标与 22 条硬验收清单；四份 docs 规范。原文给出的本批评测数据：citation_resolution_rate 1.00、verbatim_violation_rate 0.00、negative_refusal_rate 1.00、trigger_hit_rate 1.00、artifact_compliance_rate 1.00、shingle_overlap_max 0.084、coverage_score 0.667 未达标、groundedness 为 null。仓库有 CI badge、37 stars、MIT。作者自陈的边界：S4 当前为确定性抽取器，LLM 抽取器只是接口占位；LLM judge 未接入；coverage_score 未达标；professional_analysis、decision_checklist 两个插件尚在 M4；evals/baseline.json 实测数要到 M5 才出。三条设计原理被作者自己标为 UNVERIFIED。适用条件：单机 Python 环境；输入需为可解析的文本型书籍文件；只处理自有/授权/公版材料；第三方书籍产物默认私有、不可分发；MIT 只覆盖转换器代码，不覆盖任何书籍。
 
 做法 AX 全部来自调研《MiHjy12138/DSH-agent-procedures》README。可核查信息包括：procedures/ 目录、INDEX.md、_模板.md、_inbox.md、卡片六段模板、四条全局钩子、tools/scan-sessions.mjs、tools/procedures-probe.mjs、tools/procedures-audit.mjs、退出码 1 表示有 P0/P1。README 给出的自测数据是：新会话首轮查 procedures，5 题命中 5/5，对照题不命中不乱翻，读 6 张卡约 12 KB；索引从 5.2 KB 降到约 0.8 KB；13 张卡从 77.8 KB 压到 26.6 KB，约减 65%；38 张卡精简时一次移出 9 张，约 24%；两次收尾补卡实测未自发，而踩坑当下记 inbox 自发发生。这些多为作者自测，样本和统计口径有限。
 
@@ -910,7 +898,9 @@ Agent Skills 格式来自调研《agentskills/agentskills》README：技能是�
 
 做法 BJ 来自两则材料：现有正文的《@ChromiumDev: 48 hours after launching 1.0, Modern Web Guidance is the #1 trending repo on GitHub》给出项目定位、两条命令和传播数据；本次调研《@Voxyz_ai: DUDE WTF?? ... Now you can stop Claude Code and Codex from writing 100 lines of old code for web fea》给出 Chrome 团队免费 skill pack、安装命令、覆盖场景，以及 Chrome 自己的 215-task evals 上 Claude Code 57%→88%、Codex 54%→82% 的汇总数字。后者没有附评测链接、任务样例、评分细则、运行次数、置信区间或失败案例；免费、来自 Chrome 团队、无需改提示词等说法也只是推文主张。原文还称不需要改提示词、不写规则、不额外写前端 skill，但没有说明对项目技术栈、框架版本、Node 环境或安全策略的要求。由于材料只有推文，无法判断安装包内容、维护状态和评测可复现性，因此只列为先小范围试用，不升级为 adopt。传播数据、trending 排名和 57%/54% 的汇总提升只能说明关注度或作为试用假设，不能证明本地效果。
 
-做法 C–BG 的证据与局限按本手册现有正文所合并的各篇调研保留；本版新增了 Modern Web Guidance 的 install 命令、覆盖场景、215-task evals 汇总数字和缺失项，但没有新增其独立效果数据，也没有把它升级为已验证结论。文中提到的 star 数、likes、reposts、trending 排名、57%→88%、54%→82% 来自 metrics 或作者主张，不构成有效性证据。
+做法 BK 来自调研《chinhkrb113/devflow-kit》。可核查信息包括：v0.9.0、34 stars；11 个技能 DevFlow、Frontend Design、UI/UX Pro Max、Taste、UI Taste、Diagram Design、Open Code Review、Security Audit、Superpowers、Ponytail、Caveman 及原文定位；Python 安装器与 --target codex/claude-code/dsh/trae/trae-cn/generic、--project/--scope user、--dry-run、--check；宿主映射 .agents/skills、.claude/skills、.dsh/skills、.trae/skills、显式 --skills-root；新功能全流程、小改动、架构图、有界评审、聚焦安全审查的可复制提示词；verify_bundle、package_skill 与 SHA-256 sidecar；安装器保留已有内容、遇到被修改过的安装会拒绝覆盖；验证器通过 ≠ 视觉检查 ≠ 内容评审；缺能力要显式留在结果里，不得用成功声明替代；架构正确性仍取决于源证据与人工评审；明确要求全面审计时才走完整六阶段流程，需要独立验证与隔离，安装技能本身不提供；原文没有 cron、hook、watch、CI 集成说明，只有可重复执行的状态检查；docs/verification-0.9.0.md 和 0.7.1 发布验证记录只给了链接，未给内容。原文给出的效果证据只有仓库自述，没有独立数据；安装、调用提示词、验证与打包命令可直接复制，但不能据此认为已减少返工。
+
+做法 C–BG 的证据与局限按本手册现有正文所合并的各篇调研保留；本版新增了 DevFlow Kit 的安装、提示词、宿主映射、验证与打包命令和边界，但没有新增其独立效果数据，也没有把它升级为已验证结论。文中提到的 star 数、likes、reposts、trending 排名、57%→88%、54%→82% 来自 metrics 或作者主张，不构成有效性证据。
 
 ## 依据的调研
 
@@ -984,3 +974,4 @@ Agent Skills 格式来自调研《agentskills/agentskills》README：技能是�
 - [bookleme/bookleme](../research/radar/2026-11-10/12030-bookleme-bookleme.md)：值得一试，建议小范围试：用一本你有权使用的书跑通 `run` → `validate` → 冒烟评测，重点验证 7 个忠实度指标与负例拒答，再决定是否纳入工作流。理由是仓库给出了可直接执行的命令、产物契约和评测口径，但项目处于 M0–M3，coverage_score 0.667 未达标、LLM judge 未接入、两个插件仍在 M4，尚不足以直接作为稳定生产依赖。
 - [@ChromiumDev: 48 hours after launching 1.0, Modern Web Guidance is the #1 trending repo on GitHub 📈](../research/radar/2026-11-13/13077-48-hours-after-launching-1-0-modern-web-guidance-i.md)：值得一试，可小范围试：在非关键 Web 代码库中安装该 agent skill 并运行 legacy-scan，观察编码智能体是否转向现代、可访问、Baseline 支持的 Web 基元；但原文只有推文和两条命令，缺少配置、输出与效果证据，暂不宜直接采纳。
 - [@Voxyz_ai: DUDE WTF?? ... Now you can stop Claude Code and Codex from writing 100 lines of old code for web fea](../research/radar/2026-11-13/13097-dude-wtf-now-you-can-stop-claude-code-and-codex-fr.md)：值得一试，建议小范围试用：按推文给出的 npx modern-web-guidance@latest install 装入 Claude Code/Codex，在现代 Web 功能任务上做前后对比；因只有推文和汇总评测、缺少评测方法与仓库细节，先试不直接采用。
+- [chinhkrb113/devflow-kit](../research/radar/2026-11-13/13161-chinhkrb113-devflow-kit.md)：值得一试，建议先在一个真实小项目上照 README 的命令装一次，跑一条"新功能全流程"和一条"小改动"流程，重点验证它是否如实报告未执行的检查，再决定是否写进手册；理由是安装、调用提示词、验证与打包命令都到了可直接复制的程度，但效果证据只有仓库自述，没有独立数据。
