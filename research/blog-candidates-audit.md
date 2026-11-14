@@ -1,5 +1,7 @@
 # 博文选题全面检查基线与状态清单（Baseline Audit）
 
+> **路径说明**：2026-11-14 起 `playbooks/`、`research/radar/`、`research/catalog/` 已迁到 [ai-work-radar](https://github.com/llt22/ai-work-radar) 仓库，本文正文里的这些路径指那个仓库里的位置；`experiences/`、`prompts/`、`skills/`、`tools/` 仍在本仓库。
+
 > **基线建立时间**：`2026-10-03`  
 > **基线 Commit**：`149ce98`（docs: 自动调研 3 条）  
 > **检查范围**：
@@ -101,6 +103,11 @@
 | 36 | `research/history/.../engineering-anthropic-uber-2026-09-27.md` | Anthropic 长程任务 Meta-Harness 架构实录 | `anthropic-long-running-agent-architecture.mdx` | **为什么 Agent 跑半小时就崩溃？聊聊 Anthropic 的解耦架构** |
 | 37 | `playbooks/reverse-engineer-software-with-agents.md` | 在没有源码时，让 agent 有证据地搞懂一个功能再重建 | `reverse-engineer-software-with-agents.mdx` | **没有源码时用反编译证据重建功能：REA 的实践** |
 | 38 | `playbooks/manage-agent-context.md` | 把编码 agent 的上下文管起来（自动交接与状态落盘） | `coding-agent-context-auto-handoff.mdx` | **编码 Agent 长任务的自动交接与状态落盘：三个开源插件的解法** |
+| 47 | `research/radar/2026-10-11/2476-500b-tokens-later-letting-ai-agents-decompile-a-fi.md` | 500B Tokens 反编译实录与机器逐字节验收 | `500b-tokens-game-decompilation-agent-oracle.mdx` | **用 Agent 反编译一款射击游戏：6000 亿 Token 后的验收器** |
+| 48 | `research/radar/2026-10-08/1885-armin-ronacher-what-is-codemode-pi-1-0-codemode-mc.md` | Armin Ronacher Codemode 架构与 Brain/Hands 解耦 | `armin-ronacher-codemode-harness.mdx` | **Armin Ronacher 解释 Codemode：bash 够用时为什么还要它** |
+| 49 | `research/radar/2026-10-11/2471-mxc-microsoft-execution-containers-version-1-0-0.md` | 微软 MXC 策略驱动的 Agent 执行沙箱 | `microsoft-mxc-policy-driven-agent-containment.mdx` | **微软开源 MXC：把 agent 的权限交给操作系统来管** |
+| 50 | `research/radar/2026-10-11/2455-grit-77-done-is-a-claim.md` | Grit-77 证据优先工作流与 18 条实战规则 | `done-is-a-claim-agent-evidence-rules.mdx` | **Grit-77 的 18 条规则：agent 说完成以后要查什么** |
+| 51 | `research/radar/2026-10-07/1791-meta-2-1-bug.md` | Meta 补丁互审传闻与 arXiv 2607.21656 实验实测 | `claude-codex-cross-review-data.mdx` | **让 Claude 和 Codex 互审代码：一条转述和一篇实验** |
 
 ### 3. 已安装与自建 Skills（`skills/` 与 `~/skills/`，共 8 项）
 
