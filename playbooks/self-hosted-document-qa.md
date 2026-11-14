@@ -1,46 +1,50 @@
-# 把散落文档和笔记变成可追溯问答：四条本地优先路线
+# 把读过的资料变成能追问、能溯源、能自查矛盾的知识库
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：这篇手册解决如何把散落文档与 Markdown/Obsidian 笔记变成带来源引用的问答或知识库入口，并用同一批问题判断该走哪条路线、是否值得继续投入的问题。
-> 先试这一步：先挑 20–50 份同主题、答案位置明确的文档，或复制一个 vault 放 3–5 份 Markdown 来源，按最小流程跑通一条端到端链路，并记录 10 个已知答案问题的正确数与引用命中率。
-> 最近修订：2026-10-25
+> 解决的问题：把散落的文档与阅读笔记变成回答带来源、能定期自查矛盾的知识入口，并用同一批问题判断这条链路是否真的变好。
+> 先试这一步：先用 10 个你确定读过、但忘了在哪的问题，记录现在手工翻找的耗时和命中率作为基线，再任选一条做法跑通一条端到端流水线。
+> 最近修订：2026-11-14
 
 ## 解决什么问题
 
-把散落的自有文档（PDF/TXT/DOCX）与 Markdown/Obsidian 笔记变成能带来源引用回答的入口，并把每周重复的固定动作交给定时任务；进一步，让 agent 能程序化驱动一个“有据可依的昂贵阅读与综合层”，自己只负责编排和最后一公里。若想弄清答对答错出在检索的哪一环、把这条链路握在自己手里，就在本地起一套完整 RAG 栈，按周从关键词检索做到混合检索、再到 Agentic RAG，用同一批问题做对照。若知识主要沉淀在 Markdown 笔记里，则用 claude-obsidian 把 inbox 捕获、建链、只读问答和体检串成可执行链路。四条路共同的纪律是：不被一份很长的功能清单牵着走——README 或技能说明给的是能力入口，不是可照做的参数，先小范围试，再决定用不用。
+把散落的自有文档（PDF/TXT/DOCX）与 Markdown/Obsidian 笔记变成能带来源引用回答的入口，并把每周重复的固定动作交给定时任务；进一步，让 agent 能程序化驱动一个“有据可依的昂贵阅读与综合层”，自己只负责编排和最后一公里；再进一步，把“读过的文章剪进 raw、由 agent 写笔记建链接归档、每周自查矛盾”变成一条最小闭环。若想弄清答对答错出在检索的哪一环、把这条链路握在自己手里，就在本地起一套完整 RAG 栈，按周从关键词检索做到混合检索、再到 Agentic RAG，用同一批问题做对照。若知识主要沉淀在 Markdown 笔记里，可用 claude-obsidian 把 inbox 捕获、建链、只读问答和体检串成可执行链路；若只想要更轻的骨架，用 raw/wiki/outputs 三目录加根目录 CLAUDE.md 的约定，让 Claude Code 按一句“ingest the new sources”维护 wiki。五条路共同的纪律是：不被一份很长的功能清单牵着走——README 或技能说明给的是能力入口，不是可照做的参数，先小范围试，再决定用不用。
 
 ## 适用与不适用
 
 **适用**
 
-- 需要本地优先（runs locally by default）部署，把文档上下文、多模型、agent 与定时调度放在同一个应用里。
-- 想把一批自有文档变成可问答、回答带来源引用的知识入口。
-- 想用 cron 定时跑重复任务或提示词，且任务具备完整 agent 能力。
-- 已经在用 Claude Code、Codex、OpenClaw 等 agent，希望把 NotebookLM / Gemini Notebook 当“零 token 综合层/记忆层”，由它做有据可依的昂贵阅读与综合，agent 只做编排和最后一公里。
-- 需要用 CLI / Python API / MCP Server / REST Server / agent skill 程序化建 notebook、批量导入来源、带引用问答、生成并下载音频/视频/幻灯片/信息图/测验/闪卡/报告/数据表/思维导图。
-- 需要 Web UI 不提供的批量下载、测验/闪卡的 JSON/Markdown/HTML 导出、思维导图 JSON 提取。
-- 有本地模型（Ollama / LM Studio / LocalAI / llama.cpp 兼容模型）或已在用的云端 provider（AnythingLLM README 列出 30+ LLM provider、10+ embedder、9 个向量库）。
-- 需要多用户与权限、或需要把问答挂件嵌到网站——这两项仅 AnythingLLM 的 Docker 版本提供。
-- 想自己掌控检索层、看清“关键词检索 / 混合检索 / Agentic RAG”三档差别，而不是只要一个能用就行的问答框（做法 C）。
-- 需要本地 LLM 且数据不出本地（Ollama，端口 11434），同时要监控与缓存（Langfuse、Redis）。
-- 需要定时自动抓取与编排（Airflow DAG），或需要把问答做到移动端（Telegram Bot）。
-- 手上有一套可被 Docling 解析的 PDF 文档；课程本身以 arXiv 论文为贯穿案例。
-- 有 Docker 资源余量：8GB+ 内存、20GB+ 空闲磁盘。
-- 已有或愿意建立 Markdown/Obsidian 知识库，希望把来源放进 `inbox/` 后由 AI 读源、写带来源链接的笔记、建索引/MOC、只读问答、按需保存答案、检查死链/孤儿页/缺元数据/空段。
-- 使用 Claude Code，或愿意通过 Agent Skills 在 Codex、OpenCode、Gemini 等宿主复用同一组技能；需要把知识库保持为纯 Markdown，Obsidian 只做 Graph/Canvas/Bases 等可视化。
-- 需要写入安全：写入前记录 SHA-256、helper 只交草稿、合并 plan 单事务应用、journal 备份、冲突停止、`transaction recover` 回滚。
-- 需要本地确定性 BM25 检索和 bench 自测搜索质量；远程模型/网络研究默认关闭，需逐任务允许。
+- （做法 A）需要本地优先（runs locally by default）部署，把文档上下文、多模型、agent 与定时调度放在同一个应用里。
+- （做法 A）想把一批自有文档变成可问答、回答带来源引用的知识入口。
+- （做法 A）想用 cron 定时跑重复任务或提示词，且任务具备完整 agent 能力。
+- （做法 A/B 组合）已经在用 Claude Code、Codex、OpenClaw 等 agent，希望把 NotebookLM / Gemini Notebook 当“零 token 综合层/记忆层”，由它做有据可依的昂贵阅读与综合，agent 只做编排和最后一公里。
+- （做法 B）需要用 CLI、Python API、MCP Server、REST Server、agent skill 程序化建 notebook、批量导入来源、带引用问答、生成并下载音频/视频/幻灯片/信息图/测验/闪卡/报告/数据表/思维导图。
+- （做法 B）需要 Web UI 不提供的批量下载、测验/闪卡的 JSON/Markdown/HTML 导出、思维导图 JSON 提取。
+- （做法 A）有本地模型（Ollama / LM Studio / LocalAI / llama.cpp 兼容模型）或已在用的云端 provider（AnythingLLM README 列出 30+ LLM provider、10+ embedder、9 个向量库）。
+- （做法 A）需要多用户与权限、或需要把问答挂件嵌到网站——这两项仅 AnythingLLM 的 Docker 版本提供。
+- （做法 C）想自己掌控检索层、看清“关键词检索 / 混合检索 / Agentic RAG”三档差别，而不是只要一个能用就行的问答框。
+- （做法 C）需要本地 LLM 且数据不出本地（Ollama，端口 11434），同时要监控与缓存（Langfuse、Redis）。
+- （做法 C）需要定时自动抓取与编排（Airflow DAG），或需要把问答做到移动端（Telegram Bot）。
+- （做法 C）手上有一套可被 Docling 解析的 PDF 文档；课程本身以 arXiv 论文为贯穿案例。
+- （做法 C）有 Docker 资源余量：8GB+ 内存、20GB+ 空闲磁盘。
+- （做法 D）已有或愿意建立 Markdown/Obsidian 知识库，希望把来源放进 inbox/ 后由 AI 读源、写带来源链接的笔记、建索引/MOC、只读问答、按需保存答案、检查死链/孤儿页/缺元数据/空段。
+- （做法 D）使用 Claude Code，或愿意通过 Agent Skills 在 Codex、OpenCode、Gemini 等宿主复用同一组技能；需要把知识库保持为纯 Markdown，Obsidian 只做 Graph/Canvas/Bases 等可视化。
+- （做法 D）需要写入安全：写入前记录 SHA-256、helper 只交草稿、合并 plan 单事务应用、journal 备份、冲突停止、transaction recover 回滚。
+- （做法 D）需要本地确定性 BM25 检索和 bench 自测搜索质量；远程模型/网络研究默认关闭，需逐任务允许。
+- （做法 E）阅读量大且以文本为主，愿意长期投入同一个 Markdown 目录，接受 Markdown 作为唯一载体。
+- （做法 E）已经在用 Claude Code，愿意让它在本地文件夹内读写文件，并愿意自己补写 CLAUDE.md 规则与提示词。
+- （做法 E）想把“读后写笔记、建链接、归档”和“每周自查矛盾”交给 agent，人只负责把原料丢进 raw、消费 outputs。
+- （做法 E）浏览器可装 Obsidian Web Clipper；不想装 Obsidian 时，可用任意 Markdown 文件夹加剪藏工具替代（该调研指出 Obsidian 不是必要条件）。
 
 **不适用**
 
 - 只是偶尔问一次问题，不需要文档库和调度。
-- 敏感数据场景且需要安全/合规结论——四份调研都未提供安全或合规说明。
-- 出网严格受限的环境——AnythingLLM 即使关掉遥测，使用外部模型/向量库仍有对应厂商外连，应用本身还会连 `cdn.anythingllm.com` 与 github/githubusercontent；notebooklm-py 依赖 Google 服务；做法 C 的混合检索要 Jina API、监控要 Langfuse，也都是外连。
+- 敏感数据场景且需要安全/合规结论——五份材料都未提供安全或合规说明。
+- 出网严格受限的环境——AnythingLLM 即使关掉遥测，使用外部模型/向量库仍有对应厂商外连，应用本身还会连 cdn.anythingllm.com 与 github/githubusercontent；notebooklm-py 依赖 Google 服务；做法 C 的混合检索要 Jina API、监控要 Langfuse，也都是外连。
 - 不能接受非官方 API、未公开 Google API 的稳定性和限额风险。
 - 没有本地浏览器做首次交互式登录，且未准备 master token / 专用账号。
 - 想直接照抄 AnythingLLM 的定时任务、动态模型路由、Agent Flows 的具体参数——README 对这些只给文档链接和一句话描述，没有配置样例。
-- 不想承担自建与运维成本：做法 C 要自己起 Docker 全栈、配 `.env`、管端口和内存。
+- 不想承担自建与运维成本：做法 C 要自己起 Docker 全栈、配 .env、管端口和内存。
 - 只想尽快拿到一个能用的文档问答入口，不打算做检索方案对照实验——那做法 A 更划算。
 - 不愿意读代码和 notebook：做法 C 的提示词、LangGraph 图定义和评估脚本不在 README，而在仓库代码/notebooks 与博客里，README 只到架构与入口层面。
 - 知识库不是 Markdown/Obsidian，或不愿让 Claude 读取的笔记发送给 Claude/Anthropic。
@@ -49,38 +53,48 @@
 - 期待 claude-obsidian 自动转录、云同步、事实核查或替代备份。
 - 期待无人值守 cron/后台持续代理——原文只给显式命令和事件触发，没有 cron/后台自动运行配置。
 - 不能接受写入锁只协调本地合作写入者，外部设备/编辑器不共享锁，需自行备份。
+- （做法 E）重度多模态素材、需要多人协作或权限分级——该调研明确不适用。
+- （做法 E）期待原文给出可直接照抄的 CLAUDE.md、提示词、目录内文件命名规则或矛盾排查输出格式——原文都没有，只给流程骨架。
+- （做法 E）期待无人值守的定时 ingest 或自动监听文件变化——原文没有给任何自动化机制，触发仍靠人开口。
+- （做法 E）不能接受 agent 直接写 wiki 且没有事务/冲突保护——这条骨架没有 claude-obsidian 那样的写入安全契约。
 
 ## 前置条件
 
-- AnythingLLM：一台能跑 Docker 的机器（或走 README 指向的 `./BARE_METAL.md` 无 Docker 部署；也可直接下载桌面版，支持 Mac/Windows/Linux）。
+- AnythingLLM：一台能跑 Docker 的机器（或走 README 指向的 ./BARE_METAL.md 无 Docker 部署；也可直接下载桌面版，支持 Mac/Windows/Linux）。
 - AnythingLLM：一个已经能用的模型 provider：本地推理需先把模型服务跑起来；云端 provider 需要相应 API Key。
 - AnythingLLM：一个向量库：默认 LanceDB，零配置；也可从 PGVector、Astra DB、Pinecone、Chroma、Weaviate、Qdrant、Milvus、Zilliz 中选。
 - AnythingLLM：20–50 份同主题、答案位置明确的文档，用于验证。
-- AnythingLLM：走源码开发模式时，`server/.env.development` 必须填好。
+- AnythingLLM：走源码开发模式时，server/.env.development 必须填好。
 - notebooklm-py：一个可用于 NotebookLM / Gemini Notebook 的 Google 账号（每个 notebook 的来源数量上限取决于账号等级）。
 - notebooklm-py：Python 3.10–3.14。
 - notebooklm-py：首次交互式登录需要本地浏览器（会下载 Chromium，约 170 MB）。
-- notebooklm-py：推荐用 uv、pipx 或虚拟环境隔离，避免 PEP 668 的 `externally-managed-environment` 报错。
+- notebooklm-py：推荐用 uv、pipx 或虚拟环境隔离，避免 PEP 668 的 externally-managed-environment 报错。
 - notebooklm-py：无头/服务器场景需要可接受使用专用账号和 master token。
 - 做法 C：Docker Desktop（含 Docker Compose）。
 - 做法 C：Python 3.12+ 与 UV 包管理器。
 - 做法 C：8GB+ 内存、20GB+ 空闲磁盘。
-- 做法 C：`.env`（从 `.env.example` 复制）；其中 `JINA_API_KEY` 在 Week 4 及以后必需（混合检索的向量嵌入），`TELEGRAM__BOT_TOKEN` 在 Week 7 必需（Telegram Bot），`LANGFUSE__PUBLIC_KEY` 与 `LANGFUSE__SECRET_KEY` 在 Week 6 可选（监控）。
+- 做法 C：.env（从 .env.example 复制）；其中 JINA_API_KEY 在 Week 4 及以后必需（混合检索的向量嵌入），TELEGRAM__BOT_TOKEN 在 Week 7 必需（Telegram Bot），LANGFUSE__PUBLIC_KEY 与 LANGFUSE__SECRET_KEY 在 Week 6 可选（监控）。
 - 做法 C：可被 Docling 解析的 PDF 文档。
 - claude-obsidian：Claude Code、Python 3.11+、Bash；可视化需要 Obsidian；Windows 上任何写入 vault 的操作要用 WSL，原生 Windows 只能检查和预览。先备份或使用 vault 副本。
-- claude-obsidian：一个明确选定或初始化的 vault；可用 `CLAUDE_OBSIDIAN_VAULT`、最近的 `.claude-obsidian.json` 或一个明确初始化的父文件夹选定，不确定时它会退出而不写入。
-- claude-obsidian：`inbox/` 里的来源，先准备 3–5 个 Markdown 来源；PDF/EPUB 全文、网页/YouTube 抓取、OCR 需外部工具。
+- claude-obsidian：一个明确选定或初始化的 vault；可用 CLAUDE_OBSIDIAN_VAULT、最近的 .claude-obsidian.json 或一个明确初始化的父文件夹选定，不确定时它会退出而不写入。
+- claude-obsidian：inbox/ 里的来源，先准备 3–5 个 Markdown 来源；PDF/EPUB 全文、网页/YouTube 抓取、OCR 需外部工具。
 - claude-obsidian：可接受在 Claude Code 中工作时，Claude 读取的笔记会发送给 Claude/Anthropic；网络研究和远程模型默认关闭，必须逐任务允许。
+- 做法 E：本地可安装 Obsidian（或任意 Markdown 文件夹）；Claude Code 能在该文件夹内读写；浏览器装 Obsidian Web Clipper（原文点名该工具）。
+- 做法 E：一个库根目录，只放 raw/、wiki/、outputs/ 三个顶层目录和一个 CLAUDE.md。
+- 做法 E：愿意自己补写 CLAUDE.md；原文没有给出其内容。
+- 做法 E：首次试用准备 15–20 篇真实读过、一个月后确实想找回的文章，其中故意放 2–3 篇同主题观点冲突的文章。
+- 做法 E：接受原文未给安装与权限细节，需自行确认 Claude Code 的文件访问范围就是这一个目录。
 
 ## 操作步骤
 
 先决定走哪条路：
 
-- **做法 A：AnythingLLM，本地优先文档问答 + 定时任务**。要开多用户、要把问答挂件嵌进网站，只能走 Docker；本地看效果、要改代码，走源码开发模式。最短路径，几乎不写代码，但检索层是黑盒。
+- **做法 A：AnythingLLM，本地优先文档问答加定时任务**。要开多用户、要把问答挂件嵌进网站，只能走 Docker；本地看效果、要改代码，走源码开发模式。最短路径，几乎不写代码，但检索层是黑盒。
 - **做法 B：notebooklm-py，让 agent 程序化驱动 NotebookLM / Gemini Notebook**。适合已经在用 agent、想把昂贵阅读与综合外包给 NotebookLM 的团队；但它是非官方 API，依赖未公开的 Google API，稳定性和限额必须自行验证。
 - **做法 C：自建 production-agentic-rag-course 全栈**。适合想掌控检索层、要做“关键词 / 混合 / Agentic”对照的团队。它的路线主张是先用 BM25 关键词检索打底、再用向量增强，而不是一上来就向量检索。代价是要自己起 Docker 全栈、读仓库代码与 notebook。
 - **做法 D：claude-obsidian，把 Markdown/Obsidian 知识库变成可链接、可问答、可体检的第二大脑**。适合已有或愿意建立 Markdown 知识库、使用 Claude Code 或 Agent Skills 的人。它用显式命令和事件式流程工作，原文没有 cron、后台自动运行或无人值守持续代理配置，不要把它写成全自动。
-- **可组合**：NotebookLM 做 grounded 阅读与综合，agent 只负责编排和最后一公里；AnythingLLM 做本地文档库与 cron 定时任务；做法 C 做检索质量对照与自建链路；claude-obsidian 做 Markdown 笔记的捕获、建链、只读问答、保存答案和 lint 体检。先各自跑通一条端到端流水线，再决定是否固化进 SKILL.md 或定时任务。
+- **做法 E：最小 Markdown 知识库闭环（raw/wiki/outputs 加根目录 CLAUDE.md）**。适合阅读量大、想用最轻约定让 Claude Code 维护笔记的人。它只给流程骨架，CLAUDE.md 规则和提示词要自己补；没有 claude-obsidian 的写入安全契约与 lint 命令；Obsidian 可用普通文件夹替代。
+- **可组合**：NotebookLM 做 grounded 阅读与综合，agent 只负责编排和最后一公里；AnythingLLM 做本地文档库与 cron 定时任务；做法 C 做检索质量对照与自建链路；claude-obsidian 做 Markdown 笔记的捕获、建链、只读问答、保存答案和 lint 体检；做法 E 做更轻的 raw 到 wiki 再到 outputs 的日常闭环。先各自跑通一条端到端流水线，再决定是否固化进 SKILL.md 或定时任务。
 
 ### 做法 A：AnythingLLM 本地优先
 
@@ -88,20 +102,20 @@ A1. 选部署方式：
    - **Docker 部署**：要开多用户、要把问答挂件嵌进网站，只能走这条（两项均仅 Docker 版本提供）。
    - **源码开发模式**：本地看效果、要改代码时用；README 里可直接复制的命令只有这一组，但它只是“跑起来”的步骤，不是“用好”的步骤。
 
-A2. Docker：打开仓库里的 `./docker/HOW_TO_USE_DOCKER.md`，按其中给出的命令起服务。
+A2. Docker：打开仓库里的 ./docker/HOW_TO_USE_DOCKER.md，按其中给出的命令起服务。
    - 前提：本机已装 Docker。
-   - 注意：README 只提供了指向该文件的入口链接，没有给出可直接复制的 `docker run` 命令，命令需点进该文件获取。
+   - 注意：README 只提供了指向该文件的入口链接，没有给出可直接复制的 docker run 命令，命令需点进该文件获取。
    - 预期结果：本机或内网可访问 AnythingLLM；顺手记录一次“冷启动到可用”的耗时，作为后面比较的基线。
 
-A3. 关闭遥测（默认开启）。在 server 或 docker 的 `.env` 中写入：
+A3. 关闭遥测（默认开启）。在 server 或 docker 的 .env 中写入：
 
 ```env
 DISABLE_TELEMETRY=true
 ```
 
-   也可以不改配置，在应用内 sidebar > `Privacy` 里关闭。
-   - README 说明遥测只发送事件类型（安装类型、文档增删事件、向量库类型、LLM provider 与模型 tag、聊天发送事件），不含聊天内容、IP 或可识别信息，收集方为 PostHog；源码中所有 `Telemetry.sendTelemetry` 调用点可查。
-   - 前提与预期：即使关闭遥测，使用外部模型/向量库仍会有对相应厂商的外连；应用仍会连 `cdn.anythingllm.com`（拉取模型镜像）和 github/githubusercontent（下载上下文窗口缓存文件）。在有出网限制的环境里要提前评估。
+   也可以不改配置，在应用内 sidebar > Privacy 里关闭。
+   - README 说明遥测只发送事件类型（安装类型、文档增删事件、向量库类型、LLM provider 与模型 tag、聊天发送事件），不含聊天内容、IP 或可识别信息，收集方为 PostHog；源码中所有 Telemetry.sendTelemetry 调用点可查。
+   - 前提与预期：即使关闭遥测，使用外部模型/向量库仍会有对相应厂商的外连；应用仍会连 cdn.anythingllm.com（拉取模型镜像）和 github/githubusercontent（下载上下文窗口缓存文件）。在有出网限制的环境里要提前评估。
 
 A4. 源码开发模式：在仓库根目录依次执行（README 原文命令）：
 
@@ -112,24 +126,24 @@ yarn dev:frontend # 本地启动前端
 yarn dev:collector # 运行文档收集器
 ```
 
-   - 前提：仓库根目录；`yarn setup` 之后手工填写生成出来的 `.env`，尤其是 `server/.env.development`。
-   - README 原文提示：Ensure `server/.env.development` is filled or else things won't work right。
+   - 前提：仓库根目录；yarn setup 之后手工填写生成出来的 .env，尤其是 server/.env.development。
+   - README 原文提示：Ensure server/.env.development is filled or else things won't work right。
    - 预期结果：server 与 collector 同时在线；collector 不在线时文档解析会失败。
 
 A5. 接入模型与向量库，**先只接一个** provider，作为基线。
    - 本地推理选 Ollama / LM Studio / LocalAI / llama.cpp 兼容模型，云端选 OpenAI / Anthropic / DeepSeek 等。
    - 前提：云端 provider 需要 API Key；本地 provider 需要模型服务已跑起来。
 
-A6. 建一个 workspace，拖拽上传那 20–50 份 PDF/TXT/DOCX 文档，由 `collector` 解析入库。
-   - 前提：`collector` 服务在运行。
+A6. 建一个 workspace，拖拽上传那 20–50 份 PDF/TXT/DOCX 文档，由 collector 解析入库。
+   - 前提：collector 服务在运行。
    - 预期结果：在对话中得到带来源引用的回答。
 
 A7. 配 1 个 cron 定时任务：选一件你本来每周手动做一次的固定动作，让它按计划产出。
-   - README 指向 `docs.anythingllm.com/scheduled-jobs/overview`，**未给出 cron 表达式或任务配置样例**，需读官方文档；agent 类任务需要相应的工具权限。
+   - README 指向 docs.anythingllm.com/scheduled-jobs/overview，**未给出 cron 表达式或任务配置样例**，需读官方文档；agent 类任务需要相应的工具权限。
    - 预期结果：连续观察 2–3 次触发，看是否按时、产出是否可用。
 
 A8. 可选，按需要再加：
-   - 动态模型路由，按自定义规则把对话自动路由到合适的 provider / 模型（README 指向 `docs.anythingllm.com/model-router/overview`，未给出规则字段与写法）。
+   - 动态模型路由，按自定义规则把对话自动路由到合适的 provider / 模型（README 指向 docs.anythingllm.com/model-router/overview，未给出规则字段与写法）。
    - no-code Agent 构建器（Agent Flows）搭自定义 agent。
    - 对外集成用 Full Developer API；给站点加问答入口用 embed 挂件（仅 Docker 版）。
 
@@ -137,10 +151,10 @@ A8. 可选，按需要再加：
 
 B1. 前提确认：有可用于 NotebookLM / Gemini Notebook 的 Google 账号；Python 3.10–3.14；首次交互式登录需要本地浏览器（会下载 Chromium，约 170 MB）。
 
-B2. 安装 CLI（推荐隔离环境，避免 PEP 668 的 `externally-managed-environment` 报错）：
+B2. 安装 CLI（推荐隔离环境，避免 PEP 668 的 externally-managed-environment 报错）：
 
 ```bash
-uv tool install "notebooklm-py[browser]"   # or: pipx install "notebooklm-py[browser]"
+uv tool install 'notebooklm-py[browser]'   # or: pipx install 'notebooklm-py[browser]'
 notebooklm login                           # first run auto-downloads Chromium (~170 MB), then Google sign-in
 notebooklm auth check --test --json        # verify: expect status ok
 ```
@@ -151,11 +165,11 @@ notebooklm auth check --test --json        # verify: expect status ok
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-   或 `brew install uv` / `winget install astral-sh.uv`。也可以直接在虚拟环境里用 pip：
+   或 brew install uv / winget install astral-sh.uv。也可以直接在虚拟环境里用 pip：
 
 ```bash
-python3 -m venv .venv && source .venv/bin/activate   # Windows: .venv\\Scripts\\activate
-pip install "notebooklm-py[browser]"
+python3 -m venv .venv && source .venv\Scripts\activate   # Windows
+pip install 'notebooklm-py[browser]'
 ```
 
    只当库用（不装 Playwright/Chromium）：
@@ -164,7 +178,7 @@ pip install "notebooklm-py[browser]"
 uv add notebooklm-py                    # or, inside a virtualenv: pip install notebooklm-py
 ```
 
-   - 预期结果：`notebooklm auth check --test --json` 返回 status 为 ok。
+   - 预期结果：notebooklm auth check --test --json 返回 status 为 ok。
 
 B3. 登录的三种方式（按场景选）：
 
@@ -174,7 +188,7 @@ notebooklm login
 # Or use Microsoft Edge (for orgs that require Edge for SSO)
 # notebooklm login --browser msedge
 # Or reuse cookies from an already-logged-in browser session
-# notebooklm login --browser-cookies chrome
+notebooklm login --browser-cookies chrome
 # notebooklm login --browser-cookies 'chrome::Profile 1'  # one Chromium profile
 ```
 
@@ -189,21 +203,21 @@ B4. 建 notebook → 加来源 → 提问 → 生成 → 下载（CLI 主流程�
 
 ```bash
 # 2. Create a notebook and add sources
-notebooklm create "My Research"
+notebooklm create 'My Research'
 notebooklm use <notebook_id>
-notebooklm source add "https://en.wikipedia.org/wiki/Artificial_intelligence"
-notebooklm source add "./paper.pdf"
+notebooklm source add 'https://en.wikipedia.org/wiki/Artificial_intelligence'
+notebooklm source add './paper.pdf'
 
 # 3. Chat with your sources
-notebooklm ask "What are the key themes?"
+notebooklm ask 'What are the key themes?'
 notebooklm ask --prompt-file ./long_question.txt  # Read question from file
 
 # 4. Generate content (use --prompt-file for long prompts)
-notebooklm generate audio "make it engaging" --wait
+notebooklm generate audio 'make it engaging' --wait
 notebooklm generate quiz --difficulty hard
 notebooklm generate flashcards --quantity more
 notebooklm generate mind-map                       # interactive studio map (default); --kind note-backed for the JSON tree
-notebooklm generate data-table "compare key concepts"
+notebooklm generate data-table 'compare key concepts'
 
 # 5. Download artifacts
 notebooklm download audio ./podcast.m4a
@@ -213,19 +227,19 @@ notebooklm download mind-map ./mindmap.json
 notebooklm download data-table ./data.csv
 ```
 
-   - 注意 `--prompt-file` 只用于 `ask`、prompt 型 `generate` 和 `source add-research`；上传文件作为来源仍用 `source add ./file.pdf`。
+   - 注意 --prompt-file 只用于 ask、prompt 型 generate 和 source add-research；上传文件作为来源仍用 source add ./file.pdf。
    - 预期结果：拿到带引用回答，产物可下载到本地。
 
 B5. 让 agent 自动做网络调研并把结果一次导入：
 
 ```bash
-notebooklm source add-research "AI" --import-all  # web research + import found sources
+notebooklm source add-research 'AI' --import-all  # web research + import found sources
 ```
 
    README 另给的 deep 模式写法：
 
 ```bash
-notebooklm source add-research "your topic" --mode deep
+notebooklm source add-research 'your topic' --mode deep
 ```
 
 B6. 把库装成 agent skill（前提：已安装 CLI）：
@@ -234,7 +248,7 @@ B6. 把库装成 agent skill（前提：已安装 CLI）：
 notebooklm skill install
 ```
 
-   安装位置为 `~/.claude/skills/notebooklm` 和 `~/.agents/skills/notebooklm`。或用开放 skills 生态：
+   安装位置为 ~/.claude/skills/notebooklm 和 ~/.agents/skills/notebooklm。或用开放 skills 生态：
 
 ```bash
 npx skills add teng-lin/notebooklm-py
@@ -248,7 +262,7 @@ notebooklm agent show claude         # Print bundled Claude Code skill template
 notebooklm skill status              # Check local agent skill installation
 ```
 
-B7. 无头/服务器场景：master token + 定时保活（前提：可接受用专用账号）。
+B7. 无头/服务器场景：master token 加定时保活（前提：可接受用专用账号）。
    - README 的定位是：master token 可按需签发新 cookie，让过期会话无人值守自愈，是服务器、CI 和远程 MCP connector 的认证模型。
 
 ```bash
@@ -256,16 +270,16 @@ notebooklm auth refresh --quiet      # One-shot cookie keepalive (for cron / lau
 notebooklm auth refresh --browser-cookies chrome  # Re-extract and repair account routing
 ```
 
-B8. 可选 Android（gRPC）后端（前提：显式安装 android 运行时，它不在 `all` extra 中）：
+B8. 可选 Android（gRPC）后端（前提：显式安装 android 运行时，它不在 all extra 中）：
 
 ```bash
-pip install "notebooklm-py[android,browser]"
+pip install 'notebooklm-py[android,browser]'
 notebooklm login --master-token --account you@example.com
 notebooklm --backend android list --json
 ```
 
-   - README 说明：Android 后端从所选 profile 读取 `master_token.json`，按需签发短期移动 bearer token，十一个公开命名空间都可用，不依赖浏览器 cookie 会话、Web build 标签或 Web RPC ID；因为 master token 是全账号级凭证，应使用专用账号并妥善保护。
-   - 默认后端仍是 Web（`batchexecute`），也可用环境变量 `NOTEBOOKLM_BACKEND=android` 或 Python API 的 `NotebookLMClient.from_storage(backend="android")` / `NotebookLMClient(..., backend="android")` 选择。
+   - README 说明：Android 后端从所选 profile 读取 master_token.json，按需签发短期移动 bearer token，十一个公开命名空间都可用，不依赖浏览器 cookie 会话、Web build 标签或 Web RPC ID；因为 master token 是全账号级凭证，应使用专用账号并妥善保护。
+   - 默认后端仍是 Web（batchexecute），也可用环境变量 NOTEBOOKLM_BACKEND=android 或 Python API 的 NotebookLMClient.from_storage(backend='android') / NotebookLMClient(..., backend='android') 选择。
 
 B9. Python API 嵌入自有管道：
 
@@ -277,27 +291,27 @@ from notebooklm import NotebookLMClient, MindMapKind
 async def main():
     async with NotebookLMClient.from_storage() as client:
         # Create notebook and add sources
-        nb = await client.notebooks.create("Research")
-        await client.sources.add_url(nb.id, "https://example.com", wait=True)
+        nb = await client.notebooks.create('Research')
+        await client.sources.add_url(nb.id, 'https://example.com', wait=True)
 
         # Chat with your sources
-        result = await client.chat.ask(nb.id, "Summarize this")
+        result = await client.chat.ask(nb.id, 'Summarize this')
         print(result.answer)
 
         # Generate content (podcast, video, quiz, etc.)
-        status = await client.artifacts.generate_audio(nb.id, instructions="make it fun")
+        status = await client.artifacts.generate_audio(nb.id, instructions='make it fun')
         await client.artifacts.wait_for_completion(nb.id, status.task_id)
-        await client.artifacts.download_audio(nb.id, "podcast.m4a")
+        await client.artifacts.download_audio(nb.id, 'podcast.m4a')
 
         # Generate quiz and download as JSON
         status = await client.artifacts.generate_quiz(nb.id)
         await client.artifacts.wait_for_completion(nb.id, status.task_id)
-        await client.artifacts.download_quiz(nb.id, "quiz.json", output_format="json")
+        await client.artifacts.download_quiz(nb.id, 'quiz.json', output_format='json')
 ```
 
    - 调研材料中的 Python 示例在此处截断，未给出完整 mind map 调用；不要照抄不存在的部分。
 
-B10. 小范围试：先用 `create → source add → ask → download` 跑通一条端到端流水线，再决定是否固化进 SKILL.md 或定时任务。
+B10. 小范围试：先用 create → source add → ask → download 跑通一条端到端流水线，再决定是否固化进 SKILL.md 或定时任务。
 
 ### 做法 C：自建生产级 RAG 全栈（production-agentic-rag-course）
 
@@ -326,22 +340,22 @@ docker compose up --build -d
 curl http://localhost:8000/api/v1/health
 ```
 
-   - 注意：README 的克隆命令里写的是 `arxiv-paper-curator` 这个仓库名，而当前页面的仓库名是 `production-agentic-rag-course`，克隆前先确认实际地址。
+   - 注意：README 的克隆命令里写的是 arxiv-paper-curator 这个仓库名，而当前页面的仓库名是 production-agentic-rag-course，克隆前先确认实际地址。
    - 预期结果：健康检查有响应；服务全部起来大约要等 2–3 分钟。
 
-C3. 配置必需变量（前提：`.env` 已由 `.env.example` 生成）：
+C3. 配置必需变量（前提：.env 已由 .env.example 生成）：
 
 ```bash
 cp .env.example .env
 # Edit .env for your environment
 ```
 
-   - `JINA_API_KEY`：Week 4 及以后必需（混合检索的向量嵌入）。
-   - `TELEGRAM__BOT_TOKEN`：Week 7 必需（Telegram Bot）。
-   - `LANGFUSE__PUBLIC_KEY` & `LANGFUSE__SECRET_KEY`：Week 6 可选（监控）。
-   - 完整选项见仓库 `.env.example`。
+   - JINA_API_KEY：Week 4 及以后必需（混合检索的向量嵌入）。
+   - TELEGRAM__BOT_TOKEN：Week 7 必需（Telegram Bot）。
+   - LANGFUSE__PUBLIC_KEY 与 LANGFUSE__SECRET_KEY：Week 6 可选（监控）。
+   - 完整选项见仓库 .env.example。
 
-C4. 访问各服务（前提：`docker compose up --build -d` 成功）：
+C4. 访问各服务（前提：docker compose up --build -d 成功）：
 
 | 服务 | URL | 用途 |
 |---|---|---|
@@ -351,7 +365,7 @@ C4. 访问各服务（前提：`docker compose up --build -d` 成功）：
 | Airflow Dashboard | http://localhost:8080 | 工作流管理 |
 | OpenSearch Dashboards | http://localhost:5601 | 搜索引擎 UI |
 
-   - Airflow 用户名/密码见 `airflow/simple_auth_manager_passwords.json.generated`。
+   - Airflow 用户名/密码见 airflow/simple_auth_manager_passwords.json.generated。
    - 预期结果：五个入口都能打开；记一次冷启动到可用的耗时作为基线。
 
 C5. 按周推进，每周跑对应 notebook（前提：C2–C4 已通过）：
@@ -386,30 +400,30 @@ docker compose up --build -d
 # Replace <WEEK_TAG> with: week1.0, week2.0, etc.
 ```
 
-   - 可用 tag：`week1.0` … `week7.0`。
+   - 可用 tag：week1.0 … week7.0。
    - 预期结果：同一批问题可以在不同周的检索实现上重复提问，做对照。
 
 C7. 构建检索层（Week 3 → Week 4，这是可迁移的核心流程）：
-   1. 先在 OpenSearch 建索引/mapping，跑 BM25 关键词检索（`src/services/opensearch/`、`src/routers/search.py`，端点 `POST /api/v1/search`）。
-   2. 再用 `src/services/indexing/text_chunker.py` 做按章节切分（带 overlap）。
-   3. 用 `src/services/embeddings/`（Jina AI，含 fallback 策略）生成向量。
-   4. 通过 `src/routers/hybrid_search.py`（端点 `POST /api/v1/hybrid-search/`）用 RRF 融合关键词与语义结果。
+   1. 先在 OpenSearch 建索引/mapping，跑 BM25 关键词检索（src/services/opensearch/、src/routers/search.py，端点 POST /api/v1/search）。
+   2. 再用 src/services/indexing/text_chunker.py 做按章节切分（带 overlap）。
+   3. 用 src/services/embeddings/（Jina AI，含 fallback 策略）生成向量。
+   4. 通过 src/routers/hybrid_search.py（端点 POST /api/v1/hybrid-search/）用 RRF 融合关键词与语义结果。
    - 预期结果：同一批问题分别拿到关键词检索与混合检索两套结果；Week 3 用 precision、recall、relevance scoring 记录质量。
 
 C8. 接 LLM 与流式输出（Week 5）：
-   - 端点：`/api/v1/ask` 与 `/api/v1/stream`（`src/routers/ask.py`）。
-   - 系统提示词文件：`src/services/ollama/prompts/rag_system.txt`（针对学术论文优化）。
-   - LLM 服务：`src/services/ollama/`（本地 Ollama，端口 11434，数据不出本地）。
+   - 端点：/api/v1/ask 与 /api/v1/stream（src/routers/ask.py）。
+   - 系统提示词文件：src/services/ollama/prompts/rag_system.txt（针对学术论文优化）。
+   - LLM 服务：src/services/ollama/（本地 Ollama，端口 11434，数据不出本地）。
 
 C9. 加监控与缓存（Week 6）：
-   - Langfuse：`src/services/langfuse/`，在 RAG 端点挂 tracing，看延迟/成本仪表盘。
-   - Redis：`src/services/cache/`，精确匹配缓存 + 优雅降级，缓存键与 TTL 在服务内管理。
-   - `docker-compose.yml` 增加 Redis 与 Langfuse 本地实例。
+   - Langfuse：src/services/langfuse/，在 RAG 端点挂 tracing，看延迟/成本仪表盘。
+   - Redis：src/services/cache/，精确匹配缓存加优雅降级，缓存键与 TTL 在服务内管理。
+   - docker-compose.yml 增加 Redis 与 Langfuse 本地实例。
 
 C10. 升级为 Agentic RAG（Week 7）：
-   - 节点实现：`src/services/agents/nodes/`（guardrail、retrieve、grade、rewrite、generate）。
-   - 工作流编排：`src/services/agents/agentic_rag.py`（LangGraph）。
-   - 智能体端点：`src/routers/agentic_ask.py`；Telegram Bot：`src/services/telegram/`。
+   - 节点实现：src/services/agents/nodes/（guardrail、retrieve、grade、rewrite、generate）。
+   - 工作流编排：src/services/agents/agentic_rag.py（LangGraph）。
+   - 智能体端点：src/routers/agentic_ask.py；Telegram Bot：src/services/telegram/。
    - 关键机制：决策节点自适应选检索策略、文档相关性打分（document grading）、结果不足时查询改写重试（query rewriting / adaptive retrieval）、域外问题 guardrail 拦截（防幻觉）、暴露推理步骤便于调试。
    - 预期结果：域外问题被拦截而不是硬答；检索结果不足时会改写重试；推理步骤可见。
 
@@ -432,7 +446,7 @@ docker compose logs            # View logs
 uv run pytest                 # Run tests
 ```
 
-   - 排障：服务起不来先等 2–3 分钟并看 `docker compose logs`；端口冲突释放 8000 / 8080 / 5432 / 9200；内存不足调大 Docker Desktop 内存。
+   - 排障：服务起不来先等 2–3 分钟并看 docker compose logs；端口冲突释放 8000 / 8080 / 5432 / 9200；内存不足调大 Docker Desktop 内存。
    - 完全重置：
 
 ```bash
@@ -452,7 +466,7 @@ claude plugin install claude-obsidian@agricidaniel-claude-obsidian
    - 预期结果：插件安装完成，后续可在 vault 中使用 claude-obsidian 的 skills。
 
 D2. 选定 vault 并启动 Claude Code。
-   - 前提：打开想作为 vault 的文件夹；插件不会把自己的文件夹或缓存当作 vault；vault 需通过 `CLAUDE_OBSIDIAN_VAULT`、最近的 `.claude-obsidian.json` 或一个明确初始化的父文件夹选定，不确定时它会退出而不写入。
+   - 前提：打开想作为 vault 的文件夹；插件不会把自己的文件夹或缓存当作 vault；vault 需通过 CLAUDE_OBSIDIAN_VAULT、最近的 .claude-obsidian.json 或一个明确初始化的父文件夹选定，不确定时它会退出而不写入。
 
 ```bash
 claude                                   # start Claude Code in your vault folder
@@ -470,9 +484,9 @@ D3. 初始化或采纳现有 vault。
    - 预期结果：先看到预览；批准后完成初始化或采纳。
 
 D4. 捕获来源。
-   - 把论文、文章、转录或自己的笔记放进 `inbox/`。插件会先保留按内容命名的未改动副本，再摘要。
+   - 把论文、文章、转录或自己的笔记放进 inbox/。插件会先保留按内容命名的未改动副本，再摘要。
    - 前提：本地文件可捕获；图片只取元数据、hash、尺寸；PDF/EPUB 目前只有元数据、hash、大小，没有内置文本抽取；网页和 YouTube 只是待批准的计划，抓取需单独 runner；OCR 需外部工具。
-   - 预期结果：`inbox/` 中来源被捕获，原始副本保留。
+   - 预期结果：inbox/ 中来源被捕获，原始副本保留。
 
 D5. 生成链接笔记。
    - 前提：每个重要论断要链接到支持它的来源；弱证据或冲突证据应保留可见，不要被平滑掉。
@@ -528,7 +542,7 @@ bash scripts/setup-multi-agent.sh --host codex            # preview, writes noth
 bash scripts/setup-multi-agent.sh --host codex --apply    # link the skills
 ```
 
-   其他宿主把 `codex` 换成 `opencode`、`gemini` 或 `zcode`。Cursor 和 Windsurf 需要 workspace，在脚本后追加：
+   其他宿主把 codex 换成 opencode、gemini 或 zcode。Cursor 和 Windsurf 需要 workspace，在脚本后追加：
 
 ```bash
 bash scripts/setup-multi-agent.sh --host cursor --host windsurf --workspace <folder> --apply
@@ -538,7 +552,7 @@ bash scripts/setup-multi-agent.sh --host cursor --host windsurf --workspace <fol
    - 预期结果：技能被链接到目标宿主；预览步骤不写文件。
 
 D11. 可选：命令行核心与 bench。
-   - 前提：从仓库副本运行；改文件的命令先显示 plan，只有按 plan 的 hash 才 apply；`bench` 用你自己的问题文件测搜索质量，原文未给 queries 文件格式，需先看 `--help`。
+   - 前提：从仓库副本运行；改文件的命令先显示 plan，只有按 plan 的 hash 才 apply；bench 用你自己的问题文件测搜索质量，原文未给 queries 文件格式，需先看 --help。
 
 ```bash
 python3 scripts/claude-obsidian.py doctor --vault PATH
@@ -550,22 +564,77 @@ python3 scripts/claude-obsidian.py bench --queries FILE --vault PATH
    - 预期结果：拿到 doctor/lint 诊断、可回滚的事务恢复入口，以及用自有问题文件测得的搜索质量结果。
 
 D12. 按安全契约操作。
-   - 前提：每次写入前 Claude 读取将触碰的每个笔记并记录 SHA-256；helper 只交草稿；合并成一个 plan 后单事务应用；journal 在写入期间保留备份，断电后用 `transaction recover` 回滚；你在 Obsidian 里改了笔记导致 fingerprint 不匹配时写入会以冲突停止。外部设备和外部编辑器不共享该锁，同步 Canvas/Base 时尤其要备份。
+   - 前提：每次写入前 Claude 读取将触碰的每个笔记并记录 SHA-256；helper 只交草稿；合并成一个 plan 后单事务应用；journal 在写入期间保留备份，断电后用 transaction recover 回滚；你在 Obsidian 里改了笔记导致 fingerprint 不匹配时写入会以冲突停止。外部设备和外部编辑器不共享该锁，同步 Canvas/Base 时尤其要备份。
    - 预期结果：写入冲突会停止而不是覆盖；需要时可回滚。
+
+### 做法 E：最小 Markdown 知识库闭环（raw/wiki/outputs 加根目录 CLAUDE.md）
+
+E1. 建库：下载 Obsidian，新建一个 vault（一个普通本地文件夹即可）；不想装 Obsidian 时，用任意 Markdown 文件夹加剪藏工具替代。
+   - 前提：本地可安装 Obsidian；Claude Code 能在该文件夹内读写文件；浏览器装有 Obsidian Web Clipper。原文未给安装与权限细节。
+   - 预期结果：得到一个只作为知识库的本地文件夹。
+
+E2. 建三个顶层目录，角色固定：
+   - raw/：原始素材，只进不改。
+   - wiki/：agent 自己写的笔记与归档。
+   - outputs/：回答、产出物落地的地方。
+
+E3. 在库根目录放一个 CLAUDE.md，用途是按原文“告诉 Claude 这个 wiki 怎么运转”（how to run the wiki）。
+   - 注意：原文没有给出 CLAUDE.md 的内容，只给了它的位置和职责；这一步必须自己补写。至少要说清：raw 只读、wiki 由 agent 维护、每条新素材要做摘要加与既有笔记建立链接再加归档、输出写到 outputs。
+   - 预期结果：Claude Code 进入该目录后，能按同一套约定处理新素材。
+
+E4. 采集：用 Obsidian Web Clipper 把网页文章剪进 raw/。
+   - 前提：浏览器已装并配置好 Web Clipper；剪藏目标指向该库的 raw/。
+   - 预期结果：raw/ 中只增加原始素材，不被 agent 改写。
+
+E5. 入库：对 Claude Code 下达指令，原文给出的原话是：
+
+```
+ingest the new sources
+```
+
+   即让它读 raw 里的新增素材、写笔记、链接到此前保存的内容、归档进 wiki。
+   - 前提：CLAUDE.md 已写清目录职责；raw 中已有新增素材。
+   - 预期结果：wiki/ 中出现新笔记、链接和归档；人工检查生成内容是否符合 CLAUDE.md 约定。
+
+E6. 检索：对着整个库提问，原文描述是“Ask it anything about everything you saved”。
+   - 前提：已完成至少一次 ingest；wiki/ 中有可检索的笔记。
+   - 预期结果：回答能指到 raw/ 或 wiki/ 中的真实来源，而不是泛泛复述。
+
+E7. 每周质检：每周让它排查一次库内矛盾。原文原话是：
+
+```
+once a week let it hunt for contradictions
+```
+
+   即让 agent 找出不同笔记之间互相冲突的结论，交给人判断。
+   - 前提：库里已有足够多的同主题笔记；最好预埋 2–3 处已知冲突用于检验。
+   - 预期结果：拿到一份矛盾清单；人工判断哪些是真矛盾、哪些是误报。
+
+E8. 最小试用：建一个库，只放 raw/、wiki/、outputs/ 三个目录和一个 CLAUDE.md；预埋 15–20 篇你这几周真实读过、且一个月后确实想再找回来的文章剪进 raw，其中故意放 2–3 篇观点互相冲突的同主题文章。
+   - 前提：已完成 E1–E3；愿意连续两周每天新增 1–2 篇并重复 ingest。
+   - 预期结果：一周后观察 wiki 的结构是否开始自我一致；第二周做一次检索测试和一次 hunt for contradictions。
+
+E9. 与做法 D 怎么选：
+   - 要写入安全（SHA-256、plan、journal、冲突停止）、lint 体检、显式命令、只读 query，选做法 D。
+   - 只要最轻骨架、能接受自己补规则、不需要事务保护，选做法 E。
+   - 两者都维护纯 Markdown；做法 E 的 Obsidian 可被普通文件夹替代，做法 D 的写入安全契约只在它自己的工具链内生效。
+
+E10. 小范围试的纪律：原文把总成本描述为“五分钟”，但这只是搭空壳的时间，不含写 CLAUDE.md 规则和调提示词的时间；先用两周真实阅读材料试跑，再决定是否把它变成日常流程。
 
 ## 怎么判断变好了
 
 **最小试用方式（单机、单人）**
 
-1. 做法 A：按 A1–A7 起一个实例，先设 `DISABLE_TELEMETRY=true`，记录一次冷启动到可用的耗时。
+1. 做法 A：按 A1–A7 起一个实例，先设 DISABLE_TELEMETRY=true，记录一次冷启动到可用的耗时。
 2. 做法 A：只接一个你已经在用的模型，作为基线，不做切换对比。
 3. 做法 A：建 workspace，上传 20–50 份你日常需要反复翻查的文档（同一主题，含明确的答案位置）。
 4. 做法 A：准备 10 个你已知答案的问题，逐个提问，逐条记录：答案是否正确、引用是否指向真正含答案的那份文档、回答耗时。
 5. 做法 A：配 1 个 cron 定时任务，选一件你本来每周手动做一次的固定动作，连续观察 2–3 次触发是否按时、产出是否可用。
-6. 做法 B：先用 `create → source add → ask → download` 跑通一条端到端流水线，建议连续做多次真实任务；记录 ask 回答是否有引用、产物能否下载、agent 调用成功率、认证失效/限额触发次数。再决定是否固化进 SKILL.md 或定时任务。
-7. 做法 C：先用默认分支跑到 `curl http://localhost:8000/api/v1/health` 通过、五个服务入口能打开；再用 `week3.0` 与 `week4.0` 两个 tag 各起一次，用同一批问题对比 BM25 与混合检索。只有这一步出现可观察差异，再考虑 Week 5–7。
-8. 做法 D：复制一个 vault 或新建空 vault，装插件后先跑 `/claude-obsidian:wiki` 看预览；在 `inbox/` 放 3–5 个 Markdown 来源（先避开 PDF 全文和网页抓取）；跑 `/claude-obsidian:wiki-ingest`，检查原文件是否保留、每条重要论断是否有来源链接；用 `/claude-obsidian:wiki-query` 问 5–10 个跨来源问题，检查回答引用是否指向 vault 内笔记；跑 `/claude-obsidian:wiki-lint` 记录死链、孤儿、缺元数据、空段数量；用 `/claude-obsidian:save` 保存一个答案；再试 `/claude-obsidian:wiki-mode` 切换归档模式，确认旧笔记不被移动。
-9. 对照基线：同一批问题用你现在的做法（手工翻文档，或直接把文档贴进通用聊天窗口）走一遍，用同样的记录口径。
+6. 做法 B：先用 create → source add → ask → download 跑通一条端到端流水线，建议连续做多次真实任务；记录 ask 回答是否有引用、产物能否下载、agent 调用成功率、认证失效/限额触发次数。再决定是否固化进 SKILL.md 或定时任务。
+7. 做法 C：先用默认分支跑到 curl http://localhost:8000/api/v1/health 通过、五个服务入口能打开；再用 week3.0 与 week4.0 两个 tag 各起一次，用同一批问题对比 BM25 与混合检索。只有这一步出现可观察差异，再考虑 Week 5–7。
+8. 做法 D：复制一个 vault 或新建空 vault，装插件后先跑 /claude-obsidian:wiki 看预览；在 inbox/ 放 3–5 个 Markdown 来源（先避开 PDF 全文和网页抓取）；跑 /claude-obsidian:wiki-ingest，检查原文件是否保留、每条重要论断是否有来源链接；用 /claude-obsidian:wiki-query 问 5–10 个跨来源问题，检查回答引用是否指向 vault 内笔记；跑 /claude-obsidian:wiki-lint 记录死链、孤儿、缺元数据、空段数量；用 /claude-obsidian:save 保存一个答案；再试 /claude-obsidian:wiki-mode 切换归档模式，确认旧笔记不被移动。
+9. 做法 E：建一个只含 raw/、wiki/、outputs/ 和 CLAUDE.md 的库；剪 15–20 篇真实读过的文章，其中 2–3 篇同主题观点冲突；跑一次 ingest the new sources，人工检查 wiki 生成了什么；每天新增 1–2 篇，重复 ingest 一周；第二周做一次检索测试和一次 once a week let it hunt for contradictions。
+10. 对照基线：同一批问题用你现在的做法（手工翻文档，或直接把文档贴进通用聊天窗口，或直接在浏览器历史/搜索里找）走一遍，用同样的记录口径。
 
 **可观察的指标**
 
@@ -575,68 +644,84 @@ D12. 按安全契约操作。
 - 定时任务 2–3 次触发的按时率与产出可用率。
 - notebooklm-py：端到端流水线跑通次数、产物下载成功率、agent skill 调用成功率、认证保活是否无人值守、限额/失败次数。
 - 做法 C：同一批问题在 BM25 / 混合检索 / Agentic RAG 三档下的 precision、recall、relevance scoring；Langfuse 仪表盘上的端到端延迟与成本；重复问题命中 Redis 缓存后的耗时；Agentic 侧 guardrail 拦截次数、查询改写重试次数、推理步骤是否可读。
-- 做法 D：与试用前基线比较，统计重要 claim 的来源链接覆盖率、query 回答的引用可追溯率、lint 发现的死链/孤儿/缺元数据数量、人工抽检的事实错误数、同一问题从 vault 找答案的时间；用同一组问题文件跑 `bench` 对比搜索质量，先通过 `--help` 确认 queries 格式。
+- 做法 D：与试用前基线比较，统计重要 claim 的来源链接覆盖率、query 回答的引用可追溯率、lint 发现的死链/孤儿/缺元数据数量、人工抽检的事实错误数、同一问题从 vault 找答案的时间；用同一组问题文件跑 bench 对比搜索质量，先通过 --help 确认 queries 格式。
+- 做法 E：找回速度——对 10 个“我肯定读过但忘了在哪”的问题，从提问到拿到正确来源的耗时，与直接在浏览器历史/搜索里找的耗时对比。
+- 做法 E：来源命中率——上述 10 个问题中，回答能指到 raw/ 里真实存在的那一篇的比例，防止 agent 编造。
+- 做法 E：孤儿率——wiki 中没有任何入链的笔记占比，以及每条新素材平均建立的有效链接数，直接检验“no dead notes”这个主张。
+- 做法 E：矛盾排查精度——预埋的 2–3 处冲突是否被找出；同时记录它报出的“矛盾”里，人工判定为真矛盾的比例，防止误报刷屏。
+- 做法 E：维护成本——每周你花在修 CLAUDE.md、纠正分类、清理错误笔记上的分钟数；如果持续高于原先手动整理的时间，就说明这条工作流对你不成立。
+- 做法 E：留存检验——两周后再问一次第一周的问题，看答案是否稳定、来源是否仍可追溯。
 
 **试多久**
 
 - 做法 A、B：一周。一周内如果引用命中率没有明显优势，或定时任务产出不可用，就不要继续投入。notebooklm-py 若认证频繁失效或限额触发，不要固化进 SKILL.md 或定时任务。
 - 做法 C：课程本身按 7 周递进，不要一周内全做完。至少把 Week 3 与 Week 4 的对照跑完再决定是否继续投入 Week 5–7；如果混合检索相对 BM25 没有可观察提升，就不要继续往后投。
 - 做法 D：原文未给固定周期；先用一个 vault 副本和 3–5 个 Markdown 来源做一次最小试用，再以你自己的问题集重复验证。若引用可追溯性和 lint 指标没有改善，或写入冲突频繁，就不要固化进日常流程。
+- 做法 E：建议两周；第一周建立结构，第二周做检索与矛盾排查。若找回速度、来源命中率、孤儿率或矛盾精度没有改善，或维护成本持续高于手工，就不要把它变成日常流程。
 
 ## 常见坑
 
-- **AnythingLLM README 只有入口链接，没有可直接复制的命令**。Docker 部署要自己点进 `docker/HOW_TO_USE_DOCKER.md`；定时任务、模型路由、Agent Flows、MCP 兼容也各只有一个文档链接，没有参数、配置样例和步骤。
+- **AnythingLLM README 只有入口链接，没有可直接复制的命令**。Docker 部署要自己点进 docker/HOW_TO_USE_DOCKER.md；定时任务、模型路由、Agent Flows、MCP 兼容也各只有一个文档链接，没有参数、配置样例和步骤。
 - **AnythingLLM 多用户支持与网站嵌入挂件仅 Docker 版本提供**。选错部署方式，后面这两项直接做不了。
-- **AnythingLLM 遥测默认开启**，需要主动关闭；关闭后仍有固定外连（模型厂商、`cdn.anythingllm.com`、github/githubusercontent）。
-- **AnythingLLM `server/.env.development` 不填好，开发模式跑不起来**。`yarn setup` 生成 `.env` 后必须手工填写。
-- **把宣传性表述当成数据**。“Intelligent Skill Selection……token 使用最多降低 80%”、“比其它 chat UI 成本更低、响应更快”、“battle-tested”、“no extra configuration required”这些都没有测法、没有对照，只是作者主张。
+- **AnythingLLM 遥测默认开启**，需要主动关闭；关闭后仍有固定外连（模型厂商、cdn.anythingllm.com、github/githubusercontent）。
+- **AnythingLLM server/.env.development 不填好，开发模式跑不起来**。yarn setup 生成 .env 后必须手工填写。
+- **把宣传性表述当成数据**。“Intelligent Skill Selection……token 使用最多降低 80%”“比其它 chat UI 成本更低、响应更快”“battle-tested”“no extra configuration required”这些都没有测法、没有对照，只是作者主张。
 - **AnythingLLM README 没有任何效果、性能、成本数据，也没有安全/合规说明**，无法据此判断敏感数据场景是否可用。
-- **`yarn` 那组命令只是“跑起来”的步骤**，不是“用好”的步骤，后者要另找官方文档。
+- **yarn 那组命令只是“跑起来”的步骤**，不是“用好”的步骤，后者要另找官方文档。
 - **notebooklm-py 是非官方 API，依赖未公开的 Google API**。稳定性和限额必须自行验证，不能假设长期可用。
 - **NotebookLM 在 2026 年 7 月被 Google 更名为 Gemini Notebook，底层服务与链接不变**；看到旧名称时不要以为换了服务。
 - **首次交互式登录需要本地浏览器**，会下载 Chromium（约 170 MB）；无头服务器要提前准备 master token 和专用账号。
-- **PEP 668 的 `externally-managed-environment` 报错**：优先用 `uv tool install`、`pipx` 或虚拟环境，不要直接往系统 Python 装。
-- **master token 是全账号级凭证**，应使用专用账号并妥善保护；Android 后端从 profile 读取 `master_token.json`，按需签发短期移动 bearer token。
-- **Android 后端不在 `all` extra 中**，需显式安装 `notebooklm-py[android,browser]`。
-- **默认后端是 Web（`batchexecute`）**，可用 `NOTEBOOKLM_BACKEND=android` 或 Python API 的 `NotebookLMClient.from_storage(backend="android")` / `NotebookLMClient(..., backend="android")` 选择 Android。
-- **`--prompt-file` 只用于 `ask`、prompt 型 `generate` 和 `source add-research`**；上传文件作为来源仍用 `source add ./file.pdf`。
+- **PEP 668 的 externally-managed-environment 报错**：优先用 uv tool install、pipx 或虚拟环境，不要直接往系统 Python 装。
+- **master token 是全账号级凭证**，应使用专用账号并妥善保护；Android 后端从 profile 读取 master_token.json，按需签发短期移动 bearer token。
+- **Android 后端不在 all extra 中**，需显式安装 notebooklm-py[android,browser]。
+- **默认后端是 Web（batchexecute）**，可用 NOTEBOOKLM_BACKEND=android 或 Python API 的 NotebookLMClient.from_storage(backend='android') / NotebookLMClient(..., backend='android') 选择 Android。
+- **--prompt-file 只用于 ask、prompt 型 generate 和 source add-research**；上传文件作为来源仍用 source add ./file.pdf。
 - **每个 notebook 的来源数量上限取决于账号等级**；批量导入前先确认限额。
 - **notebooklm-py 的 stars 19591 来自本次线索的 metrics 字段**，不是效果、性能或成本数据。
 - **“零 token 综合层/记忆层”是调研建议**，不是 README 数据；先小范围试，再决定是否固化。
-- **课程仓库的克隆命令与页面仓库名不一致**：README 写 `cd arxiv-paper-curator`，而当前页面仓库名是 `production-agentic-rag-course`，克隆前先确认实际地址。
+- **课程仓库的克隆命令与页面仓库名不一致**：README 写 cd arxiv-paper-curator，而当前页面仓库名是 production-agentic-rag-course，克隆前先确认实际地址。
 - **做法 C 的 README 只到架构与入口层面**：提示词、LangGraph 图定义和评估脚本都在仓库代码/notebooks 与博客里，照着 README 走不到“用好”。
 - **不要跳过前几周直接上 Week 7**：课程按 7 周递进，作者的路线主张是先 BM25 关键词检索打底、再用向量增强；顺序本身是课程主张，实际差距要自己测。
 - **做法 C 的密钥要分清必需与可选**：Jina 是 Week 4 及以后必需，Telegram Bot Token 是 Week 7 必需，Langfuse 公私钥 Week 6 可选。
-- **做法 C 服务起不来通常只是没等够**：等 2–3 分钟再看 `docker compose logs`；端口冲突释放 8000 / 8080 / 5432 / 9200；内存不足调大 Docker Desktop 内存。
-- **Airflow 登录信息不在 README 正文里**：见 `airflow/simple_auth_manager_passwords.json.generated`。
+- **做法 C 服务起不来通常只是没等够**：等 2–3 分钟再看 docker compose logs；端口冲突释放 8000 / 8080 / 5432 / 9200；内存不足调大 Docker Desktop 内存。
+- **Airflow 登录信息不在 README 正文里**：见 airflow/simple_auth_manager_passwords.json.generated。
 - **Week 6 的 Redis 是精确匹配缓存**：字面不同但语义相近的问题不会命中。
 - **课程以 arXiv 论文为贯穿案例**：摄取层围绕 arXiv API 构建，用到自己的文档前先确认这条路径能改到你的数据源。
 - **claude-obsidian 的 PDF/EPUB 内置只有元数据、hash、大小，没有文本抽取**；网页/YouTube 抓取需单独 runner；OCR 需外部工具。不要把“能捕获来源”理解成能自动读全文。
 - **原生 Windows 只能检查和预览，任何写入 vault 的操作要用 WSL**。
 - **在 Claude Code 中工作时，Claude 读取的笔记会发送给 Claude/Anthropic**；敏感笔记要先评估。
 - **写入锁只协调本地合作写入者**，外部设备和外部编辑器不共享锁；同步 Canvas/Base 时尤其要备份。
-- **指纹不匹配时写入会以冲突停止**，这是安全契约，不要绕过；断电后用 `transaction recover` 回滚。
+- **指纹不匹配时写入会以冲突停止**，这是安全契约，不要绕过；断电后用 transaction recover 回滚。
 - **插件不会把自己的文件夹或缓存当作 vault**；不确定时会退出而不写入，需明确选定 vault。
-- **`wiki-query` 只读；`save` 只在明确要求时保存**，不要批量写入。
-- **切换 `wiki-mode` 只改变新笔记归档位置，不移动旧笔记**。
+- **wiki-query 只读；save 只在明确要求时保存**，不要批量写入。
+- **切换 wiki-mode 只改变新笔记归档位置，不移动旧笔记**。
 - **ZCode 在清单中标为 avoid**，README 虽声称支持，不要仅凭 README 改变判断。
-- **`bench` 的 queries 文件格式原文未给**，先看 `--help`。
+- **bench 的 queries 文件格式原文未给**，先看 --help。
 - **claude-obsidian 没有 cron/后台自动运行配置**，不能写成全自动；定期 lint 需显式触发或自行排程。
 - **claude-obsidian 原文没有量化效果数据**；“知识会复利”“Nothing gets lost”是作者主张；stars 15797 不是效果数据。
 - **claude-obsidian 不是自动转录记录器、云同步服务或事实核查器，也不替代备份**。
+- **做法 E 原文只有流程骨架，没有 CLAUDE.md 内容、具体提示词、目录内文件命名规则和矛盾排查输出格式**。照它只能复现“怎么做”，不能复现“效果”。
+- **做法 E 的“五分钟”只是搭空壳的时间**，不含写 CLAUDE.md 规则和调提示词的时间。
+- **“不用打标签、不用分类、不会产生死笔记”“从今天起你读的一切都会为你持续工作”都是作者主张**，没有案例、没有对照实验。
+- **Karpathy 那条想法 48 小时 1600 万浏览是转述，未给出处、无法核实**；推文自身的 71 赞、62 转发、14 回复只是互动量，不是效果数据。
+- **做法 E 没有给出任何自动化机制**：ingest 由新增文件触发但仍靠人开口，每周找矛盾也靠人开口，不是 cron，也不是监听文件变化。
+- **该调研自身指出其工具清单里 Obsidian 已被判为 drop，与本条把它当载体存在冲突**；可把 Obsidian 换成普通 Markdown 文件夹加剪藏工具。
+- **做法 E 只适用于文本为主、长期同一目录的个人知识库**；重度多模态素材、多人协作或权限分级不适用。
+- **做法 E 的指标要自己记**：原文只给了一个自问式指标“你这周读的东西，一个月后还能找回来多少”，以及“没有死笔记”这一目标状态，没有量化验证方式、样本或对照。
+- **预埋冲突要自己设计**：不预埋 2–3 处已知矛盾，就无法判断每周矛盾排查是真有效还是在误报刷屏。
 
 ## 证据与来源
 
 **AnythingLLM 部分**
 
-- 全部操作项来自 Mintplex-Labs/anything-llm 仓库 README：MIT 许可、66,645 stars、monorepo 六模块（`frontend` / `server` / `collector` / `docker` / `embed` / `browser-extension`）、支持清单（30+ LLM provider、10+ embedder、9 个向量库、多 TTS/STT）、部署方式一览表，以及开发模式的三条 `yarn` 命令与 `server/.env.development` 前置要求。
-- 遥测范围与关闭方式为 README 自述（PostHog 收集事件类型，不含聊天内容、IP 或可识别信息），并说明可在源码中按 `Telemetry.sendTelemetry` 检索核对。
+- 全部操作项来自 Mintplex-Labs/anything-llm 仓库 README：MIT 许可、66,645 stars、monorepo 六模块（frontend / server / collector / docker / embed / browser-extension）、支持清单（30+ LLM provider、10+ embedder、9 个向量库、多 TTS/STT）、部署方式一览表，以及开发模式的三条 yarn 命令与 server/.env.development 前置要求。
+- 遥测范围与关闭方式为 README 自述（PostHog 收集事件类型，不含聊天内容、IP 或可识别信息），并说明可在源码中按 Telemetry.sendTelemetry 检索核对。
 - 以下仅为作者主张、无数据支撑，本手册只作提示、不作结论：token 使用最多降低 80% 的“Intelligent Skill Selection”；“比其它 chat UI 更低成本、更快响应”的优化说法；“battle-tested”“no frustrating setup”“no extra configuration required”“Production-ready for any cloud deployment”；多用户权限与嵌入挂件“更安全/更私密”的定性描述。
 - 本份 AnythingLLM 调研只有 README，没有官方文档正文，也没有任何性能、成本、效果或安全合规数据。文中的最小试用方式、20–50 份文档、10 个已知答案问题、2–3 次触发观察，均为该调研给出的试用建议，不是厂商数据；“怎么算变好”需要自己按上述口径采集。
 
 **notebooklm-py 部分**
 
-- 来自 teng-lin/notebooklm-py 调研/README：非官方 Python API + CLI，同时提供 MCP Server、REST Server 和 agent skill 安装方式，让 Claude Code、Codex、OpenClaw 等智能体以编程方式驱动 NotebookLM。
+- 来自 teng-lin/notebooklm-py 调研/README：非官方 Python API 加 CLI，同时提供 MCP Server、REST Server 和 agent skill 安装方式，让 Claude Code、Codex、OpenClaw 等智能体以编程方式驱动 NotebookLM。
 - README 自述定位是“程序化访问 NotebookLM 全部能力”：建 notebook、批量导入来源（URL/YouTube/PDF/Word/EPUB/音视频/图片/Google Drive/粘贴文本）、带引用的问答、把回答存成 note、生成音频/视频/幻灯片/信息图/测验/闪卡/报告/数据表/思维导图，并把产物批量下载到本地（MP3/MP4/PDF/PPTX/PNG/CSV/JSON/Markdown）。
 - README 强调了两类 Web UI 不提供的能力：批量下载、测验/闪卡的 JSON/Markdown/HTML 导出、思维导图 JSON 提取。
 - README 自述的使用范式是：NotebookLM 做“有据可依（grounded）的昂贵阅读与综合”，agent 只负责编排和最后一公里。
@@ -648,25 +733,37 @@ D12. 按安全契约操作。
 
 **production-agentic-rag-course 部分**
 
-- 全部操作项来自 jamwithai/production-agentic-rag-course 仓库 README：MIT、免费课程，以 arXiv Paper Curator 为贯穿案例，7 周递进、每周一个独立 release tag（`week1.0` … `week7.0`），以及 Quick Start 命令、`.env` 必需变量清单、五个服务入口、`make` 命令与完全重置命令。
-- 课程结构（Week 1 基础设施 → Week 2 摄取 → Week 3 BM25 → Week 4 分块 + 混合检索 → Week 5 完整 RAG → Week 6 监控与缓存 → Week 7 Agentic RAG + Telegram）与各周对应的源码路径、端点，来自该 README。
+- 全部操作项来自 jamwithai/production-agentic-rag-course 仓库 README：MIT、免费课程，以 arXiv Paper Curator 为贯穿案例，7 周递进、每周一个独立 release tag（week1.0 … week7.0），以及 Quick Start 命令、.env 必需变量清单、五个服务入口、make 命令与完全重置命令。
+- 课程结构（Week 1 基础设施 → Week 2 摄取 → Week 3 BM25 → Week 4 分块加混合检索 → Week 5 完整 RAG → Week 6 监控与缓存 → Week 7 Agentic RAG 加 Telegram）与各周对应的源码路径、端点，来自该 README。
 - Week 3 的 precision / recall / relevance scoring 是课程给出的质量指标；Week 6 的 Langfuse 端到端追踪与 Redis 精确匹配缓存、Week 7 的 guardrail / document grading / query rewriting / 推理步骤暴露，都是课程 README 列出的内容。
 - “先用扎实的关键词搜索地基，再用向量增强”是作者明确主张的路线，属于主张而非效果数据。
 - 该调研同样只有 README，没有官方文档正文，也没有性能、成本、效果或安全合规数据；README 本身只到架构与入口层面，提示词、LangGraph 图定义与评估脚本在仓库代码/notebooks 与博客里。
-- README 克隆命令中的仓库名（`arxiv-paper-curator`）与页面仓库名（`production-agentic-rag-course`）不一致，这是本次合并时发现的材料内部不一致，照抄前需确认。
+- README 克隆命令中的仓库名（arxiv-paper-curator）与页面仓库名（production-agentic-rag-course）不一致，这是本次合并时发现的材料内部不一致，照抄前需确认。
 - 文中把做法 C 与做法 A/B 放进同一份试用与对照口径，是本次合并时的操作化安排，不是厂商数据。
 
 **claude-obsidian 部分**
 
 - 来自 AgriciDaniel/claude-obsidian 调研/README：MIT 许可、v3.0.1、15 个 skills 和 3 个只读 agents、两条安装命令、CLI 命令表、事务/溯源/冲突处理机制、四种归档模式、支持宿主列表、测试 badge；输入指标显示 15,797 stars。
-- README 自述：把来源放进 `inbox/` 后由 AI 读源、写带来源链接的笔记、建索引/MOC、只读问答、按需保存答案、检查死链/孤儿页/缺元数据/空段；文件保持纯 Markdown，Obsidian 只负责 Graph/Canvas/Bases 等可视化。
-- 安全契约（写前读取将触碰的每个笔记并记录 SHA-256、helper 只交草稿、合并 plan 单事务应用、journal 备份、fingerprint 不匹配时冲突停止、`transaction recover` 回滚）来自原文。
+- README 自述：把来源放进 inbox/ 后由 AI 读源、写带来源链接的笔记、建索引/MOC、只读问答、按需保存答案、检查死链/孤儿页/缺元数据/空段；文件保持纯 Markdown，Obsidian 只负责 Graph/Canvas/Bases 等可视化。
+- 安全契约（写前读取将触碰的每个笔记并记录 SHA-256、helper 只交草稿、合并 plan 单事务应用、journal 备份、fingerprint 不匹配时冲突停止、transaction recover 回滚）来自原文。
 - 四种归档模式（Generic、LYT、PARA、Zettelkasten）及“切换只改变新笔记归档位置、不移动旧笔记”来自原文。
-- Agent Skills 多宿主接入（Codex、OpenCode、Gemini、ZCode、Cursor、Windsurf）与 `setup-multi-agent.sh` 预览/应用方式来自原文；ZCode 在清单中标为 avoid，报告不据此改判。
-- `bench --queries FILE --vault PATH` 可用自有问题文件测搜索质量；原文未给 queries 文件格式，需先看 `--help`。
+- Agent Skills 多宿主接入（Codex、OpenCode、Gemini、ZCode、Cursor、Windsurf）与 setup-multi-agent.sh 预览/应用方式来自原文；ZCode 在清单中标为 avoid，报告不据此改判。
+- bench --queries FILE --vault PATH 可用自有问题文件测搜索质量；原文未给 queries 文件格式，需先看 --help。
 - 限制：PDF/EPUB 无内置文本抽取；网页/YouTube 抓取需单独 runner；OCR 需外部工具；Windows 写入需 WSL；锁只协调本地合作写入者；在 Claude Code 中笔记会发送给 Claude/Anthropic；不是自动转录记录器、云同步服务或事实核查器，也不替代备份。
 - 原文没有量化效果数据、用户案例结果或对照实验；“知识会复利”“Nothing gets lost”属于作者主张，需用试用数据验证。stars 15,797 不是效果、性能或成本数据。
 - 最小试用和指标来自该调研建议，不是厂商数据；阈值需团队自定。
+
+**最小 Markdown 知识库闭环（raw/wiki/outputs 加 CLAUDE.md）部分**
+
+- 流程骨架来自 @quantumaix8 推文调研：Obsidian 库、raw/wiki/outputs 三目录、根目录 CLAUDE.md、Obsidian Web Clipper 剪藏、说一句 ingest the new sources、对整库提问、每周 once a week let it hunt for contradictions。
+- 原文明确说“下面是完整分步指南”，但保存下来的正文没有 CLAUDE.md 的内容、没有具体提示词、没有目录内文件命名规则、没有矛盾排查的输出格式；因此只够复现流程骨架，不够复现“效果”。
+- 原文把总成本描述为“五分钟”，但这只是搭空壳的时间，不含写 CLAUDE.md 规则和调提示词的时间——这部分原文没写。
+- 作者主张（无证据）：“不用打标签、不用分类、不会产生死笔记”“五分钟搞定”“从今天起你读的一切都会为你持续工作”。这些都是断言，没有对照实验。
+- 给出的数据只有“Karpathy 那条想法 48 小时 1600 万浏览”这一转述，未给出处、无法核实；以及推文自身的互动量（71 赞、62 转发、14 回复，转发/点赞比偏高，更像被当作工具帖收藏传播）。这些都不是效果、性能或成本数据。
+- 调研结论把这条做法定为 try 而不是 adopt：建议两周真实阅读材料试跑，15–20 篇，其中预埋 2–3 篇同主题冲突文章。最小试用与指标（找回速度、来源命中率、孤儿率、矛盾精度、维护成本、留存检验）来自该调研建议，不是厂商数据。
+- 该调研自身指出：其工具清单里 Obsidian 已被判为 drop，与本条把它当载体存在冲突；可把 Obsidian 换成普通 Markdown 文件夹加剪藏工具，因为原文对 Obsidian 的依赖只是“一个能装 Web Clipper、存 Markdown 的本地文件夹”。
+- 原文没有给出任何自动化机制（定时任务、钩子、监听文件变化），触发仍靠人开口，所以“主动”只到“周期性例行任务”这一层；不要把它写成无人值守的全自动流程。
+- 做法 E 与做法 D 放进同一份试用与对照口径，是本次合并时的操作化安排，不是厂商数据。
 
 ## 依据的调研
 
@@ -674,3 +771,4 @@ D12. 按安全契约操作。
 - [teng-lin/notebooklm-py](../research/radar/2026-10-02/584-teng-lin-notebooklm-py.md)：值得一试，建议小范围试：把 notebooklm-py 作为「零 token 综合层/记忆层」接进 Claude Code 等 agent 的研究与写作工作流，先用 create → source add → ask → download 跑通一条端到端流水线再决定是否固化进 SKILL.md 或定时任务。README 给出了可复制的安装、认证、CLI/Python API 与 agent 集成步骤，但它依赖未公开的 Google API，稳定性和限额必须自行验证。
 - [jamwithai/production-agentic-rag-course](../research/radar/2026-10-04/1063-jamwithai-production-agentic-rag-course.md)：值得一试，建议小范围试：按 README 的 Quick Start 在本地起完整栈（Docker + FastAPI + PostgreSQL + OpenSearch + Airflow + Ollama），先跑 Week 3 的 BM25 关键词检索、再加 Week 4 混合检索，最后对比 Week 7 的 Agentic RAG 与普通 RAG 的效果；理由是原文给出了可直接复制的命令、配置项、服务入口和按周递进的可复现路径，且 Langfuse 追踪与 Redis 缓存提供了现成的效果验证手段，但提示词、LangGraph 图定义和评估脚本都在仓库代码/notebooks 与博客里，README 本身只到架构与入口层面。
 - [AgriciDaniel/claude-obsidian](../research/radar/2026-10-25/6928-agricidaniel-claude-obsidian.md)：值得一试，建议先在单个 Obsidian/Markdown 知识库副本上按 README 的最小流程试装：inbox 捕获、wiki-ingest 建链、wiki-query 带引用问答、wiki-lint 体检；理由是安装与操作命令具体且带来源溯源和事务回滚，但全文抓取与效果数据依赖外部工具和自测，暂不宜全量采用。
+- [@quantumaix8: I genuinely don’t understand why people don’t use this yet](../research/radar/2026-11-14/13381-i-genuinely-don-t-understand-why-people-don-t-use-.md)：值得一试，按“Obsidian 库 + raw/wiki/outputs 三目录 + 根目录 CLAUDE.md 规则 + Web Clipper 剪藏 + 说一句 ingest the new sources + 每周让它找一次矛盾”这套最小闭环，先用两周真实阅读材料试跑；这套做法的骨架可以直接照做，但原文只给了流程骨架，没给 CLAUDE.md 的具体规则和完整提示词，需要自己补，所以定位在小范围试而不是直接采用。

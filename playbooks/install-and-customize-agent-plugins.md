@@ -1,16 +1,16 @@
-# 让 AI 跨会话复用已验证做法，而不是每次重新试错
+# 让 AI 干长活时上下文、成本和待办都有人管
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：这篇手册解决：AI 在不同职能和长任务中反复补上下文、重复试错，装完插件又说不清是否变好；用分层试用、基线和可回退的方式，把经验沉淀成可复用做法。
-> 先试这一步：先选一台非关键机器和一个 agent，只启用 maxagent 的工作区加规则钩子跑两周，记录重复错误拦截次数和断点续做补充条数；或在现有 Claude Code 会话先记录 2–3 次基线，再只装一个层。
-> 最近修订：2026-11-10
+> 解决的问题：你在用 Claude Code、Cowork 或 Pi 终端 agent 做职能工作时，总要重复解释上下文、漏掉中途发现的问题、说不清插件有没有变好，长任务还会跨上下文丢线索。
+> 先试这一步：先记录 2–3 次基线，再只上一个最小层：Claude Code 用户先装一个职能插件，Pi 用户先装模型配置、状态栏、联网三件套，一周后对照。
+> 最近修订：2026-11-14
 
 ## 解决什么问题
 
-你已经在用 Claude Code 或 Cowork，但每让 AI 做某个职能的活（写 SQL、准备客户通话、审合同、对账、做 3D 资产、写 PRD、画论文示意图等），都要重新解释领域知识、公司上下文，手动贴外部工具数据；AI 给出的往往是教科书流程，不是你团队实际做法。还有几个常见缺口：AI 在会话中途问你的问题、顺手发现的 bug、失败的测试，过一会儿就淹没在对话里；装完一堆插件后，你说不清到底有没有变好；任务跑得比一个上下文窗口更久时，交接、唤醒和拍板都靠人守着；真正做一次中大型编码变更时，单个会话往往一口气写到底，没有计划、没有独立审查、landing 之前没人核对；长会话还会遇到自动压缩按 token 阈值切、不知道哪些消息属于同一个工作单元的问题；每个新会话还会从零重解同一个问题：搜索、尝试、失败、再找一遍。
+你已经在用 Claude Code、Cowork 或 Pi 终端 agent，但每让 AI 做某个职能的活（写 SQL、准备客户通话、审合同、对账、做 3D 资产、写 PRD、画论文示意图等），都要重新解释领域知识、公司上下文，手动贴外部工具数据；AI 给出的往往是教科书流程，不是你团队实际做法。还有几个常见缺口：AI 在会话中途问你的问题、顺手发现的 bug、失败的测试，过一会儿就淹没在对话里；装完一堆插件后，你说不清到底有没有变好；任务跑得比一个上下文窗口更久时，交接、唤醒和拍板都靠人守着；真正做一次中大型编码变更时，单个会话往往一口气写到底，没有计划、没有独立审查、landing 之前没人核对；长会话还会遇到自动压缩按 token 阈值切、不知道哪些消息属于同一个工作单元的问题；每个新会话还会从零重解同一个问题：搜索、尝试、失败、再找一遍。
 
-本手册用七类叠加来补：官方插件市场层、职能层（官方职能插件、独立 Agent Skills、按域技能包与编码变更编排）、会话模式层（work-mode 控制自主推进、批处理委派和收口）、收口层、观测层（广/深）、交接层与上下文压缩层、跨会话经验层。原则是：一次只上一个新层，用真实任务和基线对照，没有可感知改善就卸载，并记为“该插件无实质增益”，而不是“插件机制无效”。
+本手册用多层叠加来补：官方插件市场层、职能层（官方职能插件、独立 Agent Skills、按域技能包与编码变更编排）、会话模式层（work-mode 控制自主推进、批处理委派和收口）、收口层、观测层（广/深）、交接层与上下文压缩层、跨会话经验层，以及 Pi 终端 agent 的最小插件三件套。原则是：一次只上一个新层，用真实任务和基线对照，没有可感知改善就卸载，并记为“该插件无实质增益”，而不是“插件机制无效”。
 
 ## 适用与不适用
 
@@ -24,6 +24,7 @@
 - **block-ptc（DSH PTC 专用）**：适用——你在用 DeepSeek Harness（DSH）>=0.2.1-rc.2 和 PTC 模式；一个会话里有多个相对独立子任务、需要跨任务交接；你愿意让模型自己写交接摘要并遵守 `content` 写作规范；你需要完整 transcript 保留和确定性回放。不适用——单块连续、信息强耦合、需要逐字回溯原始对话的任务；不在 DSH 上；期望它自动跑或替代 DSH 内置自动压缩引擎；不愿接受“被省略的信息在后续请求里就不存在”；需要先看到量化收益才采用——作者自己声明节省 token、降低成本等收益尚未验证。
 - **billion-context**：适用——长跑型编码会话（小时级到天级、单会话上千次调用）；上下文经常被撑爆，或宿主内置压缩把有用细节切掉；客户端有插件缝（pi、omp、opencode、dsh、kimi、hermes、zcode）或有可用启动器；你愿意每个会话用 `/acp-cache` 核对前缀缓存命中率。不适用——短任务，收益不明；不能用 npm 全局安装；用 Claude Desktop 的 Code 标签页（会绕过代理）；需要 Remote Control 等账号绑定功能；闭源客户端既不支持 baseURL 改写、也不能信任代理 CA；不愿接受“被压缩的区间在还原前只剩摘要”。
 - **maxagent 跨会话经验层**：适用——本机装好 Node.js 18+，至少装一个受支持 agent（Claude Code、Codex、Antigravity、OpenClaw）；你受够了每个新会话从零重解同一个问题，愿意让工具修改 agent 的全局规则文件并先备份；偏个人/单机试用，想先看“已验证做法能不能在命令前被拦住”。不适用——需要团队协作或多人共享工作区（材料没有说明）；需要先看到基准、用户案例或前后对比数据才采用；不愿接受共享经验包是“他人编写的、会被注入 agent 上下文的指令文本”；不能接受 `adopt` 会把共享 atom 提升为可阻断命令的本地条目。
+- **Pi 终端 agent 插件组合**：适用——已在本地安装并可运行 Pi 终端 agent；能用 npm 安装全局包；有可用模型 API（第三方中转或官方均可）；想让 token、费用、context 占用常驻可见；需要联网读 GitHub 仓库、PDF；愿意只先装作者建议的三件套。不适用——不用 Pi；插件不能直接迁移到 Claude Code、Cursor 等；不愿让插件以你的用户权限运行；需要先看到 Pi 比 Claude Code 更省钱或正确率更高的证据（材料没有，作者主张无数据）；想一次装 11 个。
 
 ## 前置条件
 
@@ -39,14 +40,17 @@
 10. 同时用多层前先 `claude --version` 核对；升级 Claude Code 后先 `/reload-plugins`。
 11. claude-skills 需要 git 与 Python 3；Windows 用 `git clone -c core.symlinks=true` 并开启开发者模式，设 `PYTHONUTF8=1`；安装前能运行其 `skill_security_auditor.py`，并把 PASS 作为继续安装的门槛，WARN/FAIL 先人工检查或放弃。
 12. block-ptc 需要 DSH >=0.2.1-rc.2，随附 Cordis >=4.0.5；插件零运行时依赖（仅 `node:crypto`）；安装后必须重启一次；新建会话时选 Block PTC preset。本次发布只用 DSH 0.2.1-rc.2 做过 live 验证；peer 依赖只声明下限、无上限，新宿主只是“允许加载”，事件语义与 preset 配置仍需重新验证。
-13. billion-context 需要 Node/npm；Linux/macOS 建议用用户级 prefix `--prefix=~/.local`，Windows 默认 prefix（`%APPDATA%\npm`）可写；需要能全局安装 npm 包的权限；端口 8787（`bili start` 手动模式）与 18787 起的管理区可用。
+13. billion-context 需要 Node/npm；Linux/macOS 建议用用户级 prefix `--prefix=~/.local`，Windows 默认 npm prefix 可写；需要能全局安装 npm 包的权限；端口 8787（`bili start` 手动模式）与 18787 起的管理区可用。
 14. billion-context 原生插件支持的客户端：pi、omp、opencode 1.x/2.x、dsh、kimi（Kimi Code ≥ 2.0.0）、hermes、zcode；启动器还支持 codex、claude、gemini、qwen、aider、goose。
 15. Claude Desktop 的 Code 标签页会自设 `ANTHROPIC_BASE_URL` 绕过代理，而 `DISABLE_AUTO_COMPACT=1` 仍生效——既没压缩也没原生自动压缩；终端会话不受影响。走自定义 baseURL 会让 Claude Code 把会话当作第三方/API-key，Remote Control 等账号绑定功能会消失。
 16. work-mode 主插件需要 Claude Code 2.1.314+ 且支持 function-hook plugins；gates 还需要 `bash`、`jq`、`git`、`python3`。模式按 session 生效，新会话要重新切换模式。
 17. maxagent 需要本机装好 Node.js 18+；至少装一个受支持 agent；愿意让工具修改 agent 的全局规则文件（有备份）；首次试用只勾工作区加规则钩子，共享经验包与浏览器桥先不装。
-18. 准备非敏感小项目，先记录 2–3 次基线：完成时间、返工次数、补齐上下文次数、确认提示次数、是否误提交或多写文档、最终决策是否完整；用 maxagent 时另记重复错误拦截次数与断点续做补充条数。
+18. Pi 终端 agent 已安装并可运行；能用 npm 安装全局包；有可用模型 API（第三方中转或官方均可）。Pi 插件以你的用户权限运行，装前看 README；Pi 插件是 Pi 生态专属，不能直接迁移到 Claude Code、Cursor 等，MCP 配置可经 pi-mcp-adapter 互相导入。首试只装 `pi-thirdparty-model-settings`、`pi-powerline-footer`、`pi-web-access` 三个，不要一次装 11 个。`pi-autoresearch` 必须在单独分支跑，并在 `.auto/config.json` 设 `maxIterations` 上限；它会自动 commit。`pi-purge` 的 strict 模式会不加载 `AGENTS.md` 和 skills。`pi-mcp-adapter` 装上后会自动关闭 Pi 自带 MCP，卸载后要手动打开。
+19. 准备非敏感小项目，先记录 2–3 次基线：完成时间、返工次数、补齐上下文次数、确认提示次数、是否误提交或多写文档、最终决策是否完整；用 maxagent 时另记重复错误拦截次数与断点续做补充条数；用 Pi 三件套时另记 token、费用、context 占用百分比。
 
 ## 操作步骤
+
+先选运行时：Claude Code/Cowork 走第 0–10 步；Pi 终端 agent 走第 4 步之六，不要在同一任务上同时叠两套。
 
 ### 第 0 步：用官方插件市场发现并安装插件（做法 A / 做法 B）
 
@@ -85,7 +89,7 @@ plugin-name/
 
 ### 第 1 步：选一个与你当前工作最接近的职能插件
 
-原文列出 11 个插件：productivity、sales、customer-support、product-management、marketing、legal、finance、data、enterprise-search、bio-research、cowork-plugin-management。数据岗选 data，销售选 sales，法务选 legal，以此类推。只挑一个，不要一次装多个。如果你的职能不在上面，或需要跨运行时使用，去看第 4 步之二的独立 Agent Skills；如果现有 11 个职能插件仍不覆盖你的域，或你想拿一个可复制的 skill 结构做团队模板，看第 4 步之五的 claude-skills。如果你要动的是中大型代码库上的一次变更，看第 4 步之三的 subagent-studio，或第 4 步之四的 superlite。
+原文列出 11 个插件：productivity、sales、customer-support、product-management、marketing、legal、finance、data、enterprise-search、bio-research、cowork-plugin-management。数据岗选 data，销售选 sales，法务选 legal，以此类推。只挑一个，不要一次装多个。如果你的职能不在上面，或需要跨运行时使用，去看第 4 步之二的独立 Agent Skills；如果现有 11 个职能插件仍不覆盖你的域，或你想拿一个可复制的 skill 结构做团队模板，看第 4 步之五的 claude-skills。如果你要动的是中大型代码库上的一次变更，看第 4 步之三的 subagent-studio，或第 4 步之四的 superlite。如果你不用 Claude Code 而用 Pi 终端 agent，直接看第 4 步之六。
 
 ### 第 2 步：安装职能插件（做法 A / 做法 B）
 
@@ -400,6 +404,59 @@ cp agents/personas/startup-cto.md ~/.claude/agents/
 
 自建时参照 `agents/personas/TEMPLATE.md`；自建 skill 参照 README 指向的 `alirezarezvani/claude-code-skills-agents-factory`。**怎么选**：官方职能插件是开箱通用起点；claude-skills 覆盖更广、可按域装、可跨工具转换；独立技能包是单点。先只装一个域或一个技能，用真实任务与“不装 skill”的基线比返工轮数，再决定是否保留。
 
+### 第 4 步之六：在 Pi 终端 agent 上先配模型、状态栏、联网三件套（做法 A / 做法 B）
+
+**什么时候用**：已在本地安装并可运行 Pi 终端 agent；能用 npm 安装全局包；有可用模型 API（第三方中转或官方均可）；想让 token、费用、context 占用常驻可见；需要联网读 GitHub 仓库、PDF。**什么时候跳过**：不用 Pi；不愿让插件以你的用户权限运行；需要先看到 Pi 比 Claude Code 更省钱或正确率更高的证据（材料没有）；想一次装 11 个。
+
+**做法 A：先只装作者建议的三件套**
+
+1. 装模型配置插件（前提：使用中转/第三方 API，不想手改 models.json）：
+
+```text
+pi install npm:pi-thirdparty-model-settings
+```
+
+运行 `/dsf-config` 打开本地网页，填 Base URL、API Key、模型名，保存后 `/model` 里立即可见，不用重启。支持四种协议：OpenAI 兼容、Responses、Anthropic、Gemini。可从 `/models` 接口拉取模型列表，点选添加。先只配一个主力模型，不要一次配多家。
+
+2. 装状态栏插件（前提：想让 context 占用和费用常驻可见）：
+
+```text
+pi install npm:pi-powerline-footer
+```
+
+提供模型、思考档位、git 分支、context 占用、token 与费用；context 超 70% 变黄、超 90% 变红；`Alt+S` 暂存输入；常驻 bash 模式；`/vibe` 自定义加载文案。**注意**：这是作者推荐，材料没有对比证据；只作为成本可见性试用，不要写成“一定比 Claude Code 好”。
+
+3. 装联网插件（前提：无；不配置也能用）：
+
+```text
+pi install npm:pi-web-access
+```
+
+提供 `web_search` 和 `fetch_content` 两个工具；默认走 Exa MCP；可接 Brave、Tavily、Kimi、博查等几十家搜索服务，需各自凭据；GitHub 链接会直接 clone 到本地；能解析 PDF；配了 Gemini 还能看 YouTube 视频。
+
+**预期结果**：`/model` 能看到配置的模型；状态栏显示 context、token、费用；联网工具可调用。**失败处理**：命令不生效先查 Pi 是否安装、npm 全局权限、插件 README；不要继续叠装。
+
+**做法 B：第一批用顺后，按最痛的点只加一个**
+
+- context 占用排查：装 `pi-context-view` 后，`/context` 用图展示 context 被哪些内容占用；`/context injections` 能看到平时看不到的 system prompt、工具定义和其他插件注入的内容。作者称插件本身不占 context。
+- 子 agent 派活：装 `pi-subagents`，内置 scout（读代码）、reviewer（审代码）、oracle（给第二意见）、worker（写代码）。用法是自然语言，例如“用 reviewer 审一下这个 diff”；支持并行和后台运行。作者建议一开始只用 reviewer 和 oracle。
+- 计划批注：装 `plannotator`（包名是 `@plannotator/pi-extension`，包名和仓库名不一样）：
+
+```text
+pi install npm:@plannotator/pi-extension
+```
+
+Agent 出计划时自动在浏览器打开，可像批 PR 一样逐行批注，再一键把意见发回 Agent；也能 review 本地 diff 和 GitHub PR。启动时加 `--plan`，或用 `/plannotator-plan-mode` 切换。
+
+- MCP 省 token：装 `pi-mcp-adapter`，把几百个工具定义收成一个约 200 token 的 mcp 代理工具，server 用到时才启动、闲置 10 分钟自动关闭；Cursor、Claude Code、Codex 里配好的 MCP 可一键导入。**副作用**：装上后会自动关闭 Pi 自带的 MCP，卸载后要手动打开。
+- 暂不急的四个：
+  - `pi-lens`：Agent 每次写入或修改文件时实时跑 LSP、linter、formatter 和结构规则检查，把问题直接反馈给 Agent，还能拦下“没读过文件就动手改”的操作。比较重，依赖各语言的 LSP 和 linter。
+  - `pi-intercom`：同一台机器上多个 Pi 会话互发消息（`Alt+M`），例如研究会话把结论交给执行会话；`/handover` 会把当前会话总结后交接给另一个会话。只在多开会话时有用。
+  - `pi-autoresearch`：自动实验循环——改代码、跑 benchmark，结果变好就保留，变差就回滚，一直循环。适合测试速度、包体积、构建时间这类有明确指标的优化。建议在 `.auto/config.json` 里设置 `maxIterations` 上限，并在单独的分支里跑，因为它会自动 commit。
+  - `pi-purge`：`/purge` 替换 Pi 内置的 system prompt，可只用你自己的提示词运行，适合做 prompt 实验和对比。注意 strict 模式下连 `AGENTS.md` 和 skills 都不加载。
+
+**怎么选**：先只装三件套，一周后只按最痛的点加一个；不要一次装 11 个。不用的一定要卸载。Pi 插件是 Pi 生态专属，不能直接迁移到 Claude Code、Cursor 等；能迁移的只有 MCP 配置可经 pi-mcp-adapter 互相导入。不要把 Pi 三件套和 Claude Code 的观测层、收口层同时叠在同一任务上；材料没有说明会不会互相干扰。
+
 ### 第 5 步：加一层收口，让 AI 把没收口的事交出来（inbox）
 
 安装：
@@ -523,16 +580,7 @@ git clone https://github.com/mengwEX/dsh-block-ptc.git
 plugin_manager  install_bundle  /absolute/path/to/dsh-block-ptc
 ```
 
-手工安装等价做法：编辑 `~/.dsh/profiles/<profile>/package.json`，把依赖和 bundle 加进去；下面只保留需要新增的两处，不要改原有 `ptc` preset：
-
-```jsonc
-{
-  "dependencies": { "dsh-block-ptc": "link:/absolute/path/to/dsh-block-ptc" },
-  "dsh": { "profile": { "bundles": ["@deepseek-ai/dsh-base", "@deepseek-ai/dsh-web-app", "dsh-block-ptc"] } }
-}
-```
-
-在该目录下运行 `pnpm`。
+手工安装等价做法：编辑 `~/.dsh/profiles/<profile>/package.json`，把依赖和 bundle 加进去；只保留需要新增的两处，不要改原有 `ptc` preset：在 `dependencies` 加 `dsh-block-ptc`，在 `dsh.profile.bundles` 加 `dsh-block-ptc`。在该目录下运行 `pnpm`。
 
 2. 重启一次应用。loader 按解析后的 URL 缓存插件模块，安装 bundle 改变组合后不重启会继续跑旧模块。
 
@@ -599,7 +647,7 @@ npm install -g billion-context --prefix=~/.local
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-前提与失败处理：用 nvm / Homebrew Node 时默认 prefix 已属当前用户，可直接 `npm install -g billion-context`；Windows 默认 prefix（`%APPDATA%\npm`）可写，直接装；旧 root-owned prefix 报 `EACCES` 时带 `--prefix=~/.local` 重装，不要用 `sudo`，今后每次重装该包都要再带一次。
+前提与失败处理：用 nvm / Homebrew Node 时默认 prefix 已属当前用户，可直接 `npm install -g billion-context`；Windows 默认 npm prefix 可写，直接装；旧 root-owned prefix 报 `EACCES` 时带 `--prefix=~/.local` 重装，不要用 `sudo`，今后每次重装该包都要再带一次。
 
 2. 装原生插件（一次只装一个客户端）：
 
@@ -765,11 +813,11 @@ gates 会把模式写入 `~/.claude/state/tempo/<session_id>` 供 shell hooks �
 
 ### 第 10 步：贡献回仓库（可选）
 
-职能插件是 markdown 文件，fork 后改，提 PR。交接层是 MIT、无构建步骤的 TypeScript，按本地 clone 改、`/reload-plugins` 热加载即可。Blender 是 MIT，可 fork 后运行 `validate_skills.py` 和 `run_tests.py`；PM 是 CC BY-NC-SA 4.0，fork 和再分发要遵守许可，添加技能遵守 `## Input` 和不用 `$ARGUMENTS` 的约定；schematic-figure 代码是 MIT，内置 Latin Modern 字体是 GUST 字体许可。claude-skills 是 MIT，按仓库自带审计与贡献方式改；superlite 和 subagent-studio 按各自仓库的贡献方式和许可来。block-ptc 是 MIT，按仓库的测试与贡献方式改；它是社区插件，不是 DSH 官方组件。billion-context 和 work-mode 按仓库许可与贡献方式确认后再用于生产。maxagent 是 MIT；改之前先备份全局规则文件，按仓库说明跑 `npx maxagent update` 或 `npx maxagent uninstall`，工作区文件归用户所有、升级不覆盖。
+职能插件是 markdown 文件，fork 后改，提 PR。交接层是 MIT、无构建步骤的 TypeScript，按本地 clone 改、`/reload-plugins` 热加载即可。Blender 是 MIT，可 fork 后运行 `validate_skills.py` 和 `run_tests.py`；PM 是 CC BY-NC-SA 4.0，fork 和再分发要遵守许可，添加技能遵守 `## Input` 和不用 `$ARGUMENTS` 的约定；schematic-figure 代码是 MIT，内置 Latin Modern 字体是 GUST 字体许可。claude-skills 是 MIT，按仓库自带审计与贡献方式改；superlite 和 subagent-studio 按各自仓库的贡献方式和许可来。block-ptc 是 MIT，按仓库的测试与贡献方式改；它是社区插件，不是 DSH 官方组件。billion-context 和 work-mode 按仓库许可与贡献方式确认后再用于生产。maxagent 是 MIT；改之前先备份全局规则文件，按仓库说明跑 `npx maxagent update` 或 `npx maxagent uninstall`，工作区文件归用户所有、升级不覆盖。Pi 插件按各自仓库 README 的许可和贡献方式确认；它们是 Pi 生态社区插件，不是 Pi 官方组件。
 
 ## 怎么判断变好了
 
-先分清来源：职能插件原文没有给出验证方法或指标；收口层只有成本口径；交接层只有机制描述；观测层（深）明确没有给出四配置性能结果；Blender、PM、示意图材料都只到 README；subagent-studio 只有作者单项目自述、仓库仅 30 星，关键证据在未包含的 `docs/evidence.md`；superlite 的 3.9 倍与 52% 是作者用自建 harness 单次或少量运行自测得出，材料未说明 52% 的具体口径，且鲁棒性探针低于对照组，不能当定论；claude-skills README 全是目录与宣传、没有效果数据、没有用户案例或基准测试，规模数字还自相矛盾；block-ptc 的作者明确说节省 token、降低成本等收益尚未验证；billion-context 的 ContextBench / LongMemEval-S / MemoryAgentBench 数字是作者自测或自建基准，短任务收益不明；work-mode 只有 README 和演示主张，没有量化数据、对照实验或案例结果；maxagent 全部来自仓库 README 自述，没有基准、用户案例、故障率或前后对比数据。
+先分清来源：职能插件原文没有给出验证方法或指标；收口层只有成本口径；交接层只有机制描述；观测层（深）明确没有给出四配置性能结果；Blender、PM、示意图材料都只到 README；subagent-studio 只有作者单项目自述、仓库仅 30 星，关键证据在未包含的 `docs/evidence.md`；superlite 的 3.9 倍与 52% 是作者用自建 harness 单次或少量运行自测得出，材料未说明 52% 的具体口径，且鲁棒性探针低于对照组，不能当定论；claude-skills README 全是目录与宣传、没有效果数据、没有用户案例或基准测试，规模数字还自相矛盾；block-ptc 的作者明确说节省 token、降低成本等收益尚未验证；billion-context 的 ContextBench / LongMemEval-S / MemoryAgentBench 数字是作者自测或自建基准，短任务收益不明；work-mode 只有 README 和演示主张，没有量化数据、对照实验或案例结果；maxagent 全部来自仓库 README 自述，没有基准、用户案例、故障率或前后对比数据；Pi 插件组合来自一条低互动推文，作者称比 Claude Code 更省钱、正确率更高，但没有任务、样本、对比方法或任何数字。
 
 **通用最小试用**：先记录 2–3 次基线（完成时间、返工次数、补齐上下文次数），装一个插件或技能包，跑一个真实任务，再对照同一类任务。试一两周；没有可感知改善就卸载，并记为“该插件无实质增益”。
 
@@ -782,6 +830,10 @@ gates 会把模式写入 `~/.claude/state/tempo/<session_id>` 供 shell hooks �
 **subagent-studio**：在中大型代码库上只装 `studio-core`，跑 `studio-init`，再对一个中等以上变更执行 `Plan and build X with studio-core:plan-then-build`。看 landing commit 是否有 `Reviewed-by` / `Fixed-after-review` trailers、数字是否真实；`review_guard.sh audit` 是否判定 merge 恰好带入被审查内容、有没有漏掉的 landing；两轮 review 分别抓到了什么；token 用量相对单会话是否可接受。若第二遍独立 review 抓不到东西、guard/audit 从不拦停、trailers 记不出真实数字，说明数倍 token 没换来质量收益。
 
 **superlite**：先在中小型、spec 清晰的功能上走人工审批计划模式，记录从提出需求到拿到已测试代码的时间、测试通过率、`.superlite/metrics.jsonl` 里每个 agent 的耗时与成本、最终审查抓到的问题数、你需要介入的次数。若这些指标不比单会话或 subagent-studio 好，或鲁棒性探针低于对照组，不要推广。需要更硬的对比时，用仓库自带 harness 跑 `superlite` 与 `superpowers` 两臂，并看 `mechanical_ab` 验证模型路由是否划算。
+
+**Pi 三件套**：最小试用 1 周，1 个真实任务；只装第一批三个，只在一台机器、一个日常真实项目上试；`/dsf-config` 先只配一个主力模型，确认 `/model` 能看到且不用重启；挑一个必须查外部资料的任务（读一个 GitHub 仓库、读一份 PDF），记录联网前后各自的轮数、结论质量、token、费用、context 占用；状态栏看 context 超 70% 变黄、超 90% 变红；`/context injections` 看 system prompt、工具定义、插件注入。一周后若没有可感知改善就卸载。作者的“比 Claude Code 更省钱、正确率更高”没有任务、样本、对比方法或数字，不能当结论；互动量很低（点赞 28、转发 7、回复 17），属单人经验分享。后续插件逐个加，每次只加一个，记录是否减少轮数、返工、人工检查。
+
+**Pi 后续插件**：`pi-mcp-adapter` 看工具定义 token 是否从几百个工具降到约 200 token 代理、MCP server 是否按需启动、闲置 10 分钟关闭；注意卸载后手动打开自带 MCP。`plannotator` 看计划批注后返工轮数、计划被采纳前的人工修改次数。`pi-lens` 看写入时 lint 反馈是否减少“没读文件就改”和提交前返工；依赖 LSP/linter，环境不齐会变重。`pi-subagents` 只用 reviewer/oracle 起步，看审查发现数和返工轮数，不把角色分工当效果证据。`pi-autoresearch` 只在有明确指标（测试速度、包体积、构建时间）时用；独立分支 + `maxIterations`，看 benchmark 是否稳定变好，否则回滚。
 
 **收口层**：每个会话里被你漏掉、事后才发现的待办/问题数量是否下降；手动追问“刚才那个测试过了吗”的次数是否下降；切换窗口/翻记录的次数是否下降；成本侧看每会话新增开销占比是否可接受。
 
@@ -806,7 +858,7 @@ gates 会把模式写入 `~/.claude/state/tempo/<session_id>` 供 shell hooks �
 - 材料可能被截断：PM README 末尾截断在 “worth a bookmark if you work”；交接层材料截断在 Lazy-exit guard；subagent-studio 材料截断在 “每个 agent 文件在 frontmatter 里固定 model、”。未给出的行为不要照抄。
 - 职能插件和三个独立技能包都只到 README，未展示技能内部提示词、脚本、配置或 QA 规则；开箱插件原文自称 general starting points，价值在定制。
 - 命令不出现 = 未生效；先检查 marketplace，不要继续往下做。
-- 不要一次装多个职能插件或技能；subagent-studio 先只装 `studio-core`；superlite 先只跑一个人工审批计划；claude-skills 先只装一个域或一个技能；maxagent 首次只开工作区加规则钩子。
+- 不要一次装多个职能插件或技能；subagent-studio 先只装 `studio-core`；superlite 先只跑一个人工审批计划；claude-skills 先只装一个域或一个技能；maxagent 首次只开工作区加规则钩子；Pi 首次只装模型配置、状态栏、联网三个。
 - 小而明确的编码工作不要上 subagent-studio：单会话更便宜，小变更上很少买到东西。
 - subagent-studio 的七步流程有关键留白：plan 的固定 shape、`reviewer-prompt.md` 的检查项、占位符完整内容都要自己补；copy-in 会合并 hooks 并重写命名空间；`core.review.land: pr` 合并时必须保留 trailers；`review_guard.sh` 如果从不拦停，先怀疑配置没接上。
 - superlite 不能与 superpowers 同时启用：二者共享 skill 名且都注入会话上下文，会冲突。
@@ -856,6 +908,18 @@ gates 会把模式写入 `~/.claude/state/tempo/<session_id>` 供 shell hooks �
 - maxagent 的共享包安全属性（下载即执行、改写 agent 规则、外发密钥、破坏性命令、隐藏字符的扫描）和浏览器桥安全属性（无开放端口、逐 agent 审批）都是设计声明，材料中没有第三方审计或复现记录。
 - maxagent 首次不要装共享经验包和浏览器桥；先只开工作区加规则钩子，用两周指标决定是否继续。`npx maxagent uninstall` 只从 agent 里移除块与钩子，工作区保留；改全局规则文件前先备份。
 - maxagent 的 `vectors` 约 270 MB，模型 revision 固定并做 sha256 校验；无 Python 时向导会提议安装，Windows 走 winget 需另行确认。没有它则只用词面搜索。
+- Pi 插件全部绑定 Pi 终端 agent，不能直接迁移到 Claude Code、Cursor 等；能迁移的只有 MCP 配置可经 pi-mcp-adapter 互相导入。
+- Pi 插件以你的用户权限运行，装前看 README；不用的一定要卸载。
+- 作者“比 Claude Code 更省钱、正确率更高”没有数据；互动量很低（点赞 28、转发 7、回复 17），是单人经验分享，不是可复现评测。
+- Pi 第一批只装模型配置、状态栏、联网三个；不要一次装 11 个。状态栏 70% 黄 / 90% 红只是显示阈值，不是推荐阈值。
+- pi-mcp-adapter 会自动关闭 Pi 自带 MCP，卸载后要手动打开；这是一条明确副作用。
+- pi-lens 比较重，依赖各语言 LSP/linter；环境不齐会失效或变重。pi-purge 的 strict 模式连 `AGENTS.md` 和 skills 都不加载，等于放弃项目约定。
+- pi-autoresearch 会自动 commit 且烧 token，必须在独立分支 + `maxIterations` 上限下跑。pi-intercom 只在多开会话时有用；`/handover` 是总结后交接，不是自动同步全部上下文。
+- pi-subagents 的 scout/reviewer/oracle/worker 是角色分工，不是效果证据；一开始只用 reviewer 和 oracle。
+- pi-context-view 的 `/context injections` 能看到 system prompt、工具定义和其他插件注入内容；作者称插件本身不占 context，材料未给测量方法。
+- plannotator 的包名和仓库名不一样；启动加 `--plan` 或用 `/plannotator-plan-mode`。
+- Pi 插件没有版本号、Pi 版本要求、插件间兼容性说明；材料只到推文和 README 指引。
+- 不要把 Pi 三件套与 Claude Code 的观测层/收口层同时叠在同一任务；材料没有说明会不会互相干扰。
 
 ## 证据与来源
 
@@ -887,7 +951,9 @@ gates 会把模式写入 `~/.claude/state/tempo/<session_id>` 供 shell hooks �
 
 **maxagent**：MIT、48 stars、单作者、Node.js 18+、受支持 agent（Claude Code、Codex、Antigravity、OpenClaw）、`npx maxagent init` 安装向导、工作区 `~/maxagent` 的 `AGENTS.md` / `experience/` / `projects/` / `sync.md` / `inbox/`、规则块加钩子、按“你发消息时 / 执行命令前 / 报错后”浮现 atom、自己的经验优先且可阻断命令、共享经验包只作参考且永不阻断、`adopt` / `mute`、`npx maxagent bridge`、`npx maxagent vectors`、`npx maxagent setup|doctor|update|uninstall`、`updates: false` 关闭网络请求、共享包 sha256 与内容审查、浏览器桥 Chrome 扩展 Native Messaging 与手动加载、`experience/_spec.md` 定义 atom 格式，均来自 `vzroslieigry/maxagent` README（本次调研）。材料明确：全部来自 README 自述，没有基准测试、用户案例、故障率或前后对比数据；仓库 48 stars、单作者项目、README 自承翻译未经母语者校对；`experience/_spec.md` 未提供，atom 实际格式无法照抄；共享包扫描与 CI 同检查的有效性、隐私清单（“只发公开文件的 GET 请求”）的完备性、浏览器桥安全属性（无开放端口、逐 agent 审批）都是设计声明，没有第三方审计或复现记录；“两周最小试用、重复错误拦截次数、重新摸索成本、断点续做补充条数、经验库活性、卸载后 diff 为空”的试用与判定来自本次调研报告建议，不是原文效果数据。
 
-**属于调研建议、非原文数据**：官方市场的最小试用路径（1–2 小时 + 一周观察、只挑一个、检查来源、低风险任务、记录完成时间/轮次/手工切换/失败比例/新任务，一周无改善则卸载）来自调研报告建议；职能插件与独立技能的自测指标来自调研报告建议；claude-skills 的“先只装一个域、安装前审计、与不装基线比返工轮数、没有改善就卸载”来自调研结论，不是原文效果数据；subagent-studio 的最小试用建议来自调研结论；superlite 的最小试用建议来自调研结论；block-ptc 的最小试用与判定规则来自调研报告的“怎么试、怎么验证”部分，不是原文效果数据；billion-context 的最小试用来自调研报告结论；收口层、观测层、交接层的最小试用与指标也来自各调研报告的“怎么试、怎么验证”部分；work-mode 的试用与判定同样来自调研报告建议；maxagent 的两周试用与指标来自本次调研报告建议。
+**Pi 插件组合**：11 个插件名称与仓库地址、4 条可复制安装命令（`pi install npm:pi-thirdparty-model-settings`、`pi install npm:pi-powerline-footer`、`pi install npm:pi-web-access`、`pi install npm:@plannotator/pi-extension`）、命令入口（`/dsf-config`、`/model`、`/context`、`/context injections`、`/vibe`、`Alt+S`、`Alt+M`、`/handover`、`/purge`、`--plan`、`/plannotator-plan-mode`）、配置项 `.auto/config.json` 的 `maxIterations`、具体数值（mcp 代理工具约 200 token、MCP 闲置 10 分钟关闭、context 70% 黄 / 90% 红）均来自 `@aehyok` 推文与本次调研报告。作者主张“又省钱、正确率还这么高、甚至高过了 Claude Code”，但没给任务、样本、对比方法或任何数字；“第一批装上就能感觉到变化”等排序是个人体感；互动量很低（点赞 28、转发 7、回复 17），属单人经验分享。插件以用户权限运行、装前看 README、不用要卸载来自作者原话。pi-lens 依赖各语言 LSP/linter；pi-purge 的 strict 模式不加载 `AGENTS.md` 和 skills；autoresearch 会自动 commit 且烧 token；pi-mcp-adapter 会自动关闭 Pi 自带 MCP、卸载后需手动打开；这些是原文给出的适用条件与风险。原文未提及版本号、Pi 版本要求、插件间兼容性问题。
+
+**属于调研建议、非原文数据**：官方市场的最小试用路径（1–2 小时 + 一周观察、只挑一个、检查来源、低风险任务、记录完成时间/轮次/手工切换/失败比例/新任务，一周无改善则卸载）来自调研报告建议；职能插件与独立技能的自测指标来自调研报告建议；claude-skills 的“先只装一个域、安装前审计、与不装基线比返工轮数、没有改善就卸载”来自调研结论，不是原文效果数据；subagent-studio 的最小试用建议来自调研结论；superlite 的最小试用建议来自调研结论；block-ptc 的最小试用与判定规则来自调研报告的“怎么试、怎么验证”部分，不是原文效果数据；billion-context 的最小试用来自调研报告结论；收口层、观测层、交接层的最小试用与指标也来自各调研报告的“怎么试、怎么验证”部分；work-mode 的试用与判定同样来自调研报告建议；maxagent 的两周试用与指标来自本次调研报告建议；Pi 三件套的一周最小试用、只装三个、记录 token/费用/context/轮数、后续逐个加插件来自本次调研报告建议，不是原文效果数据。
 
 ## 依据的调研
 
@@ -907,3 +973,4 @@ gates 会把模式写入 `~/.claude/state/tempo/<session_id>` 供 shell hooks �
 - [ranxianglei/billion-context](../research/radar/2026-11-08/11533-ranxianglei-billion-context.md)：值得一试，值得在一个具体客户端上小范围试装（推荐先试 `bili plugin install opencode` 或 `bili claude` 启动器），用 `/acp`、`/acp-cache` 观察前缀缓存命中率与压缩收益，再决定是否推广；理由是安装、插件安装、启停和健康检查都给了可复制的命令和判定阈值，但省 token 与长会话效果主要是作者自测与自建基准，需自行复现。
 - [danyuchn/claude-work-mode](../research/radar/2026-11-08/11590-danyuchn-claude-work-mode.md)：值得一试，建议小范围试用：在 Claude Code 中安装 work-mode，先用 `auto` + `wrap` 约束可逆自主步骤和收尾决策，视需要再加 gates；理由是它给出了可安装的模式、闸门和配置，但效果目前只有 README/演示主张、缺少量化验证。
 - [vzroslieigry/maxagent](../research/radar/2026-11-10/12280-vzroslieigry-maxagent.md)：值得一试，先在一台非关键机器、只对一个 agent（如 Claude Code）跑 `npx maxagent init`，只启用工作区+规则钩子，暂不装共享经验包和浏览器桥，用两周观察“重复错误是否被拦住、断点续做是否更快”；它的安装与命令流程具体可照做，值得小范围试，但效果与安全全是作者自述、无任何数据或第三方验证。
+- [@aehyok: 我没想到使用 Pi 又省钱，而且正确率还这么高，甚至高过了 Claude Code](../research/radar/2026-11-14/13343-pi-claude-code.md)：值得一试，按作者给出的顺序先装「模型配置+状态栏+联网」三个 Pi 插件并照着配置，再按需加装审查类插件；因为这三种做法都有明确的安装命令、命令入口和可见的量化指标（token/费用/context 占用），足以支持小范围试用，但作者「比 Claude Code 更省钱、正确率更高」的结论没有任何数据支撑，不能直接写进手册当结论。
