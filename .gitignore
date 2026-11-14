@@ -12,3 +12,7 @@ Thumbs.db
 *.log
 node_modules/
 __pycache__/
+
+# 本地产物：单页回答的中间文件、招聘数据抓取结果，不进入仓库
+.tmp/
+research/boss_data/

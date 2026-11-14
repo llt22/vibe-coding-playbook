@@ -1,14 +1,24 @@
 {
-  "_说明": "X 搜索查询。账号和关键词起点取自 research/history/2026-09-30/methods/ai-engineering-radar.md 第二节；2026-10-01 按命中情况调整：去掉零命中的过细术语，补实践词和 ai-tool-radar 要求的对比说法。{since} 会替换为两天前的日期。",
+  "_说明": "X 搜索查询。账号和关键词起点取自 research/history/2026-09-30/methods/ai-engineering-radar.md 第二节。2026-10-01 去掉了若干术语，2026-10-14 用只读探针复核（每条查询两天的命中数、以及命中是否在库里）后补回并扩到六个维度：编排与 Harness、上下文与知识、验证与门禁、沙箱与权限、企业实战、工具与规范（MCP/Skills）；英文关键词按主题分条，不把多个引号短语堆在一条里。10-14 试过的「知识库/知识工程」查询以噪声为主（16 条里约 4 条可用），没有保留，该维度交给 'context engineering'/'上下文工程' 两条。{since} 会替换为两天前的日期。改这个文件后跑一轮只读探针，确认每条查询仍有命中。",
   "queries": [
-    "(from:simonw OR from:karpathy OR from:mitchellh OR from:swyx OR from:_lopopolo OR from:ghuntley OR from:Vtrivedy10) min_faves:20 since:{since}",
-    "(from:AnthropicAI OR from:claudeai OR from:OpenAI OR from:OpenAIDevs OR from:Docker OR from:cursor_ai OR from:sst_dev) min_faves:50 since:{since}",
-    "(from:dotey OR from:geekbb OR from:mardehaym OR from:micci1841) min_faves:20 since:{since}",
-    "\"Claude Code\" (workflow OR skill OR hook OR subagent OR harness) min_faves:100 lang:en since:{since}",
+    "(from:simonw OR from:karpathy OR from:mitchellh OR from:swyx OR from:Vtrivedy10) min_faves:20 since:{since}",
+    "(from:AnthropicAI OR from:claudeai OR from:OpenAI OR from:OpenAIDevs OR from:Docker OR from:cursor_ai) min_faves:50 since:{since}",
+    "(from:dotey OR from:geekbb OR from:mardehaym) min_faves:20 since:{since}",
+    "(from:ghuntley OR from:sst_dev OR from:micci1841 OR from:_lopopolo) min_faves:5 since:{since}",
+    "\"Claude Code\" (workflow OR skill OR hook OR subagent OR harness) min_faves:30 lang:en since:{since}",
     "(Codex OR \"coding agent\") (workflow OR harness OR review OR eval) min_faves:100 lang:en since:{since}",
     "(\"harness engineering\" OR \"context engineering\" OR \"spec-driven\" OR \"dynamic workflows\" OR \"AGENTS.md\" OR \"CLAUDE.md\") min_faves:30 since:{since}",
     "(\"Claude Code\" OR Codex OR Cursor) (\"switched from\" OR \"stopped using\" OR \"daily driver\" OR \"vs\" OR alternative) min_faves:100 lang:en since:{since}",
+    "(\"software factory\" OR \"Agentic SDLC\" OR 软件工厂 OR 研发范式) min_faves:30 since:{since}",
+    "(\"adversarial review\" OR \"agent experience\" OR \"MicroVM sandbox\") min_faves:30 since:{since}",
+    "(sandbox OR 沙箱 OR MicroVM OR \"sandboxed agent\") (agent OR \"Claude Code\" OR Codex) min_faves:30 since:{since}",
+    "(MCP OR \"MCP server\" OR \"agent skills\" OR 技能) (\"Claude Code\" OR Codex OR agent) min_faves:50 lang:en since:{since}",
+    "(Copilot OR Windsurf OR Cline OR Aider OR \"Gemini CLI\" OR OpenCode OR Amp) (workflow OR review OR agent) min_faves:100 lang:en since:{since}",
+    "(migration OR \"migrated to\" OR security OR failure) (\"Claude Code\" OR Cursor OR Codex OR Copilot) min_faves:50 lang:en since:{since}",
+    "(\"Claude Code\" OR Codex OR \"coding agent\") filter:links min_faves:50 lang:en since:{since}",
     "(\"Claude Code\" OR Codex OR \"AI 编程\" OR 智能体) min_faves:50 lang:zh since:{since}",
-    "(\"Harness Engineering\" OR 上下文工程 OR \"CLAUDE.md\" OR \"AGENTS.md\" OR 子代理) (踩坑 OR 实践 OR 工作流 OR 经验) min_faves:20 lang:zh since:{since}"
+    "(\"Harness Engineering\" OR 上下文工程 OR \"CLAUDE.md\" OR \"AGENTS.md\" OR 子代理) (踩坑 OR 实践 OR 工作流 OR 经验) min_faves:20 lang:zh since:{since}",
+    "(门禁 OR 评测 OR 验收 OR 代码审查) (智能体 OR \"Claude Code\" OR Codex OR agent) min_faves:20 lang:zh since:{since}",
+    "(腾讯 OR 阿里 OR 字节 OR 美团 OR 百度) (智能体 OR \"AI 编程\" OR agent) (落地 OR 实践 OR 复盘) min_faves:20 lang:zh since:{since}"
   ]
 }

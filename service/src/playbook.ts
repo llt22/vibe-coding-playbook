@@ -114,6 +114,16 @@ ${rows.join('\n')}
   return file;
 }
 
+/** 输入长度写进错误信息：同一篇连续失败时，先看是不是这个数超了 */
+function synthesisInput(current: string, rows: Row[]): string {
+  return JSON.stringify({
+    current,
+    research: rows.map((r) => ({ title: r.item.title, conclusion: r.conclusion, body: r.body?.slice(0, 6000) })),
+  });
+}
+
+const isConnError = (e: unknown) => /Connection error|ECONNRESET|ETIMEDOUT|socket hang up|fetch failed/i.test(describeError(e));
+
 /** 把未合并的 adopt/try 调研合并进手册并提交。返回合并的调研条数；有手册失败时抛出。 */
 export async function runPlaybook(store: Store): Promise<number> {
   requireModel();
@@ -127,11 +137,17 @@ export async function runPlaybook(store: Store): Promise<number> {
   let merged = 0;
   for (const [slug, rows] of groups) {
     const current = store.playbook(slug);
+    const input = synthesisInput(current?.body ?? '', rows);
+    const size = input.length;
     try {
-      const s = await askJson(SYNTH_SYSTEM, JSON.stringify({
-        current: current?.body ?? '',
-        research: rows.map((r) => ({ title: r.item.title, conclusion: r.conclusion, body: r.body?.slice(0, 6000) })),
-      }), Synthesis);
+      let s;
+      try {
+        s = await askJson(SYNTH_SYSTEM, input, Synthesis);
+      } catch (e) {
+        if (!isConnError(e)) throw e;
+        await new Promise((r) => setTimeout(r, 5000));
+        s = await askJson(SYNTH_SYSTEM, input, Synthesis);
+      }
       const p = store.savePlaybook({ slug, title: s.title, problem: s.problem, first_step: s.first_step, body: s.body, file: join(config.playbookDir, `${slug}.md`) },
         s.changes, rows.map((r) => r.id));
       writePlaybook(store, p);
@@ -139,7 +155,7 @@ export async function runPlaybook(store: Store): Promise<number> {
       merged += rows.length;
       log.push(`${current ? '修订' : '新建'}《${s.title}》，依据调研 ${rows.map((r) => `#${r.id}`).join(' ')}\n${s.changes.map((c) => `  - ${c}`).join('\n')}`);
     } catch (e) {
-      errors.push(`${slug}：${describeError(e)}`);
+      errors.push(`${slug}（输入 ${size} 字，${rows.length} 条调研）：${describeError(e)}`);
       if (fatal(e)) break;
     }
   }
