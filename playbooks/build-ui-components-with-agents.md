@@ -1,10 +1,10 @@
-# 让编码 agent 在交付前把边界状态和渲染结果拿出证据
+# 让编码 agent 在宣布完成前拿出浏览器里的证据
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：编码 agent 常把 demo 条件下能跑当成完成；本手册给出可落地的检查、门禁和前后证据，让边界状态、像素缺陷和还原度在交付前暴露。
-> 先试这一步：在干净分支上选一个已知缺边界状态的页面，用做法 R 的提示词只跑 1–3 个组件，人工审 diff 并跑构建与测试。
-> 最近修订：2026-11-12
+> 解决的问题：编码 agent 的前端产物经常只有代码合法、没有人在真实浏览器里看过，这份手册把检查、渲染验证和前后对比变成交付前必须走完的步骤。
+> 先试这一步：先在一个非敏感页面上按做法 S 配置 chrome-devtools-mcp，让 agent 打开页面、抓 console/网络并截一张图，再改一处小样式后重复同样检查。
+> 最近修订：2026-11-14
 
 ## 解决什么问题
 
@@ -12,9 +12,11 @@
 
 更底下还有一层：这些产物都是“渲染出来才成立”的东西，而渲染结果往往没人看。TypeScript、ESLint、单元测试、axe、Lighthouse 都只能证明代码合法，证明不了像素——文字溢出卡片或被 `overflow:hidden` 截断、灰底灰字对比度不足、图表标签重叠、只在 1024px 才坏的布局、`$undefined`/`NaN%`/`Invalid Date` 占位文本、emoji 当图标、图片变形、下拉箭头压在边框上、复选框离标签太远、缺焦点环、tap target 太小、`href="#"` 死链、hydration 报错、404、被登录页挡住的页面。改完前端 UI 或特效后，你往往还要自己开浏览器、起 localhost、开 Godot 窗口、手动点一遍才能确认。更麻烦的是，改完 UI 后你手上没有一份可重复的前后对比：不知道哪些错误被修掉了、哪些是新增加的、哪些因为条件变了仍然没被验证。
 
-这份手册给十八条可落地的做法，把“检查”和“展示”从你手里挪到 agent 交付之前：图表过三道检查、组件写代码前先签契约、架构图从真实来源生成并在合并前校验（drawio-skill）或从仓库/文章生成并做布局自检（arch-diagram-skill）、前端 UI 先固定持久事实再用确定性规则当门禁、让 Claude Code 在终端里直接展示截图/录屏/前后对比 QA、让游戏特效在真实 Godot 视口里渲染成胶片条再交给另一个 agent 独立评审、把两条界面文案规则变成“先检索列清单 → 人工确认 → 再改 → 前后截图对照”的流程、用 Hallmark 的三层门禁 + sloplint + 冷上下文复审 + before/kept 快照验收网页设计与重设计、用 unparalleled-skillset 的设计技能 + 代表性 specimen + Playwright 多宽度截图审查闭环验收 UI/网页改版、用 b-end-design-system-skill 的 B 端页面骨架和硬门禁约束后台页面生成、用 visant-killer 的 killer-scan 把界面 AI 味审计拆成脚本硬门禁 + 模型判断、用 renderlint 在无头 Chromium 里按手机/平板/桌面多视口真实渲染页面并用 37 条确定性规则抓像素级缺陷、用 replica 把“照着参考重建 UI”变成 layout/style/pixels/motion 四轴可复现分数与按收益排序的修复清单、用 flawless-ui-ux 的技能 + context/inspect/verify 给 UI/UX 修正留下前后对比证据、用 cook 把视觉构建任务压成一条“参考图定标 → 每维门槛 → 零上下文评审 → 每轮对比图 → 人工只把最终渲染关”的长跑循环、用 antislop-ui-ux-skill 的 gosto.md/receitas.md + 先问后做 + 灰度线框 + outside look 给界面去 AI 味，以及用一条提示词系统找 happy-path debt，按组件补齐慢加载、失败、空列表、长文案、窄屏五类状态（做法 R）。
+Chrome DevTools 团队提供的 `chrome-devtools-mcp` 把“打开页面、读 console、看网络、截图、录 performance trace”变成 agent 可调用的工具。它补的是“浏览器内取证”这一层：agent 不能只说编译通过，要带回 console 错误（含 source-mapped stack traces）、失败请求、截图和 trace 洞察。它不替代设计判断，也不替代像素门禁，只是让 agent 在真实 Chrome 里多看一眼、把证据带回来。
 
-几条骨架值得单独记住：特效那条——生成 → 真实渲染验证 → 独立评审 → 防篡改证据绑定到具体构建——不限于特效，可以直接搬到别的交付物；文案那条是反面补充：规则本身主观，必须留人工确认这一环；Hallmark 补的是网页页面级的“可判定检查 + 冷上下文终审 + 不丢功能”；unparalleled-skillset 补的是“先 specimen 再全量、按轮次重拍截图并记录修复账本”；B 端设计系统补的是后台页面的“先选骨架 → 按否定判据选组件 → 用硬门禁和检查清单复核”；arch-diagram-skill 补的是架构图的另一条路线（仓库/文章 → `<slug>.spec.json` → `check` → 多格式导出），和 drawio-skill 是按交付物选择而不是互相替代；visant 补的是“技能先探测目标仓库已有的 gates、primitives、tokens，再决定动作”；renderlint 补的是最硬的一层——不靠模型看图猜，靠确定性规则在真实浏览器里按像素和几何量，退出码 1 就能同时挂住构建、CI 和 Claude Code 的回合；replica 补的是“有明确参考的 UI 还原”这一窄层——四轴分数、级别门禁、`compare` 退出码和按收益排序的 findings，但它只覆盖 Web，且证据主要来自作者自测；cook 补的是“有参考图的视觉构建可以长时间自己迭代”，但必须用人工估分校准 critic 自评，并给成本设硬上限；flawless-ui-ux 补的是“技能指导 + 可重复检查/验证 CLI”这一层：`context` 收集项目语境，`inspect` 保存修改前基线，`verify` 对比 persistent / new / no-longer-observed，但 CLI 自述不覆盖完整 WCAG、完整键盘旅程、业务正确性和视觉质量；antislop 补的是“项目品味文件 + 先问后做”这一层：先读 `gosto.md`/`receitas.md`，指出 slop 信号，提问并给出灰度线框，之后才实现，最后做 outside look 和 second pass；参考只取概念，不复制调色板/字体/字面布局。做法 R 补的是“边界状态债务”这一层：提示词直接点名五个条件——数据加载快、不失败、列表非空、文案短、屏幕宽——要求代理按组件补齐缺失状态与布局断裂，不改设计、不破坏功能，并按文件汇报 before vs. now。
+这份手册给出一组可落地做法，把“检查”和“展示”从你手里挪到 agent 交付之前：图表过三道检查、组件写代码前先签契约、架构图从真实来源生成并在合并前校验（drawio-skill）或从仓库/文章生成并做布局自检（arch-diagram-skill）、前端 UI 先固定持久事实再用确定性规则当门禁、让 Claude Code 在终端里直接展示截图/录屏/前后对比 QA、让游戏特效在真实 Godot 视口里渲染成胶片条再交给另一个 agent 独立评审、把两条界面文案规则变成“先检索列清单 → 人工确认 → 再改 → 前后截图对照”的流程、用 Hallmark 的三层门禁 + sloplint + 冷上下文复审 + before/kept 快照验收网页设计与重设计、用 unparalleled-skillset 的设计技能 + 代表性 specimen + Playwright 多宽度截图审查闭环验收 UI/网页改版、用 b-end-design-system-skill 的 B 端页面骨架和硬门禁约束后台页面生成、用 visant-killer 的 killer-scan 把界面 AI 味审计拆成脚本硬门禁 + 模型判断、用 renderlint 在无头 Chromium 里按手机/平板/桌面多视口真实渲染页面并用 37 条确定性规则抓像素级缺陷、用 replica 把“照着参考重建 UI”变成 layout/style/pixels/motion 四轴可复现分数与按收益排序的修复清单、用 flawless-ui-ux 的技能 + context/inspect/verify 给 UI/UX 修正留下前后对比证据、用 cook 把视觉构建任务压成一条“参考图定标 → 每维门槛 → 零上下文评审 → 每轮对比图 → 人工只把最终渲染关”的长跑循环、用 antislop-ui-ux-skill 的 gosto.md/receitas.md + 先问后做 + 灰度线框 + outside look 给界面去 AI 味，用一条提示词系统找 happy-path debt，按组件补齐慢加载、失败、空列表、长文案、窄屏五类状态（做法 R），以及用 chrome-devtools-mcp 让 agent 在浏览器里查 console、网络、截图和性能 trace（做法 S）。
+
+几条骨架值得单独记住：特效那条——生成 → 真实渲染验证 → 独立评审 → 防篡改证据绑定到具体构建——不限于特效，可以直接搬到别的交付物；文案那条是反面补充：规则本身主观，必须留人工确认这一环；Hallmark 补的是网页页面级的“可判定检查 + 冷上下文终审 + 不丢功能”；unparalleled-skillset 补的是“先 specimen 再全量、按轮次重拍截图并记录修复账本”；B 端设计系统补的是后台页面的“先选骨架 → 按否定判据选组件 → 用硬门禁和检查清单复核”；arch-diagram-skill 补的是架构图的另一条路线（仓库/文章 → `<slug>.spec.json` → `check` → 多格式导出），和 drawio-skill 是按交付物选择而不是互相替代；visant 补的是“技能先探测目标仓库已有的 gates、primitives、tokens，再决定动作”；renderlint 补的是最硬的一层——不靠模型看图猜，靠确定性规则在真实浏览器里按像素和几何量，退出码 1 就能同时挂住构建、CI 和 Claude Code 的回合；replica 补的是“有明确参考的 UI 还原”这一窄层——四轴分数、级别门禁、`compare` 退出码和按收益排序的 findings，但它只覆盖 Web，且证据主要来自作者自测；cook 补的是“有参考图的视觉构建可以长时间自己迭代”，但必须用人工估分校准 critic 自评，并给成本设硬上限；flawless-ui-ux 补的是“技能指导 + 可重复检查/验证 CLI”这一层：`context` 收集项目语境，`inspect` 保存修改前基线，`verify` 对比 persistent / new / no-longer-observed，但 CLI 自述不覆盖完整 WCAG、完整键盘旅程、业务正确性和视觉质量；antislop 补的是“项目品味文件 + 先问后做”这一层：先读 `gosto.md`/`receitas.md`，指出 slop 信号，提问并给出灰度线框，之后才实现，最后做 outside look 和 second pass，参考只取概念，不复制调色板/字体/字面布局；做法 R 补的是“边界状态债务”这一层：提示词直接点名五个条件——数据加载快、不失败、列表非空、文案短、屏幕宽——要求代理按组件补齐缺失状态与布局断裂，不改设计、不破坏功能，并按文件汇报 before vs. now；做法 S 补的是“浏览器内调试证据”这一层：agent 自己打开 Chrome，读 console、看网络、截图、录 trace，再把发现带回交付说明。
 
 ## 适用与不适用
 
@@ -39,6 +41,7 @@
 - 你想让 agent 按创建、重设计、精修、评审流程做 UI/UX，并用 `context` / `inspect` / `verify` 留下修改前后的检查记录；你的前端项目能启动 dev server，且你接受“CLI 只覆盖可判定的采样问题，不证明完整 WCAG、键盘流程、业务正确性和视觉质量”。
 - 用 Claude Code/Codex/OpenCode 做 UI 原型或界面评审，想让 agent 先问清屏幕角色、视觉和优先级，给出灰度线框，再实现，并做 outside look 和 second pass；项目愿意填写 `gosto.md` / `receitas.md`。
 - 你有一个能在本地跑起来、工作区干净的界面代码库，想系统性找出“只在 demo 条件下正常”的 happy-path debt，并接受按组件小步推进、每轮人工审 diff（做法 R）。
+- 你有一个非敏感的前端页面或示例页，想让编码 agent 自己打开真实 Chrome、读 console、看失败请求、截图并录 performance trace，再把发现带回交付说明（做法 S）。
 
 **不适用：**
 
@@ -60,6 +63,7 @@
 - flawless-ui-ux 的 CLI 自述不覆盖完整 WCAG 合规、完整键盘旅程、业务流正确或视觉质量；采样不能代替真实设备与浏览器矩阵；检查不编辑文件、不启动服务器、不下载浏览器、不提交表单；缺失的已确认目标和变化过的条件仍属未验证。README 只到 README 层面，没有效果数据、案例研究或基准结果。
 - antislop-ui-ux-skill 的材料只有 README，未包含 `SKILL.md`、`estetica-ia.md`、`gosto.md`、`receitas.md` 的实际内容；安装命令写的 `skills/deslop` 与目录树里的 `deslop/` 不一致，执行前先确认仓库实际路径。它只面向 UI/UX 屏幕；没有量化前后对比、用户研究或失败案例；不适合无人工评审的全自动批量改写。
 - 做法 R 的原文只是一条推文：一段提示词 + 一句论断，没有前后对比、案例、截图、代码库规模或技术栈说明；“happy-path debt”是作者自造说法，外延由提示词里那五个条件界定；没有说明适用的框架、语言，是否适用于非界面代码也未知。一次性要求“全应用扫描 + 逐个修复 + 汇报”，在较大代码库上很可能超出单轮上下文或做不完。
+- chrome-devtools-mcp 官方只支持 Google Chrome 和 Chrome for Testing，其他 Chromium 不保证；MCP server 会把浏览器实例内容暴露给 MCP 客户端，可能检查、调试、修改浏览器或 DevTools 中的数据，应避免共享敏感或个人信息；性能工具可能把 trace URL 发给 Google CrUX API；使用统计默认开启。它不做定时巡检，也不能替代设计判断和像素门禁。
 - 想要现成的量化改善数据：这些材料都没有给出效果数字，只能自己跑基线对照；replica 的 demo 分数是作者自述，不是第三方评测。
 
 ## 前置条件
@@ -78,11 +82,12 @@
 - B 端后台做法（J）：任务是一个 B 端企业后台页面，能明确页面类型；能访问仓库里的 `.cursorrules`、`SKILL.md`、`components.manifest.json`、`references/`、`scripts/audit-design-rules.py`；有一个已有 B 端列表页和一个表单页做基线对照。
 - 界面硬门禁做法（L）：只想做界面审计时只需 Node 20+，无需构建步骤；`visant-killer` 的屏幕检查可选 Playwright；有可写的 `~/.claude/skills/`；已 clone 仓库并安装依赖；若接 shadcn 组件库，项目需有 `components.json`。
 - 渲染后像素门禁做法（M）：Node >= 18.17；项目能在浏览器里渲染；能启动 dev server 或产出静态构建目录；一个可用的无头 Chromium；需要覆盖登录态时，准备 token 存在哪个 storage key，或登录凭据（`RENDERLINT_USER` / `RENDERLINT_PASSWORD` 环境变量），以及 API mock 的 fixtures。
-- UI 还原度做法（O）：Node 20+；有 Playwright 的 Chromium，或退回使用本机已装的 Google Chrome；只有视频/GIF 参考才需要 `ffmpeg`；不需要 API key；一个已有代码库/已有技术栈；参考源（URL、本地 HTML、截图或录屏）、落点文件、级别、触发动作、视口和合法可用的字体/图片/图标/文案。
 - 视觉构建长跑做法（N）：Node 18+；`ffmpeg` 在 PATH 上；手上有一组参考图，给了运动参考时还要能逐帧分析；能接受长时间自主运行；能打开仓库 `references/` 下的 intake、critic、rules、ship 文件；小任务要自己设硬上限。
+- UI 还原度做法（O）：Node 20+；有 Playwright 的 Chromium，或退回使用本机已装的 Google Chrome；只有视频/GIF 参考才需要 `ffmpeg`；不需要 API key；一个已有代码库/已有技术栈；参考源（URL、本地 HTML、截图或录屏）、落点文件、级别、触发动作、视口和合法可用的字体/图片/图标/文案。
 - UI/UX 检查与验证做法（P）：Node 22.12+，在项目目录中运行；一个受支持的宿主（Codex、OpenCode、Antigravity、Kiro、Cursor、Kilo Code、GitHub Copilot CLI、Claude Code、Pi、Grok Build、Devin CLI、DeepSeek Harness）；项目已有可启动的前端页面和入口源码文件；要检查运行中的界面时，需要兼容 Chromium 和 Playwright Chromium；输出目录的父目录必须存在；如果只是评审而不改文件，需要给 agent 明确的“只报告不改文件”约束。
 - 界面去 AI 味做法（Q）：已有 Claude Code/Codex/OpenCode 项目；确认项目的技能目录；能填写项目级 `gosto.md` 和 `receitas.md`；有浏览/截图能力（用于参考和 outside look）；愿意保留人工评审。
 - 边界状态债务做法（R）：代码库能在本地跑起来；工作区干净；先开分支以便回滚；编码代理（原文点名 Claude Code 或 Codex）已能读写该仓库；原文未要求任何额外配置、插件或文件。
+- 浏览器内调试做法（S）：Node.js LTS、Chrome 当前稳定版或更新、npm；一个支持 MCP server 配置的客户端，或全局安装 CLI；目标页面非敏感，且你接受浏览器内容会暴露给 MCP 客户端；性能 trace 可能把 URL 发给 Google CrUX API；使用统计默认开启。
 
 ## 操作步骤
 
@@ -332,7 +337,7 @@
    var shot = Vfx.launch("VFX_Projectile_Fire", from, to)
    shot.arrived.connect(func(at): Vfx.play("VFX_Fire_Explosion", at))
    ```
-9. 可迁移的骨架：生成 → 在真实环境里渲染/运行 → 截图或截帧成可评审产物 → 只看产物、看不到生成脚本的第二个 agent 独立评审 → 评审提交前不给 verified。做法 A 的“只看得到 PNG 的新审阅者”、做法 E 的 before/after 录制、做法 H 的 fresh-context 子代理终审都是同一结构。
+9. 可迁移的骨架：生成 → 在真实环境里渲染/运行 → 截图或截帧成可评审产物 → 只看产物、看不到生成脚本的第二个 agent 独立评审 → 评审提交前不给 verified。做法 A 的“只看得到 PNG 的新审阅者”、做法 E 的 before/after 录制、做法 H 的 fresh-context 子代理终审、做法 S 的浏览器 trace/console 证据都是同一结构。
 
 ### 做法 G：把界面文案的卫生规则前置成约束，再人工确认
 
@@ -482,7 +487,7 @@
 
 ### 做法 M：把渲染后的像素检查变成交付门禁
 
-用 ngocanhnckh/renderlint。它在无头 Chromium 中打开真实页面，在手机/平板/桌面多视口（含暗色模式）下渲染，用 37 条规则抓 TypeScript 与 ESLint 看不见的像素级缺陷，输出给 agent 读的纯文本，并在有 error 时以退出码 1 失败。做法 A~R 大多在“生成之前”或“页面之外”约束 agent，这一条是“渲染之后、交付之前”的机器判定。
+用 ngocanhnckh/renderlint。它在无头 Chromium 中打开真实页面，在手机/平板/桌面多视口（含暗色模式）下渲染，用 37 条规则抓 TypeScript 与 ESLint 看不见的像素级缺陷，输出给 agent 读的纯文本，并在有 error 时以退出码 1 失败。做法 A~S 大多在“生成之前”或“页面之外”约束 agent，这一条是“渲染之后、交付之前”的机器判定。
 
 1. 确认前提：Node >= 18.17；项目能在浏览器里渲染；能启动 dev server 或产出静态构建目录。
 2. 最省事的方式：把下面这段原样丢给编码代理：
@@ -524,6 +529,16 @@
     ```
     或按选择器/页面忽略：配置 `ignore` 数组。agent 指令要求先修根因，忽略必须带 reason。
 12. 跑通后的循环：改 UI → `npx renderlint` → 按报告里的元素、文件:行号、截图和 fix 提示逐条修 → 直到 0 error。每轮产物落在 `.renderlint/report.json`、`.renderlint/report.md`、`.renderlint/screens/`。
+
+### 做法 N：有参考图的视觉构建长跑
+
+用 cook。目标场景是视觉构建（3D 世界、影片、发布视频、游戏、UI），不适用于纯文本或没有参考图/视频的工作。材料只到 README 层面，critic 的提示词、rubric、intake 问题清单在 `references/` 下未展开。
+
+1. 确认前提：Node 18+；`ffmpeg` 在 PATH 上；有一组参考图；能接受长时间自主运行；小任务自己设硬上限。
+2. 用 `/cook` 或 `$cook` 触发，先完成一次性 intake，按 `templates/brief.md`、`templates/ROUNDS.md` 和 `references/` 下的 intake、target-and-bar、loop-and-critics、rules、ship 文件执行。
+3. 每轮收静帧、并排对比图和 `cook/ROUNDS.md`；用 `scripts/side-by-side.mjs` 生成对比图；你自己独立给每维打一次分，用来校准 critic 自评。
+4. 最小试用：选一个小任务，配 2–3 张参考图，只跑 2–3 轮，把时间上限压到远低于 8h 的 demo 下限；不要复制作者的高成本 demo。
+5. 成本量级高，必须设硬上限；中途做一次上下文重置，看它能否从 `cook/` 续跑；8 轮不收敛要如实交代剩余差异。
 
 ### 做法 O：把 UI 还原度变成四轴分数和退出码，再进入修复循环
 
@@ -655,21 +670,75 @@
 6. 每轮结束后跑构建与现有测试，对应原文的 without breaking anything；不要靠代理自述“没破坏”。预期：构建与测试全绿；若有失败，先修再进入下一组件。
 7. 用原文要求的汇报格式做验收清单：按文件列 before / after，与实际 diff 抽查对照。预期：汇报里每一条都能在 diff 中找到对应改动。
 
-### 怎么选 A / B / C / D / E / F / G / H / I / J / K / L / M / N / O / P / Q / R
+### 做法 S：让编码 agent 在真实 Chrome 里查 console、网络、截图和性能 trace
 
-按交付物分：数据图表走 A；命名组件或有界组合走 B；架构图/系统图/架构文档维护走 C，尤其是需要可编辑 `.drawio`、真实来源导入、漂移 diff、CI 规则校验、增量同步时；把 GitHub 仓库、技术文章、PDF 或本地项目转成深色“终端蓝图”风格架构图，或需要导出 HTML/PNG/MP4/GIF/Mermaid 时走 K；前端界面的设计与实现走 D；在终端里直接看截图/录屏/前后对比 QA 走 E；在真实 Godot 里可运行的实时特效，或想把“生成 → 真实渲染验证 → 独立评审 → 证据绑定具体构建”的闭环搬到别的领域，走 F；界面文案层的清理走 G；网页页面级的设计、重设计、去 AI 味并防止改版丢功能走 H；应用型 UI 或公开网站的设计与实现，想让 agent 先出 brief/设计契约/代表性 specimen、再做多宽度截图审查和修复账本走 I；B 端企业后台页面的生成与复核走 J；界面 AI 味、动效参数、文案 AI 腔的脚本硬门禁 + 模型判断走 L；项目能在浏览器里渲染、你想让“UI 改动后 0 error”成为机器门禁时走 M；有明确 Web 参考、想把“像不像”变成可复现四轴分数和退出码时走 O；有参考图/视频的视觉构建任务，想让 agent 对着参考图长时间迭代、每轮静帧交人工关卡时走 N；想让 agent 按创建/重设计/精修/评审流程做 UI/UX，并用 `context` / `inspect` / `verify` 留下修改前后对比记录时走 P；用 Claude Code/Codex/OpenCode 做 UI 原型或界面评审，想让 agent 先读 `gosto.md`/`receitas.md`、指出 slop 信号、提问并给灰度线框，再实现并做 outside look 时走 Q；已有界面代码库、想系统清掉“只在 demo 条件下正常”的边界状态债务，按组件小步改、每轮人工审 diff 时走 R。
+用 ChromeDevTools/chrome-devtools-mcp。它是 Chrome DevTools 团队提供的 MCP server，也带 CLI，让编码智能体控制并检查一个运行中的 Chrome：录 performance trace 并提取性能洞察；分析网络请求、截图、检查浏览器 console 消息（带 source-mapped stack traces）；用 puppeteer 执行自动化并自动等待操作结果。仓库还提供 skills，教 agent 使用 MCP/CLI、做可访问性审计、Cookie/会话调试、LCP 优化、内存泄漏排查和连接故障排查。
+
+1. 确认前提：Node.js LTS、Chrome 当前稳定版或更新、npm；一个支持 MCP 的客户端；目标页面非敏感或已隔离敏感数据。
+2. 在 MCP 客户端加入 server 配置。前提：客户端支持 MCP server 配置。
+   ```json
+   {
+     "mcpServers": {
+       "chrome-devtools": {
+         "command": "npx",
+         "args": ["-y", "chrome-devtools-mcp@latest"]
+       }
+     }
+   }
+   ```
+3. 用首个 prompt 验证连通性。前提：上一步已配置；MCP 客户端会按需启动浏览器。
+   ```text
+   Check the performance of https://developers.chrome.com
+   ```
+   预期：客户端打开浏览器并录制一次 performance trace。README 说明，只有客户端调用需要浏览器实例的工具时，server 才会自动启动浏览器；单独连接不会启动。
+4. 如果不想用 MCP，可安装 CLI 从终端控制浏览器。前提：全局安装 npm 包。
+   ```sh
+   npm i chrome-devtools-mcp@latest -g
+   chrome-devtools navigate_page 1 --url "https://developers.chrome.com"
+   chrome-devtools take_screenshot 1 --filePath screenshot.png
+   chrome-devtools stop
+   ```
+5. 安装 skills，让 agent 知道如何用这些工具。前提：使用支持插件的客户端，或手动复制 skill 目录。
+   Claude Code：
+   ```text
+   /plugin marketplace add ChromeDevTools/chrome-devtools-mcp
+   /plugin install chrome-devtools-mcp@chrome-devtools-plugins
+   ```
+   Copilot / VS Code：运行 Chat: Install Plugin From Source，输入 `ChromeDevTools/chrome-devtools-mcp`。
+   Gemini CLI：
+   ```sh
+   gemini extensions install --auto-update https://github.com/ChromeDevTools/chrome-devtools-mcp
+   ```
+   手动安装示例（Claude Code）：
+   ```sh
+   npm i chrome-devtools-mcp@latest -g
+   mkdir -p ~/.claude/skills
+   cp -R "$(npm root -g)/chrome-devtools-mcp/skills/chrome-devtools-cli" ~/.claude/skills/
+   ```
+6. 按需关闭数据上报/更新检查。前提：需要隐私或 CI 环境控制。
+   ```json
+   "args": ["-y", "chrome-devtools-mcp@latest", "--no-usage-statistics"]
+   ```
+   关闭 CrUX 性能数据请求：启动时加 `--no-performance-crux`。关闭更新检查：设置 `CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS`。使用统计在设置 `CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS` 或 `CI` 环境变量时也会禁用。
+7. 只做基础浏览器任务时，可用 `--slim` 暴露精简工具集；高级连接、并发会话、持久化用户目录、自定义浏览器路径、连接已运行 Chrome、Android 调试等见 Advanced Usage Guide（原文摘录未展开具体参数）。
+8. 工作循环：改前让 agent 打开目标页，检查 console 消息、网络请求并截图，必要时录一次 performance trace；改后在同一路径重复同样检查。把 trace 洞察、console 错误（含 source-mapped stack traces）、失败请求、截图对比作为交付证据；若做可访问性审计、LCP 或内存泄漏，按对应 skill 的流程走。
+9. 验收边界：官方只支持 Google Chrome 和 Chrome for Testing，其他 Chromium 不保证；MCP server 会把浏览器实例内容暴露给 MCP 客户端，可能检查、调试、修改浏览器或 DevTools 中的数据，应避免共享敏感或个人信息；性能工具可能把 trace URL 发给 Google CrUX API；使用统计默认开启；skills 要与 server/CLI 版本同步更新。
+
+### 怎么选 A / B / C / D / E / F / G / H / I / J / K / L / M / N / O / P / Q / R / S
+
+按交付物分：数据图表走 A；命名组件或有界组合走 B；架构图/系统图/架构文档维护走 C，尤其是需要可编辑 `.drawio`、真实来源导入、漂移 diff、CI 规则校验、增量同步时；把 GitHub 仓库、技术文章、PDF 或本地项目转成深色“终端蓝图”风格架构图，或需要导出 HTML/PNG/MP4/GIF/Mermaid 时走 K；前端界面的设计与实现走 D；在终端里直接看截图/录屏/前后对比 QA 走 E；在真实 Godot 里可运行的实时特效，或想把“生成 → 真实渲染验证 → 独立评审 → 证据绑定具体构建”的闭环搬到别的领域，走 F；界面文案层的清理走 G；网页页面级的设计、重设计、去 AI 味并防止改版丢功能走 H；应用型 UI 或公开网站的设计与实现，想让 agent 先出 brief/设计契约/代表性 specimen、再做多宽度截图审查和修复账本走 I；B 端企业后台页面的生成与复核走 J；界面 AI 味、动效参数、文案 AI 腔的脚本硬门禁 + 模型判断走 L；项目能在浏览器里渲染、你想让“UI 改动后 0 error”成为机器门禁时走 M；有参考图/视频的视觉构建任务，想让 agent 对着参考图长时间迭代、每轮静帧交人工关卡时走 N；有明确 Web 参考、想把“像不像”变成可复现四轴分数和退出码时走 O；想让 agent 按创建/重设计/精修/评审流程做 UI/UX，并用 `context` / `inspect` / `verify` 留下修改前后对比记录时走 P；用 Claude Code/Codex/OpenCode 做 UI 原型或界面评审，想让 agent 先读 `gosto.md`/`receitas.md`、指出 slop 信号、提问并给灰度线框，再实现并做 outside look 时走 Q；已有界面代码库、想系统清掉“只在 demo 条件下正常”的边界状态债务，按组件小步改、每轮人工审 diff 时走 R；想让编码 agent 自己打开真实 Chrome、读 console/网络、截图、录 performance trace，把浏览器内证据带回交付说明时走 S。
 
 C 和 K 的差异：C 的核心产物是可编辑 `.drawio`，强在真实来源导入、漂移 diff、规则校验、CI 和增量同步；K 的核心产物是深色终端蓝图风格架构图，强在读仓库/文章/PDF/本地项目、以 `<slug>.spec.json` 修正、`check` 做布局自检、导出 HTML/PNG/MP4/GIF/Mermaid。K 的 `check` 只查布局，不查语义。要把架构图纳入 CI 门禁，优先 C；要快速把仓库或文章变成可展示的图/视频，优先 K。
 
-D、H、I、L、M、O、P、Q、R 都碰界面，但层次不同：D 用持久事实 + 61 条确定性规则做持续守门；H 用 Floor/Reflex/Finish 三层门禁 + `sloplint` 八宽度渲染 + 冷上下文复审 + before/kept 快照做页面级设计与重设计验收；I 用设计技能 + 代表性 specimen + Playwright 多宽度截图审查账本；L 补界面 AI 味审计和动效/文案 lint 的落地样例；M 补“真实浏览器里的像素事实”这一层——37 条规则、按几何算溢出与遮挡、按真实像素算对比度、退出码可直接挂构建和 Claude Code 回合；O 补“对着明确参考的还原度”这一层——四轴分数、级别阈值、`compare` 退出码、按收益排序的 findings；P 补“技能指导 + 可重复检查/验证 CLI”这一层——`context` 收集项目语境、`inspect` 保存 before、`verify` 对比 persistent / new / no-longer-observed，但 CLI 自述只覆盖可判定的采样问题；Q 补“项目品味文件 + 先问后做”这一层——读 `gosto.md`/`receitas.md`，指出 slop 信号，提问并给灰度线框，之后才实现，最后做 outside look 和 second pass，参考只取概念；R 补“边界状态债务”这一层——用提示词点名五类 happy-path 条件，按组件补齐缺失状态与布局断裂，不改设计、不破坏功能，并按文件汇报 before/after。M 不替代 D/H/I/L/O/P/Q/R：M 管“渲染出来有没有坏”，D/H/I/L 管“该不该这么设计、有没有 AI 味、改版有没有丢功能”，O 管“和参考差多少”，P 管“这次修正前后，可判定的检查项有没有减少、有没有新增回归、哪些仍然没被验证”，Q 管“每个元素有没有用户能感知的存在理由、参考有没有被抄成另一种套路”，R 管“只在 demo 条件下正常的边界状态有没有被补齐”。O 也不替代视觉设计判断，它只证明还原度分数，不证明设计本身好。P、Q、R 也不证明设计本身好，它们只留下检查证据、流程约束或边界状态修复。
+D、H、I、L、M、O、P、Q、R、S 都碰界面，但层次不同：D 用持久事实 + 61 条确定性规则做持续守门；H 用 Floor/Reflex/Finish 三层门禁 + `sloplint` 八宽度渲染 + 冷上下文复审 + before/kept 快照做页面级设计与重设计验收；I 用设计技能 + 代表性 specimen + Playwright 多宽度截图审查账本；L 补界面 AI 味审计和动效/文案 lint 的落地样例；M 补“真实浏览器里的像素事实”这一层——37 条规则、按几何算溢出与遮挡、按真实像素算对比度、退出码可直接挂构建和 Claude Code 回合；O 补“对着明确参考的还原度”这一层——四轴分数、级别阈值、`compare` 退出码、按收益排序的 findings；P 补“技能指导 + 可重复检查/验证 CLI”这一层——`context` 收集项目语境、`inspect` 保存 before、`verify` 对比 persistent / new / no-longer-observed，但 CLI 自述只覆盖可判定的采样问题；Q 补“项目品味文件 + 先问后做”这一层——读 `gosto.md`/`receitas.md`，指出 slop 信号，提问并给灰度线框，之后才实现，最后做 outside look 和 second pass，参考只取概念；R 补“边界状态债务”这一层——用提示词点名五类 happy-path 条件，按组件补齐缺失状态与布局断裂，不改设计、不破坏功能，并按文件汇报 before/after；S 补“浏览器内调试证据”这一层——agent 自己打开 Chrome，读 console、看网络、截图、录 trace，把发现带回交付说明。M 不替代 D/H/I/L/O/P/Q/R/S：M 管“渲染出来有没有坏”，D/H/I/L 管“该不该这么设计、有没有 AI 味、改版有没有丢功能”，O 管“和参考差多少”，P 管“这次修正前后，可判定的检查项有没有减少、有没有新增回归、哪些仍然没被验证”，Q 管“每个元素有没有用户能感知的存在理由、参考有没有被抄成另一种套路”，R 管“只在 demo 条件下正常的边界状态有没有被补齐”，S 管“浏览器里到底报了哪些错、哪个请求失败、trace 说明了什么”。O 也不替代视觉设计判断，它只证明还原度分数，不证明设计本身好。P、Q、R、S 也不证明设计本身好，它们只留下检查证据、流程约束、边界状态修复或浏览器内调试证据。
 
-N 和 F 都靠“真实渲染 + 独立评审”，但 N 是对着参考图做长跑视觉迭代，适用 3D 世界、影片、发布视频、游戏、UI；F 是实时特效在 Godot 里渲染成胶片条再交给 `vfx-review`。N 与 A/H/I/O/P/R 共享“独立评审/前后证据”结构：A 是只看 PNG 的新审阅者，F 是另一个 agent、另一个技能，H 是 fresh-context 子代理终审，I 是让 agent 打开每张截图按严重度/证据/修复/复测记录，O 是 `compare` 四轴分数和报告，P 是 `inspect` 存基线、`verify` 分 persistent / new / no-longer-observed，R 是按文件 before/after 汇报并与 diff 抽查对照。N 的成本量级高，先用小任务、2–3 张参考图、2–3 轮试，不要一上来复制作者的高成本 demo。
+N 和 F 都靠“真实渲染 + 独立评审”，但 N 是对着参考图做长跑视觉迭代，适用 3D 世界、影片、发布视频、游戏、UI；F 是实时特效在 Godot 里渲染成胶片条再交给 `vfx-review`。N 与 A/H/I/O/P/R/S 共享“独立评审/前后证据”结构：A 是只看 PNG 的新审阅者，F 是另一个 agent、另一个技能，H 是 fresh-context 子代理终审，I 是让 agent 打开每张截图按严重度/证据/修复/复测记录，O 是 `compare` 四轴分数和报告，P 是 `inspect` 存基线、`verify` 分 persistent / new / no-longer-observed，R 是按文件 before/after 汇报并与 diff 抽查对照，S 是 console/网络/截图/trace 的前后对照。N 的成本量级高，先用小任务、2–3 张参考图、2–3 轮试，不要一上来复制作者的高成本 demo。
 
-A、B、D、E、H、I、J、K、L、M、N、O、P、Q、R 都是事件触发，不是常驻巡检；D 的确定性检测、H 的 `sloplint`、I 的 `capture.mjs`/`report.json`、L 的 `killer-scan`、M 的 `npx renderlint`、O 的 `capture`/`compare`、P 的 `context`/`inspect`/`verify` 都能独立于 LLM 跑，适合直接接 CI。N 的运行状态落在 `cook/`，上下文重置或换 agent 后可续跑。Q 是任务内循环，不是定时巡检；它依赖 agent 先问、先画灰度线框、再实现，所以要有一次人工确认或明确约束，不能让 agent 跳过提问直接改。R 是一次性人工调用，原文没有涉及触发方式或持续运行；要按组件分批，不要指望一轮扫完整个中大型仓库。
+A、B、D、E、H、I、J、K、L、M、N、O、P、Q、R、S 都是事件触发，不是常驻巡检；D 的确定性检测、H 的 `sloplint`、I 的 `capture.mjs`/`report.json`、L 的 `killer-scan`、M 的 `npx renderlint`、O 的 `capture`/`compare`、P 的 `context`/`inspect`/`verify` 都能独立于 LLM 跑，适合直接接 CI；S 的 CLI 命令也能脚本化，但 MCP server 只在客户端调用需要浏览器实例的工具时启动浏览器，原文没有给出定时巡检编排。N 的运行状态落在 `cook/`，上下文重置或换 agent 后可续跑。Q 是任务内循环，不是定时巡检；它依赖 agent 先问、先画灰度线框、再实现，所以要有一次人工确认或明确约束，不能让 agent 跳过提问直接改。R 是一次性人工调用，原文没有涉及触发方式或持续运行；要按组件分批，不要指望一轮扫完整个中大型仓库。
 
 ## 怎么判断变好了
 
-最小试用：在单个代理上装一次，用一个已有图表脚本、一个已有类似实现的组件任务、一两个真实架构来源、一个公开仓库 + 一篇公开技术文章、一个现有前端页面、一个 Godot 4 游戏项目、一个真实页面文案清理、一个已有页面 audit、一个低风险内部仪表盘或落地页、一个 B 端列表页 + 一个表单页、一个自有前端仓库的 `killer-scan`、一个前端项目从 `renderlint init` 到 0 error、一个带参考的 UI 组件以 `faithful` 跑 3–4 轮、一个视觉构建小任务（2–3 张参考图跑 2–3 轮）、一个前端页面用 flawless-ui-ux 从 `context`/`inspect` 到 `verify` 跑一轮，一个低风险 UI 页面或原型用 antislop-ui-ux-skill 从填写 `gosto.md`/`receitas.md` 到跑一轮 de-slop 或新建屏幕，以及一个已知边界状态欠缺的页面用做法 R 只跑 1–3 个组件，分别试。全程做基线对照——让同一 agent 在不装技能、不给规则的情况下做同样任务，再比一次。
+最小试用：在单个代理上装一次，用一个已有图表脚本、一个已有类似实现的组件任务、一两个真实架构来源、一个公开仓库 + 一篇公开技术文章、一个现有前端页面、一个 Godot 4 游戏项目、一个真实页面文案清理、一个已有页面 audit、一个低风险内部仪表盘或落地页、一个 B 端列表页 + 一个表单页、一个自有前端仓库的 `killer-scan`、一个前端项目从 `renderlint init` 到 0 error、一个带参考的 UI 组件以 `faithful` 跑 3–4 轮、一个视觉构建小任务（2–3 张参考图跑 2–3 轮）、一个前端页面用 flawless-ui-ux 从 `context`/`inspect` 到 `verify` 跑一轮，一个低风险 UI 页面或原型用 antislop-ui-ux-skill 从填写 `gosto.md`/`receitas.md` 到跑一轮 de-slop 或新建屏幕，一个已知边界状态欠缺的页面用做法 R 只跑 1–3 个组件，以及一个非敏感页面用做法 S 跑一次“改前检查 → 小改动 → 改后检查”，分别试。全程做基线对照——让同一 agent 在不装技能、不给规则的情况下做同样任务，再比一次。
 
 图表侧：lint 报出的可判定问题数量和类型（零基线、双 y 轴、文字重叠/裁切、色盲配色、低对比度）；图像复审能抓出多少“标注数字与数据不符”“来源行靠猜或写成文件名”“图上残留 TODO/confirm”；修正前后让不看上下文的同事只看 PNG 复述“这张图说明了什么”；三轮复审的实际收敛情况。
 
@@ -697,9 +766,9 @@ B 端后台侧（J，指标需自建）：高危违规数（遮罩静默关闭�
 
 渲染后像素门禁侧（M，指标需自建）：第一轮 `npx renderlint` 的 error 数，以及按类型分布；修到 0 error 用了几轮；只在 `--sweep` 的额外宽度才暴露的问题数；`states` 打开后新增的 error 数；每条 `data-renderlint-ignore` 的理由是否站得住；`Stop` hook 是否真的拦住 Claude 的回合、重试是否停在 4 次以内；CI 里 `--format github` 的注解数与人工复核后的误报数之比；从接入到第一轮 0 error 的耗时。
 
-UI 还原度侧（O，指标需自建）：每轮四轴分与总分是否单调上升、第几轮穿过门禁；停滞在某一轴说明该轴的反馈对 agent 不可操作；`compare` 退出码 `1 → 0` 是硬性通过信号，可直接作为 CI 门禁；随机抽 5–10 条 findings 人工看图确认问题真实存在，再人工找 2–3 处明显差异看报告有没有漏，这是判断“分数可信不可信”的关键一步；把参考抓两次互比应得 100，如果不是 100，说明环境不稳定，后面的分数都不可信；同一个组件一组用 skill、一组不用，让不知情的同事只看看图猜哪个更像参考；记录轮数 × 单轮耗时，以及 8 轮上限内是否收敛。
-
 视觉构建长跑侧（N，指标需自建）：`ROUNDS.md` 里最弱维度的分数是否逐轮上升；达到你设定的门槛需要几轮；最终交付前你自己动手改的比例或次数（对照基线同样统计）；并排图上构图/光照/颜色/材质/远近细节/运动的明显不一致处，每轮计数；耗时、token、API 等价花费；中途人为做一次上下文重置，看它能否从 `cook/` 续跑。最小试用：选一个小任务，配 2–3 张参考图，只跑 2–3 轮，把时间上限压到远低于 8h 的 demo 下限；每轮收静帧、并排对比图和 `cook/ROUNDS.md`，你自己独立给每维打一次分，用来对照 critic 打分。
+
+UI 还原度侧（O，指标需自建）：每轮四轴分与总分是否单调上升、第几轮穿过门禁；停滞在某一轴说明该轴的反馈对 agent 不可操作；`compare` 退出码 `1 → 0` 是硬性通过信号，可直接作为 CI 门禁；随机抽 5–10 条 findings 人工看图确认问题真实存在，再人工找 2–3 处明显差异看报告有没有漏，这是判断“分数可信不可信”的关键一步；把参考抓两次互比应得 100，如果不是 100，说明环境不稳定，后面的分数都不可信；同一个组件一组用 skill、一组不用，让不知情的同事只看看图猜哪个更像参考；记录轮数 × 单轮耗时，以及 8 轮上限内是否收敛。
 
 UI/UX 检查与验证侧（P，指标需自建）：`context` 和 `inspect` 是否能稳定产出 before；`verify` 后 persistent、new、no-longer-observed 各有多少条；确认错误数是否下降、有没有新增回归；退出码是 `0`、`1` 还是 `2`，`2` 出现在哪一步、是输入无效还是覆盖不完整；采样视口之外的问题是否仍然存在；人工抽检键盘操作、业务流程、视觉质量，记录 CLI 没覆盖到的缺陷数；完成同一界面任务的时间、返工轮次；内容或行为是否被意外改变。只有在小样本里看到可重复的确认错误减少且无新增回归，才考虑扩大适用范围。
 
@@ -707,7 +776,9 @@ UI/UX 检查与验证侧（P，指标需自建）：`context` 和 `inspect` 是�
 
 边界状态债务侧（R，指标需自建）：状态覆盖率——该页面 5 类状态（慢加载 / 失败 / 空列表 / 长文案 / 窄屏）试前试后各有几个有处理，用清单打勾对比；回归——构建与现有测试是否全绿，diff 中与状态无关的样式/设计改动应为 0；成本——审 diff 与返工耗时，对比手写这些状态所需时间；汇报可信度——按文件的 before / after 总结与实际 diff 是否对得上，抽查即可。若覆盖率明显上升且回归为 0，再扩大到整页乃至整个应用，并按组件拆成多批执行。最小试用：选一个已知边界状态欠缺的页面，只取其中 1–3 个组件，在新分支上原样跑一次提示词，人工审 diff 后跑构建与测试。
 
-这些指标是验证方法建议，这些材料都没有给出对应的量化结果。试多久按任务数量定：若干张历史图表、一个边界清晰的组件任务、一两个真实架构来源导入并接入一次 PR、一个公开仓库 + 一篇公开文章、一个现有前端页面的检测基线、一次 show-your-work 的官方 demo 和 3–5 个真实前端修复任务、一次 effekseer-vfx 的 fire 示例和一条真实特效需求、一个真实页面的文案清理 PR、一个已有页面 audit + 一个新建小页面 build + 一次 redesign 快照比对、一个低风险内部仪表盘或一个落地页的 specimen + 截图审查闭环、一个 B 端列表页 + 一个表单页的基线对照、一个自有前端仓库的 `killer-scan` + 人工复核 FAIL、一个前端项目从 `renderlint init` 到 0 error 再连跑几个 UI 改动、一个带参考的 hero 或卡片以 `faithful` 跑 3–4 轮、一个视觉构建小任务的 2–3 轮迭代、一个前端页面用 flawless-ui-ux 的 `context`/`inspect`/`verify` 跑一轮并人工抽检 CLI 未覆盖项、一个低风险 UI 页面或原型用 antislop-ui-ux-skill 跑一轮 de-slop 或新建屏幕并做人工盲选、一个已知边界状态欠缺的页面用做法 R 只跑 1–3 个组件并逐项打勾五类状态。
+浏览器内调试侧（S，指标需自建）：最小试用选一个非敏感页面，按 MCP 配置接上，用首个 prompt 验证能打开浏览器并录 trace；改前让 agent 打开目标页，记录 console 错误（含 source map 栈）、失败/异常网络请求、截图和 trace 洞察；做一个小改动后在同一路径重复同样检查。观察：agent 是否能自主发现并定位 console 错误；是否能发现失败请求；是否能从 trace 提取可执行性能洞察；截图是否显示目标视觉变化；可访问性审计问题是否减少；LCP 调试前后同一页面的 LCP 是否改善；内存泄漏排查是否定位到泄漏点。若 agent 无法稳定复现或需要频繁人工接管，只保留为辅助调试，不进入主流程。材料没有给出量化阈值，不要虚构通过线。
+
+这些指标是验证方法建议，这些材料都没有给出对应的量化结果。试多久按任务数量定：若干张历史图表、一个边界清晰的组件任务、一两个真实架构来源导入并接入一次 PR、一个公开仓库 + 一篇公开文章、一个现有前端页面的检测基线、一次 show-your-work 的官方 demo 和 3–5 个真实前端修复任务、一次 effekseer-vfx 的 fire 示例和一条真实特效需求、一个真实页面的文案清理 PR、一个已有页面 audit + 一个新建小页面 build + 一次 redesign 快照比对、一个低风险内部仪表盘或一个落地页的 specimen + 截图审查闭环、一个 B 端列表页 + 一个表单页的基线对照、一个自有前端仓库的 `killer-scan` + 人工复核 FAIL、一个前端项目从 `renderlint init` 到 0 error 再连跑几个 UI 改动、一个带参考的 hero 或卡片以 `faithful` 跑 3–4 轮、一个视觉构建小任务的 2–3 轮迭代、一个前端页面用 flawless-ui-ux 的 `context`/`inspect`/`verify` 跑一轮并人工抽检 CLI 未覆盖项、一个低风险 UI 页面或原型用 antislop-ui-ux-skill 跑一轮 de-slop 或新建屏幕并做人工盲选、一个已知边界状态欠缺的页面用做法 R 只跑 1–3 个组件并逐项打勾五类状态、一个非敏感页面用做法 S 跑一次改前/改后检查。
 
 ## 常见坑
 
@@ -731,7 +802,8 @@ UI/UX 检查与验证侧（P，指标需自建）：`context` 和 `inspect` 是�
 - cook 的证据只有作者自述一次高成本 demo（约 $1.8k–$2.3k、约 45h、约 11M 输出 token），没有第三方复现、没有与“不用 cook”的对照基线，也没有“成品是否被外部认可”的客观指标。门槛分数（99.9%、9/10）由 critic 给出、由人校准，主观性强，“达到 99.9%”不等于客观质量。README 只到 README 层面，critic 提示词、rubric、intake 问题清单在 `references/` 下未展开。纯文本或没有参考物的工作不适用；小任务必须自己设硬上限，不要复制 demo 的 8h 下限。模型给自己打分偏高，每次评分要用你自己的估计去校准。
 - flawless-ui-ux 的 README 只有安装、调用、CLI 和退出码，没有效果数据、案例研究或基准结果；64 stars。CLI 自述的检查范围有限：采样不能证明完整 WCAG 合规、完整键盘旅程、业务流正确或视觉质量；小字号和重复内容要结合语境判断；检查不编辑文件、不启动服务器、不下载浏览器、不提交表单；缺失的已确认目标和变化过的条件仍属未验证。`verify` 的 persistent / new / no-longer-observed 只说明可判定项的变化，不等于设计变好了。不要因为退出码 `0` 就认为页面没问题；退出码 `1` 是“有确认错误”，不是“检查失败”；退出码 `2` 是输入无效或覆盖不完整，先修覆盖再谈结果。
 - antislop-ui-ux-skill 的材料只有 README，未包含 `SKILL.md`、`estetica-ia.md`、`gosto.md`、`receitas.md` 的实际内容；安装命令写的 `skills/deslop` 与目录树里的 `deslop/` 不一致，执行前先确认仓库实际路径。原文没有给出具体调用提示词，不要照抄不存在的提示词；调用时用宿主 agent 的技能调用方式。它只面向 UI/UX 屏幕；20 组正反例画廊和 12 信号清单是人工对照材料，不是量化效果证据；34 stars 只是仓库指标。没有量化前后对比、用户研究或失败案例；先只做小范围试用，跳过“先问后做 + 灰度线框 + 人工确认”直接让 agent 改，是最容易把屏幕改成另一种套路的一步。如果仓库实际没有 README 所说的检查清单、模板或技能内容，或安装后无法按循环执行，应把结论降为 study，不要写入手册作为可复制流程。
-- 做法 R 的原文只是一条推文：一段提示词 + 一句论断，没有任何前后对比、案例、截图、代码库规模或技术栈说明；互动量很低（71 赞、1 转发、20 回复），不构成效果证据。“happy-path debt”是作者自造的说法，其外延完全由提示词里那五个条件界定（快加载、不失败、非空、短文案、宽屏）。“代理写 demo 代码”是作者主张，未提供验证。一次性要求“全应用扫描 + 逐个修复 + 汇报”，在较大代码库上很可能超出单轮上下文或做不完；按组件分批是落地建议，不是原文。 “不改设计”依赖代理对现有样式约定的理解，容易走样，需要人审兜底。原文未说明适用的框架、语言，是否适用于非界面代码也未知。
+- 做法 R 的原文只是一条推文：一段提示词 + 一句论断，没有任何前后对比、案例、截图、代码库规模或技术栈说明；互动量很低（71 赞、1 转发、20 回复），不构成效果证据。“happy-path debt”是作者自造的说法，其外延完全由提示词里那五个条件界定（快加载、不失败、非空、短文案、宽屏）。“代理写 demo 代码”是作者主张，未提供验证。一次性要求“全应用扫描 + 逐个修复 + 汇报”，在较大代码库上很可能超出单轮上下文或做不完；按组件分批是落地建议，不是原文。“不改设计”依赖代理对现有样式约定的理解，容易走样，需要人审兜底。原文未说明适用的框架、语言，是否适用于非界面代码也未知。
+- chrome-devtools-mcp 官方只支持 Google Chrome 和 Chrome for Testing，其他 Chromium 不保证；MCP server 会把浏览器实例内容暴露给 MCP 客户端，可能检查、调试、修改浏览器或 DevTools 中的数据，应避免共享敏感或个人信息；性能工具可能把 trace URL 发给 Google CrUX API；使用统计默认开启。需要 Node LTS、Chrome stable+、npm；skills 要与 server/CLI 版本同步更新；原文摘录未给出完整工具参考和客户端配置细节。它不是常驻监控，不能据此认定能自主定时巡检；也不替代 M 的像素门禁、E 的终端展示、P 的前后检查记录。
 
 ## 证据与来源
 
@@ -761,15 +833,17 @@ UI/UX 检查与验证侧（P，指标需自建）：`context` 和 `inspect` 是�
 
 **渲染后像素门禁做法（renderlint）：** 依据 ngocanhnckh/renderlint 的调研报告。可操作材料是 `npx -y github:ngocanhnckh/renderlint init` 与 `npx renderlint`、`init` 的 6 项改动与 `--no-build` / `--no-hook`、`renderlint.config.json` 的配置、`data-renderlint-maxlength`、`data-renderlint-ignore` 与 `data-renderlint-reason`、构建脚本接法、Vite 插件、Claude Code 的 `Stop` hook（最多重试 4 次）、`--format github`、`--sweep` / `--no-sweep`、`explain` 命令。原文给出的具体数字：Node >= 18.17；37 条规则；13 档宽度（320–1920px）加每个断点两侧扫描、文本加长 50%、长单词替换成 36+ 字符无断点串、KPI/价格/计数器多三位数字；有 error 时退出码为 1；报告落在 `.renderlint/report.json`、`.report.md`、`.screens/`。作者主张包括“代码是合法的，坏的是像素”。材料没有给出误报率、漏报率、耗时数据，工具尚未发布到 npm。
 
-**UI 还原度做法（replica）：** 依据 albertirgi/replica 的 README。可操作材料是 `npx skills add albertirgi/replica`、手工安装到 `~/.claude/skills/replica` 或项目内 `.claude/skills/replica`、`npm install --prefix ~/.claude/skills/replica/scripts`、`doctor`、`capture`/`compare` CLI、`data-replica="placeholder"`、三档级别阈值和 `report.md` / `issues.json` / 对比图。原文给出的具体数字与案例：Node 20+；只有视频/GIF 参考才需要 ffmpeg；`structure` 为 layout ≥ 90 · motion ≥ 85，`faithful` 为 layout ≥ 95 · style ≥ 95 · pixels ≥ 85 · motion ≥ 90，`exact` 为 layout ≥ 98 · style ≥ 98 · pixels ≥ 97 · motion ≥ 95；`compare` 退出码 `0` 通过、`1` 未通过、`2` 出错；8 轮上限；静图最高 8000px；demo 从 67.2 分在第 4 轮到 98.1，作者称全程 25 秒；报告样例 round 1 总分 79.8，四轴 63.7 / 94.8 / 71.2 / 89.6；自测三套 fixture。作者主张包括“agent 会写 UI 但不会检查 UI”“对同一个线上动画页面抓两次必须 100/100 匹配”。仓库 33 stars，没有第三方评测或对照实验；自测是作者自己写的测试，能证明实现与其声明一致，但不等于在别人的项目上同样有效。
-
 **视觉构建长跑做法（cook）：** 依据 Leonxlnx/cook 的 README。可操作材料是安装命令、`/cook` / `$cook` 调用、一次性 intake、`templates/brief.md`、`templates/ROUNDS.md`、`scripts/side-by-side.mjs`、`references/` 下的 intake/target-and-bar/loop-and-critics/rules/ship 文件结构、`cook/` 状态目录。原文给出的具体数据：Node 18+、`ffmpeg` 在 PATH；主案例 Athenaion 对照 9 张 AI 生成参考图、无外部素材，约 45h、55 个子 agent（最多 12 个并行）、约 45k 行 JavaScript、约 11M 输出 token、API 等价成本约 $1.8k–$2.3k、4K 渲染在集成显卡 AMD Radeon 780M 上完成；另外列出 4 个 demo 但本材料只有链接和名称。作者主张：参考图是下限不是灵感、模型给自己打分太高、2h 就做完说明有问题、99.9% / 9/10 门槛、8h 下限、用量节奏、slop 禁列、颜色“不发灰也不过饱和”。限制：案例数字全部为作者自述，无第三方复现、无对照基线、无“成品是否被外部认可”的客观指标；README 只到 README 层面，critic 提示词、rubric、intake 问题清单在 `references/` 下未展开；门槛由 critic 给出、由人校准，主观性强。
+
+**UI 还原度做法（replica）：** 依据 albertirgi/replica 的 README。可操作材料是 `npx skills add albertirgi/replica`、手工安装到 `~/.claude/skills/replica` 或项目内 `.claude/skills/replica`、`npm install --prefix ~/.claude/skills/replica/scripts`、`doctor`、`capture`/`compare` CLI、`data-replica="placeholder"`、三档级别阈值和 `report.md` / `issues.json` / 对比图。原文给出的具体数字与案例：Node 20+；只有视频/GIF 参考才需要 ffmpeg；`structure` 为 layout ≥ 90 · motion ≥ 85，`faithful` 为 layout ≥ 95 · style ≥ 95 · pixels ≥ 85 · motion ≥ 90，`exact` 为 layout ≥ 98 · style ≥ 98 · pixels ≥ 97 · motion ≥ 95；`compare` 退出码 `0` 通过、`1` 未通过、`2` 出错；8 轮上限；静图最高 8000px；demo 从 67.2 分在第 4 轮到 98.1，作者称全程 25 秒；报告样例 round 1 总分 79.8，四轴 63.7 / 94.8 / 71.2 / 89.6；自测三套 fixture。作者主张包括“agent 会写 UI 但不会检查 UI”“对同一个线上动画页面抓两次必须 100/100 匹配”。仓库 33 stars，没有第三方评测或对照实验；自测是作者自己写的测试，能证明实现与其声明一致，但不等于在别人的项目上同样有效。
 
 **UI/UX 检查与验证做法（flawless-ui-ux）：** 依据 smokeeaasd/flawless-ui-ux 的 README。可操作材料是安装命令（npx/pnpm/bun）、显式宿主参数（`--codex`、`--devin`、`--claude-code --global`、`--project ./app`、`--yes`）、skills.sh 与 Bash 脚本安装、触发方式（`$flawless-ui-ux`、`/flawless-ui-ux`、`/skill:flawless-ui-ux`）、CLI 的 `context` / `inspect` / `verify` 命令、`--source` 与 `--selector`、`--viewport` 默认 1440×900 与 390×844、`npx playwright@1.64.1 install chromium`、输出 before/after 目录与 `run.json`、退出码 `0`/`1`/`2` 与安装器 `0`/`130`。原文给出的具体事实：Node 22.12+；MIT 许可；12 个受支持宿主；检查采集选定 axe 对比度和可访问名称规则、采样宽度下的计算字号与水平溢出、可见破图与未捕获 JS 错误、重复短语和箭头提示、源码中的字面像素字号等。作者主张包括“技能引导设计与实现”“精修发展预期特征”；README 没有效果数据、案例研究或基准结果。CLI 自述不覆盖完整 WCAG 合规、完整键盘旅程、业务流正确或视觉质量。64 stars，未读取 docs、evals 和实际代码，不能确认安装后在各宿主上的真实可用性和跨版本稳定性。
 
 **界面去 AI 味做法（antislop-ui-ux-skill）：** 依据 gustavo-henriq/antislop-ui-ux-skill 的 README。可操作材料是安装命令 `cp -r skills/deslop my-app/.claude/skills/deslop`、项目级 `gosto.md`/`receitas.md`、两种模式（de-slop 已有屏幕 / 从零建屏）、先问后做 + 灰度线框 + self-contained HTML 原型 + double check / outside look / second pass 的循环、anti-token protocol、golden rule、20 组正反例画廊、10 类 80+ 模式、12 信号清单、curated sources。原文没有给出检查清单/模板正文、具体调用提示词、量化前后对比、用户研究或失败案例；34 stars 只是仓库指标。作者主张包括：ask before deciding 是主要差异化；便宜子代理和 anti-token protocol 能省 token；分层检查能提升质量。安装路径在 README 中不完全一致。
 
 **边界状态债务做法（happy-path debt）：** 依据 @Voxyz_ai 的一条推文。可操作材料只有一段英文提示词全文和一句论断——“代理是照着 demo 写的，demo 里一切顺利，真实使用不是”。原文没有步骤、配置、案例、截图、代码库规模或技术栈说明。帖子互动数据是 71 赞、1 转发、20 回复。效果验证只有“按文件总结 before vs. now”的定性对照汇报，没有指标或判定标准。“happy-path debt”是作者自造的说法，其外延完全由提示词里五个条件界定（快加载、不失败、非空、短文案、宽屏）。“代理写 demo 代码”是作者主张，未提供验证。是否适用于非界面代码、具体框架和语言，原文未说明。
+
+**浏览器内调试做法（chrome-devtools-mcp）：** 依据 ChromeDevTools/chrome-devtools-mcp 的 README。可操作材料是 MCP server 配置、首个验证 prompt、CLI 命令、skills 列表和插件安装命令、`--no-usage-statistics` / `--no-performance-crux` / `CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS` / `CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS`、`--slim`。原文给出的具体事实：Node.js LTS、Chrome 当前稳定版或更新、npm；官方只支持 Chrome 和 Chrome for Testing；MCP server 在客户端调用需要浏览器实例的工具时才自动启动浏览器；性能工具可能向 Google CrUX API 发送 trace URL；使用统计默认开启。仓库指标为 stars 55,654、stars_today 67，只是热度信号，不是效果证据。原文没有 benchmark、案例数据或前后对比；“reliable automation, in-depth debugging, and performance analysis”是功能宣称，未给量化验证。限制：浏览器内容会暴露给 MCP 客户端；skills 要与 server/CLI 版本同步更新；原文摘录未给出完整工具参考和客户端配置细节。
 
 ## 依据的调研
 
@@ -791,3 +865,4 @@ UI/UX 检查与验证侧（P，指标需自建）：`context` 和 `inspect` 是�
 - [smokeeaasd/flawless-ui-ux](../research/radar/2026-11-07/11125-smokeeaasd-flawless-ui-ux.md)：值得一试，建议小范围试用：在现有前端项目中安装该技能，让编程智能体按创建、重设计、精修、评审流程工作，并用 context、inspect、verify 做前后对比。理由是安装、调用和检查命令具体可照做，但 README 没有给出效果数据，CLI 也不覆盖完整可访问性、键盘流程、业务正确性和视觉质量。
 - [gustavo-henriq/antislop-ui-ux-skill](../research/radar/2026-11-12/12725-gustavo-henriq-antislop-ui-ux-skill.md)：值得一试，建议在一个小型 UI 页面或原型上小范围试用：按 README 安装 skill，先填写项目的 gosto.md 和 receitas.md，再走“定位 slop 信号→提问并给灰度线框→实现→多层检查”的循环；理由是安装命令和流程较明确，但原文未提供检查清单/模板正文和效果数据，暂不宜直接 adopt。
 - [@Voxyz_ai: If you still think Claude Code and Codex 𝘀𝘂𝗰𝗸 𝗮𝘁 𝗽𝗼𝗹𝗶𝘀𝗵, try this:](../research/radar/2026-11-12/12888-if-you-still-think-claude-code-and-codex-try-this.md)：值得一试，把这条提示词原样用在一个干净分支上，按组件小步跑、每轮人工审 diff——它把“界面只在 demo 条件下才正常”这类隐性缺陷变成了可以直接交给编码代理的检查清单和修复任务，但依据只有一条推文，没有案例或数据，先小范围试再决定是否写进手册。
+- [ChromeDevTools/chrome-devtools-mcp](../research/radar/2026-11-14/13401-chromedevtools-chrome-devtools-mcp.md)：值得一试，建议在前端/Web 调试与验证场景小范围试用：照 README 配置 MCP server 或 CLI，让编码智能体打开页面、抓 console/network、截图并录性能 trace；理由是配置和首个验证 prompt 可直接照做，但官方只支持 Chrome，且会把浏览器内容暴露给 MCP 客户端，需先隔离敏感数据。
