@@ -1,24 +1,26 @@
-# 让 AI 代码评审有证据、有风险地图、有人类摘要
+# 在合并 AI 改动前，让评审有结构图、风险地图、证据链和迁移防护
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：这篇手册解决 AI 代码评审中看不懂改动、评审不可核对、证据不可审计、风险不聚焦、PR 描述淹没评审者等缺口，给出按缺口选路线的操作做法。
-> 先试这一步：先按你的主要缺口选一条路线，小范围试点；如果最痛的是 AI 生成的 PR 描述太长，先把人类筛选的一句话和截图放开头，把完整代理说明折叠进 `<details><summary>`。
-> 最近修订：2026-11-09
+> 解决的问题：AI 写代码越来越快，但评审者拿到的常常只是 diff 和一堆评论，缺少结构图、风险地图、可审计证据、逐轮闭环和数据库迁移防护，导致该拦的没拦住、该快的地方快不起来。
+> 先试这一步：先选一个非关键仓库和一批中等规模 PR，用 Claude Code 内置审查或 OpenQodex 跑一遍真实评审，保留报告并与人工结论对照，再决定加哪一层。
+> 最近修订：2026-11-14
 
 ## 解决什么问题
 
 AI 代码评审有十二个常见缺口。第一，评审者通常只拿到 diff，系统结构怎么变、数据怎么流要靠脑补。第二，push 前缺少一遍可核对的自动评审：扫描告警是否落在改动行、每条告警是否被处理、每个改动行是否送到 reviewer 面前。第三，常规评审被动等告警，缺少主动的对抗性漏洞寻找。第四，AI 生成的 TypeScript 代码常出现低证据、低信号模式，人工评审容易放过，也缺少确定性的 lint 门。第五，如果只按 PR velocity 看速度，agent 可以轻易造出大量没有业务影响的 PR。第六，agent 写得越来越快，push 之前没有人确认提交者本人是否真的读懂了这份改动。第七，即使有人审、有 agent 审，接受一个 AI 改动时往往没有一份能复核的记录：这个改动由哪些功能块组成、每块的输入输出和源位置在哪、对照哪些验收项、哪些结论有运行证据、哪些只是静态阅读。第八，即使 AI 评审跑完，审批者拿到的仍是 diff 和一堆评论，缺少一张“这次合并有多危险、危险集中在哪里”的风险地图。第九，即使评审发现了问题，发现本身和合并门禁也可能没有可审计的证据链：每条 finding 凭什么成立、门禁为什么阻断、报告事实能不能从机器可读记录重新推导，都不清楚。第十，agent 每一轮回复到底改了什么、人有没有在具体行上留下评论、评论有没有随下一条消息回灌给 agent，常常没有自动闭环。第十一，AI 评审者容易被上一轮上下文带偏，缺少“每次都是独立审查者”的约束；安全审查要么缺位，要么过度拦截，极端边界 case 没有明确的放行判断。第十二，AI 生成的 PR 描述往往准确但太长，评审者被长文淹没，缺少一段经过人类筛选的短摘要和可展开的完整说明。
 
+第十三，数据库迁移这类改动即使代码评审通过，也可能因为锁表、破坏性变更或滚动部署不兼容而在上线时出事；缺少一个在部署前读取 schema、标出锁风险并在临时库试跑的检查层。
+
 Uber 内部把前五点当成流程问题处理：PR 按 `feature`、`bugfix`、`maintenance`、`testing`、`docs` 打标，简单检查前移到 agent 开 PR 之前，AI 花费走额度加经理例外审批，评审前先跑 AI 评审并附风险分和截图。Claude Code 团队公开的代码审查流程补上了另一条线索：不要问有没有人读过这段代码，要问这个变更可能出什么问题、哪一层检查最适合抓它。审查从路尽头的关卡变成写代码时的拼写检查，大多数变更在人类看之前已被 Claude 至少审过并修过一轮；目标状态是大多数 PR 至多一个人类在环，且回滚率和事故率不上升。原文给出的背景数据是：Claude 写了约 90% 的 Claude Code 自身代码；2026 年 6 月到 9 月，合并进 Claude Code 代码库的 PR 翻了一倍多，而被回滚的比例下降超过 40%；Anthropic monorepo 每天落地的变更从 5 月约 2,500 涨到 9 月超过 30,000。
 
-Sphinx 把“提交者是否理解”做成一个 Git hook：在 agent 生成的代码被 push 之前，它读 diff，向你提一个关于这段改动在出问题时会发生什么的问题，答对才放行 push，答错会解释原因并换一个场景重试。它补的是理解层，不是代码正确性层。Ask HN 讨论里，一派主张逐行审查不可持续，应转向测试和验证；另一派坚持必须完全理解才能交付生产代码。可操作的交集是：先让 AI 写测试并亲眼看到失败，用特性设计文档和 RCA 做人工门禁，再用静态分析、SAST、fuzzing、mutation testing 和多架构 gate 分层验证，把逐行阅读集中在生产代码和高风险改动上。Simple Reviewer 补的是记录层：按职责把改动拆成功能块，说明每块的作用、输入输出、源文件/符号/行号，并对照验收项记录运行证据，生成 `code-breakdown.html`、`code-breakdown.md`，需要完整审查时生成 `report.html`、`report.md`、`review.effective.json`。它明确说生成器只校验和渲染审查记录，不执行记录内命令，也不自行发现语义缺陷。Farol 补的是审批前的风险聚焦层：它不评论 diff 里的某一行，而是回答审批者真正要判断的问题——这次合并有多危险、危险集中在哪里。做法是用静态分析在 base 和 head 两棵代码树上建立“哪个声明用了哪个声明”的图，再把 diff 里的改动回溯到所有会执行到它的入口点，最后综合触达范围、diff 覆盖率、安全发现、契约破坏、依赖变更，给出 0–100 风险分和三档结论，并列出先读哪些文件、手工测哪些页面、哪些契约变更要找客户端确认。三个关键设计：`analyze` 从不执行被分析的代码、从不上网；确定性，同一 PR 每次给同样的报告，每条结论都带调用链，读不懂的地方标 `unknown` 并要求 careful review；Shadow mode，只提示，从不批准、从不 request changes、从不 fail check。kyy-logs/code-review-skill 补的是可审计层：它把代码评审拆成四路独立探查，`behavior-review`、`test-coverage`、`repo-guard` 为必需，`impact-analysis` 可选；每个发现必须带位置、摘要、证据和严重级别，最后由 JSON 派生报告事实和合并门禁。rexmod 补的是逐轮复核层：它把 Rex 变成编码智能体的 harness，用一次性 git index 在每次发消息时和 agent 结束时各打一次快照，两次快照之差就是这一轮的 Last Turn；面板里点文件在 Neovim 中打开到改动行，`Space r` 写行级评论，评论存在 `.git/rexmod/`，随下一条消息以“`file:line` + 代码 + 批注”的短列表回灌给 agent。一条更轻的做法补的是评审者角色层：每次 review 都新开会话，把 agent 当成独立审查者，不让上一轮上下文影响判断；安全审查必要但不过度，极端边界 case 由 agent 自己判断是否不作为 block，再由人复核。Simon Willison 补的是 PR 描述呈现层：PR 开头只保留一段经过人类编辑判断的高层说明，必要时加截图；完整代理说明折叠进 GitHub Markdown 的 `<details><summary>`，`summary` 写模型名和 effort。这样信息仍保留，评审可以先看人类筛选过的短摘要。
+Sphinx 把“提交者是否理解”做成一个 Git hook：在 agent 生成的代码被 push 之前，它读 diff，向你提一个关于这段改动在出问题时会发生什么的问题，答对才放行 push，答错会解释原因并换一个场景重试。它补的是理解层，不是代码正确性层。Ask HN 讨论里，一派主张逐行审查不可持续，应转向测试和验证；另一派坚持必须完全理解才能交付生产代码。可操作的交集是：先让 AI 写测试并亲眼看到失败，用特性设计文档和 RCA 做人工门禁，再用静态分析、SAST、fuzzing、mutation testing 和多架构 gate 分层验证，把逐行阅读集中在生产代码和高风险改动上。Simple Reviewer 补的是记录层：按职责把改动拆成功能块，说明每块的作用、输入输出、源文件/符号/行号，并对照验收项记录运行证据，生成 `code-breakdown.html`、`code-breakdown.md`，需要完整审查时生成 `report.html`、`report.md`、`review.effective.json`。它明确说生成器只校验和渲染审查记录，不执行记录内命令，也不自行发现语义缺陷。Farol 补的是审批前的风险聚焦层：它不评论 diff 里的某一行，而是回答审批者真正要判断的问题——这次合并有多危险、危险集中在哪里。做法是用静态分析在 base 和 head 两棵代码树上建立“哪个声明用了哪个声明”的图，再把 diff 里的改动回溯到所有会执行到它的入口点，最后综合触达范围、diff 覆盖率、安全发现、契约破坏、依赖变更，给出 0–100 风险分和三档结论，并列出先读哪些文件、手工测哪些页面、哪些契约变更要找客户端确认。三个关键设计：`analyze` 从不执行被分析的代码、从不上网；确定性，同一 PR 每次给同样的报告，每条结论都带调用链，读不懂的地方标 `unknown` 并要求 careful review；Shadow mode，只提示，从不批准、从不 request changes、从不 fail check。kyy-logs/code-review-skill 补的是可审计层：它把代码评审拆成四路独立探查，`behavior-review`、`test-coverage`、`repo-guard` 为必需，`impact-analysis` 可选；每个发现必须带位置、摘要、证据和严重级别，最后由 JSON 派生报告事实和合并门禁。rexmod 补的是逐轮复核层：它把 Rex 变成编码智能体的 harness，用一次性 git index 在每次发消息时和 agent 结束时各打一次快照，两次快照之差就是这一轮的 Last Turn；面板里点文件在 Neovim 中打开到改动行，`Space r` 写行级评论，评论存在 `.git/rexmod/`，随下一条消息以“`file:line` + 代码 + 批注”的短列表回灌给 agent。一条更轻的做法补的是评审者角色层：每次 review 都新开会话，把 agent 当成独立审查者，不让上一轮上下文影响判断；安全审查必要但不过度，极端边界 case 由 agent 自己判断是否不作为 block，再由人复核。Simon Willison 补的是 PR 描述呈现层：PR 开头只保留一段经过人类编辑判断的高层说明，必要时加截图；完整代理说明折叠进 GitHub Markdown 的 `<details><summary>`，`summary` 写模型名和 effort。这样信息仍保留，评审可以先看人类筛选过的短摘要。数据库迁移评审 agent 补的是上线前检查层：读取现有 schema 和 migrations，识别锁风险与破坏性变更，处理滚动部署，使用 `lock_timeout` 和 `CREATE INDEX CONCURRENTLY`，并在完成前到临时数据库试跑迁移。
 
 ## 适用与不适用
 
-适用：想让评审者在读 diff 前先看到系统结构和数据流变化，有 GitHub、GitLab、Bitbucket 之一，或愿意在本地终端先看图；想在 push 前先让 AI 做一遍评审，有 macOS、Linux（Windows 用 WSL）、Node 22+、git，且已登录 Claude Code 或 Codex；想让编码代理主动找漏洞，所用工具支持子代理或子任务机制；已经在用 Claude Code 且有代码或 PR 需要审查；项目使用 TypeScript 且已用 Oxlint；想让提交者本人是否读懂 agent 改动变成 push 前必须回答的问题，有可设置保护分支的 Git 仓库和 Node 22.19+；想先让 AI 写失败测试、用文档门禁和分层验证建立可验证信心；使用 Codex 并想把 AI 改动后的审阅做成可复核记录；已经有人工审批但缺少风险地图，使用 TypeScript/React、Go 或 Python 服务；使用 Claude Code 或 Codex 并想在静态优先、不跑构建和覆盖率的前提下让每条发现带可审计证据；使用 Apple silicon Mac、macOS 15+、Rex、Homebrew，想让每一轮 agent 回复后的 Last Turn 自动出现并回灌行级评论；想在普通 review 里用最小成本让 agent 每次以独立审查者身份审 diff；想把 AI 生成的长 PR 描述折叠起来，让评审先看人类筛选的一句话和截图，PR 托管在 GitHub 并使用 GitHub Markdown。
+适用：想让评审者在读 diff 前先看到系统结构和数据流变化，有 GitHub、GitLab、Bitbucket 之一，或愿意在本地终端先看图；想在 push 前先让 AI 做一遍评审，有 macOS、Linux（Windows 用 WSL）、Node 22+、git，且已登录 Claude Code 或 Codex；想让编码代理主动找漏洞，所用工具支持子代理或子任务机制；已经在用 Claude Code 且有代码或 PR 需要审查；项目使用 TypeScript 且已用 Oxlint；想让提交者本人是否读懂 agent 改动变成 push 前必须回答的问题，有可设置保护分支的 Git 仓库和 Node 22.19+；想先让 AI 写失败测试、用文档门禁和分层验证建立可验证信心；使用 Codex 并想把 AI 改动后的审阅做成可复核记录；已经有人工审批但缺少风险地图，使用 TypeScript/React、Go 或 Python 服务；使用 Claude Code 或 Codex 并想在静态优先、不跑构建和覆盖率的前提下让每条发现带可审计证据；使用 Apple silicon Mac、macOS 15+、Rex、Homebrew，想让每一轮 agent 回复后的 Last Turn 自动出现并回灌行级评论；想在普通 review 里用最小成本让 agent 每次以独立审查者身份审 diff；想把 AI 生成的长 PR 描述折叠起来，让评审先看人类筛选的一句话和截图，PR 托管在 GitHub 并使用 GitHub Markdown；使用 Claude Code，且有一次可能涉及大表、加索引、改表结构的数据库迁移要准备，能提供现有 schema、迁移文件和临时数据库，有人工复核和回滚方案，愿意先在 staging 或临时环境做同题对照。
 
-不适用或要谨慎：关键仓库、合规要求高的仓库只建议先在非关键仓库试点；PR Lens、OpenQodex、Sphinx、kyy-logs/code-review-skill、rexmod 都会把 diff 或代码送进所选模型或 agent 的上下文，数据边界要按既有合规判断处理；PR Lens 的 Action 不保留状态，GitLab 上 `CI_JOB_TOKEN` 不能发评论，Bitbucket 上 fork PR 不触发 pipeline；OpenQodex 仍在 1.0 之前、仓库仅 30 stars、单次评审 1 到 3 分钟且消费自己的额度，还不够格直接当默认门禁；Claude Code `/code-review` 来源是个人推文，缺参数拼接语法、档位全名、权限与配置说明、适用版本；对抗审查依赖子代理机制，双重检查由同一个模型完成，存在自我确认偏差；ai-deslop 只适用于 TypeScript + Oxlint，规则较 opinionated；Uber 路线素材是节目页要点，不是完整文字稿，没有可复制配置；Claude Code 团队流程是团队级做法，不是零成本开关；Sphinx 是新项目，长期维护未知，`sphinx yolo` 不能当日常路径；Ask HN 是评论集合，不是教程；Simple Reviewer 是 Codex skill，生成器只校验和渲染记录，不执行记录内命令，也不自行发现语义缺陷；Farol 的评分和 verdict 阈值是启发式，必须先用 `farol calibrate` 在自己的历史上校准，且它只提示、不批准、不 request changes、不 fail check；kyy-logs/code-review-skill 是 beta，probe contract、report schema、gate behavior 在 1.0 前可能变化，干净报告不保证改动正确；rexmod 是非官方二进制 patch，单作者，只支持 Apple silicon Mac 和 macOS 15+，评论只回灌给 Rex 内绑定的 agent pane；路线十三只有两条 prompt 规则，没有完整流程和验证数据，不能作为唯一审查，也不能用于安全关键系统的最终把关；路线十四只有作者个人体验和 5 个 PR 示例，没有量化数据，折叠可能让评审忽略重要细节，人工写开头会增加编辑成本，非 GitHub 平台是否支持该标签原文没有讨论。
+不适用或要谨慎：关键仓库、合规要求高的仓库只建议先在非关键仓库试点；PR Lens、OpenQodex、Sphinx、kyy-logs/code-review-skill、rexmod 都会把 diff 或代码送进所选模型或 agent 的上下文，数据边界要按既有合规判断处理；PR Lens 的 Action 不保留状态，GitLab 上 `CI_JOB_TOKEN` 不能发评论，Bitbucket 上 fork PR 不触发 pipeline；OpenQodex 仍在 1.0 之前、仓库仅 30 stars、单次评审 1 到 3 分钟且消费自己的额度，还不够格直接当默认门禁；Claude Code `/code-review` 来源是个人推文，缺参数拼接语法、档位全名、权限与配置说明、适用版本；对抗审查依赖子代理机制，双重检查由同一个模型完成，存在自我确认偏差；ai-deslop 只适用于 TypeScript + Oxlint，规则较 opinionated；Uber 路线素材是节目页要点，不是完整文字稿，没有可复制配置；Claude Code 团队流程是团队级做法，不是零成本开关；Sphinx 是新项目，长期维护未知，`sphinx yolo` 不能当日常路径；Ask HN 是评论集合，不是教程；Simple Reviewer 是 Codex skill，生成器只校验和渲染记录，不执行记录内命令，也不自行发现语义缺陷；Farol 的评分和 verdict 阈值是启发式，必须先用 `farol calibrate` 在自己的历史上校准，且它只提示、不批准、不 request changes、不 fail check；kyy-logs/code-review-skill 是 beta，probe contract、report schema、gate behavior 在 1.0 前可能变化，干净报告不保证改动正确；rexmod 是非官方二进制 patch，单作者，只支持 Apple silicon Mac 和 macOS 15+，评论只回灌给 Rex 内绑定的 agent pane；路线十三只有两条 prompt 规则，没有完整流程和验证数据，不能作为唯一审查，也不能用于安全关键系统的最终把关；路线十四只有作者个人体验和 5 个 PR 示例，没有量化数据，折叠可能让评审忽略重要细节，人工写开头会增加编辑成本，非 GitHub 平台是否支持该标签原文没有讨论；路线十五只有一条 X 推文和作者自测，没有评分标准、模型版本、数据库类型、完整提示词或生产验证，安装命令参数写作 `–agent`（短破折号），执行前先确认，`CREATE INDEX CONCURRENTLY` 不是所有数据库都支持，不能替代人工复核、回滚方案和生产权限控制。
 
 ## 前置条件
 
@@ -52,6 +54,8 @@ Sphinx 把“提交者是否理解”做成一个 Git hook：在 agent 生成的
 
 路线十四（PR 描述折叠）：PR 托管在 GitHub，PR 描述使用 GitHub Markdown；已经有一段由编程智能体生成的完整 PR 描述；你有编辑 PR 描述的权限；知道模型名和 effort；可选截图。
 
+路线十五（数据库迁移评审 agent）：已使用 Claude Code；项目有可读取的 schema 和迁移文件；有一个可创建/使用的临时数据库；迁移涉及的表或业务允许在 staging 或临时库试跑；有 Node/npx 环境；有人工复核和回滚方案。原文没有给出权限配置、连接方式或安全边界。
+
 ## 操作步骤
 
 先选路线：
@@ -71,7 +75,8 @@ Sphinx 把“提交者是否理解”做成一个 Git hook：在 agent 生成的
 - 想让每一轮 agent 回复后自动出现 Last Turn，在 diff 行上写评论并随下一条消息回灌：走路线十二，做法 AB1 到 AB7。仅 Apple silicon Mac + Rex + 四种 agent 小范围试。
 - 想在普通代码 review 里用最小成本让 agent 每次都以独立审查者身份审 diff、并让人复核它的 block 意见：走路线十三，做法 AC1 到 AC3。先小范围试，不要用于安全关键系统的最终把关。
 - 想让 AI 生成的长 PR 描述不再淹没评审：走路线十四，做法 AD1 到 AD3。先小范围试用，用评审反馈验证。
-- 十五条路线阶段不同，可叠加。若只能选一个，先按你的主要缺口选。
+- 想在上线前检查一次可能锁表、破坏旧版本应用的数据库迁移：走路线十五，做法 AE1 到 AE5。先在一个非关键迁移上试，不直接用于生产。
+- 十六条路线阶段不同，可叠加。若只能选一个，先按你的主要缺口选。
 
 ### 路线零：用 Claude Code 内置的 `/code-review`（做法 S）
 
@@ -631,9 +636,51 @@ Plugins implement `register_agent_reference_types(datasette)` ...
 2. 记住标签顺序：`summary` 是可点击的摘要行，`details` 包裹其余全部内容。作者建议口头记作“details-summary”，即先 `details` 后 `summary`。
 3. 先小范围试用，用评审反馈验证。折叠完整说明可能让评审忽略重要细节；如果评审者仍然不读折叠内容或遗漏关键细节，应回到更短、更结构化的 PR 描述，而不是只依赖折叠。
 
+### 路线十五：在数据库迁移上线前检查锁风险、破坏性变更并试跑（database-architect agent，做法 AE1 到 AE5）
+
+前提：已使用 Claude Code；目标项目有可读取的 schema 和迁移文件；有一个可创建/使用的临时数据库；迁移涉及的表或业务允许在 staging 或临时库试跑；有 Node/npx 环境；有人工复核和回滚方案。原文没有给出权限配置、连接方式或安全边界，先在一个非关键迁移上试，不要直接用于生产关键迁移。
+
+#### 做法 AE1：安装 agent
+
+在具备 Node/npx 的环境中执行原文命令：
+
+```bash
+npx claude-code-templates@latest –agent database/database-architect
+```
+
+原推文中的参数写作 `–agent`（短破折号）。执行前应先用该 CLI 的帮助信息确认实际参数写法，不要在不确认的情况下直接改动或用于生产。
+
+预期结果：Claude Code 能识别 `database-architect` agent。原文没有给出安装后的验证命令。
+
+#### 做法 AE2：把迁移上下文交给 agent
+
+让 Claude Code 使用该 agent 处理一次具体迁移，要求它先读取现有 schema 和 migrations，再输出迁移计划。原文明确列出的检查项包括：锁风险、破坏性变更、滚动部署策略，以及使用 `lock_timeout` 和 `CREATE INDEX CONCURRENTLY`，并在完成前到临时数据库试跑。
+
+原文没有给出完整提示词，因此这里只要求覆盖其列出的检查项，不补造具体提示词。
+
+预期结果：得到一份迁移计划，里面标出可能的锁风险、破坏性变更和滚动部署注意事项。
+
+#### 做法 AE3：先评估再修改
+
+在真正改迁移文件前，让 agent 标出哪些操作可能阻塞运行中的应用、哪些变更不可逆或会破坏旧版本应用。原文没有给出完整提示词，也没有说明数据库类型、权限配置和完整回滚流程。
+
+预期结果：在改文件之前先得到风险清单，而不是直接拿到一份已经改好的迁移。
+
+#### 做法 AE4：在临时数据库试跑
+
+按原文描述，在 agent 完成前让它到临时数据库执行或验证迁移。需要提前准备临时库，并确认试跑不会触碰生产数据。
+
+预期结果：迁移在临时库上跑过一遍，暴露出失败、锁等待或数据风险。人工要确认 `CREATE INDEX CONCURRENTLY` 等语句是否符合目标数据库类型、事务约束和回滚方案。
+
+#### 做法 AE5：人工复核后再用于真实迁移
+
+把 agent 的输出当作部署前检查清单，而不是自动上线依据。尤其要人工确认 `CREATE INDEX CONCURRENTLY` 等语句是否符合目标数据库类型、事务约束和回滚方案。原文没有说明数据库类型、权限配置和完整回滚流程。
+
+预期结果：人工拿着风险清单和临时库试跑结果决定是否上线，并保留回滚方案。没有人工复核，不要把它接成自动放行。
+
 ## 怎么判断变好了
 
-十五条路线都只建议小范围试点，没有统一的建议时长，也没有统一的检出率、误报率、返工时间等量化效果数据。可以按下面方式自己量。
+十六条路线都只建议小范围试点，没有统一的建议时长，也没有统一的检出率、误报率、返工时间等量化效果数据。可以按下面方式自己量。
 
 - Claude Code `/code-review`：选一个已完成、本来就要人工 review 的真实 PR 或一次提交作为对照样本；先原样跑一次 `/code-review`，记录问题清单；对照人工 review 结论，标记真 bug、误报、漏掉但人工发现的 bug；再试 `--fix`，只做 diff 对比，先不提交；结果可接受再试 `--comment`。指标：真实 bug 命中数除以总报出数、漏检数、审阅耗时、`--fix` 采纳比例、`--comment` 被回应或采纳比例。
 - PR Lens：选一个非关键仓库，挑一批中等规模 PR，用 CLI 或 GitHub App 把改动画成架构或数据流图再进入评审。指标：命名修正条数、`validate` 通过率、评审中的理解性问题数量。
@@ -650,8 +697,9 @@ Plugins implement `register_agent_reference_types(datasette)` ...
 - 路线十二（rexmod）：选 3–5 个真实小任务，每个任务完整跑一轮 Prompt → Change → Review → Feedback。指标：Last Turn 是否每轮都出现、空置率、每轮评论数、评论随下条消息回灌比例、agent 下一轮是否针对评论改、返工轮数、单轮复核分钟数、双 Codex pane 时评论 pending 次数、跳过或不用面板的次数。原文没有给任何效果数据，这些指标由本手册提出，不是原文验证。
 - 路线十三：选少量近期已有真人 review 的 issue 或 PR，复制其 diff 与 issue 描述，在新会话中只放原文两条规则，让 agent 输出 block 与不作为 block 的意见；由不知情的 reviewer 对照真人意见复核。不要首次就在高风险仓库试用。指标：block 意见被人工确认有效的比例、误 block 比例、人工 reviewer 已发现但 agent 漏掉的高严重问题、复核耗时。原文无基线，需自己记录试用前后或与真人 review 对照；仅“意见更多”不算改善。
 - 路线十四：选 5 到 10 个由 Claude Code 或 Codex 生成的 PR，统一采用“人类开头一句话 + 可选截图 + `<details><summary>` 折叠完整描述”的格式；保留此前同类 PR 作为对照，或前后对比。建议观察：评审者从打开 PR 到留下第一条实质性评论的时间；完整评审耗时；评审者是否反复询问“这个 PR 到底改了什么”；评审者对“能否快速理解 PR 目的”的自评分数；合并后是否发现因折叠而被忽略的关键问题；作者整理开头所需的额外时间。原文没有给出这些指标，以上是试用设计。判断改善的最低标准：评审理解度上升或评审耗时下降，同时没有增加合并后发现的遗漏问题；如果评审者仍然不读折叠内容或遗漏关键细节，则应回到更短、更结构化的 PR 描述，而不是只依赖折叠。
+- 路线十五：选一条 staging 或临时环境中的真实迁移，最好包含较大表、可能加索引或改表结构，但不要直接用生产关键迁移。用同一模型、同一迁移任务，分别跑普通 Claude Code 和安装 `database-architect` 后的 Claude Code。记录 agent 是否提前指出锁风险、破坏性变更、滚动部署问题；是否在临时数据库完成试跑；是否给出可执行迁移步骤。由人工按事先写好的评分表复核，不要沿用原文未定义的 10 分制。指标：是否发现普通流程漏掉的真实锁风险或破坏性变更；临时库试跑是否通过，是否暴露出迁移失败或数据风险；人工复核评分是否更高且没有引入新的高风险 SQL；迁移准备时间是否可接受，是否减少部署前返工；在 staging 执行时是否出现额外锁等待、失败或需要回滚。原文只有作者自测的 8000 万行表、10 分钟部署窗口、6/10 对 10/10，以及 8 次测试中自动选择该 agent，缺评分标准、模型版本、数据库类型和完整提示词，只能当初步信号。
 
-试多久：Claude Code `/code-review`、PR Lens、OpenQodex、ai-deslop 原文都没给建议时长；至少覆盖一批中等规模 PR 或改动的完整评审周期后再判断。对抗审查建议连续两三个仓库跑下来。路线五建议先跑两周收集基线。路线六应先严后松，用回滚率和事故率做护栏。路线七建议先在一个个人仓库连续记两周。路线八至少覆盖一个完整功能的实现到上线周期。路线九至少做一次正向审阅、一次负向测试、一次证据过期重验。路线十至少覆盖一批中等规模 PR 的完整评审周期，并用自己的历史校准后再判断。路线十一原文没给建议时长；至少跑通一次 worktree、一次 commits、一次干净对照或已修复对照，再决定是否扩大范围。路线十二原文没给建议时长；至少跑完 3–5 个真实小任务，确认 Last Turn 和评论回灌稳定后再扩大范围。路线十三原文没给建议时长；至少覆盖一小批已有真人 review 的 issue/PR，并保留一次与真人意见的对照，再决定是否扩大范围。路线十四原文没给建议时长；至少覆盖 5 到 10 个 AI 生成的长 PR，并保留一批未折叠的同类 PR 作对照，再决定是否固化进模板。
+试多久：Claude Code `/code-review`、PR Lens、OpenQodex、ai-deslop 原文都没给建议时长；至少覆盖一批中等规模 PR 或改动的完整评审周期后再判断。对抗审查建议连续两三个仓库跑下来。路线五建议先跑两周收集基线。路线六应先严后松，用回滚率和事故率做护栏。路线七建议先在一个个人仓库连续记两周。路线八至少覆盖一个完整功能的实现到上线周期。路线九至少做一次正向审阅、一次负向测试、一次证据过期重验。路线十至少覆盖一批中等规模 PR 的完整评审周期，并用自己的历史校准后再判断。路线十一原文没给建议时长；至少跑通一次 worktree、一次 commits、一次干净对照或已修复对照，再决定是否扩大范围。路线十二原文没给建议时长；至少跑完 3–5 个真实小任务，确认 Last Turn 和评论回灌稳定后再扩大范围。路线十三原文没给建议时长；至少覆盖一小批已有真人 review 的 issue/PR，并保留一次与真人意见的对照，再决定是否扩大范围。路线十四原文没给建议时长；至少覆盖 5 到 10 个 AI 生成的长 PR，并保留一批未折叠的同类 PR 作对照，再决定是否固化进模板。路线十五原文没给建议时长；至少覆盖一条真实迁移的完整准备和在临时库试跑，并与普通 Claude Code 对照，再决定是否扩大。
 
 ## 常见坑
 
@@ -670,6 +718,7 @@ Plugins implement `register_agent_reference_types(datasette)` ...
 - 路线十二（rexmod）：非官方二进制 patch，单作者、仓库仅 30 stars，平台与宿主 app 双重绑定；只支持 Apple silicon Mac 和 macOS 15+，别的平台不要照抄。Codex 装完必须 `/hooks` 信任，OpenCode 装完必须退出一次，否则 Last Turn 为空。评论存在工作树的 `.git/rexmod/`，每条绑定写它时的 agent pane；Rex 之外的 agent（别的终端或 app）不会收到。同一仓库开两个 Codex pane 时，Codex 的 hooks 跑在后台 server 里，rexmod 无法判断是哪个 pane 发的消息，于是不猜——评论留在 pending，turn 记录不带 pane；此时要用面板的评论徽标直接粘进面板跟随的 pane。Claude Code / OpenCode / Pi 没有这个限制。Sparkle 更新不了打过补丁的 Rex，需靠 LaunchAgent 每小时检查并重打补丁；`brew upgrade rexmod` 后要再跑一次 `rexmod-setup`。原文没有任何效果数据，demo 视频是加速播放的一分钟，不能当实测耗时；不要把它当默认门禁。
 - 路线十三：原文只有两条 prompt 规则，不是完整流程或工具配置；给出的文本只到第 2 条，可能被截断，无法确认是否有后续规则；没有示例 diff、审查输出、误报或漏报数据，也没有指定模型、工具或协作平台；“对抗式”没有定义；第 2 条把边界 case 判断交给 agent，存在漏掉真实风险的可能，原文未给判断标准；安全关键系统不应只靠这两条规则放行，也不能作为唯一审查。互动数据点赞 25、转发 1、回复 8 不能当效果证据。
 - 路线十四：这是个人博客中的经验主张，没有量化数据证明能缩短评审时间或提升评审质量；“读起来不像 slop”是主观判断。折叠完整说明也可能让评审忽略重要细节；人工写开头会增加一点编辑成本。适用条件是 GitHub PR 或 issue comment、使用 GitHub Markdown、PR 描述由 AI 生成且篇幅较长；非 GitHub 平台是否支持该标签，原文没有讨论。不要只依赖折叠；如果评审者仍然不读折叠内容或遗漏关键细节，应回到更短、更结构化的 PR 描述。
+- 路线十五：来源是一条 X 推文，不是完整教程；安装命令参数写作 `–agent`（短破折号），执行前先查 CLI 帮助；原文没有完整提示词、评分规则、模型版本、数据库类型、迁移 SQL、失败案例或生产验证；6/10 对 10/10 是作者自测，8 次自动选择也没有说明测试条件；`CREATE INDEX CONCURRENTLY` 不是所有数据库都支持；agent 输出只能当部署前检查清单，不能替代人工复核、回滚方案和生产权限控制；原文没有说明权限配置、连接方式和安全边界。
 
 ## 证据与来源
 
@@ -703,7 +752,9 @@ Plugins implement `register_agent_reference_types(datasette)` ...
 
 路线十四来自 Simon Willison 的 `Hide your slop PR descriptions behind`。可照做内容包括人类摘要 + 可选截图 + `<details><summary>` 折叠完整代理说明、`summary` 写模型名和 effort、先 `details` 后 `summary`、可选固化进团队 PR 模板。证据：作者给出个人使用经验和 5 个 PR 示例，包括 datasette PR #3052、#3043、#3042，datasette-agent PR #51，llm PR #1838，并展示了各自的开头文案；还确认 GitHub Markdown 支持 `<details><summary>`。限制：这是个人博客中的经验主张，没有量化数据证明能缩短评审时间或提升评审质量；“读起来不像 slop”是主观判断；折叠完整说明也可能让评审忽略重要细节；人工写开头会增加一点编辑成本；适用条件是 GitHub PR 或 issue comment、使用 GitHub Markdown、PR 描述由 AI 生成且篇幅较长；非 GitHub 平台是否支持该标签，原文没有讨论。
 
-新旧做法差异：原有路线零到十三保留；本次新增路线十四。十五条路线阶段不同，可叠加；若只能选一个，先按你的主要缺口选。路线十四补的是 PR 描述呈现层，不替代路线一到十三的代码审查、证据链、风险地图和人工审批。
+路线十五来自 `@dani_avila7` 推文。可照做内容包括安装命令 `npx claude-code-templates@latest –agent database/database-architect`（参数写作短破折号，需先确认）、读取 schema 和 migrations、识别锁风险与破坏性变更、处理滚动部署、使用 `lock_timeout` 和 `CREATE INDEX CONCURRENTLY`、在临时数据库试跑。数据：作者称在 8000 万行表、部署前 10 分钟准备的场景中，同一提示词下无 agent 为 6/10、有 agent 为 10/10；8 次测试中 Claude 都自动选择了该 agent。限制：只有作者自述，没有评分标准、测试数据集、模型版本、数据库类型、完整提示词、失败案例或生产验证；`CREATE INDEX CONCURRENTLY` 并非所有数据库支持；安装命令参数需确认；原文没有权限配置、连接方式和安全边界。
+
+新旧做法差异：原有路线零到十四保留；本次新增路线十五。十六条路线阶段不同，可叠加；若只能选一个，先按你的主要缺口选。路线十五补的是数据库迁移防护层，不替代路线一到十四的代码审查、证据链、风险地图和人工审批，也不替代测试、CI 和人工复核。
 
 ## 依据的调研
 
@@ -722,3 +773,4 @@ Plugins implement `register_agent_reference_types(datasette)` ...
 - [alpcanaydin/rexmod](../research/radar/2026-11-02/9579-alpcanaydin-rexmod.md)：值得一试，在 Apple silicon Mac + Rex + Claude Code/OpenCode 的组合下，照 README 的三条命令装好后，用 3–5 个真实小任务跑「每轮看 Last Turn → 行级评论 → 评论随下条消息回灌」的闭环，验证是否真的减少返工；理由是它把人工复核智能体产出这件事落到了具体键位、具体存储（.git/rexmod/）和具体 hook 接法上，可照做，但属于非官方二进制 patch、单作者 30 stars、平台与宿主 app 双重绑定且有已知 Codex 多 pane 缺陷，先小范围试。
 - [@jiayuan_jy: 让 Agent 做对抗式 code review 的 prompt：](../research/radar/2026-11-04/10211-agent-code-review-prompt.md)：值得一试，把这两条规则作为“独立审查者”提示词，先小范围用于普通代码 review，并保留人工复核边界与安全判断；原因是原文给出了可直接照搬的规则，但只有两条、无完整流程和验证数据，还不足以直接全面采用。
 - [Hide your slop PR descriptions behind](../research/radar/2026-11-09/11815-hide-your-slop-pr-descriptions-behind.md)：值得一试，建议先在团队 PR 模板中小范围试用：AI 生成的 PR 描述开头保留人类筛选的一句话和截图，完整代理说明折叠进 <details><summary>。这样既保留审计信息，又减少评审被长文淹没的概率；但原文只有作者个人体验，需用评审反馈验证。
+- [@dani_avila7: If you use Claude Code with databases, try this agent 👇](../research/radar/2026-11-14/13419-if-you-use-claude-code-with-databases-try-this-age.md)：值得一试，建议小范围试：在 Claude Code 中安装该 database-architect agent，选一条非关键但接近真实的大表迁移，在 staging 做同题对比，重点看它是否更早发现锁风险、破坏性变更并完成临时库试跑。原文给了安装命令和迁移防护做法，但只有作者自测的 6/10 对 10/10，缺少评分标准与可复现细节，暂不宜直接 adopt。
