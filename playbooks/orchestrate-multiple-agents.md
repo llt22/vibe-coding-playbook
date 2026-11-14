@@ -1,16 +1,16 @@
-# 让多个编码 agent 按任务文件交接，并由独立 QA 放行
+# 让强模型只做规划和验收：四角色分层编排多 agent
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：解决多个编码 agent 协作时状态散在聊天里、角色和审批边界不清、完成没有独立 QA 验收的问题。
-> 先试这一步：先用示例工作区跑通 PM→Developer→QA→人工审批，再在一个低风险仓库用共享任务文件做 1–2 个有验收标准的小任务。
-> 最近修订：2026-11-12
+> 解决的问题：多 agent 并行写同一文件、所有角色都用强模型，成本高且质量无门禁；手册给出一套分层角色、单文件单写者、检查签字的可执行流程。
+> 先试这一步：先选一个需要超过一次会话、可拆成两个独立部分且含重复步骤的任务，用 solo 做基线，再按 brain/builder/checker/routine 四角色顺序模拟一遍。
+> 最近修订：2026-11-14
 
 ## 解决什么问题
 
-单个 AI 回答或单条串行 agent 会话，交付的往往是你没有验证过的结果；多个 agent 之间又常常靠人当消息总线——复制 prompt、等待、粘贴结果。手册把“不满意就重问一次”升级成一套可执行流程：任务写清、并行分工、独立验证、合入门禁、成本检查、注意力路由、共享账本核销、叫停与围栏，以及用角色化 fleet 把 spec、实现、独立 QA 分开；跨机器时再用 hub + runner 把会话接成收件箱，让派活、排队、重投和回执有明确语义。做法 A–AO 覆盖从单次答案竞赛到多项目控制台、文件状态+心跳编排、多 agent 共享账本、长时运行骨架、跨会话/跨人的消息交接、把多个编码 agent 编成有频道、有审批闸门的团队、用显式任务图 + epoch 围栏做本地执行控制面、用 coordinator + coder + qa 三角色起步的角色化交付，以及两层治理：AI 用 CTO/PM/工程师三层把任务单和验收证据固化成交接契约；AJ 用 G0–G7 状态机 + 零依赖 CLI 把基线冻结、审批签名、黑盒 QA 和 fail-closed 校验做成可执行的门。做法 AK 不替换 Claude Code、Codex、Cursor 等 agent，而是在它们之上补一层“桌子”协议——bot 提议，受影响的 owner 批准，该 owner 自己的 bot 执行，另一个席位验证；账本状态到 verified 才算完成，bot 自己说 done 只是发言。做法 AL 用 ai-dev-director 把 HEAD（出 ORDER）、BUILDER（整文件 JSON 提案）、REVIEWER（独立审查）三个订阅 CLI 角色串成一条本地流水线，所有构建只发生在隔离 git worktree，Scope Guard 检查允许路径/保护路径/文件数/diff 上限，REVIEWER fail-closed，验证命令外置在 config.yaml。做法 AM 用 myco 的单 Go 二进制 hub + 每台机器一个 runner，把散在多台机器上的 Claude Code、Codex 等 CLI 会话当成网络节点，消息进入目标 agent 收件箱，runner 长轮询取走、用该消息 resume agent 自己的会话，再把最终输出作为回复投回；消息有租约、未确认会过期重投、5 次失败标记失败。做法 AN 用 tri-agent-orchestrator 的 HANDOFF.md 交接契约和 relay 流水线，把 agy（架构/审计）、claude（实现）、codex（测试/构建/PR）串成三阶段接力；第一阶段 agy 在清单里仍属 watch，所以先做两段式降级试点：只装 claude + codex，架构与边界条件由人或 Claude Code 独立会话完成，但必须照样产出 SPEC.md 和 HANDOFF.md，跑通后再决定是否接第三个 CLI。本次新增做法 AO：用 claude-codex-project-os 生成一个项目工作区骨架，把共享 planning 目录、任务文件、决策记录、仓库规则和 PM/Developer/QA/Reviewer 四类角色固化下来；Claude Code 得到 CLAUDE.md，Codex 得到 AGENTS.md、项目 skills 和角色定义，两个客户端共用同一套任务与状态，新会话可读文件继续；同一仓库同一时间只允许一个 writer，QA 在人工审批前逐条核验验收标准，代码获批不等于 commit、push 或部署获批。共同底线不变：并行和交接只负责产出，接受与否必须由测试、独立 verifier、校验器、接收人本人确认或人工复核决定；消息层和编排层只负责把问题送到、把人叫来，不负责证明结果正确。
+单个 AI 回答或单条串行 agent 会话，交付的往往是你没有验证过的结果；多个 agent 之间又常常靠人当消息总线——复制 prompt、等待、粘贴结果。手册把“不满意就重问一次”升级成一套可执行流程：任务写清、并行分工、独立验证、合入门禁、成本检查、注意力路由、共享账本核销、叫停与围栏，以及用角色化 fleet 把 spec、实现、独立 QA 分开；跨机器时再用 hub + runner 把会话接成收件箱，让派活、排队、重投和回执有明确语义。做法 A–AP 覆盖从单次答案竞赛到多项目控制台、文件状态+心跳编排、多 agent 共享账本、长时运行骨架、跨会话/跨人的消息交接、把多个编码 agent 编成有频道、有审批闸门的团队、用显式任务图 + epoch 围栏做本地执行控制面、用 coordinator + coder + qa 三角色起步的角色化交付，以及两层治理：AI 用 CTO/PM/工程师三层把任务单和验收证据固化成交接契约；AJ 用 G0–G7 状态机 + 零依赖 CLI 把基线冻结、审批签名、黑盒 QA 和 fail-closed 校验做成可执行的门。做法 AK 不替换 Claude Code、Codex、Cursor 等 agent，而是在它们之上补一层“桌子”协议——bot 提议，受影响的 owner 批准，该 owner 自己的 bot 执行，另一个席位验证；账本状态到 verified 才算完成，bot 自己说 done 只是发言。做法 AL 用 ai-dev-director 把 HEAD（出 ORDER）、BUILDER（整文件 JSON 提案）、REVIEWER（独立审查）三个订阅 CLI 角色串成一条本地流水线，所有构建只发生在隔离 git worktree，Scope Guard 检查允许路径/保护路径/文件数/diff 上限，REVIEWER fail-closed，验证命令外置在 config.yaml。做法 AM 用 myco 的单 Go 二进制 hub + 每台机器一个 runner，把散在多台机器上的 Claude Code、Codex 等 CLI 会话当成网络节点，消息进入目标 agent 收件箱，runner 长轮询取走、用该消息 resume agent 自己的会话，再把最终输出作为回复投回；消息有租约、未确认会过期重投、5 次失败标记失败。做法 AN 用 tri-agent-orchestrator 的 HANDOFF.md 交接契约和 relay 流水线，把 agy（架构/审计）、claude（实现）、codex（测试/构建/PR）串成三阶段接力；第一阶段 agy 在清单里仍属 watch，所以先做两段式降级试点：只装 claude + codex，架构与边界条件由人或 Claude Code 独立会话完成，但必须照样产出 SPEC.md 和 HANDOFF.md，跑通后再决定是否接第三个 CLI。做法 AO 用 claude-codex-project-os 生成一个项目工作区骨架，把共享 planning 目录、任务文件、决策记录、仓库规则和 PM/Developer/QA/Reviewer 四类角色固化下来；Claude Code 得到 CLAUDE.md，Codex 得到 AGENTS.md、项目 skills 和角色定义，两个客户端共用同一套任务与状态，新会话可读文件继续；同一仓库同一时间只允许一个 writer，QA 在人工审批前逐条核验验收标准，代码获批不等于 commit、push 或部署获批。做法 AP 用四角色分层编排：最强模型做 brain 只规划、拆分和评判，builder 按 brief 构建，checker 只读审查并签字，routine 用最便宜模型跑重复任务；大脑只由 `/brain` 手动触发，同一文件同一时间绝不让两个 helper 同时改，builder 连续失败两次由 brain 接管，并在 CLAUDE.md 加一行 advisor 约束。共同底线不变：并行和交接只负责产出，接受与否必须由测试、独立 verifier、校验器、接收人本人确认或人工复核决定；消息层和编排层只负责把问题送到、把人叫来，不负责证明结果正确。
 
-做法 A–AO 概览：
+做法 A–AP 概览：
 - A：把不满意的回答送进锦标赛（arena-skill）。
 - B：并行子代理+测试合入闸门（clodfarm）。
 - C：多 harness、多座位的统一编排与恢复（openrig）。
@@ -52,6 +52,7 @@
 - AM：用 myco 的 hub + 每台机器一个 runner，把跨机器/跨会话的 Claude Code、Codex 等 CLI 接成收件箱；myco message send --wait 一对一派活，myco broadcast send --selector 按标签广播，消息有租约、过期重投、5 次失败上限，附件 SHA-256，权限走 per-agent allow-list 与 runner.access（先单机 2–3 个会话跑一两周）。
 - AN：用 tri-agent-orchestrator 的 HANDOFF.md 交接契约和 relay 流水线，把 agy 架构、claude 实现、codex 测试/构建/PR 串成三阶段接力；先两段式降级（claude + codex，人工或独立 Claude 会话做架构），跑通再接 agy。
 - AO：用 claude-codex-project-os 生成共享工作区，用任务文件、决策记录、仓库规则和 PM/Developer/QA/Reviewer 四角色把 Claude Code/Codex 的交接、QA 验收和人工审批固定下来；同一仓库单 writer，安全审查与 QA 最多两轮失败循环。
+- AP：用 brain/builder/checker/routine 四角色分层编排，强模型只做规划与验收，builder 连续失败两次由 brain 接管，单文件单写者，checker 签字才算完成（原文未给 agent 文件内容与完整提示词，先小范围试）。
 
 ## 适用与不适用
 
@@ -61,18 +62,11 @@
 - 你愿意用共享账本记录提案、批准、执行回执和验证结果，并接受“bot 说 done 不算完成，账本 verified 才算完成”。
 - 你想先在一台机器、一张桌子、两个 owner、一个小任务上验证协议本身，而不是一上来铺多机生产。
 - 你已有 A–AJ 中某条路径的验证门禁，AK 可作为“跨 owner 动作”的补充协议，不替代测试、独立 verifier 或合入门禁。
-- AL 适用于 Windows 10/11、Python 3.9+、Git，以及至少两个已用订阅账号登录的 CLI（claude、codex、agy）；你想把“规划、实现、审查”分给不同角色，并让构建只发生在隔离 worktree。
-- AL 适用于一个小仓库或一个明确的小改动：你能把项目级构建/测试命令写进 config.yaml，并接受订阅配额限制。
-- AM 适用于你同时使用至少 2 个 agent CLI（且至少一个是 Claude Code 或 Codex），并且存在跨机器或跨会话的派活需求：你受够了人肉复制 prompt、等待、粘贴结果，想把消息送进目标会话并拿回回复。
-- AM 适用于你能让 hub 常驻（VPS，或本机 + Cloudflare Tunnel / Tailscale Funnel），机器只出站 HTTPS、不需要公网 IP 和开放端口；你愿意先在一台机器上接 2–3 个已登录会话做最小试用。
-- AM 适用于你接受“定时触发要靠外部 cron / GitHub Actions 自己接”，因为编排模板与调度策略在 roadmap 里仍未完成。
-- AN 适用于 macOS 或 Linux、本机已安装并登录 agy（Antigravity）、claude（Claude Code）、codex（Codex CLI），有 git 与 GitHub 推送权限，任务复杂到需要架构、实现、测试/PR 多阶段交接。
-- AN 适用于你愿意先做两段式降级试点：只装 claude + codex，架构由人或 Claude Code 独立会话完成，但必须产出 SPEC.md 和 HANDOFF.md，再让 Codex 照验证清单写测试并验证。
-- AN 适用于把“交接契约”本身当成第一等产物：每个阶段结束都更新 HANDOFF.md，写清做了什么、关键文件、硬约束与决策、交给下一个 agent 的验证清单。
-- AO 适用于你同时使用 Claude Code 或 Codex，想让两个客户端共享同一套 planning 目录、任务文件、决策记录和仓库规则，并在步骤之间切换客户端而项目状态仍在一处。
-- AO 适用于你需要 PM 写任务和分派、Developer 改代码、QA 独立逐条验收、Reviewer/安全审查，并接受人工审批 Git 操作和部署作为单独决策。
-- AO 适用于 Node.js 22+、目标目录是全新的、你接受同一仓库同一时间只允许一个 writer，包括在 Claude Code 和 Codex 之间切换时。
-- AO 适用于小范围试点：先用示例工作区跑通，再在一个低风险仓库做 1–2 个有明确 acceptance criteria 的小任务。
+- AL 适用于 Windows 10/11、Python 3.9+、Git，以及至少两个已用订阅账号登录的 CLI（claude、codex、agy）；你想把“规划、实现、审查”分给不同角色，并让构建只发生在隔离 worktree。AL 适用于一个小仓库或一个明确的小改动：你能把项目级构建/测试命令写进 config.yaml，并接受订阅配额限制。
+- AM 适用于你同时使用至少 2 个 agent CLI（且至少一个是 Claude Code 或 Codex），并且存在跨机器或跨会话的派活需求；你受够了人肉复制 prompt、等待、粘贴结果，想把消息送进目标会话并拿回回复。AM 适用于你能让 hub 常驻（VPS，或本机 + Cloudflare Tunnel / Tailscale Funnel），机器只出站 HTTPS、不需要公网 IP 和开放端口；你愿意先在一台机器上接 2–3 个已登录会话做最小试用。AM 适用于你接受“定时触发要靠外部 cron / GitHub Actions 自己接”，因为编排模板与调度策略在 roadmap 里仍未完成。
+- AN 适用于 macOS 或 Linux、本机已安装并登录 agy（Antigravity）、claude（Claude Code）、codex（Codex CLI），有 git 与 GitHub 推送权限，任务复杂到需要架构、实现、测试/PR 多阶段交接。AN 适用于你愿意先做两段式降级试点：只装 claude + codex，架构由人或 Claude Code 独立会话完成，但必须产出 SPEC.md 和 HANDOFF.md，再让 Codex 照验证清单写测试并验证。AN 适用于把“交接契约”本身当成第一等产物：每个阶段结束都更新 HANDOFF.md，写清做了什么、关键文件、硬约束与决策、交给下一个 agent 的验证清单。
+- AO 适用于你同时使用 Claude Code 或 Codex，想让两个客户端共享同一套 planning 目录、任务文件、决策记录和仓库规则，并在步骤之间切换客户端而项目状态仍在一处。AO 适用于你需要 PM 写任务和分派、Developer 改代码、QA 独立逐条验收、Reviewer/安全审查，并接受人工审批 Git 操作和部署作为单独决策。AO 适用于 Node.js 22+、目标目录是全新的、你接受同一仓库同一时间只允许一个 writer，包括在 Claude Code 和 Codex 之间切换时。AO 适用于小范围试点：先用示例工作区跑通，再在一个低风险仓库做 1–2 个有明确 acceptance criteria 的小任务。
+- AP 适用于任务满足原文三类委派之一：可拆成独立部分、单次会话做不完、含可重复任务；你愿意把强模型限制在规划和验收，并接受单文件单写者和 checker 签字。AP 适用于你能为每个角色单独准备 agent 文件并绑定模型；若工具不能单独绑模型，可先用顺序模拟降级验证流程。AP 适用于你愿意用自己账单核对成本，不把原文的 80x 成本差和 7x token 说法当成已验证结论。
 
 **不适用**
 - 你只需要单 agent 串行问答，或任务没有跨 owner 的批准/执行/验证分离，AK 的席位和审批会变成额外开销。
@@ -82,36 +76,18 @@
 - 你把“多 agent 跑通”当成结果正确性的证明；AK 只负责审批、执行、验证和账本，不证明业务结果对。
 - 你需要已经量化过的缓存收益；调研中作者自己承认 prompt 缓存命中率尚未测量和调优，不能把缓存收益当成已验证结论。
 - 你要把 AK 直接写进团队生产规范；它仍是 v0.1、生态很早期，建议小范围试用。
-- AL 在 macOS/Linux 上代码已备但作者未在真机验证；不要把未验证平台直接当生产方案。
-- AL 需要已登录订阅 CLI，不需要也不要使用按量付费 API；只有 1 个 CLI 或没有订阅登录时不要硬套。
-- AL 的 BUILDER 用整文件 JSON 提案，大型改动会撞 CLI 输出上限；大改先拆小，或压缩重试、换供应商。
-- 你需要跨 owner 审批时仍走 AK；需要 G0–G7 审批/冻结状态机时仍走 AJ；需要 coordinator + coder + qa 三角色 fleet 时仍走 AH。AL 是单机三角色流水线，不替代这些治理层。
-- 你的场景只是单机单 agent；AM 的收益接近于零，直接用 Claude Code 或 Codex 即可。
-- 你需要内置的编排模板、调度策略、团队/角色、会话 fork 或 MCP endpoint；这些在 myco 的 roadmap 里仍是未完成项，不要当成已有能力。
-- 你需要 hub 的高可用、备份、SQLite 规模上限或并发上限数据；README 没有给出，hub 目前是单点。
-- 你要在 Windows 上直接上生产：myco 的 Windows 客户端标注 preview 且未代码签名，首次运行需“More info → Run anyway”；不适合作为首个试点。
-- 你准备把 Cursor、Gemini、OpenCode 作为首个试点：它们在 myco 里是 preset experimental，属于“两个未成熟叠在一起”，不宜先用。
-- 你无法管理 join link 和 per-agent allow-list；这套东西的权限边界靠这两样，不能默认“接进来就安全”。
-- 你需要现成的效果 benchmark；myco 的 README 没有任务成功率、延迟或对比实验，必须自建指标。
-- AN 不适合小改动或单文件任务：写 HANDOFF.md 的开销可能大于收益；任务复杂度不足以覆盖多阶段交接成本时不要用。
-- AN 强依赖 agy，而 Antigravity 在清单里仍处于 watch；如果 agy 不可用，要退化为 claude + codex 两段式，HANDOFF.md 契约本身与 agent 数量无关，可以照常使用。
-- AN 没有量化数据、没有对比实验、没有真实项目结果；仓库仅 30 stars，属于早期个人项目，不要把 README 的“preventing hallucination cascades”“delivering production-ready, verified code”当成已验证收益。
-- AN 的 workflows/*.md 具体步骤、lib/ 实现质量无法从材料判断；原文只给文件名与用途，不要臆造第 9 步之后的流程。
-- AO 不适合小任务或没有多角色收益的任务：任务文件、QA 记录和审批门会增加流程开销。
-- AO 的安装器只生成工作区，不启动 agent、不发模型请求；不要把它当成自动调度器。
-- AO 需要同一仓库单 writer；如果你要让多个 agent 同时写同一仓库，先用 AL 的隔离 worktree 或 AK 的 owner 协议，不要把 AO 的共享任务文件当成并行写锁。
-- AO 只有 README 材料，没有量化效果数据、案例对比、返工率或时间节省数据；不要把它当成已验证的质量收益。
-- AO 的 worker cap 只有 lean/standard/heavy，模型偏好记录在 .project-os.json；README 没有给出该 JSON 完整样例，实际以生成文件为准。
-- AO 不能自动选择命名角色时，需要 PM 在委派说明中带上该角色的完整指令，手动会话是回退方案。
-- AO 不能替代 AK 的 owner 签名、AJ 的 G0–G7、AL 的隔离 worktree/Scope Guard、AN 的 HANDOFF 契约、AH 的三角色 fleet；需要这些治理层时仍走对应路径。
+- AL 在 macOS/Linux 上代码已备但作者未在真机验证；不要把未验证平台直接当生产方案。AL 需要已登录订阅 CLI，不需要也不要使用按量付费 API；只有 1 个 CLI 或没有订阅登录时不要硬套。AL 的 BUILDER 用整文件 JSON 提案，大型改动会撞 CLI 输出上限；大改先拆小，或压缩重试、换供应商。你需要跨 owner 审批时仍走 AK；需要 G0–G7 审批/冻结状态机时仍走 AJ；需要 coordinator + coder + qa 三角色 fleet 时仍走 AH。AL 是单机三角色流水线，不替代这些治理层。
+- 你的场景只是单机单 agent；AM 的收益接近于零，直接用 Claude Code 或 Codex 即可。你需要内置的编排模板、调度策略、团队/角色、会话 fork 或 MCP endpoint；这些在 myco 的 roadmap 里仍是未完成项，不要当成已有能力。你需要 hub 的高可用、备份、SQLite 规模上限或并发上限数据；README 没有给出，hub 目前是单点。你要在 Windows 上直接上生产：myco 的 Windows 客户端标注 preview 且未代码签名，首次运行需“More info → Run anyway”；不适合作为首个试点。你准备把 Cursor、Gemini、OpenCode 作为首个试点：它们在 myco 里是 preset experimental，属于“两个未成熟叠在一起”，不宜先用。你无法管理 join link 和 per-agent allow-list；这套东西的权限边界靠这两样，不能默认“接进来就安全”。你需要现成的效果 benchmark；myco 的 README 没有任务成功率、延迟或对比实验，必须自建指标。
+- AN 不适合小改动或单文件任务：写 HANDOFF.md 的开销可能大于收益；任务复杂度不足以覆盖多阶段交接成本时不要用。AN 强依赖 agy，而 Antigravity 在清单里仍处于 watch；如果 agy 不可用，要退化为 claude + codex 两段式，HANDOFF.md 契约本身与 agent 数量无关，可以照常使用。AN 没有量化数据、没有对比实验、没有真实项目结果；仓库仅 30 stars，属于早期个人项目，不要把 README 的“preventing hallucination cascades”“delivering production-ready, verified code”当成已验证收益。AN 的 workflows/*.md 具体步骤、lib/ 实现质量无法从材料判断；原文只给文件名与用途，不要臆造第 9 步之后的流程。
+- AO 不适合小任务或没有多角色收益的任务：任务文件、QA 记录和审批门会增加流程开销。AO 的安装器只生成工作区，不启动 agent、不发模型请求；不要把它当成自动调度器。AO 需要同一仓库单 writer；如果你要让多个 agent 同时写同一仓库，先用 AL 的隔离 worktree 或 AK 的 owner 协议，不要把 AO 的共享任务文件当成并行写锁。AO 只有 README 材料，没有量化效果数据、案例对比、返工率或时间节省数据；不要把它当成已验证的质量收益。AO 的 worker cap 只有 lean/standard/heavy，模型偏好记录在 .project-os.json；README 没有给出该 JSON 完整样例，实际以生成文件为准。AO 不能自动选择命名角色时，需要 PM 在委派说明中带上该角色的完整指令，手动会话是回退方案。AO 不能替代 AK 的 owner 签名、AJ 的 G0–G7、AL 的隔离 worktree/Scope Guard、AN 的 HANDOFF 契约、AH 的三角色 fleet；需要这些治理层时仍走对应路径。
+- AP 不适合小任务或能一次会话做完的任务：原文称 plan mode 下 agent teams 的 token 消耗是 solo session 的 7 倍，规划和协调开销可能不划算；这是作者主张，但小任务不要先上多智能体。AP 要求同一文件同一时间不能有两个 helper 同时改；切不开文件所有权时不要用。AP 原文没有给出四个 agent 文件的具体内容、可直接复制的命令或完整提示词；不能按工具文档落地 agent 文件时，只能用顺序模拟降级。AP 没有质量、返工、缺陷率数据；模型名、价格对和 80x 成本差均为作者主张，不能当成已验证收益。AP 不能替代 AK 的 owner 签名、AJ 的 G0–G7、AL 的隔离 worktree/Scope Guard、AN 的 HANDOFF 契约、AH 的三角色 fleet；需要这些治理层时仍走对应路径。
 
-**A–AO 的适用路径选择**：单回答竞赛用 A；可拆分有测试的编码任务用 B；多 harness 用 C；同会话升档用 D；长时程底座用 E；固定多步流水线用 F；GitHub 小仓库自动链路用 G；轻量 worktree 隔离用 H；macOS 通知用 I；同 commit 独立验证用 J；多项目控制台用 K；daemon+dashboard 用 L；主 Agent 集中验证用 M；商业决策委员会用 N；菜单栏审批用 O；tmux 会话团队用 P；阶段成本检查用 Q；持续 issue/PR 值守用 R；实验性 agent teams 用 S；服务端并发落库用 T；worktree 副本用 U；后台子代理调度用 V；Bot 编排层用 W；本地控制台与危机室用 X；按类别并行代码审查用 Y；文件状态+heartbeat 编排用 Z；止损预算用 AA；共享账本核销用 AB；长时运行骨架用 AC；跨会话消息交接用 AD；频道化代理团队用 AE；project+to-dos+自动化用 AF；任务图+epoch 围栏用 AG；三角色 fleet 用 AH；CTO/PM/工程师交接契约用 AI；G0–G7 治理门用 AJ；跨 owner 的 propose→approve→execute→verify 用 AK；Windows 上 HEAD/BUILDER/REVIEWER 三角色 + 隔离 worktree + Scope Guard 用 AL；跨机器/跨会话派活、需要离线排队和重投语义用 AM；macOS/Linux 上 agy/claude/codex 三阶段交接、核心产物是 HANDOFF.md 用 AN；Claude Code/Codex 共享任务文件、PM/Developer/QA/Reviewer 分工、人工审批和单 writer 用 AO。若只是同机跨会话交接，先用 AD 更轻；若需要把别的机器上的会话也接进来、消息要能排队并在机器宕机后重投，用 AM。两者都是消息层，都不证明结果正确。AN 与 AL 都是多 CLI 流水线，但 AL 有隔离 worktree、Scope Guard、验证命令外置和 fail-closed REVIEWER；AN 的核心是 HANDOFF.md 交接契约和 relay workflow，没有这些门禁，不能替代 AL/AK/AJ/AH。AO 是文件化协作与验收层，和 AI 的 CTO/PM/工程师三层相似但不同：AO 用共享 planning 目录、任务文件、决策记录、仓库规则和 PM/Developer/QA/Reviewer 四角色，跨 Claude Code/Codex 共用状态；AI 是任务单和验收证据的交接契约。AO 不替代 AK/AJ/AL/AN/AH。
+**A–AP 的适用路径选择**：单回答竞赛用 A；可拆分有测试的编码任务用 B；多 harness 用 C；同会话升档用 D；长时程底座用 E；固定多步流水线用 F；GitHub 小仓库自动链路用 G；轻量 worktree 隔离用 H；macOS 通知用 I；同 commit 独立验证用 J；多项目控制台用 K；daemon+dashboard 用 L；主 Agent 集中验证用 M；商业决策委员会用 N；菜单栏审批用 O；tmux 会话团队用 P；阶段成本检查用 Q；持续 issue/PR 值守用 R；实验性 agent teams 用 S；服务端并发落库用 T；worktree 副本用 U；后台子代理调度用 V；Bot 编排层用 W；本地控制台与危机室用 X；按类别并行代码审查用 Y；文件状态+heartbeat 编排用 Z；止损预算用 AA；共享账本核销用 AB；长时运行骨架用 AC；跨会话消息交接用 AD；频道化代理团队用 AE；project+to-dos+自动化用 AF；任务图+epoch 围栏用 AG；三角色 fleet 用 AH；CTO/PM/工程师交接契约用 AI；G0–G7 治理门用 AJ；跨 owner 的 propose→approve→execute→verify 用 AK；Windows 上 HEAD/BUILDER/REVIEWER 三角色 + 隔离 worktree + Scope Guard 用 AL；跨机器/跨会话派活、需要离线排队和重投语义用 AM；macOS/Linux 上 agy/claude/codex 三阶段交接、核心产物是 HANDOFF.md 用 AN；Claude Code/Codex 共享任务文件、PM/Developer/QA/Reviewer 分工、人工审批和单 writer 用 AO；任务可拆、含重复步骤、需要把强模型限制在规划和验收、且能单文件单写者用 AP。若只是同机跨会话交接，先用 AD 更轻；若需要把别的机器上的会话也接进来、消息要能排队并在机器宕机后重投，用 AM。两者都是消息层，都不证明结果正确。AN 与 AL 都是多 CLI 流水线，但 AL 有隔离 worktree、Scope Guard、验证命令外置和 fail-closed REVIEWER；AN 的核心是 HANDOFF.md 交接契约和 relay workflow，没有这些门禁，不能替代 AL/AK/AJ/AH。AO 是文件化协作与验收层，和 AI 的 CTO/PM/工程师三层相似但不同：AO 用共享 planning 目录、任务文件、决策记录、仓库规则和 PM/Developer/QA/Reviewer 四角色，跨 Claude Code/Codex 共用状态；AI 是任务单和验收证据的交接契约。AO 不替代 AK/AJ/AL/AN/AH。AP 是单机四角色分层编排，不是跨 owner 审批协议；需要跨 owner 时仍走 AK，需要 G0–G7 时仍走 AJ，需要隔离 worktree 时仍走 AL。
 
 ## 前置条件
 
 - 共同前提：把任务写成独立、自包含的文件；子代理看不到你的聊天记录，任务文件是它唯一的信息源。每条路径先做最小试用，不先上全量。
-- AO 前置：Node.js 22 或更高版本；已准备好 Claude Code 或 Codex；目标目录必须是新的；README 说明无需安装 npm 包；安装器不会改动已有仓库和全局客户端设置，也不会启动 agent 或发模型请求；同一仓库同一时间只允许一个 writer；代码获批不等于 commit、push 或部署获批。
-- AO 安装与初始化：
+- AO 前置：Node.js 22 或更高版本；已准备好 Claude Code 或 Codex；目标目录必须是新的；README 说明无需安装 npm 包；安装器不会改动已有仓库和全局客户端设置，也不会启动 agent 或发模型请求；同一仓库同一时间只允许一个 writer；代码获批不等于 commit、push 或部署获批。AO 安装与初始化：
 ```sh
 git clone https://github.com/ferhatcore/claude-codex-project-os.git
 cd claude-codex-project-os
@@ -119,22 +95,19 @@ node scripts/init.mjs --target ../claude-demo --example --runtime claude
 node scripts/init.mjs --target ../codex-demo --example --runtime codex
 node scripts/init.mjs --target ../shared-demo --example --runtime both
 ```
-用于自己的项目时去掉 --example，并用 --name 指定项目名。预期：生成新的工作区；Claude Code 得到 CLAUDE.md，Codex 得到 AGENTS.md、项目 skills 和四个角色定义；共享 planning 目录、任务文件、决策记录和仓库规则就位。
-- AO 示例自检：
+用于自己的项目时去掉 --example，并用 --name 指定项目名。预期：生成新的工作区；Claude Code 得到 CLAUDE.md，Codex 得到 AGENTS.md、项目 skills 和四个角色定义；共享 planning 目录、任务文件、决策记录和仓库规则就位。AO 示例自检：
 ```sh
 node repos/catalog/catalog.mjs
 node --test repos/catalog/catalog.test.mjs
 ```
-预期：Trailboard 示例的小 CLI 和测试可运行。若示例不通过，先不要接真实仓库。
-- AO 安装器自检：
+预期：Trailboard 示例的小 CLI 和测试可运行。若示例不通过，先不要接真实仓库。AO 安装器自检：
 ```sh
 node scripts/check.mjs
 node --test scripts/system.test.mjs scripts/smoke.test.mjs scripts/runtimes.test.mjs
 node --test examples/trailboard/repos/catalog/catalog.test.mjs
 ```
 预期：安装器检查命令能跑；README 声称覆盖三种 runtime、三种 worker profile、共享任务状态、生成的角色文件、安装拒绝、配置和 fixture 行为，但本材料未展示运行结果或验证记录内容。
-- AN 前置：macOS 或 Linux；本机已安装并登录 agy（Antigravity）、claude（Claude Code）、codex（Codex CLI）；有 git 与 GitHub 推送权限；目标项目里能创建 docs/tri-agent/SPEC*.md 和仓库根目录 HANDOFF.md。两段式降级试点只需 claude + codex。
-- AN 安装与自检：
+- AN 前置：macOS 或 Linux；本机已安装并登录 agy（Antigravity）、claude（Claude Code）、codex（Codex CLI）；有 git 与 GitHub 推送权限；目标项目里能创建 docs/tri-agent/SPEC*.md 和仓库根目录 HANDOFF.md。两段式降级试点只需 claude + codex。AN 安装与自检：
 ```sh
 git clone https://github.com/abhigyan6/tri-agent-orchestrator.git
 cd tri-agent-orchestrator
@@ -142,8 +115,7 @@ cd tri-agent-orchestrator
 ./scripts/install-skill.sh
 ```
 doctor 正常输出应逐行列出三个 agent 的版本号并以 All 3 agent CLIs ... are active and ready! 结尾；任一行不是 ✅ 就先解决该 CLI 的安装问题。install-skill.sh 会安装/软链到 ~/.agents/skills、~/.claude/skills、~/.codex/skills；等价命令为 tri-agent install-skill。
-- AK 前置：Node ≥ 22.19；git；npm；一台单机跑 table host；owner 私钥文件必须私有保管；表配置必须包含 termination；MCP agent 跑在 owner 自己的机器上；能力卡来自 owner 侧文件，不来自 agent 自己。
-- AK 安装与自检：
+- AK 前置：Node ≥ 22.19；git；npm；一台单机跑 table host；owner 私钥文件必须私有保管；表配置必须包含 termination；MCP agent 跑在 owner 自己的机器上；能力卡来自 owner 侧文件，不来自 agent 自己。AK 安装与自检：
 ```sh
 git clone https://github.com/MiniMax-AI/mcode-agent-table
 cd mcode-agent-table
@@ -152,53 +124,54 @@ npm test
 npm run demo:scripted
 ```
 demo:scripted 离线跑，不需要 API key；npm test 覆盖 core、topologies、tasks、HTTP/SSE、persistence、MCP bridge、Rabbit Hole。
-- AL 前置：Windows 10/11（macOS/Linux 代码已备但作者未验证）、Python 3.9+、Git，以及至少两个已用订阅账号登录的 CLI（claude、codex、agy）；不需要 API key（代码会把所有 *_API_KEY 从环境里剔除）；一个 git 仓库（v3.0 起空文件夹也可 greenfield）；config.yaml 中写项目级验证命令；ORDER 中写允许路径、保护路径、文件数、diff 上限；控制台端口/允许项目列表/桥接 token。理想情况下 HEAD/BUILDER/REVIEWER 分属不同供应商；同供应商会被标 REDUCED_INDEPENDENCE。
-- AL 安装与自检：
+- AL 前置：Windows 10/11（macOS/Linux 代码已备但作者未验证）、Python 3.9+、Git，以及至少两个已用订阅账号登录的 CLI（claude、codex、agy）；不需要 API key（代码会把所有 *_API_KEY 从环境里剔除）；一个 git 仓库（v3.0 起空文件夹也可 greenfield）；config.yaml 中写项目级验证命令；ORDER 中写允许路径、保护路径、文件数、diff 上限；控制台端口/允许项目列表/桥接 token。理想情况下 HEAD/BUILDER/REVIEWER 分属不同供应商；同供应商会被标 REDUCED_INDEPENDENCE。AL 安装与自检：
 ```sh
 pip install -r requirements.txt
 python -m pytest -q
 ```
 作者称测试套件用桩 CLI 运行、不需要真实 CLI；测试数量在文中出现“604 个测试，约 25 分钟”和“593/596”两种说法，数字有出入，以实际运行为准。
-- AM 前置：hub 可达——在自己的 VPS 上用 sslip.io 自动拿真 HTTPS（install-hub.sh --domain auto），或在本机走 Cloudflare Tunnel（myco hub up --tunnel cloudflare --hostname hub.example.com），或走 Tailscale Funnel（myco hub up --tunnel tailscale），也可以用 App 选 Start on this computer / Connect an existing Hub。每台机器能出站访问 HTTPS；runner 和 session 只开 outbound，不需要公网 IP 和开放端口。目标机器上已安装并登录至少一个受支持的 CLI：Claude Code / Codex 为 native stable；Cursor / Gemini / OpenCode 为 preset experimental；Kiro 还需 uv tool install kiro-acp-gateway 且 kiro-cli 已登录。每个 agent 配一份“谁可以给它派活”的 allow-list，runner.access 取 readonly / workspace / full，native harness 会把它映射到该 CLI 自己的权限 flag 上。云端会话不能被 runner spawn，只能用 myco inbox wait 或 waker（webhook / claude_routine / github_dispatch / github_issue）兜底。
-- AM 安装与自检：装客户端一行 curl 完成；加机器用 hub 给出的 join link；myco agent list --online 应能看到在线 agent。先只用一台机器、2–3 个已登录会话，不先接生产凭据。
+- AM 前置：hub 可达——在自己的 VPS 上用 sslip.io 自动拿真 HTTPS（install-hub.sh --domain auto），或在本机走 Cloudflare Tunnel（myco hub up --tunnel cloudflare --hostname hub.example.com），或走 Tailscale Funnel（myco hub up --tunnel tailscale），也可以用 App 选 Start on this computer / Connect an existing Hub。每台机器能出站访问 HTTPS；runner 和 session 只开 outbound，不需要公网 IP 和开放端口。目标机器上已安装并登录至少一个受支持的 CLI：Claude Code / Codex 为 native stable；Cursor / Gemini / OpenCode 为 preset experimental；Kiro 还需 uv tool install kiro-acp-gateway 且 kiro-cli 已登录。每个 agent 配一份“谁可以给它派活”的 allow-list，runner.access 取 readonly / workspace / full，native harness 会把它映射到该 CLI 自己的权限 flag 上。云端会话不能被 runner spawn，只能用 myco inbox wait 或 waker（webhook / claude_routine / github_dispatch / github_issue）兜底。AM 安装与自检：装客户端一行 curl 完成；加机器用 hub 给出的 join link；myco agent list --online 应能看到在线 agent。先只用一台机器、2–3 个已登录会话，不先接生产凭据。
+- AP 前置：原文只要求把任务筛到三类委派之一；准备四个角色文件并分别绑定模型；能设置单文件单写者和 checker 签字；能手动输入 `/brain` 触发规划；能记录每个被接受产出的 token/成本。原文没有给出 agent 文件格式、权限配置和完整提示词，需按你的 agent 工具文档落地；模型名和价格对是作者主张，实际替换为可用模型并用自己账单核对。若工具不能给每个 agent 单独绑模型，先用顺序模拟降级，不先上多 agent 并行。
 - A–AO 前置：按所选路径检查版本、平台、登录和仓库条件；例如 A 需 Claude Code 可 spawn 子 agent，B 需 Docker 和一条验证命令，J 需 git 与 Node 22.13+，AH 需 Hermes Agent，AJ 需 Python 3 和至少 16 字符签名密钥，AN 需三个 CLI 登录或两段式降级，AO 需 Node 22+、Claude Code/Codex 和全新目标目录。没有对应前置就不要硬套。
 
 ## 操作步骤
 
-先按处境选路径。A–AJ 的详细命令保留在索引中；AK、AL、AM、AN、AO 的完整最小路径如下。
+先按处境选路径。A–AJ 的详细命令保留在索引中；AK、AL、AM、AN、AO、AP 的完整最小路径如下。
 
-### 做法 AO：用共享任务文件 + PM/Developer/QA/Reviewer + 人工审批门做跨客户端交接
-1. 确认前提。前提：Node.js 22+；已安装 Claude Code 或 Codex；目标目录是新的；接受同一仓库单 writer。预期：不需要 npm 包；安装器不启动 agent、不发模型请求。
-2. 克隆并生成工作区。前提：在 claude-codex-project-os 仓库根目录。
-```sh
-git clone https://github.com/ferhatcore/claude-codex-project-os.git
-cd claude-codex-project-os
-node scripts/init.mjs --target ../claude-demo --example --runtime claude
-node scripts/init.mjs --target ../codex-demo --example --runtime codex
-node scripts/init.mjs --target ../shared-demo --example --runtime both
+### 做法 AP：用 brain/builder/checker/routine 四角色分层编排，把强模型压在规划和验收
+
+做法 A 和做法 B 怎么选：能对每个 agent 文件单独绑定模型、且任务能拆开文件所有权，用做法 A 四角色分层；工具不能单独绑模型，或你想先验证流程本身，用做法 B 顺序模拟降级。
+
+**做法 A：四角色分层**
+1. 前提筛选。只选满足原文三类委派之一的任务：可拆成独立部分、单次会话做不完、含可重复任务。任务能一次做完时不要上多智能体。原文称 plan mode 下 agent teams 的 token 消耗是 solo session 的 7 倍；这是作者主张，先用自己账单核对。预期：你有一个需要超过一次会话、能拆成至少两个独立部分并含一个重复步骤的任务。
+2. 建四个 agent 文件，每个文件绑定自己的模型：brain/规划者、builder/构建者、checker/检查者、routine/例行执行者。原文的模型分工是 Fable 做 brain、Opus 5.5 做 builder、Sonnet 5.5 做 checker、Haiku 5.5 做 routine；这是原文的模型分工，不是已验证的通用选型，实际使用时替换为你的工具中可用模型。原文没有给出四个 agent 文件的具体内容、语法和完整提示词，需按你的 agent 工具文档配置。预期：每个角色有独立文件、独立模型和明确可写范围。
+3. 定义职责。brain 只规划、拆分和评判返回结果；builder 只按 brief 构建，不自行改需求；checker 只审查、不编辑；routine 只跑重复任务，且不碰代码。预期：没有角色越界写代码或改需求。
+4. 设置触发。brain 只在输入 `/brain` 时运行；不要让它自动触发所有任务。若你的工具不支持斜杠命令，按工具方式手动触发 brain 角色，不要编造不存在的自动触发。预期：规划由人显式开始，日常任务不会无意中拉起最强模型。
+5. 按原文交接顺序执行：
 ```
-预期：生成三个示例工作区；--runtime claude 生成 CLAUDE.md；--runtime codex 生成 AGENTS.md、项目 skills 和四个角色定义；--runtime both 让两个客户端共享同一套 planning 目录、任务文件、决策和仓库规则。用于自己的项目时去掉 --example，并用 --name 指定项目名。
-3. 在客户端里读入口文件。前提：在 Claude Code 或 Codex 中打开生成目录。让 Claude Code 读取 START.md；在 Codex 中也可以调用 $project-os-start。预期：客户端认出 PM、Developer、QA、Reviewer 四类角色和当前任务状态。不能自动选择命名角色时，由 PM 在委派说明中带上该角色的完整指令，手动会话是回退方案。
-4. 先跑示例。前提：生成目录已就绪。
-```sh
-node repos/catalog/catalog.mjs
-node --test repos/catalog/catalog.test.mjs
+I describe the job
+→ Fable writes the spec at $8 / $40
+→ Opus builds at $4 / $20
+→ Sonnet reviews at $2 / $10
+→ Haiku runs routine at $0.10 / $0.50
+→ Builder fails twice, Fable takes over
 ```
-预期：本地阅读清单 Trailboard 的小 CLI 和测试能跑通；示例里有一个待做的状态过滤任务，可用于观察任务文件、QA 和审批门。
-5. 建任务。任务必须写清 repository、scope、branch、acceptance criteria 和 permissions。工作会话要记录改了什么、检查了什么、从哪里继续。QA 要独立核验每条验收标准；如果范围变化，先改任务再继续。预期：新会话能只读任务文件继续，不需要重新解释背景。
-6. 按审批链推进。顺序固定：人给出范围与批准 → PM 写任务和计划 → Developer 修改 → 如需要则安全审查 → QA 验收 → PM 检查完整性 → 人工批准 Git 操作 → 部署作为单独决策。同一仓库同一时间只允许一个 writer，包括在 Claude Code 和 Codex 之间切换时。代码获批不等于 commit、push 或部署获批。安全审查与 QA 合计最多两轮失败循环；第三轮需要新计划与人工批准。预期：每一步都有文件记录，QA 在人工审批前独立指出不符合项。
-7. 检查 .project-os.json。前提：工作区已生成。查看所选 runtime、仓库列表、worker cap 和模型偏好。worker cap 可选 lean、standard 或 heavy；模型 tier 默认继承当前活动模型，直到映射到账户中可用的设置。README 没有给出该 JSON 的完整样例，实际以生成文件为准。预期：配置与实际账户能力一致；不一致时先改配置再派任务。
-8. 验证安装器本身。前提：你想确认安装器行为。
-```sh
-node scripts/check.mjs
-node --test scripts/system.test.mjs scripts/smoke.test.mjs scripts/runtimes.test.mjs
-node --test examples/trailboard/repos/catalog/catalog.test.mjs
+预期：brain 写 spec，builder 按 brief 构建，checker 审查，routine 跑例行任务；builder 连续失败两次后由 brain 接管。价格对和 80x 成本差是原文主张，未说明计价口径，试用时用你自己的账单核对。
+6. 加交接硬约束。同一文件同一时间绝不让两个 helper 同时改；checker 签字后才能算完成；运行前明确每个 agent 的文件所有权和可写范围。原文没有给权限配置，需在工具侧用目录/文件白名单或人工审查补上。预期：不会出现两个 agent 并行改同一文件，也不会出现未签字就宣布完成。
+7. 在 CLAUDE.md 加原文这一行约束：
 ```
-预期：检查命令能跑；README 声称覆盖三种 runtime、三种 worker profile、共享任务状态、生成的角色文件、安装拒绝、配置和 fixture 行为，但本材料未展示运行结果或验证记录内容。
-9. 最小试用。先在临时目录用 --example --runtime both 生成示例工作区，跑 Trailboard 示例和检查命令；再选一个低风险、非关键仓库，用独立的新目标目录初始化，做 1–2 个有明确 acceptance criteria 的小任务。同时用团队现有流程做基线，记录同类任务的时间、返工和上下文重建成本。不要一上来接生产凭据或部署。
+consult the advisor before the approach, on a repeating error, before calling done.
+```
+预期：agent 在开始前、重复出错时、宣布完成前会咨询 advisor；原文只给这一行，没有给更多配置。
+8. 跑 2–3 个同类任务并记录指标。先做 solo 基线，再跑四角色分层。记录每个被接受产出的总 token/成本、端到端耗时、人工干预次数、checker 拒收率、builder 失败与 brain 接管次数、返工次数、缺陷或逃逸问题数。预期：能判断在缺陷不增加的前提下，成本或人工干预是否下降；若 plan mode 的 token 明显超过 solo 且质量无提升，就停止使用多智能体。
+
+**做法 B：顺序模拟降级**
+1. 前提：工具不能给每个 agent 单独绑模型，或你想先验证角色边界和签字规则。保留同一交接顺序：brain 规划 → builder 构建 → checker 审查 → routine 跑重复任务。预期：不先上多 agent 并行，也能验证交接契约。
+2. 仍强制单文件单写者和 checker 签字；builder 连续失败两次后由 brain 接管。预期：顺序流程里也不会出现两个角色同时改同一文件。
+3. 跑 2–3 个同类任务，和 solo 基线对比成本、返工和缺陷；流程稳定后再决定是否自动化。预期：如果顺序模拟已经不能改善成本或质量，不要为了多 agent 而多 agent。
 
 ### 做法 AK：用共享账本+owner 签名席位做跨 owner 的 propose→approve→execute→verify
-1. 环境准备。前提：Node ≥ 22.19，能联网拉依赖。执行上面的 clone、npm install、npm test、npm run demo:scripted。预期：测试通过，离线 demo 能跑完 debate → decision → owner approval → execute → verify。若 demo 不通过，先不要接真实任务。
+1. 环境准备。前提：Node ≥ 22.19，能联网拉依赖。执行上面的 clone、npm install、npm test、npm run demo:scripted。预期：测试通过，离线 demo 能跑完 debate → decision → owner approval → execute → verify。
 2. 起一张桌子。终端 1：
 ```sh
 npx tsx src/cli.ts serve --port 7341 --data ./data
@@ -223,7 +196,7 @@ read 拿到的是本席位投影：稳定前缀（规则、席位、决议）+ �
 
 ### 做法 AL：用 HEAD/BUILDER/REVIEWER 三角色 + 隔离 worktree + Scope Guard 做本地编码流水线
 1. 确认前提。前提：Windows 10/11、Python 3.9+、Git，以及至少两个已用订阅账号登录的 CLI（claude、codex、agy）。不需要 API key；代码会把所有 *_API_KEY 从环境里剔除。若某平台没有 agy，把 BUILDER 改成 codex 或 claude，两个 CLI 也能跑。预期：至少两个订阅 CLI 能在终端启动并已登录；不要用按量付费 API 作为后备。
-2. 装依赖并跑测试。
+2. 装依赖并跑测试：
 ```sh
 pip install -r requirements.txt
 python -m pytest -q
@@ -376,7 +349,37 @@ tri-agent run --workflow relay --prompt 'Build modern auth middleware with JWT r
 预期：下一阶段 agent 能读到“做了什么 / 关键文件 / 硬约束与决策 / 交给下一个 agent 的验证清单”，而不是靠你复述聊天记录。硬约束和验证清单必须写具体，不要只写“已完成”。
 9. 最小试用与放弃信号。用 1–2 天、一个中等规模任务，先两段式降级，跑通后再接 agy 对比两段式与三段式。记录：交接后下一阶段首次即通过验证清单项的比例；人工介入纠偏次数与总返工轮次；交接过程中约束被遗漏的次数；最终 PR 评审意见数量与严重级别分布；从开始到 PR 就绪的总耗时。若两段式试点里 HANDOFF.md 的约束遗漏次数并不低于单 agent 基线，说明瓶颈不在模型分工而在任务描述质量，退回优化提示词与 SPEC，不要继续加 agent。
 
-### 做法 A–AJ 的保留路径索引（AK、AL、AM、AN、AO 见上）
+### 做法 AO：用共享任务文件 + PM/Developer/QA/Reviewer + 人工审批门做跨客户端交接
+1. 确认前提。前提：Node.js 22+；已安装 Claude Code 或 Codex；目标目录是新的；接受同一仓库单 writer。预期：不需要 npm 包；安装器不启动 agent、不发模型请求。
+2. 克隆并生成工作区。前提：在 claude-codex-project-os 仓库根目录。
+```sh
+git clone https://github.com/ferhatcore/claude-codex-project-os.git
+cd claude-codex-project-os
+node scripts/init.mjs --target ../claude-demo --example --runtime claude
+node scripts/init.mjs --target ../codex-demo --example --runtime codex
+node scripts/init.mjs --target ../shared-demo --example --runtime both
+```
+预期：生成三个示例工作区；--runtime claude 生成 CLAUDE.md；--runtime codex 生成 AGENTS.md、项目 skills 和四个角色定义；--runtime both 让两个客户端共享同一套 planning 目录、任务文件、决策和仓库规则。用于自己的项目时去掉 --example，并用 --name 指定项目名。
+3. 在客户端里读入口文件。前提：在 Claude Code 或 Codex 中打开生成目录。让 Claude Code 读取 START.md；在 Codex 中也可以调用 $project-os-start。预期：客户端认出 PM、Developer、QA、Reviewer 四类角色和当前任务状态。不能自动选择命名角色时，由 PM 在委派说明中带上该角色的完整指令，手动会话是回退方案。
+4. 先跑示例。前提：生成目录已就绪。
+```sh
+node repos/catalog/catalog.mjs
+node --test repos/catalog/catalog.test.mjs
+```
+预期：本地阅读清单 Trailboard 的小 CLI 和测试能跑通；示例里有一个待做的状态过滤任务，可用于观察任务文件、QA 和审批门。
+5. 建任务。任务必须写清 repository、scope、branch、acceptance criteria 和 permissions。工作会话要记录改了什么、检查了什么、从哪里继续。QA 要独立核验每条验收标准；如果范围变化，先改任务再继续。预期：新会话能只读任务文件继续，不需要重新解释背景。
+6. 按审批链推进。顺序固定：人给出范围与批准 → PM 写任务和计划 → Developer 修改 → 如需要则安全审查 → QA 验收 → PM 检查完整性 → 人工批准 Git 操作 → 部署作为单独决策。同一仓库同一时间只允许一个 writer，包括在 Claude Code 和 Codex 之间切换时。代码获批不等于 commit、push 或部署获批。安全审查与 QA 合计最多两轮失败循环；第三轮需要新计划与人工批准。预期：每一步都有文件记录，QA 在人工审批前独立指出不符合项。
+7. 检查 .project-os.json。前提：工作区已生成。查看所选 runtime、仓库列表、worker cap 和模型偏好。worker cap 可选 lean、standard 或 heavy；模型 tier 默认继承当前活动模型，直到映射到账户中可用的设置。README 没有给出该 JSON 的完整样例，实际以生成文件为准。预期：配置与实际账户能力一致；不一致时先改配置再派任务。
+8. 验证安装器本身。前提：你想确认安装器行为。
+```sh
+node scripts/check.mjs
+node --test scripts/system.test.mjs scripts/smoke.test.mjs scripts/runtimes.test.mjs
+node --test examples/trailboard/repos/catalog/catalog.test.mjs
+```
+预期：检查命令能跑；README 声称覆盖三种 runtime、三种 worker profile、共享任务状态、生成的角色文件、安装拒绝、配置和 fixture 行为，但本材料未展示运行结果或验证记录内容。
+9. 最小试用。先在临时目录用 --example --runtime both 生成示例工作区，跑 Trailboard 示例和检查命令；再选一个低风险、非关键仓库，用独立的新目标目录初始化，做 1–2 个有明确 acceptance criteria 的小任务。同时用团队现有流程做基线，记录同类任务的时间、返工和上下文重建成本。不要一上来接生产凭据或部署。
+
+### 做法 A–AJ 的保留路径索引（AK、AL、AM、AN、AO、AP 见上）
 - A：装 arena-skill，跑 /arena --quick --seed 7，用 baseline 传入旧答案；看盲评比分和攻击命中。
 - B：装 clodfarm，设 FARM_VERIFY_CMD，spawn 子代理；只有验证命令通过才合入。
 - C：装 openrig，选 starter 起两座位，用 rig ps 检查就绪；多 harness 可见可恢复。
@@ -416,6 +419,13 @@ tri-agent run --workflow relay --prompt 'Build modern auth middleware with JWT r
 
 ## 怎么判断变好了
 
+**AP 的可观察指标**
+- 每个被接受产出的总 token/成本，和 solo 基线对比；原文的 80x 成本差和 7x token 说法是作者主张，必须用自己账单核对。
+- 端到端耗时、人工干预次数、checker 拒收率、builder 失败与 brain 接管次数、返工次数、缺陷或逃逸问题数。
+- 同一文件是否始终只有一个 writer；checker 是否在完成前独立签字；是否出现未签字就宣布完成。
+- 最小试用：选一个需要超过一次会话、可拆成至少两个独立部分并含一个重复步骤的任务，先 solo 基线；再建四个角色文件，强模型给 brain、中档模型给 builder 和 checker、最便宜模型给 routine，加 CLAUDE.md 约束，只通过 `/brain` 触发规划，强制单文件单写者和 checker 签字；连续试 2–3 个同类任务。
+- 判断标准：在缺陷不增加的前提下，降低每个被接受产出的成本或减少人工干预；若 plan mode 的 token 明显超过 solo 且质量无提升，就停止使用多智能体。若工具不能单独绑模型，先用顺序模拟降级验证角色边界和签字规则。
+
 **AO 的可观察指标**
 - 新会话能否只读任务文件、决策记录和仓库规则继续，而无需重新解释背景。
 - QA 是否在人工审批前独立发现不符合验收标准的项；验收标准首次通过率是否提高。
@@ -423,16 +433,14 @@ tri-agent run --workflow relay --prompt 'Build modern auth middleware with JWT r
 - 范围变更是否先改任务再继续；是否出现未经批准的 commit、push 或部署。
 - 同一仓库是否始终只有一个 writer；在 Claude Code 和 Codex 之间切换时是否仍保持单 writer。
 - 人工审批耗时是否可接受；是否出现审批变成无脑点允许。
-- 最小试用：临时目录示例 both → 低风险仓库 1–2 个有 acceptance criteria 的小任务；同时记录团队现有流程的时间、返工和上下文重建成本。
-- 最小成功标准：1–2 个任务都有验收标准和 QA 记录，未发生越权 Git/部署操作，且新会话无需重新解释背景即可继续；若流程开销明显大于收益、QA 只是形式检查，或角色委派无法稳定执行，则停止扩大。
+- 最小试用：临时目录示例 both → 低风险仓库 1–2 个有 acceptance criteria 的小任务；同时记录团队现有流程的时间、返工和上下文重建成本。最小成功标准：1–2 个任务都有验收标准和 QA 记录，未发生越权 Git/部署操作，且新会话无需重新解释背景即可继续；若流程开销明显大于收益、QA 只是形式检查，或角色委派无法稳定执行，则停止扩大。
 
 **AN 的可观察指标**
 - 交接后下一阶段首次即通过 HANDOFF.md 验证清单项的比例；与“单 agent 一路做到底”的同类任务基线对比。
 - 人工介入纠偏的次数与总返工轮次，是否集中在架构决策、验收和发布，而不是反复补交接信息。
 - 交接过程中约束被遗漏的次数：如 token 过期时间、禁用重依赖、验证清单项被下一阶段违反。
 - 最终 PR 的评审意见数量与严重级别分布；是否出现“实现完成但测试没跑/跑错”的情况。
-- 最小试用：1–2 天、一个中等规模有明确验收标准的任务；先两段式降级，只装 claude + codex，强制产出 SPEC.md 和 HANDOFF.md，再跑通 relay 或手工按契约推进；跑通后再接 agy 对比两段式与三段式。
-- 放弃信号：如果两段式试点里 HANDOFF.md 的约束遗漏次数并不低于单 agent 基线，说明瓶颈不在模型分工而在任务描述质量，退回优化提示词与 SPEC，不要继续加 agent。
+- 最小试用：1–2 天、一个中等规模有明确验收标准的任务；先两段式降级，只装 claude + codex，强制产出 SPEC.md 和 HANDOFF.md，再跑通 relay 或手工按契约推进；跑通后再接 agy 对比两段式与三段式。放弃信号：如果两段式试点里 HANDOFF.md 的约束遗漏次数并不低于单 agent 基线，说明瓶颈不在模型分工而在任务描述质量，退回优化提示词与 SPEC，不要继续加 agent。
 
 **AM 的可观察指标**
 - 手工复制 prompt 的次数是否下降：试用前记录一天里你为转达任务复制/粘贴了几次，试用后用 myco message send --wait / broadcast send --selector 替代，比较同一类任务的转达次数。
@@ -444,63 +452,47 @@ tri-agent run --workflow relay --prompt 'Build modern auth middleware with JWT r
 **AK 的可观察指标**
 - npm test 是否通过；demo:scripted 是否完整跑通 debate → decision → owner approval → execute → verify。
 - 一桌两 owner 小任务中，账本是否出现完整链路：propose、owner 签名 approve、该 owner 的 bot 执行回执、另一席位 verify。
-- 账本 seq 是否 1..n 无缺口；replay 能否精确重建 floor、seats、tasks、budget。
-- 未批准动作数应为 0；bot 自称 done 但账本未 verified 的条目数应为 0；stalled 任务是否被 watchdog 标出。
-- 执行席位与验证席位是否为不同席位；同一席位既执行又验证的比例应为 0。
+- 账本 seq 是否 1..n 无缺口；replay 能否精确重建 floor、seats、tasks、budget。未批准动作数应为 0；bot 自称 done 但账本未 verified 的条目数应为 0；stalled 任务是否被 watchdog 标出。执行席位与验证席位是否为不同席位；同一席位既执行又验证的比例应为 0。
 - 最小试用：1–2 天、一张桌子、两个 owner、一个小任务；先看协议闭环，不先追求吞吐。
 
 **AL 的可观察指标**
 - 首次构建即通过测试的比例（第一轮 PASS 率）。
 - 人工介入次数与介入原因，是否只剩真正需要人决策的支付/凭据类动作。
 - REVIEWER 独立抓出的真实缺陷数，而不是风格挑刺。
-- 端到端耗时与订阅配额消耗。
-- 原仓库是否始终保持干净（git status 无意外改动）。
+- 端到端耗时与订阅配额消耗。原仓库是否始终保持干净（git status 无意外改动）。
 - 失败恢复能力：人为制造 JSON 破损、超时、配额耗尽，看是否按设计重试、换供应商、重规划，而不是卡死或误判 PASS。
 - 最小试用：Windows 机器 + 两个已登录订阅 CLI + 一个小仓库 + 一个明确小改动；先跑 run，再跑 mission。对照设计选 3–5 个规模相近的任务，一半用 Director、一半直接单用 Claude Code 或 Codex，任务与验收标准事先固定。
 
-**A–AO 的指标**：沿用各路径原有指标，例如 B 看合入前测试通过率，J 看 gate 绿+verifier receipt，AH 看人工介入是否集中在审批门与发布/凭据，AJ 看 freeze 是否拦住空规格和冻结后改契约是否熔断。共同判断是：人工介入是否集中在授权、验收和发布；返工是否下降；验证是否由独立方完成；没有验证证据的“完成”是否被拒绝。AN 还要额外看 HANDOFF.md 的约束遗漏次数和交接后首次通过验证清单项比例；AO 还要额外看跨会话续做、QA 首次发现、验收首次通过率、越权操作和审批耗时。
+**A–AO 的指标**：沿用各路径原有指标，例如 B 看合入前测试通过率，J 看 gate 绿+verifier receipt，AH 看人工介入是否集中在审批门与发布/凭据，AJ 看 freeze 是否拦住空规格和冻结后改契约是否熔断。共同判断是：人工介入是否集中在授权、验收和发布；返工是否下降；验证是否由独立方完成；没有验证证据的“完成”是否被拒绝。AN 还要额外看 HANDOFF.md 的约束遗漏次数和交接后首次通过验证清单项比例；AO 还要额外看跨会话续做、QA 首次发现、验收首次通过率、越权操作和审批耗时；AP 还要额外看每产出成本、checker 签字、单文件单写者和 brain 接管次数。
 
 **试多久、什么时候升级**
+- AP 先试 2–3 个同类任务，先 solo 基线再四角色；只有缺陷不增加且成本或人工干预下降，才扩大。若工具不能单独绑模型，先用顺序模拟降级。
 - AO 先试 1–2 天示例加 1–2 个低风险小任务；只有跨会话续做、QA 独立发现、验收首次通过和审批边界都成立，才扩大。
 - AN 先试 1–2 天、一个中等任务、两段式降级；只有约束遗漏低于单 agent 基线、交接后首次通过比例改善、PR 就绪耗时可接受，才接 agy 或扩到更多任务。
 - AM 先试 1–2 周、一台机器、2–3 个会话。只有转达次数下降、重投与超时语义符合预期、上下文保持、权限边界清楚，才考虑加第二台机器或接更多 CLI。
 - AK 先试 1–2 天、1–2 个小任务。只有协议闭环稳定、未批准动作为 0、账本可 replay、验证席位独立，才考虑加第三个 owner 或接更多 MCP agent。
 - AL 先跑 3–5 个对照任务，不先跑全量 Mission。只有第一轮 PASS 率、人工介入原因、独立缺陷发现、原仓库干净度和失败恢复都相对单代理对照有改善，才考虑扩大任务范围或接更多仓库。
 - 如果多 agent 只是热闹、审批变成无脑点允许、或账本 verified 没有独立验证，退回单 agent + 明确测试/评审门禁，只保留“谁批准、谁执行、谁验证”的协议思路。
-- AK 从单机扩到多机前，先确认联邦仍在 roadmap，不要假设已经支持。AM 从单机扩到多机前，先确认 hub 单点、备份和 SQLite 规模上限没有现成答案，自己补运维方案。AN 接第三个 CLI 前，先确认 agy 仍可用且两段式试点已经证明交接契约本身有效。AO 扩到多仓库前，先确认单 writer 仍成立；需要并行写同一仓库时改用 AL 的 worktree 或 AK 的 owner 协议。
+- AK 从单机扩到多机前，先确认联邦仍在 roadmap，不要假设已经支持。AM 从单机扩到多机前，先确认 hub 单点、备份和 SQLite 规模上限没有现成答案，自己补运维方案。AN 接第三个 CLI 前，先确认 agy 仍可用且两段式试点已经证明交接契约本身有效。AO 扩到多仓库前，先确认单 writer 仍成立；需要并行写同一仓库时改用 AL 的 worktree 或 AK 的 owner 协议。AP 扩到更多任务前，先确认单文件单写者和 checker 签字仍能执行；切不开文件所有权就退回顺序模拟或单 agent。
 
 ## 常见坑
 
-- AO 只有 README 材料，没有量化效果数据、案例对比、返工率或时间节省数据；角色分工和 QA 收益主要是作者的设计主张。
-- AO 的安装器只生成工作区，不启动 agent、不发模型请求；不要把它当成自动调度器。
-- AO 需要同一仓库单 writer；不要把共享任务文件当成并行写锁。
-- AO 的 .project-os.json 没有完整样例；模型 tier 默认继承当前活动模型，直到映射到账户中可用设置；实际以生成文件为准。
-- AO 不能自动选择命名角色时，由 PM 在委派说明中带完整指令，手动会话是回退方案；不要让角色委派空转。
-- AO 的安全审查与 QA 合计最多两轮失败循环；第三轮需要新计划与人工批准。不要无限循环。
-- AO 的代码获批不等于 commit、push 或部署获批；部署是单独决策。
-- AN 零基准数据、零对比实验、零真实项目结果；README 中 preventing hallucination cascades、delivering production-ready, verified code 均为作者主张，无证据。不要把“三 agent 接力”当成质量证明。
-- AN 仓库仅 30 stars，属于早期个人项目；workflows/*.md 的具体内容、lib/ 的实现质量均无法从材料判断。不要拿命令能跑通当生产就绪。
-- AN 强依赖 agy，而 Antigravity 在清单里仍处于 watch；第一个试点先用两段式降级，不要把 watch 组件当唯一架构师。
-- AN 对小改动或单文件任务不划算：写 HANDOFF.md 的开销可能大于收益；任务复杂度不足以覆盖多阶段交接成本时退回单 agent。
-- AN 的 HANDOFF.md 如果只写“做了什么”，不写硬约束和 Verification Checklist for Next Agent，下一阶段仍会丢约束；模板里的约束和清单必须具体、可勾选。
-- AM 的项目成熟度很低：32 stars、单作者、部分 harness 标注 experimental、Windows 客户端 preview 且未签名；不要因为“命令能跑”就把它写进生产规范。
-- AM 的 hub 是单点；README 未提及高可用、备份、SQLite 规模上限、并发上限。不要假设它天生能扛团队级负载。
-- AM 的编排模板与调度策略、MCP endpoint、团队/角色、会话 fork 全在 roadmap 未完成项里；定时触发要靠外部 cron / GitHub Actions 自己接，不要写成“内置调度”。
-- AM 的 join link 和 per-agent allow-list 是权限边界；runner.access 默认不要给 full。join link 泄漏等于把派活入口泄漏。
-- AM 的 --attach 只做 SHA-256 完整性校验，只有收件方能下载；它不证明文件安全，也不证明来源可信。
-- AM 的 --wait 超时不是任务失败的同义词；任务可能还在排队或运行，先看状态再重发，避免重复派活。
-- AK 是 v0.1，单机 table host；联邦仍在 roadmap，不要写成已支持多机生产。
-- AK 的 prompt 缓存收益未测量：投影设计保住了稳定前缀，但作者明确说还没测量和调优缓存命中率，不要把缓存当已验证收益。
-- AK 的能力卡必须来自 owner 侧文件，不能来自 agent 自己；bot 不能代签，也不能自己扩权。byob_approve 通过 MCP elicitation 请 owner 确认；客户端无法提问时直接拒绝，这不是故障，是设计。
-- AK 的 bot 说 done 只是发言；账本到 verified 才算完成，且必须由不同席位验证。termination 不能省；缺终止条件的表会被拒建。watchdog 只是兜底，不是主动推进机制。
-- AL 是 Windows-first、韩语界面；macOS/Linux 代码齐备但未在真机验证，部分测试假定 Windows 盘符路径（C:/...）。测试数量在文档中出现 604 与 593/596 两种说法，不要拿其中一个数字当验收标准，以实际运行为准。
-- AL 的整文件 JSON 提案在大型改动上会撞 CLI 输出上限；先压缩重试，再换供应商，或把任务拆小。AL 完全受各 CLI 订阅配额约束；不要用按量付费 API 绕过。
-- HEAD 与 REVIEWER 落到同一供应商时系统会标 REDUCED_INDEPENDENCE 并放行；独立性会打折，不要把这种情况当成独立审查。验证命令必须放在 config.yaml，不要放回项目内让 BUILDER 有机会弱化。
-- AL 不替代 AK 的 owner 签名，也不替代 AJ 的审批状态机；跨 owner 任务仍走 AK，需要 G0–G7 门禁仍走 AJ。AN 也不替代 AK/AJ/AH/AL：AN 只提供交接契约和 relay workflow，没有 owner 签名、G0–G7 状态机或隔离 worktree 的 Scope Guard。AO 也不替代 AK/AJ/AH/AL/AN：AO 只提供共享任务文件、角色、QA 和人工审批，没有 owner 签名、G0–G7、隔离 worktree/Scope Guard 或 HANDOFF 接力契约。
+- AP 原文很短，没有给出四个 agent 文件的具体内容、可直接复制的命令或完整提示词；不要编造文件格式和提示词，按你的 agent 工具文档落地。
+- AP 的模型名、价格对和 80x 成本差、plan mode 7x token 都是作者主张，未给计价口径、项目细节或对照实验；不要当成已验证收益，必须用自己账单和基线核对。
+- AP 不适合小任务：任务能一次做完时不要上多智能体；计划和协调开销可能不划算。
+- AP 必须切清文件所有权：同一文件同一时间绝不让两个 helper 同时改；不能切时不要用，或退回顺序模拟降级。
+- AP 的 checker 只审查、不编辑；签字前不算完成；builder 连续失败两次由 brain 接管，不要无限让 builder 重试。
+- AP 原文没有给权限、工具和白名单配置；需在工具侧用目录/文件白名单或人工审查补上，不能默认 agent 会自律。
+- AO 只有 README 材料，没有量化效果数据、案例对比、返工率或时间节省数据；角色分工和 QA 收益主要是作者的设计主张。AO 的安装器只生成工作区，不启动 agent、不发模型请求；不要把它当成自动调度器。AO 需要同一仓库单 writer；不要把共享任务文件当成并行写锁。AO 的 .project-os.json 没有完整样例；模型 tier 默认继承当前活动模型，直到映射到账户中可用设置；实际以生成文件为准。AO 不能自动选择命名角色时，由 PM 在委派说明中带完整指令，手动会话是回退方案；不要让角色委派空转。AO 的安全审查与 QA 合计最多两轮失败循环；第三轮需要新计划与人工批准。AO 的代码获批不等于 commit、push 或部署获批；部署是单独决策。
+- AN 零基准数据、零对比实验、零真实项目结果；README 中 preventing hallucination cascades、delivering production-ready, verified code 均为作者主张，无证据。不要把“三 agent 接力”当成质量证明。AN 仓库仅 30 stars，属于早期个人项目；workflows/*.md 的具体内容、lib/ 的实现质量均无法从材料判断。不要拿命令能跑通当生产就绪。AN 强依赖 agy，而 Antigravity 在清单里仍处于 watch；第一个试点先用两段式降级，不要把 watch 组件当唯一架构师。AN 对小改动或单文件任务不划算：写 HANDOFF.md 的开销可能大于收益；任务复杂度不足以覆盖多阶段交接成本时退回单 agent。AN 的 HANDOFF.md 如果只写“做了什么”，不写硬约束和 Verification Checklist for Next Agent，下一阶段仍会丢约束；模板里的约束和清单必须具体、可勾选。
+- AM 的项目成熟度很低：32 stars、单作者、部分 harness 标注 experimental、Windows 客户端 preview 且未签名；不要因为“命令能跑”就把它写进生产规范。AM 的 hub 是单点；README 未提及高可用、备份、SQLite 规模上限、并发上限。不要假设它天生能扛团队级负载。AM 的编排模板与调度策略、MCP endpoint、团队/角色、会话 fork 全在 roadmap 未完成项里；定时触发要靠外部 cron / GitHub Actions 自己接，不要写成“内置调度”。AM 的 join link 和 per-agent allow-list 是权限边界；runner.access 默认不要给 full。join link 泄漏等于把派活入口泄漏。AM 的 --attach 只做 SHA-256 完整性校验，只有收件方能下载；它不证明文件安全，也不证明来源可信。AM 的 --wait 超时不是任务失败的同义词；任务可能还在排队或运行，先看状态再重发，避免重复派活。
+- AK 是 v0.1，单机 table host；联邦仍在 roadmap，不要写成已支持多机生产。AK 的 prompt 缓存收益未测量：投影设计保住了稳定前缀，但作者明确说还没测量和调优缓存命中率，不要把缓存当已验证收益。AK 的能力卡必须来自 owner 侧文件，不能来自 agent 自己；bot 不能代签，也不能自己扩权。byob_approve 通过 MCP elicitation 请 owner 确认；客户端无法提问时直接拒绝，这不是故障，是设计。AK 的 bot 说 done 只是发言；账本到 verified 才算完成，且必须由不同席位验证。termination 不能省；缺终止条件的表会被拒建。watchdog 只是兜底，不是主动推进机制。
+- AL 是 Windows-first、韩语界面；macOS/Linux 代码齐备但未在真机验证，部分测试假定 Windows 盘符路径（C:/...）。测试数量在文档中出现 604 与 593/596 两种说法，不要拿其中一个数字当验收标准，以实际运行为准。AL 的整文件 JSON 提案在大型改动上会撞 CLI 输出上限；先压缩重试，再换供应商，或把任务拆小。AL 完全受各 CLI 订阅配额约束；不要用按量付费 API 绕过。HEAD 与 REVIEWER 落到同一供应商时系统会标 REDUCED_INDEPENDENCE 并放行；独立性会打折，不要把这种情况当成独立审查。验证命令必须放在 config.yaml，不要放回项目内让 BUILDER 有机会弱化。AL 不替代 AK 的 owner 签名，也不替代 AJ 的审批状态机；跨 owner 任务仍走 AK，需要 G0–G7 门禁仍走 AJ。AN 也不替代 AK/AJ/AH/AL：AN 只提供交接契约和 relay workflow，没有 owner 签名、G0–G7 状态机或隔离 worktree 的 Scope Guard。AO 也不替代 AK/AJ/AH/AL/AN：AO 只提供共享任务文件、角色、QA 和人工审批，没有 owner 签名、G0–G7、隔离 worktree/Scope Guard 或 HANDOFF 接力契约。AP 也不替代 AK/AJ/AH/AL/AN/AO：AP 只提供四角色分层、单文件单写者和 checker 签字，没有 owner 签名、G0–G7、隔离 worktree 或共享任务文件。
 - 共同坑不变：消息层和编排层只负责把问题送到、把人叫来，不证明结果正确；没有测试、独立 verifier、校验器或人工复核，不要接受完成。
 
 ## 证据与来源
 
+- AP 依据调研《@mojunel: Broke the cost floor with a team》。可核对：四角色多智能体工作流；最强模型做 brain/规划与验收，另一个模型做 builder，另一个做只读 checker，最便宜模型做 routine；每个角色一个 agent 文件并各自绑定模型；大脑只由 `/brain` 手动触发；按原文三类委派筛选任务；交接顺序为 brain 写 spec → builder 构建 → checker 审查 → routine 跑例行任务；builder 连续失败两次后由 brain 接管；同一文件同一时间绝不让两个 helper 同时改；checker 签字后才能算完成；CLAUDE.md 一行约束 consult the advisor before the approach, on a repeating error, before calling done.。作者主张或未验证：broke the cost floor；$8 / $40 到 $0.10 / $0.50 的价格对；80x 成本差；plan mode 下 agent teams token 消耗是 solo 的 7 倍；模型名和可用性未验证；没有四个 agent 文件内容、可直接复制的命令或完整提示词；没有质量、返工、缺陷率数据。适用条件：任务足够大、可拆分、含重复步骤，且文件所有权能切开；小任务可能因规划和协调开销不划算。建议小范围试，并用自己的账单和 solo 基线验证。
 - AO 依据调研《ferhatcore/claude-codex-project-os》。可核对：仓库与面向 Claude Code/Codex 的项目工作区骨架；Node.js 22+；无需安装 npm 包；scripts/init.mjs 的 --target / --example / --runtime claude|codex|both / --name；生成 CLAUDE.md、AGENTS.md、项目 skills 和四个角色定义；.project-os.json 记录 runtime、仓库列表、worker cap（lean/standard/heavy）和模型偏好；示例 Trailboard 的命令 node repos/catalog/catalog.mjs 与 node --test repos/catalog/catalog.test.mjs；检查命令 node scripts/check.mjs、node --test scripts/system.test.mjs scripts/smoke.test.mjs scripts/runtimes.test.mjs、node --test examples/trailboard/repos/catalog/catalog.test.mjs；任务字段 repository、scope、branch、acceptance criteria、permissions；审批链人给范围与批准 → PM 写任务和计划 → Developer 修改 → 如需要安全审查 → QA 验收 → PM 检查完整性 → 人工批准 Git 操作 → 部署单独决策；同一仓库单 writer；安全审查与 QA 合计最多两轮失败循环；代码获批不等于 commit、push 或部署获批；安装器不启动 agent、不发模型请求；Codex 可用 $project-os-start。作者主张或未验证：README 没有量化效果数据、案例对比、返工率或时间节省数据；角色分工和 QA 收益主要是作者设计主张；README 声称检查覆盖三种 runtime、三种 worker profile、共享任务状态、生成的角色文件、安装拒绝、配置和 fixture 行为，并称 GitHub Actions 在 Windows/Linux 的 Node.js 22 上运行测试，但本材料未展示运行结果或验证记录内容；GitHub 指标只有 54 stars；材料只有 README，未包含 QUICKSTART、workflows、customization、troubleshooting、Codex verification record 等链接内容。
 - AN 依据调研《abhigyan6/tri-agent-orchestrator》。可核对：仓库与通用 agent skill；三阶段 CLI 分工 agy 架构/审计、claude 实现、codex 测试/构建/PR；./bin/tri-agent doctor；./scripts/install-skill.sh（等价 tri-agent install-skill）；tri-agent handoff create --feature ... --completed ... --next ...；tri-agent run --workflow relay --prompt ... --dry-run；tri-agent handoff status；三个 workflow 文件 workflows/01-relay-pipeline.md、02-parallel-debate.md、03-redteam-audit.md 的名称与定位；HANDOFF.md 模板全文；doctor 示例输出；auth middleware 走查示例文件名。作者主张、无数据支撑：preventing hallucination cascades、delivering production-ready, verified code；没有指标定义、对比基线或结果数据。成熟度：仓库仅 30 stars，早期个人项目；agy 在清单中为 watch；原文只给 lib/agents.py、lib/orchestrator.py、workflows/*.md 的文件名与用途，没有贴出内部实现或 workflow 具体步骤，第 9 步之后无法从材料还原。
 - AM 依据调研《chenhg5/myco》。可核对：单 Go 二进制，hub（注册表 + 每 agent 收件箱，SQLite）+ 每台机器一个 runner；runner 只开出站 HTTPS，不需要公网 IP 和开放端口；消息状态机为长轮询 → 租约 → 未确认过期重投 → 5 次失败标记，CLI 异常退出则任务失败并通知发送方；per-agent allow-list；runner.access 三档 readonly / workspace / full 并映射到 CLI 权限 flag；附件逐个 SHA-256 且只有收件方能下载；native macOS 签名公证，Windows 为 preview 且未签名；MIT；32 stars、单作者。命令与配置：deploy/install-hub.sh --domain auto、myco hub up --tunnel cloudflare --hostname hub.example.com、myco hub up --tunnel tailscale、deploy/install-client.sh、join link、myco agent list --online、myco message send --to ... --body ... --wait 15m、myco broadcast send --selector ... --body ... --wait 30m、myco exec --to build-shell --cmd ...、--attach、myco inbox wait、waker（webhook / claude_routine / github_dispatch / github_issue）、--harness template / --harness shell、myco harness list、JSON 输出、带 suggestion 的结构化错误、--dry-run、myco schema。作者主张、无数据支撑：No VPS required、Delegation that scales、Safe by default、won't interrupt a session you are typing in；README 没有 benchmark、用户案例、任务成功率、延迟数据或对比实验。未验证/局限：本次只读 README，未读 INSTALL.md / architecture.md / delivery.md；编排模板与调度策略、MCP endpoint、团队/角色、会话 fork 在 roadmap 未完成；hub 单点，未提 HA、备份、SQLite 规模上限、并发上限；cloud session 不能被 spawn；Cursor/Gemini/OpenCode 为 experimental；Windows 未签名。
@@ -551,3 +543,4 @@ tri-agent run --workflow relay --prompt 'Build modern auth middleware with JWT r
 - [chenhg5/myco](../research/radar/2026-11-09/11723-chenhg5-myco.md)：值得一试，建议先在一台机器上起 hub，接入 2–3 个已登录的 Claude Code/Codex 会话，用 `myco message send --wait` 和 `broadcast send --selector` 替代手工复制 prompt，跑一两周看重投、超时和上下文保持情况再决定是否扩到多机；理由是 README 给出了可直接照抄的安装与派活命令、明确的消息投递语义（租约、重投、5 次失败）和权限档位，形态完整，但项目仅 32 stars、单作者、部分 harness 标注 experimental、Windows 未签名，成熟度不足以上手即采用。
 - [abhigyan6/tri-agent-orchestrator](../research/radar/2026-11-11/12505-abhigyan6-tri-agent-orchestrator.md)：值得一试，先照 README 把 `HANDOFF.md` 交接契约和 relay 流水线在一个中等规模任务上跑通（初期可只用 Claude Code + Codex 两个 agent，把 Antigravity 换成人工架构评审），跑通后再决定是否接入第三个 CLI；理由是原文给出了可直接照抄的命令、交接模板、分阶段提示词和目录结构，属于可执行的东西，但完全没有效果数据，且核心依赖之一（Antigravity）在清单里仍处于 watch 状态。
 - [ferhatcore/claude-codex-project-os](../research/radar/2026-11-12/12625-ferhatcore-claude-codex-project-os.md)：值得一试，建议小范围试：先用示例工作区跑通 PM→Developer→QA→人工审批，再在一个低风险仓库用共享任务文件做 1–2 个真实任务；它给出了可复制的安装命令、角色分工和验收流程，但材料只有 README 且无效果数据，暂不宜直接 adopt。
+- [@mojunel: Broke the cost floor with a team](../research/radar/2026-11-14/13328-broke-the-cost-floor-with-a-team.md)：值得一试，建议小范围试这套四角色分层编排：把强模型限制在规划与验收，构建、检查和例行任务分开，并强制单文件单写者和检查签字；原文给出了角色、交接和约束，但缺少可直接复制的 agent 文件配置，需先落地并用成本与返工指标对照 solo 基线。
