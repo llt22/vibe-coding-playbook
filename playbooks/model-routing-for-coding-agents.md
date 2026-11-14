@@ -1,9 +1,9 @@
-# 别让配额和模型选错拖慢编码：给编码 agent 配路由、分工与验收
+# 让编码 agent 分工：强模型只在关键判断点出手，故障能回退
 
 > **未经实测**：本手册由 ai-work-radar 根据自动调研合并生成并持续修订，步骤尚未有人实际跑过。服务修订时基于自己保存的上一版重写，直接改这个文件会被覆盖；实测过的做法请写到 experiences/。
 >
-> 解决的问题：一句话：当你有多个模型订阅、多把 key 或多个编码 agent 时，怎么分工、怎么在限流或 key 失效时自动回退，并用可观察证据判断是否真的省了时间和钱。
-> 先试这一步：先用 community-claude-code 的 `ccc-claude` 把 Claude Code 接到一个已有 key 的 provider，在同一小任务上跑通，再配 Fallback Models 做对照。
+> 解决的问题：编码 agent 常见的浪费是全程用最贵模型、配额或限流中断、工具输出吃 token、没有证据就宣布完成；这篇手册给出可小范围试的分工、路由与回退做法，并用可观察指标判断是否真的变好。
+> 先试这一步：选 2–3 个中等规模编码任务，只在开工前评审方案、连续报错时纠偏、收工前查漏这三个节点调用强模型，同时记录返工率与主模型加顾问的总 token，和主模型单跑对照。
 > 最近修订：2026-11-14
 
 ## 解决什么问题
@@ -15,6 +15,8 @@
 另一类分工是跨厂商协作：主力模型写代码，另一个厂商的模型只做评审，廉价快速子 Agent 先探索代码，只读命令走白名单以减少云端审批等待。原文来自 Antigravity + Gemini 的重度使用经验，工具绑定较强，做法要小范围试，不能直接当团队默认流程。
 
 最新加入的一层是“代理层”：Community Claude Code（CCC）在本机跑一个代理/路由服务，把 Claude Code、Codex、Pi、OpenCode 2、Cline 等编码 agent 接到任意受支持的模型提供方，宣称保留原生流式、工具调用与 interleaved thinking，并提供自动重试、可配置限流、并发控制、模型/提供方回退、多 API key 回退、思考强度分级与 Claude Code 档位路由。它解决的是“同一个 agent 换模型、换 provider、出故障回退”这类编排问题，并不引入新模型。
+
+本次补入的一层是“模板化顾问”：第三方模板 Fable 5.2 Advisor 用一条安装命令把顾问配置写进 Claude Code settings，主张主模型继续执行，只在三个决策点调用强模型——开始编码前检查技术方案、连续报错时分析问题并调整方向、任务完成前检查是否遗漏关键问题。它把“贵模型只做判断”从口号变成可安装的模板，但原文只给了安装命令和三个场景，没有展示配置内容、提示词和“连续报错”的阈值，效果必须自己测。
 
 ## 适用与不适用
 
@@ -34,6 +36,7 @@
 - 你愿意先打开 agy-fast-io 与 oil-dev-skills 仓库核对白名单和规则正文，并接受非官方插件。
 - 你已在本地跑 Claude Code 或其他编码 agent，想在不改 agent 本身的前提下，换 provider、按档位换模型、配回退链，并接受一个独立项目（CCC）作为中间层：它有安装脚本、`ccc-*` 启动命令、Admin UI、`ccc-doctor`，但项目仅 42 star，部分模型 id 与“Claude Code 全部模型免费用”的主张可疑，必须小范围自测。
 - 你想用 Discord/Telegram（含语音笔记）在碎片时间把编码任务交给已在跑的环境，或把本地 LM Studio / llama.cpp / Ollama 接进同一个入口。
+- 你日常用 Claude Code，任务有明显阶段边界（方案—实现—收尾），返工成本高到值得多付一次顾问调用，愿意先用第三方模板试“只在三个决策点调用强模型”。例如 Fable 5.2 Advisor 模板。
 
 不适用或需要谨慎：
 
@@ -54,10 +57,13 @@
 - 想把只读白名单扩大到写操作：先只放列目录、读文件、搜索，写操作保留人工审批，观察是否误放行。
 - 想在生产或多租户环境直接部署 CCC：材料只说明它能跑在本机、接消息入口时要求绝对路径的 Allowed Directory，未给出安全审计、权限模型或多人共用方案；共享场景必须先开 Proxy Authentication 并分发 token。
 - 想用一个 provider 的失败请求同时“试遍”多个 provider 而不承担成本：Fallback Models 明确警告失败请求可能先后触达并消耗多个 provider 的额度。
+- 想让第三方模板替你决定顾问配置：Fable 5.2 Advisor 原文没有展示模板写入了什么，安装前必须打开生成的 settings 核对；不能在不能回滚的配置上直接装。
+- 想在一次性小改动或判断密度低的任务上套顾问模板：原文适用条件是编码类、有明显阶段边界、返工成本高到值得多付一次调用；这类任务额外调用大概率不划算。
 
 ## 前置条件
 
-- 通用：先记录原配置，能回滚；非敏感、非生产任务先试。
+通用：先记录原配置，能回滚；非敏感、非生产任务先试。
+
 - OmniRoute：本机可安装 npm 全局包或可用 Docker 镜像 `diegosouzapw/omniroute`；默认监听 20128；至少一个你有权使用的 provider 账号或 key；客户端支持自定义 OpenAI 兼容 base URL；从 Dashboard → Endpoints 取 key。安装/首次运行章节在材料中被截断，执行前回 README 补齐。
 - agent-smith：Python 部分只用标准库；路由执行需要已有 Codex 登录；Float 仅 macOS 14+；以下命令在克隆后的仓库根目录执行。
 - FlagshipRouter：Node.js 20.9+（README 建议 22）；端口 20128 空闲——与 OmniRoute 默认端口相同，不能按默认端口同时启动；不想注册时可先只用 OpenCode Free 的免注册模型。
@@ -70,6 +76,7 @@
 - 做法 K：已安装并可正常登录 Claude Code；能修改 `~/.claude/settings.json`、`~/.claude/agents/`、`~/.claude/CLAUDE.md`；先备份这些文件；先读三页官方文档确认字段与模型标识符：advisor、sub-agents、model-config；原文称顾问模型需要 v2.1.321 或更高，实际门槛以文档为准；某些套餐下 advisor 需要一次性 `/model fable` 接受额度后再 `/model sonnet` 切回。
 - 做法 L：有 Antigravity 使用权限；能同时使用 Gemini、GPT、Claude 等多个模型（作者用 200 美元档订阅，额度条件按你的套餐核对）；能修改项目级规则文件；能打开并核对 agy-fast-io（https://github.com/oil-oil/agy-fast-io）与 oil-dev-skills（https://github.com/oil-oil/oil-dev-skills）仓库；接受非官方插件；至少一个中等规模仓库和两个真实任务（一个 bug 修复、一个小功能）。原文没有给出白名单正文、提示词正文和 swarm 规则正文，执行前必须打开仓库补齐。
 - 做法 M（CCC）：macOS/Linux/Windows 开发机；Python 3.14；uv；至少一个模型提供方的 API key 或 OAuth 账号；本地已能正常运行 Claude Code 等任一编码 agent；默认代理端口 8082 可用。provider 侧还需按类型补条件：OpenAI/ChatGPT、GitHub Copilot 走 OAuth，连接后要重启已运行的 agent；Azure 需 `AZURE_OPENAI_BASE_URL` 完整 v1 endpoint；Vertex 用 ADC（本地执行 `gcloud auth application-default login`）；Bedrock 需与 key 同区域的 `BEDROCK_BASE_URL`；Alibaba 需 key 与 endpoint 同区域；Cloudflare 需 token + account ID。消息入口需 Allowed Channels / User ID 与绝对路径的 Allowed Directory；跨机或共享场景需开启 Proxy Authentication 并分发 token。
+- 做法 N（Fable 5.2 Advisor）：已有可用的 Claude Code 环境，并且能运行 `npx`（Node 环境）；该模板来自第三方站点 aitmpl.com，会写入 Claude Code 的 settings，安装前建议在可以回滚的配置或试验目录中操作；能打开安装后生成的 settings 文件核对写入内容；愿意自己约定“连续报错”的阈值和三个节点的提示词并记录；有 2–3 个中等规模、需要多轮修改的编码任务可做对照。
 
 ## 操作步骤
 
@@ -479,7 +486,31 @@ ccc-doctor
 
 15. 小范围对照。前提：同一小任务、同一提示词、同一代码快照。A 组直接用平时的 Claude Code 直连；B 组 `ccc-claude` 走 CCC，并只配一个 fallback。各跑 2–3 次，记录是否跑通、工具调用是否正常、流式是否正常、失败后是否真的回退、以及消耗了哪些 provider 的额度。不要在没跑通第 5 步前就配第 7 步的回退链。
 
-**做法 A–M 怎么选（短表）**
+**做法 N：用第三方模板装顾问，只在三个决策点调用强模型（Fable 5.2 Advisor）**
+
+定位：一条推文介绍的 Claude Code 配置模板。它主张不让所有环节都用最贵的模型，而是主模型继续执行，只在关键决策点临时调用 Fable 5.2 提供建议。原文只提供一条安装命令和三个调用场景，没有写出配置内容，也没有给出数据；效果如何、尤其是否真省钱，只能自己测。
+
+1. 前提：已有可用的 Claude Code 环境，并且能运行 `npx`（Node 环境）。该模板来自第三方站点 aitmpl.com，会写入 Claude Code 的 settings；安装前建议在可以回滚的配置或试验目录中操作。
+
+2. 安装模板（原文命令，原样）：
+
+```
+npx claude-code-templates@latest --setting model/fable-5-2-advisor
+```
+
+3. 核对写入内容：打开安装后生成的 settings 文件，确认模板把哪个模型设为主模型、把哪个模型作为顾问、以什么方式触发顾问调用。原文没有展示配置内容，这一步必须自己核对，不能默认它符合预期。
+
+4. 在三个决策点显式请顾问介入（原文只说场景，没有给出提示词，需要自己编写并固定下来）：
+   - 编码前：把技术方案或实现计划交给顾问模型评审，再开始改动代码。
+   - 连续报错时：把错误信息与已经尝试过的修改交给顾问模型，请它判断是否需要调整方向，而不是继续在原思路上修改。
+   - 任务完成前：把改动清单交给顾问模型，请它检查是否遗漏关键问题。
+   > 原文没有定义“连续报错”的具体阈值和提示词模板，这两项需要在试用时由使用者自行约定并记录下来。
+
+5. 记录调用开销与结果：每次顾问调用都记下发生场景、消耗的 Token 和费用，以及该任务最终是否返工，作为验证依据。
+
+6. 与 F/K 的区别：N 是第三方模板写入 settings，触发靠你显式请顾问；F1–F4 是会话、启动参数或环境变量；K 是用户级三个文件并带 CLAUDE.md 行为规则与验收方式。材料未说明 N 能与它们自动叠加，先分开试。
+
+**做法 A–N 怎么选（短表）**
 
 - 跨供应商配额、限流、死 key、工具输出消耗大量 token：先 A。预算红线用 `auto/subscription`；想先耗尽套餐额度再降到最便宜付费用 `auto/thrifty`；`auto/chaos` 会成倍消耗上游调用。
 - 已在用 Codex、想让常规任务别总调最重模型，并用确定性 grader 验收：先 B。
@@ -497,6 +528,7 @@ ccc-doctor
 - 你已经在 Claude Code 里，愿意改用户级配置，并接受先备份、看 diff、再应用：先试 K。K 与 F1–F4 不同：K 不是单条启动命令，而是三个文件的用户级配置；材料未说明它能与 F1–F4 或 A–J 自动叠加，先分开试。
 - 同时有 Gemini、GPT、Claude 多模型，想按任务类型分模型、用另一家模型交叉评审、用廉价子 Agent 探路、用只读白名单减少审批等待：先试 L。白名单只放只读命令，Turbo 模式先别跑复杂任务；Orchestrator 只当待验证项。
 - 你不想改 agent 本身、只想换 provider / 按档位换模型 / 配回退链，且能接受一个 42 star 的独立项目做本机代理：先试 M 的第 1–5 步，跑通再配第 7–9 步。想要消息入口或本地模型再走第 11–12 步。M 与 A/C 都可能占本机端口，但 M 默认 8082，与 20128 不冲突；材料未说明 M 能与 A–L 自动叠加，先分开试。
+- 日常用 Claude Code、任务有明显阶段边界（方案—实现—收尾）、返工成本高到值得多付一次调用：先试 N。安装前先核对模板写入内容，“连续报错”阈值和三个节点的提示词自己定；N 与 F1–F4、K 不是同一层做法，材料未说明能自动叠加。
 - A 和 C 默认都用 20128，先选一个跑通；E 默认 4000，model-relay 默认 8950，M 默认 8082。不撞端口不代表能自动叠加。
 
 ## 怎么判断变好了
@@ -516,6 +548,7 @@ ccc-doctor
 - K：先只做验收，不做效果承诺：重启后确认 Claude Code 以 Sonnet 启动、`/advisor` 显示 fable、`/agents` 列出 checker（opus）与 Explore（haiku）；跑一个日常任务，确认顾问被调用时出现 `Advising` 行、`Ctrl+O` 能看到建议、`/usage` 能读到成本。然后选 3–5 个真实任务，默认单模型 vs K 各跑一次，记录返工次数、总 token/费用、端到端耗时、顾问实际介入次数、checker 是否发现真实问题、Explore 是否减少主模型检索 token。只有质量不降且成本下降，或返工明显减少且成本可接受，才保留；若字段/显示项不存在、顾问几乎不介入、checker 只复述构建结果、或成本上升而返工未减少，就回滚。
 - L：先只读白名单从小开始，只放列目录、读文件、搜索；写操作保留人工审批，观察是否误放行。用两个真实任务各跑 2–3 次：A 组单模型 Gemini 直接做；B 组 Gemini 写 + GPT 只做一轮评审 + 探索阶段先用廉价子 Agent。记录任务总耗时、审批次数与累计等待秒数、评审指出的问题数与被采纳数、返工轮次、每任务额度消耗、一周额度是否够用。判断：审批等待明显下降且返工轮次不上升，才算通过；若 GPT 评审采纳率很低、问题重复已知，就降级为仅思路参考；Orchestrator 先在玩具项目上对比同一任务的耗时与失败率，再决定是否进入正式流程。
 - M：分三层验收，不要一次全上。第一层（半天）：装好、`ccc-server` 起得来、Admin UI 打得开、`ccc-claude` 用默认 `MODEL` 跑通一个小任务，工具调用与流式都正常。第二层（2–3 天）：配一条 fallback，人为制造一次失败（用错的 key 或不可达端点），确认请求按顺序落到下一个 provider；同时记录到底消耗了哪几家额度。第三层（1–2 周）：同一批 5–10 个真实任务，A 组直连、B 组 `ccc-claude` 走 CCC 并配档位路由（`MODEL_*`）与 effort，记录是否跑通、中断次数、人工切模型次数、总 token/费用、端到端耗时、返工次数、`/stats` 里看到的会话状态。判断：中断或人工切换次数下降，且质量不降，才继续；若 `ccc-doctor` 频繁报错、fallback 把账单推到多家 provider、或 `MODEL_*` 映射后 `/model` 档位行为与预期不符，就退回只接一个 provider 的用法。材料没有给出 CCC 的试用时长与量化数据，以上时长为本文建议，按你的额度调整。
+- N：最小试用挑 2–3 个中等规模、需要多轮修改的编码任务，安装模板后只在三个节点各调用一次顾问，全程记录；同时准备两组对照基线——同样任务“主模型单跑”与“全程最强模型”。记录项：发生顾问调用的场景、主模型的 Token 和费用、顾问模型的 Token 和费用、任务耗时、返工次数与返工耗时、人工介入次数。判断指标：总成本（主模型与顾问模型费用相加）对比两组基线；返工率（返工任务数 / 总任务数）与返工耗时占比；一次通过率、人工介入次数；顾问提出的建议中，被实际采纳并改变结果的比例（判断是不是白白多付了费用）。改善判据：总成本下降且返工率没有明显上升；或者返工率的下降幅度带来的时间节省，超过顾问调用成本。如果顾问建议大多被忽略，说明触发点选错了，应先调整场景，而不是增加调用次数。
 
 ## 常见坑
 
@@ -569,6 +602,12 @@ ccc-doctor
 - 不停旧进程就 `ccc-update`。更新前先停掉所有 CCC 命令；更新失败就重跑安装命令，别在半更新状态下继续用。
 - 消息入口填相对路径。Allowed Directory 必须是绝对路径；Discord 还要开 Message Content Intent 和删消息权限，否则 `/clear` 不工作。
 - 把 CCC 的 42 star 当成成熟度证明或反证。它只是元信息；先小范围自测，再决定是否进团队默认流程。
+- 把 `npx claude-code-templates@latest --setting model/fable-5-2-advisor` 当成完整方案。原文只给安装命令和三个场景，配置内容、提示词、触发判据都没有。
+- 不核对模板写入了什么就安装。第三方 npm 包会向本地写 settings，先在可回滚配置或试验目录操作，打开生成的 settings 核对主模型、顾问模型、触发方式。
+- 把“连续报错”当已定义阈值。原文没有定义，自己约定并记录，否则无法判断顾问是否该介入。
+- 以为顾问会自动在三个节点介入。原文只说场景，没有 hook 或自动触发；需要显式请顾问，并把提示词固定下来。
+- 把“只在被调用时单独计费”当定价事实。原文是作者说法，Fable 5.2 是否存在、如何计费都无法从材料核实。
+- 只看省不省钱不看返工。多一次调用本身是额外成本；判据是总成本与返工率一起看，顾问建议大多被忽略就说明触发点选错了。
 
 ## 证据与来源
 
@@ -591,7 +630,8 @@ ccc-doctor
 - K（@0xCodila）：可照做的是一条完整配置 prompt，要求把 Claude Code 配成用户级四模型团队，并落到 `~/.claude/settings.json`（主模型 sonnet、`advisorModel` fable、env `CLAUDE_CODE_SUBAGENT_MODEL` haiku）、`~/.claude/agents/checker.md`（model opus，只测试/挑错、不编辑）、`~/.claude/agents/Explore.md`（name Explore、model haiku、只读工具、顶替内置 Explore）、`~/.claude/CLAUDE.md`（顾问/检查/检索/写代码子代理/小任务的行为规则）。原文还给出验收方式：重启后 Claude Code 以 Sonnet 启动、`/advisor` 显示 fable、`/agents` 列出 checker 与 Explore；顾问被调用时出现 `Advising` 行、`Ctrl+O` 看建议、`/usage` 看成本。材料边界：它引用的 Sonnet 5.5 / Fable 5.2 / Opus 5.5 / Haiku 5.5 与版本号 v2.1.321 无法核实；作者没有给出任何效果数据；字段、文件格式、模型标识符必须以官方 advisor / sub-agents / model-config 三页为准；这是用户级改动，会影响所有项目，必须备份、合成 diff、确认后应用。
 - L（@I_am_oil_oil）：可照做的有按任务类型分配模型（Gemini 写、GPT 评审、Claude 管复杂分支和版本）、安装 agy-fast-io 并整理只读白名单、用 swarm + Gemini 4 Hydrogen (Low) 做代码探索、oil-explore 规则；原文给出的等待数据是单次云端审核约 1–3 秒、复杂任务可能几十次、累计几分钟；原生子 Agent 只有 inherit / flash_lite / flash / pro 四档且不含 Gemini 4 系列；作者用 200 美元档订阅，重度开发 + Codex review 下周额度最后一两天仍需额外做点重活才用得完。仅为作者主张、无验证的是：Carbon 优于 Argon 且消耗相近、Claude 更缜密、Hydrogen 能解决读文件慢、GPT 评审搭配效果好。材料边界：强绑定 Antigravity 和特定订阅；模型名按作者叫法无法独立核对；两个仓库的白名单、提示词和 swarm 规则正文未出现在材料中；Orchestrator 作者自认测试不足；没有量化指标，需自行设计验证。
 - M（theRizwan/community-claude-code）：可照做的有 Linux/macOS 的 install.sh 与 Windows 的 install.ps1、`ccc-server`、Admin UI 的 Providers/Model Config/Messaging 配置路径、`ccc-claude`/`ccc-codex`/`ccc-pi`/`ccc-opencode`/`ccc-cline`/`ccc-hermes`/`ccc-dsh`/`ccc-grok`/`ccc-muse`/`ccc-aider`/`ccc-agy` 启动命令、OpenAI 兼容 base URL `http://127.0.0.1:8082/v1`、Fallback Models 的 effort 与 key 序号选项、`MODEL_FABLE/OPUS/SONNET/HAIKU` 档位覆盖、Default Effort 与 From client/Off/Low…Max/Inherit 的语义、Custom providers 的 Model IDs 自动发现、LM Studio/llama.cpp/Ollama 的默认 base URL 与前缀、Discord/Telegram 的权限与绝对路径要求、本地 Whisper 的安装参数、`/stats`/`/stop`/`/clear`、`ccc-server --version`/`ccc-update`/`ccc-doctor`。材料给出的条件清单属于可核对的配置前提：OAuth 连接后需重启 agent、Azure 需完整 v1 endpoint、Vertex 用 ADC、Bedrock 与 key 同区域、Alibaba key 与 endpoint 同区域、Cloudflare 需 token + account ID。材料边界与待验证项：项目仅 42 star，独立项目、与 Anthropic 无隶属关系；Python 3.14 + uv + AGPL-3.0-only；“Claude Code 全部模型免费用”与示例模型 id 可疑，材料未给独立核对；token 节省“up to 90%”没有评测方法与数据；没有性能、质量、稳定性对比或用户案例；Fallback 的额度消耗警告是原文明确写出，但没有给量化数据；消息入口的权限模型、多人共用、安全审计未说明。本文的试用分层与时长是建议，不是材料数据。
-- 材料边界：这些项目、F3 推文、J 推文、@0xVeyyro 推文、@wanerfu 推文、@0xCodila 推文、@I_am_oil_oil 推文、CCC README 以及各 Claude Code 扩展的材料都未说明可以互相集成；同时安装或叠加配置时不要假设请求一定经过你以为的那一层。
+- N（@TiagerBao：Fable 5.2 Advisor）：可照做的只有安装命令 `npx claude-code-templates@latest --setting model/fable-5-2-advisor`，以及三个调用场景的名称——编码前检查技术方案、连续报错时分析问题并调整方向、任务完成前检查是否遗漏关键问题；配套模板页为 `aitmpl.com/component/settings/model/fable-5-2-advisor`（原文链接被换行截断，此处按拼接结果转写）。原文没有展示配置内容，没有给出提示词，没有定义“连续报错”的具体阈值，没有数据、案例或对比实验；互动量 55 赞、0 转发、3 回复。Fable 5.2 是哪一家模型、能力如何、是否存在、如何定价，材料无法核实；“只在被调用时单独计费，而不是每轮都使用”是作者主张。作者给出的验证思路可直接采用：看返工率和总 Token 消耗，并指出多一次模型调用本身就是额外成本；但没有给出基准值或阈值。第三方依赖风险：安装命令会执行外部公开 npm 包并向本地写入 settings，需要自行审查；应在可以回滚的配置或试验目录中操作。适用条件：编码类任务；任务有明显阶段边界（方案—实现—收尾）；返工成本高到值得多付一次调用；对一次性小改动或判断密度低的任务，额外调用大概率不划算。
+- 材料边界：这些项目、F3 推文、J 推文、@0xVeyyro 推文、@wanerfu 推文、@0xCodila 推文、@I_am_oil_oil 推文、@TiagerBao 推文、CCC README 以及各 Claude Code 扩展的材料都未说明可以互相集成；同时安装或叠加配置时不要假设请求一定经过你以为的那一层。
 
 ## 依据的调研
 
@@ -615,3 +655,4 @@ ccc-doctor
 - [@0xCodila: Antrhopic's cheat code:](../research/radar/2026-11-13/12937-antrhopic-s-cheat-code.md)：值得一试，把这条 prompt 当作模板，而不是逐字照抄的脚本：先到 Anthropic 官方 advisor / sub-agents / model-config 三页核对字段与当前可用模型名，把四个角色（构建、顾问、检查、检索）替换成你账号里真实存在的模型，再在一个非关键项目里按同一条 prompt 的流程装配一遍。理由是它给出了可直接复制的三件套（settings.json 字段、~/.claude/agents/*.md、CLAUDE.md 触发规则）和验收方式，但模型名与版本号无法从材料核实，且作者没有给出任何效果数据。
 - [@I_am_oil_oil: 最近非常高强度地使用了 Antigravity 和 Gemini 模型，说说自己的感受和一些实用技巧：](../research/radar/2026-11-13/13154-antigravity-gemini.md)：值得一试，可以把“用不同厂商的模型交叉评审、用便宜快速的子 Agent 先探索代码、把只读命令加入白名单、减少审批等待”这组做法小范围试起来；但插件与提示词的具体内容只在链接里，原文没有给出，所以只能按粗流程试，细则需要打开仓库后再补。
 - [theRizwan/community-claude-code](../research/radar/2026-11-14/13241-therizwan-community-claude-code.md)：值得一试，按 Quick Start 装好 CCC，先用 ccc-claude 接一个已有 key 的 provider 在同一小任务上跑通，再配 Fallback Models 与 Proxy Authentication 做对比测试；这是材料中唯一给出“把 Claude Code 这类编码智能体接到任意 OpenAI 兼容模型、同时保留流式/工具调用/思考”的完整可照做步骤的方案，但项目仅 42 star、部分模型 id 与“Claude Code 全部模型免费用”的主张可疑，需先小范围自测再决定是否进手册。
+- [@TiagerBao: Claude Code 不用全程跑最贵的模型，也能在关键时刻调用 Fable 5.2。](../research/radar/2026-11-14/13425-claude-code-fable-5-2.md)：值得一试，值得小范围试：按原文给出的命令安装 Fable 5.2 Advisor 模板，在“开工前方案评审、连续报错、收工前检查”三个节点才调用强模型，同时记录返工率和总 Token 成本，再决定是否长期使用。原文只提供了一条安装命令和三个调用场景，既没有写出配置内容，也没有给出数据，因此效果如何（尤其是否真省钱）只能自己测。
