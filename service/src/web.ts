@@ -4,7 +4,9 @@ import { z } from 'zod';
 import type { Catalog } from './catalog.ts';
 import { config } from './config.ts';
 import type { Item, Research, Run, Store } from './db.ts';
-import { itemKey } from './http.ts';
+import { githubLinksIn } from './filters.ts';
+import { githubRepo, itemKey } from './http.ts';
+import type { RawItem } from './collectors/types.ts';
 import { QUESTIONS } from './questions.ts';
 import { VERDICTS } from './research.ts';
 import { ingest, unhealthy } from './scheduler.ts';
@@ -104,7 +106,7 @@ function itemRows(items: Item[], store: Store, catalog: Catalog) {
       ? `<span class="muted">已在清单：${esc(cat?.name ?? i.catalog_id)}（${esc(CATALOG_STATUS[cat?.status ?? ''] ?? cat?.status)}）</span>`
       : i.triage_status === 'error' ? `<span class="err">初筛失败：${esc(i.triage_error)}</span>`
       : i.triage_status === 'pending' ? '<span class="muted">待初筛</span>'
-      : `<span class="r${i.relevance}">${i.relevance}</span> ${esc(i.reason)}<br><span class="muted">${(JSON.parse(i.questions ?? '[]') as number[]).map((q) => esc(QUESTIONS[q]?.split('：')[0])).join('、')}</span>`;
+      : `<span class="r${i.relevance}">${i.relevance}</span> ${esc(i.reason)}${i.interesting && i.interesting >= 2 ? ` <span class="badge">有趣 ${i.interesting}</span>` : ''}<br><span class="muted">${(JSON.parse(i.questions ?? '[]') as number[]).map((q) => esc(QUESTIONS[q]?.split('：')[0])).join('、')}</span>`;
     const r = store.research('item_id = ?', [i.id], 1)[0];
     return `<tr><td><a href="${esc(i.url)}" target="_blank" rel="noreferrer">${esc(i.title)}</a><span class="muted clamp">${esc(i.summary.slice(0, 200))}</span></td>
 <td>${triage}</td><td class="muted meta">${esc(i.source)}<br>${esc(heat(i, store))}<br>${time(i.first_seen_at)}</td>
@@ -243,21 +245,26 @@ function candidates(store: Store, catalog: Catalog, q: URLSearchParams, repos = 
   if (question) { where.push(`EXISTS (SELECT 1 FROM json_each(questions) WHERE value = ?)`); params.push(Number(question)); }
   const minRel = q.get('min');
   if (minRel) { where.push('relevance >= ?'); params.push(Number(minRel)); }
+  const minInterest = q.get('interest');
+  if (minInterest) { where.push('interesting >= ?'); params.push(Number(minInterest)); }
   if (q.get('deep')) where.push('deep = 1');
   const w = where.join(' AND ') || '1=1';
   const total = store.count(w, params);
   const { offset, nav } = pager(q, total, 50);
-  const order = repos && q.get('sort') === 'stars' ? `CAST(json_extract(metrics, '$.stars') AS INTEGER) DESC, first_seen_at DESC` : 'first_seen_at DESC';
+  const order = repos && q.get('sort') === 'stars' ? `CAST(json_extract(metrics, '$.stars') AS INTEGER) DESC, first_seen_at DESC`
+    : repos && q.get('sort') === 'interesting' ? 'interesting DESC, first_seen_at DESC'
+    : 'first_seen_at DESC';
   const items = store.items(`${w} ORDER BY ${order}`, params, 50, offset);
   const sources = (store.db.prepare(`SELECT DISTINCT source FROM items WHERE ${kind} ORDER BY source`).all() as { source: string }[]).map((r) => r.source);
   const select = (name: string, opts: [string, string][]) =>
     `<select name="${name}"><option value="">全部</option>${opts.map(([v, l]) => `<option value="${esc(v)}"${q.get(name) === v ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
-  const sort = repos ? `<label>排序 <select name="sort"><option value="">最新发现</option><option value="stars"${q.get('sort') === 'stars' ? ' selected' : ''}>星数</option></select></label>
+  const sort = repos ? `<label>排序 <select name="sort"><option value="">最新发现</option><option value="stars"${q.get('sort') === 'stars' ? ' selected' : ''}>星数</option><option value="interesting"${q.get('sort') === 'interesting' ? ' selected' : ''}>有趣度</option></select></label>
  ` : '';
   const form = `<form>${sort}<label>来源 ${select('source', sources.map((s) => [s, s]))}</label>
  <label>初筛 ${select('triage', [['done', '已初筛'], ['pending', '待初筛'], ['error', '失败'], ['known', '已在清单']])}</label>
  <label>问题 ${select('question', Object.entries(QUESTIONS).map(([k, v]) => [k, v.split('：')[0]]))}</label>
  <label>相关度 ≥ ${select('min', [['1', '1'], ['2', '2'], ['3', '3']])}</label>
+ <label>有趣 ≥ ${select('interest', [['2', '2'], ['3', '3']])}</label>
  <label><input type="checkbox" name="deep" value="1"${q.get('deep') ? ' checked' : ''}> 只看模型选中深入的</label> <button>筛选</button></form>`;
   const [title, path] = repos ? ['仓库', '/repos'] : ['线索', '/candidates'];
   return page(title, `<h1>${title}（${total}）</h1>${form}` + itemRows(items, store, catalog) + nav, path);
@@ -283,10 +290,79 @@ const IngestBody = z.object({
     author: z.string().optional(),
     published_at: z.string().optional(),
     metrics: z.record(z.string(), z.number()).optional(),
+    /** 采集器从页面上抓到的外链：href 可能是 t.co 短链，text 是页面上显示的文本（含域名） */
+    links: z.array(z.union([z.string(), z.object({ href: z.string(), text: z.string().optional() })])).max(20).optional(),
   })).max(500),
   /** 推送方自身的部分失败（如某个查询出错），记为本次运行失败，但已收的条目照常入库 */
   error: z.string().max(2000).optional(),
 });
+
+type IngestItem = z.infer<typeof IngestBody>['items'][number];
+
+/**
+ * 推文里提到的 GitHub 仓库单独落一条仓库线索。X 是人工策展，仓库链接是这批线索里信号最强的一类；
+ * 以前这些链接只存在于推文正文里，仓库表看不到，自己刷 X 找到的项目永远不会进入雷达。
+ */
+const TCO = /^https?:\/\/t\.co\//i;
+const tcoCache = new Map<string, { url: string | null; at: number }>();
+/** 每个推送最多为多少条短链去问一次真实地址（约 1 秒一条），超出就只靠显示文本和卡片链接 */
+const RESOLVE_BUDGET = 25;
+
+/**
+ * 推文里的链接在 DOM 里都是 t.co 短链，显示文本被 X 截断并插了空格，只能看出域名。
+ * 只有看起来是 GitHub 的才解析——否则每轮要白跑几百个短链。
+ */
+async function resolveGithub(href: string, text: string | undefined, budget: { left: number }): Promise<string | null> {
+  if (githubRepo(href)) return href;
+  if (!TCO.test(href)) return null;
+  if (!/github\.com/i.test((text ?? '').replace(/\s+/g, ''))) return null;
+  const hit = tcoCache.get(href);
+  if (hit && Date.now() - hit.at < 3600_000) return hit.url;
+  if (budget.left <= 0) return null;
+  budget.left--;
+  let url: string | null = null;
+  try {
+    const res = await fetch(href, { redirect: 'follow', signal: AbortSignal.timeout(8000), headers: { 'user-agent': 'ai-work-radar/0.1' } });
+    url = res.url;
+    await res.body?.cancel();
+  } catch {
+    url = null;
+  }
+  tcoCache.set(href, { url, at: Date.now() });
+  return url;
+}
+
+async function xRepoItems(store: Store, items: IngestItem[], source: string): Promise<RawItem[]> {
+  const best = new Map<string, { item: IngestItem; likes: number }>();
+  const budget = { left: RESOLVE_BUDGET };
+  for (const item of items) {
+    const links = (item.links ?? []).map((l) => (typeof l === 'string' ? { href: l } : l));
+    for (const url of githubLinksIn(item.summary ?? '')) links.push({ href: url });
+    for (const link of links) {
+      const repo = githubRepo((await resolveGithub(link.href, link.text, budget)) ?? '');
+      if (!repo) continue;
+      const likes = item.metrics?.likes ?? 0;
+      const prev = best.get(repo);
+      if (!prev || likes > prev.likes) best.set(repo, { item, likes });
+    }
+  }
+  const out: RawItem[] = [];
+  for (const [repo, { item, likes }] of best) {
+    // 已在仓库表里的不重复造条目，也不拿推文正文覆盖它的简介
+    if (store.count('key = ?', [`github:${repo}`])) continue;
+    out.push({
+      key: `github:${repo}`,
+      source: `ingest:${source}-repo`,
+      title: repo,
+      url: `https://github.com/${repo}`,
+      summary: `X 上 @${item.author ?? '?'} 提到（${likes} 赞）：${(item.summary ?? '').slice(0, 900)}`,
+      author: item.author ?? null,
+      published_at: item.published_at ?? null,
+      metrics: { likes, reposts: item.metrics?.reposts ?? 0 },
+    });
+  }
+  return out;
+}
 
 async function readBody(req: IncomingMessage, max = 2_000_000): Promise<string> {
   let size = 0;
@@ -318,10 +394,15 @@ export function handler(store: Store, catalog: Catalog) {
         if (!parsed.success) return json(res, 400, { error: parsed.error.issues });
         const { source, items, error } = parsed.data;
         const run = store.startRun(`ingest:${source}`);
-        const added = ingest(store, catalog, items.map((i) => ({ ...i, key: itemKey(i.url), source: `ingest:${source}` })));
-        store.finishRun(run, error ? { error: `${error}（已收 ${items.length} 条，新增 ${added}）` } : { fetched: items.length, newItems: added });
+        const base = items.map(({ links: _links, ...rest }) => ({ ...rest, key: itemKey(rest.url), source: `ingest:${source}` }));
+        const repos = await xRepoItems(store, items, source);
+        const added = ingest(store, catalog, [...base, ...repos]);
+        const got = repos.length ? `${items.length} 条线索 + ${repos.length} 个仓库链接` : `${items.length} 条线索`;
+        store.finishRun(run, error
+          ? { error: `${error}（已收 ${got}，新增 ${added}）`, fetched: items.length, newItems: added, partial: items.length > 0 }
+          : { fetched: items.length, newItems: added });
         store.touchPusher(source, items.length);
-        return json(res, 200, { received: items.length, added });
+        return json(res, 200, { received: items.length, added, repos: repos.length });
       }
 
       if (req.method === 'GET' && url.pathname === '/x/pending-likes') {

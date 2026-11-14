@@ -17,6 +17,8 @@ export type Item = {
   catalog_id: string | null;
   triage_status: 'pending' | 'done' | 'error' | 'known';
   relevance: number | null;
+  /** 与“AI 工作方法”无关的第二条轴：这条线索本身有多值得看（0–3）。旧数据为 null */
+  interesting: number | null;
   questions: string | null;
   reason: string | null;
   triage_error: string | null;
@@ -79,6 +81,7 @@ CREATE TABLE IF NOT EXISTS items (
   catalog_id TEXT,
   triage_status TEXT NOT NULL DEFAULT 'pending',
   relevance INTEGER,
+  interesting INTEGER,
   questions TEXT,
   reason TEXT,
   triage_error TEXT,
@@ -138,6 +141,12 @@ CREATE TABLE IF NOT EXISTS pushers (
   last_seen_at TEXT NOT NULL,
   last_count INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS repo_names (
+  name TEXT NOT NULL,
+  owner TEXT NOT NULL,
+  seen_at TEXT NOT NULL,
+  PRIMARY KEY (name, owner)
+);
 `;
 
 const now = () => new Date().toISOString();
@@ -148,14 +157,16 @@ export class Store {
   constructor(path: string) {
     mkdirSync(dirname(path), { recursive: true });
     this.db = new DatabaseSync(path);
-    this.db.exec('PRAGMA journal_mode = WAL;' + SCHEMA);
+    this.db.exec('PRAGMA busy_timeout = 5000;' + 'PRAGMA journal_mode = WAL;' + SCHEMA);
     const cols = (this.db.prepare(`PRAGMA table_info(items)`).all() as { name: string }[]).map((c) => c.name);
     if (!cols.includes('deep')) this.db.exec(`ALTER TABLE items ADD COLUMN deep INTEGER`);
+    if (!cols.includes('interesting')) this.db.exec(`ALTER TABLE items ADD COLUMN interesting INTEGER`);
     if (!cols.includes('liked_at')) this.db.exec(`ALTER TABLE items ADD COLUMN liked_at TEXT`);
     const rcols = (this.db.prepare(`PRAGMA table_info(research)`).all() as { name: string }[]).map((c) => c.name);
     if (!rcols.includes('playbook')) this.db.exec(`ALTER TABLE research ADD COLUMN playbook TEXT; ALTER TABLE research ADD COLUMN merged_at TEXT`);
     // 进程被杀时遗留的 running 记录不会再结束，标成失败以免页面误以为仍在运行
     this.db.prepare(`UPDATE runs SET status='error', finished_at=?, error='进程中断' WHERE status='running'`).run(now());
+    this.db.prepare(`DELETE FROM repo_names WHERE seen_at < datetime('now', '-90 day')`).run();
   }
 
   startRun(collector: string): number {
@@ -163,9 +174,11 @@ export class Store {
     return Number(r.lastInsertRowid);
   }
 
-  finishRun(id: number, result: { fetched: number; newItems: number } | { error: string }) {
+  finishRun(id: number, result: { fetched: number; newItems: number } | { error: string; fetched?: number; newItems?: number; partial?: boolean }) {
     if ('error' in result) {
-      this.db.prepare(`UPDATE runs SET finished_at=?, status='error', error=? WHERE id=?`).run(now(), result.error, id);
+      // 单个来源失败但其余来源仍有产出时记为 partial：条目照常入库，页面也能看出是哪个来源坏了
+      this.db.prepare(`UPDATE runs SET finished_at=?, status=?, error=?, fetched=?, new_items=? WHERE id=?`)
+        .run(now(), result.partial ? 'partial' : 'error', result.error, result.fetched ?? 0, result.newItems ?? 0, id);
     } else {
       this.db.prepare(`UPDATE runs SET finished_at=?, status='ok', fetched=?, new_items=? WHERE id=?`)
         .run(now(), result.fetched, result.newItems, id);
@@ -235,9 +248,9 @@ export class Store {
     return this.db.prepare(`SELECT * FROM items WHERE triage_status IN ('pending', 'error') ORDER BY id LIMIT ?`).all(limit) as Item[];
   }
 
-  setTriage(id: number, t: { relevance: number; questions: number[]; reason: string; deep: boolean }) {
-    this.db.prepare(`UPDATE items SET triage_status='done', relevance=?, questions=?, reason=?, deep=?, triage_error=NULL WHERE id=?`)
-      .run(t.relevance, JSON.stringify(t.questions), t.reason, t.deep ? 1 : 0, id);
+  setTriage(id: number, t: { relevance: number; interesting: number; questions: number[]; reason: string; deep: boolean }) {
+    this.db.prepare(`UPDATE items SET triage_status='done', relevance=?, interesting=?, questions=?, reason=?, deep=?, triage_error=NULL WHERE id=?`)
+      .run(t.relevance, t.interesting, JSON.stringify(t.questions), t.reason, t.deep ? 1 : 0, id);
     if (t.deep) this.db.prepare(`INSERT OR IGNORE INTO research (item_id, status, created_at, updated_at) VALUES (?, 'pending', ?, ?)`).run(id, now(), now());
   }
 
@@ -309,6 +322,16 @@ export class Store {
 
   playbookUpdates(since: string): { slug: string; changes: string; research_ids: string; created_at: string }[] {
     return this.db.prepare(`SELECT * FROM playbook_updates WHERE created_at >= ? ORDER BY id`).all(since) as { slug: string; changes: string; research_ids: string; created_at: string }[];
+  }
+
+  /** 记下见过的仓库名（即使被过滤掉），换皮模板的“同名不同 owner”才有历史可比。 */
+  noteRepoName(name: string, owner: string) {
+    if (!name || !owner) return;
+    this.db.prepare(`INSERT OR IGNORE INTO repo_names (name, owner, seen_at) VALUES (?, ?, ?)`).run(name, owner.toLowerCase(), now());
+  }
+
+  repoNameOwners(): { name: string; owner: string }[] {
+    return this.db.prepare(`SELECT name, owner FROM repo_names WHERE seen_at >= datetime('now', '-30 day')`).all() as { name: string; owner: string }[];
   }
 
   touchPusher(name: string, count: number) {

@@ -27,6 +27,7 @@ ${Object.entries(QUESTIONS).map(([k, v]) => `${k}. ${v}`).join('\n')}
 请读原文，输出：
 - verdict：adopt（建议直接采用）/ try（值得小范围试）/ study（思路值得研读，不必用这个具体东西）/ watch（有潜力但还不成熟）/ drop（没有实质内容或与研究无关）。
   adopt 和 try 会被写进手册，所以只有原文给出了可照做的具体步骤、配置或流程时才能给；只有观点、宣传或新闻、提炼不出步骤的，最多给 study 或 watch。
+  如果这条线索的价值主要在“东西本身有意思”（输入里的 interesting 高）而原文缺少可照做的流程，就给 study（值得研读）：报告重点写清它做了什么、最小上手方式、和同类工具比怎么样、值不值得继续看，而不是硬凑步骤。
 - conclusion：一到两句中文结论，先说该怎么做，再说理由
 - body：Markdown 调研报告，中文，包含这些小节：
   ## 是什么
@@ -79,6 +80,7 @@ async function researchOne(item: Item, catalog: Catalog) {
   const src = await source(item);
   const data = await askJson(SYSTEM, JSON.stringify({
     title: item.title, url: item.url, source: item.source, metrics: JSON.parse(item.metrics),
+    relevance: item.relevance, interesting: item.interesting,
     triage_reason: item.reason, source_note: src.note, text: src.text.slice(0, 30_000), catalog_related: related(catalog, src.text),
   }), Result);
   return { ...data, note: src.note };

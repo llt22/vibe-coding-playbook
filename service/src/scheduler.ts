@@ -1,16 +1,18 @@
 import { config } from './config.ts';
 import type { Catalog } from './catalog.ts';
-import { githubActive, githubSearch, githubTrending } from './collectors/github.ts';
+import { githubActive, githubSearch, githubStarred, githubTrending } from './collectors/github.ts';
 import { hn } from './collectors/hn.ts';
 import { pages } from './collectors/pages.ts';
 import { rss } from './collectors/rss.ts';
 import type { Collector, RawItem } from './collectors/types.ts';
 import type { Store } from './db.ts';
+import { RepoSpamFilter } from './filters.ts';
 import { runPlaybook, writeDigest } from './playbook.ts';
 import { runResearch } from './research.ts';
 import { runTriage } from './triage.ts';
 
-export const collectors: Collector[] = [githubSearch, githubActive, githubTrending, hn, rss, pages];
+/** github-starred 只在配置了账号时注册，否则首页会把它当“从未成功运行”标红 */
+export const collectors: Collector[] = [githubSearch, githubActive, githubTrending, ...(config.githubStarredUsers.length ? [githubStarred] : []), hn, rss, pages];
 export const TRIAGE = 'triage';
 export const RESEARCH = 'research';
 export const PLAYBOOK = 'playbook';
@@ -18,13 +20,22 @@ export const DIGEST = { name: 'digest', intervalHours: 168 };
 /** 调研失败后至少隔这么久再试，避免每分钟重试刷接口 */
 const RESEARCH_EVERY_HOURS = 1;
 
-/** 写入条目并记星数快照，返回新增条数。 */
+/** 写入条目并记星数快照，返回新增条数。刷星模板仓库在入库前就丢掉，不占初筛的模型调用。 */
 export function ingest(store: Store, catalog: Catalog, items: RawItem[]): number {
+  const repos = items.filter((i) => i.key.startsWith('github:'));
+  const spam = repos.length ? new RepoSpamFilter(store).drop(repos.map((i) => i.key)) : new Set<string>();
   let added = 0;
+  let dropped = 0;
   for (const item of items) {
+    if (item.key.startsWith('github:')) {
+      const [owner, name] = item.key.slice('github:'.length).split('/');
+      store.noteRepoName(name ?? '', owner ?? '');
+    }
+    if (spam.has(item.key)) { dropped++; continue; }
     if (store.upsert(item, catalog.byKey.get(item.key)?.id ?? null)) added++;
     if (item.key.startsWith('github:') && item.metrics?.stars !== undefined) store.snapshotStars(item.key.slice(7), item.metrics.stars);
   }
+  if (dropped) console.log(`[filter] 丢弃 ${dropped} 个换皮仓库`);
   return added;
 }
 
@@ -37,7 +48,7 @@ async function runCollector(store: Store, catalog: Catalog, c: Collector) {
     const partial = (e as { partial?: RawItem[] }).partial ?? [];
     const added = ingest(store, catalog, partial);
     const note = partial.length ? `（其余来源成功 ${partial.length} 条，新增 ${added}）` : '';
-    store.finishRun(run, { error: (e as Error).message + note });
+    store.finishRun(run, { error: (e as Error).message + note, fetched: partial.length, newItems: added, partial: partial.length > 0 });
     console.error(`[${c.name}]`, (e as Error).message);
   }
 }
