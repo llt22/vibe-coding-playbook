@@ -41,6 +41,7 @@
 | [后端 Vibe 工作流](experiences/backend-vibe-workflow.md) | 不变量、DoD、LLM 集成、慢 SQL 定位 |
 | [复杂度管理与人机协作 SOP](experiences/vibe-coding-sop.md) | 四阶段 SOP：前置基建 → 过程控制 → 质量闸口 → 维护修复 |
 | [AI 高质量交付前端 UI](experiences/design-to-code-workflow.md) | 有设计稿 / 无设计稿两种场景的完整方案 |
+| [指挥者模式](experiences/commander-mode.md) | 一个指挥会话管目标、派活、验收，执行会话各做一件事；附 Paseo 指挥者 Skill 原文 |
 
 ### 工具配置
 
