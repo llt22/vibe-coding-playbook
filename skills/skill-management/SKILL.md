@@ -13,7 +13,6 @@ description: Skill 安装和管理规范。安装、卸载或查询任何 skill 
 ~/skills/                        # 唯一正本，所有 skill 在此创建
   ├── skill-management/          # 本文件
   ├── ai-tool-radar/
-  ├── herdr-link/
   └── ...
 
 ~/.claude/skills/                # Claude Code 适配层，仅放符号链接
@@ -41,10 +40,19 @@ ln -s ~/skills/my-skill ~/.codex/skills/my-skill
 ln -s ~/skills/my-skill ~/.agents/skills/my-skill
 ```
 
+## 多台电脑同步
+
+`~/skills` 本身是私有 git 仓库（github.com/llt22/skills），每台电脑都克隆到 `~/skills`。
+
+- 新增或修改 skill 后提交并推送；其他电脑执行 `git -C ~/skills pull`，链接不用重建。
+- 新增 skill 时，其他电脑拉取后还要按上面的步骤在各工具目录建链接。
+- 正本在项目仓库里的 skill（例如 api-dashboard），在 `~/skills` 里只放指向项目的链接，并写进 `.gitignore`，各台电脑自己建链接，因为项目路径因机器而异。
+
 ## 卸载规则
 
 1. 先删除各工具目录中的符号链接。
-2. 再删除 `~/skills/<name>/` 正本。
+2. 再删除 `~/skills/<name>/` 正本，提交并推送。
+3. 其他电脑拉取后，删除各工具目录中失效的链接。
 
 ## 查询
 

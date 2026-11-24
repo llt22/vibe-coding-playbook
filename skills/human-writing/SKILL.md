@@ -1,6 +1,6 @@
 ---
 name: human-writing
-description: 中文写作与文案修订规范。用于观点、教程、实测、调研、随笔、博客和说明文。先按文体组织事实与论证，再用分阶段检查去除 AI 味、翻译腔和不必要的修辞，同时保留作者声音。
+description: 中文写作与文案修订规范。用于观点、教程、实测、调研、随笔、博客、说明文，以及技术方案、设计文档、接口文档。先按文体组织事实与论证，再用分阶段检查去除 AI 味、翻译腔和不必要的修辞，同时保留作者声音。
 ---
 
 # 中文说人话写作规范 (Human Writing)
@@ -16,7 +16,7 @@ description: 中文写作与文案修订规范。用于观点、教程、实测�
 | `references/style.md` | 共同语言底线、标题与正文规范、真实改稿记录 | 动笔与改稿前必读 |
 | `references/ai-flavor.md` | 真实材料准入卡口、8 种 AI 套路与信息密度规则 | 构思素材与去套路时 |
 | `references/argument.md` | 主张、证据、推理、边界、反例与段落连贯 | 写观点、调研和长文时必读 |
-| `references/modes.md` | 教程、实测、观点、调研、随笔的不同写法 | 动笔前选择主文体 |
+| `references/modes.md` | 教程、实测、观点、调研、随笔、设计文档的不同写法 | 动笔前选择主文体 |
 | `references/brief-template.md` | 长文动笔前的文体、主张、证据与限制简报 | 写作前填写 |
 | `references/revision.md` | 从事实、结构到句子的分阶段修订顺序 | 写完初稿后必读 |
 | `references/translationese.md` | 现代 AI 常见的翻译腔与弱动词 | 句子修订时 |
@@ -39,6 +39,7 @@ description: 中文写作与文案修订规范。用于观点、教程、实测�
 - 只有说明步骤使用 STE。正常叙事保留长短句和作者自己的节奏。
 
 ### 3. 分阶段修订
+- 先以没有背景的读者身份，只看标题和每节第一句扫一遍。说不出文档讲什么，就先改结构。脚本通过不等于改好了。
 - 按 `references/revision.md` 的顺序修订：任务与读者 → 事实与来源 → 论证与结构 → 段落推进 → 句子与用词 → 删减与声音 → 标题与结尾。
 - 不要一上来只改标点和同义词。结构没有站住时，句子越顺越容易掩盖问题。
 
@@ -76,12 +77,16 @@ python3 ~/skills/human-writing/scripts/check_brief.py /tmp/article-brief.yaml
 # 2. 成稿综合检查，包含翻译腔、文风与 STE 步骤
 python3 ~/skills/human-writing/scripts/check.py <文章路径或草稿路径>
 
-# 3. 单项检查
+# 3. 技术方案、接口文档：加 --doc，多跑结构检查
+python3 ~/skills/human-writing/scripts/check.py --doc <文件路径>
+
+# 4. 单项检查
 python3 ~/skills/human-writing/scripts/check_prose.py <文件路径>
 python3 ~/skills/human-writing/scripts/check_translationese.py <文件路径>
 python3 ~/skills/human-writing/scripts/check_ste.py <文件路径>
+python3 ~/skills/human-writing/scripts/check_structure.py <文件路径>
 
-# 4. 运行回归评测
+# 5. 运行回归评测
 python3 ~/skills/human-writing/scripts/test_skill.py
 ```
 

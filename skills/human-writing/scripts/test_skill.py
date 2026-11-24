@@ -14,8 +14,40 @@ PROSE_SCRIPT = HERE / "check_prose.py"
 TRANSLATIONESE_SCRIPT = HERE / "check_translationese.py"
 STE_SCRIPT = HERE / "check_ste.py"
 BRIEF_SCRIPT = HERE / "check_brief.py"
+STRUCTURE_SCRIPT = HERE / "check_structure.py"
 
 TESTS = [
+    {
+        "name": "test_doc_intro_without_headings",
+        "description": "技术文档开头连写多段、没有小标题",
+        "text": "# 合同比对方案\n\n这个方案检查盖章版和定稿是否一致。\n\n文中两份合同这样称呼。\n\n- 定稿指审批后的合同。\n\n整个流程分五步。\n\n## 整体流程\n\n先解析，再比对。\n",
+        "checker": "structure",
+        "expect_passed": False,
+        "expect_keyword": "没有小标题",
+    },
+    {
+        "name": "test_doc_section_starts_with_table",
+        "description": "二级标题下面直接是表格",
+        "text": "# 接口说明\n\n写给接入方。\n\n## 已知问题\n\n| 问题 | 影响 |\n|---|---|\n| 网关断开 | 收不到结果 |\n",
+        "checker": "structure",
+        "expect_passed": False,
+        "expect_keyword": "下面直接是表格",
+    },
+    {
+        "name": "test_doc_local_link_and_placeholder",
+        "description": "本地文件链接和占位",
+        "text": "# 接口说明\n\n写给接入方。\n\n## 联系\n\n联系人 <姓名 / 联系方式>，详细数据见 [报告](报告.md)。\n",
+        "checker": "structure",
+        "expect_passed": False,
+        "expect_keyword": "本地文件",
+    },
+    {
+        "name": "test_doc_well_structured",
+        "description": "放行结构清楚的技术文档（含在线链接、标题下直接接小节）",
+        "text": "# 接口说明\n\n写给接入方，讲怎么调用、返回什么。\n\n## 一、概况\n\n**比对范围。** 只比正文。\n\n## 二、调用\n\n每个请求都带 API Key，文档见 [平台](https://example.com/doc)。\n\n```\nPOST /chat\n```\n\n## 三、技术难点\n\n### 复杂表格\n\n表格是误报的主要来源。\n",
+        "checker": "structure",
+        "expect_passed": True,
+    },
     {
         "name": "test_colon_announcement",
         "description": "拦截报幕式空转冒号",
@@ -293,6 +325,8 @@ def main() -> int:
             scripts_to_run.append(("check_ste", STE_SCRIPT))
         if checker == "brief":
             scripts_to_run.append(("check_brief", BRIEF_SCRIPT))
+        if checker == "structure":
+            scripts_to_run.append(("check_structure", STRUCTURE_SCRIPT))
 
         case_ok = True
         err_msg = ""

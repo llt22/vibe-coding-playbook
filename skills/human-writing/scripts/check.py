@@ -4,6 +4,7 @@
 用法：
   python3 check.py <文件路径>...
   python3 check.py draft.md
+  python3 check.py --doc 技术方案.md   # 技术方案、接口文档再加结构检查
 """
 
 from __future__ import annotations
@@ -17,9 +18,10 @@ HERE = Path(__file__).resolve().parent
 PROSE_SCRIPT = HERE / "check_prose.py"
 TRANSLATIONESE_SCRIPT = HERE / "check_translationese.py"
 STE_SCRIPT = HERE / "check_ste.py"
+STRUCTURE_SCRIPT = HERE / "check_structure.py"
 
 
-def check_file(path: Path) -> tuple[bool, list[str]]:
+def check_file(path: Path, doc: bool = False) -> tuple[bool, list[str]]:
     if not path.exists():
         return False, [f"文件不存在: {path}"]
 
@@ -73,16 +75,33 @@ def check_file(path: Path) -> tuple[bool, list[str]]:
         err_msg = (res_ste.stderr or res_ste.stdout).strip()[:200]
         problems.append(f"check_ste 运行异常: {err_msg}")
 
+    # 4. check_structure：只在 --doc 时检查，博客、随笔开头不带小标题是正常写法
+    if doc:
+        res_st = subprocess.run(
+            [sys.executable, str(STRUCTURE_SCRIPT), "--json", str(path)],
+            capture_output=True,
+            text=True,
+        )
+        try:
+            data_st = json.loads(res_st.stdout)
+            for fail in data_st.get("failures", []):
+                problems.append(f"结构 (第 {fail.get('line', '?')} 行): {fail.get('message', '')}")
+        except json.JSONDecodeError:
+            err_msg = (res_st.stderr or res_st.stdout).strip()[:200]
+            problems.append(f"check_structure 运行异常: {err_msg}")
+
     passed = len(problems) == 0
     return passed, problems
 
 
 def main() -> int:
-    if len(sys.argv) < 2:
-        print("用法: python3 check.py <文件路径>...")
+    doc = "--doc" in sys.argv[1:]
+    args = [a for a in sys.argv[1:] if a != "--doc"]
+    if not args:
+        print("用法: python3 check.py [--doc] <文件路径>...")
         return 1
 
-    targets = [Path(p) for p in sys.argv[1:]]
+    targets = [Path(p) for p in args]
     bad_count = 0
 
     for target in targets:
@@ -92,7 +111,7 @@ def main() -> int:
             files = [target]
 
         for f in files:
-            passed, problems = check_file(f)
+            passed, problems = check_file(f, doc)
             if passed:
                 print(f"[通过] {f}")
             else:
